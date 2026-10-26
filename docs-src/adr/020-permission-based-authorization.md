@@ -22,6 +22,9 @@ framework code beyond `AddPermissions(...)`.
 Revised 2026-10-06: ADC's Conference module defines twelve permissions (`SpeakersLink` added,
 Organizer-only), and the explicit-authorization-decision fitness gate is on by default with all four
 repos held to it.
+Revised 2026-10-26: the Decision paragraph names Store's `RolesManage` alias (outside `All`) and
+records that both Identity grant maps name the framework administration capabilities by value,
+partly through aliases; the ADC Notification registration anchor refreshed.
 ## Context
 The default answer in ASP.NET Core is pure role-based access control (RBAC): an endpoint declares
 `[Authorize(Policy = "RequireOrganizer")]` against a named policy that calls `RequireRole(...)`, and a
@@ -75,7 +78,7 @@ one authorization model. Nothing is pre-registered per role name.
   `MMCA.Common.Shared/Notifications/NotificationPermissions.cs:10`), so which of a host's roles may
   broadcast is a grant that host makes rather than a role name the framework picked. ADC grants it to
   `Organizer` alone (`MMCA.ADC.Notification.Shared/Authorization/NotificationPermissionGrants.cs:38`,
-  applied from `MMCA.ADC.Notification.API/DependencyInjection.cs:44`).
+  applied from `MMCA.ADC.Notification.API/DependencyInjection.cs:46`).
 
 Adoption is asymmetric and that is intentional: a module declares as many capabilities as its own
 surface needs. ADC's Conference module defines twelve (`ConferencePermissions.cs:12-55`, enumerated in
@@ -96,13 +99,17 @@ the capabilities ADC itself defines; the module's grant map hands `Organizer` th
 two by name (`IdentityPermissionGrants.cs:36-38`). MMCA.Store defines eleven of its own across three
 modules: six in Catalog (`CatalogPermissions.cs:12-36`), three in Sales
 (`SalesPermissions.cs:12-18`) and two in Identity (`IdentityPermissions.cs:14-17`, `All` at
-`:34-38`), each module granting its whole set to its own `Admin` role constant from a grant map in
+`:34-38`; a third constant, `RolesManage` at `:31`, aliases the framework's `ManageRoles` and stays
+out of `All`), each module granting its whole set to its own `Admin` role constant from a grant map in
 its Shared project (`CatalogPermissionGrants.cs:29`, `SalesPermissionGrants.cs:30`,
 `IdentityPermissionGrants.cs:35-37`) that its API registration passes to `AddPermissions(...)`
 (`MMCA.Store.Catalog.API/DependencyInjection.cs:45`, `MMCA.Store.Sales.API/DependencyInjection.cs:52`,
 `MMCA.Store.Identity.API/DependencyInjection.cs:66`). Both Identity grant maps have the same shape:
-the module's own `All` plus the framework's `ManageUsers` and `ManageRoles` named explicitly (ADC
-`IdentityPermissionGrants.cs:38`, Store `IdentityPermissionGrants.cs:37`). The registry, handler and
+the module's own `All` plus the framework's `ManageUsers` and `ManageRoles` named explicitly, by
+value rather than always by the framework constant: ADC names both through its aliases
+(`IdentityPermissionGrants.cs:38`, `UsersManage` and `RolesManage`), and Store names
+`AdministrationPermissions.ManageUsers` directly and `ManageRoles` through its `RolesManage` alias
+(`IdentityPermissionGrants.cs:37`). The registry, handler and
 policy provider are covered by framework tests, and the ADC grant tables (Conference, Engagement and
 Identity) by dedicated grant tests
 (`MMCA.ADC/Tests/Modules/Identity/MMCA.ADC.Identity.Shared.Tests/Authorization/IdentityPermissionGrantsTests.cs:24`,
@@ -253,6 +260,24 @@ Citations refreshed: the registry namespace (`MMCA.Common.Shared.Auth.Permission
   filter at `:259`, `SessionsNavRequiredRole` read and checked with `IsInRole` at `:252-253`, the
   `NavItem.RequiredRole` filter at `:257`.
 - Anchors in the live sections were re-verified against current source.
+
+## Revision (2026-10-26)
+Re-verified against current source. The decision, the grant model and every permission count are
+unchanged; the Decision paragraph now names a Store alias it omitted and one live anchor moved. The
+2026-09-07 and 2026-10-01 revisions keep their dated anchors as written; the 2026-10-06 revision
+already records the current locations for both.
+
+1. Store's Identity module carries a third constant beside its two permissions: `RolesManage`
+   (`MMCA.Store/Source/Modules/Identity/MMCA.Store.Identity.Shared/Authorization/IdentityPermissions.cs:31`)
+   aliases `AdministrationPermissions.ManageRoles` and stays out of `All` (`:34-38`). Store's grant
+   map names that alias rather than the framework constant, beside
+   `AdministrationPermissions.ManageUsers`
+   (`MMCA.Store/Source/Modules/Identity/MMCA.Store.Identity.Shared/Authorization/IdentityPermissionGrants.cs:37`),
+   while ADC names both of its aliases
+   (`MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Shared/Authorization/IdentityPermissionGrants.cs:38`).
+   The effective grants are the same framework values; the Decision paragraph now says so literally.
+2. Anchors re-verified against current source: the ADC Notification grant is applied from
+   `MMCA.ADC/Source/Modules/Notification/MMCA.ADC.Notification.API/DependencyInjection.cs:46`.
 
 ## Related
 ADR-004 (the authenticated principal and claims this keys on, including the optional `permission`

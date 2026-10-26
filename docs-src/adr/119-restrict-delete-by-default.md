@@ -8,7 +8,8 @@ Revised 2026-09-19: the rule is adopted end to end. All eight migrations were au
 2026-09-11 (four in ADC, three in Store, one in Helpdesk), and all three applications subclass the
 shipped fitness-function base, so the Decision and Trade-offs record adopted state instead of
 pending work. Revised 2026-10-21: anchors refreshed after MMCA.Common moved the convention
-registration and the permission-grant and internal-command hard deletes.
+registration and the permission-grant and internal-command hard deletes. Revised 2026-10-26: anchors
+refreshed after MMCA.Common moved the outbox cleanup and permission-grant hard deletes.
 
 ## Context
 EF Core picks a delete behavior for you. A required relationship gets `Cascade`, an optional one gets
@@ -33,11 +34,11 @@ application code. The genuine hard deletes are narrow and deliberate: the framew
 jobs against leaf tables (audit trail retention at
 `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/AuditTrail/AuditTrailCleanupJob.cs:158-161`,
 refresh sessions at `.../Persistence/Auth/RefreshSessionCleanupService.cs:127`, permission grants at
-`.../Persistence/Auth/EFPermissionGrantStore.cs:145-148`, internal commands at
+`.../Persistence/Auth/EFPermissionGrantStore.cs:143-146`, internal commands at
 `.../Persistence/InternalCommands/Administration/InternalCommandAdministration.cs:223-225` and
 `.../Persistence/InternalCommands/Administration/InternalCommandCleanupService.cs:112` and `:147`,
-outbox messages at `.../Persistence/Outbox/Administration/OutboxCleanupService.cs:105`, `:161` and
-`:177`), ADC's session-score replacement
+outbox messages at `.../Persistence/Outbox/Administration/OutboxCleanupService.cs:105`, `:165` and
+`:181`), ADC's session-score replacement
 (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Sessions/UseCases/DecisionSupport/ScoreEventSessions/SessionScoringRunner.cs:170`),
 and Store's product image blob removal
 (`MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.Infrastructure/Services/ProductImageStorageService.cs:101`
@@ -192,6 +193,16 @@ set-based deletes against leaf tables. Only line anchors in the live sections mo
    at `:400` (degrade `:387`, soft-delete unique index `:393`), `EFPermissionGrantStore.cs:145-148`,
    and `InternalCommandAdministration.cs:223-225`. The earlier dated revisions keep the anchors that
    were accurate on their own dates.
+
+## Revision (2026-10-26)
+Re-verified against current source. No decision, rationale or trade-off changed: every cited hard
+delete is still a set-based delete against a leaf table, and the convention and its registration are
+as recorded. Only line anchors in the Context list moved.
+1. Anchors re-verified against current source: the outbox cleanup deletes are the processed purge
+   (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/Administration/OutboxCleanupService.cs:105`),
+   the dead-letter purge (`:165`) and the inbox purge (`:181`), and the permission-grant revoke is one
+   set-based delete at `.../Persistence/Auth/EFPermissionGrantStore.cs:143-146` (`ExecuteDeleteAsync`
+   at `:145`). The earlier dated revisions keep the anchors that were accurate on their own dates.
 
 ## Related
 [ADR-006](006-database-per-service.md) (one context class per engine over one abstract base, which is

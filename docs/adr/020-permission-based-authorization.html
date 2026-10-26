@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 134 ADRs</summary>
+        <summary>All 135 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -234,6 +234,7 @@
         <li><a href="132-build-strictness-analyzer-policy.html">132 · Build Strictness: Analyzers at Error Severity, a Shared Baseline, and CI Test Floors</a></li>
         <li><a href="133-versioned-password-hash-work-factor.html">133 · Versioned Password Hash Work Factor</a></li>
         <li><a href="134-cloud-neutral-core-vendor-adapters.html">134 · Cloud-Neutral Core With Vendor Adapter Packages</a></li>
+        <li><a href="135-application-namespace-keyspace-isolation.html">135 · One Application Namespace Isolates Shared Infrastructure Keyspaces</a></li>
           </ol>
         </nav>
       </details>
@@ -262,7 +263,10 @@
           framework code beyond <code>AddPermissions(...)</code>.
           Revised 2026-10-06: ADC&#39;s Conference module defines twelve permissions (<code>SpeakersLink</code> added,
           Organizer-only), and the explicit-authorization-decision fitness gate is on by default with all four
-          repos held to it.</p>
+          repos held to it.
+          Revised 2026-10-26: the Decision paragraph names Store&#39;s <code>RolesManage</code> alias (outside <code>All</code>) and
+          records that both Identity grant maps name the framework administration capabilities by value,
+          partly through aliases; the ADC Notification registration anchor refreshed.</p>
           <h2 id="context">Context</h2>
           <p>The default answer in ASP.NET Core is pure role-based access control (RBAC): an endpoint declares
           <code>[Authorize(Policy = &quot;RequireOrganizer&quot;)]</code> against a named policy that calls <code>RequireRole(...)</code>, and a
@@ -315,7 +319,7 @@
           <code>MMCA.Common.Shared/Notifications/NotificationPermissions.cs:10</code>), so which of a host&#39;s roles may
           broadcast is a grant that host makes rather than a role name the framework picked. ADC grants it to
           <code>Organizer</code> alone (<code>MMCA.ADC.Notification.Shared/Authorization/NotificationPermissionGrants.cs:38</code>,
-          applied from <code>MMCA.ADC.Notification.API/DependencyInjection.cs:44</code>).</li>
+          applied from <code>MMCA.ADC.Notification.API/DependencyInjection.cs:46</code>).</li>
           </ul>
           <p>Adoption is asymmetric and that is intentional: a module declares as many capabilities as its own
           surface needs. ADC&#39;s Conference module defines twelve (<code>ConferencePermissions.cs:12-55</code>, enumerated in
@@ -336,13 +340,17 @@
           two by name (<code>IdentityPermissionGrants.cs:36-38</code>). MMCA.Store defines eleven of its own across three
           modules: six in Catalog (<code>CatalogPermissions.cs:12-36</code>), three in Sales
           (<code>SalesPermissions.cs:12-18</code>) and two in Identity (<code>IdentityPermissions.cs:14-17</code>, <code>All</code> at
-          <code>:34-38</code>), each module granting its whole set to its own <code>Admin</code> role constant from a grant map in
+          <code>:34-38</code>; a third constant, <code>RolesManage</code> at <code>:31</code>, aliases the framework&#39;s <code>ManageRoles</code> and stays
+          out of <code>All</code>), each module granting its whole set to its own <code>Admin</code> role constant from a grant map in
           its Shared project (<code>CatalogPermissionGrants.cs:29</code>, <code>SalesPermissionGrants.cs:30</code>,
           <code>IdentityPermissionGrants.cs:35-37</code>) that its API registration passes to <code>AddPermissions(...)</code>
           (<code>MMCA.Store.Catalog.API/DependencyInjection.cs:45</code>, <code>MMCA.Store.Sales.API/DependencyInjection.cs:52</code>,
           <code>MMCA.Store.Identity.API/DependencyInjection.cs:66</code>). Both Identity grant maps have the same shape:
-          the module&#39;s own <code>All</code> plus the framework&#39;s <code>ManageUsers</code> and <code>ManageRoles</code> named explicitly (ADC
-          <code>IdentityPermissionGrants.cs:38</code>, Store <code>IdentityPermissionGrants.cs:37</code>). The registry, handler and
+          the module&#39;s own <code>All</code> plus the framework&#39;s <code>ManageUsers</code> and <code>ManageRoles</code> named explicitly, by
+          value rather than always by the framework constant: ADC names both through its aliases
+          (<code>IdentityPermissionGrants.cs:38</code>, <code>UsersManage</code> and <code>RolesManage</code>), and Store names
+          <code>AdministrationPermissions.ManageUsers</code> directly and <code>ManageRoles</code> through its <code>RolesManage</code> alias
+          (<code>IdentityPermissionGrants.cs:37</code>). The registry, handler and
           policy provider are covered by framework tests, and the ADC grant tables (Conference, Engagement and
           Identity) by dedicated grant tests
           (<code>MMCA.ADC/Tests/Modules/Identity/MMCA.ADC.Identity.Shared.Tests/Authorization/IdentityPermissionGrantsTests.cs:24</code>,
@@ -492,6 +500,24 @@
           <code>NavItem.RequiredRole</code> filter at <code>:257</code>.</li>
           <li>Anchors in the live sections were re-verified against current source.</li>
           </ul>
+          <h2 id="revision-2026-10-26">Revision (2026-10-26)</h2>
+          <p>Re-verified against current source. The decision, the grant model and every permission count are
+          unchanged; the Decision paragraph now names a Store alias it omitted and one live anchor moved. The
+          2026-09-07 and 2026-10-01 revisions keep their dated anchors as written; the 2026-10-06 revision
+          already records the current locations for both.</p>
+          <ol>
+          <li>Store&#39;s Identity module carries a third constant beside its two permissions: <code>RolesManage</code>
+          (<code>MMCA.Store/Source/Modules/Identity/MMCA.Store.Identity.Shared/Authorization/IdentityPermissions.cs:31</code>)
+          aliases <code>AdministrationPermissions.ManageRoles</code> and stays out of <code>All</code> (<code>:34-38</code>). Store&#39;s grant
+          map names that alias rather than the framework constant, beside
+          <code>AdministrationPermissions.ManageUsers</code>
+          (<code>MMCA.Store/Source/Modules/Identity/MMCA.Store.Identity.Shared/Authorization/IdentityPermissionGrants.cs:37</code>),
+          while ADC names both of its aliases
+          (<code>MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Shared/Authorization/IdentityPermissionGrants.cs:38</code>).
+          The effective grants are the same framework values; the Decision paragraph now says so literally.</li>
+          <li>Anchors re-verified against current source: the ADC Notification grant is applied from
+          <code>MMCA.ADC/Source/Modules/Notification/MMCA.ADC.Notification.API/DependencyInjection.cs:46</code>.</li>
+          </ol>
           <h2 id="related">Related</h2>
           <p>ADR-004 (the authenticated principal and claims this keys on, including the optional <code>permission</code>
           claim), ADR-008 (each extracted service authorizes independently, so the registry is wired per
@@ -514,6 +540,7 @@
             <li><a href="#revision-2026-09-07">Revision (2026-09-07)</a></li>
             <li><a href="#revision-2026-10-01">Revision (2026-10-01)</a></li>
             <li><a href="#revision-2026-10-06">Revision (2026-10-06)</a></li>
+            <li><a href="#revision-2026-10-26">Revision (2026-10-26)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

@@ -8,7 +8,9 @@ local Aspire wiring (production ACA validators in ADC and Store use the direct i
 Identity authority), and the resilience claim now says the Polly pipeline covers the warmup prefetch
 but not the JwtBearer middleware's own discovery fetch. Revised 2026-10-21: anchors refreshed after
 the ADC and Store service, AppHost and Bicep edits and the Common warmup-task change moved them; no
-decision or behavior changed.
+decision or behavior changed. Revised 2026-10-26: anchors refreshed after the ADC and Store
+service, AppHost and Bicep edits and the Common hosting and warmup-task edits moved them; no decision
+or behavior changed.
 
 ## Context
 When the modular monolith is extracted into per-module service hosts behind a gateway (ADR-008),
@@ -52,9 +54,9 @@ opts into HS256 explicitly, alongside the `Jwt:SecretForKey` that choice require
   (`MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/WebApplicationBuilderExtensions.Authentication.cs:52-57`).
   No service except Identity holds key material. ADC's Conference, Engagement, and Notification
   services and Store's Catalog and Sales services all use this path
-  (`.../MMCA.ADC.Conference.Service/Program.cs:333`, `.../MMCA.ADC.Engagement.Service/Program.cs:179`,
-  `.../MMCA.ADC.Notification.Service/Program.cs:169`; `.../MMCA.Store.Catalog.Service/Program.cs:205`,
-  `.../MMCA.Store.Sales.Service/Program.cs:180`), passing the host's `IConfiguration` and
+  (`.../MMCA.ADC.Conference.Service/Program.cs:339`, `.../MMCA.ADC.Engagement.Service/Program.cs:185`,
+  `.../MMCA.ADC.Notification.Service/Program.cs:175`; `.../MMCA.Store.Catalog.Service/Program.cs:211`,
+  `.../MMCA.Store.Sales.Service/Program.cs:186`), passing the host's `IConfiguration` and
   `IHostEnvironment` and leaving `requireHttpsMetadata` at its default. All five resolve the audience
   fail-closed through the Common `JwtAudience.RequireConfigured(builder.Configuration[JwtAudience.ConfigKey])`
   (`MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/Auth/JwtAudience.cs:17`, key `Jwt:Audience`
@@ -70,10 +72,10 @@ opts into HS256 explicitly, alongside the `Jwt:SecretForKey` that choice require
   (`.../WebApplicationBuilderExtensions.Authentication.cs:68-72`).
 - `ValidIssuer` is deliberately **not** pinned: the middleware takes the issuer from the discovery
   document, because the `authority` need not be the token's `iss` origin. Locally the authority is
-  the gateway's HTTPS endpoint (`MMCA.Common/Source/Hosting/MMCA.Common.Aspire.Hosting/Extensions.cs:344-347`);
+  the gateway's HTTPS endpoint (`MMCA.Common/Source/Hosting/MMCA.Common.Aspire.Hosting/Extensions.cs:345-348`);
   in ADC's production deployment it is Identity's internal-ingress URL `http://${identityApp.name}`
-  (`MMCA.ADC/infra/main.bicep:2159`) while Identity issues tokens with `iss` set to the public
-  gateway origin (`MMCA.ADC/infra/main.bicep:1919`).
+  (`MMCA.ADC/infra/main.bicep:2195`) while Identity issues tokens with `iss` set to the public
+  gateway origin (`MMCA.ADC/infra/main.bicep:1955`).
 - Both validators pin `TokenValidationParameters.ValidAlgorithms` so an attacker cannot force an
   algorithm swap (for example, signing an HS256 token using the RSA public key as the HMAC secret):
   the **forwarded JWKS** validator (`AddForwardedJwtBearer`) pins `[RS256]` (the JWKS path only ever
@@ -93,23 +95,23 @@ opts into HS256 explicitly, alongside the `Jwt:SecretForKey` that choice require
   forwards `/.well-known/*` on to Identity. When no gateway is passed, it **falls back** to Identity's
   HTTPS endpoint directly (HTTP/2-only, so the gateway form is preferred). ADC's AppHost uses the
   two-argument gateway form for all three validating services
-  (`MMCA.ADC/Source/Hosting/MMCA.ADC.AppHost/Program.cs:373-375`).
+  (`MMCA.ADC/Source/Hosting/MMCA.ADC.AppHost/Program.cs:374-376`).
 - That gateway routing is the local Aspire wiring only; Store's AppHost uses the same gateway form
-  for Catalog and Sales (`MMCA.Store/Source/Hosting/MMCA.Store.AppHost/Program.cs:377-378`). In
+  for Catalog and Sales (`MMCA.Store/Source/Hosting/MMCA.Store.AppHost/Program.cs:379-380`). In
   the Azure Container Apps deployments the validators set `Authentication__JwtBearer__Authority`
   to Identity's internal-ingress URL `http://${identityApp.name}` directly (ADC:
-  `MMCA.ADC/infra/main.bicep:2159`, `:2295`, `:2449`; Store: `MMCA.Store/infra/main.bicep:1775`,
-  `:1911`), where TLS terminates at the platform edge, and pair it with
-  `Authentication__JwtBearer__RequireHttpsMetadata=false` (ADC: `:2163`, `:2299`, `:2453`; Store:
-  `:1780`, `:1916`), which is the shape the startup warning above exists for.
+  `MMCA.ADC/infra/main.bicep:2195`, `:2331`, `:2485`; Store: `MMCA.Store/infra/main.bicep:1781`,
+  `:1917`), where TLS terminates at the platform edge, and pair it with
+  `Authentication__JwtBearer__RequireHttpsMetadata=false` (ADC: `:2199`, `:2335`, `:2489`; Store:
+  `:1786`, `:1922`), which is the shape the startup warning above exists for.
 - `OpenIdConnectMetadataWarmupTask` (MMCA.Common.Aspire) pre-fetches the discovery document at
   startup through an `IHttpClientFactory` client
-  (`MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Warmup/OpenIdConnectMetadataWarmupTask.cs:47`),
+  (`MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Warmup/OpenIdConnectMetadataWarmupTask.cs:49`),
   aimed at the classic "first request fails, second succeeds" pattern on a cold, CPU-throttled
   Azure Container Apps Consumption replica. It warms the issuer and the discovery path, but it does
   not populate the JwtBearer middleware's `ConfigurationManager`, which caches discovery state
   separately and still performs its own fetch on the first authenticated request
-  (`.../Warmup/OpenIdConnectMetadataWarmupTask.cs:16-21`).
+  (`.../Warmup/OpenIdConnectMetadataWarmupTask.cs:18-23`).
 - SignalR cannot send an `Authorization` header on the WebSocket upgrade, so both registration paths
   read the token from the `access_token` query string for `/hubs` requests.
 
@@ -137,10 +139,10 @@ opts into HS256 explicitly, alongside the `Jwt:SecretForKey` that choice require
   client's connection pool, and only issuer-side and process-wide state is shared. The middleware
   caches the key set after its first fetch. The Polly pipeline only partly covers this: `AddServiceDefaults()` attaches
   `AddStandardResilienceHandler` through `ConfigureHttpClientDefaults`
-  (`MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Extensions.cs:39-49`), which reaches only
+  (`MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Extensions.cs:50-60`), which reaches only
   `IHttpClientFactory` clients, so the warmup prefetch is covered
-  (`.../Warmup/OpenIdConnectMetadataWarmupTask.cs:23-24`, `:47`). The JwtBearer middleware's own
-  `ConfigurationManager` fetch is separate (`OpenIdConnectMetadataWarmupTask.cs:16-21`), and
+  (`.../Warmup/OpenIdConnectMetadataWarmupTask.cs:26`, `:49`). The JwtBearer middleware's own
+  `ConfigurationManager` fetch is separate (`OpenIdConnectMetadataWarmupTask.cs:18-23`), and
   `AddForwardedJwtBearerCore` sets no `Backchannel` or `BackchannelHttpHandler`
   (`.../WebApplicationBuilderExtensions.Authentication.cs:83-114`), so that fetch does not run
   through a Common-registered resilience pipeline; what retry, if any, applies to it is left to
@@ -231,6 +233,41 @@ sections moved. The 2026-10-07 revision above keeps the anchors that were true o
      `MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Warmup/OpenIdConnectMetadataWarmupTask.cs:23-24`,
      creates the client at `:47`, and its remarks on the middleware's separate `ConfigurationManager`
      fetch run `:16-21`.
+
+## Revision (2026-10-26)
+Re-verified against current source. The signing model, the validator registration (all five services
+still pass `JwtAudience.RequireConfigured(builder.Configuration[JwtAudience.ConfigKey])`, the host
+configuration and environment, and leave `requireHttpsMetadata` at its default), the
+`RequireHttpsMetadata` resolution, the local gateway-routed discovery, the production
+internal-ingress authority, the public `Jwt__Issuer` and the warmup task's scope are unchanged; only
+anchors in the live sections moved. The 2026-10-21 revision above keeps the anchors that were true
+on that date.
+1. Anchors re-verified against current source:
+   - `services.AddForwardedJwtBearer(` starts at
+     `MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:339`,
+     `MMCA.ADC/Source/Services/MMCA.ADC.Engagement.Service/Program.cs:185`,
+     `MMCA.ADC/Source/Services/MMCA.ADC.Notification.Service/Program.cs:175`,
+     `MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:211` and
+     `MMCA.Store/Source/Services/MMCA.Store.Sales.Service/Program.cs:186`.
+   - `WithJwksDiscovery` (declared at
+     `MMCA.Common/Source/Hosting/MMCA.Common.Aspire.Hosting/Extensions.cs:322`) selects the gateway
+     (or Identity) `https` endpoint at `:345-347` and sets `Authentication__JwtBearer__Authority` at
+     `:348`.
+   - The two-argument gateway form is called at
+     `MMCA.ADC/Source/Hosting/MMCA.ADC.AppHost/Program.cs:374-376` and
+     `MMCA.Store/Source/Hosting/MMCA.Store.AppHost/Program.cs:379-380`.
+   - ADC Bicep: Identity's `Jwt__Issuer` at `MMCA.ADC/infra/main.bicep:1955`; the validators'
+     `Authentication__JwtBearer__Authority` at `:2195`, `:2331`, `:2485` and
+     `RequireHttpsMetadata=false` at `:2199`, `:2335`, `:2489`. Store Bicep: Authority at
+     `MMCA.Store/infra/main.bicep:1781`, `:1917` and `RequireHttpsMetadata=false` at `:1786`,
+     `:1922`.
+   - `AddServiceDefaults()` calls `ConfigureHttpClientDefaults` at
+     `MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Extensions.cs:50` and attaches
+     `AddStandardResilienceHandler` at `:60`.
+   - `OpenIdConnectMetadataWarmupTask` takes its `IHttpClientFactory` at
+     `MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Warmup/OpenIdConnectMetadataWarmupTask.cs:26`,
+     creates the client at `:49`, and its remarks on the middleware's separate `ConfigurationManager`
+     fetch run `:18-23`.
 
 ## Related
 ADR-007 (gRPC calls forward the validated JWT downstream via `JwtForwardingClientInterceptor`),

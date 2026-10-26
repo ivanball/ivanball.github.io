@@ -14,6 +14,7 @@ facet (superseded 2026-10-21: that block is gone), and the `with`-expression pat
 Revised 2026-10-06: a serialized `Money.Zero()` now JSON round-trips, because both currency converters read the empty code back as the sentinel and `Money`'s JSON read refuses that sentinel beside a non-zero amount, so the 2026-10-01 round-trip flag is resolved; anchors refreshed. Revised 2026-10-07: anchors refreshed after the v1.233.0 release.
 Revised 2026-10-19: the primitive Start/End exception names Store's discount window beside ADC's pairs, and the order rule is named per entity (Session uses its own strict-after rule).
 Revised 2026-10-21: `OwnsAddress` keeps the provider's Unicode default on its six columns (v1.247.0) and Store's `Customer.Address` maps through it alone, with no second `OwnsOne` override block; anchors refreshed.
+Revised 2026-10-26: anchors refreshed after the v1.248.0 through v1.261.0 releases.
 
 ## Context
 A domain model has two kinds of small type: the **identity** of a thing, and a **value** the thing
@@ -48,20 +49,20 @@ Model a domain value that carries an invariant as an **immutable record value ob
   `PhoneNumber` (`PhoneNumber.cs:16`).
 - **The constructor is private; the factory returns `Result<T>`.** `Email.Create` (`Email.cs:30`),
   `PhoneNumber.Create` (`PhoneNumber.cs:30`), `Address.Create` (`Address.cs:69`), `Money.Create`
-  (`Money.cs:85`), `DateRange.Create` (`DateRange.cs:30`) and `DateTimeRange.Create`
+  (`Money.cs:91`), `DateRange.Create` (`DateRange.cs:30`) and `DateTimeRange.Create`
   (`DateTimeRange.cs:31`) are the **validating entrance**, and for `Email`, `PhoneNumber`, `Address`,
   `DateRange` and `DateTimeRange` they are also the only public entrance at all; `Currency` is a closed
   set resolved by `Currency.FromCode` (`Currency.cs:43`). This is ADR-013 applied below the aggregate: an
   invalid value is a failed `Result`, never an exception and never a constructed-but-wrong instance.
   `Money` is the exception, deliberately: it also exposes construction sugar that composes
-  already-valid parts and so skips `Create` entirely, `Money.Zero()` (`Money.cs:160`), `Money.Zero(Currency)`
-  (`:165`), `operator *` (`:114-115`) and `Multiply` (`:142`). The fitness rule below governs the `Create` name
+  already-valid parts and so skips `Create` entirely, `Money.Zero()` (`Money.cs:166`), `Money.Zero(Currency)`
+  (`:171`), `operator *` (`:120-121`) and `Multiply` (`:148`). The fitness rule below governs the `Create` name
   only and says so in its own contract (`ArchitectureRules.Entities.cs:49-51`), so nothing stops a value
   object from shipping such a path. The sugar itself takes no raw string, and the `None` sentinel is
   `internal` (`Currency.cs:25`), but that does not make `Currency` sealed against unchecked values:
   `Currency.Code` (`Currency.cs:36`) and `Money.Amount`/`Money.Currency` (`Money.cs:32,36`) are public
   `init` accessors, shipped in the public API with the record clone method
-  (`Source/Core/MMCA.Common.Shared/PublicAPI.Shipped.txt:575,581,583,771,777`), so an external
+  (`Source/Core/MMCA.Common.Shared/PublicAPI.Shipped.txt:576,582,584,772,778`), so an external
   `with` expression (`Currency.Usd with { Code = "XYZ" }`, `Money.Zero() with { Amount = 5m }`)
   produces a currency `FromCode` never checked or a non-zero `None`-currency `Money` without going
   through `Create`. The JSON guard described under serialization below does not close this path,
@@ -81,18 +82,18 @@ Model a domain value that carries an invariant as an **immutable record value ob
   (`PhoneNumberInvariants.cs:14,17`), and the six address field lengths
   (`AddressInvariants.cs:12-27`). The split is applied **where the constraint is shared**, not
   universally: `Money`, `Currency`, `DateRange` and `DateTimeRange` keep their checks inline in the
-  factory (`Money.cs:89-90`, `Currency.cs:45-50`, `DateRange.cs:31-35`, `DateTimeRange.cs:32-36`).
+  factory (`Money.cs:95-96`, `Currency.cs:45-50`, `DateRange.cs:31-35`, `DateTimeRange.cs:32-36`).
 - **Two EF mapping shapes, chosen by whether adoption is a schema change.** A multi-field value maps as
   an **owned type**: the shipped `OwnsMoney` helper
   (`Source/Core/MMCA.Common.Infrastructure/Persistence/Configuration/EntityTypeBuilderExtensions.cs:63`)
   flattens `Money` into a `decimal(18,2)` amount column (precision pinned at `:78`) plus a
   three-character non-unicode ISO 4217 code column (`:76-88`) and sets the navigation's requiredness
   from one parameter (`:91`). Its sibling
-  `OwnsAddress` (`:133`, shipped in v1.192.0, `MMCA.Common/CHANGELOG.md:1783`) flattens `Address` into
+  `OwnsAddress` (`:133`, shipped in v1.192.0, `MMCA.Common/CHANGELOG.md:1998`) flattens `Address` into
   six columns whose lengths come from `AddressInvariants` and of which only `AddressLine1` is required
   (`:142-168`); they keep the provider's Unicode default (`nvarchar` on SQL Server), because `Address`
   accepts free text in any script (contract at `:114-118`; the forced non-unicode facet was removed
-  as a breaking change in v1.247.0, `MMCA.Common/CHANGELOG.md:70`). It names the columns from an
+  as a breaking change in v1.247.0, `MMCA.Common/CHANGELOG.md:285`). It names the columns from an
   optional prefix (`AddressLine1`, `AddressCity`, and so on by default, `:135`, joined at `:187-190`)
   and defaults the navigation to optional (`:136`, applied at `:170`). A single-string value
   maps through `HasConversion` instead, so the backing column stays a plain string column and adopting
@@ -103,16 +104,16 @@ Model a domain value that carries an invariant as an **immutable record value ob
   (`PhoneNumberValueConverter.cs:33,61`). Column facets stay at the call site.
 - **`Currency.None` is a sentinel, and materialization never yields null.** The sentinel is
   `internal static readonly Currency None = new(string.Empty)` (`Currency.cs:25`); `Money.Zero()`
-  carries it (`Money.cs:160`), `Money.Create` rejects it so an external caller must always name a real
-  currency (`Money.cs:89-90`), and addition treats it as the identity element so a zero seed can
-  accumulate into any currency (`Money.cs:149-156`). Because the write leg can therefore persist an
+  carries it (`Money.cs:166`), `Money.Create` rejects it so an external caller must always name a real
+  currency (`Money.cs:95-96`), and addition treats it as the identity element so a zero seed can
+  accumulate into any currency (`Money.cs:155-162`). Because the write leg can therefore persist an
   empty code, `OwnsMoney`'s read leg falls back to the sentinel rather than a null-forgiving `.Value!`
   (`EntityTypeBuilderExtensions.cs:26,84`, contract documented at `:38-45`), and the fallback is
   regression-covered (`Tests/Core/MMCA.Common.Infrastructure.Tests/Persistence/Configuration/OwnsMoneyTests.cs:120`).
 - **Every serialization boundary is declared explicitly.** `Money`, `Email`, `PhoneNumber` and
   `Address` are `[DataContract]` with ordered `[DataMember]` members (`Money.cs:21,31,35`,
   `Email.cs:15,19`, `PhoneNumber.cs:15,19`, `Address.cs:15,19-40`) and each carries a private
-  `[JsonConstructor]` round-trip constructor (`Money.cs:52`, `Email.cs:22`, `PhoneNumber.cs:22`,
+  `[JsonConstructor]` round-trip constructor (`Money.cs:55`, `Email.cs:22`, `PhoneNumber.cs:22`,
   `Address.cs:42`) so a materializer rebuilds the value without reopening the factory; `AddAPI`
   registers both the JSON converter and the XML `DataContractSerializer` formatters
   (`Source/Presentation/MMCA.Common.API/DependencyInjection.cs:54,67`). `Currency` instead serializes
@@ -121,9 +122,9 @@ Model a domain value that carries an invariant as an **immutable record value ob
   so non-MVC paths (cache, outbox, integration events, typed clients) fail the same way model binding
   does. Both converters read an empty code back as the `None` sentinel (`Currency.cs:88-89`,
   `CurrencyJsonConverter.cs:26-27`), so a serialized `Money.Zero()` round-trips. Because the
-  `[JsonConstructor]` bypasses `Create`, `Money` implements `IJsonOnDeserialized` (`Money.cs:22,70-76`)
+  `[JsonConstructor]` bypasses `Create`, `Money` implements `IJsonOnDeserialized` (`Money.cs:22,76-82`)
   and throws `JsonException` when a non-zero amount arrives with the sentinel (shipped in v1.232.0,
-  `MMCA.Common/CHANGELOG.md:374`). `DateRange` and `DateTimeRange` carry no serialization annotations.
+  `MMCA.Common/CHANGELOG.md:589`). `DateRange` and `DateTimeRange` carry no serialization annotations.
 - **gRPC is mapped by hand, not inferred.** `Money` crosses a service boundary as a purpose-built
   `MoneyV1` message with a **string** amount (proto has no decimal) and a currency code
   (`MMCA.Store/Source/Services/MMCA.Store.Catalog.Contracts/Protos/product_variants.proto:115,117,120`),
@@ -149,9 +150,9 @@ Model a domain value that carries an invariant as an **immutable record value ob
   as its only `Address` mapping, and
   `User.Email` the same way as `Customer.Email` (`UserConfiguration.cs:25`).
   ADC types `User.Email` as `Email`
-  (`MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Domain/Users/User.cs:52`, validated through
-  `Email.Create` at `:234` and passed to the constructor at `:250`, with the same pair repeated on the
-  social-login path `CreateExternal` (`:276`) at `:284,295`) with
+  (`MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Domain/Users/User.cs:53`, validated through
+  `Email.Create` at `:235` and passed to the constructor at `:251`, with the same pair repeated on the
+  social-login path `CreateExternal` (`:277`) at `:285,296`) with
   the same converter (`.../Identity.Infrastructure/.../UserConfiguration.cs:21`) and two optional
   Conference emails through `NullableEmailValueConverter`: a speaker's
   (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Speakers/Speaker.cs:41`, mapped at
@@ -200,7 +201,7 @@ Model a domain value that carries an invariant as an **immutable record value ob
   that returns a failure instead (`Email.cs:30-41`). That is the same invariant-over-discipline posture
   the framework takes elsewhere (ADR-015), applied one level below the aggregate.
 - **Amount and currency are one value, so they are one type.** Two loose columns can drift; `Money`
-  makes a currency mismatch a `Result` failure at the point of arithmetic (`Money.cs:125-133`) rather
+  makes a currency mismatch a `Result` failure at the point of arithmetic (`Money.cs:131-139`) rather
   than a silently wrong total.
 - **Records give equality for free.** Value semantics ("two addresses with the same fields are the same
   address") is exactly what a positional-free `record` already generates, so the base type can be empty
@@ -247,8 +248,8 @@ Model a domain value that carries an invariant as an **immutable record value ob
 - **The currency set is closed in code.** `Currency.All` is `USD` and `EUR` (`Currency.cs:56-60`), so
   supporting a third currency is a framework change and a release, not configuration.
 - **`Money` keeps a throwing operator.** `operator +` throws `InvalidOperationException` on a currency
-  mismatch (`Money.cs:102-108`), which is the one place the value objects step outside the ADR-013
-  posture; `Money.Add` is the `Result`-returning path callers are steered to (`Money.cs:125`).
+  mismatch (`Money.cs:108-114`), which is the one place the value objects step outside the ADR-013
+  posture; `Money.Add` is the `Result`-returning path callers are steered to (`Money.cs:131`).
 - **gRPC costs a hand-written mapping per value.** There is no automatic proto projection, so every
   value object that has to cross a service boundary needs its own wire message and translation pair,
   the same class of friction ADR-048 declined to pay for identifiers.
@@ -321,6 +322,22 @@ current source: `PublicAPI.Shipped.txt:575,581,583,771,777`; `EntityTypeBuilderE
 (`OwnsAddress`), `:135-136`, `:142-168`, `:170`, `:187-190`; `MMCA.Common/CHANGELOG.md:374` (inside
 `[1.232.0]`) and `:1783` (inside `[1.192.0]`); ADC `User.cs:234,250` and `CreateExternal` at
 `:276`, `:284,295`; `Speaker.cs:41`.
+
+## Revision (2026-10-26)
+Re-verified against current source. No decision changed; the value-object set, the factory shape,
+the `Money` sugar and `with`-expression paths, the `Currency.None` sentinel handling, the JSON-read
+refusal, the shipped mapping helpers and every adoption site hold. Only line anchors drifted.
+(1) Anchors re-verified against current source:
+`MMCA.Common/Source/Core/MMCA.Common.Shared/ValueObjects/Financial/Money.cs` `[JsonConstructor]` at
+`:55`, `OnDeserialized` at `:76-82`, `Create` at `:91` with the `None` rejection at `:95-96`,
+`operator +` at `:108-114`, `operator *` at `:120-121`, `Add` at `:131` with the mismatch failure
+through `:139`, `Multiply` at `:148`, `AddUnchecked` at `:155-162`, `Zero()` at `:166` and
+`Zero(Currency)` at `:171` (`:21`, `:22`, `:31-36` unchanged);
+`MMCA.Common/Source/Core/MMCA.Common.Shared/PublicAPI.Shipped.txt:576,582,584,772,778`;
+`MMCA.Common/CHANGELOG.md:1998` (inside `[1.192.0]`), `:285` (inside `[1.247.0]`) and `:589`
+(inside `[1.232.0]`); ADC
+`MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Domain/Users/User.cs:53`, `Email.Create` at
+`:235` and `:285`, `new User(...)` at `:251` and `:296`, `CreateExternal` at `:277`.
 
 ## Related
 ADR-048 (the deliberate opposite call for identifiers: primitives behind aliases, wrapper structs

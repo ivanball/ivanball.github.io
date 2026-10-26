@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 134 ADRs</summary>
+        <summary>All 135 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -234,6 +234,7 @@
         <li><a href="132-build-strictness-analyzer-policy.html">132 · Build Strictness: Analyzers at Error Severity, a Shared Baseline, and CI Test Floors</a></li>
         <li><a href="133-versioned-password-hash-work-factor.html">133 · Versioned Password Hash Work Factor</a></li>
         <li><a href="134-cloud-neutral-core-vendor-adapters.html">134 · Cloud-Neutral Core With Vendor Adapter Packages</a></li>
+        <li><a href="135-application-namespace-keyspace-isolation.html">135 · One Application Namespace Isolates Shared Infrastructure Keyspaces</a></li>
           </ol>
         </nav>
       </details>
@@ -242,7 +243,7 @@
           <p class="eyebrow doc-kicker">Architecture Decision Record</p>
           <h1 id="adr-122-dev-only-relaxations-are-environment-gated-and-fail-closed">ADR-122: Dev-Only Relaxations Are Environment-Gated and Fail Closed</h1>
           <h2 id="status">Status</h2>
-          <p>Accepted (2026-09-11). Revised 2026-10-01: citations re-anchored. Revised 2026-10-06: the plain-check inventory adds the Development-only design-time database skip. Revised 2026-10-07: the inventory names the <code>!IsProduction()</code> OpenAPI and Scalar mappings as outside the rule, the UI-side null-aware pseudo-locale check, and the Serilog file sink as out of scope.</p>
+          <p>Accepted (2026-09-11). Revised 2026-10-01: citations re-anchored. Revised 2026-10-06: the plain-check inventory adds the Development-only design-time database skip. Revised 2026-10-07: the inventory names the <code>!IsProduction()</code> OpenAPI and Scalar mappings as outside the rule, the UI-side null-aware pseudo-locale check, and the Serilog file sink as out of scope. Revised 2026-10-26: the session cookies now also set <code>Secure</code> on a Development HTTPS request, so only a plain-http Development run omits it, and the cookie bullet describes the session and culture cookies separately; CORS and pseudo-locale anchors refreshed.</p>
           <h2 id="context">Context</h2>
           <p>Several capabilities are useful locally and dangerous in a deployed environment: EF Core rendering
           parameter values into logs and exception messages, an SMTP session that skips TLS, prompt and
@@ -289,21 +290,24 @@
           guarantee their code does not make.</p>
           <ul>
           <li>CORS: the pipeline selects <code>CorsPolicyAllowAll</code> in Development and <code>CorsPolicyAllowSpecificOrigins</code>
-          otherwise (<code>.../Startup/Pipeline/MiddlewarePipelineBuilder.cs:99-101</code>); the allow-any policy is
+          otherwise (<code>.../Startup/Pipeline/MiddlewarePipelineBuilder.cs:98-100</code>); the allow-any policy is
           registered at <code>.../Startup/WebApplicationBuilderExtensions.cs:145-148</code> behind an analyzer
           suppression that states the scope (<code>:144</code>). The Aspire gateway takes the same shape on its default
           policy (<code>MMCA.Common/Source/Hosting/MMCA.Common.Aspire/GatewayCorsExtensions.cs:34-42</code>). See
           ADR-082.</li>
-          <li>Cookie <code>Secure</code> flag: <code>Secure = !environment.IsDevelopment()</code> for the session cookies
-          (<code>.../MMCA.Common.API/SessionCookies/SessionCookieJar.cs:64</code>) and for the culture cookie
-          (<code>.../Startup/WebApplicationExtensions.cs:134</code>).</li>
+          <li>Cookie <code>Secure</code> flag: the session cookies use
+          <code>Secure = !environment.IsDevelopment() || context.Request.IsHttps</code>
+          (<code>.../MMCA.Common.API/SessionCookies/SessionCookieJar.cs:68</code>), so every non-Development host sets
+          the flag whatever the request scheme, and in Development an HTTPS request also gets it; only a
+          plain-http request in Development goes without it, whatever the host name (rationale at <code>:60-63</code>). The culture cookie uses <code>Secure = !app.Environment.IsDevelopment()</code>
+          (<code>.../Startup/WebApplicationExtensions.cs:135</code>).</li>
           <li>HSTS: <code>_enableHsts = options.Value.EnableHsts &amp;&amp; !environment.IsDevelopment()</code>
           (<code>MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Security/SecurityHeaders.cs:175</code>), so Development
           is the only way to suppress it once a host enables it. CSP is built from the same flag
           (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI.Web/Security/BlazorCspPolicyProvider.cs:41</code>). See
           ADR-023.</li>
           <li>Pseudo-locale: added to the supported cultures and accepted by <code>/culture/set</code> only in Development
-          (<code>.../Startup/WebApplicationExtensions.cs:80-82</code>, <code>:119-122</code>). The culture switcher offers it in
+          (<code>.../Startup/WebApplicationExtensions.cs:81-84</code>, <code>:120-123</code>). The culture switcher offers it in
           the menu only when <code>Services.GetService&lt;IHostEnvironment&gt;()?.IsDevelopment() == true</code>
           (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI/Globalization/CultureSwitcher.razor:24-27</code>), so
           a WASM render, which registers no <code>IHostEnvironment</code> (<code>:21-22</code>), does not offer it; the WASM bootstrap takes the
@@ -396,6 +400,21 @@
           <li>Anchors re-verified against current source: the design-time database skip moved to
           <code>DatabaseInitializationExtensions.cs:174-177</code>; all other citations still hold.</li>
           </ol>
+          <h2 id="revision-2026-10-26">Revision (2026-10-26)</h2>
+          <p>Re-verified against current source. The rule, the three fail-closed gates and the rest of the
+          Development-gated inventory are unchanged; the session cookie&#39;s <code>Secure</code> expression moved, so the
+          cookie bullet now describes the session and culture cookies separately.</p>
+          <ol>
+          <li>The session cookies are <code>Secure</code> outside Development whatever the request scheme and, in
+          Development, whenever the request arrived over HTTPS
+          (<code>SessionCookieJar.cs:68</code>, <code>Secure = !environment.IsDevelopment() || context.Request.IsHttps</code>,
+          rationale <code>:60-63</code>); only a plain-http request in Development omits the flag. The culture cookie keeps
+          <code>Secure = !app.Environment.IsDevelopment()</code> (<code>WebApplicationExtensions.cs:135</code>).</li>
+          <li>Anchors re-verified against current source: the CORS selection moved to
+          <code>MiddlewarePipelineBuilder.cs:98-100</code>, and the pseudo-locale supported-cultures branch and
+          <code>/culture/set</code> check to <code>WebApplicationExtensions.cs:81-84</code> and <code>:120-123</code>; all other citations
+          still hold.</li>
+          </ol>
           <h2 id="related">Related</h2>
           <p><a href="070-fail-fast-configuration-contract.html">ADR-070</a> (binds and validates settings at startup; this
           record governs when a validated setting may be honored),
@@ -425,6 +444,7 @@
             <li><a href="#revision-2026-10-01">Revision (2026-10-01)</a></li>
             <li><a href="#revision-2026-10-06">Revision (2026-10-06)</a></li>
             <li><a href="#revision-2026-10-07">Revision (2026-10-07)</a></li>
+            <li><a href="#revision-2026-10-26">Revision (2026-10-26)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

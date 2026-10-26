@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 134 ADRs</summary>
+        <summary>All 135 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -234,6 +234,7 @@
         <li><a href="132-build-strictness-analyzer-policy.html">132 · Build Strictness: Analyzers at Error Severity, a Shared Baseline, and CI Test Floors</a></li>
         <li><a href="133-versioned-password-hash-work-factor.html">133 · Versioned Password Hash Work Factor</a></li>
         <li><a href="134-cloud-neutral-core-vendor-adapters.html">134 · Cloud-Neutral Core With Vendor Adapter Packages</a></li>
+        <li><a href="135-application-namespace-keyspace-isolation.html">135 · One Application Namespace Isolates Shared Infrastructure Keyspaces</a></li>
           </ol>
         </nav>
       </details>
@@ -278,7 +279,10 @@
           Revised 2026-10-07: anchors refreshed after the v1.233.0 release.
           Revised 2026-10-21: the default resolution order is the claim only since v1.243.0; header resolution is
           an explicit opt-in (claim-before-header is a recommended order checked only by an optional conformance
-          base), Helpdesk opts in, and the unresolved-tenant 400 still names the header; anchors refreshed.</p>
+          base), Helpdesk opts in, and the unresolved-tenant 400 still names the header; anchors refreshed.
+          Revised 2026-10-26: the Decision now names all three facts of the optional <code>TenantResolutionTestsBase</code>
+          (header opt-in through <code>AllowsHeaderResolution</code>, claim before header, health endpoints excluded), not
+          only the claim-before-header one; anchors refreshed.</p>
           <h2 id="context">Context</h2>
           <p>MMCA.Common already partitions data along two axes and neither of them is a tenant. ADR-006 partitions by
           <strong>source name</strong> (every entity resolves to a <code>DataSourceKey(Engine, Name)</code>, each module or service owning
@@ -342,10 +346,15 @@
           (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Tenancy/TenancySettingsValidator.cs:55-63</code>),
           and the claim-before-header check lives in the optional conformance base <code>TenantResolutionTestsBase</code>
           (<code>MMCA.Common/Source/Hosting/MMCA.Common.Testing/Conformance/TenantResolutionTestsBase.cs:66-81</code>), which a
-          host subclasses to enforce it. Helpdesk opts in, listing the claim first, without subclassing that base
+          host subclasses to enforce it. That base holds three facts, not one: header resolution must be an
+          explicit opt-in (<code>:46-61</code>, gated by the virtual <code>AllowsHeaderResolution</code>, default <code>false</code>, at <code>:40</code>), the
+          claim must be tried before the header (<code>:66-81</code>), and the health endpoints must stay excluded
+          (<code>:87-100</code>). With tenancy enabled, a host that lists <code>Header</code> and subclasses the base therefore also
+          overrides <code>AllowsHeaderResolution</code> (the opt-in fact returns early when tenancy is disabled, <code>:50-53</code>). Helpdesk opts in, listing the claim first, without subclassing that base
           (<code>MMCA.Helpdesk/Source/Hosts/MMCA.Helpdesk.Web/appsettings.json:32</code>). The fail-closed <code>400</code> names
           <code>HeaderName</code> beside <code>ClaimType</code> whatever the order lists, so a claim-only host still tells the caller it
-          may supply the header (<code>TenantResolutionMiddleware.cs:143-147</code>). Host-based resolution (tenant
+          may supply the header (<code>TenantResolutionMiddleware.cs:146-150</code>, <code>ClaimType</code> at <code>:147</code>, <code>HeaderName</code> at
+          <code>:149</code>). Host-based resolution (tenant
           from subdomain) is deferred: it needs a hostname-to-tenant map and certificate handling that no consumer
           needs today.</p>
           <p><code>TenantResolutionMiddleware</code> (<code>Source/Presentation/MMCA.Common.API/Middleware/TenantResolutionMiddleware.cs</code>)
@@ -355,8 +364,8 @@
           (<code>MiddlewarePipelineBuilder.cs:107-113</code>), placed immediately <strong>after</strong> the <code>Authentication</code> step
           (<code>:103-105</code>), because a claim-first resolution order requires that <code>HttpContext.User</code> already be populated.
           <code>UseCommonMiddlewarePipeline</code>
-          (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/WebApplicationExtensions.cs:48</code>, with a
-          <code>configure</code> overload at <code>:60</code>) applies the steps through <code>ApplyPipeline</code> (<code>:170</code>), which seeds
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/WebApplicationExtensions.cs:49</code>, with a
+          <code>configure</code> overload at <code>:61</code>) applies the steps through <code>ApplyPipeline</code> (<code>:171</code>), which seeds
           <code>MiddlewarePipelineBuilder.CreateDefault()</code> (<code>MiddlewarePipelineBuilder.cs:31</code>): the order is data,
           frozen by the <code>MiddlewarePipelineOrderTestsBase</code> fitness function rather than by a sequence of inline
           <code>Use*</code> calls. Like the <code>SoftDeletedUserFilter</code> step (<code>MiddlewarePipelineBuilder.cs:123-125</code>, its name at
@@ -427,17 +436,18 @@
           (<code>TenantDataSourceTargets.Expand</code>,
           <code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DataSources/TenantDataSourceTargets.cs:52</code>,
           reached through <code>FrameworkTableTargets.Relational</code> (<code>FrameworkTableTargets.cs:44</code>, <code>:63</code>), which
-          <code>OutboxProcessor.GetOutboxTargets</code> (<code>OutboxProcessor.cs:155-156</code>) and
-          <code>OutboxCleanupService.GetRelationalTargets</code> (<code>OutboxCleanupService.cs:192</code>) call: one shared target per
+          <code>OutboxProcessor.GetOutboxTargets</code> (<code>OutboxProcessor.cs:157-158</code>) and
+          <code>OutboxCleanupService.GetRelationalTargets</code> (<code>OutboxCleanupService.cs:196-197</code>) call: one shared target per
           source plus one target per tenant that overrides that source) and call <code>ITenantContext.SetTenant</code> inside
           the per-target scope before obtaining the context, through the shared <code>CreateTenantScope</code> helper
           (<code>TenantDataSourceTargets.cs:100-119</code>, which sets the tenant under <code>AmbientOrigin.Suppress</code> at <code>:105</code>;
-          called at <code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/Processing/OutboxProcessor.cs:195</code>
+          called at <code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/Processing/OutboxProcessor.cs:197</code>
           and <code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/Administration/OutboxCleanupService.cs:98</code>), so the
-          factory routes to the tenant&#39;s database and the claim-lease update (<code>OutboxProcessor.cs:371-372</code>, the <code>ExecuteUpdateAsync</code>
-          that sets <code>LockedUntil</code> and <code>LockToken</code> at <code>:372</code>) runs against the right rows. The processor also opens a
-          fresh tenant scope per dispatched row through the same helper (<code>OutboxProcessor.cs:556</code>), on which the
-          row&#39;s stored origin is restored before dispatch. Routing does not depend on a tenant
+          factory routes to the tenant&#39;s database and the claim-lease update (<code>OutboxProcessor.cs:373-374</code>, the <code>ExecuteUpdateAsync</code>
+          at <code>:373</code> that sets <code>LockedUntil</code> and <code>LockToken</code> at <code>:374</code>) runs against the right rows. The processor
+          also opens a fresh tenant scope per dispatched row through the same helper (<code>OutboxProcessor.cs:558</code>), on
+          which the row&#39;s stored origin, its tenant included, is restored before dispatch (<code>AmbientOrigin.Restore</code>,
+          <code>:565-572</code>, the tenant passed at <code>:570</code>). Routing does not depend on a tenant
           column, but the row does carry one: <code>OutboxMessage.TenantId</code>
           (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/OutboxMessage.cs:95</code>, assigned from the origin at
           <code>:153</code>) is a nullable string mapped with a 64-character, non-Unicode limit
@@ -681,6 +691,38 @@
           and <code>LockToken</code> at <code>:372</code>), the per-row scope at <code>:556</code>; the <code>OutboxMessage.TenantId</code> assignment from
           the origin at <code>OutboxMessage.cs:153</code> (declared at <code>:95</code>).</li>
           </ol>
+          <h2 id="revision-2026-10-26">Revision (2026-10-26)</h2>
+          <p>Re-verified against current source. The isolation model and the resolution defaults are unchanged:
+          claim-only by default, header by explicit opt-in, the unresolved-tenant <code>400</code> naming both <code>ClaimType</code> and
+          <code>HeaderName</code>, and background work draining per <code>(source, tenant?)</code> target. One description was
+          incomplete, and line numbers moved.</p>
+          <ol>
+          <li><strong>The optional conformance base holds three facts, not one.</strong> The Decision named only the
+          claim-before-header check. <code>TenantResolutionTestsBase</code> also asserts that header resolution is an
+          explicit opt-in
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Testing/Conformance/TenantResolutionTestsBase.cs:46-61</code>,
+          gated by the virtual <code>AllowsHeaderResolution</code> at <code>:40</code>, default <code>false</code>) and that the health endpoints
+          stay excluded (<code>:87-100</code>), beside the claim-before-header fact (<code>:66-81</code>). The v1.243.0 entry lists
+          all three (<code>MMCA.Common/CHANGELOG.md:385</code>, the release heading at <code>:380</code>). With tenancy enabled, a
+          host that lists <code>Header</code>, as Helpdesk does
+          (<code>MMCA.Helpdesk/Source/Hosts/MMCA.Helpdesk.Web/appsettings.json:32</code>), and subclasses the base also
+          overrides <code>AllowsHeaderResolution</code> (the fact returns early when tenancy is disabled, <code>:50-53</code>). The resolution-order Decision paragraph now says so.</li>
+          <li>Anchors re-verified against current source: <code>UseCommonMiddlewarePipeline</code>
+          <code>WebApplicationExtensions.cs:49</code> (the <code>configure</code> overload at <code>:61</code>, <code>ApplyPipeline</code> at <code>:171</code>); the
+          unresolved-tenant <code>400</code> detail <code>TenantResolutionMiddleware.cs:146-150</code> (<code>ClaimType</code> at <code>:147</code>,
+          <code>HeaderName</code> at <code>:149</code>); <code>OutboxProcessor.GetOutboxTargets</code> <code>OutboxProcessor.cs:157-158</code>, the
+          per-target <code>CreateTenantScope</code> call at <code>:197</code>, the claim-lease <code>ExecuteUpdateAsync</code> at <code>:373</code>
+          (<code>LockedUntil</code> and <code>LockToken</code> at <code>:374</code>), the per-row scope at <code>:558</code> with <code>AmbientOrigin.Restore</code> at
+          <code>:565-572</code> (the tenant at <code>:570</code>); <code>OutboxCleanupService.GetRelationalTargets</code>
+          <code>OutboxCleanupService.cs:196-197</code> (its <code>CreateTenantScope</code> call still at <code>:98</code>). For the dated
+          revisions, which keep their anchors as written: the v1.243.0 Breaking bullet the Revision
+          (2026-10-21) cites is at <code>MMCA.Common/CHANGELOG.md:404</code>; <code>AmbientOrigin.Restore</code> is declared at
+          <code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Context/AmbientOrigin.cs:254</code>, calling
+          <code>RestoreTenant</code> at <code>:270</code> (declared at <code>:294</code>); the consumer tenant header read is at
+          <code>ConsumerOriginRestore.cs:55</code>, applied before the inbox at <code>IntegrationEventConsumer.cs:64-66</code>;
+          <code>BrokerMessageBus</code> stamps <code>MessageHeaders.TenantId</code> at <code>BrokerMessageBus.cs:92</code> (the constant still at
+          <code>MessageHeaders.cs:25</code>).</li>
+          </ol>
           
         <div class="doc-foot btn-row">
           <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
@@ -702,6 +744,7 @@
             <li><a href="#revision-2026-10-06">Revision (2026-10-06)</a></li>
             <li><a href="#revision-2026-10-07">Revision (2026-10-07)</a></li>
             <li><a href="#revision-2026-10-21">Revision (2026-10-21)</a></li>
+            <li><a href="#revision-2026-10-26">Revision (2026-10-26)</a></li>
             </ul>
           </nav>
         </aside>

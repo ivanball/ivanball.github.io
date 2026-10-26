@@ -39,6 +39,9 @@ Revised 2026-10-07: anchors refreshed after the v1.233.0 release.
 Revised 2026-10-21: the default resolution order is the claim only since v1.243.0; header resolution is
 an explicit opt-in (claim-before-header is a recommended order checked only by an optional conformance
 base), Helpdesk opts in, and the unresolved-tenant 400 still names the header; anchors refreshed.
+Revised 2026-10-26: the Decision now names all three facts of the optional `TenantResolutionTestsBase`
+(header opt-in through `AllowsHeaderResolution`, claim before header, health endpoints excluded), not
+only the claim-before-header one; anchors refreshed.
 
 ## Context
 MMCA.Common already partitions data along two axes and neither of them is a tenant. ADR-006 partitions by
@@ -111,10 +114,15 @@ rejects only `Host`
 (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Tenancy/TenancySettingsValidator.cs:55-63`),
 and the claim-before-header check lives in the optional conformance base `TenantResolutionTestsBase`
 (`MMCA.Common/Source/Hosting/MMCA.Common.Testing/Conformance/TenantResolutionTestsBase.cs:66-81`), which a
-host subclasses to enforce it. Helpdesk opts in, listing the claim first, without subclassing that base
+host subclasses to enforce it. That base holds three facts, not one: header resolution must be an
+explicit opt-in (`:46-61`, gated by the virtual `AllowsHeaderResolution`, default `false`, at `:40`), the
+claim must be tried before the header (`:66-81`), and the health endpoints must stay excluded
+(`:87-100`). With tenancy enabled, a host that lists `Header` and subclasses the base therefore also
+overrides `AllowsHeaderResolution` (the opt-in fact returns early when tenancy is disabled, `:50-53`). Helpdesk opts in, listing the claim first, without subclassing that base
 (`MMCA.Helpdesk/Source/Hosts/MMCA.Helpdesk.Web/appsettings.json:32`). The fail-closed `400` names
 `HeaderName` beside `ClaimType` whatever the order lists, so a claim-only host still tells the caller it
-may supply the header (`TenantResolutionMiddleware.cs:143-147`). Host-based resolution (tenant
+may supply the header (`TenantResolutionMiddleware.cs:146-150`, `ClaimType` at `:147`, `HeaderName` at
+`:149`). Host-based resolution (tenant
 from subdomain) is deferred: it needs a hostname-to-tenant map and certificate handling that no consumer
 needs today.
 
@@ -125,8 +133,8 @@ constant at `MiddlewarePipelineStepNames.cs:20`). Tenant resolution is its own s
 (`MiddlewarePipelineBuilder.cs:107-113`), placed immediately **after** the `Authentication` step
 (`:103-105`), because a claim-first resolution order requires that `HttpContext.User` already be populated.
 `UseCommonMiddlewarePipeline`
-(`MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/WebApplicationExtensions.cs:48`, with a
-`configure` overload at `:60`) applies the steps through `ApplyPipeline` (`:170`), which seeds
+(`MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/WebApplicationExtensions.cs:49`, with a
+`configure` overload at `:61`) applies the steps through `ApplyPipeline` (`:171`), which seeds
 `MiddlewarePipelineBuilder.CreateDefault()` (`MiddlewarePipelineBuilder.cs:31`): the order is data,
 frozen by the `MiddlewarePipelineOrderTestsBase` fitness function rather than by a sequence of inline
 `Use*` calls. Like the `SoftDeletedUserFilter` step (`MiddlewarePipelineBuilder.cs:123-125`, its name at
@@ -202,17 +210,18 @@ for a soft-delete-inclusive read to cross tenants.
 (`TenantDataSourceTargets.Expand`,
 `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DataSources/TenantDataSourceTargets.cs:52`,
 reached through `FrameworkTableTargets.Relational` (`FrameworkTableTargets.cs:44`, `:63`), which
-`OutboxProcessor.GetOutboxTargets` (`OutboxProcessor.cs:155-156`) and
-`OutboxCleanupService.GetRelationalTargets` (`OutboxCleanupService.cs:192`) call: one shared target per
+`OutboxProcessor.GetOutboxTargets` (`OutboxProcessor.cs:157-158`) and
+`OutboxCleanupService.GetRelationalTargets` (`OutboxCleanupService.cs:196-197`) call: one shared target per
 source plus one target per tenant that overrides that source) and call `ITenantContext.SetTenant` inside
 the per-target scope before obtaining the context, through the shared `CreateTenantScope` helper
 (`TenantDataSourceTargets.cs:100-119`, which sets the tenant under `AmbientOrigin.Suppress` at `:105`;
-called at `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/Processing/OutboxProcessor.cs:195`
+called at `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/Processing/OutboxProcessor.cs:197`
 and `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/Administration/OutboxCleanupService.cs:98`), so the
-factory routes to the tenant's database and the claim-lease update (`OutboxProcessor.cs:371-372`, the `ExecuteUpdateAsync`
-that sets `LockedUntil` and `LockToken` at `:372`) runs against the right rows. The processor also opens a
-fresh tenant scope per dispatched row through the same helper (`OutboxProcessor.cs:556`), on which the
-row's stored origin is restored before dispatch. Routing does not depend on a tenant
+factory routes to the tenant's database and the claim-lease update (`OutboxProcessor.cs:373-374`, the `ExecuteUpdateAsync`
+at `:373` that sets `LockedUntil` and `LockToken` at `:374`) runs against the right rows. The processor
+also opens a fresh tenant scope per dispatched row through the same helper (`OutboxProcessor.cs:558`), on
+which the row's stored origin, its tenant included, is restored before dispatch (`AmbientOrigin.Restore`,
+`:565-572`, the tenant passed at `:570`). Routing does not depend on a tenant
 column, but the row does carry one: `OutboxMessage.TenantId`
 (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/OutboxMessage.cs:95`, assigned from the origin at
 `:153`) is a nullable string mapped with a 64-character, non-Unicode limit
@@ -464,3 +473,35 @@ still a connection-string override behind the same `DataSourceKey`, and backgrou
    `CreateTenantScope` call at `:195`, the claim-lease `ExecuteUpdateAsync` at `:371-372` (`LockedUntil`
    and `LockToken` at `:372`), the per-row scope at `:556`; the `OutboxMessage.TenantId` assignment from
    the origin at `OutboxMessage.cs:153` (declared at `:95`).
+
+## Revision (2026-10-26)
+Re-verified against current source. The isolation model and the resolution defaults are unchanged:
+claim-only by default, header by explicit opt-in, the unresolved-tenant `400` naming both `ClaimType` and
+`HeaderName`, and background work draining per `(source, tenant?)` target. One description was
+incomplete, and line numbers moved.
+
+1. **The optional conformance base holds three facts, not one.** The Decision named only the
+   claim-before-header check. `TenantResolutionTestsBase` also asserts that header resolution is an
+   explicit opt-in
+   (`MMCA.Common/Source/Hosting/MMCA.Common.Testing/Conformance/TenantResolutionTestsBase.cs:46-61`,
+   gated by the virtual `AllowsHeaderResolution` at `:40`, default `false`) and that the health endpoints
+   stay excluded (`:87-100`), beside the claim-before-header fact (`:66-81`). The v1.243.0 entry lists
+   all three (`MMCA.Common/CHANGELOG.md:385`, the release heading at `:380`). With tenancy enabled, a
+   host that lists `Header`, as Helpdesk does
+   (`MMCA.Helpdesk/Source/Hosts/MMCA.Helpdesk.Web/appsettings.json:32`), and subclasses the base also
+   overrides `AllowsHeaderResolution` (the fact returns early when tenancy is disabled, `:50-53`). The resolution-order Decision paragraph now says so.
+2. Anchors re-verified against current source: `UseCommonMiddlewarePipeline`
+   `WebApplicationExtensions.cs:49` (the `configure` overload at `:61`, `ApplyPipeline` at `:171`); the
+   unresolved-tenant `400` detail `TenantResolutionMiddleware.cs:146-150` (`ClaimType` at `:147`,
+   `HeaderName` at `:149`); `OutboxProcessor.GetOutboxTargets` `OutboxProcessor.cs:157-158`, the
+   per-target `CreateTenantScope` call at `:197`, the claim-lease `ExecuteUpdateAsync` at `:373`
+   (`LockedUntil` and `LockToken` at `:374`), the per-row scope at `:558` with `AmbientOrigin.Restore` at
+   `:565-572` (the tenant at `:570`); `OutboxCleanupService.GetRelationalTargets`
+   `OutboxCleanupService.cs:196-197` (its `CreateTenantScope` call still at `:98`). For the dated
+   revisions, which keep their anchors as written: the v1.243.0 Breaking bullet the Revision
+   (2026-10-21) cites is at `MMCA.Common/CHANGELOG.md:404`; `AmbientOrigin.Restore` is declared at
+   `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Context/AmbientOrigin.cs:254`, calling
+   `RestoreTenant` at `:270` (declared at `:294`); the consumer tenant header read is at
+   `ConsumerOriginRestore.cs:55`, applied before the inbox at `IntegrationEventConsumer.cs:64-66`;
+   `BrokerMessageBus` stamps `MessageHeaders.TenantId` at `BrokerMessageBus.cs:92` (the constant still at
+   `MessageHeaders.cs:25`).

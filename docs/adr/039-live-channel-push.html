@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 134 ADRs</summary>
+        <summary>All 135 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -234,6 +234,7 @@
         <li><a href="132-build-strictness-analyzer-policy.html">132 · Build Strictness: Analyzers at Error Severity, a Shared Baseline, and CI Test Floors</a></li>
         <li><a href="133-versioned-password-hash-work-factor.html">133 · Versioned Password Hash Work Factor</a></li>
         <li><a href="134-cloud-neutral-core-vendor-adapters.html">134 · Cloud-Neutral Core With Vendor Adapter Packages</a></li>
+        <li><a href="135-application-namespace-keyspace-isolation.html">135 · One Application Namespace Isolates Shared Infrastructure Keyspaces</a></li>
           </ol>
         </nav>
       </details>
@@ -248,7 +249,9 @@
           reads to the audience-visible states).
           Revised 2026-09-25 (re-anchored the backplane-prefix citation, which now lives in the
           <code>DependencyInjection.Notifications.cs</code> partial, and the ADC poll manage endpoint).
-          Revised 2026-10-21: anchors refreshed after the ADC live poll manage endpoint moved.</p>
+          Revised 2026-10-21: anchors refreshed after the ADC live poll manage endpoint moved.
+          Revised 2026-10-26: linked ADR-135 as the owner of the application namespace behind the backplane
+          prefix; anchors refreshed after the connection-cap, backplane-prefix and poll-read-scope code moved.</p>
           <h2 id="context">Context</h2>
           <p>Conference-day features (live polls, session Q&amp;A, live result counters) need sub-second fan-out of
           small events to whoever is looking at a page right now. The existing notification pipeline
@@ -397,6 +400,40 @@
           </ul>
           </li>
           </ol>
+          <h2 id="revision-2026-10-26">Revision (2026-10-26)</h2>
+          <p>Re-verified against current source. No change to the channel model, the per-user connection cap,
+          its default of 20, the per-application backplane prefix or the ADC live poll read scope recorded on
+          2026-09-07. The record now links the ADR that owns the application-namespace decision, and three
+          anchors have moved since the 2026-10-21 refresh.</p>
+          <ol>
+          <li><strong>Related record added.</strong> The backplane prefix in item 3 of the 2026-09-07 revision is one use
+          of the application namespace; ADR-135 owns that decision for every shared keyspace and is listed
+          under Related below.</li>
+          <li>Anchors re-verified against current source:<ul>
+          <li>The <code>MaxConnectionsPerUser</code> default of 20 is declared at
+          <code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Notifications/Push/PushNotificationSettings.cs:50</code>
+          (<code>Range(0, 10_000)</code> at <code>:49</code>).</li>
+          <li>The refusal of a connection past the cap is in <code>NotificationHub.OnConnectedAsync</code>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Notifications/NotificationHub.cs:61</code>),
+          which reads the cap at <code>:63</code>, compares at <code>:69</code> and throws <code>HubException</code> at <code>:74</code>.</li>
+          <li>The Redis backplane prefix is resolved through <code>ApplicationNamespace.Resolve</code> at
+          <code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.Notifications.cs:56</code>
+          and applied as the channel prefix at <code>:57-58</code>; the resolver is still at
+          <code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Configuration/ApplicationNamespace.cs:53</code>.</li>
+          <li><code>GetPollResultsHandler</code> still defines audience-readable at
+          <code>MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Application/LivePolls/UseCases/GetPollResults/GetPollResultsHandler.cs:65-66</code>
+          and applies it at <code>:109</code> and <code>:124</code>.</li>
+          <li>The manage endpoint (<code>GET /api/livepolls/manage</code>) is still declared at
+          <code>MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.API/Controllers/LivePollsController.cs:186</code>.</li>
+          </ul>
+          </li>
+          </ol>
+          <h2 id="related">Related</h2>
+          <ul>
+          <li><a href="024-push-notifications.html">ADR-024</a>: the durable push notification pipeline and hub this ADR extends.</li>
+          <li><a href="135-application-namespace-keyspace-isolation.html">ADR-135</a>: One Application Namespace Isolates
+          Shared Infrastructure Keyspaces (owns the namespace the backplane prefix derives from).</li>
+          </ul>
           
         <div class="doc-foot btn-row">
           <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
@@ -416,6 +453,8 @@
             <li><a href="#revision-2026-09-07">Revision (2026-09-07)</a></li>
             <li><a href="#revision-2026-10-06">Revision (2026-10-06)</a></li>
             <li><a href="#revision-2026-10-21">Revision (2026-10-21)</a></li>
+            <li><a href="#revision-2026-10-26">Revision (2026-10-26)</a></li>
+            <li><a href="#related">Related</a></li>
             </ul>
           </nav>
         </aside>

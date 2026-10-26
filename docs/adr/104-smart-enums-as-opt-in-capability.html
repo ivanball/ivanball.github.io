@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 134 ADRs</summary>
+        <summary>All 135 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -234,6 +234,7 @@
         <li><a href="132-build-strictness-analyzer-policy.html">132 · Build Strictness: Analyzers at Error Severity, a Shared Baseline, and CI Test Floors</a></li>
         <li><a href="133-versioned-password-hash-work-factor.html">133 · Versioned Password Hash Work Factor</a></li>
         <li><a href="134-cloud-neutral-core-vendor-adapters.html">134 · Cloud-Neutral Core With Vendor Adapter Packages</a></li>
+        <li><a href="135-application-namespace-keyspace-isolation.html">135 · One Application Namespace Isolates Shared Infrastructure Keyspaces</a></li>
           </ol>
         </nav>
       </details>
@@ -252,11 +253,13 @@
           Revised 2026-10-07: Decision point 13 now separates code references from comment-only mentions of
           <code>Enumeration&lt;T&gt;</code>; adoption remains zero.
           Revised 2026-10-21: anchors refreshed after the Shared public-API baseline grew; the eighteen
-          shipped declarations are unchanged.</p>
+          shipped declarations are unchanged.
+          Revised 2026-10-26: Context and Decision point 11 no longer list the message-bus provider as a plain
+          enum, because the <code>MessageBusProvider</code> enum was replaced by a string with built-in values on
+          <code>MessageBusProviders</code>.</p>
           <h2 id="context">Context</h2>
           <p>A bounded set of named values shows up everywhere in this workspace: the state that triggered a
-          domain event, an error category, a rate-limiting algorithm, a message-bus provider, a JWT signing
-          algorithm. The framework answers that need with an ordinary CLR enum. <code>DomainEntityState</code>
+          domain event, an error category, a rate-limiting algorithm, a JWT signing algorithm. The framework answers that need with an ordinary CLR enum. <code>DomainEntityState</code>
           (<code>MMCA.Common/Source/Core/MMCA.Common.Domain/Enums/DomainEntityState.cs:7-13</code>) is the canonical
           example, and it is the discriminator ADR-083 chose for the whole CRUD lifecycle taxonomy.</p>
           <p>A CLR enum stops being enough at one specific point: when a member needs to carry behavior or data.
@@ -371,7 +374,7 @@
           <li><p><strong>The rule for choosing.</strong> Use a plain C# enum when the members are names for states or options
           and every decision about them is made by the code that reads them: it is the cheaper type, it
           needs no converter registration, and it is what ADR-083&#39;s discriminator, <code>ErrorType</code>,
-          <code>RateLimitAlgorithm</code>, <code>MessageBusProvider</code> and <code>JwtSigningAlgorithm</code> all are today. Reach for
+          <code>RateLimitAlgorithm</code> and <code>JwtSigningAlgorithm</code> all are today. Reach for
           <code>Enumeration&lt;T&gt;</code> when a member must carry data or behavior (a rate, a policy, a display rule, a
           per-member override), when the same <code>switch</code> over the set is about to appear in a third place,
           or when the set needs <code>Result</code>-shaped parsing at a boundary. Declare the concrete type sealed
@@ -514,6 +517,29 @@
           (<code>All</code>, <code>FromName</code>, <code>FromValue</code>) at <code>:994-996</code>. Unchanged: Shared <code>:567-572</code> and Infrastructure
           <code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/PublicAPI.Shipped.txt:356-357</code>, <code>:360-361</code>.</li>
           </ol>
+          <h2 id="revision-2026-10-26">Revision (2026-10-26)</h2>
+          <p>Re-verified against current source. No decision or rationale changed, and adoption is still zero.
+          One example, in the Context and in Decision point 11, is corrected.</p>
+          <ol>
+          <li>The Context and Decision point 11 listed the message-bus provider (<code>MessageBusProvider</code>) among
+          the plain C# enums. That was true when written; the enum has since been replaced by a string
+          (<code>MMCA.Common/UPGRADING.md:120</code>, <code>:169</code>). The provider is now <code>MessageBusSettings.Provider</code>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Messaging/MessageBusSettings.cs:25</code>),
+          whose three built-in values are string constants on the static class <code>MessageBusProviders</code>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Messaging/Transports/MessageBusProviders.cs:10</code>,
+          constants at <code>:16</code>, <code>:19</code>, <code>:27</code>) matched through <code>IsInProcess</code>, <code>IsRabbitMq</code> and <code>IsPostgreSql</code>
+          (<code>:44</code>, <code>:50</code>, <code>:56</code>); any other value names an <code>IBrokerTransport</code> an adapter package registers
+          (<code>AzureServiceBus</code> and <code>AmazonSqs</code> are listed in the internal <code>KnownAdapterTransports</code>
+          dictionary at <code>:34-39</code>). The Context no longer names it among the bounded sets, and Decision
+          point 11 now names only the plain enums: ADR-083&#39;s discriminator (<code>DomainEntityState</code>),
+          <code>ErrorType</code>, <code>RateLimitAlgorithm</code> and <code>JwtSigningAlgorithm</code>.</li>
+          <li>Anchors re-verified against current source: <code>ErrorType</code>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Shared/Abstractions/ErrorType.cs:10</code>), <code>RateLimitAlgorithm</code>
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/RateLimiting/RateLimitAlgorithm.cs:8</code>) and
+          <code>JwtSigningAlgorithm</code>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Auth/JwtSigningAlgorithm.cs:21</code>) are still
+          plain enums.</li>
+          </ol>
           <h2 id="related">Related</h2>
           <p><a href="037-field-level-encryption-at-rest.html">ADR-037</a> (the precedent for recording a shipped, tested and
           unadopted framework capability as a decision rather than leaving it to read as unfinished adoption),
@@ -546,6 +572,7 @@
             <li><a href="#revision-2026-10-06">Revision (2026-10-06)</a></li>
             <li><a href="#revision-2026-10-07">Revision (2026-10-07)</a></li>
             <li><a href="#revision-2026-10-21">Revision (2026-10-21)</a></li>
+            <li><a href="#revision-2026-10-26">Revision (2026-10-26)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

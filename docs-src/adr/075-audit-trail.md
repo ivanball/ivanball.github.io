@@ -15,6 +15,7 @@ Revised 2026-10-01 (retention has no fallback: without the scheduler nothing is 
 Revised 2026-10-06: inserts and deletes write one summary row, a store-generated key is fixed up by an `UPDATE` after the save, and ADC's trail-DML auditing therefore fires on routine inserts too.
 Revised 2026-10-07: the key fix-up issues one filtered `UPDATE` per pending row rather than one statement covering all of them, `AuditTrailSettings` also carries `DataSource` (the engine the reader queries), and anchors are refreshed after the v1.233.0 release.
 Revised 2026-10-21: redaction also covers `[Sensitive]` properties, `IAuthUser` credentials and encrypted columns, the reverse `[Pii]` rule lives in the shared `PiiConventionTestsBase` that Store, ADC and Helpdesk subclass, a fixed-up key equal to the captured one skips its `UPDATE`, and anchors are refreshed.
+Revised 2026-10-26: the key fix-up writes the resolved key to the tracked trail row after each `UPDATE` and syncs its snapshot so that write is not saved again, and the reader and interceptor anchors are refreshed.
 ## Context
 The framework already answers "who touched this row last". Every `AuditableBaseEntity` carries
 `CreatedOn/By` and `LastModifiedOn/By`, stamped by `AuditSaveChangesInterceptor` on the way into
@@ -86,11 +87,16 @@ commits or rolls back with it: the outbox mechanic of ADR-003, applied to a diff
 exception: an inserted entity with a store-generated key has only a temporary key at capture, so after
 the save the interceptor rewrites that row's `EntityKey` (`:302-304`): it loops over the pending rows and
 issues one `UPDATE` per row, filtered by that row's `Id`, as `ExecuteUpdateAsync` on the async save path
-(`:522-537`, `:531-533`) and `ExecuteUpdate` on the sync one (`:565-567`). A row whose resolved key
-already equals the captured one is skipped (`:525-528`, `:559-562`), so an audited save inserting N such
-entities adds at most N `UPDATE` statements. Each joins the ambient transaction when one is open;
+(`:523-538`, `:532-535`) and `ExecuteUpdate` on the sync one (`:566-568`). A row whose resolved key
+already equals the captured one is skipped (`:525-529`, `:559-563`), so an audited save inserting N such
+entities adds at most N `UPDATE` statements. Each of those statements joins the ambient transaction
+when one is open;
 without one it commits after the data save, so a crash in that window leaves the row holding the
-temporary key.
+temporary key. After each `UPDATE` the interceptor writes the resolved key to the tracked
+`AuditTrailEntry`, so the in-memory instance matches the stored row, and sets that property's original
+value and clears its modified flag, so the in-memory write is not itself saved again by a later save on
+the same context (`SyncTrackedKey`, called at `:537` and `:570`, method `:580`, the write and snapshot
+at `:583-585`).
 
 Two mechanics are copied verbatim from `DomainEventSaveChangesInterceptor`:
 
@@ -103,11 +109,12 @@ Two mechanics are copied verbatim from `DomainEventSaveChangesInterceptor`:
 ### PII is redacted at capture, never at read
 A redacted property records `PiiRedactor.RedactedToken`
 (`MMCA.Common/Source/Core/MMCA.Common.Domain/Privacy/PiiRedactor.cs:27`, the class at `:24`) for both the
-old and the new value. Four things are redacted (`AuditTrailSaveChangesInterceptor.cs:636-639`, the same
-check on the scalar and the owned path): a property carrying `[Pii]`, a property carrying `[Sensitive]`,
-the credential members of an entity implementing `IAuthUser`, found through the interface map with no
-marker needed (`:668-691`), and any column mapped through `EncryptedStringConverter`, which reaches the
-interceptor as decrypted plaintext and is redacted with no attribute needed (`:639`; class doc
+old and the new value. Four things are redacted (`AuditTrailSaveChangesInterceptor.cs:637-640`, the same
+check on the scalar and the owned path, `:340` and `:412`): a property carrying `[Pii]`, a property
+carrying `[Sensitive]`, the credential members of an entity implementing `IAuthUser`, found through the
+interface map with no marker needed (`:669-692`), and any column mapped through
+`EncryptedStringConverter`, which reaches the interceptor as decrypted plaintext and is redacted with
+no attribute needed (`:640`; class doc
 `:49-59`). The trail stores the fact that a personal or secret field changed, and never its contents.
 Redacting on the way out instead would leave clear-text personal data at rest in a store that by
 construction survives the erasure of the row it describes.
@@ -119,7 +126,7 @@ it, which is what keeps volume a deliberate decision rather than a framework-imp
 bounded `[Range(1, 3650)]`, and `DataSource` default `SQLServer`, the engine whose `Default` database
 the reader queries;
 `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/AuditTrail/AuditTrailSettings.cs:26`,
-`:37-38`, `:46`; consumed at `AuditTrailReader.cs:53`) through the ADR-070 fail-fast chain, which runs
+`:37-38`, `:46`; captured at `AuditTrailReader.cs:45` and consumed at `:67`) through the ADR-070 fail-fast chain, which runs
 `ValidateDataAnnotations` plus `ValidateOnStart` (`DependencyInjection.Jobs.cs:110-113`). Cosmos is
 documented as unsupported for `DataSource` (`AuditTrailSettings.cs:44`) but not validated: the property
 carries no validation attribute (`:46`). `AddAuditTrail(configuration)`
@@ -388,6 +395,31 @@ capture-mechanics details, and the anchors.
    `ResolveGeneratedKeysAsync` loop `:522-537` with `ExecuteUpdateAsync` `:531-533`, `ExecuteUpdate`
    `:565-567`; `PiiRedactor.cs` class `:24`, token `:27`. The bicep anchors in the dated revisions above
    are left as recorded.
+
+## Revision (2026-10-26): the tracked key sync, and current anchors
+Re-verified against current source. The interceptor ordering, the same-transaction capture, the row
+shape, the per-row key fix-up and its skip rule, the redaction rule, the opt-in gates, the Cosmos skip
+and both apps' SQL-auditing content are unchanged. What moved is one omitted capture detail and the
+anchors.
+
+1. **The key fix-up also syncs the tracked trail row.** After each per-row `UPDATE`, `SyncTrackedKey`
+   (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/AuditTrail/AuditTrailSaveChangesInterceptor.cs:580`,
+   doc `:574-579`, called at `:537` and `:570`) writes the resolved key to the tracked
+   `AuditTrailEntry` (`:583`), so the in-memory instance matches the stored row, then sets its original
+   value and clears `IsModified` (`:584-585`), so that write is not itself saved again by a later save
+   on the same context. The Decision now says so.
+2. Anchors re-verified against current source: `AuditTrailSaveChangesInterceptor.cs` `IsRedacted`
+   `:637-640` (called at `:340` scalar and `:412` owned), `EncryptedStringConverter` check `:640`,
+   `CredentialPropertyNames` `:669-692`, class doc `:49-59`, `ResolveGeneratedKeysAsync` loop
+   `:523-538` with the `ExecuteUpdateAsync` statement `:532-535`, the sync `ExecuteUpdate` statement
+   `:566-568`, key-skip `:525-529` and `:559-563` (the 2026-10-21 list's `:522-537`, `:565-567`,
+   `:636-639` and `:668-691` moved down one line; its
+   `ExecuteUpdateAsync` `:531-533` moved down one line and now also spans the `.ConfigureAwait(false)`
+   line `:535`; its key-skip `:525-528` and `:559-562` cited only the `if` blocks, now at `:526-529` and
+   `:560-563`, and the new ranges also take in the `resolvedKey` line `:525` and `:559` that the
+   comparison reads); `AuditTrailReader.cs` settings captured
+   `:45`, `DataSource` consumed `:67` (the earlier `:53` is a method parameter). The anchors in the
+   dated revisions above, including the bicep ones, are left as recorded.
 
 ## Related
 [ADR-003](003-outbox-dual-dispatch.md) (the same-transaction write this copies wholesale, including the

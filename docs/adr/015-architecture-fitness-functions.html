@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 134 ADRs</summary>
+        <summary>All 135 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -234,6 +234,7 @@
         <li><a href="132-build-strictness-analyzer-policy.html">132 · Build Strictness: Analyzers at Error Severity, a Shared Baseline, and CI Test Floors</a></li>
         <li><a href="133-versioned-password-hash-work-factor.html">133 · Versioned Password Hash Work Factor</a></li>
         <li><a href="134-cloud-neutral-core-vendor-adapters.html">134 · Cloud-Neutral Core With Vendor Adapter Packages</a></li>
+        <li><a href="135-application-namespace-keyspace-isolation.html">135 · One Application Namespace Isolates Shared Infrastructure Keyspaces</a></li>
           </ol>
         </nav>
       </details>
@@ -289,7 +290,12 @@
           re-counted against v1.250.0 (8,434 declarations, every unshipped file header-only) and anchors
           refreshed after v1.250.0, the counts <code>FACTS.md</code> owns now sitting at <code>:81</code> / <code>:84</code>.
           Revised 2026-10-24: the cloud vendor boundary joins the gates as a build target plus an architecture rule pair (<a href="134-cloud-neutral-core-vendor-adapters.html">ADR-134</a>). See Revision (2026-10-24) at the end.
-          Revised 2026-10-25: the type-level cloud vendor rule&#39;s Azure and AWS roots lost the trailing dot that let it pass vacuously, and both vendor lists now cover Google. See Revision (2026-10-25) at the end.</p>
+          Revised 2026-10-25: the type-level cloud vendor rule&#39;s Azure and AWS roots lost the trailing dot that let it pass vacuously, and both vendor lists now cover Google. See Revision (2026-10-25) at the end.
+          Revised 2026-10-26: the Decision now names the language-model isolation pair (<code>EnforceAiLayerBoundary</code>
+          plus <code>AiDependencyIsolationTestsBase</code>, subclassed in all four repos) as an enforced invariant, the
+          public API gate covers 25 projects with 8,561 shipped declarations, the unshipped files hold 64 new
+          declarations and 9 removals because no promotion has run at the v1.257.0 to v1.261.0 tags, and the
+          cloud vendor target&#39;s match list and anchors are refreshed. See Revision (2026-10-26) at the end.</p>
           <h2 id="context">Context</h2>
           <p>The codebase rests on invariants that are easy to state and easy to erode by accident: clean-
           architecture layer flow (Domain depends on nothing above it), module isolation (no module reaches into
@@ -320,6 +326,18 @@
           the framework ships (see the Revision (2026-10-07) at the end). The same rules run identically
           everywhere via NetArchTest over the compiled assemblies.</li>
           </ol>
+          <p>The language-model boundary is held by one pair across both layers. The <code>EnforceAiLayerBoundary</code>
+          target (<code>MMCA.Common/Source/Build/MMCA.Common.LayerEnforcement.targets:86</code>) fails the build when
+          <code>MMCA.Common.AI</code> or an <code>MMCA.Common.AI.*</code> adapter references Domain, Application, Infrastructure, API,
+          Grpc or UI (<code>:88-99</code>). <code>AiDependencyIsolationTestsBase</code>
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Bases/Layering/AiDependencyIsolationTestsBase.cs:19</code>)
+          holds the other direction with two facts: language-model SDKs stay at the model boundary (<code>:23</code>) and
+          the governed package stays behind Infrastructure (<code>:27</code>). All four repos subclass it:
+          MMCA.Common (<code>Tests/Architecture/MMCA.Common.Architecture.Tests/Layering/AiDependencyIsolationTests.cs:14</code>),
+          MMCA.ADC (<code>Tests/Architecture/MMCA.ADC.Architecture.Tests/Layering/AiDependencyIsolationTests.cs:14</code>),
+          MMCA.Store (<code>Tests/Architecture/MMCA.Store.Architecture.Tests/Layering/AiDependencyIsolationTests.cs:15</code>)
+          and MMCA.Helpdesk (<code>Tests/Architecture/MMCA.Helpdesk.Architecture.Tests/ArchitectureTests.cs:200</code>). The
+          boundary itself is recorded in <a href="120-governed-chat-client-boundary.html">ADR-120</a>.</p>
           <p>These tests run inside the normal <code>dotnet test</code> / CI tier, so a violated invariant fails CI like any
           other test (the whole-solution run that carries them is additionally floored at
           <code>--minimum-expected-tests 2000</code>, <code>.github/workflows/ci.yml:163</code>, so a discovery or filter regression
@@ -986,6 +1004,87 @@
           <code>MMCA.Common/Tests/Hosting/MMCA.Common.Aws.Tests/CloudVendorRulesTests.cs:21</code>,
           <code>MMCA.Common/Tests/Hosting/MMCA.Common.Gcp.Tests/CloudVendorRulesTests.cs:28</code>); the Azure and AWS facts
           fail with the old entries (<code>MMCA.Common/CHANGELOG.md:32</code>).</p>
+          <h2 id="revision-2026-10-26-the-ai-isolation-pair-in-the-decision-re-counted-baselines-moved-anchors">Revision (2026-10-26): the AI isolation pair in the Decision, re-counted baselines, moved anchors</h2>
+          <p>Re-verified against current source. The enforcement layers, the <code>MMCA.Common.UI.Maui</code> exclusion, the
+          <code>--minimum-expected-tests 2000</code> floor (<code>.github/workflows/ci.yml:163</code>, as the Decision cites it), the
+          RS rule severities and both cloud vendor rules are as the earlier entries describe. One enforced
+          invariant was missing from the Decision, the baselines are re-counted at v1.261.0
+          (<code>MMCA.Common/FACTS.md:14</code>) and show that the release roll-over has not run since v1.257.0, the cloud
+          vendor target matches more than the 2026-10-24 entry lists, and several anchors drifted.</p>
+          <ol>
+          <li><strong>The Decision now names the language-model isolation pair.</strong> <code>EnforceAiLayerBoundary</code>
+          (<code>MMCA.Common/Source/Build/MMCA.Common.LayerEnforcement.targets:86</code>) and
+          <code>AiDependencyIsolationTestsBase</code> (<code>Bases/Layering/AiDependencyIsolationTestsBase.cs:19</code>, facts at
+          <code>:23</code> and <code>:27</code> (methods <code>:24</code>, <code>:28</code>)) hold the AI packages&#39; boundary in both directions, the same
+          build-plus-architecture shape as the layer and cloud vendor gates; the passage is added to the
+          Decision in place and the boundary&#39;s own record is <a href="120-governed-chat-client-boundary.html">ADR-120</a>.
+          All four repos subclass the base: MMCA.Common, MMCA.ADC
+          (<code>Tests/Architecture/MMCA.ADC.Architecture.Tests/Layering/AiDependencyIsolationTests.cs:14</code>),
+          MMCA.Store (<code>Tests/Architecture/MMCA.Store.Architecture.Tests/Layering/AiDependencyIsolationTests.cs:15</code>)
+          and MMCA.Helpdesk (<code>Tests/Architecture/MMCA.Helpdesk.Architecture.Tests/ArchitectureTests.cs:200</code>).
+          The second fact had the same defect the 2026-10-25 entry records for the vendor type rule: it
+          matched the dotted entry <code>MMCA.Common.AI.</code>, which NetArchTest&#39;s segment matching never matches, so
+          it passed vacuously in every one of those subclasses until v1.261.0 switched it to the undotted
+          namespace <code>MMCA.Common.AI</code> (<code>MMCA.Common/CHANGELOG.md:26</code>).</li>
+          <li><strong>The public API gate covers 25 projects.</strong> <code>PublicAPI.Shipped.txt</code> / <code>PublicAPI.Unshipped.txt</code>
+          pairs now exist in 25 <code>Source</code> projects, the four additions since the 2026-10-01 count being
+          <code>MMCA.Common.Azure</code>, <code>MMCA.Common.Aws</code>, <code>MMCA.Common.Gcp</code> and <code>MMCA.Common.Testing.Azure</code>. The
+          exclusion is unchanged (<code>MMCA.Common/Directory.Build.props:94</code>), so the gate still covers every
+          published package except <code>MMCA.Common.UI.Maui</code>, with the package count left to <code>FACTS.md:19</code>.</li>
+          <li><strong>The shipped baselines hold 8,561 declarations across 8,586 non-empty lines</strong> in the 25
+          <code>PublicAPI.Shipped.txt</code> files, each carrying exactly one <code>#nullable enable</code> header (the 2026-10-21
+          entry read 8,434 across 8,455 in 21 files). Two shipped files are header-only: the <code>MMCA.Common</code>
+          metapackage&#39;s (<code>Source/MMCA.Common/PublicAPI.Shipped.txt:1</code>), which has no surface, and
+          <code>Source/Hosting/MMCA.Common.Gcp/PublicAPI.Shipped.txt:1</code>, which does: <code>MMCA.Common.Gcp</code> shipped in
+          v1.257.0 (<code>MMCA.Common/CHANGELOG.md:78</code>) but its surface was never promoted, so it all still sits
+          in the unshipped file (item 4).</li>
+          <li><strong>The unshipped files are no longer all header-only, because the release roll-over has not run
+          since v1.257.0.</strong> <code>MMCA.Common/AGENTS.md:37</code> has <code>build/publicapi/Promote-PublicApi.ps1</code> move every
+          unshipped file into its shipped file in the last commit before each tag, yet the v1.257.0 additions
+          (<code>AddNpgsqlDataSourceConfigurator</code>, <code>NativePushPayloads</code>, the <code>PostgreSql</code> provider;
+          <code>MMCA.Common/CHANGELOG.md:86-88</code>) are still unshipped at
+          <code>Source/Core/MMCA.Common.Infrastructure/PublicAPI.Unshipped.txt:2-9</code>, and only <code>FACTS.md</code> changed
+          after the v1.261.0 tag. Six of the 25 <code>PublicAPI.Unshipped.txt</code> files carry 73 entries: 64 new
+          declarations and 9 <code>*REMOVED*</code> markers. By file: <code>MMCA.Common.Gcp</code> 37 new,
+          <code>MMCA.Common.Infrastructure</code> 8 new and 5 removals (<code>:10-14</code>, <code>ImageSharpImageProcessor</code>),
+          <code>MMCA.Common.Aws</code> 12 new, <code>MMCA.Common.Aspire</code> 5 new, <code>MMCA.Common.Testing.Architecture</code> 2 new and
+          2 removals (<code>Source/Hosting/MMCA.Common.Testing.Architecture/PublicAPI.Unshipped.txt:2-3</code>), and
+          <code>MMCA.Common.Application</code> 2 removals and nothing new
+          (<code>Source/Core/MMCA.Common.Application/PublicAPI.Unshipped.txt:2-3</code>, <code>IImageProcessor</code>). The
+          2026-10-21 statement that no unshipped declarations exist is a dated reading.</li>
+          <li><strong>The cloud vendor target matches more than the 2026-10-24 entry lists.</strong> Besides the <code>Azure.*</code>,
+          <code>Microsoft.Azure.*</code> and <code>AWSSDK.*</code> prefixes and the two MassTransit transports, <code>EnforceCloudVendorBoundary</code>
+          (<code>MMCA.Common.LayerEnforcement.targets:130</code>) fails on a <code>Google.*</code> prefix, a <code>FirebaseAdmin</code> prefix,
+          the exact id <code>Grpc.Auth</code>, an <code>.azure.</code> segment anywhere in the id and an <code>.azure</code> suffix
+          (<code>:138-147</code>, the comment at <code>:109-115</code>), and its adapter list names <code>MMCA.Common.Azure</code>,
+          <code>MMCA.Common.Aws</code>, <code>MMCA.Common.Gcp</code> and <code>MMCA.Common.Testing.Azure</code> (<code>:149</code>). A fourth
+          <code>CloudVendorRulesTests</code> pin sits in the <code>MMCA.Common.Testing.Azure.Tests</code> project
+          (<code>MMCA.Common/Tests/Hosting/MMCA.Common.Testing.Azure.Tests/CloudVendorRulesTests.cs:21</code>), added
+          in v1.258.0 (<code>MMCA.Common/CHANGELOG.md:67</code>).</li>
+          <li><strong>Anchors re-verified against current source:</strong> the <code>ui-e2e</code> run with <code>--minimum-expected-tests 1</code>
+          is <code>ci.yml:345</code> (step name <code>:340</code>). The live method and base counts are <code>MMCA.Common/FACTS.md:89-91</code>
+          and the executed count <code>:92</code>, where the Status block&#39;s earlier sentences cite <code>:51</code> / <code>:54</code> and
+          <code>:81</code> / <code>:84</code>; read <code>FACTS.md</code> for the values. The <code>PublicApiAnalyzers</code> 5.6.0 <code>PackageVersion</code> is
+          <code>MMCA.Common/Directory.Packages.props:291</code> (its comment ending on <code>:290</code>). In
+          <code>MMCA.Common/Directory.Build.props</code>: the public API gate comment <code>:84-93</code> (RS0016 / RS0017 at
+          <code>:86-87</code>, the Maui rationale <code>:90-92</code>), the ItemGroup condition <code>:94</code>, the <code>PackageReference</code>
+          <code>:95-98</code>, the <code>AdditionalFiles</code> <code>:99-100</code>; the RS0041 rationale <code>:22-26</code>, the <code>NoWarn</code> line <code>:30</code>
+          and <code>TreatWarningsAsErrors</code> <code>:7</code> still resolve. In <code>MMCA.Common/.editorconfig</code>: the PublicApiAnalyzers
+          overrides header <code>:881-886</code>, the RS0026 / RS0027 rationale <code>:888-892</code> with both set to <code>error</code> at
+          <code>:893-894</code>, RS0041 <code>none</code> at <code>:898</code> (its comment <code>:895-897</code>), RS0051-RS0056 <code>none</code> at <code>:901-906</code>
+          (comment <code>:899-900</code>), and the global <code>severity = error</code> at <code>:312</code> still resolves. The architecture
+          test project&#39;s <code>MMCA.Common.slnx</code> entry is <code>:68</code>. The v1.153.0 changelog heading is
+          <code>MMCA.Common/CHANGELOG.md:3878</code> and its &quot;Three new build gates&quot; bullet <code>:3933-3939</code>
+          (PublicApiAnalyzers on <code>:3937</code>). In the cloud vendor target: the exemptions <code>:134-135</code>, their
+          rationale <code>:117-124</code>, the <code>Microsoft.Azure.Cosmos</code> namespace allowance <code>:119-122</code>, and the two errors
+          <code>:151</code> (vendor) and <code>:153</code> (adapter). The <code>CloudNeutralAssembliesNameNoVendorType</code> /
+          <code>CloudNeutralAssembliesReferenceNoVendorAssembly</code> rule names are <code>CHANGELOG.md:119</code> (under
+          [1.255.0] at <code>:111</code>) and the dot-free type-rule fix is <code>:94</code> (under [1.257.0] at <code>:69</code>).
+          <code>CloudVendorIsolationTestsBase</code> is at <code>CloudVendorIsolationTestsBase.cs:15</code>, its two facts at <code>:27</code>
+          and <code>:31</code> (methods <code>:28</code>, <code>:32</code>), and the <code>AllowedVendorPrefixes</code> hook, empty by default, at <code>:24</code>
+          (summary <code>:20-23</code>). The Azure, Aws and Gcp <code>CloudVendorRulesTests</code> anchors (<code>:22</code>, <code>:21</code>, <code>:28</code>)
+          still resolve.</li>
+          </ol>
           <h2 id="related">Related</h2>
           <p>ADR-009 (resilience gate), ADR-010 (event-version gate), ADR-016 (MassTransit pin gate, and the
           lockstep release cadence the public API baseline is pinned to), ADR-006/007/008 (the transport and
@@ -1024,6 +1123,7 @@
             <li><a href="#revision-2026-10-21-re-counted-baselines-moved-anchors">Revision (2026-10-21): re-counted baselines, moved anchors</a></li>
             <li><a href="#revision-2026-10-24-the-cloud-vendor-boundary-gate-pair">Revision (2026-10-24): the cloud vendor boundary gate pair</a></li>
             <li><a href="#revision-2026-10-25-the-type-level-vendor-rule-matches-again">Revision (2026-10-25): the type-level vendor rule matches again</a></li>
+            <li><a href="#revision-2026-10-26-the-ai-isolation-pair-in-the-decision-re-counted-baselines-moved-anchors">Revision (2026-10-26): the AI isolation pair in the Decision, re-counted baselines, moved anchors</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

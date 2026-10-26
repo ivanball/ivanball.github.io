@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 134 ADRs</summary>
+        <summary>All 135 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -234,6 +234,7 @@
         <li><a href="132-build-strictness-analyzer-policy.html">132 · Build Strictness: Analyzers at Error Severity, a Shared Baseline, and CI Test Floors</a></li>
         <li><a href="133-versioned-password-hash-work-factor.html">133 · Versioned Password Hash Work Factor</a></li>
         <li><a href="134-cloud-neutral-core-vendor-adapters.html">134 · Cloud-Neutral Core With Vendor Adapter Packages</a></li>
+        <li><a href="135-application-namespace-keyspace-isolation.html">135 · One Application Namespace Isolates Shared Infrastructure Keyspaces</a></li>
           </ol>
         </nav>
       </details>
@@ -253,17 +254,19 @@
           (2026-10-07) at the end. Revised 2026-10-21: the <code>bunit</code> pin moved to 2.12.5 and a fourth central
           package file (MMCA.Helpdesk&#39;s) names it, the helper&#39;s call-site count refreshed, and the third facade
           registration (<code>IPendingToastService</code>) and the <code>FieldErrorAccessibilityExtensions</code> helper recorded.
-          See Revision (2026-10-21) at the end.</p>
+          See Revision (2026-10-21) at the end. Revised 2026-10-26: the <code>bunit</code> pin moved to 2.13.3 in all
+          four central package files, the helper&#39;s call-site count refreshed, and anchors refreshed. See
+          Revision (2026-10-26) at the end.</p>
           <h2 id="context">Context</h2>
           <p>Three test tiers in this workspace are decided in writing and one is not. ADR-015 gates <strong>structure</strong>
           with NetArchTest. ADR-058 ships the <strong>runtime conformance</strong> suites as abstract bases in
           <code>MMCA.Common.Testing</code> and scopes itself explicitly to contracts that only a booted host can prove
-          (<code>058-runtime-conformance-suites-as-a-package.md:12-16,24-27</code>). ADR-063 and ADR-092 ship the <strong>browser</strong>
+          (<code>058-runtime-conformance-suites-as-a-package.md:14-22,30-32</code>). ADR-063 and ADR-092 ship the <strong>browser</strong>
           tier as Playwright contracts and deploy gates (WCAG 2.1 AA scans, Core Web Vitals budgets). Between a
           plain unit test over a handler and a Playwright run against a live stack sits the <strong>component</strong> tier:
           render one Blazor page or component in process, drive it, assert on its markup. That tier exists in
           three of the four code repos with a Blazor UI and was recorded nowhere. ADR-101 names the <code>Testing.*</code> packages only
-          to keep them out of the metapackage (<code>101-common-metapackage.md:55</code>), which decides their packaging
+          to keep them out of the metapackage (<code>101-common-metapackage.md:58-61</code>), which decides their packaging
           and nothing about the tier itself.</p>
           <p>A component test is cheap to write and expensive to set up, and the expensive part is not per test.
           It is a fixed set of choices that is the same answer in every repo: which bUnit line, which component
@@ -277,7 +280,7 @@
           <h2 id="decision">Decision</h2>
           <p>Ship the component-test tier as a package. <code>MMCA.Common.Testing.UI</code>
           (<code>MMCA.Common/Source/Hosting/MMCA.Common.Testing.UI/MMCA.Common.Testing.UI.csproj:3</code>) is one of the
-          <code>MMCA.Common.*</code> packages released in lockstep (<code>MMCA.Common/FACTS.md:19,42</code>), and its <code>BunitComponentTestBase</code>
+          <code>MMCA.Common.*</code> packages released in lockstep (<code>MMCA.Common/FACTS.md:19-20,46</code>), and its <code>BunitComponentTestBase</code>
           fixes every choice above once, in one file.</p>
           <ul>
           <li><strong>bUnit v2, with the version-specific symbols isolated to this base.</strong> The base derives from bUnit
@@ -286,9 +289,9 @@
           and its remarks state why: v2 is the line compatible with xUnit v3 and Microsoft Testing Platform,
           and derived test classes call <code>RenderUnderTest</code> / <code>RenderAs</code> and never touch the version-specific
           symbols, so a move off that line changes this file and no other
-          (<code>BunitComponentTestBase.cs:30-35</code>). The line is pinned at <code>bunit</code> 2.12.5 in each repo&#39;s central
-          package file (<code>MMCA.Common/Directory.Packages.props:241-242</code>,
-          <code>MMCA.ADC/Directory.Packages.props:32</code>, <code>MMCA.Store/Directory.Packages.props:54</code>,
+          (<code>BunitComponentTestBase.cs:30-35</code>). The line is pinned at <code>bunit</code> 2.13.3 in each repo&#39;s central
+          package file (<code>MMCA.Common/Directory.Packages.props:297-298</code>,
+          <code>MMCA.ADC/Directory.Packages.props:32</code>, <code>MMCA.Store/Directory.Packages.props:59</code>,
           <code>MMCA.Helpdesk/Directory.Packages.props:32</code>), and the
           package carries a direct <code>AngleSharp</code> pin because central package management does not pin
           transitives (<code>MMCA.Common.Testing.UI.csproj:15-17</code>).</li>
@@ -339,8 +342,8 @@
           for the prerender boundary (<code>:125</code>), and calls <code>SetRendererInfo</code> <strong>last</strong> (<code>:128</code>). The rule is
           written where the helper is: <code>SetRendererInfo</code> builds and freezes the bUnit service provider, so any
           registration made after it is silently ignored and the page resolves the framework default instead
-          of the test&#39;s double (<code>:89-93</code>). Thirty-eight test files across MMCA.Common, MMCA.ADC and MMCA.Store
-          call the helper today (five in MMCA.Common, twenty-three in MMCA.ADC, ten in MMCA.Store); its comment
+          of the test&#39;s double (<code>:89-93</code>). Thirty-nine test files across MMCA.Common, MMCA.ADC and MMCA.Store
+          call the helper today (five in MMCA.Common, twenty-four in MMCA.ADC, ten in MMCA.Store); its comment
           records the fifteen hand-rolled copies of the block that the extraction replaced (<code>:92-93</code>).</li>
           <li><strong>The rest of the harness ships with it.</strong> <code>RenderMudProviders</code> renders the popover, dialog and
           snackbar providers into the test&#39;s render root and returns handles (<code>:154-165</code>, <code>:168-171</code>);
@@ -432,13 +435,17 @@
           directly as well
           (<code>MMCA.ADC/Tests/Modules/Conference/MMCA.ADC.Conference.UI.Tests/MMCA.ADC.Conference.UI.Tests.csproj:10</code>),
           so each repo&#39;s central package file names the number
-          (<code>MMCA.Common/Directory.Packages.props:242</code>, <code>MMCA.ADC/Directory.Packages.props:32</code>,
-          <code>MMCA.Store/Directory.Packages.props:54</code>). MMCA.Helpdesk&#39;s central file names <code>bunit</code> and
+          (<code>MMCA.Common/Directory.Packages.props:298</code>, <code>MMCA.ADC/Directory.Packages.props:32</code>,
+          <code>MMCA.Store/Directory.Packages.props:59</code>). MMCA.Helpdesk&#39;s central file names <code>bunit</code> and
           <code>MMCA.Common.Testing.UI</code> too (<code>MMCA.Helpdesk/Directory.Packages.props:32,94</code>) although no Helpdesk
           project references either, so four files have to agree. The <code>AngleSharp</code> advisory
-          pin does not spread that way: it is named once, in <code>MMCA.Common/Directory.Packages.props:247</code>, and
+          pin does not spread that way: it is named once, in <code>MMCA.Common/Directory.Packages.props:306</code>, and
           reaches consumers transitively through the package&#39;s own direct reference
-          (<code>MMCA.Common.Testing.UI.csproj:17</code>).</li>
+          (<code>MMCA.Common.Testing.UI.csproj:17</code>). It is still coupled to the <code>bunit</code> number, though: the pin
+          moves only together with a <code>bunit</code> release built against it, because a newer <code>AngleSharp</code> under an
+          older <code>bunit</code> fails every <code>Find</code> with a <code>TypeLoadException</code>
+          (<code>MMCA.Common/Directory.Packages.props:303-305</code>). It is 1.8.6 today, the floor <code>bunit</code> 2.13.3
+          itself declares (<code>MMCA.Common/Source/Hosting/MMCA.Common.Testing.UI/packages.lock.json:17-23</code>).</li>
           </ul>
           <h2 id="related">Related</h2>
           <p><a href="058-runtime-conformance-suites-as-a-package.html">ADR-058</a> (the runtime conformance tier this sits
@@ -569,6 +576,32 @@
           (was <code>:227-230</code>), <code>Infrastructure/MarkupSnapshot.cs:22</code> (was <code>:21</code>),
           <code>MMCA.Store/Directory.Packages.props:54</code> and <code>MMCA.ADC/Directory.Packages.props:32</code> (unchanged).</li>
           </ol>
+          <h2 id="revision-2026-10-26">Revision (2026-10-26)</h2>
+          <p><strong>The decision and the mechanism are unchanged.</strong> Re-verified against current source: the <code>AngleSharp</code>
+          pin is still named only in MMCA.Common&#39;s central package file (no ADC or Store props, project or
+          targets file names it) and still reaches consumers through the package&#39;s direct reference
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Testing.UI/MMCA.Common.Testing.UI.csproj:15-17</code>); no Helpdesk
+          project references <code>bunit</code> or the package; the &quot;fifteen hand-rolled copies&quot; remark still stands
+          (<code>BunitComponentTestBase.cs:92-93</code>). The <code>bunit</code> number, the <code>AngleSharp</code> number and the helper&#39;s
+          call-site count moved.</p>
+          <ol>
+          <li><code>bunit</code> is pinned at 2.13.3, not 2.12.5, and all four central package files agree
+          (<code>MMCA.Common/Directory.Packages.props:298</code>, <code>MMCA.ADC/Directory.Packages.props:32</code>,
+          <code>MMCA.Store/Directory.Packages.props:59</code>, <code>MMCA.Helpdesk/Directory.Packages.props:32</code>).</li>
+          <li><code>ConfigureDataGridListPageHost</code> has thirty-nine calling test files, not thirty-eight (five in
+          MMCA.Common, twenty-four in MMCA.ADC, ten in MMCA.Store, none in MMCA.Helpdesk). One ADC file
+          calls it twice, and one further ADC file names the helper only in a comment and is not counted.</li>
+          <li><code>AngleSharp</code> is pinned at 1.8.6 (<code>MMCA.Common/Directory.Packages.props:306</code>), the floor <code>bunit</code>
+          2.13.3 declares (<code>MMCA.Common/Source/Hosting/MMCA.Common.Testing.UI/packages.lock.json:17-23</code>).
+          The pin is coupled to <code>bunit</code>, not only to the advisory: 1.8.6 under <code>bunit</code> 2.12.5 throws a
+          <code>TypeLoadException</code> in every <code>Find</code>, so the two move together
+          (<code>MMCA.Common/Directory.Packages.props:303-305</code>). The per-repo pin trade-off now says so.</li>
+          <li>Anchors re-verified against current source: <code>MMCA.Common/Directory.Packages.props:297-298,306</code>
+          (were <code>:241-242,247</code>), <code>MMCA.Store/Directory.Packages.props:59</code> (was <code>:54</code>), <code>MMCA.Common/FACTS.md:19-20,46</code>
+          (was <code>:19,42</code>), <code>058-runtime-conformance-suites-as-a-package.md:14-22,30-32</code> (was <code>:12-16,24-27</code>),
+          <code>101-common-metapackage.md:58-61</code> (was <code>:55</code>), <code>MMCA.ADC/Directory.Packages.props:32</code> and
+          <code>MMCA.Helpdesk/Directory.Packages.props:32,94</code> (unchanged).</li>
+          </ol>
           
         <div class="doc-foot btn-row">
           <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
@@ -591,6 +624,7 @@
             <li><a href="#revision-2026-10-06">Revision (2026-10-06)</a></li>
             <li><a href="#revision-2026-10-07">Revision (2026-10-07)</a></li>
             <li><a href="#revision-2026-10-21">Revision (2026-10-21)</a></li>
+            <li><a href="#revision-2026-10-26">Revision (2026-10-26)</a></li>
             </ul>
           </nav>
         </aside>

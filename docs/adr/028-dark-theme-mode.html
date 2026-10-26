@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 134 ADRs</summary>
+        <summary>All 135 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -234,6 +234,7 @@
         <li><a href="132-build-strictness-analyzer-policy.html">132 · Build Strictness: Analyzers at Error Severity, a Shared Baseline, and CI Test Floors</a></li>
         <li><a href="133-versioned-password-hash-work-factor.html">133 · Versioned Password Hash Work Factor</a></li>
         <li><a href="134-cloud-neutral-core-vendor-adapters.html">134 · Cloud-Neutral Core With Vendor Adapter Packages</a></li>
+        <li><a href="135-application-namespace-keyspace-isolation.html">135 · One Application Namespace Isolates Shared Infrastructure Keyspaces</a></li>
           </ol>
         </nav>
       </details>
@@ -245,7 +246,8 @@
           <p>Accepted (2026-06-27; revised 2026-07-15; revised 2026-08-31; revised 2026-10-01).
           Revised 2026-10-06: the first-paint flash is scoped to web heads and the MAUI first-frame mode source is recorded.
           Revised 2026-10-19: the MAUI host pre-paint script ships from MMCA.Common.UI (<code>theme-prepaint.js</code>, v1.246.0) and both MAUI heads load it.
-          Revised 2026-10-21: the Android status-bar fallback is recorded as part of the shared <code>theme-prepaint.js</code> (Store&#39;s host page has no inline script), the per-consumer <code>MauiHostShellTests</code> theme host-page fitness tests are credited at their actual scope (only Store&#39;s checks the pre-paint script), and the <code>BrandColorTokenTests</code> coverage claim is stated as what it checks.</p>
+          Revised 2026-10-21: the Android status-bar fallback is recorded as part of the shared <code>theme-prepaint.js</code> (Store&#39;s host page has no inline script), the per-consumer <code>MauiHostShellTests</code> theme host-page fitness tests are credited at their actual scope (only Store&#39;s checks the pre-paint script), and the <code>BrandColorTokenTests</code> coverage claim is stated as what it checks.
+          Revised 2026-10-26: startup initialization is recorded as <code>InitializeAtStartupAsync</code> behind a best-effort interop guard, with a known MAUI native value authoritative over the WebView cookie for the Blazor startup mode (not the host pre-paint), and the dark palette background check is credited as a literal rather than a <code>BrandColors</code> pin.</p>
           <h2 id="context">Context</h2>
           <p><code>MMCATheme</code> (<code>MMCA.Common.UI/Theme/MMCATheme.cs</code>) has always defined a complete, brand-tuned <code>PaletteDark</code>
           alongside <code>PaletteLight</code>, but <code>MudThemeProvider</code> was hard-wired to light: no <code>@ref</code>, no <code>IsDarkMode</code>
@@ -276,25 +278,38 @@
           via a small JS interop call (<code>theme.js</code> <code>systemPrefersDark()</code> -&gt;
           <code>window.matchMedia(&#39;(prefers-color-scheme: dark)&#39;)</code>), used only when no cookie/profile value exists.</p>
           </li>
-          <li><p><strong>Theme is restored from the cookie/localStorage after first render: the no-flash SSR bootstrap is
-          outstanding.</strong> <code>ThemeService.InitializeAsync</code> reads the persisted value via JS interop from
-          <code>OnAfterRenderAsync(firstRender)</code> and deliberately does <strong>not</strong> run during SSR prerender, so the bound
-          <code>IsDarkMode</code> is corrected just after hydration. The cookie-as-single-source-of-truth persistence of
-          ADR-027 is reused, but the <em>server-side</em> prerender read that makes locale flash-free (a <code>data-theme</code>
+          <li><p><strong>Theme is restored after first render (from the cookie/localStorage, or on MAUI from a known
+          native value): the no-flash SSR bootstrap is outstanding.</strong> <code>MmcaThemeProviders.OnAfterRenderAsync(firstRender)</code> calls
+          <code>ThemeService.InitializeAtStartupAsync</code> (<code>MmcaThemeProviders.razor:67</code>), which on a web head (no
+          native value) runs <code>ThemeService.InitializeAsync</code> to read the persisted value via JS interop
+          (<code>ThemeService.cs:61-62</code>); it deliberately does <strong>not</strong> run during SSR prerender, so the bound
+          <code>IsDarkMode</code> is corrected just after hydration. The call is wrapped in <code>ThemeInterop.TryAsync</code>,
+          which swallows <code>JSException</code>, <code>JSDisconnectedException</code> and <code>InvalidOperationException</code>
+          (<code>ThemeInterop.cs:19-30</code>), so a failure of one of those three types keeps the initial mode rather
+          than killing the circuit; any other exception type (an interop call timeout&#39;s
+          <code>TaskCanceledException</code>, for example) is not caught and escapes <code>OnAfterRenderAsync</code>. The
+          cookie-as-single-source-of-truth persistence of ADR-027 is reused (on MAUI a known native value
+          outranks the cookie at startup, below), but the <em>server-side</em> prerender read that makes locale flash-free (a <code>data-theme</code>
           attribute / inline <code>&lt;head&gt;</code> script emitted from the cookie before Blazor hydrates) is <strong>not yet wired for
           theme</strong>. On web heads a brief wrong-theme flash on first paint is therefore currently possible;
           emitting the theme server-side at prerender to close it is tracked as follow-up. MAUI heads do not
           wait for JS: <code>MMCA.Common.UI.Maui</code> registers <code>IInitialThemeModeSource</code> as
           <code>MauiInitialThemeModeSource</code> (<code>MMCA.Common.UI.Maui/DependencyInjection.cs:68</code>), and
           <code>MmcaThemeProviders.OnInitialized</code> seeds <code>_isDarkMode</code> from it before subscribing
-          (<code>MmcaThemeProviders.razor:50</code>), so the first frame paints in the stored mode. Web heads register
-          no source and keep the post-render JS path. Before Blazor renders at all, the host page itself is
+          (<code>MmcaThemeProviders.razor:50</code>), so the first frame paints in the stored mode. A known native
+          value is authoritative at startup: <code>InitializeFromNativeAsync</code> adopts it without a JS read and
+          then reseeds the WebView cookie/localStorage with it (<code>ThemeService.cs:64-79</code>), so on MAUI a known
+          native value, not the cookie, decides the Blazor startup mode. When the source returns no value
+          (null means unknown, <code>MmcaThemeProviders.razor:48-50</code>) MAUI takes the same cookie/JS path as a web
+          head (<code>ThemeService.cs:61-62</code>). The host-page pre-paint described next reads no native value, so
+          until the page is interactive the host surface follows the WebView cookie/localStorage even when
+          the native store disagrees. Web heads register no source and keep the post-render JS path. Before Blazor renders at all, the host page itself is
           seeded by a framework-shipped pre-paint script: <code>MMCA.Common.UI/wwwroot/theme-prepaint.js</code>, a
           classic synchronous script that stamps <code>&lt;html data-mmca-theme=&quot;dark|light&quot;&gt;</code> from the <code>mmca_theme</code>
           cookie, then localStorage, then the OS scheme (<code>theme-prepaint.js:14-43</code>). The matching rules in
           Common&#39;s <code>app.css</code> (<code>MMCA.Common.UI/wwwroot/app.css:100-126</code>) paint the host surface in that mode
           until <code>MmcaThemeProviders</code> marks the page interactive (<code>data-mmca-interactive</code>,
-          <code>MmcaThemeProviders.razor:77-99</code>); every selector requires <code>data-mmca-theme</code>, so web heads, which
+          <code>MmcaThemeProviders.razor:87-101</code>); every selector requires <code>data-mmca-theme</code>, so web heads, which
           do not load the script, are untouched. Both MAUI heads load it as the first script in <code>&lt;head&gt;</code>
           (<code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI/wwwroot/index.html:8</code>,
           <code>MMCA.Store/Source/Hosts/UI/MMCA.Store.UI/wwwroot/index.html:13</code>), and neither head carries an
@@ -321,7 +336,8 @@
           </li>
           <li><p><strong>The choice is persisted to the Identity profile (<code>User.PreferredTheme</code>)</strong>, in the <em>same</em> migration and
           with the <em>same</em> login-reconciliation rule as <code>User.PreferredCulture</code> (ADR-027): DB is the cross-device
-          source of truth, the cookie is the runtime channel; on login the cookie is set from the profile, an
+          source of truth, the cookie is the runtime channel (on MAUI a known native value reseeds it when
+          Blazor initializes, Decision 3); on login the cookie is set from the profile, an
           authenticated toggle writes both, anonymous users get cookie/localStorage only.</p>
           </li>
           <li><p><strong>Helpdesk is brought into line.</strong> Its host&#39;s custom <code>MainLayout</code> used a bare <code>&lt;MudThemeProvider /&gt;</code>
@@ -344,7 +360,8 @@
           a raw <code>Primary*</code>/<code>Secondary*</code> hex in any MMCA.Common.UI stylesheet outside an <code>app.css</code> token
           definition (<code>:52-92</code>), and pins the theme palettes to <code>BrandColors</code> on the C# side: the light
           primary and the secondary family, including <code>PaletteDark.Secondary</code> (<code>:94-110</code>), and the dark
-          palette&#39;s background and primary (<code>:112-119</code>). The surface colors are restated by hand in two
+          palette&#39;s primary (<code>:118</code>). The dark palette&#39;s background is asserted against the literal
+          <code>#1A2027</code> (<code>:117</code>), not against <code>BrandColors.DarkBackground</code>. The surface colors are restated by hand in two
           places no test compares to <code>BrandColors.LightBackground</code>/<code>DarkBackground</code> (<code>BrandColors.cs:66</code>,
           <code>:136</code>): the pre-paint tokens <code>--mmca-prepaint-background-light/dark</code>
           (<code>MMCA.Common.UI/wwwroot/app.css:96-97</code>) and the <code>#FAFBFC</code>/<code>#1A2027</code> fallbacks in ADC&#39;s host
@@ -426,6 +443,34 @@
           <code>:36</code>, <code>:38</code>, <code>:50</code>, <code>:77-99</code>, ADC <code>index.html:8</code>, <code>app.css:100-126</code> and
           <code>theme-prepaint.js:14-43</code> unchanged.</li>
           </ol>
+          <h2 id="revision-2026-10-26">Revision (2026-10-26)</h2>
+          <p>Re-verified against current source. The binding, the web-head flash scope and the MAUI host
+          pre-paint script are unchanged; what the ADR had not recorded is the startup initialization path,
+          which routes through a native-aware entry point and a best-effort guard, and on MAUI lets a known
+          native value take precedence over the cookie in the <code>ThemeService</code> preference model.</p>
+          <ol>
+          <li>Decision 3: <code>OnAfterRenderAsync(firstRender)</code> calls <code>ThemeService.InitializeAtStartupAsync</code>
+          (<code>MmcaThemeProviders.razor:67</code>), not <code>InitializeAsync</code> directly. With no native value (every web
+          head) it runs <code>InitializeAsync</code> (<code>ThemeService.cs:61-62</code>), so the web-head JS read is unchanged.</li>
+          <li>Decision 3 and Decision 5: when an <code>IInitialThemeModeSource</code> returns a value (MAUI),
+          <code>InitializeFromNativeAsync</code> adopts it without a JS read and reseeds the WebView cookie/localStorage
+          with it (<code>ThemeService.cs:64-79</code>), so a known native value, not the cookie, decides the Blazor
+          startup mode on MAUI. A null native value (unknown, <code>MmcaThemeProviders.razor:48-50</code>) falls back
+          to the cookie/JS path, and the host pre-paint (<code>theme-prepaint.js:18-42</code>) still reads only the
+          cookie, localStorage and OS scheme. Decision 3&#39;s heading and its ADR-027 reuse sentence are
+          qualified to match.</li>
+          <li>Decision 3: the startup call is wrapped in <code>ThemeInterop.TryAsync</code>, which swallows <code>JSException</code>,
+          <code>JSDisconnectedException</code> and <code>InvalidOperationException</code> (<code>ThemeInterop.cs:26</code>), so a failure of
+          those types keeps the initial mode; any other exception type (an interop timeout&#39;s
+          <code>TaskCanceledException</code>) is not caught.</li>
+          <li>Rationale: <code>BrandColorTokenTests</code> pins the dark palette&#39;s primary to <code>BrandColors.PrimaryLight</code>
+          (<code>BrandColorTokenTests.cs:118</code>) but its background to the literal <code>#1A2027</code> (<code>:117</code>), not to
+          <code>BrandColors.DarkBackground</code>; the earlier wording credited both to <code>BrandColors</code>.</li>
+          <li>Anchors re-verified against current source: <code>MarkInteractiveAsync</code> at
+          <code>MmcaThemeProviders.razor:87-101</code> (superseding <code>:77-99</code>, which spanned the comment and stopped
+          short of the method&#39;s close); <code>MmcaThemeProviders.razor:14</code>, <code>:36</code>, <code>:38</code>, <code>:50</code>, <code>:56</code>,
+          <code>BrandColorTokenTests.cs:34-50</code>, <code>:52-92</code>, <code>:94-110</code> unchanged.</li>
+          </ol>
           <h2 id="related">Related</h2>
           <p><a href="027-multi-locale-i18n.html">ADR-027</a> (shares the cookie source-of-truth and the <code>User</code> preference migration,
           and is the model for the theme no-flash SSR bootstrap that is not yet wired),
@@ -453,6 +498,7 @@
             <li><a href="#revision-2026-10-06">Revision (2026-10-06)</a></li>
             <li><a href="#revision-2026-10-19">Revision (2026-10-19)</a></li>
             <li><a href="#revision-2026-10-21">Revision (2026-10-21)</a></li>
+            <li><a href="#revision-2026-10-26">Revision (2026-10-26)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

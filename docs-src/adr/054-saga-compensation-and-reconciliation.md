@@ -35,11 +35,12 @@ re-anchored (`CheckOutHandler`, `OrderCancelledSagaHandler`, `OrderPaymentFailed
 Revised (2026-10-01): the restoration marker and the stock increase now commit in one transaction, marker first, with the stock moved by an atomic relative update, so the Decision and Rationale bullets are corrected and a trade-off records the discarded failed `Result`; `CancelOrderHandler` retires the session through `PaymentSessionRetirement`, the reconciliation pass is gated by `PaymentProof`, and `PeriodicBackgroundService` moved with Common now subclassing it; two Revision (2026-09-11) statements are marked as no longer holding; every current-state citation is re-anchored. See the Revision below.
 Revised 2026-10-07: anchors refreshed after the v1.233.0 release.
 Revised 2026-10-21: anchors refreshed after the Common and Store changes that moved `DbContextFactory`, `OutboxProcessor`, `appsettings.json` and `main.bicep` lines.
+Revised 2026-10-26: anchors refreshed after the Common and Store changes that moved `DomainEventSaveChangesInterceptor`, `OutboxProcessor`, `CheckOutHandler`, `appsettings.json`, `main.bicep`, `ProcessPaymentWebhookHandler` and `VerifyPaymentHandler` lines.
 
 ## Context
 Checkout spans a boundary no transaction covers. `CheckOutHandler` commits the order insert, the cart
 transition and the atomic conditional stock decrements in one local transaction
-(`MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Application/ShoppingCarts/UseCases/CheckOut/CheckOutHandler.cs:122-183`,
+(`MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Application/ShoppingCarts/UseCases/CheckOut/CheckOutHandler.cs:122-181`,
 run through `ExecuteInTransactionAsync` at `:80-82`),
 but the money moves at Stripe and the confirmation arrives later, as a webhook, from outside the
 database. Two failure shapes follow directly:
@@ -114,10 +115,10 @@ saga-timeout backstop for steps that depend on an external system.
   (`MMCA.Common/.../DbContexts/Factory/DbContextFactory.cs:641-647`). Same database, one transaction: the marker
   cannot exist without the writes it guards, and the writes cannot land unmarked.
 - **Redelivery is the retry mechanism.** A failing in-process handler leaves its outbox row
-  unprocessed (`MMCA.Common/.../Interceptors/DomainEventSaveChangesInterceptor.cs:369-400`, the catch at
-  `:383-394`) and the `OutboxProcessor` re-dispatches the pure domain event on a later cycle
-  (`MMCA.Common/.../Outbox/Processing/OutboxProcessor.cs:579`, the dispatch at `:790`), with the bounded retries, backoff and
-  dead-lettering ADR-003 already defines (`OutboxProcessor.cs:593-603,627-636,1062-1063`). The framework packages that failure mode and only that
+  unprocessed (`MMCA.Common/.../Interceptors/DomainEventSaveChangesInterceptor.cs:371-406`, the catch at
+  `:390-401`) and the `OutboxProcessor` re-dispatches the pure domain event on a later cycle
+  (`MMCA.Common/.../Outbox/Processing/OutboxProcessor.cs:581`, the dispatch at `:792`), with the bounded retries, backoff and
+  dead-lettering ADR-003 already defines (`OutboxProcessor.cs:593-605,629-638,1067-1068`). The framework packages that failure mode and only that
   one: `SafeDomainEventHandler<TDomainEvent>` runs the subclass inside an exception filter whose
   `LogAndRethrow` writes one error line and always returns `false`, so the exception keeps
   propagating, with `OperationCanceledException` excluded because a host shutdown is not a delivery
@@ -167,11 +168,11 @@ saga-timeout backstop for steps that depend on an external system.
   (`PaymentReconciliationService.cs:125-130`). The sweep is configuration-gated
   (`.../Payments/Reconciliation/PaymentReconciliationSettings.cs:30`, defaults of a 10-minute interval,
   a 30-minute stuck age and a 50-order batch, carried in
-  `MMCA.Store/Source/Services/MMCA.Store.Sales.Service/appsettings.json:105-110`).
+  `MMCA.Store/Source/Services/MMCA.Store.Sales.Service/appsettings.json:104-109`).
 - **The sweep gets no private path into the aggregate, and loses races on purpose.** It calls the same
   guarded transitions as the webhook handler
-  (`.../Orders/UseCases/ProcessPaymentWebhook/ProcessPaymentWebhookHandler.cs:110,175`) and the
-  client-initiated check (`.../Orders/UseCases/VerifyPayment/VerifyPaymentHandler.cs:72`). Both passes
+  (`.../Orders/UseCases/ProcessPaymentWebhook/ProcessPaymentWebhookHandler.cs:106,169`) and the
+  client-initiated check (`.../Orders/UseCases/VerifyPayment/VerifyPaymentHandler.cs:71`). Both passes
   reload each order tracked in its own scope and re-check the status under the fresh load
   (`PaymentReconciliationService.cs:311-315` for reconciliation,
   `PaymentReconciliationService.cs:264-270` for expiry), and a `DbUpdateConcurrencyException` from a
@@ -281,14 +282,14 @@ is the framework's stated answer to cross-boundary consistency, not because it i
   handlers after it, and a redelivery re-runs the ones that already succeeded. The blast radius is
   wider than the one event: the interceptor dispatches every local event of a save in a single call
   and marks their outbox rows processed only afterwards
-  (`MMCA.Common/.../Interceptors/DomainEventSaveChangesInterceptor.cs:373-378`), so a throw skips
+  (`MMCA.Common/.../Interceptors/DomainEventSaveChangesInterceptor.cs:375-385`), so a throw skips
   that mark for the whole batch and every local event written by that save is redelivered, not just
   the one whose handler failed. Every handler on a shared event must therefore be idempotent against
   both a repeat of its own event and a repeat of every sibling event of the same save, or must
   swallow its failures itself.
 - **The sweep is not replica-leased.** The outbox processor claims rows with a lease before working
   them (ADR-003); the sweep takes no such claim, so at the configured `maxReplicas: 2`
-  (`MMCA.Store/infra/main.bicep:1954`, the `salesApp` scale block) two replicas can pick the same stuck order and each spend a
+  (`MMCA.Store/infra/main.bicep:1960`, the `salesApp` scale block) two replicas can pick the same stuck order and each spend a
   Stripe status call. Correctness holds through the concurrency token; the duplicated external call
   does not deduplicate.
 - **Every compensating action needs its own marker.** There is no generic mechanism: the ADR-021
@@ -455,6 +456,29 @@ a 30-minute stuck age, a 50-order batch), and `maxReplicas` is still 2. Only lin
    `PaymentReconciliationSettingsValidator` registered at `:73-74`, its equality check at
    `PaymentReconciliationSettingsValidator.cs:33-37`) and `CheckOutHandler` (the transaction at
    `:80`, `deadlineScheduler.ArmAsync` at `:180`). The citations inside the dated Revisions above
+   keep the line numbers of their dates.
+
+## Revision (2026-10-26)
+
+Re-verified against current source. No behaviour changed: a failing in-process handler still leaves
+its local outbox rows unprocessed (the interceptor marks them processed only after the dispatch
+succeeds, and its catch logs, releases the local lease and signals), the `OutboxProcessor` still
+redelivers with bounded retries, backoff and dead-lettering, the shipped defaults are unchanged
+(unpaid-order window 30 minutes, a 10-minute poll, a 30-minute stuck age, a 50-order batch),
+`maxReplicas` is still 2, and the sweep still calls the same guarded transitions as the webhook and
+the client-initiated check. Only line numbers moved.
+
+1. Anchors re-verified against current source: `DomainEventSaveChangesInterceptor`
+   (`FlushStateAsync` now `:371-406`, the dispatch at `:375-381`,
+   `OutboxFinalizer.MarkProcessedAsync` at `:385`, the catch at `:390-401`), `OutboxProcessor` (the
+   per-row `DeliverAsync` call at `:581`, its `dispatcher.DispatchAsync` at `:792`, the retry
+   increment and backoff re-lease at `:593-605`, the retries-exhausted dead-letter metric at
+   `:629-638`, `ComputeRetryBackoffSeconds` at `:1067-1068`), the Sales.Service `appsettings.json`
+   (`UnpaidOrderExpiry` at `:100-103`, `PaymentReconciliation` at `:104-109`), `maxReplicas: 2` in
+   the `salesApp` scale block (`MMCA.Store/infra/main.bicep:1960`), `CheckOutHandler` (`WriteAsync`
+   at `:122-181`, the transaction still at `:80-82`, `deadlineScheduler.ArmAsync` at `:178`),
+   `ProcessPaymentWebhookHandler` (`MarkAsPaid` at `:106`, `MarkAsPaymentFailed` at `:169`) and
+   `VerifyPaymentHandler` (`MarkAsPaid` at `:71`). The citations inside the dated Revisions above
    keep the line numbers of their dates.
 
 ## Related

@@ -16,7 +16,9 @@ shell pages the route list omitted. Revised 2026-10-07: records that the delete 
 directly), scopes the facades to toasts and confirmation, and re-anchors the ADC Web host's assembly
 wiring. Revised 2026-10-21: records that `AddCommonUiFacades()` also registers
 `IPendingToastService` and is called directly by the Helpdesk Web head, names permission gating in
-the nav-trimming rationale, and refreshes anchors that moved.
+the nav-trimming rationale, and refreshes anchors that moved. Revised 2026-10-26: anchors refreshed
+after both Blazor Web hosts gained an anonymous `MapStaticAssets()` call ahead of their assembly
+wiring, and after `ResultUiExtensions.NotifyOnFailure` moved.
 
 ## Context
 ADR-059 decided how a module plugs into the **server**: an `IModule` implementation is discovered by
@@ -114,7 +116,7 @@ Ship the application shell in the framework package and let each module plug int
   (`MMCA.Common/Source/Hosting/MMCA.Common.Testing.UI/Infrastructure/BunitComponentTestBase.cs:54`),
   so a component test resolves the contracts without pulling in the rest of the shared-UI surface.
   The framework helpers that raise a toast take the toast facade
-  (`MMCA.Common.UI/Common/ResultUiExtensions.cs:289-291`, and
+  (`MMCA.Common.UI/Common/ResultUiExtensions.cs:255-257`, `:276-278`, and
   `ListPageActions.DeleteWithConfirmationAsync` at `MMCA.Common.UI/Pages/Common/ListPageActions.cs:61`).
   The delete confirmation is the component-side exception: `DeleteWithConfirmationAsync` asks its
   question through the `DeleteConfirmation` component it is handed (`ListPageActions.cs:58`, `:72`),
@@ -126,8 +128,8 @@ Ship the application shell in the framework package and let each module plug int
 
 - **Blazor Web heads feed the same enumeration to the endpoint side.** `MapRazorComponents<App>()`
   takes the module assemblies from `GetServices<IUIModule>()` in addition to the shell assemblies
-  (`MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs:313-330`, which also de-duplicates at `:324`, and
-  `MMCA.Store/Source/Hosts/UI/MMCA.Store.UI.Web/Program.cs:274-284`), so the router's view and the
+  (`MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs:322-336`, which also de-duplicates at `:330`, and
+  `MMCA.Store/Source/Hosts/UI/MMCA.Store.UI.Web/Program.cs:280-290`), so the router's view and the
   endpoint's view of the routable assemblies come from one source.
 
 Adoption today is every module UI in both apps plus the framework's own and its test host: ADC
@@ -198,11 +200,11 @@ it registers the facades on their own with `AddCommonUiFacades()` instead (`:20-
   protection still comes from `AuthorizeRouteView` and the pages' own attributes (`Routes.razor:29-52`).
 - **Blazor Web heads wire the assemblies twice.** The router's `AdditionalAssemblies` and the
   endpoint's `AddAdditionalAssemblies` are separate calls, so both hosts repeat the enumeration in
-  `Program.cs` (`MMCA.ADC.UI.Web/Program.cs:313-330`, `MMCA.Store.UI.Web/Program.cs:274-284`); they
+  `Program.cs` (`MMCA.ADC.UI.Web/Program.cs:322-336`, `MMCA.Store.UI.Web/Program.cs:280-290`); they
   derive it from the same `IUIModule` registrations, but the duplication is real. The two hosts also
-  build the list differently: ADC concatenates and applies `.Distinct()` (`:323-324`), because the shell
+  build the list differently: ADC concatenates and applies `.Distinct()` (`:329-330`), because the shell
   assemblies it lists can overlap a module's, while Store spreads the module assemblies into a
-  collection expression with no de-duplication (`MMCA.Store.UI.Web/Program.cs:279-284`).
+  collection expression with no de-duplication (`MMCA.Store.UI.Web/Program.cs:285-290`).
 - **The reference seed does not demonstrate the pattern.** Helpdesk's hand-rolled shell means an
   adopter following it gets the framework's components but not this composition model.
 - **One vendor is also one upstream ceiling, and the facades cover two surfaces only.** A MudBlazor
@@ -278,6 +280,22 @@ gained a third caller, and several anchors moved.
    ADC `IdentityUIModule.cs:17` and `EngagementUIModule.cs:18`, Store `IdentityUIModule.cs:14`,
    `GalleryHost.cs:96`, ADC `MauiProgram.cs:167`, Store `MauiProgram.cs:87`. The 2026-10-06 revision's
    `MainLayout.razor:79-82` and its `IdentityUIModule.cs` line numbers are left as written there.
+
+## Revision (2026-10-26)
+Re-verified against current source. The contract, the shell, router and nav composition, the vendor
+choice, the facades and the double-wiring trade-off (ADC de-duplicates, Store does not) are unchanged;
+only anchors moved, because both Blazor Web hosts now map their static assets anonymously ahead of
+the assembly wiring.
+
+1. Anchors re-verified against current source: ADC `MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs`
+   assembly wiring `:322-336` (`GetServices<IUIModule>()` `:322`, `.Concat` `:329`, `.Distinct()`
+   `:330`, `MapRazorComponents<App>()` `:333`, `AddAdditionalAssemblies` `:336`, the overlap comment
+   `:319-321`); Store `MMCA.Store/Source/Hosts/UI/MMCA.Store.UI.Web/Program.cs` wiring `:280-290`
+   (`GetServices<IUIModule>()` `:280`, `MapRazorComponents<App>()` `:282`, the collection expression
+   `:285-290` with the module spread at `:290`, still no de-duplication); and
+   `ResultUiExtensions.NotifyOnFailure` (`MMCA.Common/Source/Presentation/MMCA.Common.UI/Common/ResultUiExtensions.cs:255-257`
+   for `Result`, `:276-278` for `Result<T>`). The 2026-10-07 revision's anchors are left as written
+   there.
 
 ## Related
 ADR-059 (the server-side `IModule` contract this mirrors in the presentation layer), ADR-056 (the

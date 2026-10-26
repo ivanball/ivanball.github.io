@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 134 ADRs</summary>
+        <summary>All 135 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -234,6 +234,7 @@
         <li><a href="132-build-strictness-analyzer-policy.html">132 · Build Strictness: Analyzers at Error Severity, a Shared Baseline, and CI Test Floors</a></li>
         <li><a href="133-versioned-password-hash-work-factor.html">133 · Versioned Password Hash Work Factor</a></li>
         <li><a href="134-cloud-neutral-core-vendor-adapters.html">134 · Cloud-Neutral Core With Vendor Adapter Packages</a></li>
+        <li><a href="135-application-namespace-keyspace-isolation.html">135 · One Application Namespace Isolates Shared Infrastructure Keyspaces</a></li>
           </ol>
         </nav>
       </details>
@@ -254,7 +255,8 @@
           facet (superseded 2026-10-21: that block is gone), and the <code>with</code>-expression path around the <code>Money</code> sugar is named (see Revision below).
           Revised 2026-10-06: a serialized <code>Money.Zero()</code> now JSON round-trips, because both currency converters read the empty code back as the sentinel and <code>Money</code>&#39;s JSON read refuses that sentinel beside a non-zero amount, so the 2026-10-01 round-trip flag is resolved; anchors refreshed. Revised 2026-10-07: anchors refreshed after the v1.233.0 release.
           Revised 2026-10-19: the primitive Start/End exception names Store&#39;s discount window beside ADC&#39;s pairs, and the order rule is named per entity (Session uses its own strict-after rule).
-          Revised 2026-10-21: <code>OwnsAddress</code> keeps the provider&#39;s Unicode default on its six columns (v1.247.0) and Store&#39;s <code>Customer.Address</code> maps through it alone, with no second <code>OwnsOne</code> override block; anchors refreshed.</p>
+          Revised 2026-10-21: <code>OwnsAddress</code> keeps the provider&#39;s Unicode default on its six columns (v1.247.0) and Store&#39;s <code>Customer.Address</code> maps through it alone, with no second <code>OwnsOne</code> override block; anchors refreshed.
+          Revised 2026-10-26: anchors refreshed after the v1.248.0 through v1.261.0 releases.</p>
           <h2 id="context">Context</h2>
           <p>A domain model has two kinds of small type: the <strong>identity</strong> of a thing, and a <strong>value</strong> the thing
           carries. ADR-048 recorded the identity half: identifiers stay primitives named through a global-using
@@ -285,20 +287,20 @@
           <code>PhoneNumber</code> (<code>PhoneNumber.cs:16</code>).</li>
           <li><strong>The constructor is private; the factory returns <code>Result&lt;T&gt;</code>.</strong> <code>Email.Create</code> (<code>Email.cs:30</code>),
           <code>PhoneNumber.Create</code> (<code>PhoneNumber.cs:30</code>), <code>Address.Create</code> (<code>Address.cs:69</code>), <code>Money.Create</code>
-          (<code>Money.cs:85</code>), <code>DateRange.Create</code> (<code>DateRange.cs:30</code>) and <code>DateTimeRange.Create</code>
+          (<code>Money.cs:91</code>), <code>DateRange.Create</code> (<code>DateRange.cs:30</code>) and <code>DateTimeRange.Create</code>
           (<code>DateTimeRange.cs:31</code>) are the <strong>validating entrance</strong>, and for <code>Email</code>, <code>PhoneNumber</code>, <code>Address</code>,
           <code>DateRange</code> and <code>DateTimeRange</code> they are also the only public entrance at all; <code>Currency</code> is a closed
           set resolved by <code>Currency.FromCode</code> (<code>Currency.cs:43</code>). This is ADR-013 applied below the aggregate: an
           invalid value is a failed <code>Result</code>, never an exception and never a constructed-but-wrong instance.
           <code>Money</code> is the exception, deliberately: it also exposes construction sugar that composes
-          already-valid parts and so skips <code>Create</code> entirely, <code>Money.Zero()</code> (<code>Money.cs:160</code>), <code>Money.Zero(Currency)</code>
-          (<code>:165</code>), <code>operator *</code> (<code>:114-115</code>) and <code>Multiply</code> (<code>:142</code>). The fitness rule below governs the <code>Create</code> name
+          already-valid parts and so skips <code>Create</code> entirely, <code>Money.Zero()</code> (<code>Money.cs:166</code>), <code>Money.Zero(Currency)</code>
+          (<code>:171</code>), <code>operator *</code> (<code>:120-121</code>) and <code>Multiply</code> (<code>:148</code>). The fitness rule below governs the <code>Create</code> name
           only and says so in its own contract (<code>ArchitectureRules.Entities.cs:49-51</code>), so nothing stops a value
           object from shipping such a path. The sugar itself takes no raw string, and the <code>None</code> sentinel is
           <code>internal</code> (<code>Currency.cs:25</code>), but that does not make <code>Currency</code> sealed against unchecked values:
           <code>Currency.Code</code> (<code>Currency.cs:36</code>) and <code>Money.Amount</code>/<code>Money.Currency</code> (<code>Money.cs:32,36</code>) are public
           <code>init</code> accessors, shipped in the public API with the record clone method
-          (<code>Source/Core/MMCA.Common.Shared/PublicAPI.Shipped.txt:575,581,583,771,777</code>), so an external
+          (<code>Source/Core/MMCA.Common.Shared/PublicAPI.Shipped.txt:576,582,584,772,778</code>), so an external
           <code>with</code> expression (<code>Currency.Usd with { Code = &quot;XYZ&quot; }</code>, <code>Money.Zero() with { Amount = 5m }</code>)
           produces a currency <code>FromCode</code> never checked or a non-zero <code>None</code>-currency <code>Money</code> without going
           through <code>Create</code>. The JSON guard described under serialization below does not close this path,
@@ -318,18 +320,18 @@
           (<code>PhoneNumberInvariants.cs:14,17</code>), and the six address field lengths
           (<code>AddressInvariants.cs:12-27</code>). The split is applied <strong>where the constraint is shared</strong>, not
           universally: <code>Money</code>, <code>Currency</code>, <code>DateRange</code> and <code>DateTimeRange</code> keep their checks inline in the
-          factory (<code>Money.cs:89-90</code>, <code>Currency.cs:45-50</code>, <code>DateRange.cs:31-35</code>, <code>DateTimeRange.cs:32-36</code>).</li>
+          factory (<code>Money.cs:95-96</code>, <code>Currency.cs:45-50</code>, <code>DateRange.cs:31-35</code>, <code>DateTimeRange.cs:32-36</code>).</li>
           <li><strong>Two EF mapping shapes, chosen by whether adoption is a schema change.</strong> A multi-field value maps as
           an <strong>owned type</strong>: the shipped <code>OwnsMoney</code> helper
           (<code>Source/Core/MMCA.Common.Infrastructure/Persistence/Configuration/EntityTypeBuilderExtensions.cs:63</code>)
           flattens <code>Money</code> into a <code>decimal(18,2)</code> amount column (precision pinned at <code>:78</code>) plus a
           three-character non-unicode ISO 4217 code column (<code>:76-88</code>) and sets the navigation&#39;s requiredness
           from one parameter (<code>:91</code>). Its sibling
-          <code>OwnsAddress</code> (<code>:133</code>, shipped in v1.192.0, <code>MMCA.Common/CHANGELOG.md:1783</code>) flattens <code>Address</code> into
+          <code>OwnsAddress</code> (<code>:133</code>, shipped in v1.192.0, <code>MMCA.Common/CHANGELOG.md:1998</code>) flattens <code>Address</code> into
           six columns whose lengths come from <code>AddressInvariants</code> and of which only <code>AddressLine1</code> is required
           (<code>:142-168</code>); they keep the provider&#39;s Unicode default (<code>nvarchar</code> on SQL Server), because <code>Address</code>
           accepts free text in any script (contract at <code>:114-118</code>; the forced non-unicode facet was removed
-          as a breaking change in v1.247.0, <code>MMCA.Common/CHANGELOG.md:70</code>). It names the columns from an
+          as a breaking change in v1.247.0, <code>MMCA.Common/CHANGELOG.md:285</code>). It names the columns from an
           optional prefix (<code>AddressLine1</code>, <code>AddressCity</code>, and so on by default, <code>:135</code>, joined at <code>:187-190</code>)
           and defaults the navigation to optional (<code>:136</code>, applied at <code>:170</code>). A single-string value
           maps through <code>HasConversion</code> instead, so the backing column stays a plain string column and adopting
@@ -340,16 +342,16 @@
           (<code>PhoneNumberValueConverter.cs:33,61</code>). Column facets stay at the call site.</li>
           <li><strong><code>Currency.None</code> is a sentinel, and materialization never yields null.</strong> The sentinel is
           <code>internal static readonly Currency None = new(string.Empty)</code> (<code>Currency.cs:25</code>); <code>Money.Zero()</code>
-          carries it (<code>Money.cs:160</code>), <code>Money.Create</code> rejects it so an external caller must always name a real
-          currency (<code>Money.cs:89-90</code>), and addition treats it as the identity element so a zero seed can
-          accumulate into any currency (<code>Money.cs:149-156</code>). Because the write leg can therefore persist an
+          carries it (<code>Money.cs:166</code>), <code>Money.Create</code> rejects it so an external caller must always name a real
+          currency (<code>Money.cs:95-96</code>), and addition treats it as the identity element so a zero seed can
+          accumulate into any currency (<code>Money.cs:155-162</code>). Because the write leg can therefore persist an
           empty code, <code>OwnsMoney</code>&#39;s read leg falls back to the sentinel rather than a null-forgiving <code>.Value!</code>
           (<code>EntityTypeBuilderExtensions.cs:26,84</code>, contract documented at <code>:38-45</code>), and the fallback is
           regression-covered (<code>Tests/Core/MMCA.Common.Infrastructure.Tests/Persistence/Configuration/OwnsMoneyTests.cs:120</code>).</li>
           <li><strong>Every serialization boundary is declared explicitly.</strong> <code>Money</code>, <code>Email</code>, <code>PhoneNumber</code> and
           <code>Address</code> are <code>[DataContract]</code> with ordered <code>[DataMember]</code> members (<code>Money.cs:21,31,35</code>,
           <code>Email.cs:15,19</code>, <code>PhoneNumber.cs:15,19</code>, <code>Address.cs:15,19-40</code>) and each carries a private
-          <code>[JsonConstructor]</code> round-trip constructor (<code>Money.cs:52</code>, <code>Email.cs:22</code>, <code>PhoneNumber.cs:22</code>,
+          <code>[JsonConstructor]</code> round-trip constructor (<code>Money.cs:55</code>, <code>Email.cs:22</code>, <code>PhoneNumber.cs:22</code>,
           <code>Address.cs:42</code>) so a materializer rebuilds the value without reopening the factory; <code>AddAPI</code>
           registers both the JSON converter and the XML <code>DataContractSerializer</code> formatters
           (<code>Source/Presentation/MMCA.Common.API/DependencyInjection.cs:54,67</code>). <code>Currency</code> instead serializes
@@ -358,9 +360,9 @@
           so non-MVC paths (cache, outbox, integration events, typed clients) fail the same way model binding
           does. Both converters read an empty code back as the <code>None</code> sentinel (<code>Currency.cs:88-89</code>,
           <code>CurrencyJsonConverter.cs:26-27</code>), so a serialized <code>Money.Zero()</code> round-trips. Because the
-          <code>[JsonConstructor]</code> bypasses <code>Create</code>, <code>Money</code> implements <code>IJsonOnDeserialized</code> (<code>Money.cs:22,70-76</code>)
+          <code>[JsonConstructor]</code> bypasses <code>Create</code>, <code>Money</code> implements <code>IJsonOnDeserialized</code> (<code>Money.cs:22,76-82</code>)
           and throws <code>JsonException</code> when a non-zero amount arrives with the sentinel (shipped in v1.232.0,
-          <code>MMCA.Common/CHANGELOG.md:374</code>). <code>DateRange</code> and <code>DateTimeRange</code> carry no serialization annotations.</li>
+          <code>MMCA.Common/CHANGELOG.md:589</code>). <code>DateRange</code> and <code>DateTimeRange</code> carry no serialization annotations.</li>
           <li><strong>gRPC is mapped by hand, not inferred.</strong> <code>Money</code> crosses a service boundary as a purpose-built
           <code>MoneyV1</code> message with a <strong>string</strong> amount (proto has no decimal) and a currency code
           (<code>MMCA.Store/Source/Services/MMCA.Store.Catalog.Contracts/Protos/product_variants.proto:115,117,120</code>),
@@ -386,9 +388,9 @@
           as its only <code>Address</code> mapping, and
           <code>User.Email</code> the same way as <code>Customer.Email</code> (<code>UserConfiguration.cs:25</code>).
           ADC types <code>User.Email</code> as <code>Email</code>
-          (<code>MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Domain/Users/User.cs:52</code>, validated through
-          <code>Email.Create</code> at <code>:234</code> and passed to the constructor at <code>:250</code>, with the same pair repeated on the
-          social-login path <code>CreateExternal</code> (<code>:276</code>) at <code>:284,295</code>) with
+          (<code>MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Domain/Users/User.cs:53</code>, validated through
+          <code>Email.Create</code> at <code>:235</code> and passed to the constructor at <code>:251</code>, with the same pair repeated on the
+          social-login path <code>CreateExternal</code> (<code>:277</code>) at <code>:285,296</code>) with
           the same converter (<code>.../Identity.Infrastructure/.../UserConfiguration.cs:21</code>) and two optional
           Conference emails through <code>NullableEmailValueConverter</code>: a speaker&#39;s
           (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Speakers/Speaker.cs:41</code>, mapped at
@@ -438,7 +440,7 @@
           that returns a failure instead (<code>Email.cs:30-41</code>). That is the same invariant-over-discipline posture
           the framework takes elsewhere (ADR-015), applied one level below the aggregate.</li>
           <li><strong>Amount and currency are one value, so they are one type.</strong> Two loose columns can drift; <code>Money</code>
-          makes a currency mismatch a <code>Result</code> failure at the point of arithmetic (<code>Money.cs:125-133</code>) rather
+          makes a currency mismatch a <code>Result</code> failure at the point of arithmetic (<code>Money.cs:131-139</code>) rather
           than a silently wrong total.</li>
           <li><strong>Records give equality for free.</strong> Value semantics (&quot;two addresses with the same fields are the same
           address&quot;) is exactly what a positional-free <code>record</code> already generates, so the base type can be empty
@@ -486,8 +488,8 @@
           <li><strong>The currency set is closed in code.</strong> <code>Currency.All</code> is <code>USD</code> and <code>EUR</code> (<code>Currency.cs:56-60</code>), so
           supporting a third currency is a framework change and a release, not configuration.</li>
           <li><strong><code>Money</code> keeps a throwing operator.</strong> <code>operator +</code> throws <code>InvalidOperationException</code> on a currency
-          mismatch (<code>Money.cs:102-108</code>), which is the one place the value objects step outside the ADR-013
-          posture; <code>Money.Add</code> is the <code>Result</code>-returning path callers are steered to (<code>Money.cs:125</code>).</li>
+          mismatch (<code>Money.cs:108-114</code>), which is the one place the value objects step outside the ADR-013
+          posture; <code>Money.Add</code> is the <code>Result</code>-returning path callers are steered to (<code>Money.cs:131</code>).</li>
           <li><strong>gRPC costs a hand-written mapping per value.</strong> There is no automatic proto projection, so every
           value object that has to cross a service boundary needs its own wire message and translation pair,
           the same class of friction ADR-048 declined to pay for identifiers.</li>
@@ -556,6 +558,21 @@
           (<code>OwnsAddress</code>), <code>:135-136</code>, <code>:142-168</code>, <code>:170</code>, <code>:187-190</code>; <code>MMCA.Common/CHANGELOG.md:374</code> (inside
           <code>[1.232.0]</code>) and <code>:1783</code> (inside <code>[1.192.0]</code>); ADC <code>User.cs:234,250</code> and <code>CreateExternal</code> at
           <code>:276</code>, <code>:284,295</code>; <code>Speaker.cs:41</code>.</p>
+          <h2 id="revision-2026-10-26">Revision (2026-10-26)</h2>
+          <p>Re-verified against current source. No decision changed; the value-object set, the factory shape,
+          the <code>Money</code> sugar and <code>with</code>-expression paths, the <code>Currency.None</code> sentinel handling, the JSON-read
+          refusal, the shipped mapping helpers and every adoption site hold. Only line anchors drifted.
+          (1) Anchors re-verified against current source:
+          <code>MMCA.Common/Source/Core/MMCA.Common.Shared/ValueObjects/Financial/Money.cs</code> <code>[JsonConstructor]</code> at
+          <code>:55</code>, <code>OnDeserialized</code> at <code>:76-82</code>, <code>Create</code> at <code>:91</code> with the <code>None</code> rejection at <code>:95-96</code>,
+          <code>operator +</code> at <code>:108-114</code>, <code>operator *</code> at <code>:120-121</code>, <code>Add</code> at <code>:131</code> with the mismatch failure
+          through <code>:139</code>, <code>Multiply</code> at <code>:148</code>, <code>AddUnchecked</code> at <code>:155-162</code>, <code>Zero()</code> at <code>:166</code> and
+          <code>Zero(Currency)</code> at <code>:171</code> (<code>:21</code>, <code>:22</code>, <code>:31-36</code> unchanged);
+          <code>MMCA.Common/Source/Core/MMCA.Common.Shared/PublicAPI.Shipped.txt:576,582,584,772,778</code>;
+          <code>MMCA.Common/CHANGELOG.md:1998</code> (inside <code>[1.192.0]</code>), <code>:285</code> (inside <code>[1.247.0]</code>) and <code>:589</code>
+          (inside <code>[1.232.0]</code>); ADC
+          <code>MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Domain/Users/User.cs:53</code>, <code>Email.Create</code> at
+          <code>:235</code> and <code>:285</code>, <code>new User(...)</code> at <code>:251</code> and <code>:296</code>, <code>CreateExternal</code> at <code>:277</code>.</p>
           <h2 id="related">Related</h2>
           <p>ADR-048 (the deliberate opposite call for identifiers: primitives behind aliases, wrapper structs
           rejected, because identifiers cross process boundaries constantly and carry no invariant), ADR-115
@@ -583,6 +600,7 @@
             <li><a href="#revision-2026-10-07">Revision (2026-10-07)</a></li>
             <li><a href="#revision-2026-10-19">Revision (2026-10-19)</a></li>
             <li><a href="#revision-2026-10-21">Revision (2026-10-21)</a></li>
+            <li><a href="#revision-2026-10-26">Revision (2026-10-26)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

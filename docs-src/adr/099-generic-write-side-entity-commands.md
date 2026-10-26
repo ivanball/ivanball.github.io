@@ -22,11 +22,12 @@ permission and timeout steps only when a derived command opts in. Revised 2026-1
 override now runs on the shared mutate workflow with its provider call inside `MutateAsync`, so the
 generic-path boundary is the generic update path, not the presence of a provider call. Revised
 2026-10-21: anchors refreshed after the controller base and the consumer DI registrations shifted.
+Revised 2026-10-26: anchors refreshed after #590 shifted the controller base delete action.
 
 ## Context
 ADR-034 records the read side of the generic resource layer and stops one verb short. Its
 `AggregateRootEntityControllerBase` ships `[HttpPost]` create and `[HttpDelete("{id}")]`
-(`Source/Presentation/MMCA.Common.API/Controllers/AggregateRootEntityControllerBase.cs:75`, `:107`),
+(`Source/Presentation/MMCA.Common.API/Controllers/AggregateRootEntityControllerBase.cs:75`, `:106`),
 and the framework already carried a generic delete command and handler. Update was the verb every
 aggregate still hand-wrote.
 
@@ -453,3 +454,13 @@ delete actions on the four-parameter controller base. Only line positions moved.
    `AddEntityCrud` for `Customer`
    (`MMCA.Store/Source/Modules/Identity/MMCA.Store.Identity.Application/DependencyInjection.cs:84-86`).
    The Store Catalog anchors (`:101-104`, `:105`, `:112`) are unchanged.
+
+## Revision (2026-10-26)
+
+Re-verified against current source. No decision, behavior or adoption changed: the generic create,
+update and delete commands and the controller base actions are as recorded. Only one line position
+moved in the controller base. Anchors inside the earlier Revisions are left as recorded.
+
+1. Anchors re-verified against current source: the base controller's `[HttpPost]`
+   (`MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/AggregateRootEntityControllerBase.cs:75`)
+   and `[HttpDelete("{id}")]` (`:106`), re-pointed in Context.

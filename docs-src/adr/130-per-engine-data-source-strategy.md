@@ -1,7 +1,7 @@
 # ADR-130: Per-Engine Data Source Strategy (Engine Facts Instead of Branching on the Enum)
 
 ## Status
-Accepted (2026-10-01). Shipped in MMCA.Common v1.218.0 (`MMCA.Common/CHANGELOG.md:623`). Revised
+Accepted (2026-10-01). Shipped in MMCA.Common v1.218.0 (`MMCA.Common/CHANGELOG.md:838`). Revised
 2026-10-06: the release status now records v1.218.0 as shipped. Refines [ADR-018](018-polyglot-persistence.md) (engine as
 a routing decision) and [ADR-113](113-postgresql-as-a-first-class-engine.md) (the fourth engine)
 without changing [ADR-006](006-database-per-service.md) (one sealed context class per engine, one
@@ -11,7 +11,7 @@ container build only in Development), not unconditionally at startup, so it meet
 startup bar only in Development; the replaced shape is cited through its squash commit on main;
 anchors refreshed. Revised 2026-10-25: re-checked for the PostgreSQL data-source extension point
 v1.257.0 adds; the engine strategy is unchanged and the extension point is recorded in ADR-113 (see
-Revision (2026-10-25) below).
+Revision (2026-10-25) below). Revised 2026-10-26: anchors refreshed after the v1.261.0 release.
 
 ## Context
 MMCA.Common persists through four engines named by one shipped public enum, `DataSource`
@@ -81,8 +81,9 @@ registry keyed by the shipped enum. Call sites read engine facts; they no longer
   (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/ApplicationDbContext.cs:61`).
   The resolver orders substitution by `SubstitutionPriority`
   (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DataSources/DataSourceResolver.cs:36`)
-  and reads migration policy and connection strings through the engine (`:394`, `:451`, `:471`,
-  `:501`, `:504`); `PhysicalDataSource.UsesMigrations` switches on `Migrations`
+  and reads migration policy, migrations assemblies and connection strings through the engine
+  (`:307`, `:413`, `:470`, `:478`, `:490`, `:515`, `:520`, `:523`);
+  `PhysicalDataSource.UsesMigrations` switches on `Migrations`
   (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DataSources/PhysicalDataSource.cs:42`);
   the row-version mapping and stamp read `RowVersion`
   (`ApplicationDbContext.cs:592`,
@@ -99,7 +100,7 @@ registry keyed by the shipped enum. Call sites read engine facts; they no longer
   the outbox routing decision reads `context.Engine.Capabilities.IsRelational`
   (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Messaging/InProcessEventBus.cs:82`,
   `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Messaging/BrokerEventBus.cs:70`,
-  `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Interceptors/DomainEventSaveChangesInterceptor.cs:257`).
+  `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Interceptors/DomainEventSaveChangesInterceptor.cs:259`).
 - **Explicit-key insert is engine-neutral at the API.** `IUnitOfWork.RequestIdentityInsert` is renamed
   `RequestExplicitKeyInsert`, with no alias
   (`MMCA.Common/Source/Core/MMCA.Common.Application/Interfaces/Infrastructure/Persistence/IUnitOfWork.cs:45`,
@@ -116,12 +117,12 @@ registry keyed by the shipped enum. Call sites read engine facts; they no longer
   dialect (`SQLServerDataSourceEngine.cs:19`, `:49`) and emits `SET IDENTITY_INSERT [schema].[table] ON` or `OFF`
   (`:163`); the other three return `null`, so the save runs unchanged.
 - **Raw SQL is registered only where it can run.** `AddRawSqlQueryExecutor`
-  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:407`, called at `:116`)
+  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:426`, called at `:116`)
   resolves the host's framework default engine and registers `IRawSqlQueryExecutor` only when that
-  engine is relational (`:416-418`). A Cosmos-default host gets no registration, so a service that
+  engine is relational (`:435-438`). A Cosmos-default host gets no registration, so a service that
   injects the executor fails at resolution instead of on its first statement: at container build in
   Development, where the default host validates the container, and on first resolution elsewhere
-  (`:397-403`).
+  (`:416-422`).
   Both branches are tested
   (`MMCA.Common/Tests/Core/MMCA.Common.Infrastructure.Tests/DependencyInjectionInfrastructureTests.cs:273`,
   `:294`).
@@ -162,7 +163,7 @@ cannot go stale. Its failure message names this record.
   the three row-version strategies).
 - **Fail at resolution, not at first statement.** Registering the raw-SQL executor conditionally
   turns a call-time `NotSupportedException` on Cosmos into a resolution failure, caught at container
-  build in Development and on first resolution elsewhere (`DependencyInjection.cs:397-403`). In
+  build in Development and on first resolution elsewhere (`DependencyInjection.cs:416-422`). In
   Development that is a startup failure, the stance of
   [ADR-070](070-fail-fast-configuration-contract.md); elsewhere it is a lazy first-use failure,
   which ADR-070 rules out for configuration, but still earlier than the first statement.
@@ -177,7 +178,7 @@ cannot go stale. Its failure message names this record.
 - **Breaking for consumers.** The `RequestIdentityInsert` rename has no alias
   (`IUnitOfWork.cs:45`); a Cosmos-default host that injects `IRawSqlQueryExecutor` now fails at
   resolution (container build in Development, first resolution elsewhere,
-  `DependencyInjection.cs:397-403`, `:416-418`); and a SQLite consumer with migrations sees a model diff on
+  `DependencyInjection.cs:416-422`, `:435-438`); and a SQLite consumer with migrations sees a model diff on
   the outbox, internal-command and push-notification filtered indexes and needs a migration.
 - **Static means not replaceable.** A consumer cannot substitute or add an engine; the registry is
   internal (`DataSourceEngines.cs:19`) and so is the contract (`IDataSourceEngine.cs:18`). That is
@@ -285,6 +286,22 @@ not by `IDataSourceEngine`, and only PostgreSQL connection strings reach a confi
 so it adds no capability and no engine branch. The extension point, the readiness check and
 PostgreSql broker that share it, and the RDS and Cloud SQL IAM token providers that use it are
 recorded in [ADR-113](113-postgresql-as-a-first-class-engine.md) decision 10.
+
+## Revision (2026-10-26)
+Re-verified against current source. The engine contract, the registry, the capabilities table, the
+call sites that read engine facts and the raw-SQL registration are unchanged; only line anchors
+moved, and the resolver's engine reads are now listed in full.
+
+1. Anchors re-verified against current source: the v1.218.0 release heading is
+   `MMCA.Common/CHANGELOG.md:838`, with the `RequestIdentityInsert` rename entry at `:844`, cited in
+   the Status block (the anchors in the earlier revisions are left as written); the resolver reads
+   engine facts at `DataSourceResolver.cs:307` (top-level migrations assembly), `:413` and `:470`
+   (migration policy), `:478` (migrations assembly), `:490` (migration policy), `:515` (connection
+   identity), `:520` and `:523` (connection strings), with `:23` and `:36` unchanged; the outbox
+   routing reads `IsRelational` at `DomainEventSaveChangesInterceptor.cs:259`
+   (`InProcessEventBus.cs:82` and `BrokerEventBus.cs:70` unchanged); and `AddRawSqlQueryExecutor`
+   is declared at `DependencyInjection.cs:426` (still called at `:116`), with the relational check
+   and registration at `:435-438` and its doc comment at `:416-422`.
 
 ## Related
 [ADR-006](006-database-per-service.md) (one sealed context per engine),

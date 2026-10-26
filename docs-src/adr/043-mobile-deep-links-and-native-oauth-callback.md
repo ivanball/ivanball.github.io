@@ -18,7 +18,7 @@ the OAuth custom-scheme returnUrl allowlist in `CompleteAsync`, the app-associat
 (`Source/Presentation/MMCA.Common.UI.Maui/Capabilities/Auth/MauiExternalAuthBroker.cs:20`). The ADC
 consumer's deep-link wave has shipped: `MMCA.ADC.UI.Web` serves the two well-known association
 documents through the shared helper
-(`MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs:296`), the Identity service allow-lists the
+(`MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs:302`), the Identity service allow-lists the
 `atldevcon` scheme (`MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/appsettings.json:89-91`, the
 entry at `:90`), and
 the native heads register the callback: iOS carries both the custom-scheme URL type
@@ -29,8 +29,8 @@ Android registers the custom-scheme `WebAuthenticatorCallbackActivity`
 Android's `AutoVerify` https App Links intent filter is in place too, declared as a C# attribute on
 `MainActivity` rather than in XML
 (`MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI/Platforms/Android/MainActivity.cs:29-35`, with the public web
-host constant at `:44` and the verified link reduced to path plus query at `:83`, shape-checked at
-`:97-100` and published to `IDeepLinkDispatcher` at `:102`). The filter claims only the deep-linkable
+host constant at `:44` and the verified link reduced to path plus query at `:94`, shape-checked at
+`:108-111` and published to `IDeepLinkDispatcher` at `:113`). The filter claims only the deep-linkable
 path prefixes (`/conference/`, `/engage/`, `/happening-now`, `/feedback/`, `/auth/oauth-complete`, at `:34`),
 the same set the iOS `applinks` components declare, so any other page on the host stays in the
 browser. The checked-in
@@ -66,6 +66,8 @@ and room check-in QR landing pages, so those printed codes open in the app; see 
 Revised 2026-10-21: the hostname trade-off now names the architecture test that keeps the three
 binary host spots in agreement and the gateway default-domain URLs also embedded in the MAUI
 binary, and two MMCA.ADC anchors are refreshed; see Revision below.
+Revised 2026-10-26: anchors refreshed after the `Program.cs` association block, `MainActivity`'s
+`PublishDeepLink` and the shared `DeepLinkDispatcher` grew; see Revision below.
 ## Context
 Three mobile flows all need a URL to leave the web world and land inside the MAUI app:
 
@@ -518,3 +520,22 @@ hostname trade-off gains two facts it omitted, and two MMCA.ADC anchors moved.
    `PublicSite:BaseUrl` is still `MMCA.ADC.UI/appsettings.json:33` and the `MainActivity` cutover
    comment still `:41-43` with `PublicWebHost` at `:44`. Every live citation above is updated; the
    dated entries keep the values they recorded.
+
+## Revision (2026-10-26)
+Re-verified against current source. The decision, the allowlist behavior, the path-scoped link sets
+(the iOS `applinks` components still match the Android `DataPathPrefixes`), the three binary host
+spots and the shape rule the Android head asks before publishing are unchanged; MMCA.ADC and
+MMCA.Common anchors moved.
+
+1. **Anchors re-verified against current source:** in ADC,
+   `MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs`: ADR-043 block comment `:295-300`,
+   `GetSection("AppAssociation")` `:301`, `MapAppAssociationEndpoints` `:302`, package-id comment
+   `:304-307`, `AndroidPackageName` `:308`, `AndroidCertFingerprints` `:309`, `AppleAppId` `:310`,
+   `AppleAppLinkComponents` `:311` (`/conference/*`, `/engage/*`, `/happening-now`, `/feedback/*`,
+   `/auth/oauth-complete*`); `Platforms/Android/MainActivity.cs`: intent filter `:29-35` with
+   `DataPathPrefixes` `:34` and `AutoVerify` `:35`, cutover comment `:41-43`, `PublicWebHost` `:44`,
+   `OnCreate` publish `:56`, `OnNewIntent` publish `:78`, `PublishDeepLink` `:81-114`, route
+   reduction `:94`, shape check `:108-111`, publish `:113`. In Common,
+   `MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/Capabilities/Navigation/DeepLinkDispatcher.cs`:
+   class `:22`, `IsAppRelativeRoute` `:113`, `Publish` `:168` with the guard inside it at `:172`.
+   Every live citation above is updated; the dated entries keep the values they recorded.

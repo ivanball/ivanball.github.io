@@ -17,6 +17,8 @@ contexts, attributes once-per-key caching to the scoped `DbContextFactory` (not
 `PhysicalDbContextFactory`), and scopes the no-per-module-context rule to concrete runtime contexts
 (abstract per-module `ModuleApplicationDbContext` DbSet holders exist);
 `infra/main.bicep` anchors refreshed.
+Revised 2026-10-26: per-module `ModuleApplicationDbContext` declarations are scoped to modules that
+own their own aggregates (ADC Notification declares none); `infra/main.bicep` anchors refreshed.
 
 ## Context
 When the modules were first extracted into independently-deployable services, all services in an
@@ -38,7 +40,12 @@ Adopt **database-per-service**: each service owns its own physical database with
   introduce a per-module concrete (runtime) DbContext class. Each module may declare an abstract
   `ModuleApplicationDbContext` that only lists its `DbSet`s (for example
   `MMCA.Helpdesk/Source/Modules/Tickets/MMCA.Helpdesk.Tickets.Infrastructure/Persistence/DbContexts/ModuleApplicationDbContext.cs:14`),
-  but nothing subclasses it at runtime (rule stated at `MMCA.Helpdesk/AGENTS.md:74`). The default engine is SQL Server (`SQLServerDbContext`); ADR-018
+  but nothing subclasses it at runtime (rule stated at `MMCA.Helpdesk/AGENTS.md:74`). Only modules
+  that own their own aggregates declare one. ADC Notification still owns the `ADC_Notification`
+  database, but its `PushNotification` and `UserNotification` entities live in MMCA.Common
+  (`MMCA.ADC/Source/Services/MMCA.ADC.Notification.Service/Program.cs:269-270`), so its module
+  projects are API, Application and Shared only, with no Infrastructure project and no
+  `ModuleApplicationDbContext`. The default engine is SQL Server (`SQLServerDbContext`); ADR-018
   later added `SqliteDbContext` and `CosmosDbContext`, and ADR-113 added `PostgreSQLDbContext`, each
   a sealed subclass of the abstract `ApplicationDbContext`. The singleton `PhysicalDbContextFactory`
   creates a new raw context on every `Create(DataSourceKey)` call; the scoped `DbContextFactory`
@@ -53,7 +60,7 @@ Adopt **database-per-service**: each service owns its own physical database with
   longer declares it. That bacpac was itself deleted permanently on 2026-10-03 (blob soft delete and
   versioning were off), so there is no restore path to the pre-cutover `AtlDevCon` data; its contents
   had already been copied into the per-service databases at cutover, and those four databases keep
-  their own PITR plus LTR (`MMCA.ADC/infra/main.bicep:1080`, `MMCA.ADC/infra/main.bicep:1132`,
+  their own PITR plus LTR (`MMCA.ADC/infra/main.bicep:1114`, `MMCA.ADC/infra/main.bicep:1166`,
   `MMCA.ADC/infra/POST-CUTOVER-atldevcon-downgrade.md:103`, `MMCA.ADC/infra/DISASTER-RECOVERY.md:27`).
 - **Per-source outbox.** Each database has its own `OutboxMessages`; the `OutboxProcessor` drains
   only the sources its host owns, so no service ever sees another's rows.
@@ -126,3 +133,37 @@ above keep the anchors they recorded.
    monthly `P12M`, yearly `P1Y` at `:1137-1139`; was `:982`);
    `MMCA.ADC/infra/POST-CUTOVER-atldevcon-downgrade.md:103` and `MMCA.ADC/infra/DISASTER-RECOVERY.md:27`
    are unchanged.
+
+## Revision (2026-10-26)
+Re-verified against current source. The decision is unchanged: one sealed context class per engine,
+one instance per database, four per-service `ADC_*` databases with PITR plus LTR as the only restore
+path. The Decision bullet now scopes per-module `ModuleApplicationDbContext` declarations to modules
+that own their own aggregates, and its `infra/main.bicep` anchors moved. The 2026-10-21 revision above keeps
+the wording and anchors it recorded (its "every consumer module" statement and its
+`PostgreSQLDbContext.cs:23` anchor are superseded by this revision).
+
+1. Not every consumer module declares a `ModuleApplicationDbContext`. ADC Identity
+   (`MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Infrastructure/Persistence/DbContexts/ModuleApplicationDbContext.cs:15`),
+   Conference (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Infrastructure/Persistence/DbContexts/ModuleApplicationDbContext.cs:22`),
+   Engagement (`MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Infrastructure/Persistence/DbContexts/ModuleApplicationDbContext.cs:20`)
+   and Helpdesk Tickets
+   (`MMCA.Helpdesk/Source/Modules/Tickets/MMCA.Helpdesk.Tickets.Infrastructure/Persistence/DbContexts/ModuleApplicationDbContext.cs:14`)
+   do; ADC Notification declares none. Its module projects are only `MMCA.ADC.Notification.API`,
+   `MMCA.ADC.Notification.Application` and `MMCA.ADC.Notification.Shared` (the host-side
+   `MMCA.ADC.Notification.Contracts` and `MMCA.ADC.Notification.Service` projects live under
+   `MMCA.ADC/Source/Services`), and none of them is an Infrastructure project. Notification still
+   owns persistence: the `ADC_Notification` database maps `PushNotification` and `UserNotification`
+   to a `Notification` schema
+   (`MMCA.ADC/Source/Hosting/MMCA.ADC.Migrations.SqlServer.Notification/Migrations/SQLServerDbContextModelSnapshot.cs:95`,
+   `:156`), but those entities live in MMCA.Common and the module owns no aggregates of its own
+   (`MMCA.ADC/Source/Services/MMCA.ADC.Notification.Service/Program.cs:269-270`). The Decision
+   bullet keeps "Each module may declare" and names Notification as the module that does not.
+2. Anchors re-verified against current source: `PostgreSQLDbContext` is declared at
+   `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/PostgreSQLDbContext.cs:24`
+   (was `:23`); the `AtlDevCon` archived-and-dropped note at `MMCA.ADC/infra/main.bicep:1114` (was
+   `:1080`), with the 2026-10-03 bacpac deletion sentence at `:1119` (was `:1085`) and a second
+   mention in the LTR comment at `:1164-1165`; the `serviceDatabaseLtr` policy at
+   `MMCA.ADC/infra/main.bicep:1166` (was `:1132`), weekly `P4W`, monthly `P12M`, yearly `P1Y` at
+   `:1171-1173` (values unchanged); `MMCA.Helpdesk/AGENTS.md:74`,
+   `MMCA.ADC/infra/POST-CUTOVER-atldevcon-downgrade.md:103` and
+   `MMCA.ADC/infra/DISASTER-RECOVERY.md:27` are unchanged.

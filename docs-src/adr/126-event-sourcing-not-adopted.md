@@ -9,7 +9,7 @@ to revisit. The current-state persistence model recorded in [ADR-003](003-outbox
 mechanism. Revised 2026-10-01: citations re-anchored. Revised 2026-10-06: the ADR-075 history claim
 is scoped to opted-in entities, with retention purging only where the host runs the scheduler. Revised 2026-10-07: the rationale acknowledges ADC's append-only points ledger and why it
 is not event sourcing, and the Marten rejection separates framework PostgreSQL support (ADR-113)
-from production, where no deployment runs a PostgreSQL server. Revised 2026-10-21: anchors refreshed after Common and ADC source commits moved the outbox, inbox, provider and snapshot lines.
+from production, where no deployment runs a PostgreSQL server. Revised 2026-10-21: anchors refreshed after Common and ADC source commits moved the outbox, inbox, provider and snapshot lines. Revised 2026-10-26: anchors refreshed after Common source commits on 2026-10-25 moved the PostgreSQL provider pin and reference lines.
 
 ## Context
 Event sourcing keeps an append-only log of the facts that happened to an aggregate and treats that log
@@ -102,9 +102,9 @@ statement anywhere that the combination was declined.
   and the specific option this record weighed. It was dropped on two grounds rather than on taste. It
   requires PostgreSQL. The framework already supports PostgreSQL as an engine
   ([ADR-113](113-postgresql-as-a-first-class-engine.md),
-  `MMCA.Common/Directory.Packages.props:63`), and the provider ships in every consumer as a direct
+  `MMCA.Common/Directory.Packages.props:64`), and the provider ships in every consumer as a direct
   dependency of `MMCA.Common.Infrastructure`
-  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/MMCA.Common.Infrastructure.csproj:50`), but no
+  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/MMCA.Common.Infrastructure.csproj:43`), but no
   production deployment runs a PostgreSQL server and no production entity routes to a
   non-SQL-Server engine ([ADR-018](018-polyglot-persistence.md)). So Marten would add no engine to the
   framework, but it would add a deployed PostgreSQL server for the adopting module's database
@@ -186,6 +186,18 @@ is still a direct dependency of `MMCA.Common.Infrastructure`.
    (`.../Persistence/Inbox/EfInboxStore.cs:43`, previously `:41`), and the Npgsql provider reference
    (`MMCA.Common.Infrastructure.csproj:50`, previously `:47`). `MMCA.Common/Directory.Packages.props:63`
    holds.
+
+## Revision (2026-10-26)
+Re-verified against current source. The decision (event sourcing not adopted), the rationale and the
+revisit trigger are unchanged, and the PostgreSQL provider is still pinned centrally and referenced
+unconditionally by `MMCA.Common.Infrastructure`; two body anchors in the Marten rejection moved after
+Common source commits on 2026-10-25 shifted the lines they cited.
+1. Anchors re-verified against current source: the `Npgsql.EntityFrameworkCore.PostgreSQL` version pin
+   (`MMCA.Common/Directory.Packages.props:64`, previously `:63`, which now holds the end of its
+   explanatory comment) and the unconditional provider reference
+   (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/MMCA.Common.Infrastructure.csproj:43`,
+   previously `:50`, which now holds the comment for the `MassTransit.SqlTransport.PostgreSQL` broker
+   reference).
 
 ## Related
 [ADR-003](003-outbox-dual-dispatch.md) (at-least-once delivery of domain events, the mechanism a

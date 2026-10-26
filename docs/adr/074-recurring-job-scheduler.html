@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 134 ADRs</summary>
+        <summary>All 135 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -234,6 +234,7 @@
         <li><a href="132-build-strictness-analyzer-policy.html">132 · Build Strictness: Analyzers at Error Severity, a Shared Baseline, and CI Test Floors</a></li>
         <li><a href="133-versioned-password-hash-work-factor.html">133 · Versioned Password Hash Work Factor</a></li>
         <li><a href="134-cloud-neutral-core-vendor-adapters.html">134 · Cloud-Neutral Core With Vendor Adapter Packages</a></li>
+        <li><a href="135-application-namespace-keyspace-isolation.html">135 · One Application Namespace Isolates Shared Infrastructure Keyspaces</a></li>
           </ol>
         </nav>
       </details>
@@ -246,7 +247,8 @@
           smart-wait and cron-validation statements now match the runner&#39;s actual behavior. Revised 2026-10-07:
           the consumer-adoption statement now names every host that calls <code>AddScheduledJobs</code> and the combined
           audit-trail migrations that create the table. Revised 2026-10-21: anchors refreshed after the outbox
-          claim path and the <code>ConfigureScheduler</code> mapping moved in source. The implementation lands in the MMCA.Common &quot;enterprise capability wave&quot; release
+          claim path and the <code>ConfigureScheduler</code> mapping moved in source. Revised 2026-10-26: anchors refreshed
+          after the outbox claim path and the consumer <code>AddScheduledJobs</code> calls moved in source. The implementation lands in the MMCA.Common &quot;enterprise capability wave&quot; release
           and is opt-in: a host calls <code>AddScheduledJobs(configuration)</code> and sets <code>Scheduler:Enabled</code>. Until it does,
           the framework creates no table and starts no runner.</p>
           <h2 id="context">Context</h2>
@@ -269,11 +271,11 @@
           <h3 id="the-scheduler-is-the-outbox-claim-lease-pattern-applied-to-cron-not-hangfire-and-not-quartznet">The scheduler is the outbox claim-lease pattern applied to cron, not Hangfire and not Quartz.NET</h3>
           <p>A persistent job store plus a single-runner claim lease, reusing the exact idiom the outbox proved. The
           outbox claims a batch with an <code>ExecuteUpdateAsync</code> that sets <code>LockedUntil</code> and <code>LockToken</code> in one statement
-          (<code>.../Persistence/Outbox/Processing/OutboxProcessor.cs:370-374</code>, inside <code>ClaimEligibleAsync</code>, <code>:343</code>) over a shared
+          (<code>.../Persistence/Outbox/Processing/OutboxProcessor.cs:372-376</code>, inside <code>ClaimEligibleAsync</code>, <code>:345</code>) over a shared
           <code>FilterClaimable</code> predicate that admits only eligible, unprocessed rows whose <code>LockedUntil</code> is null or already
-          in the past (<code>:422-428</code>; a batch carrying an ordering key claims through <code>FilterUnblocked</code>, which composes it,
-          <code>:366-368</code>, <code>:442</code>), then re-reads the claimed
-          set by <code>LockToken</code> so a partial claim processes only its own rows (<code>:382-390</code>). A due job is claimed the same way, so two replicas can
+          in the past (<code>:424-430</code>; a batch carrying an ordering key claims through <code>FilterUnblocked</code>, which composes it,
+          <code>:368-370</code>, <code>:444</code>), then re-reads the claimed
+          set by <code>LockToken</code> so a partial claim processes only its own rows (<code>:384-389</code>). A due job is claimed the same way, so two replicas can
           never run the same occurrence, and a replica that dies mid-run releases its job when the lease expires.</p>
           <p>Hangfire would have brought its own schema, its own storage abstraction, a dashboard surface to authorize
           and host, and a licensing posture that varies by storage provider. Quartz.NET would have brought a large
@@ -490,6 +492,25 @@
           soft-delete filter anchors (<code>ApplicationDbContext.cs:457</code>, <code>:466</code>) are current. The earlier revision
           entries above are left as written.</li>
           </ol>
+          <h2 id="revision-2026-10-26">Revision (2026-10-26)</h2>
+          <p>Re-verified against current source. No decision, rationale, trade-off or adoption statement changed; the
+          claim lease, the keyed claim path, the partial-claim re-read and the consumer-adoption host set (ADC three
+          of four hosts without Notification, Store three, Helpdesk one) behave and stand as described. Only anchors
+          moved, two to three lines in <code>OutboxProcessor.cs</code> and in the consumer <code>Program.cs</code> files.</p>
+          <ol>
+          <li>Anchors re-verified against current source: the outbox claim <code>ExecuteUpdateAsync</code>
+          (<code>OutboxProcessor.cs:372-376</code>, setting <code>LockedUntil</code> and <code>LockToken</code> at <code>:374</code>) inside
+          <code>ClaimEligibleAsync</code> (<code>:345</code>), <code>FilterClaimable</code> (<code>:424-430</code>), the keyed <code>FilterUnblocked</code> branch
+          (<code>:368-370</code>), <code>FilterUnblocked</code> itself (<code>:439</code>) composing <code>FilterClaimable</code> (<code>:444</code>), and the
+          partial-claim re-read by <code>LockToken</code> (<code>:384-389</code>). The <code>AddScheduledJobs</code> calls are at
+          <code>MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:252</code>,
+          <code>MMCA.ADC.Conference.Service/Program.cs:358</code>, <code>MMCA.ADC.Engagement.Service/Program.cs:204</code>,
+          <code>MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:240</code>,
+          <code>MMCA.Store.Sales.Service/Program.cs:216</code>, <code>MMCA.Store.Identity.Service/Program.cs:210</code> and
+          <code>MMCA.Helpdesk/Source/Hosts/MMCA.Helpdesk.Web/Program.cs:89</code>. The 2026-10-07 and 2026-10-21 entries
+          above are left as written; their <code>OutboxProcessor.cs</code> anchors and the 2026-10-07 ADC and Store
+          <code>Program.cs</code> anchors are stale.</li>
+          </ol>
           <h2 id="related">Related</h2>
           <p><a href="003-outbox-dual-dispatch.html">ADR-003</a> (the outbox whose claim-lease idiom and smart wait this reuses
           verbatim, and whose at-least-once posture it inherits along with the idempotency obligation on job bodies),
@@ -524,6 +545,7 @@
             <li><a href="#revision-2026-10-06">Revision (2026-10-06)</a></li>
             <li><a href="#revision-2026-10-07">Revision (2026-10-07)</a></li>
             <li><a href="#revision-2026-10-21">Revision (2026-10-21)</a></li>
+            <li><a href="#revision-2026-10-26">Revision (2026-10-26)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

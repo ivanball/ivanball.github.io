@@ -1,7 +1,7 @@
 # ADR-033: Resource-Ownership Authorization (Row-Level + Action Filter)
 
 ## Status
-Accepted (2026-07-02, revised 2026-07-25, 2026-08-01, 2026-08-31, 2026-09-10). Revised 2026-10-01 (the fail-closed owner gate and the per-record ownership check are now framework code in `OwnershipHelper`; see Revision below). Revised 2026-10-06: the CSV export's fail-closed `AllowUnscopedExport` opt-in, which lets only the bypass role export an unscoped table, is now recorded in Adoption. Revised 2026-10-07: anchors refreshed after the v1.233.0 release. Revised 2026-10-21: the bypass check is `ICurrentUserService.IsInRole` over every role claim (v1.234.0), not a compare against the first role claim, and the bypass role is a required host-named argument with no `Admin` default.
+Accepted (2026-07-02, revised 2026-07-25, 2026-08-01, 2026-08-31, 2026-09-10). Revised 2026-10-01 (the fail-closed owner gate and the per-record ownership check are now framework code in `OwnershipHelper`; see Revision below). Revised 2026-10-06: the CSV export's fail-closed `AllowUnscopedExport` opt-in, which lets only the bypass role export an unscoped table, is now recorded in Adoption. Revised 2026-10-07: anchors refreshed after the v1.233.0 release. Revised 2026-10-21: the bypass check is `ICurrentUserService.IsInRole` over every role claim (v1.234.0), not a compare against the first role claim, and the bypass role is a required host-named argument with no `Admin` default. Revised 2026-10-26: anchors refreshed after the v1.261.0 release (changelog, `OwnershipHelper` overload and Store `ReviewsController` anchors cited in earlier revisions).
 
 ## Context
 ADR-020 added a permission (capability) layer over RBAC: it answers "what may this **role** do",
@@ -431,3 +431,20 @@ refresh, and Revision 2026-10-07's "enforcement behavior is unchanged" no longer
    and the private `AccessDenied` that builds `Error.Forbidden` (`:180-181`). The v1.216.0 changelog
    entry recorded in Revisions 2026-10-01, 2026-10-06 and 2026-10-07 is now
    `MMCA.Common/CHANGELOG.md:711`, under the `[1.216.0]` header at `:694`.
+
+## Revision (2026-10-26)
+Re-verified against current source. The filter, the ownership specification, the bypass check over
+every role claim, the fail-closed `RequireResolvableOwner<TId>` gate and the per-record
+`ValidateOwnershipAsync<TId>` check read as recorded, and the live `OwnershipHelper` anchors are
+unchanged. Only anchors cited in earlier revisions moved; those revisions stay as written.
+
+1. Anchors re-verified against current source: the two-generic `GetOwnershipSpecification<TSpec, TId>`
+   overload cited at `OwnershipHelper.cs:34` (Revision 2026-09-10) and `:35` (Revision 2026-10-07) is
+   declared at `MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/OwnershipHelper.cs:41`,
+   with the convenience overload at `:71` delegating at `:76`. Store Catalog's `ReviewsController`
+   (`MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.API/Controllers/ReviewsController.cs`)
+   declares `ResolveOwner()` at `:251` (called at `:142`) and its private `ValidateOwnershipAsync` at
+   `:291`, which delegates to `OwnershipHelper.ValidateOwnershipAsync` at `:295`. In
+   `MMCA.Common/CHANGELOG.md`, the v1.216.0 `OwnershipHelper` entry is `:926` under the `[1.216.0]`
+   header at `:909`, the v1.234.0 `IsInRole` entry is `:539` under the header at `:528`, and the
+   v1.201.0 removal of the `= "Admin"` default is `:1654-1656` under the header at `:1581`.

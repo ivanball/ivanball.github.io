@@ -19,7 +19,10 @@ stored pair or an empty access token (other failures are unavailable), the Serve
 recorded as seeing a non-null `HttpContext` on the circuit and telling it from the prerender by a
 hub-connection request and by memory authority, both browser storage services discard a hydrate
 overtaken by a login or logout, and the bearer handler marks replay safety on a transport failure;
-anchors refreshed.
+anchors refreshed. Revised 2026-10-26: both browser storage services raise `SessionEnded`
+(`ISessionAwareTokenStorage`) when a held session ends on the server and the auth-state provider
+signs the shell out on it (no MAUI equivalent), the WASM clients pre-hydrate the token through
+`TokenHydrationWarmup`, and Decision anchors are refreshed.
 
 ## Context
 ADR-022 and ADR-050 describe the two server halves of authentication: the Blazor host's
@@ -65,9 +68,9 @@ match its safe-storage story; the UI code above them never branches on render mo
   `POST /auth/session/token` with `credentials:'same-origin'` so the browser sends its HttpOnly auth
   cookies and the UI host validates-or-refreshes server-side, returning a browser token (the access
   token by default; a claims-only copy on a same-origin API proxy host, below)
-  (`MMCA.Common/Source/Presentation/MMCA.Common.UI/wwwroot/mmca-auth-cookie.js:44-60`). The refresh
+  (`MMCA.Common/Source/Presentation/MMCA.Common.UI/wwwroot/mmca-auth-cookie.js:47-63`). The refresh
   token never reaches JS. The script answers `null` only for the endpoint's 401 and throws on any
-  other non-OK status (`mmca-auth-cookie.js:51-56`). The refresher also implements
+  other non-OK status (`mmca-auth-cookie.js:54-59`). The refresher also implements
   `ISessionAwareTokenRefresher`, whose `TryAcquireAccessTokenAsync` returns a three-way
   `TokenAcquisition`: acquired, no session (a blank token), or unavailable when interop is missing
   (SSR prerender, disconnected circuit), the call is cancelled, or the endpoint fails transiently
@@ -77,14 +80,14 @@ match its safe-storage story; the UI code above them never branches on render mo
   (`SameOriginProxyTokenRefresher.cs:19-20`).
 - **On a same-origin API proxy host the browser never holds a credential.** Both consumer Server
   hosts call `AddCommonSameOriginApiProxy` and `MapCommonSameOriginApiProxy`
-  (`MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs:161`, `Program.cs:284`;
-  `MMCA.Store/Source/Hosts/UI/MMCA.Store.UI.Web/Program.cs:153`, `Program.cs:262`; ADR-131). That
+  (`MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs:167`, `Program.cs:290`;
+  `MMCA.Store/Source/Hosts/UI/MMCA.Store.UI.Web/Program.cs:159`, `Program.cs:268`; ADR-131). That
   call replaces the Server circuit's `ITokenRefresher` with `HandoffTokenRefresher` and its
   `ISessionCookieSync` with `HandoffSessionCookieSync`
   (`MMCA.Common/Source/Presentation/MMCA.Common.UI.Web/SameOriginProxy/SameOriginApiProxyServiceExtensions.cs:83-84`).
   They call `mmcaAuthHandoff.getToken` / `mmcaAuthHandoff.setCookie`
   (`MMCA.Common/Source/Presentation/MMCA.Common.UI.Web/SameOriginProxy/HandoffSessionServices.cs:24`,
-  `HandoffSessionServices.cs:58`, `mmca-auth-cookie.js:66-100`) against `/auth/session/handoff` and
+  `HandoffSessionServices.cs:58`, `mmca-auth-cookie.js:69-103`) against `/auth/session/handoff` and
   `/auth/session-cookie/handoff` (`SessionHandoffEndpoints.cs:17-18`), so the page carries only
   `SessionHandoffProtector` ciphertext and the circuit opens it server-side; a handoff it cannot open
   is unavailable, not "no session" (`HandoffSessionServices.cs:32-34`). Boot fails if a later
@@ -92,7 +95,7 @@ match its safe-storage story; the UI code above them never branches on render mo
   same call sets `ClaimsOnlyBrowserTokens` (`SameOriginApiProxyServiceExtensions.cs:73`), so the
   WASM client's `/auth/session/token` answers with an unsigned `alg:none` claims copy rather than
   the access token
-  (`MMCA.Common/Source/Presentation/MMCA.Common.API/SessionCookies/SessionCookieEndpoints.cs:75-77`,
+  (`MMCA.Common/Source/Presentation/MMCA.Common.API/SessionCookies/SessionCookieEndpoints.cs:83-86`,
   `SessionClaimsToken.cs:10`, `SessionClaimsToken.cs:17`).
 - **MAUI refreshes directly against the API.** `DirectApiTokenRefresher` reads the stored access and
   refresh tokens out of OS SecureStorage through `ISecureTokenStore`, posts them to the API's
@@ -122,32 +125,50 @@ match its safe-storage story; the UI code above them never branches on render mo
   browser implementations keep the access token **in memory only** and never hand a refresh token to
   JS: `WasmTokenStorageService` (in MMCA.Common.UI) hydrates the
   in-memory token on demand from the cookie and returns `null` for the refresh token unconditionally
-  (`WasmTokenStorageService.cs:22`, `WasmTokenStorageService.cs:57-96`, `WasmTokenStorageService.cs:99`);
+  (`WasmTokenStorageService.cs:26`, `WasmTokenStorageService.cs:71-110`, `WasmTokenStorageService.cs:113`);
   `ServerTokenStorageService` (in MMCA.Common.UI.Web) answers from the HttpOnly cookie during SSR
   prerender and holds an in-memory token on the interactive circuit
-  (`MMCA.Common/Source/Presentation/MMCA.Common.UI.Web/Services/ServerTokenStorageService.cs:44`,
-  `ServerTokenStorageService.cs:93-138`, `ServerTokenStorageService.cs:227-250`). The circuit still
+  (`MMCA.Common/Source/Presentation/MMCA.Common.UI.Web/Services/ServerTokenStorageService.cs:47`,
+  `ServerTokenStorageService.cs:106-151`, `ServerTokenStorageService.cs:200-253`). The circuit still
   has an `HttpContext`: the request that opened the hub connection, whose cookie is stale by
-  construction (`ServerTokenStorageService.cs:26-36`). So the cookie answers a hub-connection request
+  construction (`ServerTokenStorageService.cs:29-39`). So the cookie answers a hub-connection request
   only until this instance has stored, cleared or hydrated a token, and then only while that cookie
   is fresh or absent; an expired one goes to the refresher instead
-  (`ServerTokenStorageService.cs:74`, `ServerTokenStorageService.cs:240-249`,
-  `ServerTokenStorageService.cs:257-259`). Its refresh-token read returns the cookie value whenever
-  an `HttpContext` is present, which on the circuit is that connection request's cookie
-  (`ServerTokenStorageService.cs:140-145`). Both browser services discard a hydrate whose
-  acquisition was in flight when a login or logout landed, through a token-version counter that
-  `SetTokensAsync` and `ClearTokensAsync` bump (`WasmTokenStorageService.cs:44`,
-  `WasmTokenStorageService.cs:141`, `WasmTokenStorageService.cs:155`, `ServerTokenStorageService.cs:68`,
-  `ServerTokenStorageService.cs:191`, `ServerTokenStorageService.cs:205-208`). Both browser
+  (`ServerTokenStorageService.cs:77`, `ServerTokenStorageService.cs:260-288`,
+  `ServerTokenStorageService.cs:295-297`). A connection request whose cookie carries a token also
+  marks the circuit as holding a session (`ServerTokenStorageService.cs:282-285`). Its refresh-token
+  read returns the cookie value whenever an `HttpContext` is present, which on the circuit is that
+  connection request's cookie (`ServerTokenStorageService.cs:153-160`). Both browser services
+  discard a hydrate whose acquisition was in flight when a login or logout landed, through a
+  token-version counter that `SetTokensAsync` bumps and `ClearTokensAsync` bumps both before and
+  after its cookie clear (`WasmTokenStorageService.cs:48`, `WasmTokenStorageService.cs:118`,
+  `WasmTokenStorageService.cs:134`, `WasmTokenStorageService.cs:145`,
+  `WasmTokenStorageService.cs:175-178`, `ServerTokenStorageService.cs:71`,
+  `ServerTokenStorageService.cs:165`, `ServerTokenStorageService.cs:182`,
+  `ServerTokenStorageService.cs:196`, `ServerTokenStorageService.cs:226-229`). Both browser
   services remember a definitive "no session" for a 15-second anonymous grace, so an anonymous
   visitor is answered from memory instead of one token POST per API call; a `null` from the
   refresher starts it unless an `ISessionAwareTokenRefresher` reports the result unavailable (a
   plain `ITokenRefresher`'s `null` counts as no session), and `SetTokensAsync` ends it at once
-  (`WasmTokenStorageService.cs:30`, `WasmTokenStorageService.cs:64-67`, `WasmTokenStorageService.cs:105`,
-  `WasmTokenStorageService.cs:144-153`, `WasmTokenStorageService.cs:162-165`,
-  `ServerTokenStorageService.cs:54`, `ServerTokenStorageService.cs:106-109`,
-  `ServerTokenStorageService.cs:151`, `ServerTokenStorageService.cs:194-203`,
-  `ServerTokenStorageService.cs:214-217`). All three shipped refreshers are session-aware. The MAUI
+  (`WasmTokenStorageService.cs:34`, `WasmTokenStorageService.cs:78-81`, `WasmTokenStorageService.cs:119`,
+  `WasmTokenStorageService.cs:159-173`, `WasmTokenStorageService.cs:182-185`,
+  `ServerTokenStorageService.cs:57`, `ServerTokenStorageService.cs:119-122`,
+  `ServerTokenStorageService.cs:166`, `ServerTokenStorageService.cs:210-223`,
+  `ServerTokenStorageService.cs:235-238`). All three shipped refreshers are session-aware. Both
+  browser services also implement `ISessionAwareTokenStorage`, whose `SessionEnded` event fires once
+  when a session-aware refresher answers a definitive "no session" for a session the storage held (a
+  session revoked from another device, or a deleted account); a transient failure never raises it
+  (`MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/Auth/Tokens/ISessionAwareTokenStorage.cs:12`,
+  `ISessionAwareTokenStorage.cs:18`, `WasmTokenStorageService.cs:29`, `WasmTokenStorageService.cs:58`,
+  `WasmTokenStorageService.cs:191-197`, `ServerTokenStorageService.cs:52`,
+  `ServerTokenStorageService.cs:87`, `ServerTokenStorageService.cs:244-249`). The MAUI storage does
+  not implement it, so the MAUI head has no `SessionEnded` path (`MauiTokenStorageService.cs:34`). Each WASM client also starts
+  `TokenHydrationWarmup.WarmAsync` after `builder.Build()` and discards the task, so the first
+  hydration overlaps first render instead of running inline on the first API call; it only reads
+  through `ITokenStorageService` and swallows every failure
+  (`MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/Auth/Tokens/TokenHydrationWarmup.cs:26`,
+  `TokenHydrationWarmup.cs:37-58`, `MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web.Client/Program.cs:92`,
+  `MMCA.Store/Source/Hosts/UI/MMCA.Store.UI.Web.Client/Program.cs:80`). The MAUI
   implementation is framework-shared too and is a pair: `MauiTokenStorageService` is the
   freshness-checking layer
   (`MMCA.Common/Source/Presentation/MMCA.Common.UI.Maui/Services/MauiTokenStorageService.cs:32-34`)
@@ -172,9 +193,9 @@ match its safe-storage story; the UI code above them never branches on render mo
   storage services caches the access token in memory and calls `ISessionCookieSync.SyncAsync`, which
   fires a browser fetch to `/auth/session-cookie` so the resulting `Set-Cookie` lands in the user's
   cookie jar in both Server interactive mode and WASM
-  (`WasmTokenStorageService.cs:101-115`, `ISessionCookieSync.cs:8`,
+  (`WasmTokenStorageService.cs:115-130`, `ISessionCookieSync.cs:8`,
   `MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/Auth/JsFetchSessionCookieSync.cs:13`,
-  `JsFetchSessionCookieSync.cs:19`, `mmca-auth-cookie.js:7`). The refresh token transits JS only for
+  `JsFetchSessionCookieSync.cs:19`, `mmca-auth-cookie.js:10-23`). The refresh token transits JS only for
   that single same-origin POST and is never persisted in localStorage. The sync is registered via
   `AddClientAuthSessionCookieSync`
   (`MMCA.Common/Source/Presentation/MMCA.Common.UI/DependencyInjection.cs:251`,
@@ -186,7 +207,8 @@ match its safe-storage story; the UI code above them never branches on render mo
   the WASM client still registers `AddClientAuthSessionCookieSync`
   (`MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web.Client/Program.cs:52`,
   `MMCA.Store/Source/Hosts/UI/MMCA.Store.UI.Web.Client/Program.cs:49`), but its
-  `POST /auth/session-cookie` then writes nothing and answers 204 (`SessionCookieEndpoints.cs:36-46`).
+  `POST /auth/session-cookie` then writes nothing and answers 204 (`SessionCookieEndpoints.cs:41`,
+  `SessionCookieEndpoints.cs:55`).
 - **Every outgoing API request is bearer-stamped by one handler.** `AuthDelegatingHandler` reads the
   current access token from `ITokenStorageService` and attaches it as a `Bearer` authorization header
   (`MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/Auth/AuthDelegatingHandler.cs:15`,
@@ -207,22 +229,28 @@ match its safe-storage story; the UI code above them never branches on render mo
   (`DependencyInjection.cs:128-129`, `DependencyInjection.cs:144`, `DependencyInjection.cs:157-163`),
   and the host proxy stamps the cookie session's bearer server-side: the endpoint takes the bearer
   from the validated-or-refreshed cookie session and the transformer sets it as the `Authorization`
-  header (`MMCA.Common/Source/Presentation/MMCA.Common.UI.Web/SameOriginProxy/SameOriginApiProxyEndpoint.cs:86-95`,
+  header (`MMCA.Common/Source/Presentation/MMCA.Common.UI.Web/SameOriginProxy/SameOriginApiProxyEndpoint.cs:96-111`,
   `SameOriginProxyTransformer.cs:60`).
 - **Blazor auth state is derived from the JWT client-side.** `JwtAuthenticationStateProvider` reads
   the stored access token, parses and expiry-checks it without server validation, and builds an
   authenticated `ClaimsPrincipal` from the token's claims, falling back to anonymous on any failure
-  (`MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/Auth/JwtAuthenticationStateProvider.cs:13`,
-  `JwtAuthenticationStateProvider.cs:33-48`, `JwtAuthenticationStateProvider.cs:50-53`). Client-side
-  parsing keeps the UI responsive (`AuthorizeView` reacts immediately after login or logout via
-  `NotifyUserAuthentication` / `NotifyUserLogout`, `JwtAuthenticationStateProvider.cs:60`,
-  `JwtAuthenticationStateProvider.cs:72`); the WebAPI still performs full token validation on every
-  request.
+  (`MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/Auth/JwtAuthenticationStateProvider.cs:20`,
+  `JwtAuthenticationStateProvider.cs:62-93`, `JwtAuthenticationStateProvider.cs:79`,
+  `JwtAuthenticationStateProvider.cs:89-92`). Client-side parsing keeps the UI responsive
+  (`AuthorizeView` reacts immediately after login or logout via `NotifyUserAuthentication` /
+  `NotifyUserLogout`, `JwtAuthenticationStateProvider.cs:99`, `JwtAuthenticationStateProvider.cs:111`);
+  the WebAPI still performs full token validation on every request. The provider subscribes to
+  `SessionEnded` when its storage is an `ISessionAwareTokenStorage` (it does not implement the
+  interface), and on that event clears the optional `IUiReadCache` its second constructor takes and
+  flips the state to anonymous through `NotifyUserLogout`, so a session ended on the server signs the
+  shell out instead of leaving it signed in behind 401s
+  (`JwtAuthenticationStateProvider.cs:33`, `JwtAuthenticationStateProvider.cs:44`,
+  `JwtAuthenticationStateProvider.cs:51-54`, `JwtAuthenticationStateProvider.cs:114-118`).
 - **Concurrent callers share one refresh.** All three storage services proactively reacquire when the
   token they hold is within a 30-second expiry skew and collapse concurrent acquisitions (delegating
   handler, auth-state provider, SignalR) onto a single in-flight hydration
-  (`WasmTokenStorageService.cs:27`, `WasmTokenStorageService.cs:73-78`, `ServerTokenStorageService.cs:51`,
-  `ServerTokenStorageService.cs:115-120`, `MauiTokenStorageService.cs:36`,
+  (`WasmTokenStorageService.cs:31`, `WasmTokenStorageService.cs:87-92`, `ServerTokenStorageService.cs:54`,
+  `ServerTokenStorageService.cs:128-133`, `MauiTokenStorageService.cs:36`,
   `MauiTokenStorageService.cs:57-66`). The browser services hold that slot per instance; on MAUI it is
   process-wide (static), because the `AuthDelegatingHandler` that `IHttpClientFactory` builds resolves
   its own scoped storage instance in its handler scope, and a per-instance slot let that scope and the
@@ -238,11 +266,12 @@ match its safe-storage story; the UI code above them never branches on render mo
   registers `ServerTokenStorageService` via `AddCommonServerTokenStorage`
   (`MMCA.Common/Source/Presentation/MMCA.Common.UI.Web/DependencyInjection.cs:41`,
   `DependencyInjection.cs:50`) plus the same proxy refresher and auth-state provider
-  (`MMCA.Store/Source/Hosts/UI/MMCA.Store.UI.Web/Program.cs:142-143`, `Program.cs:155`;
-  `MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs:150-151`, `Program.cs:163`), and in both hosts
+  (`MMCA.Store/Source/Hosts/UI/MMCA.Store.UI.Web/Program.cs:148-149`, `Program.cs:161`;
+  `MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs:156-157`, `Program.cs:169`), and in both hosts
   the later `AddCommonSameOriginApiProxy` call overrides that refresher with `HandoffTokenRefresher`
-  (`MMCA.Store/Source/Hosts/UI/MMCA.Store.UI.Web/Program.cs:153`,
-  `MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs:161`); the MAUI host
+  (`MMCA.Store/Source/Hosts/UI/MMCA.Store.UI.Web/Program.cs:159`,
+  `MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs:167`; the auth-state provider registration
+  follows that call); the MAUI host
   registers the shared SecureStorage-backed pair via `AddCommonMauiTokenStorage` plus
   `DirectApiTokenRefresher` + `JwtAuthenticationStateProvider`
   (`MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI/MauiProgram.cs:171-173`,
@@ -258,7 +287,7 @@ match its safe-storage story; the UI code above them never branches on render mo
   attack surface, so their refresh token stays in an HttpOnly cookie and rotation happens server-side
   through the same-origin proxy; the token the browser holds is memory-only and short-lived, and on a
   same-origin API proxy host it is only a claims-only copy, never the credential
-  (`SessionCookieEndpoints.cs:75-77`, `SameOriginProxyTransformer.cs:142-143`). MAUI, with no
+  (`SessionCookieEndpoints.cs:83-86`, `SameOriginProxyTransformer.cs:142-143`). MAUI, with no
   DOM, can safely hold both tokens in the OS secure enclave.
 - **Reuse the ADR-022 cookie plumbing rather than duplicate it.** The browser refresher is a thin JS
   interop call onto the same `/auth/session/token` and `/auth/session-cookie` endpoints ADR-022
@@ -527,3 +556,54 @@ Revisions above keep their anchors as written; they are not current.
    `:214-217`; the MAUI wiring at `MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI/MauiProgram.cs:171-173` and
    `MMCA.Store/Source/Hosts/UI/MMCA.Store.UI/MauiProgram.cs:103-105`. `ISecureTokenStore` still has
    one implementer (`MMCA.Common/Source/Presentation/MMCA.Common.UI.Maui/Services/MauiSecureTokenStore.cs:22`).
+
+## Revision (2026-10-26)
+Re-verified against current source. The three abstractions, the head-specific trios, the
+same-origin proxy handoff, the claims-only browser token, the 15-second grace, the 30-second skew,
+the token-version counter and the single-flight refresh are unchanged. What the Decision did not
+record is how a session that ends on the server reaches the UI, and the WASM boot warm-up; both are
+now stated in place. Every Decision anchor into the two browser storage services, the auth-state
+provider, the auth script, the session-cookie endpoints, the proxy endpoint and the Server host
+`Program.cs` files had moved and is re-pointed (point 4). The dated Revisions above keep their
+anchors as written; they are not current (the 2026-10-21 note that the Server host anchors had not
+moved no longer holds).
+
+1. **A session ended on the server signs the shell out.** `ISessionAwareTokenStorage` extends
+   `ITokenStorageService` with a `SessionEnded` event, raised once when a session-aware refresher
+   answers a definitive "no session" for a session the storage held, and never on a transient
+   failure
+   (`MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/Auth/Tokens/ISessionAwareTokenStorage.cs:12`,
+   `ISessionAwareTokenStorage.cs:18`). Both browser storage services implement it
+   (`WasmTokenStorageService.cs:29`, `:58`, raised at `:191-197`;
+   `MMCA.Common/Source/Presentation/MMCA.Common.UI.Web/Services/ServerTokenStorageService.cs:52`,
+   `:87`, raised at `:244-249`). `JwtAuthenticationStateProvider` subscribes rather than implements:
+   on the event it clears the optional `IUiReadCache` and calls `NotifyUserLogout`
+   (`MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/Auth/JwtAuthenticationStateProvider.cs:44`,
+   `:51-54`, `:114-118`). `MauiTokenStorageService` implements only `ITokenStorageService`, so the
+   MAUI head has no such path
+   (`MMCA.Common/Source/Presentation/MMCA.Common.UI.Maui/Services/MauiTokenStorageService.cs:34`).
+2. **The Server storage marks a session held from the connection cookie.** A hub-connection request
+   whose cookie carries a token sets the held flag before answering, so a circuit that started signed
+   in can later raise `SessionEnded` (`ServerTokenStorageService.cs:282-285`).
+3. **WASM boot pre-hydrates the token.** `TokenHydrationWarmup.WarmAsync` reads the access token once
+   through `ITokenStorageService` and swallows any failure; both WASM clients start it after
+   `builder.Build()` and discard the task
+   (`MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/Auth/Tokens/TokenHydrationWarmup.cs:26`,
+   `TokenHydrationWarmup.cs:37-58`, `MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web.Client/Program.cs:92`,
+   `MMCA.Store/Source/Hosts/UI/MMCA.Store.UI.Web.Client/Program.cs:80`).
+4. Anchors re-verified against current source: `mmca-auth-cookie.js:47-63` (`getToken`), `:54-59`
+   (401 versus throw), `:69-103` (`mmcaAuthHandoff`), `:10-23` (`mmcaAuthCookie.set`);
+   `WasmTokenStorageService.cs:26` (class), `:31` (skew), `:34` (grace), `:48` (version), `:71-110`
+   (read, grace check `:78-81`, single flight `:87-92`), `:113` (null refresh token), `:115-130`
+   (`SetTokensAsync`, bump `:118`, grace cleared `:119`), `:134` and `:145` (clear bumps), `:159-173`,
+   `:175-178` and `:182-185` (hydrate); `ServerTokenStorageService.cs:29-39` (remarks), `:47` (class),
+   `:54`, `:57`, `:71`, `:77`, `:106-151` (read, grace `:119-122`, single flight `:128-133`),
+   `:153-160` (refresh-token read), `:165`, `:166`, `:182`, `:196` (bumps and grace clear),
+   `:200-253` (hydrate, version check `:226-229`), `:260-288` (`TryAnswerFromCookie`), `:295-297`
+   (`IsHubConnection`); `JwtAuthenticationStateProvider.cs:20`, `:62-93`, `:79`, `:89-92`, `:99`,
+   `:111`; `SessionCookieEndpoints.cs:41` and `:55` (claims-only POST answers 204), `:83-86`
+   (claims-only token); `SameOriginApiProxyEndpoint.cs:96-111` (bearer from the cookie session); the
+   Server hosts at `MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs:156-157`, `:167`, `:169`,
+   `:290` and `MMCA.Store/Source/Hosts/UI/MMCA.Store.UI.Web/Program.cs:148-149`, `:159`, `:161`,
+   `:268`. `SessionClaimsToken.cs:10` and `:17` and `SameOriginProxyTransformer.cs:60` stand as
+   written.

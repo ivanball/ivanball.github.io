@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 134 ADRs</summary>
+        <summary>All 135 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -234,6 +234,7 @@
         <li><a href="132-build-strictness-analyzer-policy.html">132 · Build Strictness: Analyzers at Error Severity, a Shared Baseline, and CI Test Floors</a></li>
         <li><a href="133-versioned-password-hash-work-factor.html">133 · Versioned Password Hash Work Factor</a></li>
         <li><a href="134-cloud-neutral-core-vendor-adapters.html">134 · Cloud-Neutral Core With Vendor Adapter Packages</a></li>
+        <li><a href="135-application-namespace-keyspace-isolation.html">135 · One Application Namespace Isolates Shared Infrastructure Keyspaces</a></li>
           </ol>
         </nav>
       </details>
@@ -256,7 +257,8 @@
           window rather than one per request; <code>/alive</code> stays uncached (see Decision). Revised 2026-10-07: anchors
           refreshed after the v1.233.0 release. Revised 2026-10-21: the built-in OIDC task is recorded as waking and
           JIT-warming the authority&#39;s discovery route, not a connection the JwtBearer middleware shares, and the
-          single-digit-millisecond first-fetch claim is dropped; per-host warm-up anchors refreshed.</p>
+          single-digit-millisecond first-fetch claim is dropped; per-host warm-up anchors refreshed. Revised
+          2026-10-26: anchors refreshed after the v1.261.0 release.</p>
           <h2 id="context">Context</h2>
           <p>On the Azure Container Apps Consumption plan a replica that has been idle is CPU-throttled, and a
           scale-from-zero or scaled-out replica starts cold. The first authenticated request on such a replica
@@ -291,7 +293,7 @@
           a cached health report rather than a probe per request: the helper renders exactly what
           <code>MapHealthChecks</code> renders (the status name as <code>text/plain</code>, <code>503</code> only when unhealthy) but answers from
           <code>CachedHealthReportProvider</code>, keyed by path so two endpoints never share a report, and runs the
-          dependency probes at most once per cache window (<code>Extensions.Health.cs:170</code>,
+          dependency probes at most once per cache window (<code>Extensions.Health.cs:172</code>,
           <code>Source/Hosting/MMCA.Common.Aspire/Health/CachedHealthReportProvider.cs:52</code>). The window is
           <code>HealthChecks:CacheSeconds</code>, 5 seconds by default and <code>0</code> to restore probe-per-request behaviour
           (<code>Source/Hosting/MMCA.Common.Aspire/Health/HealthReportCacheOptions.cs:38</code>), and refreshes are
@@ -336,21 +338,21 @@
           failure.</li>
           <li><strong>A built-in task that pre-warms OIDC discovery.</strong> <code>OpenIdConnectMetadataWarmupTask</code> fetches
           <code>{Authority}/.well-known/openid-configuration</code> through a named client from the shared
-          <code>IHttpClientFactory</code> (<code>Source/Hosting/MMCA.Common.Aspire/Warmup/OpenIdConnectMetadataWarmupTask.cs:47-48</code>),
+          <code>IHttpClientFactory</code> (<code>Source/Hosting/MMCA.Common.Aspire/Warmup/OpenIdConnectMetadataWarmupTask.cs:49-50</code>),
           which wakes and JIT-warms the authority&#39;s discovery route (the gateway, or Identity when there is no
           gateway, as the AppHost wires it at
-          <code>Source/Hosting/MMCA.Common.Aspire.Hosting/Extensions.cs:344-347</code>). The authority keeps no discovery cache to warm: it rebuilds the document from configuration
+          <code>Source/Hosting/MMCA.Common.Aspire.Hosting/Extensions.cs:345-348</code>). The authority keeps no discovery cache to warm: it rebuilds the document from configuration
           on every request
           (<code>Source/Presentation/MMCA.Common.API/Startup/Endpoints/OidcDiscoveryEndpointExtensions.cs:60-86</code>).
           The connection the task opens lives only in its own named-client pool, and nothing else reuses it.
-          It no-ops when no <code>Authentication:JwtBearer:Authority</code> is configured (<code>:32-36</code>). The JwtBearer
+          It no-ops when no <code>Authentication:JwtBearer:Authority</code> is configured (<code>:34-38</code>). The JwtBearer
           middleware&#39;s <code>ConfigurationManager</code> caches discovery separately and fetches through its own default
           backchannel <code>HttpClient</code> (no <code>Backchannel</code> or <code>BackchannelHttpHandler</code> is configured anywhere in
           source), so its first fetch still runs, with its own handshakes over a connection of its own: what it
-          gains is an authority that is already awake, not a shared warm connection (remarks at <code>:14-22</code>).</li>
+          gains is an authority that is already awake, not a shared warm connection (remarks at <code>:14-24</code>).</li>
           <li><strong>A shipped base class for warming the host&#39;s own request path.</strong> <code>SelfHttpWarmupTaskBase</code>
           (<code>Source/Hosting/MMCA.Common.Aspire/Warmup/SelfHttpWarmupTaskBase.cs:28</code>, public API at
-          <code>Source/Hosting/MMCA.Common.Aspire/PublicAPI.Shipped.txt:129-131</code>) is the second warm-up family: where the
+          <code>Source/Hosting/MMCA.Common.Aspire/PublicAPI.Shipped.txt:127-129</code>) is the second warm-up family: where the
           OIDC task wakes one remote dependency (the authority), this replays a short list of hot read paths against the host&#39;s
           own Kestrel endpoint, so the cost paid down is the full inbound path (ingress connection, Kestrel,
           output cache, routing, authentication, handler, EF Core, SQL) rather than a single dependency
@@ -368,13 +370,13 @@
           the rest of the subsystem: caught, logged at warning level, never fatal (<code>:141-146</code>, <code>:205-207</code>). Both
           production apps subclass and register it: ADC in Conference
           (<code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/SelfHttpOutputCacheWarmupTask.cs:22</code>, registered
-          at <code>Program.cs:314</code>), Engagement (<code>MMCA.ADC/Source/Services/MMCA.ADC.Engagement.Service/SelfHttpWarmupTask.cs:23</code>,
-          <code>Program.cs:160</code>) and Identity (<code>MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/SelfHttpWarmupTask.cs:25</code>,
-          <code>Program.cs:175</code>); Store in Catalog
+          at <code>Program.cs:320</code>), Engagement (<code>MMCA.ADC/Source/Services/MMCA.ADC.Engagement.Service/SelfHttpWarmupTask.cs:23</code>,
+          <code>Program.cs:166</code>) and Identity (<code>MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/SelfHttpWarmupTask.cs:25</code>,
+          <code>Program.cs:181</code>); Store in Catalog
           (<code>MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/SelfHttpOutputCacheWarmupTask.cs:23</code>,
-          <code>Program.cs:184</code>), Identity (<code>MMCA.Store/Source/Services/MMCA.Store.Identity.Service/SelfHttpOutputCacheWarmupTask.cs:25</code>,
-          <code>Program.cs:146</code>) and Sales (<code>MMCA.Store/Source/Services/MMCA.Store.Sales.Service/SelfHttpOutputCacheWarmupTask.cs:26</code>,
-          <code>Program.cs:159</code>).</li>
+          <code>Program.cs:190</code>), Identity (<code>MMCA.Store/Source/Services/MMCA.Store.Identity.Service/SelfHttpOutputCacheWarmupTask.cs:25</code>,
+          <code>Program.cs:152</code>) and Sales (<code>MMCA.Store/Source/Services/MMCA.Store.Sales.Service/SelfHttpOutputCacheWarmupTask.cs:26</code>,
+          <code>Program.cs:165</code>).</li>
           <li><strong>Extensible per host.</strong> <code>AddWarmupReadiness()</code> registers the gate, the runner, the readiness health
           check, and the built-in OIDC task; a host adds its own pre-fetches (output cache, reference data) with
           <code>AddWarmupTask&lt;T&gt;()</code>, which is also how a <code>SelfHttpWarmupTaskBase</code> subclass enters the run.</li>
@@ -402,7 +404,7 @@
           <li><strong>Free for every host, cheap for the ones that do not need it.</strong> Putting it in <code>AddServiceDefaults</code>
           makes it the default posture; the built-in task self-disables when there is no authority, so a host
           without JwtBearer pays only for the runner and the gate (<code>AddWarmupReadiness</code> is called
-          unconditionally, <code>Source/Hosting/MMCA.Common.Aspire/Extensions.cs:34</code>; see Trade-offs).</li>
+          unconditionally, <code>Source/Hosting/MMCA.Common.Aspire/Extensions.cs:37</code>; see Trade-offs).</li>
           </ul>
           <h2 id="trade-offs">Trade-offs</h2>
           <ul>
@@ -419,8 +421,8 @@
           ceiling (<code>WarmupHostedService.cs:42</code>, applied at <code>:69</code>), and a task that trips it surfaces as a
           <code>TimeoutException</code>, is logged, and lets the gate open (<code>:77-82</code>). The number deliberately sits above the
           90-second shared Polly total-request timeout that already bounds the built-in OIDC task&#39;s HTTP call
-          (<code>Extensions.cs:53</code>, <code>HttpResilienceDefaults.cs:19</code>), so a host-registered task doing non-HTTP work,
-          which previously had no bound at all, now inherits the same backstop. Two costs follow. A replica whose
+          (<code>Extensions.cs:64</code>, <code>Source/Core/MMCA.Common.Shared/Resilience/HttpResilienceDefaults.cs:22</code>), so a
+          host-registered task doing non-HTTP work, which previously had no bound at all, now inherits the same backstop. Two costs follow. A replica whose
           warm-up hangs stays out of rotation for the full two minutes before it is admitted, so the ceiling
           bounds the damage rather than making it cheap. And <code>WaitAsync</code> abandons rather than cancels, so the
           stuck task keeps running detached for the life of the host; the only token that can stop it is still the
@@ -442,7 +444,7 @@
           <li><strong>Middleware cache and connection are separate.</strong> The warm-up wakes the authority&#39;s discovery route,
           not the JwtBearer <code>ConfigurationManager</code>&#39;s discovery cache and not its backchannel connection, so
           the very first authenticated request still triggers the middleware&#39;s own fetch over a connection of its
-          own (<code>Source/Hosting/MMCA.Common.Aspire/Warmup/OpenIdConnectMetadataWarmupTask.cs:14-22</code>). How much
+          own (<code>Source/Hosting/MMCA.Common.Aspire/Warmup/OpenIdConnectMetadataWarmupTask.cs:14-24</code>). How much
           faster that fetch runs against an already-awake authority is not measured or gated anywhere in the repo.</li>
           </ul>
           <h2 id="revision-2026-10-01">Revision (2026-10-01)</h2>
@@ -491,6 +493,27 @@
           <code>Program.cs:160</code>, Store Catalog <code>Program.cs:184</code>, and the subclass declarations ADC <code>:22</code>, <code>:23</code>,
           Store <code>:23</code>, <code>:25</code>, <code>:26</code>.</li>
           </ol>
+          <h2 id="revision-2026-10-26">Revision (2026-10-26)</h2>
+          <p>Re-verified against current source. No decision or rationale changed: the readiness gate, the cached
+          <code>/health/ready</code> predicate, the 120-second per-task ceiling, the PING-class rule, the OIDC task&#39;s
+          behavior and the six production <code>SelfHttpWarmupTaskBase</code> subclasses (one <code>AddWarmupTask</code> per host) are
+          as recorded. Only anchors moved, and one Trade-offs citation now names the right constant.</p>
+          <ol>
+          <li>The 90-second total-request timeout citation in Trade-offs pointed at
+          <code>HttpResilienceDefaults.cs:19</code>, which is now <code>CircuitBreakerSamplingDuration</code> (60 seconds). It now
+          cites <code>Source/Core/MMCA.Common.Shared/Resilience/HttpResilienceDefaults.cs:22</code> with its full path,
+          since the file lives in <code>MMCA.Common.Shared</code>, not <code>MMCA.Common.Aspire</code>. The value (90 seconds, below
+          the 120-second ceiling) is unchanged.</li>
+          <li>Anchors re-verified against current source: <code>Extensions.Health.cs:172</code> (<code>MapCachedHealthChecks</code>,
+          was <code>:170</code>), <code>OpenIdConnectMetadataWarmupTask.cs:49-50</code> (named-client fetch, was <code>:47-48</code>), <code>:34-38</code>
+          (no-authority no-op, was <code>:32-36</code>), remarks <code>:14-24</code> (was <code>:14-22</code>), Aspire.Hosting
+          <code>Extensions.cs:345-348</code> (authority wiring, was <code>:344-347</code>), Aspire <code>Extensions.cs:37</code>
+          (<code>AddWarmupReadiness</code> call, was <code>:34</code>) and <code>:64</code> (total-request timeout assignment, was <code>:53</code>),
+          <code>PublicAPI.Shipped.txt:127-129</code> (was <code>:129-131</code>), ADC Conference <code>Program.cs:320</code> (was <code>:314</code>),
+          Engagement <code>:166</code> (was <code>:160</code>), Identity <code>:181</code> (was <code>:175</code>), Store Catalog <code>Program.cs:190</code> (was
+          <code>:184</code>), Identity <code>:152</code> (was <code>:146</code>), Sales <code>:165</code> (was <code>:159</code>); unchanged and re-checked:
+          <code>Extensions.Health.cs:154-156</code> and <code>:138-141</code>.</li>
+          </ol>
           <h2 id="related">Related</h2>
           <p>ADR-004 (the OIDC discovery document the built-in task pre-fetches, and the auth-side view of the same
           cold-start), ADR-009 (the Polly resilience pipeline that absorbs the lazy retry when the gate opens
@@ -516,6 +539,7 @@
             <li><a href="#revision-2026-10-06">Revision (2026-10-06)</a></li>
             <li><a href="#revision-2026-10-07">Revision (2026-10-07)</a></li>
             <li><a href="#revision-2026-10-21">Revision (2026-10-21)</a></li>
+            <li><a href="#revision-2026-10-26">Revision (2026-10-26)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

@@ -32,6 +32,7 @@ Revised 2026-10-06: per-engine behavior now lives in an internal engine registry
 than a `SupportsOutbox` member.
 Revised 2026-10-07: anchors refreshed after the v1.233.0 release.
 Revised 2026-10-21: anchors refreshed against the Common v1.250.0 source (Aspire data-source helpers).
+Revised 2026-10-26: anchors refreshed after the Common v1.261.0 release.
 
 ## Context
 ADR-006 (database-per-service) splits storage along the **Name** axis: several physically separate
@@ -83,18 +84,18 @@ per entity configuration.
    change with no body edits.
 3. **One concrete context per engine, one instance per database.** `SQLServerDbContext`,
    `PostgreSQLDbContext`
-   (`Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/PostgreSQLDbContext.cs:23`),
+   (`Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/PostgreSQLDbContext.cs:24`),
    `SqliteDbContext`, and `CosmosDbContext` are sealed contexts over the abstract `ApplicationDbContext`.
    Combined with ADR-006's "one instance per `DataSourceKey`", a host materializes one context instance
    per physical (engine, name) source.
 4. **Configuration drives routing.** `DataSourceResolver` builds a per-engine logical-to-physical map
    from the engine-specific connection strings (`SQLServerConnectionString` /
    `PostgreSQLConnectionString` / `CosmosConnectionString` / `SqliteConnectionString`, each read by
-   its engine: `DataSourceResolver.cs:500-501` for the top-level section and `:503-504` for a named
+   its engine: `DataSourceResolver.cs:519-520` for the top-level section and `:522-523` for a named
    entry delegate to the registry, for example `SQLServerDataSourceEngine.cs:52-63`,
    plus `CosmosDatabaseName` and a migrations assembly for the
    two server engines, `SQLServerMigrationsAssembly` and `PostgreSQLMigrationsAssembly`, which SQLite
-   and Cosmos leave empty at the top level (`DataSourceResolver.cs:255`, `:287-288`;
+   and Cosmos leave empty at the top level (`DataSourceResolver.cs:274`, `:306-307`;
    `SqliteDataSourceEngine.cs:74`, `CosmosDataSourceEngine.cs:73`) and which a named entry can override per source
    (`DataSourceEntrySettings.cs:37`, `:64`); a named entry also carries a `SqliteMigrationsAssembly`
    (`DataSourceEntrySettings.cs:55`, read by its engine at `SqliteDataSourceEngine.cs:77-80`)), read from either
@@ -104,7 +105,7 @@ per entity configuration.
    database on it, that database is the host's single database and becomes `Default`, which is what lets
    a host declare its databases only under `DataSources` and still route the framework-owned tables
    (outbox, inbox, scheduled jobs, audit trail) that resolve to the `Default` name
-   (`Source/Core/MMCA.Common.Infrastructure/Persistence/DataSources/DataSourceResolver.cs:219-277`).
+   (`Source/Core/MMCA.Common.Infrastructure/Persistence/DataSources/DataSourceResolver.cs:261-296`).
    Several distinct databases with no top-level value leave `Default` empty, since there is no single
    answer: a genuinely multi-database host names the one it wants shared by adding a
    `DataSources:Default` entry. Logical names with no entry for an engine collapse onto that engine's
@@ -128,22 +129,22 @@ per entity configuration.
    (`Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/CosmosDbContext.cs:123-127`, `:139-143`),
    so its events dispatch in-process only: the save interceptor writes outbox rows only for a relational
    engine
-   (`Source/Core/MMCA.Common.Infrastructure/Persistence/Interceptors/DomainEventSaveChangesInterceptor.cs:257`,
-   the synchronous save path at `:141`),
+   (`Source/Core/MMCA.Common.Infrastructure/Persistence/Interceptors/DomainEventSaveChangesInterceptor.cs:259`,
+   the synchronous save path at `:143`),
    and `BrokerEventBus` throws when the outbox target is not relational
    (`Source/Core/MMCA.Common.Infrastructure/Messaging/BrokerEventBus.cs:70-77`).
 7. **The host surface reads the same two shapes.** The Aspire AppHost helpers
    `With{SQLServer,PostgreSQL,Cosmos,Sqlite}DataSource` inject the `DataSources__{logicalName}__*`
    environment variables for the source they attach
-   (`Source/Hosting/MMCA.Common.Aspire.Hosting/Extensions.cs:540`, `:570`, `:599-600`, `:624`). The
+   (`Source/Hosting/MMCA.Common.Aspire.Hosting/Extensions.cs:541`, `:571`, `:600-601`, `:625`). The
    database health checks enumerate the top-level section and every named
    entry, deduplicated by connection string, so each physical relational database (SQL Server,
    PostgreSQL or SQLite) contributes exactly one readiness check and the entries that collapse onto one
    database contribute one between them; a Cosmos database contributes none
-   (the per-engine enumeration at `Source/Hosting/MMCA.Common.Aspire/Extensions.Health.cs:258-295`,
-   registered at `:208-239`). The requirement that a host have a
+   (the per-engine enumeration at `Source/Hosting/MMCA.Common.Aspire/Extensions.Health.cs:268-305`,
+   registered at `:216-249`). The requirement that a host have a
    database at all is engine-agnostic: `AddInfrastructureHealthChecks(requireDatabase)` is satisfied by
-   SQL Server, PostgreSQL or SQLite, declared in either shape (`:69-73`, the rule at `:217-223`).
+   SQL Server, PostgreSQL or SQLite, declared in either shape (`:69-73`, the rule at `:225-231`).
 
 ## Rationale
 - **Right store per access pattern, as a configuration decision.** The engine becomes an attribute on a
@@ -315,3 +316,27 @@ anchors moved.
    (helper declared at `:530`), PostgreSQL at `:570` (declared at `:560`), Cosmos at `:599-600`
    (connection string plus database name, declared at `:589`), and SQLite at `:624` (declared at
    `:614`).
+
+## Revision (2026-10-26)
+
+Re-verified against current source (Common v1.261.0). No decision changed: the four sealed engine
+contexts, the registry-delegated connection-string reads, the default-seed rule, the top-level
+migrations assembly that only the two server engines carry, the relational-only outbox gate, the
+Aspire data-source helpers and the deduplicated relational health checks all behave as described.
+No production entity routes to a non-SQL-Server engine: the ADC, Store and Helpdesk sources carry
+no `EntityTypeConfigurationCosmos`, `EntityTypeConfigurationSqlite`, `EntityTypeConfigurationPostgreSQL`
+or `[UseDataSource(...)]`. Only line anchors moved.
+
+1. Anchors re-verified against current source: `PostgreSQLDbContext.cs:24` (sealed context);
+   `DataSourceResolver.cs:519-520` and `:522-523` (connection-string reads, delegating to the engine
+   registry), `:261-296` (`ResolveDefaultSeed`: top-level branch `:266-276`, single distinct database
+   `:278-294`, empty `Default` otherwise), `:274` and `:306-307` (top-level migrations assembly);
+   `DomainEventSaveChangesInterceptor.cs:259` (outbox-write gate) and `:143` (synchronous save path);
+   `Source/Hosting/MMCA.Common.Aspire.Hosting/Extensions.cs:541` (SQL Server, helper declared at
+   `:531`), `:571` (PostgreSQL, `:561`), `:600-601` (Cosmos connection string plus database name,
+   `:590`) and `:625` (SQLite, `:615`); `Source/Hosting/MMCA.Common.Aspire/Extensions.Health.cs:268-305`
+   (per-engine enumeration, deduplicated by connection string at `:294-302`), `:216-249`
+   (registration) and `:225-231` (the `requireDatabase` rule). Unchanged and still correct:
+   `SQLServerDataSourceEngine.cs:52-63`, `SqliteDataSourceEngine.cs:74`, `:77-80`,
+   `CosmosDataSourceEngine.cs:73`, `DataSourceEntrySettings.cs:37`, `:55`, `:64`, and
+   `Extensions.Health.cs:69-73`.

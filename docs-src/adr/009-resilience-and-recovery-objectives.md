@@ -34,25 +34,35 @@ Revised 2026-10-23: the east-west gRPC values moved into `HttpResilienceDefaults
 with their own 8s/20s timeouts instead of the outbound-HTTP 30s/90s, `AddTypedGrpcClient` gained a
 per-client override, and the `ResilienceHandlerTests` anchors are refreshed.
 
+Revised 2026-10-26: `AddTypedServiceClient` and its registration test are gone (removed in
+v1.254.0), so the HTTP half of Decision point 1 now rests on the global Aspire
+`ConfigureHttpClientDefaults` handler alone; other anchors refreshed.
+
 ## Context
 The framework already supplies the *mechanisms* for surviving partial failure: a standard Polly
 resilience handler (timeout / retry / circuit breaker), the outbox for at-least-once delivery
 (ADR-003), and database-per-service isolation (ADR-006). What was missing was a *stated contract*:
 
-1. **No guaranteed coverage.** Resilience is applied per registration site (`AddTypedGrpcClient`,
-   `AddTypedServiceClient`) plus a global `ConfigureHttpClientDefaults` default in `MMCA.Common.Aspire`.
+1. **No guaranteed coverage.** Resilience is applied per registration site (`AddTypedGrpcClient`)
+   plus a global `ConfigureHttpClientDefaults` default in `MMCA.Common.Aspire`.
    Nothing stopped a new outbound client from silently shipping with no retry/circuit-breaker.
 2. **No recovery objectives.** Each consumer deploys its own databases, but RTO/RPO and the
    single-region-vs-failover decision were undocumented: "we'd figure it out" is not a plan, and an
    untested backup is not a backup (rubric §29).
 
 ## Decision
-1. **Resilience is a framework invariant, not a per-call choice.** Every outbound `HttpClient` and
-   gRPC client registered through the framework's extension methods (`AddTypedGrpcClient`,
-   `AddTypedServiceClient`) wires the **standard resilience handler**. `AddTypedServiceClient` takes
-   the global HTTP defaults' timeouts, retry budget and sampling window from `HttpResilienceDefaults`
-   (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.Messaging.cs:170-179`), and
-   switches the retry off for POST and PATCH (`:177`), the same two verbs the Aspire defaults exclude.
+1. **Resilience is a framework invariant, not a per-call choice.** Every outbound `HttpClient`
+   created through `IHttpClientFactory` in a host that calls `AddServiceDefaults` (typed clients,
+   named clients, the YARP forwarder), and every gRPC client registered through
+   `AddTypedGrpcClient`, wires the **standard resilience handler**. A client constructed by hand with
+   `new HttpClient(...)` is outside this default and owns its own bounds. The HTTP default is the
+   global `ConfigureHttpClientDefaults` registration
+   (`MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Extensions.cs:50-108`, scoped by its comment at
+   `:48-49`, the handler at `:60-85`), which takes its timeouts, retry budget and sampling window from
+   `HttpResilienceDefaults` (`:62-65`) and switches the retry off for POST and PATCH (`:74`). The
+   framework no longer ships a typed HTTP service-client helper: `AddTypedServiceClient` was removed
+   in v1.254.0, gRPC through `AddTypedGrpcClient` is the supported cross-service client, and a host
+   that wants a typed `HttpClient` registers it itself (`MMCA.Common/CHANGELOG.md:150`).
    `AddTypedGrpcClient` reads the `Grpc`-prefixed members of the same `HttpResilienceDefaults`
    (`MMCA.Common/Source/Presentation/MMCA.Common.Grpc/DependencyInjection.cs:141-167`). Its timeouts
    are the east-west path's own, not the outbound-HTTP 30s/90s: an 8-second attempt and a 20-second
@@ -63,8 +73,9 @@ resilience handler (timeout / retry / circuit breaker), the outbox for at-least-
    `HttpRequestException` whose `HttpRequestError` is a name-resolution, connect or TLS handshake
    failure (`DependencyInjection.cs:154-159`). An optional per-client `configureResilience` callback
    runs after those defaults, so it wins only where it sets a value (`:98-100`, `:165-166`). This is
-   enforced by a fitness function (`ResilienceHandlerTests` in `MMCA.Common.Grpc.Tests`) so the
-   policy cannot silently regress.
+   enforced by fitness functions on both halves (`ResilienceHandlerTests` in
+   `MMCA.Common.Grpc.Tests` for gRPC, `ServiceDefaultsRetryTests` in `MMCA.Common.Aspire.Tests` for
+   the HTTP default) so the policy cannot silently regress.
 2. **Consumers must declare recovery objectives.** Each consuming app documents, in its own
    `infra/DISASTER-RECOVERY.md`: RTO/RPO per failure scenario, the backup/restore mechanism, and an
    **explicit, written** acceptance of single-region risk (or a multi-region failover plan).
@@ -108,16 +119,16 @@ restore is drilled.
   a silent change to them is not. A
   separate fault-injection
   test (`ResilienceCircuitBreakerFaultInjectionTests`, same project) drives sustained failures and
-  proves the circuit breaker actually trips and short-circuits. `AddTypedServiceClient` has its own
-  registration test
-  (`MMCA.Common/Tests/Core/MMCA.Common.Infrastructure.Tests/Messaging/TypedServiceClientRegistrationTests.cs:17-31`),
-  asserting one retry and the 30-second attempt, 90-second total and 60-second sampling values, plus a
-  theory proving the retry refuses a POST or PATCH replay (`:34-55`).
+  proves the circuit breaker actually trips and short-circuits. The global HTTP default has its own
+  runtime gate (`ServiceDefaultsRetryTests`,
+  `MMCA.Common/Tests/Hosting/MMCA.Common.Aspire.Tests/Resilience/ServiceDefaultsRetryTests.cs`): on a
+  503 only the idempotent verbs are retried (`:33`), a POST is not replayed after an attempt timeout
+  (`:46`), and a 429 is retried only within the `Retry-After` budget (`:65`, `:77`).
 - Per-consumer DR docs can drift from reality. The drill-result table is hand-maintained and lags the
   drills (its last rows are 2026-08-10 in `MMCA.ADC/infra/DISASTER-RECOVERY.md:204` and 2026-07-28 in
   `MMCA.Store/infra/DISASTER-RECOVERY.md:212`), so it is not the operative mitigation: drill recency
   is enforced from `dr-drill.yml` run history by each consumer's `dr-freshness` deploy gate
-  (`MMCA.ADC/.github/workflows/deploy.yml:845-857`, `MMCA.Store/.github/workflows/deploy.yml:790-801`).
+  (`MMCA.ADC/.github/workflows/deploy.yml:846-858`, `MMCA.Store/.github/workflows/deploy.yml:791-802`).
 - A gRPC client that needs bespoke timeouts passes `AddTypedGrpcClient`'s `configureResilience`
   callback, which adjusts the standard handler after the defaults
   (`MMCA.Common/Source/Presentation/MMCA.Common.Grpc/DependencyInjection.cs:98-100`, `:166`); there is
@@ -364,3 +375,45 @@ gates stand as recorded. Three statements are made more precise, and line positi
    (the 8-day window at `:854` and `:798`); and the ADC drill table's last row at
    `MMCA.ADC/infra/DISASTER-RECOVERY.md:204`. Citations inside the earlier Revision sections are left
    as recorded.
+
+## Revision (2026-10-26)
+Re-verified against current source. The Decision's second and third points, the reference
+objectives, the outbox breaker, the database posture on both engines, the Stripe single-retry-owner
+pipeline, the Polly meter wiring and both consumers' 8-day `dr-freshness` gates stand as recorded.
+One registration site recorded since 2026-06-14 no longer exists, and line positions moved.
+
+1. `AddTypedServiceClient<TInterface, TImplementation>` was removed in v1.254.0
+   (`MMCA.Common/CHANGELOG.md:150`, under the heading at `:135`), together with
+   `TypedServiceClientRegistrationTests`. No first-party consumer called it, and gRPC through
+   `AddTypedGrpcClient` is the supported cross-service client; a host that wants a typed `HttpClient`
+   registers it with `AddHttpClient`. The CHANGELOG pairs that with `AddStandardResilienceHandler`,
+   which a host without `AddServiceDefaults` needs; in a host that calls `AddServiceDefaults` the
+   factory-created client already receives the standard handler from `ConfigureHttpClientDefaults`
+   (`Extensions.cs:50`, `:60`), so adding a second would stack two pipelines. Context point 1 and
+   Decision point 1 now name `AddTypedGrpcClient` as the one framework registration site, with
+   outbound `HttpClient` coverage (clients created through `IHttpClientFactory`; a hand-built
+   `new HttpClient(...)` is not reached) coming from the global Aspire handler
+   (`MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Extensions.cs:60-85`, values from
+   `HttpResilienceDefaults` at `:62-65`, POST and PATCH excluded at `:74`). The Trade-offs entry no
+   longer cites the deleted registration test and cites `ServiceDefaultsRetryTests` for the HTTP
+   default instead. The mentions in the 2026-10-01 and 2026-10-06
+   revisions are left as recorded.
+2. Anchors re-verified against current source: `ConfigureHttpClientDefaults` at
+   `Extensions.cs:50-108`; the Polly meter wiring in
+   `MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Extensions.Telemetry.cs` (config key `:24`, meter
+   name `:30`, `resilience.polly.strategy.events` `:51`, `AddMeter` `:321`, the duration-histogram
+   opt-in `:331` with the `Drop` view at `:333-338`); the outbox broker pipeline field at
+   `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/Processing/OutboxProcessor.cs:118`
+   (its documentation at `:103-117`), `DeliverAsync` at `:772-794` wrapping the `IMessageBus` publish
+   at `:783-787` with the domain-event branch outside it at `:789-793`, `BrokenCircuitException`
+   recognized at `:615`, and `BuildBrokerPublishPipeline` at `:1077-1088` (a breaker with no retry,
+   `OperationCanceledException` excluded at `:1086`); `PostgreSQLDbContext`'s `CommandTimeout` at
+   `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/PostgreSQLDbContext.cs:94`
+   and `EnableRetryOnFailure` at `:102-105` (5 retries `:103`, 10-second maximum delay `:104`); the
+   Stripe `IsTransientFailure` at
+   `MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Infrastructure/Payments/Stripe/StripePaymentService.cs:569-576`
+   (the timeout arm at `:574`; the pipeline at `:76-113`, retry `:77`, breaker `:94`, both
+   `ShouldHandle` predicates through `IsTransientFailure` at `:87` and `:101`); and the
+   `dr-freshness` gates at `MMCA.ADC/.github/workflows/deploy.yml:846-858` and
+   `MMCA.Store/.github/workflows/deploy.yml:791-802` (the 8-day window at `:855` and `:799`).
+   Citations inside the earlier Revision sections are left as recorded.

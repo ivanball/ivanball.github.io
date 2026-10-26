@@ -5,7 +5,9 @@ Accepted. Extended by [ADR-131](131-same-origin-api-proxy.md) (the same-origin A
 2026-10-06: both apps run the same-origin API proxy, so the server writes the session cookies, the
 browser receives only a claims-only token, and SameSite is a configured value (Lax in both apps).
 Revised 2026-10-07: anchors refreshed after the v1.233.0 release. Revised 2026-10-21: anchors
-refreshed after the v1.247.0 release.
+refreshed after the v1.247.0 release. Revised 2026-10-26: the `X-CSRF` gate is documented with
+its one exemption (an HTTP/2 WebSocket extended `CONNECT`, held to the same-origin check instead),
+and anchors refreshed after the v1.255.0 consumer adoption.
 
 ## Context
 The apps are Blazor Web Apps: a server-rendered (SSR) prerender pass runs on the first request, then
@@ -31,8 +33,8 @@ companion, and both apps' Web UI hosts wire it.
   `mmca_auth_refresh` (the refresh token). In the framework's default mode the browser seeds them via
   `POST /auth/session-cookie` at login and `SessionCookieJar` writes them
   (`MMCA.Common/Source/Presentation/MMCA.Common.API/SessionCookies/SessionCookieEndpoints.cs:52`).
-  Both apps run the same-origin proxy (`MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs:161`,
-  `MMCA.Store/Source/Hosts/UI/MMCA.Store.UI.Web/Program.cs:153`), which sets
+  Both apps run the same-origin proxy (`MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs:167`,
+  `MMCA.Store/Source/Hosts/UI/MMCA.Store.UI.Web/Program.cs:159`), which sets
   `ClaimsOnlyBrowserTokens = true`
   (`MMCA.Common/Source/Presentation/MMCA.Common.UI.Web/SameOriginProxy/SameOriginApiProxyServiceExtensions.cs:73`),
   so that `POST` answers 204 without writing anything (`SessionCookieEndpoints.cs:41-55`). The cookies
@@ -68,8 +70,10 @@ companion, and both apps' Web UI hosts wire it.
   `:62`) and rest on the cookies' `SameSite` value; the `/auth/session/token` refresh endpoint
   additionally rejects cross-site requests via the `Sec-Fetch-Site` header (`:72`, `:100-102`). Under the
   proxy, unsafe methods on `/api/**` and both handoff endpoints require the `X-CSRF: 1` header
-  (`SameOriginApiProxyEndpoint.cs:264`, `SessionHandoffEndpoints.cs:26`, `:44`), which is the CSRF gate
-  the apps rely on rather than SameSite.
+  (`SameOriginApiProxyEndpoint.cs:266`, `SessionHandoffEndpoints.cs:26`, `:44`), which is the CSRF gate
+  the apps rely on rather than SameSite. The one exemption is an HTTP/2 WebSocket extended `CONNECT`,
+  which cannot carry the header and is instead held to this host's own `Origin` by the proxy's
+  same-origin gate (`SameOriginApiProxyEndpoint.cs:182-201`, `:265-266`).
 
 This is a backend-for-frontend (BFF) style token-storage layer: the browser holds an HttpOnly session
 whose refresh half it cannot read, the SSR pass authenticates from the access cookie without trusting
@@ -161,6 +165,21 @@ write in v1.247.0, which shifted every later line of `SessionCookieEndpoints.cs`
    `:73`, `:83-84`, `SameOriginProxyTransformer.cs:60`, `:141`, `SessionHandoffEndpoints.cs:17-18`,
    `:26`, `:44`, `:55`, both `Program.cs` anchors, and
    `MMCA.Store/Source/Hosts/UI/MMCA.Store.UI.Web/appsettings.json:53-54`.
+
+## Revision (2026-10-26)
+Re-verified against current source. The decision is unchanged: both apps run the same-origin proxy,
+the server is the only writer of the session cookies, and unsafe proxied methods require `X-CSRF`.
+One long-standing omission is corrected, and the `Program.cs` and proxy-endpoint anchors moved.
+
+1. The CSRF bullet in the Decision now names the gate's one exemption: an HTTP/2 WebSocket extended
+   `CONNECT` cannot carry the `X-CSRF` header, so it is admitted without it and relies on the proxy's
+   same-origin gate, which requires this host's own `Origin` on a WebSocket upgrade
+   (`MMCA.Common/Source/Presentation/MMCA.Common.UI.Web/SameOriginProxy/SameOriginApiProxyEndpoint.cs:182-201`,
+   `:265-266`).
+2. Anchors re-verified against current source:
+   `MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs:167` and
+   `MMCA.Store/Source/Hosts/UI/MMCA.Store.UI.Web/Program.cs:159` (`AddCommonSameOriginApiProxy`);
+   `SameOriginApiProxyEndpoint.cs:266` (`X-CSRF` gate on unsafe methods).
 
 ## Related
 ADR-004 (the JWT/JWKS validation the API performs on every call, which is why the SSR handler can skip

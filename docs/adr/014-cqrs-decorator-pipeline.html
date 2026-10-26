@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 134 ADRs</summary>
+        <summary>All 135 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -234,6 +234,7 @@
         <li><a href="132-build-strictness-analyzer-policy.html">132 · Build Strictness: Analyzers at Error Severity, a Shared Baseline, and CI Test Floors</a></li>
         <li><a href="133-versioned-password-hash-work-factor.html">133 · Versioned Password Hash Work Factor</a></li>
         <li><a href="134-cloud-neutral-core-vendor-adapters.html">134 · Cloud-Neutral Core With Vendor Adapter Packages</a></li>
+        <li><a href="135-application-namespace-keyspace-isolation.html">135 · One Application Namespace Isolates Shared Infrastructure Keyspaces</a></li>
           </ol>
         </nav>
       </details>
@@ -272,7 +273,10 @@
           Revised 2026-10-06: the Decision states the shipped seven-decorator command chain and six-decorator query chain instead of the pre-2026-08-18 order. Revised 2026-10-07: anchors refreshed after the v1.233.0 release. Revised 2026-10-19: the Helpdesk
           reference host composes through <code>AddMmcaApplicationPipeline</code> too, so all eight hosts take the sealed
           path; see the Revision (2026-10-19) at the end. Revised 2026-10-21: anchors refreshed after
-          the ADC and Store service hosts moved their <code>AddMmcaApplicationPipeline</code> call sites.</p>
+          the ADC and Store service hosts moved their <code>AddMmcaApplicationPipeline</code> call sites. Revised 2026-10-26:
+          the Store UI adoption of <code>ModelValidation.For</code> is now 7 page call sites, and the Helpdesk
+          decorator-order test composes through <code>AddMmcaApplicationPipeline</code>; all seven service-host call sites
+          re-pointed.</p>
           <h2 id="context">Context</h2>
           <p>Commands and queries share cross-cutting concerns: validation, transactions, cache invalidation,
           logging / timing, and feature gating. Putting that logic inside each handler scatters it, makes the
@@ -319,10 +323,10 @@
           Revision (2026-08-26) below): the Helpdesk reference host
           (<code>MMCA.Helpdesk/Source/Hosts/MMCA.Helpdesk.Web/Program.cs:121</code>) and the seven production service
           hosts, ADC Identity / Conference / Engagement /
-          Notification (<code>MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:328</code>, <code>...Conference.Service/Program.cs:418</code>,
-          <code>...Engagement.Service/Program.cs:287</code>, <code>...Notification.Service/Program.cs:228</code>) and Store Identity /
-          Catalog / Sales (<code>MMCA.Store/Source/Services/MMCA.Store.Identity.Service/Program.cs:244</code>,
-          <code>...Catalog.Service/Program.cs:256</code>, <code>...Sales.Service/Program.cs:237</code>). Only that decorators-last
+          Notification (<code>MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:339</code>, <code>...Conference.Service/Program.cs:429</code>,
+          <code>...Engagement.Service/Program.cs:298</code>, <code>...Notification.Service/Program.cs:239</code>) and Store Identity /
+          Catalog / Sales (<code>MMCA.Store/Source/Services/MMCA.Store.Identity.Service/Program.cs:255</code>,
+          <code>...Catalog.Service/Program.cs:267</code>, <code>...Sales.Service/Program.cs:248</code>). Only that decorators-last
           ordering is load-bearing; the relative position of <code>AddInfrastructure</code>/<code>AddAPI</code> is not.</li>
           <li><strong>Each kind of validation has one home.</strong> UI form models declare DataAnnotations rules once and
           bridge them onto <code>MudForm</code> through <code>ModelValidation.For(model, validator)</code>
@@ -754,6 +758,42 @@
           (<code>MMCA.Store/Source/Services/MMCA.Store.Sales.Service/Program.cs:237</code>) are re-pointed; Store Catalog
           <code>:256</code> and <code>MMCA.Helpdesk/Source/Hosts/MMCA.Helpdesk.Web/Program.cs:121</code> still match.</li>
           </ol>
+          <h2 id="revision-2026-10-26">Revision (2026-10-26)</h2>
+          <p>Re-verified against current source. The decision, both decorator chains
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/DependencyInjection.cs:134-140</code>, <code>:143-148</code>), the
+          eight composing hosts and the validation homes are unchanged. Two facts recorded in earlier Revision
+          sections moved, and all seven service-host call sites in the Decision moved. Stale anchors inside the
+          earlier Revision sections are left as historical records; the items below state current reality.</p>
+          <ol>
+          <li><strong>Store UI adoption of <code>ModelValidation.For</code> is 7 page call sites, not 4.</strong> The Revision
+          (2026-10-01) counted 4; current source has Catalog x4
+          (<code>MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.UI/Pages/Products/ProductCreate.razor.cs</code>,
+          <code>.../Products/ProductDetail.razor.cs</code>, <code>.../Categories/CategoryCreate.razor.cs</code>,
+          <code>.../Categories/CategoryDetail.razor.cs</code>), Identity x2
+          (<code>MMCA.Store/Source/Modules/Identity/MMCA.Store.Identity.UI/Pages/Customers/CustomerCreate.razor.cs</code>,
+          <code>.../Customers/CustomerDetail.razor.cs</code>) and Sales x1
+          (<code>MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.UI/Pages/Inventory/InventoryItemCreate.razor.cs</code>).
+          MMCA.Helpdesk still has none.</li>
+          <li><strong>The Helpdesk decorator-order test composes through the sealed path.</strong> The Revision (2026-08-18)
+          records that Common and Helpdesk hand-sequence <code>AddApplication</code>, the module scan and
+          <code>AddApplicationDecorators</code> in their order tests. Helpdesk&#39;s
+          <code>DecoratorPipelineOrderTests</code> (<code>MMCA.Helpdesk/Tests/Architecture/MMCA.Helpdesk.Architecture.Tests/DecoratorPipelineOrderTests.cs:38</code>)
+          now builds its sequence with <code>services.AddMmcaApplicationPipeline(...)</code> (<code>:67</code>), matching its host.
+          Only Common&#39;s own conformance test still hand-sequences the calls
+          (<code>MMCA.Common/Tests/Hosting/MMCA.Common.Testing.Tests/Conformance/DecoratorPipelineOrderTests.cs:38</code>,
+          <code>:40</code>).</li>
+          <li>Anchors re-verified against current source: in the Decision, ADC Identity
+          (<code>MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:339</code>), Conference
+          (<code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:429</code>), Engagement
+          (<code>MMCA.ADC/Source/Services/MMCA.ADC.Engagement.Service/Program.cs:298</code>) and Notification
+          (<code>MMCA.ADC/Source/Services/MMCA.ADC.Notification.Service/Program.cs:239</code>), Store Identity
+          (<code>MMCA.Store/Source/Services/MMCA.Store.Identity.Service/Program.cs:255</code>), Catalog
+          (<code>MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:267</code>) and Sales
+          (<code>MMCA.Store/Source/Services/MMCA.Store.Sales.Service/Program.cs:248</code>) are re-pointed;
+          <code>MMCA.Helpdesk/Source/Hosts/MMCA.Helpdesk.Web/Program.cs:121</code> still matches. The Decision&#39;s
+          <code>DependencyInjection.cs:134-140</code> / <code>:143-148</code>, <code>ModelValidation.cs:26,43</code>, <code>IModelValidator.cs:13</code>,
+          <code>ValidatingCommandDecorator.cs:32</code> and <code>CommandValidatorCoverageTestsBase.cs:22</code> still match.</li>
+          </ol>
           
         <div class="doc-foot btn-row">
           <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
@@ -782,6 +822,7 @@
             <li><a href="#revision-2026-10-07">Revision (2026-10-07)</a></li>
             <li><a href="#revision-2026-10-19">Revision (2026-10-19)</a></li>
             <li><a href="#revision-2026-10-21">Revision (2026-10-21)</a></li>
+            <li><a href="#revision-2026-10-26">Revision (2026-10-26)</a></li>
             </ul>
           </nav>
         </aside>

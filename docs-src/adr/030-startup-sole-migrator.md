@@ -8,7 +8,9 @@ startup path consults the environment for the build-time OpenAPI skip. Revised 2
 replicas of one service are a supported case (EF's migrations lock plus a five-minute initialization
 command timeout), so `minReplicas: 1` is not a single-applier guarantee. Revised 2026-10-21: both
 `deploy.yml` sole-migrator comments now describe concurrent replicas serializing on the migrations
-lock, so the Decision cites them as agreeing rather than stale; anchors refreshed.
+lock, so the Decision cites them as agreeing rather than stale; anchors refreshed. Revised
+2026-10-26: anchors refreshed after later ADC and Store changes moved `main.bicep`, the Conference
+seeder and the host `Program.cs` lines.
 
 ## Context
 Under database-per-service (ADR-006), each service owns its own database and its own migrations project,
@@ -40,14 +42,14 @@ in production and is the sole migrator of its own database**: it applies its pen
 at startup, before the new revision serves traffic. There is deliberately **no** separate deploy-step
 migration (no `sqlcmd` / `dotnet ef database update` apply in `deploy.yml`).
 
-- **Set in prod for every service.** `MMCA.Store/infra/main.bicep:1610,1781,1917` (Identity/Catalog/Sales)
-  and `MMCA.ADC/infra/main.bicep:1923,2164,2300,2454` (Identity/Conference/Engagement/Notification) all set
+- **Set in prod for every service.** `MMCA.Store/infra/main.bicep:1616,1787,1923` (Identity/Catalog/Sales)
+  and `MMCA.ADC/infra/main.bicep:1959,2200,2336,2490` (Identity/Conference/Engagement/Notification) all set
   `DatabaseInitStrategy = 'Migrate'`.
 - **Concurrent replicas serialize on EF's migrations lock.** "Sole migrator" means the service is the
   only thing that migrates its database, not that one replica does. Every service runs
-  `minReplicas: 1` but scales above it (Store `MMCA.Store/infra/main.bicep:1682,1806,1954`, max 2; ADC
-  `MMCA.ADC/infra/main.bicep:2070,2223,2358`, max `conferenceScaledMaxReplicas`, 2 or 4 in conference
-  mode, `:192`, and `:2544`, max 2), so several replicas can run startup initialization at once. Each
+  `minReplicas: 1` but scales above it (Store `MMCA.Store/infra/main.bicep:1688,1812,1960`, max 2; ADC
+  `MMCA.ADC/infra/main.bicep:2106,2259,2394`, max `conferenceScaledMaxReplicas`, 2 or 4 in conference
+  mode, `:192`, and `:2580`, max 2), so several replicas can run startup initialization at once. Each
   calls `MigrateAsync`; every replica but one waits on EF's migrations lock (`__EFMigrationsLock`), and
   migration plus seeding run under a five-minute command timeout so that wait does not trip the
   30-second default
@@ -56,14 +58,14 @@ migration (no `sqlcmd` / `dotnet ef database update` apply in `deploy.yml`).
   startup probe is the tighter bound: it polls `/alive` with `initialDelaySeconds: 5`,
   `periodSeconds: 5` and `failureThreshold: 30` (about 155 seconds), and the host does not listen
   until initialization finishes, so a replica still waiting on the lock after that window is
-  restarted before the five-minute timeout is reached (ADC `MMCA.ADC/infra/main.bicep:2043-2050`,
-  with the same block at `:2196-2203`, `:2331-2338` and `:2498-2505`; Store
-  `MMCA.Store/infra/main.bicep:1676,1800,1948`). Seeding tolerates the overlap only where a
+  restarted before the five-minute timeout is reached (ADC `MMCA.ADC/infra/main.bicep:2079-2086`,
+  with the same block at `:2232-2239`, `:2367-2374` and `:2534-2541`; Store
+  `MMCA.Store/infra/main.bicep:1682,1806,1954`). Seeding tolerates the overlap only where a
   seeder handles it: ADC's `ConferenceModuleDbSeeder` treats a unique or primary-key violation on
   save as another replica having seeded those rows and detaches every pending entry of the failing
   context, the seed rows and the outbox rows the save captured
-  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Infrastructure/Persistence/DbContexts/Seeding/ConferenceModuleDbSeeder.cs:68`,
-  `:574-594`). Store's seeders check then insert and save with a plain `SaveChangesAsync`, with no
+  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Infrastructure/Persistence/DbContexts/Seeding/ConferenceModuleDbSeeder.cs:83`,
+  `:603-623`). Store's seeders check then insert and save with a plain `SaveChangesAsync`, with no
   violation handling
   (`MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.Infrastructure/Persistence/DbContexts/Seeding/CatalogModuleDbSeeder.cs:55,79,122`,
   `MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Infrastructure/Persistence/DbContexts/Seeding/SalesModuleDbSeeder.cs:118`).
@@ -125,8 +127,8 @@ migration (no `sqlcmd` / `dotnet ef database update` apply in `deploy.yml`).
 ADR-006 (database-per-service: why each service owns and migrates its own database),
 ADR-025 (readiness gating; a still-migrating replica is not yet listening at all, because
 initialization completes before the host starts, e.g.
-`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:447` ahead of `app.RunAsync()` at
-`:478`),
+`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:458` ahead of `app.RunAsync()` at
+`:489`),
 ADR-003 (the outbox lease that makes scale-out safe on the dispatch side),
 ADR-009 (RTO/RPO + drilled restore is the recovery backstop for a bad migration).
 
@@ -305,3 +307,25 @@ before it listens. What moved is the wording of the two `deploy.yml` comments th
    Conference `:447` (`:478`), Engagement `:323` (`:364`), Notification `:267` (`:310`); Store
    Identity `MMCA.Store/Source/Services/MMCA.Store.Identity.Service/Program.cs:304` (`:356`),
    Catalog `:317` (`:365`), Sales `:306` (`:338`).
+
+## Revision (2026-10-26)
+Re-verified against current source. Unchanged: every service host still sets
+`DatabaseInitStrategy = 'Migrate'` in production, is the sole migrator and seeder of its own
+database, scales above `minReplicas: 1` (Store to 2; ADC to `conferenceScaledMaxReplicas`, still
+`conferenceMode ? 4 : 2` at `MMCA.ADC/infra/main.bicep:192`, and Notification to 2), keeps the
+`/alive` startup probe at 5/5/30, and initializes before it listens. ADC's Conference seeder still
+tolerates a concurrent seed by detaching every Added, Modified or Deleted entry of the failing
+context. Only line numbers moved.
+
+1. Anchors re-verified against current source: both `main.bicep` setting lines
+   (`MMCA.Store/infra/main.bicep:1616,1787,1923`; `MMCA.ADC/infra/main.bicep:1959,2200,2336,2490`);
+   the scale blocks (Store `:1688,1812,1960`; ADC `:2106,2259,2394` and Notification `:2580`); the
+   `/alive` startup probes (ADC `:2079-2086`, `:2232-2239`, `:2367-2374`, `:2534-2541`; Store
+   `:1682,1806,1954`); the Conference seeder's violation detector
+   (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Infrastructure/Persistence/DbContexts/Seeding/ConferenceModuleDbSeeder.cs:83`)
+   and `SaveToleratingConcurrentSeedAsync` (`:603-623`, called at `:155`, `:197`, `:246`, `:289`,
+   `:360`, `:386`, `:466`, `:522`, `:593`); the host call sites, all still ahead of
+   `app.RunAsync()`: ADC Identity `MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:369`
+   (`:398`), Conference `:458` (`:489`), Engagement `:334` (`:375`), Notification `:278` (`:321`);
+   Store Identity `MMCA.Store/Source/Services/MMCA.Store.Identity.Service/Program.cs:315` (`:367`),
+   Catalog `:328` (`:376`), Sales `:317` (`:349`).

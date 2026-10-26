@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 134 ADRs</summary>
+        <summary>All 135 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -234,6 +234,7 @@
         <li><a href="132-build-strictness-analyzer-policy.html">132 · Build Strictness: Analyzers at Error Severity, a Shared Baseline, and CI Test Floors</a></li>
         <li><a href="133-versioned-password-hash-work-factor.html">133 · Versioned Password Hash Work Factor</a></li>
         <li><a href="134-cloud-neutral-core-vendor-adapters.html">134 · Cloud-Neutral Core With Vendor Adapter Packages</a></li>
+        <li><a href="135-application-namespace-keyspace-isolation.html">135 · One Application Namespace Isolates Shared Infrastructure Keyspaces</a></li>
           </ol>
         </nav>
       </details>
@@ -267,7 +268,8 @@
           deploy anchors are refreshed after that prune; no decision changed. Revised 2026-10-21: the gallery
           count is re-measured (nineteen assertions across twelve classes, adding the role administration scans),
           the gallery no longer uses the pager exception, and the CI, deploy, theme and Helpdesk anchors are
-          refreshed; no decision changed.</p>
+          refreshed; no decision changed. Revised 2026-10-26: anchors refreshed after the CI and deploy workflow
+          edits that moved the Common <code>ui-e2e</code> and ADC/Store <code>deploy.yml</code> gate lines; no decision changed.</p>
           <h2 id="context">Context</h2>
           <p>Accessibility was documented before it was enforced. The narrative guide
           (<a href="../guides/common-ACCESSIBILITY.html">common-ACCESSIBILITY.md</a>, rubric section 21) named WCAG 2.1 AA
@@ -325,18 +327,18 @@
           <li><strong>Common gates it cross-browser as a required merge check.</strong> The <code>ui-e2e</code> job
           (<code>MMCA.Common/.github/workflows/ci.yml:223</code>) builds the out-of-slnx gallery plus E2E project and runs
           the axe scans across a <code>chromium, firefox, webkit</code> matrix (<code>:232</code>), one engine per leg via
-          <code>E2E_BROWSER</code> (<code>:291</code>), with <code>fail-fast: false</code> so each engine reports independently (<code>:230</code>). All
+          <code>E2E_BROWSER</code> (<code>:344</code>), with <code>fail-fast: false</code> so each engine reports independently (<code>:230</code>). All
           three contexts block merges (<code>MMCA.Common/CONTRIBUTING.md:63-64</code>, enumerated in the branch-protection
           payload at <code>:202-204</code>).</li>
           <li><strong>Both deployed apps gate the deploy on it.</strong> The <code>e2e-gate</code> jobs
-          (<code>MMCA.ADC/.github/workflows/deploy.yml:807</code>, <code>MMCA.Store/.github/workflows/deploy.yml:753</code>) call the
-          reusable <code>e2e.yml</code> workflow (ADC <code>:819</code>, Store <code>:764</code>) chromium-only (ADC <code>:821</code>, Store <code>:766</code>) against
-          the full Aspire stack, and the <code>deploy</code> job waits on that gate (ADC <code>:1160</code>, Store <code>:1098</code>). The same
-          <code>deploy</code> needs list also carries the <code>freshness</code> job (ADC <code>:1160</code>, Store <code>:1098</code>), whose
-          <code>cross-browser-freshness</code> step (ADC <code>:924</code>, Store <code>:858</code>) launches no browser: it asserts that the
+          (<code>MMCA.ADC/.github/workflows/deploy.yml:808</code>, <code>MMCA.Store/.github/workflows/deploy.yml:754</code>) call the
+          reusable <code>e2e.yml</code> workflow (ADC <code>:820</code>, Store <code>:765</code>) chromium-only (ADC <code>:822</code>, Store <code>:767</code>) against
+          the full Aspire stack, and the <code>deploy</code> job waits on that gate (ADC <code>:1161</code>, Store <code>:1099</code>). The same
+          <code>deploy</code> needs list also carries the <code>freshness</code> job (ADC <code>:1161</code>, Store <code>:1099</code>), whose
+          <code>cross-browser-freshness</code> step (ADC <code>:925</code>, Store <code>:859</code>) launches no browser: it asserts that the
           scheduled firefox and webkit <code>e2e.yml</code> legs (Monday firefox, Thursday webkit) each have a recent
           successful run, so engine coverage beyond chromium gates the deploy by recency rather than per commit
-          (ADC rationale at <code>:908-923</code>, Store at <code>:850-857</code>).</li>
+          (ADC rationale at <code>:909-924</code>, Store at <code>:851-858</code>).</li>
           <li><strong>The gate already owns design-token decisions.</strong> Contrast values in the shared theme are set to
           what the scan will accept, with the ratio recorded in place: light-palette <code>WarningContrastText</code>
           (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI/Theme/MMCATheme.cs:36</code>, rationale at <code>:28-34</code>,
@@ -429,8 +431,8 @@
           not machine-checkable and are covered by the manual screen-reader checklist in
           <a href="../guides/common-ACCESSIBILITY.html">common-ACCESSIBILITY.md</a>, which is a periodic human pass, not a gate.</li>
           <li><strong>The deploy gate is ui-scoped and may legitimately skip.</strong> Both apps gate <code>e2e-gate</code> on a <code>ui</code> change
-          filter (ADC <code>deploy.yml:818</code>, Store <code>deploy.yml:763</code>), and <code>deploy</code> accepts <code>success</code> or <code>skipped</code> for it
-          (ADC <code>:1197</code>, Store <code>:1131</code>), so a backend-only or infra-only deploy ships without a browser scan. That
+          filter (ADC <code>deploy.yml:819</code>, Store <code>deploy.yml:764</code>), and <code>deploy</code> accepts <code>success</code> or <code>skipped</code> for it
+          (ADC <code>:1198</code>, Store <code>:1132</code>), so a backend-only or infra-only deploy ships without a browser scan. That
           is the intended cost trade (a backend change cannot alter rendered markup) with the post-deploy smoke
           gate as backstop, but it does mean &quot;deployed&quot; does not always mean &quot;axe ran on this commit&quot;.</li>
           <li><strong>Consumer breadth is hand-maintained.</strong> Nothing forces a new page into <code>AccessibilityTests</code>, so
@@ -511,6 +513,22 @@
           (<code>PrimaryContrastText</code> <code>:71</code>, rationale <code>:68-70</code>; <code>WarningContrastText</code> <code>:90</code>; <code>ErrorContrastText</code>
           <code>:98</code>); and the MMCA.Helpdesk pin (<code>Directory.Packages.props:93</code>), still referenced by no project.</li>
           </ol>
+          <h2 id="revision-2026-10-26">Revision (2026-10-26)</h2>
+          <p>Re-verified against current source. No decision or rationale changed: Common still runs the gallery
+          scans across a <code>chromium, firefox, webkit</code> matrix with <code>fail-fast: false</code>, both apps still gate the
+          deploy on a chromium-only <code>e2e-gate</code> that may legitimately skip, and the <code>cross-browser-freshness</code> step
+          of the <code>freshness</code> job still gates it by recency. Only line anchors moved.</p>
+          <ol>
+          <li>Anchors re-verified against current source: the Common <code>E2E_BROWSER</code> assignment
+          (<code>MMCA.Common/.github/workflows/ci.yml:344</code>; the <code>ui-e2e</code> job <code>:223</code>, <code>fail-fast</code> <code>:230</code> and matrix
+          <code>:232</code> are unchanged); the ADC and Store <code>e2e-gate</code> jobs
+          (<code>MMCA.ADC/.github/workflows/deploy.yml:808</code>, <code>MMCA.Store/.github/workflows/deploy.yml:754</code>), their
+          <code>ui</code> filter (ADC <code>:819</code>, Store <code>:764</code>), reusable <code>e2e.yml</code> call (ADC <code>:820</code>, Store <code>:765</code>) and
+          chromium-only browsers (ADC <code>:822</code>, Store <code>:767</code>); the <code>deploy</code> needs lists naming <code>freshness</code> and
+          <code>e2e-gate</code> (ADC <code>:1161</code>, Store <code>:1099</code>) and their <code>success</code>-or-<code>skipped</code> acceptance (ADC <code>:1198</code>,
+          Store <code>:1132</code>); the <code>cross-browser-freshness</code> step (ADC <code>:925</code>, Store <code>:859</code>) with its rationale
+          comment (ADC <code>:909-924</code>, Store <code>:851-858</code>).</li>
+          </ol>
           <h2 id="related">Related</h2>
           <p>ADR-015 (architecture fitness functions: the structural tier this parallels at the browser tier, and the
           same invariant-over-discipline posture), ADR-058 (runtime conformance suites shipped as subclassable
@@ -538,6 +556,7 @@
             <li><a href="#revision-2026-10-06">Revision (2026-10-06)</a></li>
             <li><a href="#revision-2026-10-07">Revision (2026-10-07)</a></li>
             <li><a href="#revision-2026-10-21">Revision (2026-10-21)</a></li>
+            <li><a href="#revision-2026-10-26">Revision (2026-10-26)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

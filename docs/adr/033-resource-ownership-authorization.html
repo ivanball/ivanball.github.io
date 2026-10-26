@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 134 ADRs</summary>
+        <summary>All 135 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -234,6 +234,7 @@
         <li><a href="132-build-strictness-analyzer-policy.html">132 · Build Strictness: Analyzers at Error Severity, a Shared Baseline, and CI Test Floors</a></li>
         <li><a href="133-versioned-password-hash-work-factor.html">133 · Versioned Password Hash Work Factor</a></li>
         <li><a href="134-cloud-neutral-core-vendor-adapters.html">134 · Cloud-Neutral Core With Vendor Adapter Packages</a></li>
+        <li><a href="135-application-namespace-keyspace-isolation.html">135 · One Application Namespace Isolates Shared Infrastructure Keyspaces</a></li>
           </ol>
         </nav>
       </details>
@@ -242,7 +243,7 @@
           <p class="eyebrow doc-kicker">Architecture Decision Record</p>
           <h1 id="adr-033-resource-ownership-authorization-row-level--action-filter">ADR-033: Resource-Ownership Authorization (Row-Level + Action Filter)</h1>
           <h2 id="status">Status</h2>
-          <p>Accepted (2026-07-02, revised 2026-07-25, 2026-08-01, 2026-08-31, 2026-09-10). Revised 2026-10-01 (the fail-closed owner gate and the per-record ownership check are now framework code in <code>OwnershipHelper</code>; see Revision below). Revised 2026-10-06: the CSV export&#39;s fail-closed <code>AllowUnscopedExport</code> opt-in, which lets only the bypass role export an unscoped table, is now recorded in Adoption. Revised 2026-10-07: anchors refreshed after the v1.233.0 release. Revised 2026-10-21: the bypass check is <code>ICurrentUserService.IsInRole</code> over every role claim (v1.234.0), not a compare against the first role claim, and the bypass role is a required host-named argument with no <code>Admin</code> default.</p>
+          <p>Accepted (2026-07-02, revised 2026-07-25, 2026-08-01, 2026-08-31, 2026-09-10). Revised 2026-10-01 (the fail-closed owner gate and the per-record ownership check are now framework code in <code>OwnershipHelper</code>; see Revision below). Revised 2026-10-06: the CSV export&#39;s fail-closed <code>AllowUnscopedExport</code> opt-in, which lets only the bypass role export an unscoped table, is now recorded in Adoption. Revised 2026-10-07: anchors refreshed after the v1.233.0 release. Revised 2026-10-21: the bypass check is <code>ICurrentUserService.IsInRole</code> over every role claim (v1.234.0), not a compare against the first role claim, and the bypass role is a required host-named argument with no <code>Admin</code> default. Revised 2026-10-26: anchors refreshed after the v1.261.0 release (changelog, <code>OwnershipHelper</code> overload and Store <code>ReviewsController</code> anchors cited in earlier revisions).</p>
           <h2 id="context">Context</h2>
           <p>ADR-020 added a permission (capability) layer over RBAC: it answers &quot;what may this <strong>role</strong> do&quot;,
           resolving a role to a permission so an endpoint can require a capability instead of a role name. It
@@ -683,6 +684,23 @@
           entry recorded in Revisions 2026-10-01, 2026-10-06 and 2026-10-07 is now
           <code>MMCA.Common/CHANGELOG.md:711</code>, under the <code>[1.216.0]</code> header at <code>:694</code>.</li>
           </ol>
+          <h2 id="revision-2026-10-26">Revision (2026-10-26)</h2>
+          <p>Re-verified against current source. The filter, the ownership specification, the bypass check over
+          every role claim, the fail-closed <code>RequireResolvableOwner&lt;TId&gt;</code> gate and the per-record
+          <code>ValidateOwnershipAsync&lt;TId&gt;</code> check read as recorded, and the live <code>OwnershipHelper</code> anchors are
+          unchanged. Only anchors cited in earlier revisions moved; those revisions stay as written.</p>
+          <ol>
+          <li>Anchors re-verified against current source: the two-generic <code>GetOwnershipSpecification&lt;TSpec, TId&gt;</code>
+          overload cited at <code>OwnershipHelper.cs:34</code> (Revision 2026-09-10) and <code>:35</code> (Revision 2026-10-07) is
+          declared at <code>MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/OwnershipHelper.cs:41</code>,
+          with the convenience overload at <code>:71</code> delegating at <code>:76</code>. Store Catalog&#39;s <code>ReviewsController</code>
+          (<code>MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.API/Controllers/ReviewsController.cs</code>)
+          declares <code>ResolveOwner()</code> at <code>:251</code> (called at <code>:142</code>) and its private <code>ValidateOwnershipAsync</code> at
+          <code>:291</code>, which delegates to <code>OwnershipHelper.ValidateOwnershipAsync</code> at <code>:295</code>. In
+          <code>MMCA.Common/CHANGELOG.md</code>, the v1.216.0 <code>OwnershipHelper</code> entry is <code>:926</code> under the <code>[1.216.0]</code>
+          header at <code>:909</code>, the v1.234.0 <code>IsInRole</code> entry is <code>:539</code> under the header at <code>:528</code>, and the
+          v1.201.0 removal of the <code>= &quot;Admin&quot;</code> default is <code>:1654-1656</code> under the header at <code>:1581</code>.</li>
+          </ol>
           
         <div class="doc-foot btn-row">
           <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
@@ -707,6 +725,7 @@
             <li><a href="#revision-2026-10-06">Revision (2026-10-06)</a></li>
             <li><a href="#revision-2026-10-07">Revision (2026-10-07)</a></li>
             <li><a href="#revision-2026-10-21">Revision (2026-10-21)</a></li>
+            <li><a href="#revision-2026-10-26">Revision (2026-10-26)</a></li>
             </ul>
           </nav>
         </aside>

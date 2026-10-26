@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 134 ADRs</summary>
+        <summary>All 135 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -234,6 +234,7 @@
         <li><a href="132-build-strictness-analyzer-policy.html">132 · Build Strictness: Analyzers at Error Severity, a Shared Baseline, and CI Test Floors</a></li>
         <li><a href="133-versioned-password-hash-work-factor.html">133 · Versioned Password Hash Work Factor</a></li>
         <li><a href="134-cloud-neutral-core-vendor-adapters.html">134 · Cloud-Neutral Core With Vendor Adapter Packages</a></li>
+        <li><a href="135-application-namespace-keyspace-isolation.html">135 · One Application Namespace Isolates Shared Infrastructure Keyspaces</a></li>
           </ol>
         </nav>
       </details>
@@ -249,7 +250,9 @@
           the <code>CheckIn</code> parameter types were corrected). Revised 2026-10-06: the <code>string</code> identity-path
           rationale was corrected, since <code>System.String</code> does implement <code>IParsable&lt;string&gt;</code>. Revised
           2026-10-21: the alias count is 49 (47 <code>int</code>), <code>StronglyTypedIdMappings</code> ships two conversions
-          rather than four, and the public API surface is 53 declarations rather than 55.
+          rather than four, and the public API surface is 53 declarations rather than 55. Revised
+          2026-10-26: anchors refreshed after <code>AddStronglyTypedIds</code> moved within the Infrastructure
+          <code>DependencyInjection.cs</code>.
           <strong>Revisits <a href="048-primitive-identifier-type-aliases.html">ADR-048</a> and
           <a href="085-identifier-type-aliases-revisited.html">ADR-085</a></strong> by adding the capability those records deferred,
           without migrating anything. ADR-048&#39;s decision (every entity identity is a primitive named through a
@@ -357,9 +360,9 @@
           </li>
           <li><p><strong>One call is the whole opt-in.</strong>
           <code>services.AddStronglyTypedIds(typeof(OrderId).Assembly)</code>
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:382</code>) scans the named
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:401</code>) scans the named
           assemblies for wrappers, registers the <code>TypeConverter</code> for each, and registers a
-          <code>StronglyTypedIdRegistry</code> singleton through <code>TryAddSingleton</code> (<code>:391</code>)
+          <code>StronglyTypedIdRegistry</code> singleton through <code>TryAddSingleton</code> (<code>:410</code>)
           (<code>MMCA.Common/Source/Core/MMCA.Common.Shared/Identifiers/StronglyTypedIdRegistry.cs:22</code>). A host
           that never calls it keeps the aliases and sees no behavioural change anywhere.</p>
           </li>
@@ -675,6 +678,18 @@
           <code>QueryFilterService.cs:413-424</code> (the <code>:399-417</code> recorded by the Revision (2026-10-06) note was
           correct then; the method moved on 2026-10-10), and <code>StronglyTypedIdMappings.cs:36</code>.</li>
           </ol>
+          <h2 id="revision-2026-10-26">Revision (2026-10-26)</h2>
+          <p>Re-verified against current source. The decision is unchanged: the framework still ships the
+          capability, the aliases are still the default, and adoption is still zero. Only the opt-in entry
+          point moved within its file; its behavior is the same.</p>
+          <ol>
+          <li>Anchors re-verified against current source: <code>AddStronglyTypedIds</code> is
+          <code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:401</code>; it builds the
+          registry (<code>:405</code>), registers each wrapper&#39;s converter through
+          <code>StronglyTypedIdTypeConverters.Register</code> (<code>:408</code>), and registers the singleton through
+          <code>TryAddSingleton</code> at <code>:410</code>. Decision point 6 now carries these anchors (the Revision
+          (2026-10-21) item 5 anchors stay as recorded). <code>StronglyTypedIdRegistry.cs:22</code> still holds.</li>
+          </ol>
           
         <div class="doc-foot btn-row">
           <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
@@ -695,6 +710,7 @@
             <li><a href="#revision-2026-10-01">Revision (2026-10-01)</a></li>
             <li><a href="#revision-2026-10-06">Revision (2026-10-06)</a></li>
             <li><a href="#revision-2026-10-21">Revision (2026-10-21)</a></li>
+            <li><a href="#revision-2026-10-26">Revision (2026-10-26)</a></li>
             </ul>
           </nav>
         </aside>

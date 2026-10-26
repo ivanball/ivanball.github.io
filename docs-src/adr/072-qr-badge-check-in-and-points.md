@@ -17,6 +17,7 @@ Revised (2026-10-01): a fourth handler (the event-side batch path) raises the fe
 Revised 2026-10-06: the question award runs through `BestEffort.ExecuteAsync`, the scanner reports a non-badge QR as a skipped outcome, and a rejoin of an erased leaderboard row is refused.
 Revised 2026-10-07: anchors refreshed after the v1.233.0 release.
 Revised 2026-10-21: session check-in points are awarded once per time slot rather than once per session (a handler-side rule over a Conference schedule read, layered on the ledger index), the room self check-in response reports `EarnsPoints` and `PointsPaused` and refuses the check-in when the Conference lookup fails, an absent points entry keeps its default rather than disabling the rule, and a lost check-in insert race answers as a repeat.
+Revised 2026-10-26: the two self-service check-ins now record that they refuse an erased account and an unpublished event, a lost concurrent opt-out answers as success, the `UserDeleted` consumer also erases the attendee badge (so the display name is not the only data it reaches), the five pre-redelivery retries are exponential (1 to 30 seconds) rather than immediate, and anchors are refreshed.
 
 ## Context
 ADC wanted two conference-day capabilities that turn out to be one mechanism. Organizers want to know
@@ -88,30 +89,36 @@ the identity comes from the token, as on `/my-badge`, and the room endpoint reso
 server-side from the room plus a configured grace window rather than accepting a session id
 (`:153-154`; `CheckInSettings.RoomCheckInGraceMinutes`, 15 by default at
 `.../Engagement.Shared/CheckIns/CheckInSettings.cs:21`, read at
-`.../CheckIns/UseCases/RecordRoomCheckIn/RecordRoomCheckInHandler.cs:68`). For these rows the two
-parties are the same person, which the aggregate says outright (`CheckIn.cs:46-49`). All four POST
+`.../CheckIns/UseCases/RecordRoomCheckIn/RecordRoomCheckInHandler.cs:74`). Before any of that, both
+handlers refuse an erased account's still-valid token (`ErasedUserGuard.EnsureNotErasedAsync`,
+`RecordRoomCheckInHandler.cs:65-68`, `.../CheckIns/UseCases/RecordSponsorVisit/RecordSponsorVisitHandler.cs:58`).
+Once the session or sponsor is resolved, both refuse a check-in against an unpublished event with
+`CheckInProcessor.EventNotPublished` (`RecordRoomCheckInHandler.cs:88-89`, `RecordSponsorVisitHandler.cs:71`), which the room page shows
+as its own `NotPublished` state (`.../Engagement.UI/Pages/CheckIns/Rooms/RoomCheckIn.razor:58`).
+Badge minting applies the same erased-account guard (`GetOrCreateMyBadgeHandler.cs:40`). For these
+rows the two parties are the same person, which the aggregate says outright (`CheckIn.cs:46-49`). All four POST
 actions on the controller carry `[Idempotent]` (`:78`, `:102`, `:133`, `:168`), since a repeat already
 answers 200 and a replay says the same thing.
 
 The room response tells the attendee whether this check-in earns points
-(`RecordRoomCheckInHandler.cs:127-135`, `EarnsPoints` and `PointsPaused` at `:133-134`, documented at
+(`RecordRoomCheckInHandler.cs:133-141`, `EarnsPoints` and `PointsPaused` at `:139-140`, documented at
 `CheckInsController.cs:155-160`). `PointsPaused` is true when `Points:SessionCheckIn` is configured
 to 0 or below, and then the time-slot question is not asked and the check-in is still recorded
-(`RecordRoomCheckInHandler.cs:90-92`); an absent entry keeps the default of 10
-(`PointsSettings.cs:21`, bound without validation at
-`.../MMCA.ADC.Engagement.Service/Program.cs:128-129`). Otherwise the handler asks the shared
-time-slot rule before it writes (`RecordRoomCheckInHandler.cs:94-101`, described below) and fails
-closed: when the Conference lookup fails it returns the failure before the write (`:102-103`, the
-write at `:110-119`), so on this path the rule's Conference read can refuse a check-in, not only an
+(`RecordRoomCheckInHandler.cs:96-98`); an absent entry keeps the default of 10
+(`PointsSettings.cs:22`, bound without validation at
+`.../MMCA.ADC.Engagement.Service/Program.cs:134-135`). Otherwise the handler asks the shared
+time-slot rule before it writes (`RecordRoomCheckInHandler.cs:100-107`, described below) and fails
+closed: when the Conference lookup fails it returns the failure before the write (`:108-109`, the
+write at `:116-125`), so on this path the rule's Conference read can refuse a check-in, not only an
 award.
 
 The scan surface adapts to the head rather than branching on platform, per ADR-071:
 `ScannerAvailable => Scanner.IsSupported` (`CheckInScan.razor.cs:46`) gates the camera card
-(`CheckInScan.razor:76-100`), while the manual attendee-search panel is **always** rendered once an
-event is loaded (the loading, error and no-event states come first, `CheckInScan.razor:17-30`), because
-on a web or Windows head that search *is* the check-in surface (`CheckInScan.razor:120-125`). The scan
+(`CheckInScan.razor:78-102`), while the manual attendee-search panel is **always** rendered once an
+event is loaded (the loading, error and no-event states come first, `CheckInScan.razor:17-32`), because
+on a web or Windows head that search *is* the check-in surface (`CheckInScan.razor:122-127`). The scan
 loop does not fail on a non-badge QR: it reports it to the operator as a skipped `NotABadge` outcome
-and keeps scanning (`CheckInScan.razor.cs:206-215`, the outcome at `:212`).
+and keeps scanning (`CheckInScan.razor.cs:215-224`, the outcome at `:221`).
 
 ### One `CheckIn` aggregate carrying a scope
 `CheckInScope` is `Event = 0` / `Session = 1` / `Sponsor = 2`
@@ -128,10 +135,10 @@ in advance.
 A repeat scan is answered, not written: `CheckInProcessor.FindExistingAsync` returns the prior row and the
 processor reports `AlreadyCheckedIn = true` without a write
 (`.../Engagement.Application/CheckIns/Services/CheckInProcessor.cs:73-77`, surfaced on the DTO at
-`:168`), so no second integration event is published. A concurrent double scan that loses the insert
+`:167`), so no second integration event is published. A concurrent double scan that loses the insert
 race answers the same way: the processor catches the unique violation, re-reads the stored winner and
-reports it as already recorded, rethrowing only when no winner is found (`:96-111`, the rethrow at
-`:107-108`). Three **filtered unique indexes** are the backstop under a concurrent double scan
+reports it as already recorded, rethrowing only when no winner is found (`:95-110`, the rethrow at
+`:106-107`). Three **filtered unique indexes** are the backstop under a concurrent double scan
 (`.../EntityConfiguration/CheckIns/CheckInConfiguration.cs:49-62`): `(UserId, EventId)` filtered to `[Scope] = 0`,
 `(UserId, SessionId)` filtered to `[Scope] = 1`, and `(UserId, SponsorId)` filtered to `[Scope] = 2`
 (`:60-62`), all three also excluding soft-deleted rows. The third one is what makes a shared sponsor
@@ -156,14 +163,14 @@ carry one further rule on top of that index, enforced in handler code: once per 
 conference concept, and the record for that choice is in the interface itself (`:12-17`): the ledger is
 built so it can MOVE to MMCA.Common the day a second consumer (Store loyalty) exists, not before.
 
-- `PointsSettings` (section `"Points"`, `.../Engagement.Shared/Points/PointsSettings.cs:15-40`) carries the
+- `PointsSettings` (section `"Points"` at `:16`, `.../Engagement.Shared/Points/PointsSettings.cs:13-41`) carries the
   rule values: `EventCheckIn` 25, `SessionCheckIn` 10, `SessionFeedback` 15, `EventFeedback` 15,
-  `QuestionAsked` 5, `SponsorVisit` 20 (`:37`), `LeaderboardSize` 10 (`:40`). The deployed
+  `QuestionAsked` 5, `SponsorVisit` 20 (`:38`), `LeaderboardSize` 10 (`:41`). The deployed
   configuration restates the same seven values rather than relying on the defaults
   (`.../MMCA.ADC.Engagement.Service/appsettings.json:26-34`).
 - **Zero disables a rule.** `PointsAwarder` short-circuits on `value <= 0` and writes nothing
   (`.../Points/Services/PointsAwarder.cs:43-51`). An absent config entry does not take that path:
-  the section binds without validation (`.../MMCA.ADC.Engagement.Service/Program.cs:128-129`), so a
+  the section binds without validation (`.../MMCA.ADC.Engagement.Service/Program.cs:134-135`), so a
   missing key keeps the property default above.
 - The awarded `Points` value is snapshotted onto the entry at award time (`PointsEntry.cs:40`), so the
   ledger records what a rule was worth then.
@@ -197,9 +204,9 @@ On this award path attendance is never affected, because the row was written bef
 raised; the room self check-in below is the one path that asks the rule before writing.
 
 Room self check-in has no rule of its own: it writes an ordinary session-scoped `CheckIn` through the
-shared core (`.../CheckIns/UseCases/RecordRoomCheckIn/RecordRoomCheckInHandler.cs:110-119`, the scope
-argument at `:114`), so it earns the `SessionCheckIn` row above under the same time-slot rule, which it
-asks in advance to tell the attendee (`:94-105`).
+shared core (`.../CheckIns/UseCases/RecordRoomCheckIn/RecordRoomCheckInHandler.cs:116-125`, the scope
+argument at `:120`), so it earns the `SessionCheckIn` row above under the same time-slot rule, which it
+asks in advance to tell the attendee (`:98-112`).
 
 `AttendeeCheckedIn` (`.../Engagement.Shared/CheckIns/IntegrationEvents/AttendeeCheckedIn.cs:24-32`) is
 raised inside `CheckIn.Create` (`CheckIn.cs:112-119`), so the outbox captures it in the same transaction
@@ -207,8 +214,8 @@ as the row (ADR-003), and it carries `Scope` as a **string** (`:26`) so a new sc
 `SponsorId` proved that: it was added as an optional last parameter (`:31`), so consumers keep
 deserializing payloads that predate it. It is ADC's first broker self-consumption: the Engagement
 service both publishes and consumes it
-(`.../Services/MMCA.ADC.Engagement.Service/Program.cs:277-286` for the reasoning, `:294-297` for the
-four `RegisterIntegrationEventConsumer<T>` calls inside `AddBrokerMessaging` at `:292`).
+(`.../Services/MMCA.ADC.Engagement.Service/Program.cs:283-292` for the reasoning, `:305-308` for the
+four `RegisterIntegrationEventConsumer<T>` calls inside `AddBrokerMessaging` at `:303`).
 
 The two feedback events are new to the Conference module
 (`.../Conference.Shared/Sessions/IntegrationEvents/SessionFeedbackSubmitted.cs:20-26`,
@@ -230,20 +237,25 @@ keyed by session rather than by question (`:95`).
 ### The leaderboard is opt-in, and opting in is a row
 `LeaderboardOptIn` (`.../Engagement.Domain/Points/LeaderboardOptIn.cs:32`, `:35`) holds `UserId` and a
 `DisplayName` snapshot, resolved server-side from the caller's token claims rather than accepted from the
-request body (`SetLeaderboardParticipationHandler.cs:180-211`, the three claim lookups at `:182-184`;
+request body (`SetLeaderboardParticipationHandler.cs:190-221`, the three claim lookups at `:192-194`;
 the request carries only `Participate`, `.../Engagement.Shared/Points/SetLeaderboardParticipationRequest.cs:11`,
 dispatched at `SetLeaderboardParticipationHandler.cs:53-55`).
-Opting out soft-deletes the row (`LeaveAsync`, `:144-162`, `active.Delete()` at `:156`) and rejoining
-reactivates it (`JoinAsync`, `:62-128`, the reactivation at `:100`, the BR-135 pattern), so nobody's name is on the board without a
-live opt-in. A row whose name was erased is terminal: rejoining it returns `Forbidden`
-`Points.AccountErased` instead of reactivating (`:89-98`). A join that loses a race to a concurrent
+Opting out soft-deletes the row (`LeaveAsync`, `:143-172`, `active.Delete()` at `:155`) and rejoining
+reactivates it (`JoinAsync`, `:62-127`, the reactivation at `:99`, the BR-135 pattern), so nobody's name is on the board without a
+live opt-in. A concurrent opt-out that loses the rowversion check to an identical one is a success,
+since being off the board is what was asked (`:163-169`). A row whose name was erased is terminal: rejoining it returns `Forbidden`
+`Points.AccountErased` instead of reactivating (`:88-97`). A join that loses a race to a concurrent
 identical join (a unique-index violation on the insert path, or a concurrency conflict on the
-reactivate path) is treated as the already-on-board success (`IsLostJoinRace`, `:136-138`, catch filter
-at `:117`). Erasure is a separate, irreversible promise: `EraseDisplayName()` (`LeaderboardOptIn.cs:119-130`)
+reactivate path) is treated as the already-on-board success (`IsLostJoinRace`, `:135-137`, catch filter
+at `:116`). Erasure is a separate, irreversible promise: `EraseDisplayName()` (`LeaderboardOptIn.cs:119-130`)
 overwrites the published name in place when the account behind it is erased, and it is driven by a fourth
-broker consumer, `UserDeleted` -> `UserDeletedPointsHandler` (`Program.cs:297`, the mapping documented at
-`:266-271`, the `UserDeleted` line at `:269`), because the published name is the one piece of personal
-data the Identity-side erasure cannot reach across the database boundary (`Program.cs:273-275`). The row itself survives (anonymize-in-place,
+broker consumer, `UserDeleted` -> `UserDeletedPointsHandler` (`Program.cs:308`, the mapping documented at
+`:268-277`, the `UserDeleted` line at `:275`), because the published name lives in the Engagement
+database, beyond the reach of the Identity-side erasure. It is not the only such data: the same
+consumer also runs the bookmark, session-question, poll-vote and badge erasure handlers
+(`Program.cs:276-277`), and `UserDeletedBadgeHandler` deletes the attendee badge for the same reason,
+its per-user credential being out of Identity's reach
+(`.../CheckIns/IntegrationEventHandlers/UserDeletedBadgeHandler.cs:10-13`). The opt-in row itself survives (anonymize-in-place,
 ADR-005). `GetLeaderboard`
 (`.../Points/UseCases/GetLeaderboard/GetLeaderboardHandler.cs`) reads only opted-in users' entries
 (`:39-46`), asks the database for one grouped `SUM` per attendee rather than reading the ledger rows
@@ -278,7 +290,7 @@ which belong to the live-poll and question-upvote features rather than to this r
   **is** shareable and the argument above applies to them in full. What changed is that the exposure is
   now priced instead of avoided: the once-per-subject filtered unique index caps a leaked sponsor link at
   one award per attendee (`CheckInConfiguration.cs:60-62`), the award is a single per-sponsor grant
-  and zero-able mid-conference (`PointsSettings.cs:32-37`), each surface has its own kill switch
+  and zero-able mid-conference (`PointsSettings.cs:33-38`), each surface has its own kill switch
   (`EngagementFeatures.cs:59`, `:71`), and the row still records both parties even when they are the
   same person (`CheckIn.cs:46-49`), so a self-recorded row is identifiable as one rather than
   indistinguishable from an organizer scan. Both flags ship on
@@ -299,8 +311,8 @@ which belong to the live-poll and question-upvote features rather than to this r
   handler code (`SessionTimeSlotPoints`), whose overlap predicate is stated once and asked by both the
   award and the room response. The two callers do not share everything around it: the award lets a
   Conference NotFound stand (`AttendeeCheckedInPointsHandler.cs:104-105`) while the room path fails
-  the request on any lookup failure (`RecordRoomCheckInHandler.cs:102-103`), and the room path asks
-  at the request instant (`:100`) while the stored row takes a later clock read
+  the request on any lookup failure (`RecordRoomCheckInHandler.cs:108-109`), and the room path asks
+  at the request instant (`:106`) while the stored row takes a later clock read
   (`CheckInProcessor.cs:85`), so under concurrent check-ins the room's `EarnsPoints` is a prediction
   the eventual award can contradict. As a points rule it only ever withholds an award the index
   would otherwise allow. The index remains the arbiter for idempotency.
@@ -345,13 +357,13 @@ which belong to the live-poll and question-upvote features rather than to this r
   someone who can: `IUniqueConstraintViolationDetector`
   (`MMCA.Common.Application/Interfaces/Infrastructure/Persistence/IUniqueConstraintViolationDetector.cs:31`) is
   constructor-injected into the handlers on this surface that can lose an insert race, so `PointsAwarder`
-  (`:32`, catch filter at `:75`), `SetLeaderboardParticipationHandler` (`:35`, catch filter at `:117`,
-  the detector call at `:137`, alongside `IConcurrencyConflictDetector` at `:36`) and
-  `GetOrCreateMyBadgeHandler` (`:21`, `:54`) classify one way rather than three; other Engagement
-  handlers outside this record inject it the same way (`CreateBookmarkHandler.cs:20`,
+  (`:32`, catch filter at `:75`), `SetLeaderboardParticipationHandler` (`:35`, catch filter at `:116`,
+  the detector call at `:136`, alongside `IConcurrencyConflictDetector` at `:36`) and
+  `GetOrCreateMyBadgeHandler` (`:22`, catch filter at `:62`) classify one way rather than three; other Engagement
+  handlers outside this record inject it the same way (`CreateBookmarkHandler.cs:22`,
   `CastVoteHandler.cs:26`, `ToggleUpvoteHandler.cs:23`). The check-in write path reaches the same
   detector without injecting it: `CheckInProcessor` classifies its lost insert race through
-  `unitOfWork is IUniqueConstraintViolationDetector` (`CheckInProcessor.cs:96-97`), which MMCA.Common's
+  `unitOfWork is IUniqueConstraintViolationDetector` (`CheckInProcessor.cs:95-96`), which MMCA.Common's
   `UnitOfWork` implements (`MMCA.Common.Infrastructure/Persistence/UnitOfWork.cs:24`). The registered
   implementation walks the inner exception chain matching **SQL Server error numbers 2601 and 2627
   first** (`MMCA.Common.Infrastructure/Persistence/SqlServerUniqueConstraintViolationDetector.cs:34`,
@@ -377,10 +389,12 @@ which belong to the live-poll and question-upvote features rather than to this r
   per time slot: an attendee who moves from one overlapping talk to another is checked in to both and
   earns points for the first only. The award also takes a cross-service Conference read, so a
   Conference outage delays session awards rather than granting them: the handler throws and the
-  delivery runs MMCA.Common's bounded retry and redelivery schedule (5 immediate retries, then
-  redeliveries after 60, 600 and 3600 seconds by default,
-  `MMCA.Common.Infrastructure/Messaging/MessageBusSettings.cs:92`, `:211`), and an outage that
-  outlasts it dead-letters the award for an operator replay.
+  delivery runs MMCA.Common's bounded retry and redelivery schedule (5 in-process retries,
+  `MMCA.Common.Infrastructure/Messaging/MessageBusSettings.cs:99`, at exponential intervals from 1 to
+  30 seconds, `:106` and `:112`, then redeliveries after 60, 600
+  and 3600 seconds, the framework default at `:217` that applies when no intervals are configured
+  (`:240`) and the transport declares none of its own, as on ADC's Service Bus transport), and an
+  outage that outlasts it dead-letters the award for an operator replay.
 - **The export carries the activity as a number.** `activity_type` is an `int32` rather than a proto enum
   (`user_engagement_export.proto:77`, with the reasoning at `:71-76`), because proto3 forces a zero member
   and 0 is reserved as "unset" on the C# side, so a reader of the raw export sees `3` rather than
@@ -474,6 +488,46 @@ Rationale and Trade-offs are amended in place for it.
    `NotABadge` block `:206-215`, outcome `:212`; Engagement service `Program.cs` reasoning `:277-286`,
    `AddBrokerMessaging` `:292`, consumers `:294-297` (`UserDeleted` `:297`), mapping `:266-271`,
    erasure rationale `:273-275`; `CastVoteHandler.cs:26`, `ToggleUpvoteHandler.cs:23`.
+
+## Revision (2026-10-26)
+Re-verified against current source. The opaque credential, the scoped `CheckIn` aggregate, the
+ledger index, the once-per-time-slot rule, broker self-consumption with the same four consumers, and
+the opt-in leaderboard are unchanged; the `Points` section still binds without validation, so an
+absent entry keeps its default and 0 is the kill switch. Items 1 to 3 add facts the Decision
+omitted (item 3 also corrects its claim that the published name is the only personal data out of
+Identity's reach), and item 4 restates the Trade-offs retry and redelivery schedule.
+
+1. Both self-service check-ins refuse an erased account's still-valid token
+   (`RecordRoomCheckInHandler.cs:65-68`, `RecordSponsorVisitHandler.cs:58`) and an unpublished event
+   (`RecordRoomCheckInHandler.cs:88-89`, `RecordSponsorVisitHandler.cs:71`), the latter shown as a
+   `NotPublished` state on the room page (`Pages/CheckIns/Rooms/RoomCheckIn.razor:58`); badge minting
+   applies the same erased-account guard (`GetOrCreateMyBadgeHandler.cs:40`).
+2. `LeaveAsync` treats a concurrent opt-out that loses the rowversion check as success
+   (`SetLeaderboardParticipationHandler.cs:163-169`).
+3. The `UserDeleted` consumer runs the bookmark, session-question, poll-vote and badge erasure
+   handlers as well as the display-name one (`Program.cs:276-277`), and `UserDeletedBadgeHandler`
+   deletes the attendee badge because its credential is also beyond the Identity-side erasure
+   (`UserDeletedBadgeHandler.cs:10-13`), so the Decision no longer calls the published name the one
+   piece of personal data out of Identity's reach.
+4. The 5 retries before redelivery are in-process `UseMessageRetry` attempts at exponential
+   intervals from 1 to 30 seconds (`MessageBusSettings.cs:99`, `:106`, `:112`), not immediate ones.
+   The redelivery default of 60, 600 and 3600 seconds is now the framework default
+   (`MessageBusSettings.cs:217`) that applies when no intervals are configured (`:240`) and the
+   transport declares none; ADC's Service Bus transport declares none.
+5. Anchors re-verified against current source: Engagement service `Program.cs` points binding
+   `:134-135`, reasoning `:283-292`, `AddBrokerMessaging` `:303`, consumers `:305-308` (`UserDeleted`
+   `:308`), mapping `:268-277` (`UserDeleted` `:275`); `RecordRoomCheckInHandler.cs` grace read `:74`,
+   pause gate `:96-98`, rule `:100-107` asked at `:106`, failure `:108-109`, ask block `:98-112`, write
+   `:116-125`, scope `:120`, response `:133-141` (`EarnsPoints`/`PointsPaused` `:139-140`);
+   `CheckInProcessor.cs` race catch `:95-110`, cast `:95-96`, rethrow `:106-107`, DTO `:167`;
+   `SetLeaderboardParticipationHandler.cs` `JoinAsync` `:62-127`, `AccountErased` `:88-97`,
+   reactivation `:99`, catch filter `:116`, `IsLostJoinRace` `:135-137` (detector call `:136`),
+   `LeaveAsync` `:143-172`, `Delete` `:155`, `ResolveDisplayName` `:190-221`, claim lookups
+   `:192-194`; `CheckInScan.razor` states `:17-32`, camera card `:78-102`, manual panel `:122-127`;
+   `CheckInScan.razor.cs` `NotABadge` block `:215-224`, outcome `:221`; `PointsSettings.cs` class
+   `:13-41`, `SessionCheckIn` `:22`, `SponsorVisit` `:38` (doc `:33-38`), `LeaderboardSize` `:41`;
+   `GetOrCreateMyBadgeHandler.cs` `:22`, `:62`; `CreateBookmarkHandler.cs:22`;
+   `MessageBusSettings.cs:99`.
 
 ## Related
 [ADR-071](071-barcode-scanning-and-qr-display.md) (the framework halves this consumes: the QR component on

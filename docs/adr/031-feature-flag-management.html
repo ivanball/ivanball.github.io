@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 134 ADRs</summary>
+        <summary>All 135 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -234,6 +234,7 @@
         <li><a href="132-build-strictness-analyzer-policy.html">132 · Build Strictness: Analyzers at Error Severity, a Shared Baseline, and CI Test Floors</a></li>
         <li><a href="133-versioned-password-hash-work-factor.html">133 · Versioned Password Hash Work Factor</a></li>
         <li><a href="134-cloud-neutral-core-vendor-adapters.html">134 · Cloud-Neutral Core With Vendor Adapter Packages</a></li>
+        <li><a href="135-application-namespace-keyspace-isolation.html">135 · One Application Namespace Isolates Shared Infrastructure Keyspaces</a></li>
           </ol>
         </nav>
       </details>
@@ -258,7 +259,10 @@
           <p>Revised 2026-10-06: the CQRS disabled failure no longer names the flag; its message is the generic
           wording the edge handler uses, and clients branch on the <code>Feature.Disabled</code> code. See the Revision
           (2026-10-06) at the end. Revised 2026-10-21: anchors refreshed after the <code>DisabledFeatureHandler</code>
-          statement moved down one line.</p>
+          statement moved down one line. Revised 2026-10-26: the last Trade-offs entry now states that <code>AddAPI</code>
+          wires the targeting context unconditionally and that only the Targeting filter is sticky per user
+          (the Percentage filter is random per evaluation, so the 2026-08-18 sentence above holds for Targeting
+          only), and the flag-debt entry records that all four repos adopt the lifecycle gate.</p>
           <h2 id="context">Context</h2>
           <p>The apps need to decouple <em>release</em> from <em>deploy</em>: ship code dark, flip a kill switch, or roll a feature
           out to a percentage of users without a redeploy. A flag has to be enforceable at <strong>two</strong> different points
@@ -317,13 +321,23 @@
           <li><strong>Flag debt.</strong> Every flag is a branch that must eventually be removed. The framework now ships the
           expiry check it used to lack (<code>[FeatureFlag]</code> plus two fitness rules; see the Revision (2026-09-11)),
           but the gate is adopted per repo: a repo that has not subclassed <code>FeatureFlagLifecycleTestsBase</code>
-          still carries its flag debt uncounted.</li>
+          still carries its flag debt uncounted. All four repos (Common, ADC, Store, Helpdesk) currently
+          subclass it.</li>
           <li><strong>Per-service configuration.</strong> The same flag name must be present in each service that enforces it. A
           missing key resolves to <strong>disabled</strong> (<code>IsEnabledAsync</code>&#39;s default): fail-safe for a kill switch, but it
           will silently hide a feature you meant to ship if the key is forgotten.</li>
-          <li><strong>Rollout state is per instance unless a context is wired.</strong> Percentage/Targeting bucketing is
-          evaluated locally, so consistent assignment across replicas/users needs a deliberate targeting context;
-          out of the box the rollout is per-process.</li>
+          <li><strong>Only the Targeting filter is sticky per user.</strong> Filters are evaluated locally in each process.
+          <code>AddAPI</code> registers <code>CurrentUserTargetingContextAccessor</code> through <code>WithTargeting</code> unconditionally
+          (<code>MMCA.Common.API/DependencyInjection.cs:105-106</code>), so in a host that goes through <code>AddAPI</code> a
+          Targeting-filter rollout gives a signed-in user the same answer across requests and replicas, keyed
+          on the targeting id: the <code>sub</code> (or mapped <code>NameIdentifier</code>) claim, falling back to <code>Identity.Name</code>
+          when a principal carries neither (<code>MMCA.Common.API/FeatureManagement/CurrentUserTargetingContextAccessor.cs:86</code>).
+          An anonymous caller gets an empty context (no user id, no groups, <code>:67-74</code>), so it matches no named
+          user or group; the accessor documents a targeted feature as off for anonymous callers unless the
+          audience opts everyone in (<code>:27-28</code>). The built-in <strong>Percentage</strong> filter never reads the targeting
+          context: it activates on a random percentage at each evaluation, so a Percentage-filter flag can
+          flip between requests for the same user. A rollout that must be sticky uses Targeting with a
+          <code>DefaultRolloutPercentage</code>, not Percentage.</li>
           </ul>
           <h2 id="revision-2026-08-18">Revision (2026-08-18)</h2>
           <p><strong>Progressive rollout is now usable, because the targeting context exists.</strong> The Decision above listed
@@ -452,6 +466,43 @@
           <code>HandleFailure</code>&#39;s body at <code>ApiControllerBase.cs:50-58</code> and <code>BuildErrorsExtension</code> at
           <code>ErrorHttpMapping.cs:62-70</code> are unchanged.</li>
           </ol>
+          <h2 id="revision-2026-10-26">Revision (2026-10-26)</h2>
+          <p>Re-verified against current source. The decision is unchanged: both surfaces answer <code>404</code>, the edge
+          writes its own &quot;Feature not available&quot; ProblemDetails, and both decorators return the generic
+          <code>Feature.Disabled</code> failure. Two live Trade-offs entries moved to match source.</p>
+          <ol>
+          <li><strong>The rollout trade-off no longer says &quot;per-process out of the box&quot;.</strong> The Status recorded in
+          2026-08-18 that the last Trade-offs entry was narrowed, but only that Revision qualified it; the
+          entry itself still said the rollout is per-process out of the box. <code>AddAPI</code> calls
+          <code>AddFeatureManagement().WithTargeting&lt;CurrentUserTargetingContextAccessor&gt;()</code> unconditionally
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/DependencyInjection.cs:105-106</code>, preceded by
+          <code>AddHttpContextAccessor()</code> at <code>:104</code>), so the entry now states the residual limits instead. The
+          per-user stickiness belongs to the Targeting filter alone: the built-in Percentage filter never
+          reads the targeting context and activates &quot;based on a random percentage&quot; on each evaluation
+          (<code>Microsoft.FeatureManagement</code> 4.8.0, pinned at <code>MMCA.Common/Directory.Packages.props:32</code>), so the
+          Status sentence of 2026-08-18 (&quot;the built-in Targeting and Percentage filters give consistent
+          per-user bucketing&quot;) holds for Targeting only. The targeting id is the <code>sub</code> claim falling back
+          to <code>Identity.Name</code>
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/FeatureManagement/CurrentUserTargetingContextAccessor.cs:86</code>),
+          and an anonymous caller gets an empty context (<code>:67-74</code>), which the accessor documents as leaving
+          a targeted feature off unless the audience opts everyone in (<code>:27-28</code>).</li>
+          <li><strong>The lifecycle gate is adopted in all four repos.</strong> <code>FeatureFlagLifecycleTestsBase</code> is subclassed
+          in <code>MMCA.Common/Tests/Architecture/MMCA.Common.Architecture.Tests/Governance/FeatureFlagLifecycleTests.cs:13</code>,
+          <code>MMCA.ADC/Tests/Architecture/MMCA.ADC.Architecture.Tests/Governance/FeatureFlagLifecycleTests.cs:9</code>,
+          <code>MMCA.Store/Tests/Architecture/MMCA.Store.Architecture.Tests/Governance/FeatureFlagLifecycleTests.cs:9</code>
+          and <code>MMCA.Helpdesk/Tests/Architecture/MMCA.Helpdesk.Architecture.Tests/ArchitectureTests.cs:210</code>.
+          Adoption stays per repo; the flag-debt entry now records the current state.</li>
+          <li>Anchors re-verified against current source: the decorators&#39; <code>IFeatureManager</code> parameter at
+          <code>FeatureGateCommandDecorator.cs:22</code> and <code>FeatureGateQueryDecorator.cs:22</code>, <code>IsEnabledAsync</code> at
+          <code>:53</code> in both, and <code>Error.NotFoundError</code> at <code>FeatureGateCommandDecorator.cs:60-62</code> and
+          <code>FeatureGateQueryDecorator.cs:59-61</code>; <code>DisabledFeatureHandler.cs:19-27</code> with Title at <code>:22</code> and
+          Detail at <code>:23</code> (the <code>:22</code> Detail anchor in the Revision (2026-10-06) is superseded by this one);
+          <code>AuthClaimTypes.Subject</code> at <code>AuthClaimTypes.cs:34</code>; <code>BuildErrorsExtension</code> at
+          <code>ErrorHttpMapping.cs:62</code>; the <code>AddAPI</code> registration at <code>DependencyInjection.cs:105-107</code>. The stale
+          anchors inside the Revisions (2026-08-18) and (2026-10-01) stay as written, as does the <code>:22</code>
+          Detail anchor in the Revision (2026-10-06) superseded above; the rest of the Revision (2026-10-06)
+          and the Revision (2026-10-21) carry current locations.</li>
+          </ol>
           
         <div class="doc-foot btn-row">
           <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
@@ -473,6 +524,7 @@
             <li><a href="#revision-2026-10-01">Revision (2026-10-01)</a></li>
             <li><a href="#revision-2026-10-06">Revision (2026-10-06)</a></li>
             <li><a href="#revision-2026-10-21">Revision (2026-10-21)</a></li>
+            <li><a href="#revision-2026-10-26">Revision (2026-10-26)</a></li>
             </ul>
           </nav>
         </aside>

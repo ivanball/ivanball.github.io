@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 134 ADRs</summary>
+        <summary>All 135 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -234,6 +234,7 @@
         <li><a href="132-build-strictness-analyzer-policy.html">132 · Build Strictness: Analyzers at Error Severity, a Shared Baseline, and CI Test Floors</a></li>
         <li><a href="133-versioned-password-hash-work-factor.html">133 · Versioned Password Hash Work Factor</a></li>
         <li><a href="134-cloud-neutral-core-vendor-adapters.html">134 · Cloud-Neutral Core With Vendor Adapter Packages</a></li>
+        <li><a href="135-application-namespace-keyspace-isolation.html">135 · One Application Namespace Isolates Shared Infrastructure Keyspaces</a></li>
           </ol>
         </nav>
       </details>
@@ -255,7 +256,8 @@
           Revised 2026-10-01 (retention has no fallback: without the scheduler nothing is purged; see Revision below).
           Revised 2026-10-06: inserts and deletes write one summary row, a store-generated key is fixed up by an <code>UPDATE</code> after the save, and ADC&#39;s trail-DML auditing therefore fires on routine inserts too.
           Revised 2026-10-07: the key fix-up issues one filtered <code>UPDATE</code> per pending row rather than one statement covering all of them, <code>AuditTrailSettings</code> also carries <code>DataSource</code> (the engine the reader queries), and anchors are refreshed after the v1.233.0 release.
-          Revised 2026-10-21: redaction also covers <code>[Sensitive]</code> properties, <code>IAuthUser</code> credentials and encrypted columns, the reverse <code>[Pii]</code> rule lives in the shared <code>PiiConventionTestsBase</code> that Store, ADC and Helpdesk subclass, a fixed-up key equal to the captured one skips its <code>UPDATE</code>, and anchors are refreshed.</p>
+          Revised 2026-10-21: redaction also covers <code>[Sensitive]</code> properties, <code>IAuthUser</code> credentials and encrypted columns, the reverse <code>[Pii]</code> rule lives in the shared <code>PiiConventionTestsBase</code> that Store, ADC and Helpdesk subclass, a fixed-up key equal to the captured one skips its <code>UPDATE</code>, and anchors are refreshed.
+          Revised 2026-10-26: the key fix-up writes the resolved key to the tracked trail row after each <code>UPDATE</code> and syncs its snapshot so that write is not saved again, and the reader and interceptor anchors are refreshed.</p>
           <h2 id="context">Context</h2>
           <p>The framework already answers &quot;who touched this row last&quot;. Every <code>AuditableBaseEntity</code> carries
           <code>CreatedOn/By</code> and <code>LastModifiedOn/By</code>, stamped by <code>AuditSaveChangesInterceptor</code> on the way into
@@ -321,11 +323,16 @@
           exception: an inserted entity with a store-generated key has only a temporary key at capture, so after
           the save the interceptor rewrites that row&#39;s <code>EntityKey</code> (<code>:302-304</code>): it loops over the pending rows and
           issues one <code>UPDATE</code> per row, filtered by that row&#39;s <code>Id</code>, as <code>ExecuteUpdateAsync</code> on the async save path
-          (<code>:522-537</code>, <code>:531-533</code>) and <code>ExecuteUpdate</code> on the sync one (<code>:565-567</code>). A row whose resolved key
-          already equals the captured one is skipped (<code>:525-528</code>, <code>:559-562</code>), so an audited save inserting N such
-          entities adds at most N <code>UPDATE</code> statements. Each joins the ambient transaction when one is open;
+          (<code>:523-538</code>, <code>:532-535</code>) and <code>ExecuteUpdate</code> on the sync one (<code>:566-568</code>). A row whose resolved key
+          already equals the captured one is skipped (<code>:525-529</code>, <code>:559-563</code>), so an audited save inserting N such
+          entities adds at most N <code>UPDATE</code> statements. Each of those statements joins the ambient transaction
+          when one is open;
           without one it commits after the data save, so a crash in that window leaves the row holding the
-          temporary key.</p>
+          temporary key. After each <code>UPDATE</code> the interceptor writes the resolved key to the tracked
+          <code>AuditTrailEntry</code>, so the in-memory instance matches the stored row, and sets that property&#39;s original
+          value and clears its modified flag, so the in-memory write is not itself saved again by a later save on
+          the same context (<code>SyncTrackedKey</code>, called at <code>:537</code> and <code>:570</code>, method <code>:580</code>, the write and snapshot
+          at <code>:583-585</code>).</p>
           <p>Two mechanics are copied verbatim from <code>DomainEventSaveChangesInterceptor</code>:</p>
           <ul>
           <li><strong>A <code>DiscardAbandonedCapture</code> equivalent.</strong> <code>EnableRetryOnFailure</code> re-runs <code>SavingChanges</code> against a
@@ -337,11 +344,12 @@
           <h3 id="pii-is-redacted-at-capture-never-at-read">PII is redacted at capture, never at read</h3>
           <p>A redacted property records <code>PiiRedactor.RedactedToken</code>
           (<code>MMCA.Common/Source/Core/MMCA.Common.Domain/Privacy/PiiRedactor.cs:27</code>, the class at <code>:24</code>) for both the
-          old and the new value. Four things are redacted (<code>AuditTrailSaveChangesInterceptor.cs:636-639</code>, the same
-          check on the scalar and the owned path): a property carrying <code>[Pii]</code>, a property carrying <code>[Sensitive]</code>,
-          the credential members of an entity implementing <code>IAuthUser</code>, found through the interface map with no
-          marker needed (<code>:668-691</code>), and any column mapped through <code>EncryptedStringConverter</code>, which reaches the
-          interceptor as decrypted plaintext and is redacted with no attribute needed (<code>:639</code>; class doc
+          old and the new value. Four things are redacted (<code>AuditTrailSaveChangesInterceptor.cs:637-640</code>, the same
+          check on the scalar and the owned path, <code>:340</code> and <code>:412</code>): a property carrying <code>[Pii]</code>, a property
+          carrying <code>[Sensitive]</code>, the credential members of an entity implementing <code>IAuthUser</code>, found through the
+          interface map with no marker needed (<code>:669-692</code>), and any column mapped through
+          <code>EncryptedStringConverter</code>, which reaches the interceptor as decrypted plaintext and is redacted with
+          no attribute needed (<code>:640</code>; class doc
           <code>:49-59</code>). The trail stores the fact that a personal or secret field changed, and never its contents.
           Redacting on the way out instead would leave clear-text personal data at rest in a store that by
           construction survives the erasure of the row it describes.</p>
@@ -352,7 +360,7 @@
           bounded <code>[Range(1, 3650)]</code>, and <code>DataSource</code> default <code>SQLServer</code>, the engine whose <code>Default</code> database
           the reader queries;
           <code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/AuditTrail/AuditTrailSettings.cs:26</code>,
-          <code>:37-38</code>, <code>:46</code>; consumed at <code>AuditTrailReader.cs:53</code>) through the ADR-070 fail-fast chain, which runs
+          <code>:37-38</code>, <code>:46</code>; captured at <code>AuditTrailReader.cs:45</code> and consumed at <code>:67</code>) through the ADR-070 fail-fast chain, which runs
           <code>ValidateDataAnnotations</code> plus <code>ValidateOnStart</code> (<code>DependencyInjection.Jobs.cs:110-113</code>). Cosmos is
           documented as unsupported for <code>DataSource</code> (<code>AuditTrailSettings.cs:44</code>) but not validated: the property
           carries no validation attribute (<code>:46</code>). <code>AddAuditTrail(configuration)</code>
@@ -621,6 +629,31 @@
           <code>:565-567</code>; <code>PiiRedactor.cs</code> class <code>:24</code>, token <code>:27</code>. The bicep anchors in the dated revisions above
           are left as recorded.</li>
           </ol>
+          <h2 id="revision-2026-10-26-the-tracked-key-sync-and-current-anchors">Revision (2026-10-26): the tracked key sync, and current anchors</h2>
+          <p>Re-verified against current source. The interceptor ordering, the same-transaction capture, the row
+          shape, the per-row key fix-up and its skip rule, the redaction rule, the opt-in gates, the Cosmos skip
+          and both apps&#39; SQL-auditing content are unchanged. What moved is one omitted capture detail and the
+          anchors.</p>
+          <ol>
+          <li><strong>The key fix-up also syncs the tracked trail row.</strong> After each per-row <code>UPDATE</code>, <code>SyncTrackedKey</code>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/AuditTrail/AuditTrailSaveChangesInterceptor.cs:580</code>,
+          doc <code>:574-579</code>, called at <code>:537</code> and <code>:570</code>) writes the resolved key to the tracked
+          <code>AuditTrailEntry</code> (<code>:583</code>), so the in-memory instance matches the stored row, then sets its original
+          value and clears <code>IsModified</code> (<code>:584-585</code>), so that write is not itself saved again by a later save
+          on the same context. The Decision now says so.</li>
+          <li>Anchors re-verified against current source: <code>AuditTrailSaveChangesInterceptor.cs</code> <code>IsRedacted</code>
+          <code>:637-640</code> (called at <code>:340</code> scalar and <code>:412</code> owned), <code>EncryptedStringConverter</code> check <code>:640</code>,
+          <code>CredentialPropertyNames</code> <code>:669-692</code>, class doc <code>:49-59</code>, <code>ResolveGeneratedKeysAsync</code> loop
+          <code>:523-538</code> with the <code>ExecuteUpdateAsync</code> statement <code>:532-535</code>, the sync <code>ExecuteUpdate</code> statement
+          <code>:566-568</code>, key-skip <code>:525-529</code> and <code>:559-563</code> (the 2026-10-21 list&#39;s <code>:522-537</code>, <code>:565-567</code>,
+          <code>:636-639</code> and <code>:668-691</code> moved down one line; its
+          <code>ExecuteUpdateAsync</code> <code>:531-533</code> moved down one line and now also spans the <code>.ConfigureAwait(false)</code>
+          line <code>:535</code>; its key-skip <code>:525-528</code> and <code>:559-562</code> cited only the <code>if</code> blocks, now at <code>:526-529</code> and
+          <code>:560-563</code>, and the new ranges also take in the <code>resolvedKey</code> line <code>:525</code> and <code>:559</code> that the
+          comparison reads); <code>AuditTrailReader.cs</code> settings captured
+          <code>:45</code>, <code>DataSource</code> consumed <code>:67</code> (the earlier <code>:53</code> is a method parameter). The anchors in the
+          dated revisions above, including the bicep ones, are left as recorded.</li>
+          </ol>
           <h2 id="related">Related</h2>
           <p><a href="003-outbox-dual-dispatch.html">ADR-003</a> (the same-transaction write this copies wholesale, including the
           retry-discard and the <code>Add</code>-only mutation rule),
@@ -655,6 +688,7 @@
             <li><a href="#revision-2026-10-06-row-shape-the-key-fix-up-and-current-anchors">Revision (2026-10-06): row shape, the key fix-up, and current anchors</a></li>
             <li><a href="#revision-2026-10-07-per-row-key-fix-up-the-readers-data-source-and-current-anchors">Revision (2026-10-07): per-row key fix-up, the reader&#39;s data source, and current anchors</a></li>
             <li><a href="#revision-2026-10-21-wider-redaction-the-shared-reverse-pii-rule-and-current-anchors">Revision (2026-10-21): wider redaction, the shared reverse [Pii] rule, and current anchors</a></li>
+            <li><a href="#revision-2026-10-26-the-tracked-key-sync-and-current-anchors">Revision (2026-10-26): the tracked key sync, and current anchors</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

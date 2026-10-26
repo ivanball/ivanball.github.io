@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 134 ADRs</summary>
+        <summary>All 135 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -234,6 +234,7 @@
         <li><a href="132-build-strictness-analyzer-policy.html">132 · Build Strictness: Analyzers at Error Severity, a Shared Baseline, and CI Test Floors</a></li>
         <li><a href="133-versioned-password-hash-work-factor.html">133 · Versioned Password Hash Work Factor</a></li>
         <li><a href="134-cloud-neutral-core-vendor-adapters.html">134 · Cloud-Neutral Core With Vendor Adapter Packages</a></li>
+        <li><a href="135-application-namespace-keyspace-isolation.html">135 · One Application Namespace Isolates Shared Infrastructure Keyspaces</a></li>
           </ol>
         </nav>
       </details>
@@ -251,7 +252,8 @@
           Revised 2026-10-21: anchors refreshed after the releases that moved the device controller, the
           registration service and the registrar.
           Revised 2026-10-24: the Notification Hubs sender and registrar moved to MMCA.Common.Azure, registered by <code>AddAzureNotificationHubsPush</code> (<a href="134-cloud-neutral-core-vendor-adapters.html">ADR-134</a>); see Revision (2026-10-24).
-          Revised 2026-10-25: two more delivery adapters ship, SNS mobile push over a DynamoDB registry (MMCA.Common.Aws) and FCM HTTP v1 over a Firestore registry (MMCA.Common.Gcp), and the payload builders moved into the core; see Revision (2026-10-25).</p>
+          Revised 2026-10-25: two more delivery adapters ship, SNS mobile push over a DynamoDB registry (MMCA.Common.Aws) and FCM HTTP v1 over a Firestore registry (MMCA.Common.Gcp), and the payload builders moved into the core; see Revision (2026-10-25).
+          Revised 2026-10-26: anchors refreshed after the releases that moved the SNS sender and registrar and the core payload builders.</p>
           <h2 id="context">Context</h2>
           <p>ADR-024 established two notification channels: a durable per-user <code>UserNotification</code> inbox (the
           source of truth) and a transient SignalR push behind <code>IPushNotificationSender</code>. Both stop at the
@@ -286,9 +288,9 @@
           <code>.../MMCA.Common.Aws/Notifications/SnsInstallationRegistry.cs:29</code>). The ownership and handover
           rule is one conditional write, <code>attribute_not_exists(InstallationId) OR UserId = :me OR PushChannel = :channel</code> (<code>SnsInstallationRegistry.cs:36</code>, applied at <code>:97</code>), so it holds under
           concurrency without a lock. A broadcast is one publish to the topic every endpoint subscribes
-          to (<code>Notifications/SnsPushDeviceRegistrar.cs:140-143</code>, <code>Notifications/SnsNativePushSender.cs:65-74</code>),
+          to (<code>Notifications/SnsPushDeviceRegistrar.cs:157-167</code>, <code>Notifications/SnsNativePushSender.cs:73-80</code>),
           and an endpoint SNS reports disabled or missing is removed with its row on send
-          (<code>SnsNativePushSender.cs:93-96</code>).</li>
+          (<code>SnsNativePushSender.cs:99-102</code>).</li>
           <li><strong>Google FCM HTTP v1</strong>, <code>AddFirebaseCloudMessagingPush(configuration)</code>
           (<code>MMCA.Common/Source/Hosting/MMCA.Common.Gcp/GcpServiceCollectionExtensions.cs:142</code>), gated on
           <code>NativePush:Fcm</code> carrying <code>ProjectId</code>, <code>InstallationsCollection</code> and <code>BroadcastTopic</code>
@@ -318,7 +320,7 @@
           at a time, <code>FirestoreInstallationRegistry.cs:23</code>).</li>
           <li><strong>One payload shape in the core.</strong> <code>NativePushPayloads.BuildFcmV1Payload</code> and <code>BuildApnsPayload</code>
           are public in <code>MMCA.Common.Infrastructure.Notifications.Push</code>
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Notifications/Push/NativePushPayloads.cs:11,18,40</code>),
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Notifications/Push/NativePushPayloads.cs:13,20,42</code>),
           called by the Notification Hubs sender
           (<code>MMCA.Common/Source/Hosting/MMCA.Common.Azure/Notifications/AzureNotificationHubNativePushSender.cs:22-23</code>)
           and the SNS message builder
@@ -496,6 +498,21 @@
           delete and channel handover through the DynamoDB condition and the Firestore transaction
           (<code>AwsServiceCollectionExtensions.cs:134-136</code>, <code>GcpServiceCollectionExtensions.cs:113-115</code>).</li>
           </ol>
+          <h2 id="revision-2026-10-26">Revision (2026-10-26)</h2>
+          <p>Re-verified against current source. The decision is unchanged: three delivery adapters, the
+          Null-by-default sender and registrar, the <code>NativePush:Enabled</code> gate, and one payload shape in the
+          core. Only anchors in the live sections moved.</p>
+          <ol>
+          <li>Anchors re-verified against current source: the SNS broadcast topic subscription is
+          <code>MMCA.Common/Source/Hosting/MMCA.Common.Aws/Notifications/SnsPushDeviceRegistrar.cs:157-167</code>
+          (<code>TopicArn = options.Value.BroadcastTopicArn</code> at <code>:162</code>); the single broadcast publish is
+          <code>Notifications/SnsNativePushSender.cs:73-80</code> inside <code>BroadcastAsync</code> (<code>:71</code>); the disabled or
+          missing endpoint pruning is <code>SnsNativePushSender.cs:99-102</code>; and <code>NativePushPayloads</code>,
+          <code>BuildFcmV1Payload</code> and <code>BuildApnsPayload</code> are
+          <code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Notifications/Push/NativePushPayloads.cs:13,20,42</code>.
+          The <code>AddMauiPushDeviceTokenProvider()</code> anchor inside the 2026-10-01 revision is left as recorded;
+          the live Decision already cites <code>MMCA.Common.UI.Maui/DependencyInjection.cs:124-132</code>.</li>
+          </ol>
           
         <div class="doc-foot btn-row">
           <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
@@ -516,6 +533,7 @@
             <li><a href="#revision-2026-10-21">Revision (2026-10-21)</a></li>
             <li><a href="#revision-2026-10-24">Revision (2026-10-24)</a></li>
             <li><a href="#revision-2026-10-25">Revision (2026-10-25)</a></li>
+            <li><a href="#revision-2026-10-26">Revision (2026-10-26)</a></li>
             </ul>
           </nav>
         </aside>

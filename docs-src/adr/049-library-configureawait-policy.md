@@ -2,7 +2,8 @@
 
 ## Status
 Accepted (2026-07-20; measurements re-anchored 2026-08-07, 2026-08-14, 2026-08-18, 2026-08-23,
-2026-08-31, 2026-09-01, 2026-09-03, 2026-09-11, 2026-09-19, 2026-10-01, 2026-10-06, 2026-10-07 and 2026-10-21).
+2026-08-31, 2026-09-01, 2026-09-03, 2026-09-11, 2026-09-19, 2026-10-01, 2026-10-06, 2026-10-07, 2026-10-21 and
+2026-10-26).
 Revised 2026-09-19: the framework site counts and the consumer-scale upper bound are re-measured, and
 the occurrence-versus-line delta still turns on the same two ADC handler lines. The policy, the gate
 and the exemption are unchanged.
@@ -14,6 +15,9 @@ Revised 2026-10-07: the consumer-scale figure is re-measured after ADC growth (A
 Revised 2026-10-21: the framework site counts (1,331, 163 exempt) and the consumer-scale upper bound
 (2,211 combined) are re-measured, Store now carries one double-await line, and the "324 sites at
 adoption" figure is restated as the calls the adoption commit added.
+Revised 2026-10-26: the framework site counts (1,416, 163 exempt, 1,253 gated) and the
+consumer-scale upper bound (2,256 combined) are re-measured, and the `Directory.Build.props`
+`NoWarn`, `ServerTokenStorageService` and `SubmitQuestionHandler` anchors are refreshed.
 
 ## Context
 MMCA.Common ships as NuGet packages consumed by host applications, not as an application itself.
@@ -62,8 +66,8 @@ application code do not.
 - **Standard .NET library guidance, applied at the boundary where it holds.** The rule is scoped to
   exactly the code that ships in packages; it is not blanket-applied to the apps, where it would be
   360+ sites of pure noise (measured across Store/ADC before this decision, and the current scale is
-  far past that: a raw `\bawait\b` scan of `*.cs` on 2026-10-21 counts 736 occurrences in
-  `MMCA.Store/Source` and 1,475 in `MMCA.ADC/Source`, 2,211 combined, which is the upper bound on the
+  far past that: a raw `\bawait\b` scan of `*.cs` on 2026-10-26 counts 736 occurrences in
+  `MMCA.Store/Source` and 1,520 in `MMCA.ADC/Source`, 2,256 combined, which is the upper bound on the
   CA2007 sites the rule would open there).
 - **Mechanical, with the enforcement and the remediation at different levels.** The build gate is the
   enforced half: a new context-capturing await in packaged non-UI code fails the build, so it costs no
@@ -74,7 +78,7 @@ application code do not.
 ## Trade-offs
 - **Visual noise in framework source.** Every await in `Source/` (except UI packages) carries
   `.ConfigureAwait(false)` (the adoption commit added 324 calls, bringing the gated total to 537;
-  1,168 gated sites as of the 2026-10-21 snapshot, out of 1,331 across `Source/` once the 163 calls
+  1,253 gated sites as of the 2026-10-26 snapshot, out of 1,416 across `Source/` once the 163 calls
   in the exempt UI packages are counted back in).
   The gate makes it uniform, so the noise is consistent rather than sporadic.
 - **A per-repo delta in an otherwise shared analyzer baseline.** The workspace keeps one
@@ -627,3 +631,46 @@ counts are taken at MMCA.Common `main` `9ac4c41e`, Store at `main` `d375ab74`, A
    remediation examples sit at `Website/docs-src/guides/common-GETTING-STARTED.md:190` and
    `MMCA.Helpdesk/build/templates/stage.ps1:1247`; a per-repo search of MMCA.Common, MMCA.Store,
    MMCA.ADC, MMCA.Helpdesk and Website finds `--diagnostics CA2007` nowhere outside this ADR.
+
+## Revision (2026-10-26)
+Re-verified against current source. The policy, the `[Source/**.cs]` gate and the
+`[Source/Presentation/MMCA.Common.UI*/**.cs]` exemption are unchanged. What moved is both counted
+figures and seven anchors across three files. Framework counts are taken at MMCA.Common `main` `4910c13c`; consumer
+counts at `origin/main`, ADC `be6114eb` and Store `b1c51b43` (the local ADC and Store checkouts were
+one commit behind; Store's counts are identical at both refs).
+
+1. **Framework site counts.** `MMCA.Common/Source/**/*.cs` holds 1,416 `ConfigureAwait(false)`
+   occurrences across 258 files (1,416 matching lines, so no line carries two), of which 163 sit
+   inside the exempt UI packages across 43 files (`MMCA.Common.UI` 82 across 20 files,
+   `MMCA.Common.UI.Maui` 57 across 19, `MMCA.Common.UI.Web` 24 across 4, per-file split unchanged:
+   `SameOriginApiProxyEndpoint.cs` 15, `SameOriginProxyTransformer.cs` 5,
+   `ServerTokenStorageService.cs` 3, `SessionHandoffEndpoints.cs` 1), leaving 1,253 under the gate
+   across 215 files. The exempt split is identical to 2026-10-21, so the net growth of 85
+   occurrences and 14 files is all in gated code (the diff from `9ac4c41e` adds or removes no
+   `ConfigureAwait(false)` line inside the exempt packages). The Trade-offs entry now carries these figures.
+2. **Consumer-scale upper bound.** A raw `\bawait\b` scan of `*.cs` gives 736 occurrences (735
+   matching lines) across 141 files in `MMCA.Store/Source` and 1,520 occurrences (1,518 lines) across
+   302 files in `MMCA.ADC/Source`, 2,256 occurrences (2,253 lines) combined. The Rationale now
+   carries the occurrence figures. Raw `await` still overcounts CA2007 sites, so this remains an
+   upper bound.
+3. **The double-await set is unchanged; one of its anchors moved.** The same three lines carry two
+   `await` tokens:
+   `MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Infrastructure/Payments/Stripe/StripeWebhookRegistrationService.cs:143`,
+   `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Sessions/UseCases/DecisionSupport/ScoreEventSessions/ScoreEventSessionsInternalCommandHandler.cs:83`
+   and
+   `MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Application/SessionQuestions/UseCases/Submit/SubmitQuestionHandler.cs:149`
+   (previously `:153`). `SubmitQuestionHandler.cs` still reports 10 matching lines and 11 `await`
+   tokens.
+4. **Anchors re-verified against current source:** `TreatWarningsAsErrors` at
+   `MMCA.Common/Directory.Build.props:7`, `CodeAnalysisTreatWarningsAsErrors` at `:13`, and the three
+   `NoWarn` lists at `:30`, `:40` and `:46` (previously `:30`, `:57` and `:63`; none naming CA2007);
+   the `ServerTokenStorageService` declaration at
+   `MMCA.Common/Source/Presentation/MMCA.Common.UI.Web/Services/ServerTokenStorageService.cs:47`
+   (previously `:44`), with its three `ConfigureAwait(false)` calls at `:137`, `:216` and `:223`
+   (previously `:124`, `:196` and `:202`). Unchanged: the shared-baseline `CA2007` `none` at
+   `MMCA.Common/.editorconfig:348`, the marker at `:821-824`, the rationale comment block at
+   `:827-833`, the gate at `:834-835`, the exemption at `:837-838` and the S8969/S8970 block from
+   `:840`; `Tools/Scripts/compare-analyzer-config.ps1:26-28` still slices only the lines before the
+   marker; the SA1210/SA1211 remediation examples at
+   `Website/docs-src/guides/common-GETTING-STARTED.md:190` and
+   `MMCA.Helpdesk/build/templates/stage.ps1:1247`.

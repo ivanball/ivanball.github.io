@@ -8,11 +8,12 @@ Revised 2026-09-10 (the security-headers suite reaches both UI web hosts) and 20
 Revised 2026-10-06: the consumers' lockstep `MMCA.Common.Shared` pin is now 1.232.0 and this Status block lists every Revision section; see the Revision (2026-10-06) below.
 Revised 2026-10-07: the consumers' lockstep `MMCA.Common.Shared` pin is now 1.233.0 and the ADC pin anchor moved to `Directory.Packages.props:101`; see the Revision (2026-10-07) below.
 Revised 2026-10-21: the OpenAPI base gains an opt-in committed-baseline breaking-change diff that all seven OpenAPI subclasses adopt, the decorator pipeline is now sealed against late registration through the framework helpers, the lockstep pin is 1.250.0, and anchors are refreshed; see the Revision (2026-10-21) below.
+Revised 2026-10-26: anchors refreshed after the v1.261.0 consumer sweep (the lockstep `MMCA.Common.Shared` pin is now 1.261.0 and the ADC pin anchor moved to `Directory.Packages.props:108`), with the `MiddlewarePipelineOrderTestsBase` and ADR-015 / ADR-046 cross-reference anchors re-pointed; see the Revision (2026-10-26) below.
 
 ## Context
 ADR-015 turned the architecture invariants into build-gating tests, and drew its own boundary
 explicitly: the fitness suite asserts "**structure / registration**, not runtime behavior"
-(`015-architecture-fitness-functions.md:95`). NetArchTest can prove a controller lives in the right
+(`015-architecture-fitness-functions.md:118`). NetArchTest can prove a controller lives in the right
 assembly and that an outbound client *wires* resilience. It cannot prove that a booted host answers a
 bad page number with an RFC 9457 problem document, emits HSTS on a liveness probe, drains within a
 bounded stop, serves the OpenAPI document it claims to serve, answers two API versions, or nests the
@@ -21,7 +22,7 @@ one of them is only true if the consuming host wired it correctly: the framework
 the controller base, and the decorator registrations, but the host composes them.
 
 The gap is visible in the ADR set. ADR-046 names exactly one of these checks (a "shared
-fitness contract" for versioning, one Decision bullet at `046-http-api-versioning.md:99`), and ADR-013 defines the RFC 9457
+fitness contract" for versioning, one Decision bullet at `046-http-api-versioning.md:100`), and ADR-013 defines the RFC 9457
 edge contract that another one guards, but neither decides the layer itself. The runtime-conformance
 tier has been referenced repeatedly and never recorded on its own.
 
@@ -212,7 +213,7 @@ aggregate by the seed's own `AddEntityCrud` wiring, and the module's hand-writte
 project import the `MMCA.Common.Testing.Conformance` namespace, and only one of them belongs to this
 record: that decorator subclass (`:13`). The other, `MiddlewarePipelineOrderTests.cs` (`:1`), is a
 one-line subclass of `MiddlewarePipelineOrderTestsBase`
-(`MMCA.Common/Source/Hosting/MMCA.Common.Testing/Conformance/MiddlewarePipelineOrderTestsBase.cs:29`,
+(`MMCA.Common/Source/Hosting/MMCA.Common.Testing/Conformance/MiddlewarePipelineOrderTestsBase.cs:31`,
 `MMCA.Helpdesk/Tests/Architecture/MMCA.Helpdesk.Architecture.Tests/MiddlewarePipelineOrderTests.cs:15`)
 guarding the ADR-079 shared HTTP edge-pipeline order, not one of the seven contract bases above.
 The package reference the domain-test project
@@ -486,6 +487,25 @@ reach, the decorator registration it protects, the pin, and the anchors.
    `:38` with its generic arguments `:40-43` (the `:13` namespace import and the ADC and Store `:29`
    classes are unchanged); and the cross-references `015-architecture-fitness-functions.md:95` and
    `046-http-api-versioning.md:99`.
+
+## Revision (2026-10-26)
+
+Re-verified against current source. No decision, rationale or adoption changed; the seven bases and
+the subclass inventory above stand. The lockstep pin moved, and four anchors were re-pointed.
+
+1. **The lockstep pin is now 1.261.0.** On merged `main`, MMCA.ADC, MMCA.Store and MMCA.Helpdesk all
+   pin `MMCA.Common.Shared` 1.261.0 (`MMCA.ADC/Directory.Packages.props:108`,
+   `MMCA.Store/Directory.Packages.props:8`, `MMCA.Helpdesk/Directory.Packages.props:83`), not the
+   1.250.0 the 2026-10-21 Revision recorded, so every consumer still carries the compile-time layer
+   targets in a package-mode build.
+2. Anchors re-verified against current source: the ADC `MMCA.Common.Shared` pin is at
+   `MMCA.ADC/Directory.Packages.props:108` (the 2026-10-21 Revision cites `:100`); the Store (`:8`)
+   and Helpdesk (`:83`) pin lines are unchanged; the `MiddlewarePipelineOrderTestsBase` class
+   declaration in the Decision is at
+   `MMCA.Common/Source/Hosting/MMCA.Common.Testing/Conformance/MiddlewarePipelineOrderTestsBase.cs:31`
+   (was `:29`; the pinned 1.261.0 contains the two added lines); and the Context cross-references are
+   `015-architecture-fitness-functions.md:118` (was `:95`) and `046-http-api-versioning.md:100`
+   (was `:99`).
 
 ## Related
 ADR-015 (the structural / registration fitness layer this complements; its stated non-goal, "not

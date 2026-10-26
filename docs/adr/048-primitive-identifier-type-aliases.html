@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 134 ADRs</summary>
+        <summary>All 135 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -234,6 +234,7 @@
         <li><a href="132-build-strictness-analyzer-policy.html">132 · Build Strictness: Analyzers at Error Severity, a Shared Baseline, and CI Test Floors</a></li>
         <li><a href="133-versioned-password-hash-work-factor.html">133 · Versioned Password Hash Work Factor</a></li>
         <li><a href="134-cloud-neutral-core-vendor-adapters.html">134 · Cloud-Neutral Core With Vendor Adapter Packages</a></li>
+        <li><a href="135-application-namespace-keyspace-isolation.html">135 · One Application Namespace Isolates Shared Infrastructure Keyspaces</a></li>
           </ol>
         </nav>
       </details>
@@ -271,6 +272,9 @@
           Revised 2026-10-21: Engagement&#39;s alias file now declares eleven aliases, <code>UserSessionBookmarkIdentifierType</code>
           having been added, so the workspace total is 49 aliases across 10 files, 47 of them <code>int</code>; the three
           <code>Directory.Build.props</code> alias-block citations were re-anchored. See the Revision (2026-10-21) at the end.
+          Revised 2026-10-26: anchors refreshed after the three <code>Directory.Build.props</code> alias link blocks, the
+          <code>AuthenticationServiceBase&lt;TUser&gt;</code> constraint and the ADC <code>User</code> declarations moved without their
+          content changing. See the Revision (2026-10-26) at the end.
           <strong>Revisited by <a href="085-identifier-type-aliases-revisited.html">ADR-085</a> (2026-08-18)</strong>: the wrapper-struct
           alternative this record deferred was re-evaluated, priced, and deferred again, now against named
           revisit triggers instead of open-endedly. The decision below is unchanged; see the Revision
@@ -312,7 +316,7 @@
           (<code>Source/Core/MMCA.Common.Domain/Entities/AuditableBaseEntity.cs:27,31</code>), and constrains the user
           type parameter of <code>AuthenticationServiceBase&lt;TUser&gt;</code>
           (<code>where TUser : AuditableAggregateRootEntity&lt;UserIdentifierType&gt;, IAuthUser</code>,
-          <code>Source/Core/MMCA.Common.Application/Auth/AuthenticationServiceBase.cs:72</code>), with each consuming
+          <code>Source/Core/MMCA.Common.Application/Auth/AuthenticationServiceBase.cs:75</code>), with each consuming
           app supplying the concrete <code>User</code> entity that satisfies it.
           Consumers follow the same pattern: ADC Identity
           (<code>MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Shared/MMCA.ADC.Identity.GlobalUsings.IdentifierType.cs:2</code>),
@@ -330,13 +334,13 @@
           <li><strong>Aliases are linked solution-wide via <code>Directory.Build.props</code>.</strong> Each <code>GlobalUsings.*.cs</code> file is
           pulled into every project with a <code>&lt;Compile Include ... Link=... /&gt;</code> block, so the alias is visible
           everywhere without a project reference: Common
-          (<code>MMCA.Common/Directory.Build.props:153-163</code>), ADC
-          (<code>MMCA.ADC/Directory.Build.props:138-152</code>), Store (<code>MMCA.Store/Directory.Build.props:138-149</code>). Adding a
+          (<code>MMCA.Common/Directory.Build.props:136-146</code>), ADC
+          (<code>MMCA.ADC/Directory.Build.props:122-136</code>), Store (<code>MMCA.Store/Directory.Build.props:124-135</code>). Adding a
           solution-wide alias is a new <code>GlobalUsings.*.cs</code> plus a matching <code>&lt;Compile Include&gt;</code> line, nothing more.</li>
           <li><strong>The alias flows unchanged through every layer.</strong> Tracing the ADC <code>User</code> aggregate: the domain
           entity is <code>User : AuditableAggregateRootEntity&lt;UserIdentifierType&gt;</code>
-          (<code>MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Domain/Users/User.cs:34</code>); the cross-context
-          reference to a speaker is typed <code>SpeakerIdentifierType? LinkedSpeakerId</code> (same file, line 78); the EF
+          (<code>MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Domain/Users/User.cs:35</code>); the cross-context
+          reference to a speaker is typed <code>SpeakerIdentifierType? LinkedSpeakerId</code> (same file, line 79); the EF
           configuration is <code>EntityTypeConfigurationSQLServer&lt;User, UserIdentifierType&gt;</code>
           (<code>MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Infrastructure/Persistence/EntityConfiguration/UserConfiguration.cs:13</code>);
           the repository handle is <code>GetRepository&lt;User, UserIdentifierType&gt;()</code>
@@ -576,6 +580,23 @@
           <code>MMCA.Store/Directory.Build.props:138-149</code> (three: Catalog, Sales, Identity). The <code>:131-141</code> recorded
           in the Revision (2026-10-06) stays as recorded on that date.</li>
           </ol>
+          <h2 id="revision-2026-10-26">Revision (2026-10-26)</h2>
+          <p>Re-verified against current source. No decision, no rationale and no count changed: the alias census in
+          the Revision (2026-10-21) stands, and the four ADC and three Store <code>&lt;Compile Include&gt;</code> entries are in the
+          order that revision recorded. Five Decision citations moved without their text changing.</p>
+          <ol>
+          <li>Anchors re-verified against current source: the <code>Directory.Build.props</code> alias link blocks are at
+          <code>MMCA.Common/Directory.Build.props:136-146</code> (the Common.Domain <code>UserIdentifierType</code> block at 136-140
+          and the Common.Shared notification block at 142-146), <code>MMCA.ADC/Directory.Build.props:122-136</code>
+          (Identity, Conference, Engagement, Notification) and <code>MMCA.Store/Directory.Build.props:124-135</code>
+          (Catalog, Sales, Identity); the <code>AuthenticationServiceBase&lt;TUser&gt;</code> constraint is at
+          <code>MMCA.Common/Source/Core/MMCA.Common.Application/Auth/AuthenticationServiceBase.cs:75</code>; ADC&#39;s
+          <code>User : AuditableAggregateRootEntity&lt;UserIdentifierType&gt;</code> is at
+          <code>MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Domain/Users/User.cs:35</code> and its
+          <code>SpeakerIdentifierType? LinkedSpeakerId</code> at line 79 of the same file. The ranges recorded in the
+          Revision (2026-10-21) and the <code>:72</code> recorded in the Revision (2026-10-06) stay as recorded on those
+          dates.</li>
+          </ol>
           
         <div class="doc-foot btn-row">
           <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
@@ -599,6 +620,7 @@
             <li><a href="#revision-2026-10-01">Revision (2026-10-01)</a></li>
             <li><a href="#revision-2026-10-06">Revision (2026-10-06)</a></li>
             <li><a href="#revision-2026-10-21">Revision (2026-10-21)</a></li>
+            <li><a href="#revision-2026-10-26">Revision (2026-10-26)</a></li>
             </ul>
           </nav>
         </aside>

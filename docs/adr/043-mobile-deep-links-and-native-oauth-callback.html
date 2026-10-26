@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 134 ADRs</summary>
+        <summary>All 135 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -234,6 +234,7 @@
         <li><a href="132-build-strictness-analyzer-policy.html">132 · Build Strictness: Analyzers at Error Severity, a Shared Baseline, and CI Test Floors</a></li>
         <li><a href="133-versioned-password-hash-work-factor.html">133 · Versioned Password Hash Work Factor</a></li>
         <li><a href="134-cloud-neutral-core-vendor-adapters.html">134 · Cloud-Neutral Core With Vendor Adapter Packages</a></li>
+        <li><a href="135-application-namespace-keyspace-isolation.html">135 · One Application Namespace Isolates Shared Infrastructure Keyspaces</a></li>
           </ol>
         </nav>
       </details>
@@ -259,7 +260,7 @@
           (<code>Source/Presentation/MMCA.Common.UI.Maui/Capabilities/Auth/MauiExternalAuthBroker.cs:20</code>). The ADC
           consumer&#39;s deep-link wave has shipped: <code>MMCA.ADC.UI.Web</code> serves the two well-known association
           documents through the shared helper
-          (<code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs:296</code>), the Identity service allow-lists the
+          (<code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs:302</code>), the Identity service allow-lists the
           <code>atldevcon</code> scheme (<code>MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/appsettings.json:89-91</code>, the
           entry at <code>:90</code>), and
           the native heads register the callback: iOS carries both the custom-scheme URL type
@@ -270,8 +271,8 @@
           Android&#39;s <code>AutoVerify</code> https App Links intent filter is in place too, declared as a C# attribute on
           <code>MainActivity</code> rather than in XML
           (<code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI/Platforms/Android/MainActivity.cs:29-35</code>, with the public web
-          host constant at <code>:44</code> and the verified link reduced to path plus query at <code>:83</code>, shape-checked at
-          <code>:97-100</code> and published to <code>IDeepLinkDispatcher</code> at <code>:102</code>). The filter claims only the deep-linkable
+          host constant at <code>:44</code> and the verified link reduced to path plus query at <code>:94</code>, shape-checked at
+          <code>:108-111</code> and published to <code>IDeepLinkDispatcher</code> at <code>:113</code>). The filter claims only the deep-linkable
           path prefixes (<code>/conference/</code>, <code>/engage/</code>, <code>/happening-now</code>, <code>/feedback/</code>, <code>/auth/oauth-complete</code>, at <code>:34</code>),
           the same set the iOS <code>applinks</code> components declare, so any other page on the host stays in the
           browser. The checked-in
@@ -306,7 +307,9 @@
           and room check-in QR landing pages, so those printed codes open in the app; see Revision below.
           Revised 2026-10-21: the hostname trade-off now names the architecture test that keeps the three
           binary host spots in agreement and the gateway default-domain URLs also embedded in the MAUI
-          binary, and two MMCA.ADC anchors are refreshed; see Revision below.</p>
+          binary, and two MMCA.ADC anchors are refreshed; see Revision below.
+          Revised 2026-10-26: anchors refreshed after the <code>Program.cs</code> association block, <code>MainActivity</code>&#39;s
+          <code>PublishDeepLink</code> and the shared <code>DeepLinkDispatcher</code> grew; see Revision below.</p>
           <h2 id="context">Context</h2>
           <p>Three mobile flows all need a URL to leave the web world and land inside the MAUI app:</p>
           <ol>
@@ -755,6 +758,25 @@
           comment still <code>:41-43</code> with <code>PublicWebHost</code> at <code>:44</code>. Every live citation above is updated; the
           dated entries keep the values they recorded.</li>
           </ol>
+          <h2 id="revision-2026-10-26">Revision (2026-10-26)</h2>
+          <p>Re-verified against current source. The decision, the allowlist behavior, the path-scoped link sets
+          (the iOS <code>applinks</code> components still match the Android <code>DataPathPrefixes</code>), the three binary host
+          spots and the shape rule the Android head asks before publishing are unchanged; MMCA.ADC and
+          MMCA.Common anchors moved.</p>
+          <ol>
+          <li><strong>Anchors re-verified against current source:</strong> in ADC,
+          <code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs</code>: ADR-043 block comment <code>:295-300</code>,
+          <code>GetSection(&quot;AppAssociation&quot;)</code> <code>:301</code>, <code>MapAppAssociationEndpoints</code> <code>:302</code>, package-id comment
+          <code>:304-307</code>, <code>AndroidPackageName</code> <code>:308</code>, <code>AndroidCertFingerprints</code> <code>:309</code>, <code>AppleAppId</code> <code>:310</code>,
+          <code>AppleAppLinkComponents</code> <code>:311</code> (<code>/conference/*</code>, <code>/engage/*</code>, <code>/happening-now</code>, <code>/feedback/*</code>,
+          <code>/auth/oauth-complete*</code>); <code>Platforms/Android/MainActivity.cs</code>: intent filter <code>:29-35</code> with
+          <code>DataPathPrefixes</code> <code>:34</code> and <code>AutoVerify</code> <code>:35</code>, cutover comment <code>:41-43</code>, <code>PublicWebHost</code> <code>:44</code>,
+          <code>OnCreate</code> publish <code>:56</code>, <code>OnNewIntent</code> publish <code>:78</code>, <code>PublishDeepLink</code> <code>:81-114</code>, route
+          reduction <code>:94</code>, shape check <code>:108-111</code>, publish <code>:113</code>. In Common,
+          <code>MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/Capabilities/Navigation/DeepLinkDispatcher.cs</code>:
+          class <code>:22</code>, <code>IsAppRelativeRoute</code> <code>:113</code>, <code>Publish</code> <code>:168</code> with the guard inside it at <code>:172</code>.
+          Every live citation above is updated; the dated entries keep the values they recorded.</li>
+          </ol>
           
         <div class="doc-foot btn-row">
           <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
@@ -782,6 +804,7 @@
             <li><a href="#revision-2026-10-07">Revision (2026-10-07)</a></li>
             <li><a href="#revision-2026-10-15">Revision (2026-10-15)</a></li>
             <li><a href="#revision-2026-10-21">Revision (2026-10-21)</a></li>
+            <li><a href="#revision-2026-10-26">Revision (2026-10-26)</a></li>
             </ul>
           </nav>
         </aside>

@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 134 ADRs</summary>
+        <summary>All 135 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -234,6 +234,7 @@
         <li><a href="132-build-strictness-analyzer-policy.html">132 · Build Strictness: Analyzers at Error Severity, a Shared Baseline, and CI Test Floors</a></li>
         <li><a href="133-versioned-password-hash-work-factor.html">133 · Versioned Password Hash Work Factor</a></li>
         <li><a href="134-cloud-neutral-core-vendor-adapters.html">134 · Cloud-Neutral Core With Vendor Adapter Packages</a></li>
+        <li><a href="135-application-namespace-keyspace-isolation.html">135 · One Application Namespace Isolates Shared Infrastructure Keyspaces</a></li>
           </ol>
         </nav>
       </details>
@@ -272,15 +273,18 @@
           recorded as gone from both deploy conditions; anchors refreshed after the v1.233.0 release.
           Revised 2026-10-19: ADC&#39;s cron runs daily while Store&#39;s stays weekly (a sanctioned per-repo cadence), the circular-remediation trade-off is retired because neither drift message suggests re-running the deploy, <code>deploy_gate</code> is recorded as a <code>workflow_call</code> input, and the ADC and deploy-path anchors are re-pointed.
           Revised 2026-10-21: anchors refreshed after both Bicep templates, both CONTRIBUTING files, ADC&#39;s
-          <code>cost-guard.yml</code> and ADR-064 moved; no statement changed.</p>
+          <code>cost-guard.yml</code> and ADR-064 moved; no statement changed.
+          Revised 2026-10-26: the &quot;no drift message offers a re-run&quot; sentence is scoped to the surge-drift
+          messages, since ADC&#39;s expired-window message does say to run the deploy (which the gate lets
+          through), and anchors are refreshed after both Bicep templates and both <code>deploy.yml</code> files moved.</p>
           <h2 id="context">Context</h2>
           <p>Both deployed apps run a deliberately small production footprint: every Container App is declared with
           <code>maxReplicas: 2</code> (ADC&#39;s five scaled apps read <code>conferenceScaledMaxReplicas</code>, which <code>conferenceMode</code> raises
-          to 4, <code>MMCA.ADC/infra/main.bicep:192</code>, while Notification keeps a literal <code>maxReplicas: 2</code>, <code>:2544</code>; the
-          same mode lifts ADC&#39;s hot-path databases to S2, <code>:1115-1119</code>; see Revision (2026-10-06)) and every SQL
+          to 4, <code>MMCA.ADC/infra/main.bicep:192</code>, while Notification keeps a literal <code>maxReplicas: 2</code>, <code>:2580</code>; the
+          same mode lifts ADC&#39;s hot-path databases to S2, <code>:1149-1153</code>; see Revision (2026-10-06)) and every SQL
           database with the <code>Basic</code> tier
-          (<code>MMCA.Store/infra/main.bicep:1682,1806,1954,2073,2191</code> and <code>:1036-1039</code>;
-          <code>MMCA.ADC/infra/main.bicep:2070,2223,2358,2544,2697,2848</code> and <code>:1117-1119</code>). That
+          (<code>MMCA.Store/infra/main.bicep:1688,1812,1960,2079,2197</code> and <code>:1040-1044</code>;
+          <code>MMCA.ADC/infra/main.bicep:2106,2259,2394,2580,2733,2884</code> and <code>:1151-1153</code>). That
           footprint is the cost baseline, and it is what the monthly bill is planned against.</p>
           <p>The footprint is also expected to move temporarily. A conference day, a load test, a slow query under
           real traffic: an operator scales the replica ceiling or the SQL tier up by hand and is supposed to
@@ -288,10 +292,10 @@
           it is silent: nothing breaks, no alert fires on a healthy oversized system, and the app keeps serving
           traffic perfectly while costing several times its baseline.</p>
           <p>The existing control against that was the monthly Azure budget declared in both Bicep templates
-          (<code>MMCA.Store/infra/main.bicep:841-866</code>, <code>MMCA.ADC/infra/main.bicep:941-966</code>), which notifies at 80% of
+          (<code>MMCA.Store/infra/main.bicep:845-873</code>, <code>MMCA.ADC/infra/main.bicep:975-1003</code>), which notifies at 80% of
           actual spend and 100% of forecast spend. The Store template names the exact case it is meant to catch
           in its own comment, &quot;a scale-up (manual SQL-tier / replica) silently running for weeks&quot;
-          (<code>MMCA.Store/infra/main.bicep:839</code>). A spend threshold is a lagging indicator: by the time it
+          (<code>MMCA.Store/infra/main.bicep:843</code>). A spend threshold is a lagging indicator: by the time it
           trips, weeks of the overspend have already happened, and the notification says a number, not which
           resource is wrong. What was missing was a check on the <strong>configuration</strong> itself, and a moment at which
           someone would have to look at it.</p>
@@ -335,15 +339,15 @@
           <strong>or</strong> <code>Standard</code> at objective <code>S0</code> only, through the <code>sql_sku_ok</code> function
           (<code>MMCA.Store/.github/workflows/cost-guard.yml:62-68</code>, applied at <code>:102</code>), so a scaled-up Standard
           (S1 to S12) reports drift even though its tier reads <code>Standard</code>. Every Store database is Basic today: the live
-          per-service databases are declared Basic (<code>MMCA.Store/infra/main.bicep:1036-1039</code>) and the legacy
+          per-service databases are declared Basic (<code>MMCA.Store/infra/main.bicep:1040-1044</code>) and the legacy
           <code>MMCAStore</code> archive that used to sit beside them at S0 is gone, exported on 2026-09-02 to the
           bacpac blob <code>sql-archive/MMCAStore-20260902.bacpac</code> and then dropped
-          (<code>MMCA.Store/infra/main.bicep:1006-1013</code>). The wider window is kept anyway, and the workflow header
+          (<code>MMCA.Store/infra/main.bicep:1010-1017</code>). The wider window is kept anyway, and the workflow header
           states why: so that a <strong>deliberate</strong> bump to S0 (the tier a Store database would be raised to under
           real load, or the tier a bacpac restore would land on) does not fail the gate as if it were an
           un-reverted surge, while anything above Standard S0 still does
           (<code>MMCA.Store/.github/workflows/cost-guard.yml:9-13</code>). ADC has no comparable headroom case: its
-          archive was dropped the same day (<code>MMCA.ADC/infra/main.bicep:1080-1086</code>) and its baseline stayed at
+          archive was dropped the same day (<code>MMCA.ADC/infra/main.bicep:1114-1123</code>) and its baseline stayed at
           <code>Basic</code> alone. The asymmetry is deliberate in both directions.</p>
           </li>
           <li><p><strong>It never mutates production.</strong> Every Azure call is an <code>az ... list</code> or <code>az ... show</code>; the one
@@ -362,27 +366,27 @@
           (<code>MMCA.Store/.github/workflows/cost-guard.yml:52</code>, <code>MMCA.ADC/.github/workflows/cost-guard.yml:52</code>).</p>
           </li>
           <li><p><strong><code>deploy</code> waits on it by name.</strong> <code>cost-guard</code> is listed in <code>deploy.needs</code>
-          (<code>MMCA.Store/.github/workflows/deploy.yml:1098</code>, <code>MMCA.ADC/.github/workflows/deploy.yml:1160</code>), and
+          (<code>MMCA.Store/.github/workflows/deploy.yml:1099</code>, <code>MMCA.ADC/.github/workflows/deploy.yml:1161</code>), and
           because the deploy condition runs under <code>always()</code> with explicit per-need results, the condition
           requires <code>needs.cost-guard.result == &#39;success&#39;</code> literally
-          (<code>MMCA.Store/.github/workflows/deploy.yml:1121-1131</code>, the literal at <code>:1127</code>;
-          <code>MMCA.ADC/.github/workflows/deploy.yml:1187-1198</code>, the literal at <code>:1193</code>). The only needs allowed to be <code>skipped</code> there are
+          (<code>MMCA.Store/.github/workflows/deploy.yml:1122-1132</code>, the literal at <code>:1128</code>;
+          <code>MMCA.ADC/.github/workflows/deploy.yml:1188-1199</code>, the literal at <code>:1194</code>). The only needs allowed to be <code>skipped</code> there are
           the diff-scoped gates, and the two lists are not symmetric. Store tolerates one, <code>e2e-gate</code>, which
-          runs when the diff touches the UI (<code>MMCA.Store/.github/workflows/deploy.yml:763,1131</code>). ADC tolerates
+          runs when the diff touches the UI (<code>MMCA.Store/.github/workflows/deploy.yml:764,1132</code>). ADC tolerates
           <code>e2e-gate</code> plus <code>ai-eval-gate</code>, which runs when the diff touches the scoring code
-          (<code>MMCA.ADC/.github/workflows/deploy.yml:525,1197-1198</code>). Either way a cost-guard that fails, errors or
+          (<code>MMCA.ADC/.github/workflows/deploy.yml:526,1198-1199</code>). Either way a cost-guard that fails, errors or
           is skipped on a code push leaves <code>deploy</code> unrun; on a docs-only push <code>cost-guard</code> and <code>deploy</code> both
-          skip (<code>MMCA.ADC/.github/workflows/deploy.yml:786,1191</code>,
-          <code>MMCA.Store/.github/workflows/deploy.yml:733,1125</code>).</p>
+          skip (<code>MMCA.ADC/.github/workflows/deploy.yml:787,1192</code>,
+          <code>MMCA.Store/.github/workflows/deploy.yml:734,1126</code>).</p>
           </li>
           <li><p><strong>Gate on deploys only, never on pull requests.</strong> The calling job carries
           <code>if: github.event_name != &#39;pull_request&#39;</code> and <code>secrets: inherit</code>
-          (<code>MMCA.Store/.github/workflows/deploy.yml:731-740</code>,
-          <code>MMCA.ADC/.github/workflows/deploy.yml:784-797</code>), because there is no production OIDC on a PR and the
+          (<code>MMCA.Store/.github/workflows/deploy.yml:732-741</code>,
+          <code>MMCA.ADC/.github/workflows/deploy.yml:785-798</code>), because there is no production OIDC on a PR and the
           deploy is PR-skipped anyway. ADC&#39;s calling job also grants its own <code>id-token: write</code> and
-          <code>contents: read</code> (<code>MMCA.ADC/.github/workflows/deploy.yml:789-791</code>), because ADC&#39;s workflow-level
+          <code>contents: read</code> (<code>MMCA.ADC/.github/workflows/deploy.yml:790-792</code>), because ADC&#39;s workflow-level
           permissions deliberately omit <code>id-token</code> (<code>:28-37</code>); Store&#39;s calling job does the same
-          (<code>MMCA.Store/.github/workflows/deploy.yml:736-738</code>), because its workflow-level permissions omit
+          (<code>MMCA.Store/.github/workflows/deploy.yml:737-739</code>), because its workflow-level permissions omit
           <code>id-token</code> too (<code>:44-53</code>). Both repos&#39; CONTRIBUTING files list <code>cost-guard</code> among the push-only
           jobs that must <strong>not</strong> be added to branch protection (<code>MMCA.Store/CONTRIBUTING.md:42,120</code>,
           <code>MMCA.ADC/CONTRIBUTING.md:42,112</code>).</p>
@@ -393,11 +397,14 @@
           (<code>MMCA.Store/.github/workflows/cost-guard.yml:62-68</code>, <code>MMCA.ADC/.github/workflows/cost-guard.yml:101</code>).
           A legitimately larger footprint means editing those <strong>and</strong> the Bicep that declares the footprint,
           in a pull request, together: otherwise the next <code>main.bicep</code> run pushes the resource back down to
-          the declared value. Neither drift message offers a re-run of the deploy as the reset, because with
-          the gate in <code>deploy.needs</code> that re-run would fail again: Store&#39;s says to reset to baseline by hand in
-          Azure (<code>MMCA.Store/.github/workflows/cost-guard.yml:109</code>), and ADC&#39;s out-of-band message points at the
-          runbook&#39;s recovery move, which reverts through an expired conference window
-          (<code>MMCA.ADC/.github/workflows/cost-guard.yml:120</code>).</p>
+          the declared value. Neither surge-drift message offers a re-run of the deploy as the reset, because
+          with the gate in <code>deploy.needs</code> that re-run would fail again: Store&#39;s says to reset to baseline by
+          hand in Azure (<code>MMCA.Store/.github/workflows/cost-guard.yml:109</code>), and ADC&#39;s out-of-band message
+          points at the runbook&#39;s recovery move, which reverts through an expired conference window
+          (<code>MMCA.ADC/.github/workflows/cost-guard.yml:120</code>). The one message that does say to run the deploy
+          is ADC&#39;s expired-window message (<code>MMCA.ADC/.github/workflows/cost-guard.yml:117</code>), and there the
+          re-run succeeds, because on the deploy path an expired window passes the gate (<code>:112-114</code>) and that
+          deploy reverts <code>conferenceMode</code>.</p>
           </li>
           </ul>
           <p><strong>Adoption is the two deployed apps, in near-identical form apart from ADC&#39;s conference window (Revision (2026-10-06)).</strong> The files differ in the resource name
@@ -477,7 +484,7 @@
           <li><strong>Only two cost dimensions and one name prefix are covered.</strong> Service Bus, Redis, Log Analytics
           retention and everything else in the resource group are invisible to the gate, as is any resource
           whose name does not start with the app prefix or that lives in another resource group. Store&#39;s
-          Service Bus is Standard tier (<code>MMCA.Store/infra/main.bicep:1074-1081</code>, tier at <code>:1080</code>) and would go unchecked if it
+          Service Bus is Standard tier (<code>MMCA.Store/infra/main.bicep:1078-1085</code>, tier at <code>:1084</code>) and would go unchecked if it
           were scaled up.</li>
           <li><strong>The ceiling is an upper bound, not an equality.</strong> Scaling a resource <strong>below</strong> the baseline is not
           drift, so an accidental <code>maxReplicas: 1</code> on a service that needs two, or a downgrade that costs
@@ -611,6 +618,36 @@
           (<code>Website/docs-src/adr/064-deploy-recency-gates.md:46-47</code>) and its four-gate decision (<code>:78-80</code>).
           ADC&#39;s deploy-path pass on an expired window is <code>MMCA.ADC/.github/workflows/cost-guard.yml:112-114</code>.</li>
           </ol>
+          <h2 id="revision-2026-10-26">Revision (2026-10-26)</h2>
+          <p>Re-verified against current source. The gate mechanism, the <code>2</code> replica ceiling, the per-repo SQL
+          tier sets, the budget thresholds, ADC&#39;s conference-mode window and the deploy-path wiring are
+          unchanged; one Decision sentence is scoped and the Bicep and <code>deploy.yml</code> anchors moved. Anchors
+          inside the earlier dated revisions stay as written.</p>
+          <ol>
+          <li><strong>The re-run sentence is scoped to the surge-drift messages.</strong> The Decision said flatly that
+          neither drift message offers a re-run of the deploy. ADC&#39;s expired-window message does say to run
+          the deploy (<code>MMCA.ADC/.github/workflows/cost-guard.yml:117</code>), and that re-run is not circular,
+          because on the deploy path an expired window exits 0 (<code>:112-114</code>) and the deploy reverts
+          <code>conferenceMode</code>. Store&#39;s message (<code>MMCA.Store/.github/workflows/cost-guard.yml:109</code>) and ADC&#39;s
+          out-of-band message (<code>MMCA.ADC/.github/workflows/cost-guard.yml:120</code>) still offer no re-run. The
+          Decision now names the exception the Trade-offs bullet already carried.</li>
+          <li>Anchors re-verified against current source: Store <code>maxReplicas: 2</code> apps
+          (<code>MMCA.Store/infra/main.bicep:1688,1812,1960,2079,2197</code>), Store per-service SQL <code>Basic</code> sku
+          (<code>:1040-1044</code>, name at <code>:1041</code>), Store budget (<code>:845-873</code>, thresholds <code>:858</code> and <code>:866</code>, &quot;silently
+          running&quot; comment <code>:843</code>), Store <code>MMCAStore</code> archive note (<code>:1010-1017</code>), Store Service Bus
+          <code>Standard</code> (<code>:1078-1085</code>, tier at <code>:1084</code>); ADC scaled apps reading <code>conferenceScaledMaxReplicas</code>
+          (<code>MMCA.ADC/infra/main.bicep:2106,2259,2394,2733,2884</code>), Notification&#39;s literal <code>maxReplicas: 2</code>
+          (<code>:2580</code>, comment <code>:2577-2579</code>), the S2/Basic switch (<code>:1149-1153</code>, Basic at <code>:1153</code>), the budget
+          (<code>:975-1003</code>, thresholds <code>:988</code> and <code>:996</code>), the AtlDevCon note (<code>:1114-1123</code>, bacpac deletion on
+          2026-10-03 at <code>:1119</code>, repeated at <code>:1164-1165</code>); <code>conferenceMode</code> (<code>:157</code>) and
+          <code>conferenceScaledMaxReplicas</code> (<code>:192</code>) are unchanged. <code>deploy.needs</code>:
+          <code>MMCA.Store/.github/workflows/deploy.yml:1099</code>, <code>MMCA.ADC/.github/workflows/deploy.yml:1161</code>; the
+          <code>always()</code> condition: Store <code>:1122-1132</code> (literal at <code>:1128</code>, <code>e2e-gate</code> tolerance <code>:1132</code>, docs-only
+          <code>:1126</code>), ADC <code>:1188-1199</code> (literal at <code>:1194</code>, tolerances <code>:1198-1199</code>, docs-only <code>:1192</code>); the
+          diff-scoped gates: Store <code>e2e-gate</code> <code>if</code> at <code>:764</code>, ADC <code>ai-eval-gate</code> <code>if</code> at <code>:526</code>; the calling
+          job: Store <code>:732-741</code> (<code>if</code> at <code>:734</code>, permissions <code>:737-739</code>), ADC <code>:785-798</code> (<code>if</code> at <code>:787</code>,
+          permissions <code>:790-792</code>).</li>
+          </ol>
           
         <div class="doc-foot btn-row">
           <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
@@ -632,6 +669,7 @@
             <li><a href="#revision-2026-10-07">Revision (2026-10-07)</a></li>
             <li><a href="#revision-2026-10-19">Revision (2026-10-19)</a></li>
             <li><a href="#revision-2026-10-21">Revision (2026-10-21)</a></li>
+            <li><a href="#revision-2026-10-26">Revision (2026-10-26)</a></li>
             </ul>
           </nav>
         </aside>

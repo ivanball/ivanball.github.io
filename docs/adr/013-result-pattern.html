@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 134 ADRs</summary>
+        <summary>All 135 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -234,6 +234,7 @@
         <li><a href="132-build-strictness-analyzer-policy.html">132 · Build Strictness: Analyzers at Error Severity, a Shared Baseline, and CI Test Floors</a></li>
         <li><a href="133-versioned-password-hash-work-factor.html">133 · Versioned Password Hash Work Factor</a></li>
         <li><a href="134-cloud-neutral-core-vendor-adapters.html">134 · Cloud-Neutral Core With Vendor Adapter Packages</a></li>
+        <li><a href="135-application-namespace-keyspace-isolation.html">135 · One Application Namespace Isolates Shared Infrastructure Keyspaces</a></li>
           </ol>
         </nav>
       </details>
@@ -264,7 +265,10 @@
           <code>Error.TooManyRequests</code>; anchors refreshed after the v1.232.1 release.
           Revised 2026-10-21: the error-catalog rule now recognizes <code>Error.TooManyRequests</code> (v1.247.0), so
           codes built through it are held to the uniqueness and prefix gates; the 499 handler also answers a
-          <code>DbException</code> raised after the client disconnects (v1.241.0); anchors refreshed.</p>
+          <code>DbException</code> raised after the client disconnects (v1.241.0); anchors refreshed.
+          Revised 2026-10-26: <code>TryGetValue</code> is an instance member of <code>Result&lt;T&gt;</code> (v1.252.0) and the page-side
+          extension keeps only the overload that hands the errors back, which decides on a non-null success
+          value; the 409 handler&#39;s concurrency metric is recorded; anchors refreshed.</p>
           <h2 id="context">Context</h2>
           <p>Operations at every layer fail in <em>expected</em> ways: input is invalid, a domain invariant is broken, a
           requested entity is missing, a uniqueness conflict occurs, the caller lacks permission. There are two
@@ -299,15 +303,18 @@
           results through combinators instead of <code>try</code>/<code>catch</code>. The surface is:</p>
           <ul>
           <li><strong>Lifting without naming a factory.</strong> An <code>Error</code> converts implicitly to a failed <code>Result</code>
-          (<code>.../Shared/Abstractions/Result.cs:43</code>) or <code>Result&lt;T&gt;</code> (<code>:233-237</code>), and a value converts
-          implicitly to a successful <code>Result&lt;T&gt;</code> (<code>:249</code>), so a guard clause writes <code>return someError;</code> and
+          (<code>.../Shared/Abstractions/Result.cs:43</code>) or <code>Result&lt;T&gt;</code> (<code>:254-258</code>), and a value converts
+          implicitly to a successful <code>Result&lt;T&gt;</code> (<code>:270</code>), so a guard clause writes <code>return someError;</code> and
           a happy path writes <code>return theValue;</code>. <code>Result.FromError</code> is the named alternate for the
           non-generic conversion (<code>:49-53</code>); the inherited <code>Result.Failure&lt;T&gt;</code> / <code>Result.Success&lt;T&gt;</code>
-          factories are the named alternates on the generic type (<code>:229-232</code>, <code>:245-248</code>).</li>
-          <li><strong>On <code>Result&lt;T&gt;</code>:</strong> <code>Match</code> (<code>:260-268</code>) / <code>MatchAsync</code> (<code>:355-365</code>), exactly one branch running
-          in both; <code>Map</code> (<code>:276-280</code>), <code>Bind</code> (<code>:302-306</code>) / <code>BindAsync</code> (<code>:289-293</code>), <code>Tap</code> (a side effect
-          on the success value, returning the same instance, <code>:314-324</code>) and <code>Ensure</code> (fail the chain with a
-          supplied <code>Error</code> when the value does not satisfy a predicate, <code>:334-345</code>).</li>
+          factories are the named alternates on the generic type (<code>:250-253</code>, <code>:266-269</code>).</li>
+          <li><strong>On <code>Result&lt;T&gt;</code>:</strong> <code>Match</code> (<code>:281-289</code>) / <code>MatchAsync</code> (<code>:376-386</code>), exactly one branch running
+          in both; <code>Map</code> (<code>:297-301</code>), <code>Bind</code> (<code>:323-327</code>) / <code>BindAsync</code> (<code>:310-314</code>), <code>Tap</code> (a side effect
+          on the success value, returning the same instance, <code>:335-345</code>) and <code>Ensure</code> (fail the chain with a
+          supplied <code>Error</code> when the value does not satisfy a predicate, <code>:355-366</code>). <code>TryGetValue</code> unwraps
+          the value inside a conditional the way <code>Dictionary.TryGetValue</code> does, deciding on <code>IsFailure</code>
+          rather than on the value so a value-type default is not mistaken for success (<code>:218-228</code>, the
+          check at <code>:220</code>).</li>
           <li><strong>On the non-generic <code>Result</code>:</strong> <code>Match</code> (<code>:155-161</code>), <code>Bind</code> (<code>:187-191</code>) and <code>OnFailure</code>
           (<code>:169-179</code>), so a valueless step composes the same way instead of forcing an <code>IsFailure</code> check.</li>
           <li><strong>On a pending <code>Task&lt;Result&lt;T&gt;&gt;</code>:</strong> <code>ResultExtensions</code>
@@ -319,7 +326,7 @@
           <code>MapAsync</code> delegate to them, <code>TapAsync</code> runs its asynchronous action inline only on success
           (<code>:89-92</code>), and <code>MatchAsync</code> hands the awaited result to the synchronous <code>Match</code> (<code>:115-116</code>).</li>
           <li>Every combinator short-circuits: a failed result never invokes the delegate it was handed
-          (<code>Result.cs:279</code>, <code>:292</code>, <code>:305</code>, <code>:339-342</code>).</li>
+          (<code>Result.cs:300</code>, <code>:313</code>, <code>:326</code>, <code>:360-363</code>).</li>
           </ul>
           </li>
           <li><p>The transport mapping lives only at the edge. <code>ApiControllerBase.HandleFailure()</code>
@@ -385,8 +392,10 @@
           (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Middleware/DomainExceptionHandler.cs:27,32</code>).</li>
           <li><code>DbUpdateExceptionHandler</code> maps an EF Core <code>DbUpdateException</code> (concurrency, unique-constraint, or
           foreign-key failure) to HTTP 409 Conflict, returning a generic detail so no database schema detail
-          leaks to the client
-          (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Middleware/DbUpdateExceptionHandler.cs:28,33,37</code>).</li>
+          leaks to the client; the full exception is logged at error, and a concurrency conflict (only that
+          kind) is also counted in a metric
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Middleware/DbUpdateExceptionHandler.cs:29,32,41,45</code>,
+          the metric at <code>:36-39</code>).</li>
           <li><code>ValidationExceptionHandler</code> maps a FluentValidation <code>ValidationException</code> to HTTP 400, grouping the
           failures by property name into an <code>errors</code> extension that matches ASP.NET Core&#39;s model-validation
           shape
@@ -463,31 +472,33 @@
           call, so an already-abandoned request never reaches the network (<code>:63</code>, <code>:98</code>).</p>
           <p><strong>Pages branch; they do not catch.</strong> <code>ResultUiExtensions</code>
           (<code>.../MMCA.Common.UI/Common/ResultUiExtensions.cs:74</code>) is the page-side idiom, written once so no
-          page hand-rolls it: <code>TryGetValue</code> unwraps inside a conditional the way <code>Dictionary.TryGetValue</code>
-          does, deciding the failing branch on <code>IsFailure</code> rather than on the value so a value-type default is
-          not mistaken for success (<code>:103-118</code>, the check at <code>:110-114</code>, the overload handing the errors back
-          at <code>:137</code>); <code>OnFailureSetError</code> pushes the composed message into a page field (<code>:248</code>, <code>:260</code>) and
-          <code>NotifyOnFailure</code> raises it as exactly one snackbar, never one per error (<code>:289</code>, <code>:310</code>); and
-          <code>HasErrorType</code> with <code>IsNotFound</code> / <code>IsUnauthorized</code> lets a page turn a 404 into an empty state and
-          a 401 into a redirect instead of an alert (<code>:328-332</code>, <code>:340</code>, <code>:348</code>). Messages are localized as
-          resource keys <strong>with pass-through</strong>, so one call site handles both an API error the server already
-          translated and a client-side error whose <code>Message</code> is a key (<code>:23-27</code>, <code>Localize</code> at <code>:407-416</code>,
-          ADR-027). The failures the client synthesized itself have no server-phrased message to pass
-          through, so they are looked up by their error code instead: a bodiless <code>Http.{status}</code> (recognized
-          through <code>ProblemDetailsResultReader.TryGetSynthesizedStatus</code>, <code>:360</code>), then the generic
-          <code>Http.Status</code> format, plus <code>Http.TransportFailure</code> and <code>Http.Timeout</code> (<code>:27-33</code>, <code>LocalizeError</code> at
-          <code>:350-373</code>). Each code resolves through the localizer the page passed and then, when that
-          localizer has no such key, through the framework&#39;s own <code>SharedResource</code> pair for the current UI
-          culture, so a page passing its own <code>IStringLocalizer&lt;PageType&gt;</code> still shows the translated sentence;
-          the English message is the last resort (<code>:30-33</code>, the two-step lookup at <code>:377-383</code> and <code>:386-397</code>).
-          The lookup runs only when a localizer is passed: <code>OnFailureSetError</code> and <code>NotifyOnFailure</code> default
-          it to null (<code>:248</code>, <code>:260</code>, <code>:292</code>, <code>:313</code>), and with none <code>LocalizeError</code> returns the raw English
-          message without consulting <code>SharedResource</code> (<code>:352-355</code>).
+          page hand-rolls it. A page unwraps with the instance <code>Result&lt;T&gt;.TryGetValue</code> (<code>Result.cs:218-228</code>);
+          the one <code>TryGetValue</code> left here is the overload that also hands the errors back on the failing
+          branch (<code>ResultUiExtensions.cs:103-120</code>). That overload decides on <code>IsSuccess</code> and a non-null
+          value (<code>:110</code>), so a success carrying a null value takes its failing branch with an empty error
+          list (stated at <code>:90-95</code>), where the instance method returns true because it decides on
+          <code>IsFailure</code> alone (<code>Result.cs:220-227</code>). Back in <code>ResultUiExtensions.cs</code>, <code>OnFailureSetError</code>
+          pushes the composed message into a page field (<code>:214</code>, <code>:226</code>) and <code>NotifyOnFailure</code> raises it as exactly one snackbar, never one per
+          error (<code>:255</code>, <code>:276</code>); and <code>HasErrorType</code> with <code>IsNotFound</code> / <code>IsUnauthorized</code> lets a page turn a
+          404 into an empty state and a 401 into a redirect instead of an alert (<code>:294-298</code>, <code>:306</code>, <code>:314</code>).
+          Messages are localized as resource keys <strong>with pass-through</strong>, so one call site handles both an API
+          error the server already translated and a client-side error whose <code>Message</code> is a key (<code>:23-27</code>,
+          <code>Localize</code> at <code>:373-382</code>, ADR-027). The failures the client synthesized itself have no
+          server-phrased message to pass through, so they are looked up by their error code instead: a
+          bodiless <code>Http.{status}</code> (recognized through <code>ProblemDetailsResultReader.TryGetSynthesizedStatus</code>,
+          <code>:326</code>), then the generic <code>Http.Status</code> format, plus <code>Http.TransportFailure</code> and <code>Http.Timeout</code>
+          (<code>:27-33</code>, <code>LocalizeError</code> at <code>:316-339</code>). Each code resolves through the localizer the page passed
+          and then, when that localizer has no such key, through the framework&#39;s own <code>SharedResource</code> pair
+          for the current UI culture, so a page passing its own <code>IStringLocalizer&lt;PageType&gt;</code> still shows the
+          translated sentence; the English message is the last resort (<code>:30-33</code>, the two-step lookup at
+          <code>:343-349</code> and <code>:352-362</code>). The lookup runs only when a localizer is passed: <code>OnFailureSetError</code>
+          and <code>NotifyOnFailure</code> default it to null (<code>:214</code>, <code>:226</code>, <code>:258</code>, <code>:279</code>), and with none
+          <code>LocalizeError</code> returns the raw English message without consulting <code>SharedResource</code> (<code>:318-321</code>).
           A transport or timeout code is replaced only while it still carries the executor&#39;s own English
           sentence, so a caller that reused the code with a message of its own keeps that message
-          (<code>:398-405</code>). The messages are deduplicated and ordered by the same <code>ErrorTypeSeverity</code> rank the
-          edges use, so a real 403 leads and an incidental validation message never buries it (<code>:166-180</code>,
-          the ordering at <code>:176</code>, the deduplication at <code>:179</code>). The shared <code>ErrorSummary</code> component
+          (<code>:366-371</code>). The messages are deduplicated and ordered by the same <code>ErrorTypeSeverity</code> rank the
+          edges use, so a real 403 leads and an incidental validation message never buries it (<code>:132-146</code>,
+          the ordering at <code>:142</code>, the deduplication at <code>:145</code>). The shared <code>ErrorSummary</code> component
           renders the same list as one deduplicating <code>MudAlert</code>, taking a failed <code>Result</code> and the
           <code>MudForm.Errors</code> shape together and rendering nothing at all when there is nothing to say
           (<code>.../MMCA.Common.UI/Components/Forms/ErrorSummary.razor:8</code>, both shapes merged at <code>:87-105</code>, one message
@@ -690,6 +701,33 @@
           <code>:63</code>, <code>:74</code>, <code>:103</code>, <code>:148-156</code>, <code>:170</code>, <code>:184-190</code>, <code>:206-207</code>, <code>:211-214</code>, <code>:218-223</code>;
           <code>Error.cs:103-104</code>.</li>
           </ol>
+          <h2 id="revision-2026-10-26">Revision (2026-10-26)</h2>
+          <p>Re-verified against current source. The decision, the ten categories, the severity ranking, the
+          exception-handler order and the localization behavior are unchanged; v1.252.0 moved the unwrap
+          idiom onto <code>Result&lt;T&gt;</code> itself, which shifted every generic <code>Result.cs</code> anchor, and anchors into
+          <code>ResultUiExtensions.cs</code> and <code>DbUpdateExceptionHandler.cs</code> moved.</p>
+          <ol>
+          <li>Changed: <code>TryGetValue</code> is now the instance method <code>Result&lt;T&gt;.TryGetValue</code>, deciding on
+          <code>IsFailure</code> (<code>MMCA.Common/Source/Core/MMCA.Common.Shared/Abstractions/Result.cs:218-228</code>, the
+          check at <code>:220</code>); the one-argument <code>ResultUiExtensions.TryGetValue</code> is removed
+          (<code>MMCA.Common/CHANGELOG.md:201</code>). The remaining <code>ResultUiExtensions.TryGetValue</code> overload hands
+          the errors back and decides on <code>IsSuccess</code> with a non-null value, so a success carrying a null
+          value takes its failing branch there (<code>ResultUiExtensions.cs:103-120</code>, the check at <code>:110</code>,
+          documented at <code>:90-95</code>). The live text no longer attributes the <code>IsFailure</code> decision to the UI
+          extension.</li>
+          <li>Added: <code>DbUpdateExceptionHandler</code> counts a <code>DbUpdateConcurrencyException</code> (and only that kind)
+          through <code>ConcurrencyConflictMetrics.RecordConflict</code> before answering 409
+          (<code>DbUpdateExceptionHandler.cs:36-39</code>); the client detail stays the fixed generic string (<code>:45</code>).</li>
+          <li>Anchors re-verified against current source: <code>Result.cs:254-258</code>, <code>:270</code>, <code>:250-253</code>,
+          <code>:266-269</code>, <code>:281-289</code>, <code>:297-301</code>, <code>:310-314</code>, <code>:323-327</code>, <code>:335-345</code>, <code>:355-366</code>, <code>:376-386</code>,
+          short-circuits <code>:300</code>, <code>:313</code>, <code>:326</code>, <code>:360-363</code> (the non-generic <code>:43</code>, <code>:49-53</code>, <code>:155</code>,
+          <code>:169</code>, <code>:187</code> did not move); <code>DbUpdateExceptionHandler.cs:29</code>, <code>:32</code>, <code>:41</code>, <code>:45</code>;
+          <code>ResultUiExtensions.cs:132-146</code> (<code>:142</code>, <code>:145</code>), <code>:214</code>, <code>:226</code>, <code>:255</code>, <code>:258</code>, <code>:276</code>, <code>:279</code>,
+          <code>:294-298</code>, <code>:306</code>, <code>:314</code>, <code>:316-339</code> (<code>:318-321</code>, <code>:326</code>), <code>:343-349</code>, <code>:352-362</code>, <code>:366-371</code>,
+          <code>:373-382</code> (<code>:23-27</code>, <code>:27-33</code>, <code>:30-33</code> and <code>:74</code> did not move). The 2026-10-21 entry above keeps
+          its <code>CHANGELOG.md:93</code> and <code>:230</code> as written; the v1.247.0 and v1.241.0 entries now sit at
+          <code>CHANGELOG.md:308</code> and <code>:445</code>.</li>
+          </ol>
           <h2 id="related">Related</h2>
           <p><a href="007-grpc-extraction.html">ADR-007</a> (Result over the wire via gRPC, the second edge the shared severity
           ranking now serves),
@@ -719,6 +757,7 @@
             <li><a href="#revision-2026-10-06">Revision (2026-10-06)</a></li>
             <li><a href="#revision-2026-10-07">Revision (2026-10-07)</a></li>
             <li><a href="#revision-2026-10-21">Revision (2026-10-21)</a></li>
+            <li><a href="#revision-2026-10-26">Revision (2026-10-26)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

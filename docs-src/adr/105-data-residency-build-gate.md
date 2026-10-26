@@ -1,7 +1,7 @@
 # ADR-105: The Published Data-Residency Claim as a Build Gate
 
 ## Status
-Accepted (2026-09-01). Revised 2026-10-01 (region matching is a whole-token comparison rather than plain containment; see Revision below). Revised 2026-10-06: the gate runs only on a code diff, so a Markdown-only pull request skips it. Revised 2026-10-07: anchors refreshed after the v1.233.0 release. Revised 2026-10-21: rubric section 30 title corrected and anchors refreshed after the ADC deploy workflow, the ADC and Store privacy policies and the shipped API baseline moved.
+Accepted (2026-09-01). Revised 2026-10-01 (region matching is a whole-token comparison rather than plain containment; see Revision below). Revised 2026-10-06: the gate runs only on a code diff, so a Markdown-only pull request skips it. Revised 2026-10-07: anchors refreshed after the v1.233.0 release. Revised 2026-10-21: rubric section 30 title corrected and anchors refreshed after the ADC deploy workflow, the ADC and Store privacy policies and the shipped API baseline moved. Revised 2026-10-26: anchors refreshed after the ADC deploy workflow, the ADC architecture-tests project and the shipped API baseline moved.
 
 ## Context
 Both deployed apps publish a privacy policy at their repo root, and each has a section that tells a
@@ -15,7 +15,7 @@ actually provisioned lives in infrastructure code that moves for reasons having 
 the policy: ADC pins its SQL server's region to a default declared inside its deploy workflow,
 deliberately separate from where its Container Apps run, because the subscription blocks the SQL
 resource provider in the resource group's own location
-(`MMCA.ADC/.github/workflows/deploy.yml:1269-1274`); Store runs single-region and records that region
+(`MMCA.ADC/.github/workflows/deploy.yml:1270-1275`); Store runs single-region and records that region
 as a single sentence in its DR runbook (`MMCA.Store/infra/DISASTER-RECOVERY.md:19`). Either can move
 without anyone opening `PRIVACY.md`, and the failure is silent: nothing breaks, no test goes red, no
 alert fires, and the app keeps serving traffic while the published claim is false. This workspace had
@@ -31,7 +31,7 @@ Residency is not a property of any type, so that technique does not reach it: th
 prose and the truth lives in a workflow file or a runbook. It is a doc-to-infrastructure consistency
 problem, the same shape ADC already solves for SLO alerts by embedding the Bicep template and the
 operations runbook into the architecture test assembly and pairing them
-(`MMCA.ADC/Tests/Architecture/MMCA.ADC.Architecture.Tests/MMCA.ADC.Architecture.Tests.csproj:14-22`,
+(`MMCA.ADC/Tests/Architecture/MMCA.ADC.Architecture.Tests/MMCA.ADC.Architecture.Tests.csproj:22-30`,
 ADR-062), and the same shape ADR-081 solves for the cost baseline at deploy time.
 
 ## Decision
@@ -85,7 +85,7 @@ source of truth, and fails the build unless the repo's `PRIVACY.md` states that 
    reads `.github/workflows/deploy.yml`, finds the `SQL_LOCATION_OVERRIDE:-` marker, asserts it is
    present, and takes the letters and digits that follow it as the region (`:20-31`, marker at `:24`,
    assertion at `:26-27`). That default is the region ADC's SQL server and database land in
-   (`MMCA.ADC/.github/workflows/deploy.yml:1274`). Its denylist carries one entry, the
+   (`MMCA.ADC/.github/workflows/deploy.yml:1275`). Its denylist carries one entry, the
    pre-migration claim that once contradicted the deployed region (`:16`, explained at `:9-10`).
 
 8. **Store parses its DR runbook.** `DataResidencyTests`
@@ -99,7 +99,7 @@ source of truth, and fails the build unless the repo's `PRIVACY.md` states that 
 9. **It runs in the ordinary fitness suite, with no credentials and no cloud calls.** The rule lives
    in each repo's `*.Architecture.Tests` project and executes wherever that repo's `CI.slnf` test
    step runs, like every other architecture rule; in CI that step runs only when the diff is
-   classified as code (`MMCA.ADC/.github/workflows/deploy.yml:350`,
+   classified as code (`MMCA.ADC/.github/workflows/deploy.yml:351`,
    `MMCA.Store/.github/workflows/deploy.yml:325`). Unlike the deploy-time gates it never authenticates to Azure and
    never reads live resource state: both of its inputs are committed files.
 
@@ -117,7 +117,7 @@ source of truth, and fails the build unless the repo's `PRIVACY.md` states that 
     and `ExtractDeployedRegion`, the static `ContainsRegionClaim`, and the virtual
     `ForbiddenResidencyClaims` are all in the package's
     shipped baseline
-    (`MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/PublicAPI.Shipped.txt:78-80,363-364,561,593`),
+    (`MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/PublicAPI.Shipped.txt:82-84,368-369,568,603`),
     so reshaping the extension point is a reviewable text diff and a breaking change under ADR-015.
 
 ## Rationale
@@ -127,7 +127,7 @@ source of truth, and fails the build unless the repo's `PRIVACY.md` states that 
   artifact nothing in the build was reading.
 - **The truth has to be per repo, because the deployments genuinely differ.** ADC's SQL region is set
   independently of its compute region for a subscription-level reason
-  (`MMCA.ADC/.github/workflows/deploy.yml:1269-1273`), while Store's whole footprint is one region
+  (`MMCA.ADC/.github/workflows/deploy.yml:1270-1274`), while Store's whole footprint is one region
   documented in its DR runbook. A single hardcoded extractor would have fit neither; leaving only
   `Map` and `ExtractDeployedRegion` abstract keeps the assertion, the normalization and the
   denylist shared while the parsing stays local.
@@ -153,7 +153,7 @@ source of truth, and fails the build unless the repo's `PRIVACY.md` states that 
 - **It proves the policy agrees with a file, not with Azure.** Both extractors read committed text.
   A database provisioned by hand into another region, a restore into a different geography, or a
   geo-redundant backup target is invisible to this gate. In ADC's case the marker parsed is a shell
-  default (`MMCA.ADC/.github/workflows/deploy.yml:1274`, override mapped from a repository variable at `:1220`), so a deploy run with `SQL_LOCATION_OVERRIDE`
+  default (`MMCA.ADC/.github/workflows/deploy.yml:1275`, override mapped from a repository variable at `:1221`), so a deploy run with `SQL_LOCATION_OVERRIDE`
   set lands the SQL server in a region the test will never see, and the test still passes.
 - **A whole-token match is looser than equality.** The assertion is that some whole-token occurrence
   of the region exists in the policy (`DataResidencyTestsBase.cs:37-38`, loop at `:64-76`), so a policy
@@ -172,7 +172,7 @@ source of truth, and fails the build unless the repo's `PRIVACY.md` states that 
   is the intended fail-loud posture, but the cost lands on an unrelated edit.
 - **A Markdown-only pull request skips the gate.** Both repos classify any `*.md` path as docs-only
   (`MMCA.ADC/.github/workflows/deploy.yml:138`, `MMCA.Store/.github/workflows/deploy.yml:192`), and
-  the `CI.slnf` test step runs only on a code diff (ADC `:350`, Store `:325`). A pull request that edits
+  the `CI.slnf` test step runs only on a code diff (ADC `:351`, Store `:325`). A pull request that edits
   only `PRIVACY.md` therefore never runs this test, and in Store both inputs (`PRIVACY.md` and
   `infra/DISASTER-RECOVERY.md`) are Markdown, so an edit to either alone is not checked. The drift
   surfaces on the next pull request that touches code.
@@ -241,6 +241,21 @@ anchors moved.
    (`:1220`), the code-gated "Run unit & architecture tests (with coverage)" step (`:350`, its
    `if` at `:351`), and the shipped API entries
    (`MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/PublicAPI.Shipped.txt:78-80,363-364,561,593`).
+
+## Revision (2026-10-26)
+Re-verified against current source. The decision, both extractors, the ADC `SQL_LOCATION_OVERRIDE:-`
+marker and its `westus2` default, the code-diff gating of the test step, the Store anchors and every
+shipped API member are unchanged; only anchors moved, and they are re-pointed in Context,
+Decisions 7, 9 and 11, Rationale and Trade-offs.
+
+1. Anchors re-verified against current source: the ADC `deploy.yml` SQL region rationale comment
+   (`MMCA.ADC/.github/workflows/deploy.yml:1270-1274`), the `SQL_LOCATION_OVERRIDE:-westus2` default
+   (`:1275`), the `SQL_LOCATION_OVERRIDE` mapping from the `AZURE_SQL_LOCATION` repository variable
+   (`:1221`), the code-gated "Run unit & architecture tests (with coverage)" step (`:351`, its `if`
+   at `:352`), the SLO pairing embeds in the ADC architecture-tests project
+   (`MMCA.ADC/Tests/Architecture/MMCA.ADC.Architecture.Tests/MMCA.ADC.Architecture.Tests.csproj:22-30`),
+   and the shipped API entries
+   (`MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/PublicAPI.Shipped.txt:82-84,368-369,568,603`).
 
 ## Related
 [ADR-009](009-resilience-and-recovery-objectives.md) (the single-region acceptance a consumer must

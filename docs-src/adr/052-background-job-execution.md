@@ -13,7 +13,8 @@ save into a distributed-lock helper): see the revisions at the end. Revised 2026
 drain now loops `WaitToReadAsync` plus `TryRead` and, on shutdown, drains what is still queued
 within a 5-second budget, logging what it abandons; the producer API is a void `Enqueue` rather
 than `TryEnqueue`; the session-scoring queue no longer exists in source; and the bookmark
-cache-eviction signal is a second, coalescing (`DropWrite`) instance.
+cache-eviction signal is a second, coalescing (`DropWrite`) instance. Revised 2026-10-26: anchors
+refreshed after the `SubmitQuestionHandler` and `OpenLivePollHandler` bodies shifted.
 
 ## Context
 Some requests trigger work that cannot run inside the request: an AI scoring pass over an event's
@@ -302,3 +303,31 @@ is how the drain consumes and stops, the producer API, and the expensive instanc
      body at `:211-212`, queue writes at `:223` and `:238`.
    - `SessionQuestionUpvoteChangedHandler.cs`: `IDomainEventHandler` at `:44`, `BestEffort` at
      `:54`, scope at `:56`, enqueue at `:87`.
+
+## Revision (2026-10-26)
+Re-verified against current source. **Nothing in the decision, the post-commit rule or the
+ephemeral half moved:** `SubmitQuestionHandler` still saves inside the claim helper and enqueues
+below that call, and `OpenLivePollHandler` still enqueues from the `OnMutatedAsync` post-save hook
+of `MutateEntityHandlerBase`. Only line anchors moved: the `SubmitQuestionHandler` body after the
+`ClaimWait` field sits a uniform four lines higher than item 7 of the Revision (2026-10-21) records,
+and `OpenLivePollHandler` sits one line higher than the Revision (2026-08-31) records. The dated
+revisions above keep their anchors as written.
+
+1. Anchors re-verified against current source:
+   - `SubmitQuestionHandler.cs`
+     (`MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Application/SessionQuestions/UseCases/Submit/SubmitQuestionHandler.cs`):
+     class at `:32`, `IDistributedLock` parameter at `:35`, `ICommandHandler` base at `:39`,
+     `ClaimTimeToLive` at `:50`, `ClaimWait` at `:58`, `CreateUnderClaimAsync` call at `:95` and
+     definition at `:144`, `LogQuestionSubmitted` at `:99`, `EnqueueSubmittedAsync` call at `:101`,
+     `ClaimKey` at `:109`, `TryAcquireAsync` at `:150`, `SaveChangesAsync` at `:186`,
+     `EnqueueSubmittedAsync` and its `BestEffort.ExecuteAsync` body at `:207-208`, queue writes at
+     `:219` (approved) and `:234` (pending count).
+   - `OpenLivePollHandler.cs`
+     (`MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Application/LivePolls/UseCases/Open/OpenLivePollHandler.cs`):
+     `MutateEntityHandlerBase` at `:26`, `LogMutated` override at `:78`, `EnqueueOpened(poll)` call
+     at `:87`, queue write at `:108`.
+   - `MutateEntityHandlerBase.cs`: `MutateEntityHandlerCore` at `:52`, `SaveSkipped` check at
+     `:310`, `SaveChangesAsync` at `:322`, `LogMutated` at `:324`, `OnMutatedAsync` at `:325`,
+     `MutateEntityHandlerBase` at `:339` (DTO variant at `:362`), unchanged.
+   - `SessionQuestionUpvoteChangedHandler.cs`: `IDomainEventHandler` at `:44`, `BestEffort` at
+     `:54`, enqueue at `:87`, unchanged.

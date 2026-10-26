@@ -1,7 +1,7 @@
 # ADR-129: The Tactical Aggregate Contract
 
 ## Status
-Accepted (2026-10-01). Revised 2026-10-21: anchors refreshed after the ADC `Speaker` aggregate moved its child-access call sites.
+Accepted (2026-10-01). Revised 2026-10-21: anchors refreshed after the ADC `Speaker` aggregate moved its child-access call sites. Revised 2026-10-26: anchors refreshed after the framework aggregate base and the Helpdesk `Ticket`, ADC `Speaker` and Store `Product` aggregates moved their child-access and `Result.Combine` lines.
 
 ## Context
 Every entity in the four repos is written the same way: a sealed class over a framework base, a
@@ -68,11 +68,11 @@ every repo follows, not a test.
   replacement: it copies the incoming items, calls the overridable `ValidateSetItems` hook (a no-op by
   default) and only then replaces the backing list (`:60-76`, hook at `:87-92`). Three more protected
   static helpers build on the lookup: `RemoveChildOrNotFound` (lookup then the child's `Delete()`,
-  `:158`), `RestoreChild` (reactivates a soft-deleted child, `:214`) and `DeleteChildren` (soft-deletes
-  every active child for a cascading `Delete()`, `:275`). All five are protected, so only the aggregate
+  `:158`), `RestoreChild` (reactivates a soft-deleted child, `:212`) and `DeleteChildren` (soft-deletes
+  every active child for a cascading `Delete()`, `:273`). All five are protected, so only the aggregate
   calls them directly; aggregates still expose `internal` `SetXxx` wrappers over `SetItems` for
   manual navigation loading (for example
-  `MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.Domain/Products/Product.cs:413-414`), which
+  `MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.Domain/Products/Product.cs:404-405`, `:411-412`), which
   Application-layer navigation populators call
   (`MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.Application/Products/ProductNavigationPopulator.cs:28`).
   No fitness rule requires the use of any of these helpers.
@@ -87,13 +87,13 @@ every repo follows, not a test.
 - **The reference shape is Helpdesk's `Ticket`.** It is sealed over the aggregate base
   (`MMCA.Helpdesk/Source/Modules/Tickets/MMCA.Helpdesk.Tickets.Domain/Tickets/Ticket.cs:26`), has a
   private constructor (`:52`) and `Create` returning `Result<Ticket>` (`:66`), composes
-  `TicketInvariants` through `Result.Combine` in `Create` and `UpdateDetails` (`:68`, `:118`), and
-  finds a comment through `GetChildOrNotFound` (`:144`). `TicketInvariants` is the static class
+  `TicketInvariants` through `Result.Combine` in `Create` and `UpdateDetails` (`:68`, `:117`), and
+  finds a comment through `GetChildOrNotFound` (`:143`). `TicketInvariants` is the static class
   (`MMCA.Helpdesk/Source/Modules/Tickets/MMCA.Helpdesk.Tickets.Domain/Tickets/TicketInvariants.cs:16`,
   `Result.Combine` at `:27`, `:33`, `:40`). The ADC and Store aggregates use the same members, for
-  example `Speaker` (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Speakers/Speaker.cs:437`,
-  `:497`, `:517`) and `Product`
-  (`MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.Domain/Products/Product.cs:407`, `:455`, `:474`).
+  example `Speaker` (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Speakers/Speaker.cs:434`,
+  `:491`, `:510`) and `Product`
+  (`MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.Domain/Products/Product.cs:405`, `:451`, `:470`).
 - **Adoption: the three application repos subclass the full base unchanged.** MMCA.ADC
   (`MMCA.ADC/Tests/Architecture/MMCA.ADC.Architecture.Tests/Domain/EntityConventionTests.cs:3-6`),
   MMCA.Store
@@ -167,6 +167,27 @@ hold (`SetItems` at `Product.cs:407`, `RemoveChildOrNotFound` at `:455`, `GetChi
    `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Speakers/Speaker.cs:437`,
    `RemoveChildOrNotFound` at `:497` and `GetChildOrNotFound` at `:517` (the same members also
    appear at `:511` and `:423`). The earlier `:394`, `:454` and `:474` no longer land on these calls.
+
+## Revision (2026-10-26)
+Re-verified against current source. The contract is unchanged: the five protected child-access
+members, the `SetItems`/`ValidateSetItems` pair and the `Result.Combine` usage in Helpdesk `Ticket`,
+ADC `Speaker` and Store `Product` are as described. Only line anchors moved, in the framework base and
+in all three example aggregates; the Store `Product` anchors the 2026-10-21 revision called stable had
+also moved.
+
+1. Anchors re-verified against current source:
+   `MMCA.Common/Source/Core/MMCA.Common.Domain/Entities/AuditableAggregateRootEntity.cs:212`
+   (`RestoreChild`, was `:214`) and `:273` (`DeleteChildren`, was `:275`); `:105`, `:158`, `:60` and
+   `:87` still hold. Store
+   `MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.Domain/Products/Product.cs:405` (`SetItems`),
+   `:451` (`RemoveChildOrNotFound`, also `:301`), `:470` (`GetChildOrNotFound`, also `:500`, `:534`,
+   `:556`) and the `internal` wrappers at `:404-405` and `:411-412`. ADC
+   `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Speakers/Speaker.cs:434`
+   (`SetItems`, also `:504`), `:491` (`RemoveChildOrNotFound`, also `:421`) and `:510`
+   (`GetChildOrNotFound`). Helpdesk
+   `MMCA.Helpdesk/Source/Modules/Tickets/MMCA.Helpdesk.Tickets.Domain/Tickets/Ticket.cs:117`
+   (`Result.Combine` in `UpdateDetails`) and `:143` (`GetChildOrNotFound`); `Ticket.cs:26`, `:52`,
+   `:66`, `:68` and `TicketInvariants.cs:16`, `:27`, `:33`, `:40` still hold.
 
 ## Related
 [ADR-013](013-result-pattern.md) (the `Result<T>` factories this contract requires),

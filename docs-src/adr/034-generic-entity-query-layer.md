@@ -19,6 +19,8 @@ is bounded).
 Revised 2026-10-21: the generic create now builds its `Location` itself and returns `Created`
 rather than `CreatedAtRoute`, the filter registry also covers the `Email` value object, and the
 fail-closed CSV export is recorded among the virtual reads; anchors refreshed.
+Revised 2026-10-26: anchors refreshed after the create's `Location` and `Created` lines and the
+delete action in `AggregateRootEntityControllerBase.cs` moved up one line.
 ## Context
 Every module exposes many entities, and most of them need the same read and write
 surface: list, page, look up for a dropdown, fetch by id, create, delete. Hand
@@ -55,11 +57,11 @@ contract, supplied by two controller bases over a shared query pipeline.
    (`Source/Presentation/MMCA.Common.API/Controllers/AggregateRootEntityControllerBase.cs:29`)
    inherits all of the above and adds `[HttpPost]` create
    (`AggregateRootEntityControllerBase.cs:75`) and `[HttpDelete("{id}")]`
-   (`AggregateRootEntityControllerBase.cs:107`). The create returns 201 through
-   `Created(location, created)` (`AggregateRootEntityControllerBase.cs:98`), with the
+   (`AggregateRootEntityControllerBase.cs:106`). The create returns 201 through
+   `Created(location, created)` (`AggregateRootEntityControllerBase.cs:97`), with the
    `Location` resolved before the result is returned: `Url.Link(GetByIdRouteName, ...)` when
-   the named route resolves (`:94`, `GetByIdRouteName` defaulting to `Get{EntityName}ById` at
-   `:57`), otherwise the new id appended to the collection path the POST was made to (`:96`).
+   the named route resolves (`:93`, `GetByIdRouteName` defaulting to `Get{EntityName}ById` at
+   `:57`), otherwise the new id appended to the collection path the POST was made to (`:95`).
    The create action is decorated with `[Idempotent]`
    (`AggregateRootEntityControllerBase.cs:76`) so a retried POST does not create a
    duplicate (ADR-017).
@@ -169,7 +171,7 @@ contract, supplied by two controller bases over a shared query pipeline.
   learned once rather than read off each endpoint.
 - **Opting out means overriding the base.** All five reads (list, paged, CSV export, lookup
   and by-id: `EntityControllerBase.cs:110`, `:158`, `:257`, `:320`, `:361`) and the two
-  writes (`AggregateRootEntityControllerBase.cs:80`, `:112`) are `virtual`, so a controller
+  writes (`AggregateRootEntityControllerBase.cs:80`, `:111`) are `virtual`, so a controller
   that needs bespoke behavior overrides the specific action rather than abandoning the base,
   but the default surface is opt-out, not opt-in.
 - **The CSV export widens the inherited surface, so it fails closed.** `ExportAsync`
@@ -342,3 +344,17 @@ surface moved.
    `MaxUnboundedResultLimit` at
    `Source/Core/MMCA.Common.Infrastructure/Persistence/Repositories/EFReadRepository.cs:245`, with
    the other `Take` at `:288`.
+
+## Revision (2026-10-26)
+Re-verified against current source. No decision, rationale or behavior changed: the create still
+resolves its own `Location` and returns `Created`, and the delete is still a `virtual` write. Only
+the line anchors in `AggregateRootEntityControllerBase.cs` moved.
+
+1. Anchors re-verified against current source:
+   `Source/Presentation/MMCA.Common.API/Controllers/AggregateRootEntityControllerBase.cs` class
+   `:29`, `GetByIdRouteName` `:57`, rationale remarks `:67-74`, `[HttpPost]` `:75`, `[Idempotent]`
+   `:76`, `CreateAsync` `:80`, `Url.Link` `:93`, collection-path fallback `:95`,
+   `Created(location, created)` `:97`, `[HttpDelete("{id}")]` `:106`, `DeleteAsync` `:111`
+   (rebased in Decision item 2 and Trade-offs). Anchors inside the earlier Revision sections are
+   left as recorded; the revision 2026-09-07 item 3 `LookupNameContract` check stays at the `:394`
+   revision 2026-10-21 item 4 gives.

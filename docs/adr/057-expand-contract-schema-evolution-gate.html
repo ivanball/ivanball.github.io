@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 134 ADRs</summary>
+        <summary>All 135 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -234,6 +234,7 @@
         <li><a href="132-build-strictness-analyzer-policy.html">132 · Build Strictness: Analyzers at Error Severity, a Shared Baseline, and CI Test Floors</a></li>
         <li><a href="133-versioned-password-hash-work-factor.html">133 · Versioned Password Hash Work Factor</a></li>
         <li><a href="134-cloud-neutral-core-vendor-adapters.html">134 · Cloud-Neutral Core With Vendor Adapter Packages</a></li>
+        <li><a href="135-application-namespace-keyspace-isolation.html">135 · One Application Namespace Isolates Shared Infrastructure Keyspaces</a></li>
           </ol>
         </nav>
       </details>
@@ -252,24 +253,31 @@
           fixture. The decision itself is unchanged. Revised 2026-10-07: anchors refreshed after the v1.233.0 release, and the
           Decision&#39;s MMCA.Store regex anchor corrected to the regex line. Revised 2026-10-21: the filter case of
           an in-place index rebuild is attributed to the MMCA.ADC override marker rather than to MMCA.Store&#39;s
-          CONTRIBUTING (which documents INCLUDE columns only), and anchors refreshed.</p>
+          CONTRIBUTING (which documents INCLUDE columns only), and anchors refreshed. Revised 2026-10-26: the
+          guard in both repos now also flags <code>RenameColumn</code> and <code>RenameTable</code> (five operations, not three),
+          which both CONTRIBUTING files do not yet document; the rollback is described as skipping any app
+          whose newest revision is live; and anchors refreshed.</p>
           <h2 id="context">Context</h2>
           <p>ADR-030 decides <strong>who</strong> applies a migration: every service host runs <code>DatabaseInitStrategy = Migrate</code>
           and self-applies its pending EF Core migrations at startup as the sole migrator, with no deploy-step
-          <code>sqlcmd</code> backstop (<code>MMCA.Store/.github/workflows/deploy.yml:1337-1347</code>,
-          <code>MMCA.ADC/.github/workflows/deploy.yml:1456-1469</code>). It says nothing about what <strong>shape</strong> a migration
+          <code>sqlcmd</code> backstop (<code>MMCA.Store/.github/workflows/deploy.yml:1338-1348</code>,
+          <code>MMCA.ADC/.github/workflows/deploy.yml:1457-1470</code>). It says nothing about what <strong>shape</strong> a migration
           may take.</p>
           <p>That gap is load-bearing because production rollback is <strong>revision-only</strong>. When the post-deploy smoke
-          gate fails, the deploy rolls every container app back to its previous revision with
-          <code>az containerapp revision copy --from-revision</code> (<code>MMCA.Store/.github/workflows/deploy.yml:1530</code>,
-          <code>MMCA.ADC/.github/workflows/deploy.yml:1625</code>). That reverts the <strong>image</strong> and nothing else:
+          gate fails, the deploy rolls back each container app whose newest revision is not live, copying its
+          newest healthy, active earlier revision with <code>az containerapp revision copy --from-revision</code>
+          (<code>MMCA.Store/.github/workflows/deploy.yml:1531</code>, <code>MMCA.ADC/.github/workflows/deploy.yml:1631</code>). An
+          app whose newest revision is already serving all traffic is skipped, so a smoke failure on a fleet
+          that activated fully rolls nothing back (<code>MMCA.Store/.github/workflows/deploy.yml:1504-1508</code>,
+          <code>:1517-1520</code>; <code>MMCA.ADC/.github/workflows/deploy.yml:1602-1604</code>, <code>:1608-1615</code>). For an app that is
+          rolled back, the copy reverts the <strong>image</strong> and nothing else:
           the new revision already migrated the database on boot, and no down-migration runs. The previous
           release therefore keeps serving traffic against the <strong>new</strong> schema, which is exactly the statement
           both repos&#39; CONTRIBUTING makes (<code>MMCA.Store/CONTRIBUTING.md:58-61</code>, <code>MMCA.ADC/CONTRIBUTING.md:58-61</code>).
           A <code>DropColumn</code> shipped alongside the code that stopped reading it makes the rollback path a broken
           release rather than a recovery.</p>
           <p>The existing build-time gate does not cover this. <code>dotnet ef migrations has-pending-model-changes</code>
-          (<code>MMCA.Store/.github/workflows/deploy.yml:415-429</code>, <code>MMCA.ADC/.github/workflows/deploy.yml:450-465</code>)
+          (<code>MMCA.Store/.github/workflows/deploy.yml:415-429</code>, <code>MMCA.ADC/.github/workflows/deploy.yml:451-466</code>)
           asserts a migration <strong>exists</strong> for every model change; it has no opinion on whether that migration is
           survivable one release back. The gate below is the shape rule that ADR-030 left open. It arrived in
           MMCA.ADC with the 2026-07-19 security/resilience/ops review batch (commit <code>adee5058</code>, PR #38) and was
@@ -278,26 +286,35 @@
           <p>Schema changes follow <strong>expand/contract</strong>, and a CI step enforces the contract half.</p>
           <ul>
           <li><strong>Expand now, contract later, as a written rule.</strong> Adding nullable columns, new tables and new
-          indexes is safe in any release; <code>DropColumn</code> / <code>DropTable</code> / <code>DropIndex</code> belong to a LATER release,
-          once no revision that reads the old shape can still be rolled back to
-          (<code>MMCA.Store/CONTRIBUTING.md:63-66</code>, <code>MMCA.ADC/CONTRIBUTING.md:63-66</code>).</li>
-          <li><strong>A migration ADDED by a PR may not drop without a marker.</strong> The <code>Expand/contract migration guard (schema rollback safety)</code> step fails the build when a newly added migration&#39;s <code>Up()</code> matches
-          <code>\.(DropColumn|DropTable|DropIndex)\s*(&lt;[^&gt;]*&gt;)?\s*\(</code> and the same <code>Up()</code> body does not carry the
-          override marker (<code>MMCA.Store/.github/workflows/deploy.yml:431-482</code>, regex at <code>:474</code>;
-          <code>MMCA.ADC/.github/workflows/deploy.yml:234-282</code>, regex at <code>:274</code>). Those three operations are the entire matched set.</li>
+          indexes is safe in any release; destructive operations belong to a LATER release, once no revision
+          that reads the old shape can still be rolled back to. Both CONTRIBUTING files name the contract step
+          as <code>DropColumn</code> / <code>DropTable</code> / <code>DropIndex</code> only (<code>MMCA.Store/CONTRIBUTING.md:63-66</code>,
+          <code>MMCA.ADC/CONTRIBUTING.md:63-66</code>) and describe the guard with the same three operations
+          (<code>MMCA.Store/CONTRIBUTING.md:68-70</code>, <code>MMCA.ADC/CONTRIBUTING.md:68-70</code>), so the written rule lags
+          the five operations the guard below enforces.</li>
+          <li><strong>A migration ADDED by a PR may not drop or rename without a marker.</strong> The
+          <code>Expand/contract migration guard (schema rollback safety)</code> step fails the build when a newly
+          added migration&#39;s <code>Up()</code> matches
+          <code>\.(DropColumn|DropTable|DropIndex|RenameColumn|RenameTable)\s*(&lt;[^&gt;]*&gt;)?\s*\(</code> and the same <code>Up()</code>
+          body does not carry the override marker (<code>MMCA.Store/.github/workflows/deploy.yml:431-483</code>, regex
+          at <code>:475</code>; <code>MMCA.ADC/.github/workflows/deploy.yml:234-283</code>, regex at <code>:275</code>). Those five operations
+          are the entire matched set. The renames are in it because EF emits them silently when a property or
+          entity is renamed, and a rename breaks the old revision exactly like a drop (step comment
+          <code>MMCA.Store/.github/workflows/deploy.yml:436-437</code> and <code>::error::</code> text <code>:477</code>;
+          <code>MMCA.ADC/.github/workflows/deploy.yml:239-240</code> and <code>:277</code>).</li>
           <li><strong>The marker&#39;s documented format is one comment line:</strong>
           <code>// EXPAND-CONTRACT-OVERRIDE: &lt;why this drop is safe one release back&gt;</code>
           (<code>MMCA.Store/CONTRIBUTING.md:74-76</code>, <code>MMCA.ADC/CONTRIBUTING.md:74-76</code>). What the step actually
           enforces is looser: <code>grep -q &#39;EXPAND-CONTRACT-OVERRIDE&#39;</code> over the <code>Up()</code> body
-          (<code>MMCA.Store/.github/workflows/deploy.yml:475</code>, <code>MMCA.ADC/.github/workflows/deploy.yml:275</code>), so the
+          (<code>MMCA.Store/.github/workflows/deploy.yml:476</code>, <code>MMCA.ADC/.github/workflows/deploy.yml:276</code>), so the
           token must appear inside <code>Up()</code>, but the <code>//</code> prefix, the colon and the reason text are convention,
           not validation.</li>
           <li><strong>&quot;Added by this PR&quot; means git-added, base-relative, path-scoped.</strong> The step fetches the PR base and
           runs <code>git diff --diff-filter=A --name-only &quot;origin/&lt;base_ref&gt;...HEAD&quot;</code> limited to
           <code>Source/Hosting/MMCA.Store.Migrations.SqlServer.*/Migrations/*.cs</code> (respectively
-          <code>MMCA.ADC.Migrations.SqlServer.*</code>) (<code>MMCA.Store/.github/workflows/deploy.yml:458-459</code>,
-          <code>MMCA.ADC/.github/workflows/deploy.yml:258-259</code>). <code>*.Designer.cs</code> files are skipped explicitly
-          (<code>MMCA.Store/.github/workflows/deploy.yml:470-472</code>, <code>MMCA.ADC/.github/workflows/deploy.yml:270-272</code>),
+          <code>MMCA.ADC.Migrations.SqlServer.*</code>) (<code>MMCA.Store/.github/workflows/deploy.yml:459-460</code>,
+          <code>MMCA.ADC/.github/workflows/deploy.yml:259-260</code>). <code>*.Designer.cs</code> files are skipped explicitly
+          (<code>MMCA.Store/.github/workflows/deploy.yml:471-473</code>, <code>MMCA.ADC/.github/workflows/deploy.yml:271-273</code>),
           the model snapshot is a modification rather than an addition so it never enters the list, and the
           dot before the wildcard means only per-module migration projects match. Today that is every
           migration project in both repos: <code>MMCA.Store.Migrations.SqlServer.{Catalog,Identity,Sales}</code> and
@@ -306,7 +323,7 @@
           the pathspec.</li>
           <li><strong>Only the <code>Up()</code> body is scanned.</strong> The body is extracted with
           <code>awk &#39;/protected override void Up\(/{flag=1} /protected override void Down\(/{flag=0} flag&#39;</code>
-          (<code>MMCA.Store/.github/workflows/deploy.yml:473</code>, <code>MMCA.ADC/.github/workflows/deploy.yml:273</code>), because
+          (<code>MMCA.Store/.github/workflows/deploy.yml:474</code>, <code>MMCA.ADC/.github/workflows/deploy.yml:274</code>), because
           every additive migration&#39;s <code>Down()</code> legitimately drops what <code>Up()</code> added and <code>Down()</code> never runs at
           startup: down-migration is explicit tooling only.</li>
           <li><strong>It is a merge gate, not a deploy gate.</strong> The step lives in the <code>build-and-test</code> job, which both
@@ -378,8 +395,8 @@
           </ul>
           <h2 id="trade-offs">Trade-offs</h2>
           <ul>
-          <li><strong>Three operations, not a model of compatibility.</strong> <code>AlterColumn</code> narrowing a type or flipping a
-          column to NOT NULL, <code>DropForeignKey</code>, <code>DropPrimaryKey</code>, <code>DropSchema</code>, <code>RenameColumn</code> and a raw
+          <li><strong>Five operations, not a model of compatibility.</strong> <code>AlterColumn</code> narrowing a type or flipping a
+          column to NOT NULL, <code>DropForeignKey</code>, <code>DropPrimaryKey</code>, <code>DropSchema</code> and a raw
           <code>migrationBuilder.Sql(&quot;DROP ...&quot;)</code> all pass unflagged. The gate catches the common destructive
           shapes, not every one.</li>
           <li><strong>The marker is per-migration and unvalidated.</strong> One occurrence anywhere in <code>Up()</code> exempts every
@@ -390,10 +407,10 @@
           reaches <code>main</code> without a PR.</li>
           <li><strong>The diff fails closed, and the checkout it depends on is elsewhere in the file.</strong> Neither repo
           wraps the diff in <code>|| true</code> any more: an unresolvable diff prints an <code>::error::</code> and exits 1
-          (<code>MMCA.Store/.github/workflows/deploy.yml:454-462</code>,
-          <code>MMCA.ADC/.github/workflows/deploy.yml:253-262</code>), and only a diff that resolves to an empty added
+          (<code>MMCA.Store/.github/workflows/deploy.yml:454-463</code>,
+          <code>MMCA.ADC/.github/workflows/deploy.yml:252-263</code>), and only a diff that resolves to an empty added
           list prints &quot;No new migration files in this diff: expand/contract guard passes.&quot; and exits 0
-          (<code>MMCA.Store/.github/workflows/deploy.yml:463-466</code>, <code>MMCA.ADC/.github/workflows/deploy.yml:263-266</code>).
+          (<code>MMCA.Store/.github/workflows/deploy.yml:464-467</code>, <code>MMCA.ADC/.github/workflows/deploy.yml:264-267</code>).
           Both <code>build-and-test</code> checkouts now set <code>fetch-depth: 0</code>
           (<code>MMCA.Store/.github/workflows/deploy.yml:265-271</code>, <code>MMCA.ADC/.github/workflows/deploy.yml:229-232</code>),
           so the two repos run the same step against the same git object graph. The residual cost is that the
@@ -482,6 +499,49 @@
           <code>:261</code>, <code>:265-271</code>, <code>:192-193</code>) and the MMCA.ADC guard-step anchors (<code>:225</code>, <code>:229-232</code>,
           <code>:234-282</code>, <code>:258-259</code>, <code>:270-275</code>, <code>:138-139</code>) still hold.</li>
           </ol>
+          <h2 id="revision-2026-10-26">Revision (2026-10-26)</h2>
+          <p>Re-verified against current source. The decision, the <code>Up()</code>-only scan, the marker check, the
+          fail-closed diff, the Markdown-only <code>code</code> filter, the merge-check placement and the revision-only
+          rollback are unchanged. What moved is the matched set (both guards now match five operations rather
+          than three), the rollback&#39;s reporting in MMCA.ADC, and the guard-step and rollback anchors in both
+          repos.</p>
+          <ol>
+          <li>The guard regex in both repos is now
+          <code>\.(DropColumn|DropTable|DropIndex|RenameColumn|RenameTable)\s*(&lt;[^&gt;]*&gt;)?\s*\(</code>
+          (<code>MMCA.Store/.github/workflows/deploy.yml:475</code>, <code>MMCA.ADC/.github/workflows/deploy.yml:275</code>),
+          added on 2026-10-24 (MMCA.Store commit <code>4ee4e912</code>, PR #224; MMCA.ADC commit <code>9004ce8dd</code>, PR #290).
+          The step comments (Store <code>:436-437</code>, ADC <code>:239-240</code>) and the <code>::error::</code> text (Store <code>:477</code>, ADC
+          <code>:277</code>) give the reason: EF emits a rename silently, and a rename breaks the one-release-back
+          revision exactly like a drop. The Decision bullet now names five operations, and the Trade-offs
+          bullet no longer lists <code>RenameColumn</code> among the shapes that pass unflagged. The earlier revisions&#39;
+          statements that the three-operation set is unchanged stay as recorded on their dates.</li>
+          <li>Both CONTRIBUTING files still name only <code>DropColumn</code> / <code>DropTable</code> / <code>DropIndex</code>, both as the
+          contract step and in the guard description (<code>MMCA.Store/CONTRIBUTING.md:66</code>, <code>:70</code>;
+          <code>MMCA.ADC/CONTRIBUTING.md:66</code>, <code>:70</code>), so the documented rule lags the five operations the guard
+          enforces. The Decision&#39;s first bullet now records that gap, and its second bullet&#39;s heading names
+          renames alongside drops.</li>
+          <li>The Context paragraph said a smoke failure rolls every container app back. Both rollbacks skip an
+          app whose newest revision is already live, so a smoke failure on a fleet that activated fully
+          rolls nothing back (<code>MMCA.Store/.github/workflows/deploy.yml:1504-1508</code>, <code>:1517-1520</code>;
+          <code>MMCA.ADC/.github/workflows/deploy.yml:1602-1604</code>, <code>:1608-1615</code>); the paragraph now says so. For an
+          app that is rolled back the copy is still revision-only. In MMCA.ADC the rollback also gained
+          per-app counters (<code>:1606</code>), a &quot;no candidate revision&quot; message (<code>:1639-1640</code>) and an always-printed
+          summary line (<code>:1651</code>), on 2026-10-23 (commit <code>f61e9ecda</code>, PR #289), which moved its
+          <code>revision copy</code> call from <code>:1625</code> to <code>:1631</code>.</li>
+          <li>Anchors re-verified against current source: MMCA.Store guard step
+          <code>MMCA.Store/.github/workflows/deploy.yml:431-483</code> (step filter <code>:432</code>, fail-closed <code>:454-463</code>, diff
+          <code>:459-460</code>, empty list <code>:464-467</code>, Designer skip <code>:471-473</code>, <code>Up()</code> extraction <code>:474</code>, regex <code>:475</code>,
+          marker <code>:476</code>), startup-migrate note <code>:1338-1348</code>, rollback <code>:1531</code>; MMCA.ADC guard step
+          <code>MMCA.ADC/.github/workflows/deploy.yml:234-283</code> (step filter <code>:235</code>, fail-closed <code>:252-263</code>, diff
+          <code>:259-260</code>, empty list <code>:264-267</code>, Designer skip <code>:271-273</code>, <code>Up()</code> extraction <code>:274</code>, regex <code>:275</code>,
+          marker <code>:276</code>), model-drift gate <code>:451-466</code>, startup-migrate note <code>:1457-1470</code>, rollback <code>:1631</code>.
+          MMCA.Store&#39;s model-drift gate <code>:415-429</code>, <code>pull_request</code> condition <code>:261</code>, checkout <code>:265-271</code>
+          (vacuous-window comment <code>:267-270</code>) and Markdown-only filter <code>:192-193</code>, MMCA.ADC&#39;s <code>:225</code>,
+          <code>:229-232</code> and <code>:138-139</code>, and the CONTRIBUTING anchors (<code>:37-38</code>, <code>:58-61</code>, <code>:63-66</code>, <code>:74-76</code> in
+          both, <code>MMCA.Store/CONTRIBUTING.md:78-80</code>) still hold. The MMCA.ADC fail-closed anchor changed
+          scope rather than shifting: it now runs from <code>set -euo pipefail</code> through the <code>exit 1</code> block
+          (<code>:252-263</code>, previously recorded as <code>:253-266</code>).</li>
+          </ol>
           <h2 id="related">Related</h2>
           <p>ADR-030 (decides that each service self-applies its migrations at startup, which is precisely why a
           rolled-back revision meets the new schema; this ADR constrains what those migrations may contain),
@@ -508,6 +568,7 @@
             <li><a href="#revision-2026-10-06">Revision (2026-10-06)</a></li>
             <li><a href="#revision-2026-10-07">Revision (2026-10-07)</a></li>
             <li><a href="#revision-2026-10-21">Revision (2026-10-21)</a></li>
+            <li><a href="#revision-2026-10-26">Revision (2026-10-26)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

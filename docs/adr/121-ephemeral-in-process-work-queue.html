@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 134 ADRs</summary>
+        <summary>All 135 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -234,6 +234,7 @@
         <li><a href="132-build-strictness-analyzer-policy.html">132 · Build Strictness: Analyzers at Error Severity, a Shared Baseline, and CI Test Floors</a></li>
         <li><a href="133-versioned-password-hash-work-factor.html">133 · Versioned Password Hash Work Factor</a></li>
         <li><a href="134-cloud-neutral-core-vendor-adapters.html">134 · Cloud-Neutral Core With Vendor Adapter Packages</a></li>
+        <li><a href="135-application-namespace-keyspace-isolation.html">135 · One Application Namespace Isolates Shared Infrastructure Keyspaces</a></li>
           </ol>
         </nav>
       </details>
@@ -246,7 +247,8 @@
           Revised 2026-10-01: the scoring trigger&#39;s feature gate and failure path, and ADR-025&#39;s place among the framework hosted services.
           Revised 2026-10-06: the scoring trigger&#39;s event-existence 404 and the handler&#39;s current retry remarks.
           Revised 2026-10-07: the live drain&#39;s bounded shutdown flush (complete the queue, then publish what remains within a 5-second budget) and its <code>WaitToReadAsync</code> loop.
-          Revised 2026-10-21: anchors refreshed after the live drain, upvote handler and question submit handler moved.</p>
+          Revised 2026-10-21: anchors refreshed after the live drain, upvote handler and question submit handler moved.
+          Revised 2026-10-26: anchors refreshed after the live poll open handler and question submit handler moved.</p>
           <h2 id="context">Context</h2>
           <p>ADR-052 ran two different kinds of work through one mechanism: ephemeral broadcasts that must not
           put a gRPC round trip on the hot path of a vote, and an AI scoring pass that takes minutes and issues
@@ -359,7 +361,7 @@
           enqueue is the body of that hook. <code>CloseLivePollHandler</code> declares the base at
           <code>.../LivePolls/UseCases/Close/CloseLivePollHandler.cs:24</code> and enqueues from the hook at <code>:73</code>
           (queue write at <code>:94-95</code>); <code>OpenLivePollHandler</code> at
-          <code>.../LivePolls/UseCases/Open/OpenLivePollHandler.cs:26</code> and <code>:88</code> (write at <code>:109-110</code>);
+          <code>.../LivePolls/UseCases/Open/OpenLivePollHandler.cs:26</code> and <code>:87</code> (write at <code>:108-109</code>);
           <code>ModerateQuestionHandler</code> at <code>.../SessionQuestions/UseCases/Moderate/ModerateQuestionHandler.cs:28</code>
           and <code>:89</code>, whose helper wraps its work in <code>BestEffort.ExecuteAsync</code> (<code>:138</code>) with one write per
           branch (<code>:140</code>, <code>:154</code>).</li>
@@ -367,10 +369,10 @@
           <code>SubmitQuestionHandler</code> implements <code>ICommandHandler&lt;SubmitQuestionCommand, Result&lt;SessionQuestionDTO&gt;&gt;</code>
           directly (<code>.../SessionQuestions/UseCases/Submit/SubmitQuestionHandler.cs:39</code>), so it owns its
           sequence. Its save is not inline: the count-decide-insert-save sequence runs inside
-          <code>CreateUnderClaimAsync</code> (<code>:148</code>) under a per-<code>(session, user)</code> <code>IDistributedLock</code> claim (<code>:154</code>,
-          <code>SaveChangesAsync</code> at <code>:190</code>), and <code>HandleAsync</code> calls that helper at <code>:97</code>, logs at <code>:103</code> and
-          awaits <code>EnqueueSubmittedAsync(question)</code> at <code>:105</code>, whose <code>BestEffort.ExecuteAsync</code> body
-          (<code>:211-212</code>) writes the queue at <code>:223</code> (approved) and <code>:238</code> (pending count). The rule a
+          <code>CreateUnderClaimAsync</code> (<code>:144</code>) under a per-<code>(session, user)</code> <code>IDistributedLock</code> claim (<code>:150</code>,
+          <code>SaveChangesAsync</code> at <code>:186</code>), and <code>HandleAsync</code> calls that helper at <code>:95</code>, logs at <code>:99</code> and
+          awaits <code>EnqueueSubmittedAsync(question)</code> at <code>:101</code>, whose <code>BestEffort.ExecuteAsync</code> body
+          (<code>:207-208</code>) writes the queue at <code>:219</code> (approved) and <code>:234</code> (pending count). The rule a
           future edit has to keep is therefore <strong>the enqueue stays below the <code>CreateUnderClaimAsync</code> call</strong>,
           not below a save statement in the same method.</li>
           </ul>
@@ -424,7 +426,7 @@
           needs its own queue rather than a wider reader, or ordering is lost.</li>
           <li><strong>One post-save ordering is remembered rather than enforced.</strong> The three base-class handlers cannot
           express the wrong order, but <code>SubmitQuestionHandler</code> can: an edit that lifted its enqueue above the
-          <code>CreateUnderClaimAsync</code> call (<code>SubmitQuestionHandler.cs:97</code>, <code>:105</code>) would broadcast a question that
+          <code>CreateUnderClaimAsync</code> call (<code>SubmitQuestionHandler.cs:95</code>, <code>:101</code>) would broadcast a question that
           may never have persisted, and no test or analyzer catches that shape.</li>
           <li><strong>Choosing this over ADR-114 is a per-job judgement.</strong> Putting must-run work on a <code>DropOldest</code>
           channel loses it silently, and putting a broadcast through a durable command pays a row, a poll
@@ -523,6 +525,23 @@
           (<code>MMCA.ADC/Source/Services/MMCA.ADC.Notification.Contracts/LiveChannelPublisherGrpcAdapter.cs:49-53</code>,
           forward at <code>:49</code>, catch at <code>:51</code>, rethrow at <code>:53</code>).</li>
           </ol>
+          <h2 id="revision-2026-10-26">Revision (2026-10-26)</h2>
+          <p>Re-verified against current source. The decision, rationale and trade-offs are unchanged, and so
+          is every behavior they describe (the post-commit enqueue in both shapes and the
+          <code>SubmitQuestionHandler</code> ordering rule, whose enqueue still follows the <code>CreateUnderClaimAsync</code>
+          call); only line numbers moved in <code>OpenLivePollHandler</code> and <code>SubmitQuestionHandler</code>.</p>
+          <ol>
+          <li>Anchors re-verified against current source: in
+          <code>MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Application/LivePolls/UseCases/Open/OpenLivePollHandler.cs</code>,
+          the hook&#39;s enqueue call (<code>:87</code>, inside the <code>OnMutatedAsync</code> override at <code>:82</code>) and the queue
+          write (<code>:108-109</code>); in <code>.../SessionQuestions/UseCases/Submit/SubmitQuestionHandler.cs</code>,
+          <code>CreateUnderClaimAsync</code> (defined at <code>:144</code>, claim at <code>:150</code>), <code>SaveChangesAsync</code> (<code>:186</code>), the
+          helper call (<code>:95</code>), the log (<code>:99</code>), the <code>EnqueueSubmittedAsync</code> call (<code>:101</code>, body at
+          <code>:207-208</code>) and the queue writes (<code>:219</code>, <code>:234</code>), also in Trade-offs. Unchanged and confirmed:
+          <code>CloseLivePollHandler.cs</code> (<code>:24</code>, hook enqueue call <code>:73</code> inside the override at <code>:68</code>, write
+          <code>:94-95</code>), <code>ModerateQuestionHandler.cs</code> (<code>:28</code>, <code>:89</code>, <code>:138</code>, <code>:140</code>, <code>:154</code>), and the
+          <code>MutateEntityHandlerBase</code> lines (<code>:339</code>, <code>:52</code>, <code>:322</code>, <code>:325</code>).</li>
+          </ol>
           <h2 id="related">Related</h2>
           <p><a href="114-internal-commands-durable-job-queue.html">ADR-114</a> (the durable, leased, retrying queue that owns
           expensive and must-run work),
@@ -553,6 +572,7 @@
             <li><a href="#revision-2026-10-06">Revision (2026-10-06)</a></li>
             <li><a href="#revision-2026-10-07">Revision (2026-10-07)</a></li>
             <li><a href="#revision-2026-10-21">Revision (2026-10-21)</a></li>
+            <li><a href="#revision-2026-10-26">Revision (2026-10-26)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

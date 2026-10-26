@@ -36,7 +36,8 @@ refreshed after the v1.233.0 release (see the Revision (2026-10-07)). Revised 20
 Context now records that `AuthDelegatingHandler` also leaves a request that already carries an
 `Authorization` header untouched (the header `AuthenticatedServiceBase` sets itself), and the
 Bicep scale-rule anchors, which had drifted into other resources, are refreshed with the rest (see
-the Revision (2026-10-21)).
+the Revision (2026-10-21)). Revised 2026-10-26: anchors refreshed after the hosts, the shared UI
+service base and both Bicep templates grew (see the Revision (2026-10-26)).
 
 ## Context
 
@@ -45,19 +46,19 @@ endpoints (`[AllowAnonymous]` GETs like event/session/speaker catalogs) carry na
 tag-based eviction, primed by startup warmup and load-tested by k6. Five minutes is the usual TTL,
 but it is a default, not a rule: a payload that cannot wait five minutes takes a shorter one. Three
 of Store Catalog's four policies run five minutes
-(`MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:152`, `:153`, `:162`), while
+(`MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:158`, `:159`, `:168`), while
 `ProductsCache` runs 60 seconds because each variant's effective price moves on the clock when a
-discount window opens or closes, with no mutation to evict on (`:159`, the reasoning at
-`:154-158`). ADC runs two 60-second policies (`NowNextCache`, a clock-dependent now-and-next
+discount window opens or closes, with no mutation to evict on (`:165`, the reasoning at
+`:160-164`). ADC runs two 60-second policies (`NowNextCache`, a clock-dependent now-and-next
 snapshot, and `BookmarkCountsCache`, written by another service;
-`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:287,301`).
+`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:293,307`).
 
 That design was silently inert for the traffic that matters. The shared UI HttpClient pipeline
 attaches the stored Bearer token to every outgoing API request: the main authenticated path,
 `AuthenticatedServiceBase.CreateAuthenticatedClientAsync`, sets it on the client's default
 `Authorization` header itself
-(`MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/Api/AuthenticatedServiceBase.cs:59-70`,
-the handler scope issue it avoids at `:53-58`), and `AuthDelegatingHandler` attaches it as the
+(`MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/Api/AuthenticatedServiceBase.cs:62-73`,
+the handler scope issue it avoids at `:56-61`), and `AuthDelegatingHandler` attaches it as the
 fallback for any request still lacking one
 (`MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/Auth/AuthDelegatingHandler.cs:52-58`; a
 request that sets the `SkipBearer` option, which the token-refresh POST does, passes through
@@ -131,13 +132,13 @@ and the API-layer visibility check reads the same list
 Two lists naming different roles would put a privileged payload in the shared public entries and
 serve it to everyone, so the single declaration is the guard, not a convention. Nor is the bypass a
 narrow exception in practice: eleven of ADC's twelve public policies pass it
-(`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:270-301`, the array at `:269`),
-the exception being `NowNextCache` (`:287`), whose published-data payload is identical for every
+(`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:276-307`, the array at `:275`),
+the exception being `NowNextCache` (`:293`), whose published-data payload is identical for every
 role. Breadth has a second driver that role-shaped variance does not cover: the admin surfaces read
 back right after mutating, and a write that never touches a controller (the BR-207 speaker
 auto-link, an Engagement bookmark) evicts only by publishing `OutputCacheEvictionRequested`, a
-broker round trip that is prompt but not instant (`Program.cs:254-260`), so a cached stale row
-version makes the next save throw `DbUpdateConcurrencyException` (`Program.cs:261-263`).
+broker round trip that is prompt but not instant (`Program.cs:260-266`), so a cached stale row
+version makes the next save throw `DbUpdateConcurrencyException` (`Program.cs:267-269`).
 
 ## Rationale
 
@@ -160,8 +161,8 @@ version makes the next save throw `DbUpdateConcurrencyException` (`Program.cs:26
   bounded staleness window.** That acceptance did not survive contact with the deployed topology:
   ADC's Conference service and Store's Catalog service both run `minReplicas: 1` with an HTTP scale
   rule at 50 concurrent requests and a ceiling of at least two replicas (Store `maxReplicas: 2`,
-  `MMCA.Store/infra/main.bicep:1806`; ADC `conferenceScaledMaxReplicas`,
-  `MMCA.ADC/infra/main.bicep:2223`, which is 2 normally and 4 with `conferenceMode` on, `:192`), so
+  `MMCA.Store/infra/main.bicep:1812`; ADC `conferenceScaledMaxReplicas`,
+  `MMCA.ADC/infra/main.bicep:2259`, which is 2 normally and 4 with `conferenceMode` on, `:192`), so
   every `EvictByTagAsync` reached only the replica that handled the mutation and the others kept
   serving the pre-edit payload for the full 5-minute TTL.
 
@@ -187,10 +188,10 @@ version makes the next save throw `DbUpdateConcurrencyException` (`Program.cs:26
   holds the framework's single `AddStackExchangeRedisOutputCache` call (`:99`) and no-ops when the
   connection string is blank (`:94`), so each host calls it unconditionally, top-level, before
   `AddOutputCache`
-  (`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:196`,
-  `MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:99`), leaning on the framework
+  (`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:202`,
+  `MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:105`), leaning on the framework
   behavior their comments state: `AddOutputCache` registers its store with `TryAdd` (ADC
-  `Program.cs:192-193`, Store `Program.cs:96-97`), so an explicit Redis registration wins regardless
+  `Program.cs:198-199`, Store `Program.cs:102-103`), so an explicit Redis registration wins regardless
   of call order (only the Store comment spells out that consequence). Read that as framework
   behavior per those host comments; nothing in these repos verifies it.
 
@@ -209,14 +210,14 @@ version makes the next save throw `DbUpdateConcurrencyException` (`Program.cs:26
   paced to at most one broadcast per 10-second `PacingWindow` per replica (`:46`) so a burst of
   stars cannot keep the tag permanently cold. The Conference host consumes it
   (`AddOutputCacheEvictionHandler()` at
-  `MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:307`, and
+  `MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:313`, and
   `RegisterOutputCacheEvictionConsumer()` at
   `MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/ConferenceBrokerConsumers.cs:37`, wired
-  through `AddBrokerMessaging` at `Program.cs:421`), keeping the short TTL as the backstop for a
+  through `AddBrokerMessaging` at `Program.cs:432`), keeping the short TTL as the backstop for a
   lost or late event rather than the only defense (`BookmarkCountsCache`, 60 seconds,
-  `Program.cs:301`). A payload that changes on the clock still has no mutation to evict on, so a
-  short TTL remains its whole answer (`NowNextCache`, 60 seconds, ADC `Program.cs:287`; Store's
-  `ProductsCache`, 60 seconds, `MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:159`, whose discount
+  `Program.cs:307`). A payload that changes on the clock still has no mutation to evict on, so a
+  short TTL remains its whole answer (`NowNextCache`, 60 seconds, ADC `Program.cs:293`; Store's
+  `ProductsCache`, 60 seconds, `MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:165`, whose discount
   edits still evict the `catalog:products` tag at once but whose discount windows open and close with
   no write at all). When adding a cached endpoint, check
   which process owns every write that can change its payload, and whether time alone changes it.
@@ -415,3 +416,30 @@ itself, and anchors (the two Bicep scale-rule anchors among them) shifted after 
    policies `:152`, `:153`, `:159` with reasoning `:154-158`, `:162`) and
    `MMCA.Store/infra/main.bicep:1806`. The earlier Revision sections keep the anchors they were
    written with.
+
+## Revision (2026-10-26)
+
+Re-verified against current source. The decision, the strict apply-only-to-identity-independent
+contract, the tenant vary rule, the wide `HasRole` bypass check, the twelve/eleven ADC bypass count
+(only `NowNextCache` omits `adminBypassRoles`), Store's four no-bypass policies, the three
+60-second TTLs, both registered eviction halves on each host and both replica ceilings are
+unchanged. What moved: line anchors, after ADC Conference and Store Catalog `Program.cs`,
+`AuthenticatedServiceBase.cs` and both `main.bicep` files grew. The `TryAdd` store-precedence claim
+is still asserted only by the host comments; nothing in these repos verifies it.
+
+1. Anchors re-verified against current source: `AuthenticatedServiceBase.cs`
+   (`CreateAuthenticatedClientAsync` through the default `Authorization` header `:62-73`, the
+   handler-scope summary `:56-61`); ADC Conference `Program.cs` (`AddRedisOutputCaching()` `:202`
+   with its comment `:193-201` and `TryAdd` sentence `:198-199`, the broker-round-trip reasoning
+   `:260-266`, the `DbUpdateConcurrencyException` sentence `:267-269`, `adminBypassRoles` array
+   `:275`, the twelve public policies `:276-307`, `NowNextCache` `:293`, `BookmarkCountsCache`
+   `:307`, `AddOutputCacheEvictionHandler()` `:313`, `AddBrokerMessaging` with
+   `ConferenceBrokerConsumers.Register` `:432`); `ConferenceBrokerConsumers.cs:37`;
+   `MMCA.ADC/infra/main.bicep` (`conferenceScaledMaxReplicas` `:192`, the Conference scale rule
+   `:2259` inside `conferenceApp` `:2114`); Store Catalog `Program.cs` (`AddRedisOutputCaching()`
+   `:105` with its comment `:97-104` and `TryAdd` sentence `:102-103`, policies `:158`, `:159`,
+   `:165` with reasoning `:160-164`, `:168`, `AddOutputCacheEvictionHandler()` `:183`,
+   `RegisterOutputCacheEvictionConsumer()` `:301`); the framework
+   `RegisterOutputCacheEvictionConsumer` at `IntegrationEventConsumerExtensions.cs:158-160`;
+   `MMCA.Store/infra/main.bicep` (Catalog scale rule `:1812` inside `catalogApp` `:1696`). The
+   earlier Revision sections keep the anchors they were written with.

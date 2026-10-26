@@ -17,12 +17,14 @@ shared Aspire handler's refusal to retry POST and PATCH, and the `IdempotentRead
 read services outside the hierarchy are recorded, and the `IsNotFound` anchor is corrected.
 Revised 2026-10-19: Store's two Sales lookup services now run their GETs through `IdempotentReadRetry`, so the helper has eleven call sites across both apps.
 Revised 2026-10-21: the retry policy is recorded with its transport-failure arm (a keyless POST or PATCH is resent only when it failed before it was sent), the `EntityServiceBase` count is twenty with the two `UserListService` types, the list-page base's opt-in virtualized fetch path is recorded, and anchors are refreshed.
+Revised 2026-10-26: the client retry policy and the shared Aspire handler are recorded as refusing a 429 whose `Retry-After` exceeds `MaxRetryAfterWait` (a shorter one is waited out in place of the backoff), the list-page base's superseded-load handling, `EmptyConfirmed` flag and aliased page-filter keys are recorded, and anchors are refreshed.
 
 ## Context
 ADR-034 decided the **server** half of entity data access: a generic controller base with a dynamic
 query contract, where filters arrive as `filters[Property].operator` / `filters[Property].value` query
 pairs bound by `QueryFilterModelBinder`
-(`MMCA.Common/Source/Presentation/MMCA.Common.API/ModelBinders/QueryFilterModelBinder.cs:12,20,92`).
+(`MMCA.Common/Source/Presentation/MMCA.Common.API/ModelBinders/QueryFilterModelBinder.cs:12,20`, the
+key parsing at `:117-151`).
 It says nothing about who calls that surface or how.
 
 In practice the calling half is just as decided, and just as load-bearing, but it was never recorded.
@@ -43,24 +45,24 @@ contract that consumes it.
 Client-side entity data access goes through one hand-written base hierarchy in `MMCA.Common.UI`.
 
 - **One HTTP root: `AuthenticatedServiceBase`**
-  (`MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/Api/AuthenticatedServiceBase.cs:16`). It owns
-  the named `"APIClient"` (`:29`), the bearer attachment
-  (`CreateAuthenticatedClientAsync`, `:59-78`, tolerating the SSR pre-render case where JS interop is
-  unavailable, `:72-75`), the explicit-token variant used to replay a 401 with a freshly refreshed
-  token (`CreateClientWithToken`, `:88-95`, the client end of ADR-051), the retry policy, and the
+  (`MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/Api/AuthenticatedServiceBase.cs:17`). It owns
+  the named `"APIClient"` (`:32`), the bearer attachment
+  (`CreateAuthenticatedClientAsync`, `:62-81`, tolerating the SSR pre-render case where JS interop is
+  unavailable, `:75-78`), the explicit-token variant used to replay a 401 with a freshly refreshed
+  token (`CreateClientWithToken`, `:91-98`, the client end of ADR-051), the retry policy, and the
   idempotency-key mint. The client itself is registered once, in `AddUIShared`
-  (`.../MMCA.Common.UI/DependencyInjection.cs:132-162`): base address from `ApiSettings`
+  (`.../MMCA.Common.UI/DependencyInjection.cs:132-163`): base address from `ApiSettings`
   (`SameOriginApiEndpoint` when set, otherwise `ApiEndpoint`, `:144`), `Accept:
   application/json`, `AuthDelegatingHandler` plus `CultureDelegatingHandler`, and a transport timeout
-  pinned to the shared 90-second budget (`:150`, `MMCA.Common/Source/Core/MMCA.Common.Shared/Resilience/HttpResilienceDefaults.cs:19`)
+  pinned to the shared 90-second budget (`:150`, `MMCA.Common/Source/Core/MMCA.Common.Shared/Resilience/HttpResilienceDefaults.cs:22`)
   so the BCL's uncoordinated 100-second default cannot cut a call off mid-policy. When
   `Api:SameOriginApiEndpoint` is configured (`:128-129`, the opt-in same-origin proxy a WebAssembly
   client receives from its Server host), one more handler, `SameOriginProxyRequestHandler`, is added
-  innermost (`:157-162`), so it sees and strips every `Authorization` header the outer handlers
+  innermost (`:157-163`), so it sees and strips every `Authorization` header the outer handlers
   attached and stamps the proxy's CSRF header; without it the chain keeps only the two handlers
   `AddUIShared` adds (`:154-155`). A host that calls `AddServiceDefaults` also wraps the client in the
   standard resilience and service-discovery handlers through `ConfigureHttpClientDefaults`
-  (`MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Extensions.cs:39-87`).
+  (`MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Extensions.cs:50-108`).
 - **Typed CRUD is `EntityServiceBase<TEntityDTO, TIdentifierType>`**
   (`.../MMCA.Common.UI/Services/Api/EntityServiceBase.cs:43`), implementing
   `IEntityService<TEntityDTO, TIdentifierType>` (`.../MMCA.Common.UI/Common/Interfaces/IEntityService.cs:20`).
@@ -75,7 +77,7 @@ Client-side entity data access goes through one hand-written base hierarchy in `
   `id`, `includeChildren` and the caller's `CancellationToken`) cover the remaining reads. A read for a
   missing entity is a `NotFound` failure, not a default value (`:155-158`): the caller tells it apart
   from a transport failure through `ResultUiExtensions.IsNotFound`
-  (`.../MMCA.Common.UI/Common/ResultUiExtensions.cs:340`) rather than by asking for a null.
+  (`.../MMCA.Common.UI/Common/ResultUiExtensions.cs:306`) rather than by asking for a null.
 - **Reads go through an optional client read cache.** The constructor takes an optional `IUiReadCache`
   (`EntityServiceBase.cs:47`, exposed to subclasses as `ReadCache`, `:58`), the client half of
   [ADR-040](040-authenticated-output-caching-for-public-reads.md). All four reads call `GetCachedAsync`
@@ -93,22 +95,32 @@ Client-side entity data access goes through one hand-written base hierarchy in `
   that may answer the retry of a write whose first attempt landed, a 5xx, a transport failure)
   leaves the server state changed or unknown and invalidates like a success.
 - **Retry is owned by the client base, not by a resilience handler.** `RetryPolicy`
-  (`AuthenticatedServiceBase.cs:27`, built by `BuildRetryPolicy`, `:201-204`) is a static Polly
-  policy: three retries after the initial attempt, on a retryable `HttpRequestException` or a
-  retryable response, with 2s / 4s / 8s exponential backoff plus up to 1000 ms of jitter so a fleet
-  of clients does not re-converge on one instant, and every retried response is disposed in
-  `onRetry` (`:204`) so only the final one reaches the caller. `IsRetryableResponse` (`:108-122`)
-  retries 5xx **except** 501 and 505 (permanent verdicts) and adds 408 and 429 (the server
-  explicitly inviting a later attempt), but only for a request that is safe to send again:
-  `IsReplaySafe` (`:134-148`, checked at `:115`) answers false for a POST or PATCH carrying no
-  `Idempotency-Key`, so a keyless write that got a response is never replayed. The exception arm
+  (`AuthenticatedServiceBase.cs:30`, built by `BuildRetryPolicy`, `:239-255`) is a static Polly
+  policy: three retries after the initial attempt (`:248`), on a retryable `HttpRequestException` or
+  a retryable response, with 2s / 4s / 8s exponential backoff plus up to 1000 ms of jitter
+  (`DefaultBackoff`, `:197-199`) so a fleet of clients does not re-converge on one instant, and
+  every retried response is disposed in `onRetry` (`:250-254`, the dispose at `:252`) so only the
+  final one reaches the caller. `IsRetryableResponse` (`:114-133`) retries 5xx **except** 501 and
+  505 (permanent verdicts, `:116`) and adds 408 and 429 (the server explicitly inviting a later
+  attempt, `:131-132`), but only for a request that is safe to send again: `IsReplaySafe`
+  (`:145-159`, checked at `:126`) answers false for a POST or PATCH carrying no `Idempotency-Key`,
+  so a keyless write that got a response is never replayed. A 429 is bounded by its own
+  `Retry-After`: one asking for longer than `HttpResilienceDefaults.MaxRetryAfterWait` (eight
+  seconds, the longest backoff step, `HttpResilienceDefaults.cs:41`) is not retried at all
+  (`RetryAfterHeader.ExceedsRetryBudget`, checked at `:121`, defined at
+  `MMCA.Common/Source/Core/MMCA.Common.Shared/Resilience/RetryAfterHeader.cs:75-78`, which reads only
+  a 429), so a rate-limited action surfaces at once instead of holding the user for the rest of the
+  window (the test is a strict "longer than", so a `Retry-After` of exactly eight seconds is still
+  retried, `RetryAfterHeader.cs:78`); a shorter or equal one is waited out exactly in place of the
+  backoff (`RetryDelay`, `:212-220`, used at `:249`), while a 5xx, and a 429 with no `Retry-After`,
+  keeps the backoff (`:217-220`). The exception arm
   sees no request, so `AuthDelegatingHandler`, the outermost of the handlers `AddUIShared` registers
   on `"APIClient"` (on a host that calls `AddServiceDefaults` the default resilience and
-  service-discovery handlers wrap it, `MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Extensions.cs:49`,
-  `:65`), stamps each transport failure that passes through it with the request's replay safety
+  service-discovery handlers wrap it, `MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Extensions.cs:60`,
+  `:86`), stamps each transport failure that passes through it with the request's replay safety
   (`.../MMCA.Common.UI/Services/Auth/AuthDelegatingHandler.cs:38`, through `MarkReplaySafety`,
-  `AuthenticatedServiceBase.cs:164-165`, under `ReplaySafeDataKey`, `:156`). `IsRetryableException`
-  (`:175-179`, wired at `:202`) then resends a keyless POST or PATCH only when it failed before it
+  `AuthenticatedServiceBase.cs:177-178`, under `ReplaySafeDataKey`, `:167`). `IsRetryableException`
+  (`:188-192`, wired at `:245`) then resends a keyless POST or PATCH only when it failed before it
   was sent (name resolution, the TCP connect or the TLS handshake), since any later failure may
   have reached the handler; every other request, and an exception no handler marked, keeps the
   retry. Every dispatch runs through `SendRequestAsync` (`EntityServiceBase.cs:351-369` for the
@@ -116,7 +128,7 @@ Client-side entity data access goes through one hand-written base hierarchy in `
   and `If-Match` value), which passes the caller's `CancellationToken` into the policy (`:365`,
   `:393`) so cancellation aborts the wait between attempts instead of sleeping out the backoff budget.
 - **The `Idempotency-Key` is minted client-side and survives retries.** `NewIdempotencyKey()` returns a
-  compact GUID (`AuthenticatedServiceBase.cs:51`); the header name is the shared constant
+  compact GUID (`AuthenticatedServiceBase.cs:54`); the header name is the shared constant
   `IdempotencyHeaders.IdempotencyKey` (`MMCA.Common/Source/Core/MMCA.Common.Shared/Http/IdempotencyHeaders.cs:19`).
   Only `AddAsync` supplies one (`EntityServiceBase.cs:171-175`, the mint at `:174`): creates are the
   one CRUD verb that is not naturally idempotent, so reads, full `PUT` updates and deletes send no key
@@ -171,8 +183,8 @@ Client-side entity data access goes through one hand-written base hierarchy in `
   `IdempotentReadRetry`
   (`.../MMCA.Common.UI/Services/Api/IdempotentReadRetry.cs:18`) is a public static class whose only
   entry point is a GET (`GetAsync`, `:35-44`), run through the very policy object the root exposes
-  (`AuthenticatedServiceBase.SharedRetryPolicy`, `AuthenticatedServiceBase.cs:38`, over `RetryPolicy`
-  at `:27`; taken at `IdempotentReadRetry.cs:24`), so the two paths cannot drift. It serves services
+  (`AuthenticatedServiceBase.SharedRetryPolicy`, `AuthenticatedServiceBase.cs:41`, over `RetryPolicy`
+  at `:30`; taken at `IdempotentReadRetry.cs:24`), so the two paths cannot drift. It serves services
   that create the named `"APIClient"` themselves rather than through `CreateAuthenticatedClientAsync`
   or `CreateClientWithToken`. They never set a token explicitly, but the registered chain still
   includes `AuthDelegatingHandler` (`.../MMCA.Common.UI/DependencyInjection.cs:154`), which attaches
@@ -186,11 +198,11 @@ Client-side entity data access goes through one hand-written base hierarchy in `
   `.../Services/Events/EventLookupService.cs:102`,
   `.../Services/Categories/CategoryItemLookupService.cs:54`, and
   `MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.UI/Services/Lookups/SessionLookupService.cs:30,53`)
-  plus `.../Services/SessionLive/LiveEventService.cs:57` and
+  plus `.../Services/SessionLive/LiveEventService.cs:56` and
   `.../Services/HappeningNow/NowNextService.cs:26`. In Store, four across its two Sales lookup
   services
   (`MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.UI/Services/Lookups/CustomerLookupService.cs:32,84`
-  and `.../Services/Lookups/ProductVariantLookupService.cs:48,103`), which enrich the admin grids.
+  and `.../Services/Lookups/ProductVariantLookupService.cs:48,102`), which enrich the admin grids.
   Helpdesk and the rest of Common do not call it.
   Writes are deliberately not offered: a write that needs retries goes through `EntityServiceBase`,
   whose creates carry an `Idempotency-Key`.
@@ -220,7 +232,7 @@ Store's `CustomerService`, `ProductService` and `CategoryService`).
 Conference
 (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/Services/`:
 `Activities/ActivityService.cs:11`, `Categories/CategoryItemService.cs:11`,
-`Categories/ConferenceCategoryService.cs:11`, `Events/EventService.cs:27`,
+`Categories/ConferenceCategoryService.cs:11`, `Events/EventService.cs:26`,
 `Partners/PartnerService.cs:11`, `Questions/QuestionService.cs:11`, `Rooms/RoomService.cs:15`,
 `Sessions/SessionService.cs:11`, `Speakers/SpeakerService.cs:23`, `Sponsors/SponsorService.cs:11`)
 plus Identity's `UserListService`
@@ -242,14 +254,14 @@ the framework itself
 `Services/UserService.cs:22`, four in the framework
 (`Services/Notifications/NotificationInboxService.cs:34`,
 `Services/Legal/LegalAcceptanceUIService.cs:26`,
-`Services/Administration/UserAdminService.cs:29` and
+`Services/Administration/UserAdminService.cs:30` and
 `Services/Administration/RoleAdminService.cs:28`), and two in Store: `UserDataService`
 (`MMCA.Store/Source/Modules/Identity/MMCA.Store.Identity.UI/Services/UserDataService.cs:20`) and
 `CartStateService`
-(`MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.UI/Services/ShoppingCarts/CartStateService.cs:39`,
-base at `:45`), which uses the inherited `RetryPolicy` (for example `:98`, `:145`, `:264`) and
-`NewIdempotencyKey()` under the same rule: one key per user action, reused by every attempt (`:91`
-per add-to-cart, `:257` per checkout, shared by both checkout steps).
+(`MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.UI/Services/ShoppingCarts/CartStateService.cs:38`,
+base at `:44`), which uses the inherited `RetryPolicy` (for example `:97`, `:144`, `:263`) and
+`NewIdempotencyKey()` under the same rule: one key per user action, reused by every attempt (`:90`
+per add-to-cart, `:256` per checkout, shared by both checkout steps).
 
 ### The list-page contract: `DataGridListPageBase<TDto>`
 
@@ -260,49 +272,70 @@ delegate that is almost always an `EntityServiceBase.GetPagedAsync` call.
 `DataGridListPageBase<TDto>`
 (`MMCA.Common/Source/Presentation/MMCA.Common.UI/Pages/Common/DataGridListPageBase.cs:23`) owns:
 
-- **Server-side paging through MudDataGrid `ServerData`.** `LoadServerDataAsync` (`:641`) flattens the
-  grid's filter definitions into the one-filter-per-column dictionary the fetch delegate takes, with
-  the newest row winning when the user stacks two filters on one column (`ExtractGridFilters`,
-  `:1031-1044`), resolves sort from `GridState` (`ResolveSortParameters`, called in the paged fetch at
-  `:719`, defined at `:1093-1105`: it reads the grid's own `SortDefinition` through
-  `ExtractSortParameters`, `:1081-1086`, and falls back to the sort restored from the query string when
-  the grid has not picked one up yet, which is the normal case on a first fetch with a URL-driven
-  sort), and converts the grid's zero-based page to the API's one-based `pageNumber` (`:721`).
+- **Server-side paging through MudDataGrid `ServerData`.** `LoadServerDataAsync` (`:657`) is a thin
+  entry point over `LoadPagedAsync` (`:671`) and `FetchPagedAsync` (`:732`). The fetch flattens the
+  grid's filter definitions into a dictionary keyed by column, with the newest row winning when the
+  user stacks two filters on one column (`ExtractGridFilters`, `:1119-1132`), then lets the page's
+  own filter callback (search box, status dropdown) edit it through `ApplyAdditionalFilters`
+  (`:1145-1167`): an injected filter that collides with a grid column filter does not overwrite it
+  but moves to the aliased key `QueryFilterKeys.Alias(key, SearchTag)` (`Name~search`, `:1165`),
+  which the server resolves to the same property and ANDs, so one column can carry two keys. It
+  resolves sort from `GridState` (`ResolveSortParameters`, called in the paged fetch at `:745`,
+  defined at `:1181-1193`: it reads the grid's own `SortDefinition` through `ExtractSortParameters`,
+  `:1169-1174`, and falls back to the sort restored from the query string when the grid has not
+  picked one up yet, which is the normal case on a first fetch with a URL-driven sort), and converts
+  the grid's zero-based page to the API's one-based `pageNumber` (`:747`).
+- **The newest load owns the grid.** MudDataGrid applies whichever `ServerData` call completes last,
+  so a superseded paged call does not hand back its own result: `NewestPagedResultAsync`
+  (`:715-725`, tracking `_newestPagedLoad`, `:126`) answers it with the newest load's result. A load
+  checks it is still current (`IsCurrentLoad`, `:1094`) and `ThrowIfSuperseded` (`:1101-1107`) after
+  each fetch, so only the newest load writes rows, flags and the empty state.
 - **Cancellation-token management.** Each fetch swaps in a fresh source before tearing down the
   previous one, tolerating the `ObjectDisposedException` race a debounced reload after disposal would
-  otherwise raise (`ResetCancellationTokenAsync`, `:997-1019`); during SSR pre-render the token
+  otherwise raise (`ResetCancellationTokenAsync`, `:1060-1087`); during SSR pre-render the token
   additionally times out after `PrerenderFetchTimeoutMs` (5000 ms) so a cold backend cannot block the
-  page load (`:96`, `CreateFetchCts`, `:933-944`).
-- **An opt-in virtualized fetch path.** A page that overrides `VirtualizeGrid` (`:155`, default
-  false) binds MudDataGrid `VirtualizeServerData` to `LoadVirtualizedServerDataAsync` (`:762`), which
+  page load (`:112`, `CreateFetchCts`, `:984-995`).
+- **An opt-in virtualized fetch path.** A page that overrides `VirtualizeGrid` (`:171`, default
+  false) binds MudDataGrid `VirtualizeServerData` to `LoadVirtualizedServerDataAsync` (`:790`), which
   maps the requested row window onto the same page-based fetch delegate (one or two pages, trimmed to
-  the window) through the same `RunFetchAsync` (`:774`) and `ExtractGridFilters` (`:777`), so a page
+  the window) through the same `RunFetchAsync` (`:806`) and `ExtractGridFilters` (`:810`), so a page
   switches to virtualization without a second API contract. A virtualized grid renders no pager, so
-  the pager-restore workarounds are skipped for it (`:582-590`).
+  the pager-restore workarounds are skipped for it (`:598-606`).
 - **A `LoadFailed` flag that distinguishes error-with-retry from genuinely empty** (`:54`). The paged
-  grid, virtualized grid and mobile paths share one fetch wrapper, `RunFetchAsync` (`:837`), which clears the flag (`:846`)
-  and sets it on a thrown fetch (`:872`), while `FailedFetch` (`:890`) sets it on a failed `Result` (`:893`). A failed fetch renders
-  zero rows, which is visually identical to an empty list once the error snackbar expires, so pages
-  branch on this flag in `NoRecordsContent` instead of showing the "no records" state.
-- **Viewport-driven mobile card state.** `IsMobile` (`:58`) flips from the browser-viewport observer
-  (`:319-332`) below the 960 px sidebar-collapse threshold, and the card view has its own paged fetch
-  path (`MobileItems` / `MobileTotalItems` / `MobileCurrentPage` / `MobilePageSize`, `:61-64`;
-  `LoadMobileDataAsync`, `:950`).
+  grid, virtualized grid and mobile paths share one fetch wrapper, `RunFetchAsync` (`:881`), which
+  clears the flag (`:890`) and sets it on a thrown fetch of the current load (`:922`); a thrown fetch
+  from a superseded load returns its cancelled result and leaves the flag alone (`:914-918`), since
+  it describes a query nobody is showing. `FailedFetch` (`:940`) sets it on a failed `Result`
+  (`:943`). A failed fetch renders zero rows, which is visually identical to an empty list once the
+  error snackbar expires, so pages branch on this flag in `NoRecordsContent` instead of showing the
+  "no records" state.
+- **An `EmptyConfirmed` flag for the genuinely empty case** (`:65-69`). It is true only when the
+  newest load completed with `TotalItems == 0` (set at `:697`, `:756`, `:838` and `:1033`, cleared by
+  `RunFetchAsync` at `:891`) and only while the renderer is interactive, and a page binds it to
+  `ListNoRecordsContent.EmptyConfirmed`, so the "no records" text does not flash before a non-empty
+  page arrives.
+- **Viewport-driven mobile card state.** `IsMobile` (`:74`) flips from the browser-viewport observer
+  (`NotifyBrowserViewportChangeAsync`, `:335-348`) below the 960 px sidebar-collapse threshold, and
+  the card view has its own paged fetch path (`MobileItems` / `MobileTotalItems` /
+  `MobileCurrentPage` / `MobilePageSize`, `:77-80`; `LoadMobileDataAsync`, `:1001`).
 - **List state persisted and restored three ways.** `ListPageState`
   (`.../MMCA.Common.UI/Services/ListPageStateService.cs:9`) carries page, page size, mobile page, sort,
   density, filters and scroll position; `ListPageStateService` (`:63`) holds it in memory and mirrors
   it to `sessionStorage`, and `ListPageQueryStateService`
   (`.../MMCA.Common.UI/Services/ListPageQueryStateService.cs:28`) encodes it into the URL. The URL is
   the source of truth on initialization, with the in-memory entry as the fallback and scroll position
-  read only from it (`DataGridListPageBase.cs:218-255`); writes go to all three (`SaveCurrentState`,
-  `:1107-1144`). Deferred writes are dropped once the user has navigated away, because the route is
+  read only from it (`DataGridListPageBase.cs:234-271`); writes go to all three (`SaveCurrentState`,
+  `:1202-1240`). Deferred writes are dropped once the user has navigated away, because the route is
   pinned at initialization rather than read from the live URI at write time (`_ownRoutePath`, field at
-  `:1187`, pinned at `:216`; `IsOwnRouteCurrent`, `:1195-1196`).
+  `:1291`, pinned at `:232`; `IsOwnRouteCurrent`, `:1299-1300`).
 
-**Twenty types inherit this base**: thirteen in ADC (seven directly, six through the abstract
-`Pages/Common/EventFilteredListPageBase.cs:25`) and seven in Store, nineteen of them routable list
+**Twenty application types inherit this base**: thirteen in ADC (seven directly, six through the abstract
+`Pages/Common/EventFilteredListPageBase.cs:24`) and seven in Store, nineteen of them routable list
 pages plus ADC's non-routable `AttendeeSearchPanel`
 (`MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.UI/Pages/CheckIns/AttendeeSearchPanel.razor.cs:16`).
+The framework itself adds one more: the generic `UserAdminList<TUser>`
+(`MMCA.Common/Source/Presentation/MMCA.Common.UI/Pages/Administration/UserAdminList.razor:4`), which
+binds `EmptyConfirmed` like the application pages (`:182`).
 ADR-056 owns the render-mode aspect of the same type (the `PersistentComponentState` pre-render
 handoff and the `InteractiveAuto` registration) and inventories the same set of pages.
 
@@ -339,30 +372,34 @@ handoff and the `InteractiveAuto` registration) and inventories the same set of 
   for the binder, `EntityServiceBaseTests.cs` for the emitter) rather than end to end.
 - **Retry budgets stack across hops, and are deliberately bounded rather than eliminated.** A host that
   calls `AddServiceDefaults` applies the standard resilience handler to every factory client through
-  `ConfigureHttpClientDefaults` (`MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Extensions.cs:39-87`),
+  `ConfigureHttpClientDefaults` (`MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Extensions.cs:50-108`),
   including `"APIClient"`. Because the UI base already makes up to four attempts, the shared
   per-hop retry count is pinned to **one**
-  (`HttpResilienceDefaults.cs:21-30`, applied at `Extensions.cs:54`), with the reason stated in both
+  (`HttpResilienceDefaults.cs:24-33`, applied at `Extensions.cs:65`), with the reason stated in both
   places: full budgets at every hop turned a backend brownout into an up-to-16x request storm. The
   shared handler also never replays a POST or PATCH
-  (`options.Retry.DisableFor(HttpMethod.Post, HttpMethod.Patch)`, `Extensions.cs:63`), because a
+  (`options.Retry.DisableFor(HttpMethod.Post, HttpMethod.Patch)`, `Extensions.cs:74`), because a
   timed-out attempt may still be running server-side and the handler does not look for an
   idempotency key (even on `"APIClient"`, where the UI base's create does carry one), so a client
-  create is retried only by the UI base, under its key. The cost is that the effective attempt count for a UI action is a product of two layers and cannot be
+  create is retried only by the UI base, under its key. It also refuses to retry a 429 whose
+  `Retry-After` exceeds `MaxRetryAfterWait` (`Extensions.cs:80-84`, wrapping the handler's own
+  `ShouldHandle` with the same `RetryAfterHeader.ExceedsRetryBudget` check the UI base uses), so a
+  rate-limited request is retried at neither layer rather than held open for the rest of the
+  window. The cost is that the effective attempt count for a UI action is a product of two layers and cannot be
   read off either one alone.
 - **The retry policy is `static` and not configurable.** `RetryPolicy` is a `protected static readonly`
-  field (`AuthenticatedServiceBase.cs:27`), so its counts and delays are compile-time constants shared
+  field (`AuthenticatedServiceBase.cs:30`), so its counts and delays are compile-time constants shared
   by every service in the process. A per-endpoint or per-environment retry profile would need a change
   to the framework, not configuration.
 - **Only `AddAsync` gets an idempotency key automatically.** Any non-CRUD write (a hand-written POST on
   a service deriving from `AuthenticatedServiceBase`, such as `CartStateService`) has to mint and
   attach the key itself, and nothing fails the build if it does
   not. The omission mostly costs resilience rather than correctness: `RetryPolicy` never replays a
-  keyless POST or PATCH that got a response (`IsReplaySafe`, `AuthenticatedServiceBase.cs:134-148`),
+  keyless POST or PATCH that got a response (`IsReplaySafe`, `AuthenticatedServiceBase.cs:145-159`),
   and resends one that failed in transport only when it failed before it was sent, provided
-  `AuthDelegatingHandler` saw the failure and marked it (`IsRetryableException`, `:175-179`; the mark
+  `AuthDelegatingHandler` saw the failure and marked it (`IsRetryableException`, `:188-192`; the mark
   at `AuthDelegatingHandler.cs:34-38`). An exception raised outside that handler carries no mark and
-  keeps the retry (`:176`), so the guarantee is "not resent once the handler saw it fail", not an
+  keeps the retry (`:189`), so the guarantee is "not resent once the handler saw it fail", not an
   absolute no-duplicate rule; any other transient fault on such a write surfaces to the user instead
   of being absorbed. Both `ChildEntityServiceBase.PostAsync` overloads (`ChildEntityServiceBase.cs:36`, `:52`)
   are such writes and send no key today.
@@ -371,7 +408,8 @@ handoff and the `InteractiveAuto` registration) and inventories the same set of 
   where the same blip on the parent entity would be absorbed.
 - **The list-page base is deep.** It coordinates render-mode-aware persistence, three state stores, JS
   interop for scroll tracking, and two MudDataGrid v9 parameter-setter workarounds
-  (`DataGridListPageBase.cs:542-548`, `:592-608`). That depth is the price of twenty pages behaving
+  (`RestoreCurrentPageAfterRowsPerPageReset`, `DataGridListPageBase.cs:558-564`, and the
+  `RestoreGridStateAsync` safety net, `:608-624`). That depth is the price of twenty pages behaving
   identically, but it makes the base itself the hardest type in the UI package to change safely.
 
 ## Revision (2026-10-01)
@@ -492,6 +530,66 @@ missed two services, the list-page section omitted the virtualized fetch path, a
    `:1031-1044`, `ExtractSortParameters` `:1081-1086`, `ResolveSortParameters` `:1093-1105`,
    `SaveCurrentState` `:1107-1144`, the `_ownRoutePath` field `:1187` and `IsOwnRouteCurrent`
    `:1195-1196`.
+
+## Revision (2026-10-26)
+Re-verified against current source. The client data-access contract, the idempotency-key mint, the
+adoption counts and the list-page paging, cancellation and state contract are unchanged; the retry
+policy and the shared handler gained a `Retry-After` bound that was not recorded, the list page
+gained superseded-load handling, an `EmptyConfirmed` flag and filter aliasing, and anchors moved.
+1. The retry bullet now records the 429 bound: `IsRetryableResponse` refuses a 429 whose
+   `Retry-After` exceeds `HttpResilienceDefaults.MaxRetryAfterWait` (eight seconds,
+   `MMCA.Common/Source/Core/MMCA.Common.Shared/Resilience/HttpResilienceDefaults.cs:41`) through
+   `RetryAfterHeader.ExceedsRetryBudget`
+   (`MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/Api/AuthenticatedServiceBase.cs:121`;
+   `MMCA.Common/Source/Core/MMCA.Common.Shared/Resilience/RetryAfterHeader.cs:75-78`), and
+   `RetryDelay` (`AuthenticatedServiceBase.cs:212-220`, used at `:249`) waits out a 429
+   `Retry-After` at or under the budget in place of the backoff (the budget test is a strict `>`,
+   `RetryAfterHeader.cs:78`), while a 429 with no `Retry-After` keeps the backoff (`:217-220`).
+2. The stacked-retry trade-off now records that the shared standard resilience handler applies the
+   same refusal by wrapping its `ShouldHandle`
+   (`MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Extensions.cs:80-84`), so the shared handler's
+   behavior is no longer only "one retry, never a POST or PATCH".
+3. The list-page section now records that a superseded load does not own the grid:
+   `NewestPagedResultAsync`
+   (`MMCA.Common/Source/Presentation/MMCA.Common.UI/Pages/Common/DataGridListPageBase.cs:715-725`)
+   answers a superseded paged call with the newest result, `IsCurrentLoad` (`:1094`) and
+   `ThrowIfSuperseded` (`:1101-1107`) keep stale loads from writing state, and a thrown fetch from a
+   superseded load no longer sets `LoadFailed` (`:914-918`).
+4. A new bullet records `EmptyConfirmed` (`DataGridListPageBase.cs:65-69`, set at `:697`, `:756`, `:838`,
+   `:1033`), the flag a page binds to `ListNoRecordsContent.EmptyConfirmed`.
+5. The paging bullet no longer calls the emitted filters strictly one per column:
+   `ApplyAdditionalFilters` (`DataGridListPageBase.cs:1145-1167`) moves a page-injected filter that
+   collides with a grid column filter to `QueryFilterKeys.Alias(key, SearchTag)` (`:1165`), which the
+   server ANDs on the same property.
+6. Anchors re-verified against current source: in `AuthenticatedServiceBase.cs` the class is `:17`,
+   `"APIClient"` `:32`, `CreateAuthenticatedClientAsync` `:62-81` (SSR catch `:75-78`),
+   `CreateClientWithToken` `:91-98`, `RetryPolicy` `:30`, `SharedRetryPolicy` `:41`,
+   `NewIdempotencyKey` `:54`, `IsRetryableResponse` `:114-133` (`IsReplaySafe` check `:126`),
+   `IsReplaySafe` `:145-159`, `ReplaySafeDataKey` `:167`, `MarkReplaySafety` `:177-178`,
+   `IsRetryableException` `:188-192` (unmarked keeps the retry `:189`, wired `:245`),
+   `BuildRetryPolicy` `:239-255` and `onRetry` `:250-254`; `HttpResilienceDefaults.cs`
+   `TotalRequestTimeout` `:22` and the retry-count pin `:24-33`; in `Extensions.cs`
+   `ConfigureHttpClientDefaults` `:50-108`, the resilience and service-discovery handlers `:60` and
+   `:86`, the retry count `:65` and `DisableFor(Post, Patch)` `:74`; the `"APIClient"` proxy handler
+   block in the UI `DependencyInjection.cs` is `:157-163`; `ResultUiExtensions.IsNotFound` `:306`;
+   `QueryFilterModelBinder.cs:12,20` with key parsing `:117-151` (`:92` is no longer a code line);
+   `EventService.cs:26`, `UserAdminService.cs:30`, `LiveEventService.cs:56`,
+   `ProductVariantLookupService.cs:102`, `EventFilteredListPageBase.cs:24`; `CartStateService.cs`
+   class `:38`, base `:44`, `RetryPolicy` uses `:97`, `:144`, `:263`, keys `:90` and `:256`; and in
+   `DataGridListPageBase.cs` `IsMobile` `:74`, the mobile properties `:77-80`,
+   `PrerenderFetchTimeoutMs` `:112`, `VirtualizeGrid` `:171`, the restore `:234-271` (route pinned
+   `:232`), the viewport observer `:335-348`, the MudDataGrid workarounds `:558-564` and `:608-624`,
+   the virtualized pager skip `:598-606`, `LoadServerDataAsync` `:657`, the paged sort and page
+   conversion `:745` and `:747`, `LoadVirtualizedServerDataAsync` `:790` (its `RunFetchAsync` and
+   `ExtractGridFilters` calls `:806` and `:810`), `RunFetchAsync` `:881` (cleared `:890`, set `:922`),
+   `FailedFetch` `:940` (set `:943`), `CreateFetchCts` `:984-995`, `LoadMobileDataAsync` `:1001`,
+   `ResetCancellationTokenAsync` `:1060-1087`, `ExtractGridFilters` `:1119-1132`,
+   `ExtractSortParameters` `:1169-1174`, `ResolveSortParameters` `:1181-1193`, `SaveCurrentState`
+   `:1202-1240`, the `_ownRoutePath` field `:1291` and `IsOwnRouteCurrent` `:1299-1300`.
+7. The list-page inheritor count is now qualified as twenty application types (thirteen ADC, seven
+   Store), and the framework's own `UserAdminList<TUser>`
+   (`MMCA.Common/Source/Presentation/MMCA.Common.UI/Pages/Administration/UserAdminList.razor:4`) is
+   recorded as a further inheritor.
 
 ## Related
 [ADR-034](034-generic-entity-query-layer.md) (the server surface this contract calls, and the filter

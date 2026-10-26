@@ -9,10 +9,13 @@ Revised (2026-09-11): the first per-instance scheduled deadline now exists in MM
 ADR-114's internal-command queue rather than on a state machine, which retires one of the three
 absent properties without meeting this record's trigger; the deferral stands. See the Revision below.
 Revised 2026-10-07: the in-process provider is not MassTransit, so a state machine needs a broker
-provider (or a new in-process MassTransit registration) to ride, and the EF saga repository would be
-a fourth MassTransit package that the v8 pin gate covers only once its id is added; the deferral
+provider (or a new in-process MassTransit registration) to ride, and the EF saga repository would then
+have been a fourth MassTransit package that the v8 pin gate covers only once its id is added; the deferral
 stands. Revised 2026-10-21: anchors refreshed after the 2026-10-07 change to
-`DependencyVersionTestsBase` moved the pin gate's lines; the deferral stands.
+`DependencyVersionTestsBase` moved the pin gate's lines; the deferral stands. Revised 2026-10-26:
+the MassTransit pin now covers five v8 packages at 8.5.12 across four broker providers (RabbitMQ and
+PostgreSQL built in, Azure Service Bus and Amazon SQS as adapters), so the EF saga repository would be
+a sixth pinned package; the deferral stands.
 
 ## Context
 [ADR-054](054-saga-compensation-and-reconciliation.md) decided how this workspace achieves
@@ -72,11 +75,11 @@ A durable multi-step workflow coordinator in this workspace is a **MassTransit v
 machine**, not a hand-rolled orchestrator and not a third-party workflow engine:
 
 - **`MassTransitStateMachine<TInstance>` for the definition.** The transport abstraction
-  ([ADR-066](066-broker-transport-selection.md)) is MassTransit for both broker providers (RabbitMQ
-  locally, Azure Service Bus in production), so in a broker deployment the state machine rides the
-  bus that already exists. The `InProcess` provider is not MassTransit: `AddBrokerMessaging` returns
-  before `AddMassTransit` is ever called, and the bus is the hand-written `InProcessMessageBus`
-  dispatching through `IDomainEventDispatcher`. A coordinator therefore needs a broker provider, or
+  ([ADR-066](066-broker-transport-selection.md)) is MassTransit for every broker provider (RabbitMQ
+  and PostgreSQL built in, Azure Service Bus and Amazon SQS through adapter packages), so in a
+  broker deployment the state machine rides the bus that already exists. The `InProcess` provider
+  is not MassTransit: `AddBrokerMessaging` returns before `AddMassTransit` is ever called, and the
+  bus is the hand-written `InProcessMessageBus` dispatching through `IDomainEventDispatcher`. A coordinator therefore needs a broker provider, or
   a MassTransit registration added for the in-process mode, before it has a bus to ride. Introducing
   a second coordination technology beside MassTransit would mean two retry models, two dead-letter
   destinations and two sets of transport configuration.
@@ -101,9 +104,12 @@ machine**, not a hand-rolled orchestrator and not a third-party workflow engine:
 
 ### The constraint that shapes the technology choice
 MassTransit is **pinned to v8** and the pin is a build gate
-([ADR-016](016-lockstep-versioning-masstransit-pin.md)): `MassTransit`, `MassTransit.RabbitMQ` and
-`MassTransit.Azure.ServiceBus.Core` are all held at 8.5.11 in
-`MMCA.Common/Directory.Packages.props:124-126`, because v9 requires a commercial license. The design
+([ADR-016](016-lockstep-versioning-masstransit-pin.md)): `MassTransit`, `MassTransit.RabbitMQ`,
+`MassTransit.Azure.ServiceBus.Core`, `MassTransit.AmazonSQS` and
+`MassTransit.SqlTransport.PostgreSQL` are all held at 8.5.12 in
+`MMCA.Common/Directory.Packages.props:125-127,130,136`, because v9 requires a commercial license.
+The build gate checks a fixed list of exactly those five ids, so the EF saga repository the design
+needs would be a sixth MassTransit package, guarded only once its id is added. The design
 assumes the v8 saga state machine and its EF Core saga repository are sufficient, an assumption no
 source here exercises (no saga type and no `MassTransit.EntityFrameworkCore` version exists in any
 repo), so the pin is not known to block the design;
@@ -264,6 +270,47 @@ the build-gate anchors cited by the 2026-10-07 Revision moved; that Revision is 
    The pin itself holds at 8.5.11 for all three packages (`MMCA.Common/Directory.Packages.props:124-126`),
    and the arm call holds at `CheckOutHandler.cs:180`, delegating to
    `CheckOutDeadlineScheduler.cs:55` for the scheduling.
+
+## Revision (2026-10-26)
+
+Re-verified against current source. The deferral, its trigger, the coordinator's shape, the v8
+licensing constraint and the absence evidence are unchanged. What moved is the MassTransit surface
+the coordinator would ride: more broker providers and more pinned packages. The Decision is
+corrected in place; the 2026-10-07 and 2026-10-21 Revisions are kept as written.
+
+1. **Every broker provider is MassTransit, and there are four.** RabbitMQ and PostgreSQL are built in
+   (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.Messaging.cs:190-198`,
+   documented at `:26-29`); Azure Service Bus and Amazon SQS are adapter `IBrokerTransport`s
+   (`:32-36`), registering `UsingAzureServiceBus`
+   (`MMCA.Common/Source/Hosting/MMCA.Common.Azure/Messaging/AzureServiceBusTransport.cs:33`) and
+   `UsingAmazonSqs` (`MMCA.Common/Source/Hosting/MMCA.Common.Aws/Messaging/AmazonSqsTransport.cs:90`).
+   `InProcess` is still the one provider that is not MassTransit: `AddBrokerMessaging` returns at
+   `:57-60` before `AddMassTransit` at `:83`, the no-op is documented at `:30-31`, and the bus is
+   `InProcessMessageBus` over `IDomainEventDispatcher`
+   (`.../Messaging/InProcessMessageBus.cs:19`). The 2026-10-07 Revision's "not for all three"
+   now reads as "not for all five providers"; the Decision bullet names the four broker providers.
+2. **The pin covers five packages at 8.5.12.** `MassTransit`, `MassTransit.RabbitMQ` and
+   `MassTransit.Azure.ServiceBus.Core` sit at `MMCA.Common/Directory.Packages.props:125-127`,
+   `MassTransit.AmazonSQS` at `:130` and `MassTransit.SqlTransport.PostgreSQL` at `:136`, all still
+   v8. The gate's `MassTransitPackageIds` lists those five ids
+   (`MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Bases/Governance/DependencyVersionTestsBase.cs:18-25`,
+   ids at `:20-24`). `MassTransit.EntityFrameworkCore` is still declared nowhere, so the EF saga
+   repository would be a sixth MassTransit package, guarded only once its id is added. The
+   constraint paragraph in the Decision now says so.
+3. Anchors re-verified against current source: the gate's `[Fact]` at
+   `DependencyVersionTestsBase.cs:27`, the method `MassTransit_MustNotExceed_MajorVersion8` at `:28`
+   and its loop at `:30-39`, still run through
+   `MMCA.Common/Tests/Architecture/MMCA.Common.Architecture.Tests/Governance/DependencyVersionTests.cs:9`;
+   the 2026-10-07 Revision's `DependencyInjection.Messaging.cs:342-344` switch anchor no longer
+   exists (the file has 274 lines and no switch). In MMCA.Store the arm call is
+   `deadlineScheduler.ArmAsync` at `CheckOutHandler.cs:178` (scheduler injected at `:45`; the file
+   has 212 lines, so the 2026-09-11 Revision's `:226-229` is past its end), delegating to
+   `CheckOutDeadlineScheduler.cs:55`. The Context anchors hold: `PaymentReconciliationService.cs:69`
+   (class) and `:75` (base), `RefreshSessionCleanupService.cs:53`,
+   `PermissionGrantRefreshService.cs:36`, `InternalCommandCleanupService.cs:46`,
+   `OutboxCleanupService.cs:49`. A per-repo content sweep of the four `Source` trees for
+   `MassTransitStateMachine`, `SagaStateMachineInstance`, `ISaga`, `InMemorySagaRepository` and
+   `MassTransit.EntityFrameworkCore` still returns no match.
 
 ## Related
 [ADR-054](054-saga-compensation-and-reconciliation.md) (the accepted mechanism this record defers an

@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 134 ADRs</summary>
+        <summary>All 135 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -234,6 +234,7 @@
         <li><a href="132-build-strictness-analyzer-policy.html">132 · Build Strictness: Analyzers at Error Severity, a Shared Baseline, and CI Test Floors</a></li>
         <li><a href="133-versioned-password-hash-work-factor.html">133 · Versioned Password Hash Work Factor</a></li>
         <li><a href="134-cloud-neutral-core-vendor-adapters.html">134 · Cloud-Neutral Core With Vendor Adapter Packages</a></li>
+        <li><a href="135-application-namespace-keyspace-isolation.html">135 · One Application Namespace Isolates Shared Infrastructure Keyspaces</a></li>
           </ol>
         </nav>
       </details>
@@ -275,7 +276,9 @@
           configuration overload in every service.
           Revised 2026-10-21: the distributed limiter&#39;s increment and expiry run as one atomic Lua script, so
           no fault between them can leave a counter key without a TTL, and the forwarded-header trade-off
-          records that both Bicep templates declare service ingress internal-only.</p>
+          records that both Bicep templates declare service ingress internal-only.
+          Revised 2026-10-26: anchors refreshed after the source moves since 2026-10-21, and Related names
+          ADR-135 as the record that owns the application-namespace decision the Redis partition key follows.</p>
           <h2 id="context">Context</h2>
           <p>Every service exposes read and write endpoints to the public internet through the gateway (ADR-008).
           Abusive or runaway clients (scrapers, credential stuffing, retry storms, a buggy SPA stuck in a loop)
@@ -314,7 +317,7 @@
           are served from the output cache (<code>UseOutputCache</code>; ADC&#39;s Conference service defines one
           public-endpoint policy per public aggregate, among them <code>EventsCache</code> / <code>CategoriesCache</code> /
           <code>QuestionsCache</code> / <code>RoomsCache</code>,
-          <code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:270-301</code>), and login/registration brute-force is handled by <code>LoginProtectionService</code>
+          <code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:276-307</code>), and login/registration brute-force is handled by <code>LoginProtectionService</code>
           (exponential-backoff account lockout after <code>MaxFailedAttempts</code> failed logins, plus per-IP
           registration throttling).</li>
           <li><strong>A per-IP cap on the anonymous authentication endpoints, on by default.</strong> <code>AddCommonRateLimiting</code>
@@ -350,8 +353,8 @@
           rather than sharing one bucket with every other such request (a deliberate difference from the
           global limiter, which puts an unattributable authenticated request in one shared <code>&quot;authenticated&quot;</code>
           bucket and an unattributable anonymous hub request in one shared <code>&quot;anonymous-hub&quot;</code> bucket,
-          <code>MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/WebApplicationBuilderExtensions.RateLimiting.cs:66</code>,
-          <code>:156</code>, <code>:309-310</code>); and the default is 30 rather than a tighter 10 for the same shared-IP reason,
+          <code>MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/WebApplicationBuilderExtensions.RateLimiting.cs:87</code>,
+          <code>:177</code>, <code>:330-331</code>); and the default is 30 rather than a tighter 10 for the same shared-IP reason,
           since every Server-circuit user&#39;s login leaves from the UI host&#39;s address.</li>
           <li><strong>The remaining named policies are opt-in, per-endpoint tightening.</strong> <code>AddCommonRateLimiting</code> also
           registers <code>FixedPolicy</code> and <code>UserPolicy</code>, which a specific action can apply with
@@ -403,9 +406,9 @@
           <code>KnownProxies</code> (the shared options only clear them,
           <code>MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/CommonForwardedHeaders.cs:49</code>). The first
           is declared in infrastructure instead: both Bicep templates give every service container app
-          internal-only ingress (<code>external: false</code>, <code>MMCA.ADC/infra/main.bicep:1840</code>, <code>:2093</code>, <code>:2246</code>,
-          <code>:2381</code>; <code>MMCA.Store/infra/main.bicep:1523</code>, <code>:1705</code>, <code>:1829</code>) and expose only the gateway and the
-          UI host (ADC <code>:2571</code>, <code>:2734</code>; Store <code>:1981</code>, <code>:2110</code>), so traffic from outside the environment
+          internal-only ingress (<code>external: false</code>, <code>MMCA.ADC/infra/main.bicep:1876</code>, <code>:2129</code>, <code>:2282</code>,
+          <code>:2417</code>; <code>MMCA.Store/infra/main.bicep:1529</code>, <code>:1711</code>, <code>:1835</code>) and expose only the gateway and the
+          UI host (ADC <code>:2607</code>, <code>:2770</code>; Store <code>:1987</code>, <code>:2116</code>), so traffic from outside the environment
           reaches a service only through the gateway. A caller already inside the container-apps
           environment can still reach a service directly.</li>
           <li><strong>Per-user partitioning depends on the authenticated principal being populated</strong> when the limiter
@@ -419,10 +422,11 @@
           This holds for <code>auth-ip</code> and <code>FixedPolicy</code> (always in-memory), for the gateway limiters, and for
           the global, per-user and hub windows in any host that leaves <code>Distributed</code> unset (see the Revision
           (2026-08-18)). ADC production sets <code>RateLimiting__Distributed=true</code> on all four services
-          (<code>MMCA.ADC/infra/main.bicep:1916</code>, <code>:2157</code>, <code>:2294</code>, <code>:2448</code>; the AppHost does the same,
-          <code>MMCA.ADC/Source/Hosting/MMCA.ADC.AppHost/Program.cs:476</code>), so there those three windows share one
+          (<code>MMCA.ADC/infra/main.bicep:1952</code>, <code>:2193</code>, <code>:2330</code>, <code>:2484</code>; the AppHost does the same only in its
+          opt-in multi-replica run, when <code>ADC_REPLICAS</code> is greater than 1,
+          <code>MMCA.ADC/Source/Hosting/MMCA.ADC.AppHost/Program.cs:459-464</code>, <code>:477</code>), so there those three windows share one
           Redis budget across replicas and only <code>auth-ip</code> and the gateway limiters scale with replica count
-          (<code>MMCA.ADC/infra/main.bicep:1910-1915</code>). Store sets no <code>Distributed</code> value, so every Store limiter
+          (<code>MMCA.ADC/infra/main.bicep:1946-1951</code>). Store sets no <code>Distributed</code> value, so every Store limiter
           stays per-instance.</li>
           </ul>
           <h2 id="revision-2026-08-18">Revision (2026-08-18)</h2>
@@ -701,6 +705,65 @@
           <code>:2016-2021</code>); the ADC <code>GatewayRateLimiting__TrustedCallerSecret</code> injections are at <code>:2647</code> and
           <code>:2806</code>, and Store&#39;s at <code>MMCA.Store/infra/main.bicep:2053</code> and <code>:2178</code>.</li>
           </ol>
+          <h2 id="revision-2026-10-26">Revision (2026-10-26)</h2>
+          <p>Re-verified against current source. The layering, every default, the <code>auth-ip</code> surface, the
+          fail-open posture, the atomic <code>INCRBY</code> script and its 65-second TTL, the application-namespaced Redis
+          key, the declared internal-only service ingress and both gateways&#39; <code>auth-tight</code> scoping are
+          unchanged. No behavior moved; the anchors that drifted since the 2026-10-21 revision are re-pointed,
+          and the Related section gains the record that owns the application namespace.</p>
+          <ol>
+          <li><strong>Related names ADR-135.</strong> The Redis partition key&#39;s namespace (Revision 2026-10-07) is the
+          application namespace that ADR-135 records as the one isolation rule for shared infrastructure
+          keyspaces, so the Related section now points there for that decision rather than leaving it
+          implied by this record and ADR-026.</li>
+          <li><strong>The unattributable-bucket anchors in Decision item 3 moved.</strong> Revision 2026-10-07 recorded them
+          as unchanged; they have since moved with the file. In
+          <code>MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/WebApplicationBuilderExtensions.RateLimiting.cs</code>
+          the <code>&quot;anonymous-hub&quot;</code> fallback key is at <code>:87</code>, the <code>&quot;authenticated&quot;</code> fallback at <code>:177</code>, and the
+          <code>auth-ip</code> <code>__unknown-ip</code> <code>NoLimiter</code> branch at <code>:330-331</code> (inside the settings overload of
+          <code>AuthIpRateLimitPartition</code>, <code>:326</code>); Decision item 3 now cites those lines.</li>
+          <li>Anchors re-verified against current source. In <code>WebApplicationBuilderExtensions.RateLimiting.cs</code>:
+          <code>IsRateLimitBypassed</code> <code>:67</code>, <code>AnonymousPartition</code> <code>:83</code> (the anonymous <code>NoLimiter</code> <code>:93</code>),
+          <code>IsAnonymousHubRequest</code> <code>:103</code>, the <code>__infra</code> <code>NoLimiter</code> <code>:166</code>, <code>auth-ip</code>
+          <code>allowDistributed: false</code> <code>:339</code>, and <code>FixedPolicy</code> <code>allowDistributed: false</code> <code>:439</code>. The Redis
+          partition key <code>{namespace}:{scope}:{partition}</code> is built at <code>:275</code> (rationale <code>:268-270</code>), the
+          namespace is resolved by <code>RateLimitKeyNamespace</code> (<code>:220-226</code>, trailing colon trimmed at <code>:225</code>),
+          and with no multiplexer registered the factory falls through to the in-memory limiters (<code>:263</code>,
+          <code>:280-283</code>). In
+          <code>MMCA.Common/Source/Presentation/MMCA.Common.API/RateLimiting/RedisFixedWindowRateLimiter.cs</code>:
+          <code>IncrementScript</code> <code>:50-53</code>, <code>KeyTtlSeconds</code> <code>:60</code>, the static <code>_lastLoggedFailureWindow</code> <code>:67</code>, the
+          <code>rl:</code> key built at <code>:164</code>, <code>ScriptEvaluateAsync</code> <code>:169</code>, the permit comparison <code>:175</code>, the
+          fail-open <code>catch</code> <code>:179</code> and its <code>Interlocked.Exchange</code> guard <code>:181</code>.
+          <code>MiddlewarePipelineBuilder.IsCleartextHttp2</code> is defined at
+          <code>MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/Pipeline/MiddlewarePipelineBuilder.cs:349</code>
+          and used at <code>:85</code>. <code>GatewayRateLimitingSettings.cs</code> keeps <code>SectionName</code> <code>:51</code>,
+          <code>TrustedCallerHeaderName</code> <code>:126</code> and <code>TrustedCallerSecret</code> <code>:154</code>; in
+          <code>MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Gateway/GatewayRateLimitingExtensions.cs</code> the
+          <code>FixedTimeEquals</code> comparison is at <code>:195</code> inside the shared <code>PresentsSecret</code> helper (<code>:179</code>), which
+          <code>IsTrustedInternalCaller</code> (<code>:164</code>) calls with the trusted-caller settings (<code>:171-172</code>), applied at
+          <code>:208</code> (the last term of the <code>IsExemptFromLimiters</code> OR chain, <code>:205-208</code>) and <code>:225</code>. <code>AddTrustedCallerHeader</code>
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI.Web/DependencyInjection.cs:121</code>) is called from
+          <code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs:143</code> and
+          <code>MMCA.Store/Source/Hosts/UI/MMCA.Store.UI.Web/Program.cs:135</code> and from no other host (outside those two, only MMCA.Common&#39;s own tests call it). Every service
+          calls <code>AddCommonRateLimiting(builder.Configuration)</code>: ADC Conference
+          <code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:227</code>, Engagement <code>:157</code>, Identity
+          <code>:172</code>, Notification <code>:150</code>; Store Catalog
+          <code>MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:147</code>, Sales <code>:155</code>, Identity
+          <code>:142</code>. The Conference output-cache policies run from <code>ConferencePublicCache</code>
+          (<code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:276</code>) to <code>BookmarkCountsCache</code>
+          (<code>:307</code>), with <code>EventsCache</code> <code>:277</code>, <code>RoomsCache</code> <code>:285</code>, <code>CategoriesCache</code> <code>:286</code> and
+          <code>QuestionsCache</code> <code>:287</code>, and Decision item 2 now cites <code>:276-307</code>. In <code>MMCA.ADC/infra/main.bicep</code>
+          <code>RateLimiting__Distributed</code> is set at <code>:1952</code>, <code>:2193</code>, <code>:2330</code> and <code>:2484</code> (rationale
+          <code>:1946-1951</code>; the AppHost at <code>MMCA.ADC/Source/Hosting/MMCA.ADC.AppHost/Program.cs:477</code>, only
+          when <code>ADC_REPLICAS</code> is greater than 1, <code>:459-464</code>),
+          <code>RateLimiting__AuthIpPermitLimit</code> <code>&#39;300&#39;</code> at <code>:2060</code> (rationale <code>:2052-2057</code>), service ingress is
+          internal at <code>:1876</code>, <code>:2129</code>, <code>:2282</code> and <code>:2417</code> and the gateway and UI host are external at
+          <code>:2607</code> and <code>:2770</code>, and the trusted-caller secret is injected at <code>:2683</code> and <code>:2842</code>. In
+          <code>MMCA.Store/infra/main.bicep</code> service ingress is internal at <code>:1529</code>, <code>:1711</code> and <code>:1835</code>, the
+          gateway and UI host are external at <code>:1987</code> and <code>:2116</code>, the trusted-caller secret is injected at
+          <code>:2059</code> and <code>:2184</code>, and no service-side <code>RateLimiting__</code> key is set. The Trade-offs anchors now
+          cite these lines.</li>
+          </ol>
           <h2 id="related">Related</h2>
           <p>ADR-004 (the JWKS/discovery traffic the limiter exempts, and the authenticated principal it keys on),
           ADR-008 (the gateway edge this protects), ADR-017 (request idempotency, the other inbound-edge
@@ -711,7 +774,9 @@
           Lua script here avoids by owning its own <code>rl:</code> keyspace, qualified per application), ADR-070 (the fail-fast configuration contract
           <code>RateLimitingSettings</code> binds into, and the <code>Distributed</code> degradation that sits outside it), ADR-079
           (the shared middleware pipeline that places <code>UseRateLimiter</code> after authentication and after forwarded
-          headers, which is what makes both partition keys resolvable).</p>
+          headers, which is what makes both partition keys resolvable), ADR-135 (the application namespace that
+          qualifies the distributed limiter&#39;s Redis partition key, one rule for every shared infrastructure
+          keyspace).</p>
           
         <div class="doc-foot btn-row">
           <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
@@ -735,6 +800,7 @@
             <li><a href="#revision-2026-10-07">Revision (2026-10-07)</a></li>
             <li><a href="#revision-2026-10-19">Revision (2026-10-19)</a></li>
             <li><a href="#revision-2026-10-21">Revision (2026-10-21)</a></li>
+            <li><a href="#revision-2026-10-26">Revision (2026-10-26)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

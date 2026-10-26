@@ -1,7 +1,7 @@
 # ADR-125: Parameterized SQL Only, Enforced by a Fitness Gate
 
 ## Status
-Accepted (2026-09-19). Revised 2026-10-01: citations refreshed and MMCA.Helpdesk counted as the fourth subclassing repo. Revised 2026-10-06: the relational limit is now a conditional registration that fails at container validation, not a `NotSupportedException` on the first statement. Revised 2026-10-07: the Cosmos-default failure is an unresolved-service error raised at startup only where the container is validated on build (Development under the default builder) and otherwise on first resolution, and the CHANGELOG anchors are refreshed after the v1.233.0 release. Revised 2026-10-21: the source comments now state the same Development-build versus first-resolution timing the ADR does, the `SET IDENTITY_INSERT` exemption is described as the SQL Server explicit-key insert dialect with a best-effort toggle-off on the failure path, and anchors are refreshed after v1.250.0.
+Accepted (2026-09-19). Revised 2026-10-01: citations refreshed and MMCA.Helpdesk counted as the fourth subclassing repo. Revised 2026-10-06: the relational limit is now a conditional registration that fails at container validation, not a `NotSupportedException` on the first statement. Revised 2026-10-07: the Cosmos-default failure is an unresolved-service error raised at startup only where the container is validated on build (Development under the default builder) and otherwise on first resolution, and the CHANGELOG anchors are refreshed after the v1.233.0 release. Revised 2026-10-21: the source comments now state the same Development-build versus first-resolution timing the ADR does, the `SET IDENTITY_INSERT` exemption is described as the SQL Server explicit-key insert dialect with a best-effort toggle-off on the failure path, and anchors are refreshed after v1.250.0. Revised 2026-10-26: anchors refreshed after v1.261.0.
 
 ## Context
 The supported way to read data is the repository plus specification contract
@@ -25,9 +25,9 @@ Two call sites that look identical, opposite safety, and the difference is three
 The framework also runs on four engines ([ADR-018](018-polyglot-persistence.md)), and one of them has
 no SQL command surface at all, so "raw SQL" cannot be offered as a capability every host has. Before
 v1.192.0 the landing shape for a raw scalar read was four keyless `ValReturn<T>` entities mapped to no
-table and queried by nobody (`MMCA.Common/CHANGELOG.md:1838-1844`); the pair of additions this record
-covers shipped in v1.192.0 (`MMCA.Common/CHANGELOG.md:1723`, the interface at `:1793-1802` and the
-fitness base at `:1803-1806`).
+table and queried by nobody (`MMCA.Common/CHANGELOG.md:2053-2059`); the pair of additions this record
+covers shipped in v1.192.0 (`MMCA.Common/CHANGELOG.md:1938`, the interface at `:2008-2017` and the
+fitness base at `:2018-2021`).
 
 ## Decision
 Give raw SQL exactly one door whose signature makes the unsafe call uncompilable, and ban the four raw
@@ -45,14 +45,14 @@ EF members in module code with a fitness test rather than a guideline.
   (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/EFRawSqlQueryExecutor.cs:29`)
   resolves the host's default physical source (`:51`), and it is registered only when that default
   source is on a relational engine
-  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:416`, registration at
-  `:418`). A Cosmos-default host has no registration, so a service that injects the interface there
+  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:435`, registration at
+  `:437`). A Cosmos-default host has no registration, so a service that injects the interface there
   fails with an unresolved-service error rather than on its first statement. The interface
   (`IRawSqlQueryExecutor.cs:17-23`), the executor (`EFRawSqlQueryExecutor.cs:19-25`) and the
-  registration method (`DependencyInjection.cs:397-403`) all document the missing registration and
+  registration method (`DependencyInjection.cs:416-422`) all document the missing registration and
   its timing: at container build in Development, where the default host validates the container, and
   on first resolution elsewhere (`IRawSqlQueryExecutor.cs:21-22`, `EFRawSqlQueryExecutor.cs:23-24`,
-  `DependencyInjection.cs:401-402`). No host in the four repos sets `ValidateOnBuild` itself, and the
+  `DependencyInjection.cs:420-421`). No host in the four repos sets `ValidateOnBuild` itself, and the
   hosts that register the executor build through `WebApplication.CreateBuilder` (for example
   `MMCA.Helpdesk/Source/Hosts/MMCA.Helpdesk.Web/Program.cs:12`), so the container is validated at
   startup only where the default builder turns validation on (the Development environment), and
@@ -62,7 +62,7 @@ EF members in module code with a fitness test rather than a guideline.
   the read shares the caller's connection and any transaction an `ITransactional` command opened. It is
   registered scoped, by the call that follows the singleton `IQueryableExecutor` and deliberately not a
   singleton itself (`DependencyInjection.cs:116`, the sibling at `:111` and the reason at `:113-115`;
-  the scoped registration itself at `:418`), and is `internal sealed` (`EFRawSqlQueryExecutor.cs:29`),
+  the scoped registration itself at `:437`), and is `internal sealed` (`EFRawSqlQueryExecutor.cs:29`),
   so the abstraction is the only public surface.
 - **The ban is a test, not a paragraph.** `ModuleCode_UsesParameterizedSqlOnly`
   (`RawSqlConventionTestsBase.cs:66`) scans the `.cs` files of every mapped module and fails on member
@@ -254,6 +254,25 @@ anchors and `DependencyInjection.cs:111`, `:113-115`, `:116`) still hold as cite
    `RawSqlConventionTestsBase` entry `:1803-1806`, `ValReturn<T>` removal `:1838-1844`; the v1.218.0
    conditional registration bullet is now `:630` (header `:623`). The earlier revisions and Status
    sentences keep their anchors as recorded on their dates.
+
+## Revision (2026-10-26)
+Re-verified against current source. The decision, the `FormattableString`-only contract, the
+conditional relational registration and its timing, the fitness base, the one-entry `AllowedFiles`
+ratchet and every consumer subclass are unchanged. Only anchors moved: `DependencyInjection.cs` grew
+above `AddRawSqlQueryExecutor`, so the old `:397-403` range now points into unrelated documentation,
+and every CHANGELOG anchor shifted as the releases through v1.261.0 landed above v1.192.0.
+
+1. Anchors re-verified against current source: `DependencyInjection.cs` `AddRawSqlQueryExecutor`
+   summary `:416-422` (timing wording `:420-421`, method `:426`), relational check `:435`, scoped
+   registration `:437` (call site `:116`, sibling `:111`, reason `:113-115` unchanged);
+   `MMCA.Common/CHANGELOG.md` v1.192.0 header `:1938`, `IRawSqlQueryExecutor` entry `:2008-2017`
+   (still ending on the original `NotSupportedException` sentence at `:2017`),
+   `RawSqlConventionTestsBase` entry `:2018-2021`, `ValReturn<T>` removal `:2053-2059`; the v1.218.0
+   conditional registration bullet is now `:845` (header `:838`); the v1.247.0 failure-path toggle-off
+   entry is `:313` (header `:260`, item M229), which describes the guarded `IDENTITY_INSERT` toggle-off
+   without naming `TryToggleOffAsync`. The `DbContextFactory.cs` anchors (`:296`, `:389`, `:423`,
+   `:439`, `:445`) still hold as cited. The earlier revisions and Status sentences keep their anchors
+   as recorded on their dates.
 
 ## Related
 [ADR-055](055-repository-and-specification-contract.md) (the repository plus specification path this

@@ -22,6 +22,7 @@ Revised 2026-10-06 (credential paths also answer `Pragma: no-cache`, re-apply th
 response start over a weaker downstream value, and have their prefixes validated at startup).
 Revised 2026-10-07: anchors refreshed after the v1.233.0 release.
 Revised 2026-10-21: re-verified against current source, no content or anchor change.
+Revised 2026-10-26: anchors refreshed after ADC #291 moved the Blazor host's pipeline lines.
 ## Context
 Every client-facing host (the YARP Gateway and the Blazor UI web host in each app) must stamp the same
 hardened HTTP response headers: `X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy`,
@@ -316,6 +317,28 @@ anchor moved since the 2026-10-07 revision.
    `strict-origin-when-cross-origin` (`:28`), the `Permissions-Policy` value (`:31`), HSTS
    `max-age=31536000; includeSubDomains` (`:51`) gated on `EnableHsts` outside Development (`:175`),
    the static baseline (`:67-69`), and the 128-bit `{nonce}` (16 bytes, `:153`, generated at `:228`).
+
+## Revision (2026-10-26)
+
+Re-verified against current source. No decision, rationale or trade-off changed, and the live-section
+anchors still hold. What moved is the ADC Blazor host: its `Program.cs` lines shifted by six after
+the 2026-10-21 revision (ADC #291), so the host anchors recorded by the 2026-10-07 revision are
+stale. The pipeline ordering is unchanged: forwarded headers, then security headers, then rate
+limiting, then the HTTPS redirect.
+
+1. Anchors re-verified against current source: in the ADC Blazor host
+   (`MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs`), `AddCommonBlazorCsp` is at `:200` and
+   `AddCommonSecurityHeaders` at `:201`, `UseCommonUiForwardedHeaders()` at `:216`,
+   `UseCommonSecurityHeaders()` at `:222`, `UseUiRateLimiting()` at `:227` and
+   `UseHttpsRedirection()` at `:240`, with the rationale comments at `:189-199` (CSP and HSTS),
+   `:205-215` (forwarded headers), `:218-221` (security headers, no `UseHsts`) and `:224-226` (rate
+   limiter). In the framework, the static default's `TryAddSingleton` is still
+   `MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Security/SecurityHeaders.cs:288` (interface at
+   `:86`), `CredentialPathPrefixes` `:48`, `IsCredentialPath` `:179-182` (used at `:192` and `:197`),
+   `no-referrer` `:193`, `CredentialCacheControl` `:156` (written at `:248`) and the HSTS value
+   `:51`; `AddCommonBlazorCsp`
+   (`MMCA.Common/Source/Presentation/MMCA.Common.UI.Web/DependencyInjection.cs:67`) still calls
+   `ValidateOnStart` at `:71` and registers with plain `AddSingleton` at `:77`.
 
 ## Related
 ADR-019 (rate limiting, the other always-on edge protection living in the same Aspire layer), ADR-022

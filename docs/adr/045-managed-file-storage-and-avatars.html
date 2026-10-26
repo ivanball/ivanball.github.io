@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 134 ADRs</summary>
+        <summary>All 135 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -234,6 +234,7 @@
         <li><a href="132-build-strictness-analyzer-policy.html">132 · Build Strictness: Analyzers at Error Severity, a Shared Baseline, and CI Test Floors</a></li>
         <li><a href="133-versioned-password-hash-work-factor.html">133 · Versioned Password Hash Work Factor</a></li>
         <li><a href="134-cloud-neutral-core-vendor-adapters.html">134 · Cloud-Neutral Core With Vendor Adapter Packages</a></li>
+        <li><a href="135-application-namespace-keyspace-isolation.html">135 · One Application Namespace Isolates Shared Infrastructure Keyspaces</a></li>
           </ol>
         </nav>
       </details>
@@ -258,7 +259,8 @@
           longer holds an image processor or those suppressions).
           Revised 2026-10-24: the Azure Blob implementation moved to MMCA.Common.Azure and an S3-compatible implementation ships in MMCA.Common.Aws (<a href="134-cloud-neutral-core-vendor-adapters.html">ADR-134</a>); see Revision (2026-10-24).
           Revised 2026-10-25: a Google Cloud Storage implementation ships in MMCA.Common.Gcp, so three adapters read the shared <code>FileStorage</code> section, each keyed on its own field; see Revision (2026-10-25).
-          Revised 2026-10-25 (image processing): <code>IImageProcessor</code> and its SkiaSharp implementation are ADC&#39;s Identity module&#39;s, not framework types; MMCA.Common keeps <code>IFileStorageService</code> and the dependency-free upload guards, <code>ImageContentSniffer</code> among them; see Revision (2026-10-25, image processing moves to ADC).</p>
+          Revised 2026-10-25 (image processing): <code>IImageProcessor</code> and its SkiaSharp implementation are ADC&#39;s Identity module&#39;s, not framework types; MMCA.Common keeps <code>IFileStorageService</code> and the dependency-free upload guards, <code>ImageContentSniffer</code> among them; see Revision (2026-10-25, image processing moves to ADC).
+          Revised 2026-10-26: anchors refreshed after MMCA.Common v1.261.0 (the GCS delete posture, the Consequences CHANGELOG cite and the revision-section anchors moved; no behavior changed); see Revision (2026-10-26).</p>
           <h2 id="context">Context</h2>
           <p>The MAUI capability program (ADR-042) brought MediaPicker/camera within reach, and ADC amended
           BR-116 to include user avatar photos. That needs binary blob storage (the databases store
@@ -289,7 +291,7 @@
           (<code>.../MMCA.Common.Gcp/Storage/GcsFileStorageSettings.cs:18</code>) is present (<code>:56</code>), over
           Application Default Credentials with no HMAC keys (<code>:37-38</code>). A section carrying only the S3
           <code>Bucket</code> or the Azure <code>ContainerName</code> leaves it a no-op (<code>:38-40</code>). Its delete answers success
-          for any HTTP 404 (<code>.../Storage/GcsFileStorageService.cs:83-87</code>); the filter does not tell a
+          for any HTTP 404 (<code>.../Storage/GcsFileStorageService.cs:94-99</code>); the filter does not tell a
           missing object from a missing bucket, so a delete against a missing bucket also reads as success.</li>
           </ul>
           <p>The container or bucket is provisioned by infrastructure, never created by the app (the GCS
@@ -352,7 +354,7 @@
           (Storage Blob Data Contributor) for the app identity - a bicep-level grant, not a secret.</li>
           <li>Image decoding is an application dependency, not a framework one: <code>AddInfrastructure</code> registers
           no image processor and MMCA.Common.Infrastructure takes no image library
-          (<code>MMCA.Common/CHANGELOG.md:17</code>), and the framework&#39;s accepted-advisory list is empty
+          (<code>MMCA.Common/CHANGELOG.md:49</code>), and the framework&#39;s accepted-advisory list is empty
           (<code>MMCA.Common/Directory.Build.props:33</code>). ADC confines SkiaSharp&#39;s native libraries to the
           projects that run it: <code>MMCA.ADC.Identity.Infrastructure</code> takes the managed assembly only
           (<code>MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Infrastructure/MMCA.ADC.Identity.Infrastructure.csproj:10</code>),
@@ -602,6 +604,50 @@
           2026-09-07, 2026-10-06 and 2026-10-21 revisions, and the ImageSharp audit posture recorded on
           2026-10-21, are left as recorded; that file and those suppressions no longer exist in MMCA.Common.</li>
           </ol>
+          <h2 id="revision-2026-10-26">Revision (2026-10-26)</h2>
+          <p>Re-verified against current source. The storage abstraction, the three adapters and the keys they
+          read, the avatar contract, the GCS delete posture and the durable blob deletion are unchanged; the
+          MMCA.Common v1.261.0 release moved the anchors, and a new 1.261.0 section at the top of CHANGELOG
+          and UPGRADING shifted every release cite below it. The Decision&#39;s GCS delete anchor and the
+          Consequences CHANGELOG cite are re-pointed in place; the dated sections above keep their anchors.</p>
+          <ol>
+          <li>Anchors re-verified against current source:<ul>
+          <li>The GCS delete answers success for a 404 in the <code>GoogleApiException</code> filter at
+          <code>MMCA.Common/Source/Hosting/MMCA.Common.Gcp/Storage/GcsFileStorageService.cs:94-99</code>
+          (<code>DeleteAsync</code> at <code>:87</code>), so a missing bucket still reads as success. The service classes are
+          <code>GcsFileStorageService</code> (<code>:25</code>), <code>AzureBlobFileStorageService</code>
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Azure/Storage/AzureBlobFileStorageService.cs:20</code>) and
+          <code>S3FileStorageService</code> (<code>MMCA.Common/Source/Hosting/MMCA.Common.Aws/Storage/S3FileStorageService.cs:23</code>).</li>
+          <li><code>AddS3FileStorage</code> is at
+          <code>MMCA.Common/Source/Hosting/MMCA.Common.Aws/AwsServiceCollectionExtensions.cs:50</code>, with its
+          <code>Bucket</code> gate at <code>:58</code>.</li>
+          <li>The <code>aws-integration</code> job is at <code>MMCA.Common/.github/workflows/ci.yml:902</code> (LocalStack) and the
+          <code>gcp-integration</code> job at <code>:942</code> (fake-gcs-server and the Firestore emulator); neither is a
+          required check.</li>
+          <li>The abstract options-carrying <code>UploadAsync</code> is at
+          <code>MMCA.Common/Source/Core/MMCA.Common.Application/Interfaces/Infrastructure/Storage/IFileStorageService.cs:41</code>;
+          the interface (<code>:15</code>) and <code>DeleteAsync</code> (<code>:47</code>) are where the Decision cites them.</li>
+          <li><code>FileStorage.NotConfigured</code> is raised by the <code>NotConfigured()</code> helper at
+          <code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Storage/NullFileStorageService.cs:32-36</code>
+          (code at <code>:34</code>); the no-tripwire rationale is still at
+          <code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Configuration/CloudAdapterTripwire.cs:21-26</code>.</li>
+          <li>The erasure path schedules the blob delete inside the transaction at
+          <code>MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Application/Users/UseCases/DeleteUser/DeleteUserHandler.cs:65-75</code>
+          (call at <code>:74</code>), through <code>ScheduleAvatarBlobDeletionAsync</code> (<code>:80-90</code>), and a failed schedule
+          fails the erasure (<code>:89</code>).</li>
+          <li>Replace and remove schedule after <code>SaveChangesAsync</code>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/UseCases/Crud/MutateEntityHandlerBase.cs:322</code>)
+          from the <code>OnMutatedAsync</code> hook (<code>:325</code>).</li>
+          <li>Release cites in <code>MMCA.Common/CHANGELOG.md</code>: the S3 adapter entry at <code>:116</code>, the Gcp adapter
+          and its <code>GcsBucket</code> gate at <code>:78-79</code>, <code>gcp-integration</code> not required at <code>:85</code>, the v1.258.0
+          SkiaSharp swap and suppression removal at <code>:55</code>, the v1.259.0 removal (490 MB cost,
+          <code>ImageContentSniffer</code> stays) at <code>:49</code>, and the v1.256.0 removal of the <code>FileStorage</code> startup
+          check at <code>:101</code>. In <code>MMCA.Common/UPGRADING.md</code>: the v1.259.0 section at <code>:46</code>,
+          <code>ImageContentSniffer</code> unchanged at <code>:67</code>, and the <code>ImageSharpPackageIds</code> removal at <code>:78</code> and
+          <code>:85</code>.</li>
+          </ul>
+          </li>
+          </ol>
           
         <div class="doc-foot btn-row">
           <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
@@ -624,6 +670,7 @@
             <li><a href="#revision-2026-10-24">Revision (2026-10-24)</a></li>
             <li><a href="#revision-2026-10-25">Revision (2026-10-25)</a></li>
             <li><a href="#revision-2026-10-25-image-processing-moves-to-adc">Revision (2026-10-25, image processing moves to ADC)</a></li>
+            <li><a href="#revision-2026-10-26">Revision (2026-10-26)</a></li>
             </ul>
           </nav>
         </aside>

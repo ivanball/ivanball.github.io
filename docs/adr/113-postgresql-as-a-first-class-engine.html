@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 134 ADRs</summary>
+        <summary>All 135 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -234,6 +234,7 @@
         <li><a href="132-build-strictness-analyzer-policy.html">132 · Build Strictness: Analyzers at Error Severity, a Shared Baseline, and CI Test Floors</a></li>
         <li><a href="133-versioned-password-hash-work-factor.html">133 · Versioned Password Hash Work Factor</a></li>
         <li><a href="134-cloud-neutral-core-vendor-adapters.html">134 · Cloud-Neutral Core With Vendor Adapter Packages</a></li>
+        <li><a href="135-application-namespace-keyspace-isolation.html">135 · One Application Namespace Isolates Shared Infrastructure Keyspaces</a></li>
           </ol>
         </nav>
       </details>
@@ -253,7 +254,10 @@
           through <code>INpgsqlDataSourceConfigurator</code>, one shared <code>NpgsqlDataSource</code> per connection string for the
           context, the readiness check and the PostgreSql broker, with the RDS and Cloud SQL IAM token
           providers as its users; decisions 2 and 8 are extended and decision 10 is new. See Revision
-          (2026-10-25) at the end.</p>
+          (2026-10-25) at the end. Revised 2026-10-26: decision 4 corrected (SQLite quotes outbox filter
+          columns with double quotes like PostgreSQL, and only SQL Server and Cosmos answer brackets), decision
+          9 gains the periodic-password-provider test, and anchors refreshed after the v1.257.0 and v1.261.0
+          releases.</p>
           <h2 id="context">Context</h2>
           <p>The framework has shipped three database engines since its first release: SQL Server, Azure Cosmos DB
           and SQLite. Every one of them is reached the same way, because <a href="006-database-per-service.html">ADR-006</a>
@@ -301,11 +305,12 @@
           no existing public signature changes.</p>
           </li>
           <li><p><strong>One sealed context, built like the SQL Server one.</strong> <code>PostgreSQLDbContext</code>
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/PostgreSQLDbContext.cs:23</code>)
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/PostgreSQLDbContext.cs:24</code>)
           calls <code>UseNpgsql</code> with the resolved connection string, the per-source migrations assembly, the
           configured command timeout and the same retry-on-failure posture <code>SQLServerDbContext</code> uses
-          (<code>PostgreSQLDbContext.cs:51-82</code>, retry at <code>:74-77</code>), and suppresses <code>PendingModelChangesWarning</code> for the same
-          microservice-extraction reason (<code>PostgreSQLDbContext.cs:82</code>). Everything else the engine
+          (<code>OnConfiguring</code> at <code>PostgreSQLDbContext.cs:56-80</code>, <code>ConfigureNpgsql</code> at <code>:82-106</code>, retry at
+          <code>:102-105</code>), and suppresses <code>PendingModelChangesWarning</code> for the same microservice-extraction
+          reason (<code>PostgreSQLDbContext.cs:77</code>). Everything else the engine
           contributes lives in one <code>PostgreSQLDataSourceEngine</code>
           (<code>.../Persistence/DataSources/Engines/PostgreSQLDataSourceEngine.cs:17</code>), registered in the
           <code>DataSourceEngines</code> registry (<code>.../DataSources/Engines/DataSourceEngines.cs:19-28</code>):
@@ -340,16 +345,18 @@
           The outbox filters are built through one <code>QuoteColumn</code> helper
           (<code>.../DbContexts/ApplicationDbContext.cs:619-620</code>, delegating to
           <code>SoftDeleteFilterSql.QuoteColumn</code> at <code>SoftDeleteFilterSql.cs:70-71</code> and on to the engine) that
-          returns the bracketed form for every engine except PostgreSQL (<code>PostgreSQLDataSourceEngine.cs:113</code>),
-          so the literals SQL Server and SQLite have always produced are
-          byte-identical. <code>IncludeColumns</code> (<code>.../DbContexts/ApplicationDbContext.cs:645-649</code>) asks the
-          engine for the provider&#39;s own <code>IncludeProperties</code> overload (<code>PostgreSQLDataSourceEngine.cs:109</code>)
-          for the same reason.</p>
+          returns brackets for SQL Server (<code>.../DataSources/Engines/SQLServerDataSourceEngine.cs:114</code>) and
+          SQL-standard double quotes for PostgreSQL (<code>PostgreSQLDataSourceEngine.cs:113</code>) and SQLite
+          (<code>SqliteDataSourceEngine.cs:112</code>, whose soft-delete filter is <code>&quot;IsDeleted&quot; = 0</code> at <code>:115</code>).
+          Cosmos answers brackets too (<code>CosmosDataSourceEngine.cs:114</code>) but builds no soft-delete filter
+          (<code>null</code> at <code>:117</code>). <code>IncludeColumns</code> (<code>.../DbContexts/ApplicationDbContext.cs:645-649</code>) asks the
+          engine for the provider&#39;s own <code>IncludeProperties</code> overload (<code>PostgreSQLDataSourceEngine.cs:109-110</code>),
+          so each provider gets its own form.</p>
           </li>
           <li><p><strong>Timestamps are normalized in the model, never with the process-wide switch.</strong>
           <code>PostgreSQLDbContext.ConfigureConventions</code> maps every <code>DateTime</code> (and, through the same entry,
           every <code>DateTime?</code>) to <code>timestamp with time zone</code> through <code>UtcDateTimeConverter</code>
-          (<code>PostgreSQLDbContext.cs:95-105</code>,
+          (<code>PostgreSQLDbContext.cs:116-126</code>, the <code>DateTime</code> mapping at <code>:123-125</code>,
           <code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Conversions/UtcDateTimeConverter.cs:25-40</code>).
           The converter treats <code>Unspecified</code> as already-UTC (the framework&#39;s own convention) and genuinely
           converts a <code>Local</code> value rather than relabelling it. <strong><code>Npgsql.EnableLegacyTimestampBehavior</code> is
@@ -380,9 +387,11 @@
           </li>
           <li><p><strong>Readiness and orchestration are peers, not extras.</strong>
           <code>AddInfrastructureHealthChecks()</code> registers an <code>AddNpgSql</code> check per declared PostgreSQL database
-          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Extensions.Health.cs:232</code>), named <code>postgresql</code> for
-          the first one (<code>Extensions.Health.cs:263</code>), and <code>WithPostgreSQLDataSource(database, logicalName)</code>
-          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Aspire.Hosting/Extensions.cs:560</code>) wires a service
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Extensions.Health.cs:238-243</code>, through
+          <code>PostgreSqlHealthCheckRegistration.Register</code> at <code>:242</code>, which wraps <code>AddNpgSql</code> at
+          <code>.../Health/PostgreSqlHealthCheckRegistration.cs:32-33</code>), named <code>postgresql</code> for the first one
+          (<code>Extensions.Health.cs:273</code>), and <code>WithPostgreSQLDataSource(database, logicalName)</code>
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Aspire.Hosting/Extensions.cs:561</code>) wires a service
           project to its own <code>PostgresDatabaseResource</code> with the same reference / <code>WaitFor</code> / environment
           shape <code>WithSQLServerDataSource</code> uses. <strong>No Aspire client integration is added</strong>
           (<code>Aspire.Npgsql.EntityFrameworkCore.PostgreSQL</code>), because the SQL Server path does not use one
@@ -398,12 +407,15 @@
           <code>Tests/Core/MMCA.Common.Infrastructure.PostgreSQL.Tests</code> is a Testcontainers project outside
           <code>MMCA.Common.slnx</code> (the posture <code>Tests/Core/MMCA.Common.Infrastructure.Redis.Tests</code> established:
           Docker-gated, own CI job, kept out of the fast solution-wide unit loop), run by the
-          <code>postgresql-integration</code> CI job (<code>MMCA.Common/.github/workflows/ci.yml:769</code>). It creates the whole
-          schema, round-trips an auditable entity&#39;s UTC audit stamps, proves a soft-deleted row is hidden AND
-          frees its unique slot, writes and drains the outbox row of a local domain event, and writes the
-          outbox row of an integration event and asserts it stays pending for <code>OutboxProcessor</code>
-          (<code>Tests/Core/MMCA.Common.Infrastructure.PostgreSQL.Tests/PostgreSQLPersistenceTests.cs:217-260</code>). The three failures listed in the Context section are each caught by one of
-          those, and by nothing in the unit tier.</p>
+          <code>postgresql-integration</code> CI job (<code>MMCA.Common/.github/workflows/ci.yml:822</code>). It creates the whole
+          schema, round-trips an auditable entity&#39;s UTC audit stamps (<code>PostgreSQLPersistenceTests.cs:119-120</code>),
+          proves a soft-deleted row is hidden (<code>:145-146</code>) AND frees its unique slot (<code>:179-180</code>), writes and
+          drains the outbox row of a local domain event, and writes the outbox row of an integration event
+          and asserts it stays pending for <code>OutboxProcessor</code>
+          (<code>Tests/Core/MMCA.Common.Infrastructure.PostgreSQL.Tests/PostgreSQLPersistenceTests.cs:204-248</code>).
+          The three failures listed in the Context section are each caught by one of those, and by nothing
+          in the unit tier. A further test authenticates through a periodic password provider on the
+          configured data source (<code>PostgreSQLPersistenceTests.cs:254-255</code>, decision 10).</p>
           </li>
           <li><p><strong>Connection customization is one extension point, and cloud IAM authentication is its two users.</strong>
           <code>INpgsqlDataSourceConfigurator</code>
@@ -437,12 +449,12 @@
           60, while Npgsql reuses whatever it was handed for the whole interval (<code>:16-21</code>). Both send the token
           as the password, so both reject a connection string below <code>SSL Mode=Require</code>
           (<code>RdsIamAuthenticationConfigurator.cs:110-117</code>, <code>CloudSqlIamAuthenticationConfigurator.cs:100-107</code>)
-          and expect no password in it (<code>MMCA.Common/CHANGELOG.md:15</code>, <code>:21</code>). Neither reaches SQL Server:
+          and expect no password in it (<code>MMCA.Common/CHANGELOG.md:77</code>, <code>:83</code>). Neither reaches SQL Server:
           RDS and Cloud SQL offer no IAM database authentication for it
           (<code>AwsServiceCollectionExtensions.cs:98</code>, <code>GcpServiceCollectionExtensions.cs:80</code>), so an RDS SQL
-          Server password connection string stays in Secrets Manager (<code>MMCA.Common/CHANGELOG.md:15</code>). The
+          Server password connection string stays in Secrets Manager (<code>MMCA.Common/CHANGELOG.md:77</code>). The
           PostgreSQL tier covers a periodic password provider and the PostgreSql broker transport
-          (<code>MMCA.Common/CHANGELOG.md:28</code>).</p>
+          (<code>MMCA.Common/CHANGELOG.md:90</code>).</p>
           </li>
           </ol>
           <h3 id="rollout-the-helpdesk-canary-and-the-template-axis">Rollout: the Helpdesk canary and the template axis</h3>
@@ -600,6 +612,31 @@
           <li>The other <code>PostgreSQLDbContext.cs</code> and <code>Extensions.Health.cs</code> anchors in decisions 2 and 8 were not
           re-verified in this pass and are left as recorded on 2026-10-21.</li>
           </ol>
+          <h2 id="revision-2026-10-26">Revision (2026-10-26)</h2>
+          <p>Re-verified against current source. The engine decision, its mapping, its timestamp handling and its
+          rationale are unchanged. One statement in decision 4 was wrong and is corrected, decision 9 names a
+          test added with decision 10, and the anchors left unverified on 2026-10-25 are re-pointed.</p>
+          <ol>
+          <li><strong>Decision 4 corrected.</strong> <code>QuoteColumn</code> does not answer brackets for every engine except
+          PostgreSQL: SQLite answers SQL-standard double quotes (<code>SqliteDataSourceEngine.cs:112</code>) and builds
+          <code>&quot;IsDeleted&quot; = 0</code> (<code>:115</code>), as <code>ApplicationDbContext.cs:613-614</code> states. Only SQL Server
+          (<code>SQLServerDataSourceEngine.cs:114</code>) and Cosmos (<code>CosmosDataSourceEngine.cs:114</code>, whose soft-delete
+          filter is <code>null</code> at <code>:117</code>) answer brackets. The claim that SQL Server and SQLite literals are
+          byte-identical is removed.</li>
+          <li><strong>Decision 9 extended</strong> with <code>APeriodicPasswordProvider_AuthenticatesThroughTheConfiguredDataSource</code>
+          (<code>PostgreSQLPersistenceTests.cs:254-255</code>), and the outbox tests re-scoped to <code>:204-248</code>.</li>
+          <li>Anchors re-verified against current source: <code>PostgreSQLDbContext.cs:24</code> (class), <code>:56-80</code>
+          (<code>OnConfiguring</code>, <code>UseNpgsql</code> at <code>:66</code> and <code>:70</code>), <code>:77</code> (<code>PendingModelChangesWarning</code>),
+          <code>:82-106</code> (<code>ConfigureNpgsql</code>, retry <code>:102-105</code>), <code>:116-126</code> (<code>ConfigureConventions</code>, mapping
+          <code>:123-125</code>); <code>UtcDateTimeConverter.cs:25-40</code> unchanged; <code>Extensions.Health.cs:238-243</code> (PostgreSQL
+          loop, <code>Register</code> at <code>:242</code>), <code>PostgreSqlHealthCheckRegistration.cs:32-33</code> (<code>AddNpgSql</code>) and <code>:45</code>,
+          <code>Extensions.Health.cs:273</code> (<code>postgresql</code> name); <code>MMCA.Common.Aspire.Hosting/Extensions.cs:561</code>
+          (<code>WithPostgreSQLDataSource</code>; <code>WithSQLServerDataSource</code> at <code>:531</code>); the <code>postgresql-integration</code>
+          job at <code>MMCA.Common/.github/workflows/ci.yml:822</code>; <code>PostgreSQLPersistenceTests.cs:119-120</code>,
+          <code>:145-146</code>, <code>:179-180</code>; and the v1.257.0 entries at <code>MMCA.Common/CHANGELOG.md:77</code>
+          (<code>AddAwsRdsIamAuthentication</code>), <code>:83</code> (<code>AddCloudSqlIamAuthentication</code>), <code>:87</code>
+          (<code>AddNpgsqlDataSourceConfigurator</code>) and <code>:90</code> (PostgreSQL tier).</li>
+          </ol>
           <h2 id="related">Related</h2>
           <p><a href="006-database-per-service.html">ADR-006</a> (one sealed context per engine, one instance per database),
           <a href="018-polyglot-persistence.html">ADR-018</a> (the engine axis this record adds a member to),
@@ -633,6 +670,7 @@
             <li><a href="#revision-2026-10-07">Revision (2026-10-07)</a></li>
             <li><a href="#revision-2026-10-21">Revision (2026-10-21)</a></li>
             <li><a href="#revision-2026-10-25">Revision (2026-10-25)</a></li>
+            <li><a href="#revision-2026-10-26">Revision (2026-10-26)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

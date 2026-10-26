@@ -9,6 +9,7 @@ ships the email confirmation page; see Revision below). Revised 2026-10-06: item
 Terms of Service acceptance as a fifth opt-in completion of the same shape (see Revision below).
 Revised 2026-10-07: anchors refreshed after the v1.233.0 release.
 Revised 2026-10-21: anchors refreshed after the v1.250.0 release.
+Revised 2026-10-26: anchors refreshed after the v1.261.0 release.
 Layers stored permission grants over
 [ADR-020](020-permission-based-authorization.md)'s compiled registry and extends the shared sign-in
 workflow of [ADR-050](050-jwt-refresh-token-rotation.md) with optional collaborators.
@@ -16,7 +17,7 @@ workflow of [ADR-050](050-jwt-refresh-token-rotation.md) with optional collabora
 ## Context
 The framework already owns the hard, uniform parts of identity. `AuthenticationServiceBase<TUser>`
 carries login, registration, refresh-token rotation with reuse detection and revocation
-(`MMCA.Common/Source/Core/MMCA.Common.Application/Auth/AuthenticationServiceBase.cs:64`), the apps
+(`MMCA.Common/Source/Core/MMCA.Common.Application/Auth/AuthenticationServiceBase.cs:67`), the apps
 subclass it and supply hooks for the pieces that are genuinely theirs (their `User` factory, their
 claim set, their lookups). Password reset ships the same way: a cache-backed, hashed-at-rest,
 single-use token service
@@ -46,8 +47,8 @@ either be too thin to use or force fields an app has no column for.
 **Sign-in is a chain no consumer can afford to have changed under it.** ADC and Store both run their
 production sign-in through the shared base. A new mandatory step in that chain is a behaviour change
 in a deployed system, and the framework's own history says so: the 1.188.0 release needed an
-`UPGRADING.md` section with eight items (`MMCA.Common/UPGRADING.md:1219`), one of which (the fallback
-authorization policy, item 1 at `:1225`) broke unannotated endpoints.
+`UPGRADING.md` section with eight items (`MMCA.Common/UPGRADING.md:1447`), one of which (the fallback
+authorization policy, item 1 at `:1453`) broke unannotated endpoints.
 
 **Pages are where apps diverge most.** The framework ships credential pages in `MMCA.Common.UI`, and
 their existence is already the exception rather than the rule. A two-factor enrollment page has to
@@ -73,16 +74,19 @@ same one.**
 2. **The sign-in hook is an optional constructor argument, and its absence is a no-op.**
    `AuthenticationServiceBase` gained `ITwoFactorAuthenticator? twoFactor = null` and
    `IOptions<EmailConfirmationSettings>? emailConfirmationSettings = null`
-   (`.../Auth/AuthenticationServiceBase.cs:70-71`), the optional trailing-parameter shape
+   (`.../Auth/AuthenticationServiceBase.cs:73-74`), the optional trailing-parameter shape
    `ChangePasswordHandlerBase` uses for its `TimeProvider? timeProvider = null`
-   (`.../Users/UseCases/ChangePassword/ChangePasswordHandlerBase.cs:62`). `ChallengeSecondFactorAsync` (`:530`) answers `NotEnrolled` outright when no
-   authenticator was supplied (`:534-535`), so an unadopted consumer pays not even a query, and every
+   (`.../Users/UseCases/ChangePassword/ChangePasswordHandlerBase.cs:62`). `ChallengeSecondFactorAsync` (`:550`) answers `NotEnrolled` outright when no
+   authenticator was supplied (`:554-555`), so an unadopted consumer pays not even a query, and every
    existing subclass keeps compiling because it simply passes fewer arguments.
 
 3. **The step-up assertion is a claim, and presence is the whole test.** A verified challenge stamps
    the `amr`-style `mfa` claim (`MMCA.Common/Source/Core/MMCA.Common.Shared/Auth/AuthClaimTypes.cs:62`)
-   with the method that satisfied it (`:65`, `:68`), through the same pass-through token service that
-   already stamps `sid` (`.../Auth/AuthenticationServiceBase.cs:495-496`), so the app's
+   with the method that satisfied it (`:65`, `:68`), through the same pass-through token wrapper that
+   already stamps `sid`: `CreateAccessTokenForSession`
+   (`.../Auth/AuthenticationServiceBase.cs:515-516`) hands the app's token to
+   `AuthSessionIssuer.MintForSession`, which appends `sid` and `mfa`
+   (`.../Auth/Sessions/AuthSessionIssuer.cs:587`, `:592`), so the app's
    `CreateAccessToken` hook keeps its signature. `IRequiresMfa`
    (`.../UseCases/Markers/IRequiresMfa.cs:28`) is checked by the decorators through the shared
    `AuthorizationGate` (`.../UseCases/Decorators/AuthorizationGate.cs:60`), which reads the claim via
@@ -95,7 +99,7 @@ same one.**
    `IEmailConfirmationTokenService`
    (`.../Auth/EmailConfirmation/IEmailConfirmationTokenService.cs:15`) mirrors
    `IPasswordResetTokenService` member for member, and the implementation
-   (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Auth/EmailConfirmationTokenService.cs:36`)
+   (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Auth/EmailConfirmationTokenService.cs:41`)
    mirrors its record shape, hashing, attempt cap and throttle, under its own `emailconfirm:` key
    prefix so issuing a confirmation link cannot invalidate an outstanding reset link.
    `RequireConfirmedEmail` defaults to false
@@ -170,7 +174,7 @@ same one.**
 9. **One new package, in Infrastructure only.** `Otp.NET` (MIT, netstandard2.0, no transitive graph)
    supplies the RFC 6238 grammar and the Base32 alphabet, which the BCL has no primitive for. It is
    referenced by `MMCA.Common.Infrastructure` alone
-   (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/MMCA.Common.Infrastructure.csproj:82`, used by
+   (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/MMCA.Common.Infrastructure.csproj:74`, used by
    `.../Auth/TwoFactor/TotpTwoFactorService.cs:35`); Application, Domain and Shared stay
    dependency-free, matching the `Cronos` precedent.
 
@@ -218,8 +222,8 @@ same one.**
     (`MMCA.Common/Source/Core/MMCA.Common.Application/Auth/UnconfiguredPermissionRegistry.cs:20-21`,
     registered at `.../Application/DependencyInjection.cs:123`, `:129`). `SetStoredPermissionsAsync` refuses
     two things against that list
-    (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Auth/Administration/StoredPermissionRoleAdministrationService.cs:142-149`,
-    `:151-163`): `AdministrationPermissions.ManageRoles`, outright, because granting the key to this
+    (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Auth/Administration/StoredPermissionRoleAdministrationService.cs:147-154`,
+    `:156-168`): `AdministrationPermissions.ManageRoles`, outright, because granting the key to this
     surface from a row would make access to role administration a matter of data and deleting the row
     would lock every operator out of the screen that could restore it; and any permission outside the
     catalog, because a stored row no endpoint checks is a typo rather than a silently inert grant.
@@ -258,7 +262,7 @@ same one.**
     service, and it routes a subclass of `LegalAcceptanceControllerBase`
     (`MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/Legal/LegalAcceptanceControllerBase.cs:45`).
     The version is the server's: at registration the client sends only an `AcceptedTerms` flag and the
-    server stamps its own configured version (`MMCA.Common/CHANGELOG.md:549`), a `POST` naming any
+    server stamps its own configured version (`MMCA.Common/CHANGELOG.md:764`), a `POST` naming any
     other version is refused with `Legal.VersionNotCurrent`
     (`MMCA.Common/Source/Core/MMCA.Common.Application/Auth/Legal/LegalAcceptancePolicy.cs:33`), and
     both controller answers pass through `LegalAcceptancePolicy.Normalize` (`:47`), which re-derives
@@ -267,10 +271,10 @@ same one.**
     (`MMCA.Common/Source/Presentation/MMCA.Common.UI/Components/Legal/TermsAcceptanceGate.razor.cs:29`)
     is a layout component the host adds itself; its dialog cannot be dismissed (no backdrop click,
     Escape, close on navigation or close button, `:39-42`), so a user whose accepted version is no
-    longer current re-accepts or signs out. It shipped in 1.223.0 (`MMCA.Common/CHANGELOG.md:543`).
+    longer current re-accepts or signs out. It shipped in 1.223.0 (`MMCA.Common/CHANGELOG.md:758`).
     MMCA.ADC adopts it
-    (`MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:242`,
-    `MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Domain/Users/User.cs:35`,
+    (`MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:248`,
+    `MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Domain/Users/User.cs:36`,
     `.../Identity.API/Controllers/LegalAcceptanceController.cs:28`,
     `.../Identity.UI/IdentityUIModule.cs:33`); MMCA.Store and MMCA.Helpdesk do not.
 
@@ -402,6 +406,33 @@ acceptance while MMCA.Store and MMCA.Helpdesk still do not. Only line anchors mo
    `MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:242` and `TermsAcceptanceGate` at
    `MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.UI/IdentityUIModule.cs:33`. The Context,
    items 2, 5, 7, 9, 10 and 13 and the Trade-offs now cite these.
+
+## Revision (2026-10-26)
+Re-verified against current source. The decision, the five opt-in completions and their behaviour
+are unchanged: the two optional sign-in collaborators still default to null and an absent
+authenticator still answers `NotEnrolled` without a query, `Otp.NET` is still referenced by
+`MMCA.Common.Infrastructure` alone, `SetStoredPermissionsAsync` still refuses `ManageRoles` and any
+permission outside the catalog, and MMCA.ADC still adopts Terms of Service acceptance. Only line
+anchors moved.
+
+1. Anchors re-verified against current source: `AuthenticationServiceBase` is
+   `MMCA.Common/Source/Core/MMCA.Common.Application/Auth/AuthenticationServiceBase.cs:67`, its
+   optional arguments `:73-74`, `ChallengeSecondFactorAsync` `:550` and its null-authenticator branch
+   `:554-555`; the `sid` and `mfa` stamping runs through `CreateAccessTokenForSession` (`:515-516`)
+   into `MMCA.Common/Source/Core/MMCA.Common.Application/Auth/Sessions/AuthSessionIssuer.cs:587`,
+   `:592`; `EmailConfirmationTokenService` is
+   `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Auth/EmailConfirmationTokenService.cs:41`;
+   `Otp.NET` is referenced at
+   `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/MMCA.Common.Infrastructure.csproj:74`; the two
+   refusals are
+   `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Auth/Administration/StoredPermissionRoleAdministrationService.cs:147-154`
+   and `:156-168`; the 1.188.0 section is `MMCA.Common/UPGRADING.md:1447` and its item 1 `:1453`; in
+   item 13 the server-stamped version is `MMCA.Common/CHANGELOG.md:764` and the 1.223.0 release
+   `:758`, and MMCA.ADC registers `AddLegalAcceptance` at
+   `MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:248` and declares
+   `ILegalAcceptingUser` at
+   `MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Domain/Users/User.cs:36`. The Context and items
+   2, 3, 4, 9, 11 and 13 now cite these.
 
 ## Related
 [ADR-020](020-permission-based-authorization.md) (the compiled role-to-permission registry stored

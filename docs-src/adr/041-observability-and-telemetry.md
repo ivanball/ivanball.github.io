@@ -61,6 +61,7 @@ Revised 2026-10-07: Context and the rejected-alternative now separate unsampled 
 Revised 2026-10-21: `StartOutboxActivity` runs once per dispatched message (a message a lease renewal found re-claimed (lost) is skipped before it), and the `Extensions.Telemetry.cs`, outbox, Store bicep and host `Program.cs` anchors are refreshed.
 Revised 2026-10-24: OTLP is the only built-in exporter; Azure Monitor moved to the `AddAzureMonitorExporter()` call in MMCA.Common.Azure ([ADR-134](134-cloud-neutral-core-vendor-adapters.md)), and the Decision's exporter bullet is corrected in place. See Revision (2026-10-24) at the end.
 Revised 2026-10-25: a second vendor exporter, `AddGoogleCloudTelemetryExporter()` in MMCA.Common.Gcp, sends traces and logs to the Google Cloud Telemetry API; metrics go through the Google-built Collector, and the collector-free metrics path is recorded as a rejected alternative. See Revision (2026-10-25) at the end.
+Revised 2026-10-26: the meter chain carries eleven subscriptions (ten `MMCA.Common.*` plus `Polly`) now that `MMCA.Common.Persistence` and its `persistence.concurrency.conflict` counter are subscribed, superseding the ten-meter count of the 2026-09-19 entry, and the `Extensions.Telemetry.cs`, `OutboxProcessor.cs` and bicep anchors in the live sections are refreshed. See Revision (2026-10-26) at the end.
 
 ## Context
 The framework is a modular monolith whose modules extract into standalone services (ADR-008), so
@@ -73,15 +74,15 @@ dead-lettering" are not questions auto-instrumentation can answer.
 
 Two cost forces pull the other way. A deployed fleet polls every relational outbox around the clock,
 so idle poll spans would dominate Application Insights ingestion if exported, and full-fidelity
-tracing is the largest observability line item (`MMCA.ADC/infra/main.bicep:275`-`:277`,
-`MMCA.Store/infra/main.bicep:206`-`:209`), which is why both deployments sample traces at 25%
-(`MMCA.ADC/infra/main.bicep:280`-`:281`). With sampling on, metrics are the line every recorded
+tracing is the largest observability line item (`MMCA.ADC/infra/main.bicep:276`-`:279`,
+`MMCA.Store/infra/main.bicep:207`-`:210`), which is why both deployments sample traces at 25%
+(`MMCA.ADC/infra/main.bicep:280`-`:282`). With sampling on, metrics are the line every recorded
 measurement puts on top: the `http.client.*` gauges plus the runtime instruments were about 65% of
-AppMetrics over 2026-08-03..09 (`MMCA.ADC/infra/main.bicep:305`-`:307`, behind the HttpClient and
+AppMetrics over 2026-08-03..09 (`MMCA.ADC/infra/main.bicep:306`-`:308`, behind the HttpClient and
 runtime knobs), AppMetrics stayed about 63% of workspace ingestion in ADC (67% in Store) over
 2026-08-01..22 after those two groups were dropped (`MMCA.ADC/infra/main.bicep:341`-`:342`,
-`MMCA.Store/infra/main.bicep:271`-`:273`, behind the 300s export interval), and the ASP.NET Core meter
-family alone was 73% over 2026-09-22..28 (`MMCA.ADC/infra/main.bicep:321`-`:322`, behind the
+`MMCA.Store/infra/main.bicep:272`-`:273`, behind the 300s export interval), and the ASP.NET Core meter
+family alone was 73% over 2026-09-22..28 (`MMCA.ADC/infra/main.bicep:322`-`:323`, behind the
 ASP.NET Core knob). The framework needs custom instrumentation
 where auto-instrumentation is blind, plus knobs that cut telemetry cost without going dark. This
 cross-cutting observability decision was implemented but named by no existing ADR; this record
@@ -92,13 +93,13 @@ Standardize telemetry in the shared Aspire service defaults, add framework-speci
 for the CQRS and outbox paths, and expose cost knobs with fail-safe defaults.
 
 - **One shared telemetry baseline on every host.** `ConfigureOpenTelemetry`
-  (`Source/Hosting/MMCA.Common.Aspire/Extensions.Telemetry.cs:71`) wires OpenTelemetry logging with
-  formatted messages and scopes (`Extensions.Telemetry.cs:73`, the two flags at `:75`-`:76`), metrics
+  (`Source/Hosting/MMCA.Common.Aspire/Extensions.Telemetry.cs:70`) wires OpenTelemetry logging with
+  formatted messages and scopes (`Extensions.Telemetry.cs:72`, the two flags at `:74`-`:75`), metrics
   from ASP.NET Core, `HttpClient` and the runtime (each gated behind a cost knob, see below), and
   tracing from ASP.NET Core and `HttpClient`, added either with the probe-telemetry filters attached
-  (`Extensions.Telemetry.cs:106`-`:109`) or plain (`Extensions.Telemetry.cs:113`-`:114`) depending on
+  (`Extensions.Telemetry.cs:105`-`:108`) or plain (`Extensions.Telemetry.cs:112`-`:113`) depending on
   the knob the Amended (2026-09-03) section records. It is called from `AddServiceDefaults`
-  (`Source/Hosting/MMCA.Common.Aspire/Extensions.cs:32`), so a host opts in once and
+  (`Source/Hosting/MMCA.Common.Aspire/Extensions.cs:35`, declared at `:33`), so a host opts in once and
   every project in the Aspire model inherits the same pipeline.
 
 - **Custom RED metrics from the CQRS pipeline.** A single meter `MMCA.Common.Cqrs`
@@ -116,7 +117,7 @@ for the CQRS and outbox paths, and expose cost knobs with fail-safe defaults.
   path (`LoggingCommandDecorator.cs:54`, `:49`, `:76`; the query equivalents at
   `LoggingQueryDecorator.cs:51`, `:46`, `:69`), so count gives rate, the tag gives errors, and the
   histogram gives duration. The Aspire host subscribes the meter by literal name
-  (`Extensions.Telemetry.cs:309`).
+  (`Extensions.Telemetry.cs:306`).
 
 - **An outbox dead-letter counter.** The outbox instruments live in their own static type
   (`Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/Processing/OutboxMetrics.cs:16`), which
@@ -125,15 +126,15 @@ for the CQRS and outbox paths, and expose cost knobs with fail-safe defaults.
   (`Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/Processing/OutboxProcessor.cs`) increments
   it on both dead-letter paths, tagged by `event_type` and by a `reason` that tells them apart:
   `type_unresolvable` when a message's event type cannot be resolved and the row has been attempted before
-  (`OutboxProcessor.cs:1049`-`OutboxProcessor.cs:1052`, in `HandleUnresolvableType` at `:1032`; on the
+  (`OutboxProcessor.cs:1054`-`OutboxProcessor.cs:1057`, in `HandleUnresolvableType` at `:1034`; on the
   row's first attempt, `RetryCount` 0, it is retried once as transient at
-  `OutboxProcessor.cs:1038`-`OutboxProcessor.cs:1045`, unless `MaxRetries` is 1 or less), and
+  `OutboxProcessor.cs:1040`-`OutboxProcessor.cs:1047`, unless `MaxRetries` is 1 or less), and
   `retries_exhausted` when a failing message reaches `MaxRetries` and drops out of the poll
-  (guard at `OutboxProcessor.cs:627`, increment at `OutboxProcessor.cs:632`-`OutboxProcessor.cs:635`).
+  (guard at `OutboxProcessor.cs:629`, increment at `OutboxProcessor.cs:634`-`OutboxProcessor.cs:637`).
   The processor's activity source publishes outbox spans under the same name
-  (`OutboxProcessor.cs:99`); both the meter and the trace source are
-  registered by literal name in the Aspire defaults (`Extensions.Telemetry.cs:308`,
-  `Extensions.Telemetry.cs:84`).
+  (`OutboxProcessor.cs:101`); both the meter and the trace source are
+  registered by literal name in the Aspire defaults (`Extensions.Telemetry.cs:305`,
+  `Extensions.Telemetry.cs:83`).
 
 - **Correlation-ID middleware ties the request together.** `CorrelationIdMiddleware`
   (`Source/Presentation/MMCA.Common.API/Middleware/CorrelationIdMiddleware.cs:20`) uses the
@@ -152,18 +153,18 @@ for the CQRS and outbox paths, and expose cost knobs with fail-safe defaults.
 - **Three high-volume metric families gated behind cost knobs, on by default.** ASP.NET Core metrics
   (`http.server.*`, `kestrel.*`, `aspnetcore.*`, `signalr.server.*`) are added only when
   `Telemetry:DisableAspNetCoreMetrics` is unset or false (`ConfigureAspNetCoreMetrics`,
-  `Extensions.Telemetry.cs:353`, knob read at `:355`, adding instrumentation at `:367`), `HttpClient`
+  `Extensions.Telemetry.cs:351`, knob read at `:353`, adding instrumentation at `:365`), `HttpClient`
   connection and request metrics only when `Telemetry:DisableHttpClientMetrics` is unset or false
-  (`Extensions.Telemetry.cs:255`, adding instrumentation at `:275`), and .NET runtime metrics
+  (`Extensions.Telemetry.cs:250`, adding instrumentation at `:271`), and .NET runtime metrics
   (`dotnet.gc.*`, `jit.*`, `thread_pool.*`) only when `Telemetry:DisableRuntimeMetrics` is unset or
-  false (`Extensions.Telemetry.cs:282`, adding at `:294`). Skipping the instrumentation is not enough
+  false (`Extensions.Telemetry.cs:278`, adding at `:290`). Skipping the instrumentation is not enough
   on its own, so each disabled branch also drops the whole meter family with a `View`
-  (`Extensions.Telemetry.cs:360`-`:363` for every meter under the `Microsoft.AspNetCore.` prefix,
-  `:267`-`:271` for `System.Net.Http` plus `System.Net.NameResolution`, `:287`-`:290` for
+  (`Extensions.Telemetry.cs:358`-`:361` for every meter under the `Microsoft.AspNetCore.` prefix,
+  `:263`-`:267` for `System.Net.Http` plus `System.Net.NameResolution`, `:283`-`:286` for
   `System.Runtime`): the Azure Monitor distro adds those meters itself, and a `View` applies to the
   whole `MeterProvider` regardless of which component added them, which is what makes each knob
   authoritative rather than advisory. All three keys are read by `IsInstrumentationDisabled`
-  (`Extensions.Telemetry.cs:209`-`:210`), which drops the family only when the value parses as boolean `true`; absent,
+  (`Extensions.Telemetry.cs:204`-`:205`), which drops the family only when the value parses as boolean `true`; absent,
   blank, or unparseable falls back to keeping the instrumentation, so a typo cannot silently blind a
   whole metric family. A deployed host sets any of them to `true` to cut ingestion cost; outbound
   dependency latency is still captured as traces when `HttpClient` metrics are dropped, and request
@@ -173,32 +174,32 @@ for the CQRS and outbox paths, and expose cost knobs with fail-safe defaults.
   exports the ASP.NET Core meter family.
 
 - **Head-based sampling as a cost knob, off by default.** `Telemetry:TracesSampleRatio`
-  (`Extensions.Telemetry.cs:138`, parsed by `TryGetTraceSampleRatio` at `Extensions.Telemetry.cs:186`,
-  which reads the key at `Extensions.Telemetry.cs:189`) is unset by default, so a host samples everything and behavior does not
+  (`Extensions.Telemetry.cs:139`, parsed by `TryGetTraceSampleRatio` at `Extensions.Telemetry.cs:181`,
+  which reads the key at `Extensions.Telemetry.cs:184`) is unset by default, so a host samples everything and behavior does not
   change. A deployed host sets a ratio in
   the open interval (0,1) to keep that fraction of traces; the value wraps a `TraceIdRatioBasedSampler`
-  in a `ParentBasedSampler` (`Extensions.Telemetry.cs:139`) so a sampled-in request keeps its whole
+  in a `ParentBasedSampler` (`Extensions.Telemetry.cs:140`) so a sampled-in request keeps its whole
   trace across service boundaries. A key that is absent, unparseable, or outside (0,1) falls back to
-  sample-all (`Extensions.Telemetry.cs:190`-`:195`), so a typo can never silently drop all telemetry.
+  sample-all (`Extensions.Telemetry.cs:185`-`:190`), so a typo can never silently drop all telemetry.
 
 - **Outbox poll spans are filtered out of export.** `OutboxPollFilterProcessor`
   (`Source/Hosting/MMCA.Common.Aspire/Telemetry/OutboxPollFilterProcessor.cs:17`), registered before
-  the exporters (`Extensions.Telemetry.cs:122`), clears the `Recorded` flag on the recurring `OutboxPoll` span
+  the exporters (`Extensions.Telemetry.cs:123`), clears the `Recorded` flag on the recurring `OutboxPoll` span
   and its children (`OutboxPollFilterProcessor.cs:49`), and on the internal-command queue's
   `InternalCommandPoll` span the same way (`OutboxPollFilterProcessor.cs:60`-`:64`). The poll query runs inside that span, opened at
-  the top of `FetchCandidatesAsync` (`OutboxProcessor.cs:300`, span started at `OutboxProcessor.cs:306`,
+  the top of `FetchCandidatesAsync` (`OutboxProcessor.cs:302`, span started at `OutboxProcessor.cs:308`,
   named at `OutboxProcessor.cs:75`), and the backlog count in `CountPendingAsync` runs inside a second
-  span of the same name (`OutboxProcessor.cs:268`, started at `OutboxProcessor.cs:280`), so
+  span of the same name (`OutboxProcessor.cs:270`, started at `OutboxProcessor.cs:282`), so
   steady-state polling does not flood Application Insights. Real
   outbox work is untouched: each per-message `OutboxProcess` span is started by `StartOutboxActivity`
-  (called once per dispatched message at `OutboxProcessor.cs:548`, declared at
-  `OutboxProcessor.cs:1090`; a message a lease renewal found re-claimed (lost) is skipped before that call,
-  `OutboxProcessor.cs:542`-`:546`) under an
+  (called once per dispatched message at `OutboxProcessor.cs:550`, declared at
+  `OutboxProcessor.cs:1095`; a message a lease renewal found re-claimed (lost) is skipped before that call,
+  `OutboxProcessor.cs:544`-`:548`) under an
   explicit parent context restored from the message's stored trace and span ids
-  (`OutboxProcessor.cs:1097`-`OutboxProcessor.cs:1100`), span started at
-  `OutboxProcessor.cs:1102`-`OutboxProcessor.cs:1105`, so it is never a child of the poll span. A
+  (`OutboxProcessor.cs:1102`-`OutboxProcessor.cs:1105`), span started at
+  `OutboxProcessor.cs:1107`-`OutboxProcessor.cs:1110`, so it is never a child of the poll span. A
   message that stored no trace or span id gets no `OutboxProcess` span at all
-  (`OutboxProcessor.cs:1092`-`:1095`).
+  (`OutboxProcessor.cs:1097`-`:1100`).
 
 - **OTLP built in, vendor exporters by adapter.** `AddOpenTelemetryExporters` (`Extensions.Telemetry.cs:163`)
   enables OTLP when `OTEL_EXPORTER_OTLP_ENDPOINT` is present (read at `:165`-`:166`, the Aspire dashboard
@@ -258,10 +259,11 @@ for the CQRS and outbox paths, and expose cost knobs with fail-safe defaults.
 ## Trade-offs
 - **Custom instrumentation carries a maintenance cost.** The Aspire package has no reference to
   Application or Infrastructure by design, so the meter and activity-source names are duplicated as
-  literals (the ten meter subscriptions at `Extensions.Telemetry.cs:308`-`:316` and
-  `Extensions.Telemetry.cs:323`, the trace sources at `Extensions.Telemetry.cs:84`-`:86`, and the sync
-  notes at `CqrsMetrics.cs:9`,
-  `OutboxMetrics.cs:9` and `OutboxPollFilterProcessor.cs:19`-`:25`). A rename on one side silently
+  literals (the eleven meter subscriptions, ten `MMCA.Common.*` at `Extensions.Telemetry.cs:305`-`:314`
+  plus Polly at `Extensions.Telemetry.cs:321`, the trace sources at `Extensions.Telemetry.cs:83`-`:85`,
+  and the sync notes at `CqrsMetrics.cs:9`,
+  `OutboxMetrics.cs:9`, `ConcurrencyConflictMetrics.cs:9`-`:10` and
+  `OutboxPollFilterProcessor.cs:19`-`:25`). A rename on one side silently
   stops export until the literal is updated. That is the price of the decoupled package graph.
 - **Sampling trades trace completeness for cost.** A sampled-out trace is simply gone; deep debugging
   of a specific request can miss it. Metrics and logs are unaffected (sampling is trace-only), so RED
@@ -839,3 +841,54 @@ and logs, and a Collector sidecar for metrics, configured outside this framework
 credentials still starts and exports nothing** until a token refresh succeeds; the failure is a Warning
 log line (`GoogleCloudTelemetryAccessToken.cs:108`-`:109`) and refused exports
 (`GoogleCloudTelemetryAuthHandler.cs:46`-`:51`), not a startup failure.
+
+## Revision (2026-10-26)
+Re-verified against current source. The telemetry baseline, the CQRS and outbox instruments, the
+three metrics knobs and their drop views, sampling, poll-span filtering and the exporters behave as
+the Decision describes. What moved is the meter count (one new framework meter), most
+`Extensions.Telemetry.cs` and `OutboxProcessor.cs` anchors in the live sections, and the ADC and Store
+bicep anchors after the 2026-10-24 bicep edits. The exporter anchors (`Extensions.Telemetry.cs:147`,
+`:163`, `:165`-`:166`, `:170`) and `PollActivityName` (`OutboxProcessor.cs:75`) held.
+
+1. **The meter chain carries eleven subscriptions: ten `MMCA.Common.*` plus `Polly`.** The new one
+   is `MMCA.Common.Persistence`
+   (`MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Extensions.Telemetry.cs:313`, the chain at
+   `:305`-`:314`, Polly at `:321`), owned by `ConcurrencyConflictMetrics`
+   (`MMCA.Common/Source/Presentation/MMCA.Common.API/Concurrency/ConcurrencyConflictMetrics.cs:27`)
+   with one counter, `persistence.concurrency.conflict` (`:37`-`:38`), tagged by entity type. It counts
+   a save rejected by an optimistic-concurrency check and answered as a conflict, recorded once per
+   conflict at the 409 path in `DbUpdateExceptionHandler`
+   (`MMCA.Common/Source/Presentation/MMCA.Common.API/Middleware/DbUpdateExceptionHandler.cs:38`) or
+   at the 412 path under an explicit `If-Match`. Like the other framework meters its name is
+   duplicated as a literal in the Aspire package, so the Trade-offs maintenance cost now spans eleven
+   literals. The Trade-offs bullet is corrected in place, and its sync-note list now includes the
+   new meter's note (`ConcurrencyConflictMetrics.cs:9`-`:10`). The meter shipped on 2026-10-24 (in
+   MMCA.Common v1.254.0), so the "meters ... are unchanged" lines of the Revisions (2026-10-24) and
+   (2026-10-25) were already inaccurate on their own dates; they, and the "ten" in the Status entry
+   of 2026-09-19, are left as written and superseded by this item.
+2. Anchors re-verified against current source: in `Extensions.Telemetry.cs`, `ConfigureOpenTelemetry`
+   `:70` (OTel logging `:72`, flags `:74`-`:75`), filtered tracing `:105`-`:108`, plain tracing
+   `:112`-`:113`, trace sources `:83`-`:85` (`:82` is the application name, not a literal),
+   `OutboxPollFilterProcessor` registration `:123`, the sampling call `:139`, `ParentBasedSampler`
+   `:140`, `TryGetTraceSampleRatio` `:181` (key `:184`, fallback `:185`-`:190`),
+   `IsInstrumentationDisabled` `:204`-`:205`, `ConfigureAspNetCoreMetrics` `:351` (knob `:353`, `View`
+   `:358`-`:361`, add `:365`), the `HttpClient` knob `:250` (`View` `:263`-`:267`, add `:271`), the
+   runtime knob `:278` (`View` `:283`-`:286`, add `:290`), Outbox meter `:305`, Cqrs meter `:306`;
+   `AddServiceDefaults` at `MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Extensions.cs:33`, calling
+   `ConfigureOpenTelemetry` at `:35`; in `OutboxProcessor.cs`, the activity source `:101`,
+   `PollActivityName` `:75` (unchanged), `CountPendingAsync` `:270` (span `:282`),
+   `FetchCandidatesAsync` `:302` (span `:308`), the lease-lost skip `:544`-`:548`, the
+   `StartOutboxActivity` call `:550`, the `retries_exhausted` guard `:629` and increment
+   `:634`-`:637`, `HandleUnresolvableType` `:1034` (first-attempt retry `:1040`-`:1047`, increment
+   `:1054`-`:1057`), `StartOutboxActivity` declared `:1095` (null return `:1097`-`:1100`, parent
+   context `:1102`-`:1105`, span start `:1107`-`:1110`); in `MMCA.ADC/infra/main.bicep`, the sampling
+   comment `:276`-`:279`, the 0.25 setting `:280`-`:282`, the 65% comment `:306`-`:308`, the 73%
+   comment `:322`-`:323` (the `:326`-`:327` setting and the 63% comment `:341`-`:342` hold); in
+   `MMCA.Store/infra/main.bicep`, the sampling comment `:207`-`:210` and the 67% comment `:272`-`:273`
+   (the `:257`-`:258` setting holds). Current locations for anchors the dated sections keep as
+   written: the probe comment that leaves metrics untouched `Extensions.Telemetry.cs:97`-`:98`,
+   `IsProbeTelemetryFilterEnabled` `:229`-`:230`, `ConfigureMetrics` `:239` (called at `:79`),
+   `FilterProbeTelemetryConfigKey` `:18`, `ProbeTelemetryFilterProcessor` `:130`; the
+   `DbUpdateExceptionHandler` `LogError` `:32` and its 409 `:41`; the Application Insights tripwire
+   check `MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Integrations/HostIntegrationTripwire.cs:63`-`:67`
+   (its key constant `:20` holds).

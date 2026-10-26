@@ -31,7 +31,10 @@ Validating decorator with its coverage fitness gate, and domain factories; see R
 Revised 2026-10-06: the Decision states the shipped seven-decorator command chain and six-decorator query chain instead of the pre-2026-08-18 order. Revised 2026-10-07: anchors refreshed after the v1.233.0 release. Revised 2026-10-19: the Helpdesk
 reference host composes through `AddMmcaApplicationPipeline` too, so all eight hosts take the sealed
 path; see the Revision (2026-10-19) at the end. Revised 2026-10-21: anchors refreshed after
-the ADC and Store service hosts moved their `AddMmcaApplicationPipeline` call sites.
+the ADC and Store service hosts moved their `AddMmcaApplicationPipeline` call sites. Revised 2026-10-26:
+the Store UI adoption of `ModelValidation.For` is now 7 page call sites, and the Helpdesk
+decorator-order test composes through `AddMmcaApplicationPipeline`; all seven service-host call sites
+re-pointed.
 
 ## Context
 Commands and queries share cross-cutting concerns: validation, transactions, cache invalidation,
@@ -78,10 +81,10 @@ Use single-responsibility handlers behind a Scrutor-composed decorator pipeline.
   Revision (2026-08-26) below): the Helpdesk reference host
   (`MMCA.Helpdesk/Source/Hosts/MMCA.Helpdesk.Web/Program.cs:121`) and the seven production service
   hosts, ADC Identity / Conference / Engagement /
-  Notification (`MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:328`, `...Conference.Service/Program.cs:418`,
-  `...Engagement.Service/Program.cs:287`, `...Notification.Service/Program.cs:228`) and Store Identity /
-  Catalog / Sales (`MMCA.Store/Source/Services/MMCA.Store.Identity.Service/Program.cs:244`,
-  `...Catalog.Service/Program.cs:256`, `...Sales.Service/Program.cs:237`). Only that decorators-last
+  Notification (`MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:339`, `...Conference.Service/Program.cs:429`,
+  `...Engagement.Service/Program.cs:298`, `...Notification.Service/Program.cs:239`) and Store Identity /
+  Catalog / Sales (`MMCA.Store/Source/Services/MMCA.Store.Identity.Service/Program.cs:255`,
+  `...Catalog.Service/Program.cs:267`, `...Sales.Service/Program.cs:248`). Only that decorators-last
   ordering is load-bearing; the relative position of `AddInfrastructure`/`AddAPI` is not.
 - **Each kind of validation has one home.** UI form models declare DataAnnotations rules once and
   bridge them onto `MudForm` through `ModelValidation.For(model, validator)`
@@ -529,3 +532,39 @@ inside the earlier Revision sections are left as historical records.
    (`MMCA.Store/Source/Services/MMCA.Store.Identity.Service/Program.cs:244`) and Sales
    (`MMCA.Store/Source/Services/MMCA.Store.Sales.Service/Program.cs:237`) are re-pointed; Store Catalog
    `:256` and `MMCA.Helpdesk/Source/Hosts/MMCA.Helpdesk.Web/Program.cs:121` still match.
+
+## Revision (2026-10-26)
+Re-verified against current source. The decision, both decorator chains
+(`MMCA.Common/Source/Core/MMCA.Common.Application/DependencyInjection.cs:134-140`, `:143-148`), the
+eight composing hosts and the validation homes are unchanged. Two facts recorded in earlier Revision
+sections moved, and all seven service-host call sites in the Decision moved. Stale anchors inside the
+earlier Revision sections are left as historical records; the items below state current reality.
+
+1. **Store UI adoption of `ModelValidation.For` is 7 page call sites, not 4.** The Revision
+   (2026-10-01) counted 4; current source has Catalog x4
+   (`MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.UI/Pages/Products/ProductCreate.razor.cs`,
+   `.../Products/ProductDetail.razor.cs`, `.../Categories/CategoryCreate.razor.cs`,
+   `.../Categories/CategoryDetail.razor.cs`), Identity x2
+   (`MMCA.Store/Source/Modules/Identity/MMCA.Store.Identity.UI/Pages/Customers/CustomerCreate.razor.cs`,
+   `.../Customers/CustomerDetail.razor.cs`) and Sales x1
+   (`MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.UI/Pages/Inventory/InventoryItemCreate.razor.cs`).
+   MMCA.Helpdesk still has none.
+2. **The Helpdesk decorator-order test composes through the sealed path.** The Revision (2026-08-18)
+   records that Common and Helpdesk hand-sequence `AddApplication`, the module scan and
+   `AddApplicationDecorators` in their order tests. Helpdesk's
+   `DecoratorPipelineOrderTests` (`MMCA.Helpdesk/Tests/Architecture/MMCA.Helpdesk.Architecture.Tests/DecoratorPipelineOrderTests.cs:38`)
+   now builds its sequence with `services.AddMmcaApplicationPipeline(...)` (`:67`), matching its host.
+   Only Common's own conformance test still hand-sequences the calls
+   (`MMCA.Common/Tests/Hosting/MMCA.Common.Testing.Tests/Conformance/DecoratorPipelineOrderTests.cs:38`,
+   `:40`).
+3. Anchors re-verified against current source: in the Decision, ADC Identity
+   (`MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:339`), Conference
+   (`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:429`), Engagement
+   (`MMCA.ADC/Source/Services/MMCA.ADC.Engagement.Service/Program.cs:298`) and Notification
+   (`MMCA.ADC/Source/Services/MMCA.ADC.Notification.Service/Program.cs:239`), Store Identity
+   (`MMCA.Store/Source/Services/MMCA.Store.Identity.Service/Program.cs:255`), Catalog
+   (`MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:267`) and Sales
+   (`MMCA.Store/Source/Services/MMCA.Store.Sales.Service/Program.cs:248`) are re-pointed;
+   `MMCA.Helpdesk/Source/Hosts/MMCA.Helpdesk.Web/Program.cs:121` still matches. The Decision's
+   `DependencyInjection.cs:134-140` / `:143-148`, `ModelValidation.cs:26,43`, `IModelValidator.cs:13`,
+   `ValidatingCommandDecorator.cs:32` and `CommandValidatorCoverageTestsBase.cs:22` still match.

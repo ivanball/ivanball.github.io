@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 134 ADRs</summary>
+        <summary>All 135 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -234,6 +234,7 @@
         <li><a href="132-build-strictness-analyzer-policy.html">132 · Build Strictness: Analyzers at Error Severity, a Shared Baseline, and CI Test Floors</a></li>
         <li><a href="133-versioned-password-hash-work-factor.html">133 · Versioned Password Hash Work Factor</a></li>
         <li><a href="134-cloud-neutral-core-vendor-adapters.html">134 · Cloud-Neutral Core With Vendor Adapter Packages</a></li>
+        <li><a href="135-application-namespace-keyspace-isolation.html">135 · One Application Namespace Isolates Shared Infrastructure Keyspaces</a></li>
           </ol>
         </nav>
       </details>
@@ -273,7 +274,8 @@
           view sits over the same store, and anchors are refreshed after 1.250.0.
           Revised 2026-10-25: a token already swept by reuse detection fails alone instead of re-revoking the
           user&#39;s newer sessions (1.261.0), because the flagged row is dead by construction and re-revoking
-          bought no theft containment, only an extra sign-out per stale device.</p>
+          bought no theft containment, only an extra sign-out per stale device.
+          Revised 2026-10-26: anchors refreshed after 1.261.0.</p>
           <h2 id="context">Context</h2>
           <p>ADR-050 stores a user&#39;s refresh token as a single nullable <code>RefreshToken</code> string plus its
           <code>RefreshTokenExpiry</code> on the app&#39;s <code>User</code> aggregate. That model settles rotation and reuse detection
@@ -328,14 +330,14 @@
           argued at <code>:133-139</code>). The shipped EF store claims the row with a conditional
           <code>UPDATE ... WHERE Id = @id AND RevokedAt IS NULL</code>, so the database arbitrates: the winner affects
           one row, the loser affects none and writes nothing
-          (<code>.../Persistence/Auth/EFRefreshSessionStore.cs:187-195</code>, argued at <code>:156-161</code>). The update and the
+          (<code>.../Persistence/Auth/EFRefreshSessionStore.cs:190-198</code>, argued at <code>:159-164</code>). The update and the
           successor insert share one transaction, so a loser cannot observe a half-finished rotation
-          (<code>:171-214</code>, reasoning at <code>:164-168</code>). The interface&#39;s default implementation keeps the
+          (<code>:174-217</code>, reasoning at <code>:167-171</code>). The interface&#39;s default implementation keeps the
           revoke-add-save shape, which is atomic only per instance and is all an in-memory or test store can
           offer (<code>IRefreshSessionStore.cs:156-174</code>, reasoning at <code>:142-144</code>). The caller that loses the claim
           re-reads the row as the database now holds it, through <code>IRefreshSessionStore.FindByIdUntrackedAsync</code>
           (<code>IRefreshSessionStore.cs:105-121</code>; the EF store&#39;s <code>AsNoTracking</code> override at
-          <code>EFRefreshSessionStore.cs:144-147</code>), and is answered by what that row says
+          <code>EFRefreshSessionStore.cs:147-150</code>), and is answered by what that row says
           (<code>.../Application/Auth/Sessions/AuthSessionIssuer.cs:396-455</code>, the losing branch at <code>:422-452</code>): a
           sign-out, a cap eviction or an earlier reuse sweep of the same row fails that request alone
           (<code>:431-437</code>), a rotation less than <code>ReuseGraceSeconds</code> ago answers <code>409 Auth.RefreshSuperseded</code> with
@@ -347,8 +349,8 @@
           lives in the sealed <code>AuthSessionIssuer</code>
           (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Auth/Sessions/AuthSessionIssuer.cs:41</code>), which
           <code>AuthenticationServiceBase&lt;TUser&gt;</code> takes as a required <code>IAuthSessionIssuer</code> constructor parameter
-          (<code>.../Application/Auth/AuthenticationServiceBase.cs:64-71</code>): the base decides who is signed in, the
-          issuer decides what they are handed (<code>:40-45</code>). The issuer resolves a presented token to its session
+          (<code>.../Application/Auth/AuthenticationServiceBase.cs:67-74</code>): the base decides who is signed in, the
+          issuer decides what they are handed (<code>:43-48</code>). The issuer resolves a presented token to its session
           (<code>AuthSessionIssuer.cs:300-348</code>) and separates the rejections, which answer the caller with the same
           <code>Auth.InvalidRefreshToken</code> failure (<code>:267-271</code>) except for the rotation race below. An unknown hash
           (or one belonging to another account) fails alone (<code>:315-318</code>), because revoking the family on it
@@ -379,22 +381,23 @@
           <code>AuthSessionIssuerReuseGraceTests.cs:98</code>). <code>AuthControllerBase</code>&#39;s refresh action documents and
           declares the 409 (<code>AuthControllerBase.cs:116-121</code>, <code>:129</code>), and the clients treat it as transient:
           <code>CookieSessionRefresher</code> keeps the cookie
-          (<code>.../MMCA.Common.API/SessionCookies/CookieSessionRefresher.cs:117</code>), <code>DirectApiTokenRefresher</code>
+          (<code>.../MMCA.Common.API/SessionCookies/CookieSessionRefresher.cs:118-121</code>, only 400, 401 and 403
+          classified as rejected at <code>:123-126</code>), <code>DirectApiTokenRefresher</code>
           never reports it as signed out: it returns the newer stored pair when another refresh in the same
           process already stored one, and reports unavailable with the stored pair untouched otherwise
-          (<code>.../MMCA.Common.UI/Services/Auth/Tokens/DirectApiTokenRefresher.cs:26-32</code>, <code>:64-67</code>,
-          <code>:88-97</code>), and
+          (<code>.../MMCA.Common.UI/Services/Auth/Tokens/DirectApiTokenRefresher.cs:26-32</code>, the 409 branch at
+          <code>:86-89</code>, <code>ReadSupersededOutcomeAsync</code> at <code>:108-122</code>), and
           <code>AuthUIService.TryRefreshTokenAsync</code> keeps the stored tokens on that outcome
           (<code>.../MMCA.Common.UI/Services/Auth/AuthUIService.cs:151</code>, <code>:165</code>).</li>
           <li><strong>Sign-out has both scopes.</strong> <code>RevokeTokenAsync(userId, refreshToken)</code>
-          (<code>AuthenticationServiceBase.cs:378</code>) delegates to <code>IAuthSessionIssuer.SignOutAsync</code>
+          (<code>AuthenticationServiceBase.cs:398</code>) delegates to <code>IAuthSessionIssuer.SignOutAsync</code>
           (<code>AuthSessionIssuer.cs:150-176</code>), which signs out one device when the token resolves to a live
           session of that user (the per-device branch at <code>:164-171</code>); an unknown token, another account&#39;s
           token or an already-revoked row leaves the caller unidentifiable, so the request degrades to signing
           every device out rather than reporting success for a revocation that reached nothing (<code>:160-163</code>,
           fall-through at <code>:174-175</code>). <code>RevokeAllSessionsAsync(userId)</code> is the explicit everywhere case, for a
           password change, an admin lockout or a &quot;sign out everywhere&quot; action
-          (<code>AuthenticationServiceBase.cs:395</code>, delegating to <code>IAuthSessionIssuer.SignOutEverywhereAsync</code> at
+          (<code>AuthenticationServiceBase.cs:415</code>, delegating to <code>IAuthSessionIssuer.SignOutEverywhereAsync</code> at
           <code>AuthSessionIssuer.cs:179-184</code>; the contract states both scopes at
           <code>.../Application/Auth/IAuthenticationService.cs:58-62,72-75</code>). <code>AuthControllerBase</code>&#39;s
           <code>POST auth/revoke</code> carries no body, so it cannot name the device it is called from and deliberately
@@ -407,13 +410,13 @@
           (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Auth/RefreshSessionSettings.cs:35</code>, default 10,
           <code>[Range(1, 1000)]</code> at <code>:34</code>, reasoning at <code>:27-33</code>; <code>AuthSessionIssuer</code> requires
           <code>IOptions&lt;RefreshSessionSettings&gt;</code> (<code>AuthSessionIssuer.cs:44</code>) and reads the cap straight from the
-          bound settings (<code>:514</code>), and because the issuer is sealed (<code>:41</code>) the bound value is the only source)
-          is enforced before a new session is staged (<code>:374-375</code>): while the user is at or over the cap, the
-          oldest live session is revoked with reason <code>SessionCapExceeded</code> (<code>:512-525</code>, the eviction loop at
-          <code>:521-524</code>). Ordering is <code>CreatedAt</code> then <code>Id</code> (<code>:517-518</code>, matched by the store&#39;s own ordering,
-          <code>.../Infrastructure/Persistence/Auth/EFRefreshSessionStore.cs:62-70</code>), so two sessions opened in the
+          bound settings (<code>:521</code>), and because the issuer is sealed (<code>:41</code>) the bound value is the only source)
+          is enforced before a new session is staged (<code>:376-377</code>): while the user is at or over the cap, the
+          oldest live session is revoked with reason <code>SessionCapExceeded</code> (<code>:519-532</code>, the eviction loop at
+          <code>:528-531</code>). Ordering is <code>CreatedAt</code> then <code>Id</code> (<code>:524-525</code>, matched by the store&#39;s own ordering,
+          <code>.../Infrastructure/Persistence/Auth/EFRefreshSessionStore.cs:64-72</code>), so two sessions opened in the
           same clock tick still evict deterministically. Expired-but-unrevoked rows do not count against the
-          cap: they authenticate nobody (<code>AuthSessionIssuer.cs:503-511</code>, filter at <code>:516</code>).</li>
+          cap: they authenticate nobody (<code>AuthSessionIssuer.cs:513-514</code>, filter at <code>:523</code>).</li>
           <li><strong>IP and user-agent capture is optional and informational.</strong> <code>AuthControllerBase</code> reads them from
           the connection and the request headers (<code>AuthControllerBase.cs:58</code>, <code>:64</code>) and passes them into
           login, registration and refresh (<code>:81</code>, <code>:107</code>, <code>:135</code>), and the entity truncates them to their
@@ -435,9 +438,9 @@
           argument at <code>:8-14</code>); Cosmos never reaches either path, because its context overrides
           <code>OnModelCreating</code> (<code>ApplicationDbContext.cs:888-889</code>).</li>
           <li><strong>The shipped store routes to that same database.</strong> <code>EFRefreshSessionStore</code>
-          (<code>.../Persistence/Auth/EFRefreshSessionStore.cs:31-35</code>) resolves the physical source through the
+          (<code>.../Persistence/Auth/EFRefreshSessionStore.cs:33-37</code>) resolves the physical source through the
           entity registry first (a consumer that ships a real entity configuration for the session entity is
-          routed like any other entity), falling back to the source named by <code>DataSourceName</code> (<code>:219-224</code>,
+          routed like any other entity), falling back to the source named by <code>DataSourceName</code> (<code>:222-227</code>,
           reasoning at <code>:15-22</code>), and is registered scoped beside its bound options
           (<code>.../MMCA.Common.Infrastructure/DependencyInjection.cs:168-172</code>), with the <code>AuthSessionIssuer</code>
           over it registered scoped for the same reason (<code>:176</code>). Every read the caller can revoke through is
@@ -445,10 +448,10 @@
           no-tracking read would drop those revocations at save time
           (<code>.../Application/Auth/IRefreshSessionStore.cs:16-20</code>, restated at <code>EFRefreshSessionStore.cs:25-29</code>).
           The one exception is <code>FindByIdUntrackedAsync</code>, a read-only <code>AsNoTracking</code> re-read for the rotation
-          loser that nothing revokes through (<code>EFRefreshSessionStore.cs:144-147</code>, declared at
+          loser that nothing revokes through (<code>EFRefreshSessionStore.cs:147-150</code>, declared at
           <code>IRefreshSessionStore.cs:105-121</code>). The two scalar projections behind an administrator&#39;s sessions
           view, <code>GetUserIdsWithLiveSessionsAsync</code> and <code>CountLiveSessionsByUserAsync</code>
-          (<code>IRefreshSessionStore.cs:72</code>, <code>:85</code>; <code>EFRefreshSessionStore.cs:89</code>, <code>:104</code>), return ids and
+          (<code>IRefreshSessionStore.cs:72</code>, <code>:85</code>; <code>EFRefreshSessionStore.cs:91</code>, <code>:106</code>), return ids and
           counts rather than sessions, so there is nothing to track. The read-only
           <code>IUserSessionsAdministrationService</code>, which uses those two projections and lists sessions through
           the tracked <code>GetUnrevokedByUserAsync</code> (<code>UserSessionsAdministrationService.cs:28</code>), is registered
@@ -496,25 +499,25 @@
           parameter, an overload or an obsoletion (<code>.../MMCA.Common.Infrastructure/Auth/TokenService.cs:101-159</code>,
           the contract at <code>.../MMCA.Common.Application/Interfaces/Infrastructure/Auth/ITokenService.cs:17-22</code>).
           Instead a private pass-through decorator nested in <code>AuthSessionIssuer</code>,
-          <code>SessionStampingTokenService</code> (<code>.../Application/Auth/Sessions/AuthSessionIssuer.cs:544</code>), appends
-          the claim when an ambient session id is armed (<code>:576-581</code>, and an <code>mfa</code> claim when a verified second
-          factor is, <code>:583-586</code>) and forwards untouched when neither is (<code>:569-572</code>). The issuer exposes it as
+          <code>SessionStampingTokenService</code> (<code>.../Application/Auth/Sessions/AuthSessionIssuer.cs:551</code>), appends
+          the claim when an ambient session id is armed (<code>:583-588</code>, and an <code>mfa</code> claim when a verified second
+          factor is, <code>:590-593</code>) and forwards untouched when neither is (<code>:576-579</code>). The issuer exposes it as
           its <code>TokenService</code> (<code>:55</code>), and the base surfaces that to subclasses as its own <code>TokenService</code>
-          property (<code>.../Application/Auth/AuthenticationServiceBase.cs:99</code>, no field of its own).
-          <code>CreateAccessTokenForSession</code> (<code>:495-496</code>) hands the mint to <code>IAuthSessionIssuer.MintForSession</code>,
+          property (<code>.../Application/Auth/AuthenticationServiceBase.cs:105</code>, no field of its own).
+          <code>CreateAccessTokenForSession</code> (<code>:515-516</code>) hands the mint to <code>IAuthSessionIssuer.MintForSession</code>,
           which arms, mints and disarms (<code>AuthSessionIssuer.cs:132-147</code>). The abstract
           <code>CreateAccessToken(TUser)</code> hook every consumer already overrides
-          (<code>AuthenticationServiceBase.cs:476</code>) keeps its signature, so every existing subclass emits <code>sid</code>
-          with no edit at all (<code>:482-491</code>, <code>AuthSessionIssuer.cs:539-543</code>).</p>
+          (<code>AuthenticationServiceBase.cs:496</code>) keeps its signature, so every existing subclass emits <code>sid</code>
+          with no edit at all (<code>:502-511</code>, <code>AuthSessionIssuer.cs:546-550</code>).</p>
           </li>
           <li><p><strong>The session is created before the token is minted, because a token cannot name an id that does
           not exist yet.</strong> The ordering is explicit in the code and explained there
-          (<code>AuthSessionIssuer.cs:75-76</code>): <code>OpenSessionAsync</code> returns the new row&#39;s id (<code>:352-378</code>, the
-          <code>IssuedSession</code> record at <code>:532</code>), <code>SaveChangesAsync</code> runs at <code>:83</code>, and only then does <code>:85-88</code>
-          mint. Login reaches it through <code>IssueTokensAsync</code> at <code>AuthenticationServiceBase.cs:212</code> and
-          registration at <code>:305</code> (the helper at <code>:443-457</code>). On refresh the rotation mints against the
+          (<code>AuthSessionIssuer.cs:75-76</code>): <code>OpenSessionAsync</code> returns the new row&#39;s id (<code>:355-380</code>, the
+          <code>IssuedSession</code> record at <code>:539</code>), <code>SaveChangesAsync</code> runs at <code>:83</code>, and only then does <code>:85-88</code>
+          mint. Login reaches it through <code>IssueTokensAsync</code> at <code>AuthenticationServiceBase.cs:230</code> and
+          registration at <code>:325</code> (the helper at <code>:463-477</code>). On refresh the rotation mints against the
           <strong>successor&#39;s</strong> id, not the session it just revoked (<code>AuthSessionIssuer.cs:121-124</code>, rotation at
-          <code>:394-454</code>, argued at <code>:118-120</code>), so the <code>sid</code> in a freshly refreshed token names a live row.</p>
+          <code>:396-455</code>, argued at <code>:118-120</code>), so the <code>sid</code> in a freshly refreshed token names a live row.</p>
           </li>
           <li><p><strong>Two endpoints put the device list and the per-device revoke in the framework.</strong> Both are on
           <code>AuthControllerBase</code> and both are <code>[Authorize]</code>:</p>
@@ -538,11 +541,11 @@
           </li>
           <li><p><strong>Revoking a session you do not own is indistinguishable from revoking one that does not exist,
           and revoking one already revoked says so without writing.</strong> <code>RevokeSessionByIdAsync</code>
-          (<code>AuthenticationServiceBase.cs:428-432</code>) delegates to <code>IAuthSessionIssuer.RevokeSessionAsync</code>
+          (<code>AuthenticationServiceBase.cs:448-452</code>) delegates to <code>IAuthSessionIssuer.RevokeSessionAsync</code>
           (<code>AuthSessionIssuer.cs:231-259</code>), which resolves through the user-scoped
           <code>IRefreshSessionStore.FindByIdAsync</code> (<code>.../Application/Auth/IRefreshSessionStore.cs:90-103</code>), whose
           EF implementation puts the user in the predicate rather than in a post-read check
-          (<code>.../Infrastructure/Persistence/Auth/EFRefreshSessionStore.cs:125-136</code>), so another account&#39;s id
+          (<code>.../Infrastructure/Persistence/Auth/EFRefreshSessionStore.cs:127-138</code>), so another account&#39;s id
           returns the same <code>Auth.SessionNotFound</code> as a random one (<code>AuthSessionIssuer.cs:236-244</code>). An
           <strong>already-revoked</strong> row returns <code>NotFound</code> with the code <code>Auth.SessionAlreadyRevoked</code> and writes
           nothing (<code>:246-253</code>): the list the user clicked through rendered it as live, so after a double
@@ -721,7 +724,7 @@
           caps how long a stolen token remains detectable as theft rather than as an unknown value. Both the
           setting and the service say so (<code>RefreshSessionSettings.cs:59-66</code>,
           <code>RefreshSessionCleanupService.cs:24-32</code>, cross-referenced from
-          <code>AuthSessionIssuer.cs:503-511</code>). The 30-day default is comfortably longer than the 7-day
+          <code>AuthSessionIssuer.cs:513-517</code>). The 30-day default is comfortably longer than the 7-day
           <code>Jwt:RefreshTokenExpirationDays</code> it has to outlive, but the two settings are independent and
           nothing fails a build when an operator sets retention below the refresh lifetime: it just quietly
           starts deleting rows whose tokens could still come back.</li>
@@ -732,8 +735,8 @@
           <li><strong>The <code>sid</code> claim is stamped by a decorator, so a subclass can opt out of it by accident.</strong> A
           consumer whose <code>CreateAccessToken</code> override mints from its own injected <code>ITokenService</code> rather than
           from the base&#39;s <code>TokenService</code> property produces a perfectly valid token that simply carries no
-          <code>sid</code> (<code>AuthenticationServiceBase.cs:89-98</code>; such a subclass can override
-          <code>CreateAccessTokenForSession</code> instead, <code>:489-490</code>). Nothing fails; the device list just marks no row as
+          <code>sid</code> (<code>AuthenticationServiceBase.cs:97-103</code>; such a subclass can override
+          <code>CreateAccessTokenForSession</code> instead, <code>:515-516</code>). Nothing fails; the device list just marks no row as
           current for that consumer, which is pinned by
           <code>GetSessionsAsync_WithNoCurrentSessionId_MarksNothingCurrent</code>
           (<code>.../MMCA.Common.Application.Tests/Auth/RefreshSessionManagementTests.cs:176</code>). That is the price
@@ -754,8 +757,8 @@
           design-time one (<code>DesignTimeDbContextOptions.cs:73</code>); a mismatch produces no startup error, just a
           migration that does not match the running model (<code>:69-71</code>).</li>
           <li><strong>The refresh path writes more than it did.</strong> A rotation inserts one row and revokes another
-          (<code>AuthSessionIssuer.cs:394-454</code>), and every issue reads the user&#39;s live set to enforce the
-          cap (<code>:512-519</code>), where the previous model wrote one column. The reads are index-covered
+          (<code>AuthSessionIssuer.cs:396-455</code>), and every issue reads the user&#39;s live set to enforce the
+          cap (<code>:519-526</code>), where the previous model wrote one column. The reads are index-covered
           (<code>RefreshSessionModelBuilderExtensions.cs:70-71</code>), but the refresh endpoint is no longer a
           single-row update.</li>
           <li><strong>The hash is confirmable, by design.</strong> Anyone holding both a database read and a candidate token
@@ -926,6 +929,31 @@
           <code>AuthenticationServiceBaseTests.cs:257</code> through <code>:868</code>, and <code>050-jwt-refresh-token-rotation.md:211-213</code>.
           Dated revisions above keep their anchors as written.</li>
           </ol>
+          <h2 id="revision-2026-10-26">Revision (2026-10-26)</h2>
+          <p>Re-verified against current source. No decision, default or behavior changed: the cap (default 10,
+          <code>[Range(1, 1000)]</code>, <code>RefreshSessionSettings.cs:34-35</code>), the eviction reason, the rotation claim, the
+          reuse rules and grace, the 409 handling in both clients and the sign-out scopes read as before. What
+          moved is line numbers in <code>AuthSessionIssuer.cs</code>, <code>AuthenticationServiceBase.cs</code> and
+          <code>EFRefreshSessionStore.cs</code>, plus two client anchors that had landed beside the code they cite.</p>
+          <ol>
+          <li>Anchors re-verified against current source: <code>AuthSessionIssuer.cs</code> (<code>OpenSessionAsync</code> <code>:355-380</code>,
+          cap call before staging <code>:376-377</code>, rotation <code>:396-455</code>, <code>EnforceSessionCapAsync</code> <code>:519-532</code> with
+          the cap read at <code>:521</code>, filter <code>:523</code>, ordering <code>:524-525</code>, eviction loop <code>:528-531</code>, the
+          expired-rows and retention remarks <code>:513-517</code>, <code>IssuedSession</code> <code>:539</code>, the additive-claim remarks
+          <code>:546-550</code>, <code>SessionStampingTokenService</code> <code>:551</code>, forward untouched <code>:576-579</code>, <code>sid</code> <code>:583-588</code>,
+          <code>mfa</code> <code>:590-593</code>), <code>AuthenticationServiceBase.cs</code> (base and issuer split <code>:43-48</code>, constructor
+          <code>:67-74</code>, <code>TokenService</code> <code>:105</code> with its no-<code>sid</code> remarks <code>:97-103</code>, <code>IssueTokensAsync</code> callers
+          <code>:230</code> and <code>:325</code>, helper <code>:463-477</code>, <code>RevokeTokenAsync</code> <code>:398</code>, <code>RevokeAllSessionsAsync</code> <code>:415</code>,
+          <code>RevokeSessionByIdAsync</code> <code>:448-452</code>, <code>CreateAccessToken</code> <code>:496</code>, <code>CreateAccessTokenForSession</code>
+          remarks <code>:502-511</code> and method <code>:515-516</code>, the ADR-029 lockout check <code>:152-157</code> and registration rate
+          limit <code>:263-268</code>), <code>EFRefreshSessionStore.cs</code> (class <code>:33-37</code>, ordering <code>:64-72</code>, projections <code>:91</code>
+          and <code>:106</code>, <code>FindByIdAsync</code> <code>:127-138</code>, <code>FindByIdUntrackedAsync</code> <code>:147-150</code>, claim argument
+          <code>:159-164</code>, transaction reasoning <code>:167-171</code>, <code>TryRotateAsync</code> <code>:174-217</code>, conditional UPDATE
+          <code>:190-198</code>, data-source fallback <code>:222-227</code>), <code>CookieSessionRefresher.cs</code> (the 409 remark
+          <code>:118-121</code>, <code>ClassifyFailure</code> <code>:123-126</code>) and <code>DirectApiTokenRefresher.cs</code> (the 409 branch
+          <code>:86-89</code>, <code>ReadSupersededOutcomeAsync</code> <code>:108-122</code>). Dated revisions above keep their anchors as
+          written, including their <code>CHANGELOG.md</code> line citations.</li>
+          </ol>
           <h2 id="related">Related</h2>
           <p><a href="050-jwt-refresh-token-rotation.html">ADR-050</a> (the single-column model this record replaces, and the
           source of the rotation and reuse-detection policy it keeps),
@@ -935,7 +963,7 @@
           gate lives on the base context rather than in a consumer subclass),
           <a href="029-authentication-brute-force-protection.html">ADR-029</a> (the lockout and rate-limit checks that run
           before a session is ever opened, in the same shared workflow,
-          <code>AuthenticationServiceBase.cs:135-140</code> for login and <code>:242</code> for registration),
+          <code>AuthenticationServiceBase.cs:152-157</code> for login and <code>:263-268</code> for registration),
           <a href="047-soft-deleted-user-session-revocation.html">ADR-047</a> (the middleware that bounds the access token&#39;s
           revocation gap; a soft-deleted user&#39;s sessions stop refreshing because the refresh flow re-fetches
           through the same query filter; when a store is passed, the delete handler also revokes them as
@@ -977,6 +1005,7 @@
             <li><a href="#revision-2026-10-06">Revision (2026-10-06)</a></li>
             <li><a href="#revision-2026-10-07">Revision (2026-10-07)</a></li>
             <li><a href="#revision-2026-10-21">Revision (2026-10-21)</a></li>
+            <li><a href="#revision-2026-10-26">Revision (2026-10-26)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

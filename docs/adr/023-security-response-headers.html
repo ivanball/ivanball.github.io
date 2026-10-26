@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 134 ADRs</summary>
+        <summary>All 135 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -234,6 +234,7 @@
         <li><a href="132-build-strictness-analyzer-policy.html">132 · Build Strictness: Analyzers at Error Severity, a Shared Baseline, and CI Test Floors</a></li>
         <li><a href="133-versioned-password-hash-work-factor.html">133 · Versioned Password Hash Work Factor</a></li>
         <li><a href="134-cloud-neutral-core-vendor-adapters.html">134 · Cloud-Neutral Core With Vendor Adapter Packages</a></li>
+        <li><a href="135-application-namespace-keyspace-isolation.html">135 · One Application Namespace Isolates Shared Infrastructure Keyspaces</a></li>
           </ol>
         </nav>
       </details>
@@ -262,7 +263,8 @@
           Revised 2026-10-06 (credential paths also answer <code>Pragma: no-cache</code>, re-apply their cache headers at
           response start over a weaker downstream value, and have their prefixes validated at startup).
           Revised 2026-10-07: anchors refreshed after the v1.233.0 release.
-          Revised 2026-10-21: re-verified against current source, no content or anchor change.</p>
+          Revised 2026-10-21: re-verified against current source, no content or anchor change.
+          Revised 2026-10-26: anchors refreshed after ADC #291 moved the Blazor host&#39;s pipeline lines.</p>
           <h2 id="context">Context</h2>
           <p>Every client-facing host (the YARP Gateway and the Blazor UI web host in each app) must stamp the same
           hardened HTTP response headers: <code>X-Content-Type-Options</code>, <code>X-Frame-Options</code>, <code>Referrer-Policy</code>,
@@ -552,6 +554,27 @@
           <code>max-age=31536000; includeSubDomains</code> (<code>:51</code>) gated on <code>EnableHsts</code> outside Development (<code>:175</code>),
           the static baseline (<code>:67-69</code>), and the 128-bit <code>{nonce}</code> (16 bytes, <code>:153</code>, generated at <code>:228</code>).</li>
           </ol>
+          <h2 id="revision-2026-10-26">Revision (2026-10-26)</h2>
+          <p>Re-verified against current source. No decision, rationale or trade-off changed, and the live-section
+          anchors still hold. What moved is the ADC Blazor host: its <code>Program.cs</code> lines shifted by six after
+          the 2026-10-21 revision (ADC #291), so the host anchors recorded by the 2026-10-07 revision are
+          stale. The pipeline ordering is unchanged: forwarded headers, then security headers, then rate
+          limiting, then the HTTPS redirect.</p>
+          <ol>
+          <li>Anchors re-verified against current source: in the ADC Blazor host
+          (<code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs</code>), <code>AddCommonBlazorCsp</code> is at <code>:200</code> and
+          <code>AddCommonSecurityHeaders</code> at <code>:201</code>, <code>UseCommonUiForwardedHeaders()</code> at <code>:216</code>,
+          <code>UseCommonSecurityHeaders()</code> at <code>:222</code>, <code>UseUiRateLimiting()</code> at <code>:227</code> and
+          <code>UseHttpsRedirection()</code> at <code>:240</code>, with the rationale comments at <code>:189-199</code> (CSP and HSTS),
+          <code>:205-215</code> (forwarded headers), <code>:218-221</code> (security headers, no <code>UseHsts</code>) and <code>:224-226</code> (rate
+          limiter). In the framework, the static default&#39;s <code>TryAddSingleton</code> is still
+          <code>MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Security/SecurityHeaders.cs:288</code> (interface at
+          <code>:86</code>), <code>CredentialPathPrefixes</code> <code>:48</code>, <code>IsCredentialPath</code> <code>:179-182</code> (used at <code>:192</code> and <code>:197</code>),
+          <code>no-referrer</code> <code>:193</code>, <code>CredentialCacheControl</code> <code>:156</code> (written at <code>:248</code>) and the HSTS value
+          <code>:51</code>; <code>AddCommonBlazorCsp</code>
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI.Web/DependencyInjection.cs:67</code>) still calls
+          <code>ValidateOnStart</code> at <code>:71</code> and registers with plain <code>AddSingleton</code> at <code>:77</code>.</li>
+          </ol>
           <h2 id="related">Related</h2>
           <p>ADR-019 (rate limiting, the other always-on edge protection living in the same Aspire layer), ADR-022
           (browser session-cookie auth, the other browser-edge security control), ADR-008 (the gateway topology
@@ -578,6 +601,7 @@
             <li><a href="#revision-2026-10-06">Revision (2026-10-06)</a></li>
             <li><a href="#revision-2026-10-07">Revision (2026-10-07)</a></li>
             <li><a href="#revision-2026-10-21">Revision (2026-10-21)</a></li>
+            <li><a href="#revision-2026-10-26">Revision (2026-10-26)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

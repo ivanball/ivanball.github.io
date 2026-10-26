@@ -22,11 +22,13 @@ the current file (see Revision below). Revised (2026-10-07): anchors re-pinned t
 `release.yml` and `ci.yml`, the Decision names the SHA-pinned `NuGet/login` action, and the Trade-offs record
 that the two publishing jobs run independently, so a release can land half-published. Revised
 2026-10-21: anchors refreshed after the MAUI job's timeout comment grew by two lines, shifting
-every later `publish-maui` anchor in `release.yml` by +2.
+every later `publish-maui` anchor in `release.yml` by +2. Revised 2026-10-26: anchors refreshed
+after the `ci.yml` canaries moved back to `:475-476` and `:693-694` and newly added packages
+extended the FACTS list and the solution file.
 
 ## Context
 The `MMCA.Common.*` packages have shipped to GitHub Packages since the first release (the package
-list and its count are generated and CI-gated in `MMCA.Common/FACTS.md:19-43`, so this record links
+list and its count are generated and CI-gated in `MMCA.Common/FACTS.md:19-47`, so this record links
 to them rather than restating them). That was the right default while the framework had exactly one consumer group (this account's own
 repositories), which already authenticate to GitHub for other reasons.
 
@@ -59,9 +61,9 @@ independent jobs, see Trade-offs).
   with `--skip-duplicate` (`release.yml:140`, `:257`). Both the main (ubuntu) job and the MAUI (windows)
   job push to both registries, so when both jobs succeed (see Trade-offs) the lockstep release
   stays whole across every published id: the
-  packable projects in `MMCA.Common.slnx` (`MMCA.Common.slnx:8-34`) ship from the ubuntu job, and
+  packable projects in `MMCA.Common.slnx` (`MMCA.Common.slnx:8-38`) ship from the ubuntu job, and
   `MMCA.Common.UI.Maui` ships from the windows job (ADR-042 splits the MAUI package into its own
-  job). `MMCA.Common/FACTS.md:19-43` is the source of truth for that set, and the workflow comment
+  job). `MMCA.Common/FACTS.md:19-47` is the source of truth for that set, and the workflow comment
   that introduces the MAUI job points at it rather than restating a count (`release.yml:142-145`).
 - **Authentication to nuget.org is trusted publishing, not a stored API key.** Each publishing job
   requests a GitHub OIDC token (`permissions: id-token: write`) and exchanges it through
@@ -139,7 +141,7 @@ independent jobs, see Trade-offs).
   (`release.yml:207-208`). Both jobs also attest build provenance (`release.yml:97-100`, `:216-219`).
   The rest run on the merged pull request rather than on the tag, and the ancestry assertion is what
   makes them cover the tagged tree: its comment names the FACTS drift gate, the vulnerability audit,
-  the Helpdesk consumer canary (`ci.yml:422-423`), the package-consumption canary (`ci.yml:640`),
+  the Helpdesk consumer canary (`ci.yml:475-476`), the package-consumption canary (`ci.yml:693-694`),
   ui-e2e and the perf gate (`release.yml:31-35`).
 - **The two publishing jobs are independent, so a release can land half-published.** `publish`
   (`release.yml:11`) and `publish-maui` (`release.yml:146`) declare no `needs:` on each other, so
@@ -229,9 +231,28 @@ so every later anchor in that job shifts by +2. Every `publish` job anchor holds
    MAUI job comment (`:142-145`), the ancestry comment (`:31-35`), the locked-mode restore (`:66`),
    the vulnerability audit (`:79-84`) and the test floor (`:86-89`).
 
+## Revision (2026-10-26)
+Re-verified against current source (MMCA.Common v1.261.0). The decision is unchanged: both jobs
+still push to GitHub Packages and then, behind the owner guard, log in through the SHA-pinned
+`NuGet/login` and push to nuget.org with `--skip-duplicate`, and every `release.yml` anchor holds.
+What moved is anchors outside `release.yml`: the two CI canaries in `ci.yml` are back at their
+2026-10-01 lines, and the published-package list in FACTS and the packable projects in the solution
+file each grew with newly added packages (among them `MMCA.Common.Aws` and `MMCA.Common.Gcp`).
+
+1. Anchors re-verified against current source: the Helpdesk consumer canary
+   (`.github/workflows/ci.yml:475-476`, `consumer-source-build`) and the package-consumption canary
+   (`ci.yml:693-694`, `package-consumption`), where `ci.yml:422-423` is now a coverage-job step;
+   the published set (`MMCA.Common/FACTS.md:19-47`, heading at `:19`, list at `:22-47` ending with
+   the `MMCA.Common` metapackage); and the packable projects (`MMCA.Common.slnx:8-38`, from the
+   metapackage at `:8` to `MMCA.Common.Testing.UI` at `:38`). Unchanged: `publish`
+   (`release.yml:11`), `publish-maui` (`:146`), the environment declarations (`:19`, `:156`), the
+   locked-mode restore (`:66`), the pack steps (`:92`, `:211`), the GitHub Packages pushes (`:120`,
+   `:241`), the SHA-pinned `NuGet/login` lines (`:133`, `:249`), the nuget.org pushes (`:140`,
+   `:257`) and the ancestry comment (`:31-35`).
+
 ## Related
 ADR-016 (lockstep versioning: every package ships at one version, so both registries receive the
-same set of ids per release, enumerated in `MMCA.Common/FACTS.md:19-43`),
+same set of ids per release, enumerated in `MMCA.Common/FACTS.md:19-47`),
 ADR-038 (supply-chain provenance: the SBOM hard gate runs before both jobs' pushes, while the
 locked-mode restore and the vulnerability audit run in the ubuntu job only; keyless publishing extends that posture to the credential itself),
 ADR-042 (the MAUI package's separate windows job, which needs the same dual push to keep the

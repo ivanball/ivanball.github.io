@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 134 ADRs</summary>
+        <summary>All 135 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -234,6 +234,7 @@
         <li><a href="132-build-strictness-analyzer-policy.html">132 · Build Strictness: Analyzers at Error Severity, a Shared Baseline, and CI Test Floors</a></li>
         <li><a href="133-versioned-password-hash-work-factor.html">133 · Versioned Password Hash Work Factor</a></li>
         <li><a href="134-cloud-neutral-core-vendor-adapters.html">134 · Cloud-Neutral Core With Vendor Adapter Packages</a></li>
+        <li><a href="135-application-namespace-keyspace-isolation.html">135 · One Application Namespace Isolates Shared Infrastructure Keyspaces</a></li>
           </ol>
         </nav>
       </details>
@@ -263,10 +264,12 @@
           <code>release.yml</code> and <code>ci.yml</code>, the Decision names the SHA-pinned <code>NuGet/login</code> action, and the Trade-offs record
           that the two publishing jobs run independently, so a release can land half-published. Revised
           2026-10-21: anchors refreshed after the MAUI job&#39;s timeout comment grew by two lines, shifting
-          every later <code>publish-maui</code> anchor in <code>release.yml</code> by +2.</p>
+          every later <code>publish-maui</code> anchor in <code>release.yml</code> by +2. Revised 2026-10-26: anchors refreshed
+          after the <code>ci.yml</code> canaries moved back to <code>:475-476</code> and <code>:693-694</code> and newly added packages
+          extended the FACTS list and the solution file.</p>
           <h2 id="context">Context</h2>
           <p>The <code>MMCA.Common.*</code> packages have shipped to GitHub Packages since the first release (the package
-          list and its count are generated and CI-gated in <code>MMCA.Common/FACTS.md:19-43</code>, so this record links
+          list and its count are generated and CI-gated in <code>MMCA.Common/FACTS.md:19-47</code>, so this record links
           to them rather than restating them). That was the right default while the framework had exactly one consumer group (this account&#39;s own
           repositories), which already authenticate to GitHub for other reasons.</p>
           <p>It stopped being right the moment the framework was documented publicly. GitHub Packages&#39; <strong>NuGet</strong>
@@ -297,9 +300,9 @@
           with <code>--skip-duplicate</code> (<code>release.yml:140</code>, <code>:257</code>). Both the main (ubuntu) job and the MAUI (windows)
           job push to both registries, so when both jobs succeed (see Trade-offs) the lockstep release
           stays whole across every published id: the
-          packable projects in <code>MMCA.Common.slnx</code> (<code>MMCA.Common.slnx:8-34</code>) ship from the ubuntu job, and
+          packable projects in <code>MMCA.Common.slnx</code> (<code>MMCA.Common.slnx:8-38</code>) ship from the ubuntu job, and
           <code>MMCA.Common.UI.Maui</code> ships from the windows job (ADR-042 splits the MAUI package into its own
-          job). <code>MMCA.Common/FACTS.md:19-43</code> is the source of truth for that set, and the workflow comment
+          job). <code>MMCA.Common/FACTS.md:19-47</code> is the source of truth for that set, and the workflow comment
           that introduces the MAUI job points at it rather than restating a count (<code>release.yml:142-145</code>).</li>
           <li><strong>Authentication to nuget.org is trusted publishing, not a stored API key.</strong> Each publishing job
           requests a GitHub OIDC token (<code>permissions: id-token: write</code>) and exchanges it through
@@ -379,7 +382,7 @@
           (<code>release.yml:207-208</code>). Both jobs also attest build provenance (<code>release.yml:97-100</code>, <code>:216-219</code>).
           The rest run on the merged pull request rather than on the tag, and the ancestry assertion is what
           makes them cover the tagged tree: its comment names the FACTS drift gate, the vulnerability audit,
-          the Helpdesk consumer canary (<code>ci.yml:422-423</code>), the package-consumption canary (<code>ci.yml:640</code>),
+          the Helpdesk consumer canary (<code>ci.yml:475-476</code>), the package-consumption canary (<code>ci.yml:693-694</code>),
           ui-e2e and the perf gate (<code>release.yml:31-35</code>).</li>
           <li><strong>The two publishing jobs are independent, so a release can land half-published.</strong> <code>publish</code>
           (<code>release.yml:11</code>) and <code>publish-maui</code> (<code>release.yml:146</code>) declare no <code>needs:</code> on each other, so
@@ -468,9 +471,28 @@
           MAUI job comment (<code>:142-145</code>), the ancestry comment (<code>:31-35</code>), the locked-mode restore (<code>:66</code>),
           the vulnerability audit (<code>:79-84</code>) and the test floor (<code>:86-89</code>).</li>
           </ol>
+          <h2 id="revision-2026-10-26">Revision (2026-10-26)</h2>
+          <p>Re-verified against current source (MMCA.Common v1.261.0). The decision is unchanged: both jobs
+          still push to GitHub Packages and then, behind the owner guard, log in through the SHA-pinned
+          <code>NuGet/login</code> and push to nuget.org with <code>--skip-duplicate</code>, and every <code>release.yml</code> anchor holds.
+          What moved is anchors outside <code>release.yml</code>: the two CI canaries in <code>ci.yml</code> are back at their
+          2026-10-01 lines, and the published-package list in FACTS and the packable projects in the solution
+          file each grew with newly added packages (among them <code>MMCA.Common.Aws</code> and <code>MMCA.Common.Gcp</code>).</p>
+          <ol>
+          <li>Anchors re-verified against current source: the Helpdesk consumer canary
+          (<code>.github/workflows/ci.yml:475-476</code>, <code>consumer-source-build</code>) and the package-consumption canary
+          (<code>ci.yml:693-694</code>, <code>package-consumption</code>), where <code>ci.yml:422-423</code> is now a coverage-job step;
+          the published set (<code>MMCA.Common/FACTS.md:19-47</code>, heading at <code>:19</code>, list at <code>:22-47</code> ending with
+          the <code>MMCA.Common</code> metapackage); and the packable projects (<code>MMCA.Common.slnx:8-38</code>, from the
+          metapackage at <code>:8</code> to <code>MMCA.Common.Testing.UI</code> at <code>:38</code>). Unchanged: <code>publish</code>
+          (<code>release.yml:11</code>), <code>publish-maui</code> (<code>:146</code>), the environment declarations (<code>:19</code>, <code>:156</code>), the
+          locked-mode restore (<code>:66</code>), the pack steps (<code>:92</code>, <code>:211</code>), the GitHub Packages pushes (<code>:120</code>,
+          <code>:241</code>), the SHA-pinned <code>NuGet/login</code> lines (<code>:133</code>, <code>:249</code>), the nuget.org pushes (<code>:140</code>,
+          <code>:257</code>) and the ancestry comment (<code>:31-35</code>).</li>
+          </ol>
           <h2 id="related">Related</h2>
           <p>ADR-016 (lockstep versioning: every package ships at one version, so both registries receive the
-          same set of ids per release, enumerated in <code>MMCA.Common/FACTS.md:19-43</code>),
+          same set of ids per release, enumerated in <code>MMCA.Common/FACTS.md:19-47</code>),
           ADR-038 (supply-chain provenance: the SBOM hard gate runs before both jobs&#39; pushes, while the
           locked-mode restore and the vulnerability audit run in the ubuntu job only; keyless publishing extends that posture to the credential itself),
           ADR-042 (the MAUI package&#39;s separate windows job, which needs the same dual push to keep the
@@ -493,6 +515,7 @@
             <li><a href="#revision-2026-10-01">Revision (2026-10-01)</a></li>
             <li><a href="#revision-2026-10-07">Revision (2026-10-07)</a></li>
             <li><a href="#revision-2026-10-21">Revision (2026-10-21)</a></li>
+            <li><a href="#revision-2026-10-26">Revision (2026-10-26)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

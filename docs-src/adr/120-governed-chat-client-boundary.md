@@ -60,6 +60,10 @@ Revised 2026-10-21: `PiiRedactionGuardrail` passes signed reasoning and items wi
 redact through unchanged, and a rebuilt item keeps its metadata (still not `RawRepresentation`)
 (since v1.247.0), and the package pins and anchors are refreshed.
 
+Revised 2026-10-26: the Anthropic SDK pin is 13.3.0, ADC's section 16 score reads M4/I9 as the
+scorecard does, `ContentPolicyGuardrail` keeps item metadata like the PII policy and both guardrails keep
+`CreatedAt` (since v1.261.0), the type-level fitness rule's namespace root is stated, and anchors are refreshed.
+
 ## Context
 Rubric section 16, AI-Native Application Architecture, asks one question of a product feature that
 calls a language model: is that dependency governed like any other external system, meaning
@@ -83,12 +87,12 @@ than standing as independent literals, nothing in the module constructs an `Http
 (`MMCA.ADC.Conference.Infrastructure/DependencyInjection.cs:36-50`), and Infrastructure is the only
 layer that names the package (`MMCA.ADC.Conference.Infrastructure.csproj:19`, reason at `:15-18`).
 Token counters come off the framework meter `MMCA.Common.AI` rather than a meter named for the
-feature (`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:154`, meter registration
-at `:173-174`). That division is the whole point of this record: ADR-111 names the alternative in
+feature (`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:160`, meter registration
+at `:179-180`). That division is the whole point of this record: ADR-111 names the alternative in
 its own trade-offs, where one feature, one provider and one model leave no general model-calling
 abstraction, so a second AI feature inherits the conventions by imitation rather than by
 construction. ADC scored M2/I5 on section 16 in the 2026-09-04 cycle, before the package existed,
-and scores M4/I10 on it now (`Website/docs-src/governance/adc-ArchitectureScorecard.md:80`); Store
+and scores M4/I9 on it now (`Website/docs-src/governance/adc-ArchitectureScorecard.md:80`); Store
 and Helpdesk have no feature that calls a model, so the category is N/A for them.
 
 Imitation is the wrong transport for this particular set of rules. Every one of them is a property
@@ -116,7 +120,7 @@ start, and the evaluation harness ships beside the package.**
    (`MMCA.Common/Source/Core/MMCA.Common.AI/MMCA.Common.AI.csproj:11`) for the hosting environment,
    the distributed cache, the configuration binder and the options validation pipeline, plus exactly
    one runtime package: `Microsoft.Extensions.AI` (`:30`), pinned at 10.11.0
-   (`MMCA.Common/Directory.Packages.props:104`). The csproj states the reason in place
+   (`MMCA.Common/Directory.Packages.props:105`). The csproj states the reason in place
    (`MMCA.Common.AI.csproj:15-29`): everything the package governs is expressed in
    `Microsoft.Extensions.AI` primitives, so it needs nothing from Domain, Application or
    Infrastructure, must stay installable by a host that has taken none of them, and must not pin a
@@ -128,11 +132,11 @@ start, and the evaluation harness ships beside the package.**
    an ungoverned `IChatClient` (`:34`). Two adapters ship, each one factory and one registration
    call: `MMCA.Common.AI.Anthropic` (`AnthropicAiProviderFactory.cs:14`, name at `:17`, the SDK's own
    `AsIChatClient` at `:48`, `AddAnthropicAiProvider()` at `DependencyInjection.cs:26`) over the
-   official Anthropic SDK (`MMCA.Common.AI.Anthropic.csproj:13`, pinned at 12.60.0,
-   `Directory.Packages.props:111`), and `MMCA.Common.AI.OpenAI` (`OpenAiProviderFactory.cs:18`, name
+   official Anthropic SDK (`MMCA.Common.AI.Anthropic.csproj:13`, pinned at 13.3.0,
+   `Directory.Packages.props:112`), and `MMCA.Common.AI.OpenAI` (`OpenAiProviderFactory.cs:18`, name
    at `:21`, `GetChatClient(model).AsIChatClient()` at `:49-51`, `AddOpenAiProvider()` at
    `DependencyInjection.cs:26`) over `Microsoft.Extensions.AI.OpenAI` and the official OpenAI SDK
-   (`MMCA.Common.AI.OpenAI.csproj:13-14`, pinned at 10.11.0 and 2.14.0, `Directory.Packages.props:116-117`).
+   (`MMCA.Common.AI.OpenAI.csproj:13-14`, pinned at 10.11.0 and 2.14.0, `Directory.Packages.props:117-118`).
    `Ai:Provider` is a plain string (`AiSettings.cs:55`) matched case-insensitively against the
    registered factory names (`Providers/AiProviderValidator.cs:41-42`), and
    `CreateProviderChatClient` (`DependencyInjection.cs:239`) asks the match to build the client
@@ -153,11 +157,13 @@ start, and the evaluation harness ships beside the package.**
    (`MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Bases/Layering/AiDependencyIsolationTestsBase.cs:19`)
    asserts that no layer outside a `*.Infrastructure` assembly or the boundary itself names
    `Anthropic`, `Microsoft.Extensions.AI`, `OpenAI` or `Azure.AI`
-   (`Rules/Layering/ArchitectureRules.Ai.cs:26-32`, rule at `:38`), and that nothing outside
-   Infrastructure references the governed package at all (`:63`). The boundary is classified by the
-   `MMCA.Common.AI.` prefix (`:13`, classification at `:87-95`), which is what admits the adapter
-   packages and `MMCA.Common.AI.Testing` to it. A prompt or a bound must not become a type Domain or
-   Application depends on.
+   (`Rules/Layering/ArchitectureRules.Ai.cs:38-44`, rule at `:50`), and that nothing outside
+   Infrastructure references the governed package at all (`:75`, check at `:83`). The boundary
+   assembly is classified by name with the `MMCA.Common.AI.` prefix (`:19`, classification at
+   `:99-107`), which is what admits the adapter packages and `MMCA.Common.AI.Testing` to it; the
+   type-level rule matches the undotted namespace root `MMCA.Common.AI` (`:25`), because NetArchTest
+   matches whole namespace segments and an entry ending in a dot would match nothing (`:13-14`). A prompt or a
+   bound must not become a type Domain or Application depends on.
 
 4. **Governance is a pipeline of delegating clients, ordered outermost first.**
    `AddMmcaChatClient(IConfiguration)` (`DependencyInjection.cs:88`) builds `BoundedChatClient` ->
@@ -196,7 +202,7 @@ start, and the evaluation harness ships beside the package.**
    compose by intersection and a new concern can only ever remove tools; `Denied` is the enum's zero
    value (`Guardrails/ToolAuthorization.cs:13`), so a policy that forgets to answer refuses. A tool
    that marks itself consequential (`Guardrails/ChatToolPolicy.cs:30`) clears one more bar: the
-   request has to name it in the confirmed list (`:41`, read at `:76-97`, checked at
+   request has to name it in the confirmed list (`:43`, read at `:78-109`, checked at
    `BoundedChatClient.cs:269`), per request and never per session. With no policy registered every
    tool is stripped (`:251-254`), so the layer fails closed, and that combination is refused at
    registration instead (`DependencyInjection.cs:219-226`).
@@ -216,16 +222,17 @@ start, and the evaluation harness ships beside the package.**
    framework ships two content policies that answer that refusal on their own. The first,
    `PiiRedactionGuardrail` (`Guardrails/PiiRedactionGuardrail.cs:40`), removes email addresses and
    North American phone numbers from every outgoing message, including reasoning text, tool results
-   and the arguments of tool calls (`:71-81`, `:122-156`, `RedactText` at `:203`), whether those
+   and the arguments of tool calls (`:71-81`, `:123-157`, `RedactText` at `:192`), whether those
    arrive as strings or as `JsonElement` values, where only string values are rewritten and property
-   names, numbers and booleans are copied as they are (`:170-174`, `RedactJson` at `:211`,
-   `WriteRedacted` at `:223-255`). Two kinds of item pass through unchanged: a reasoning block that
+   names, numbers and booleans are copied as they are (`:159-164`, `RedactJson` at `:200`,
+   `WriteRedacted` at `:212-244`). Two kinds of item pass through unchanged: a reasoning block that
    carries `ProtectedData` (a signed thinking block) is never rebuilt, because an edited signed
-   block is rejected when the conversation is sent back (`:117-119`, `:124`), and an item with
-   nothing to redact passes through by reference (`:108`, `:155`). A rebuilt item keeps
+   block is rejected when the conversation is sent back (`:118-120`, `:125`), and an item with
+   nothing to redact passes through by reference (`:109`, `:156`). A rebuilt item keeps
    `AdditionalProperties`, `Annotations` and a tool item's `InformationalOnly` and `Exception`
-   (`:135`, `:147-148`, `WithMetadataOf` at `:162-168`), but not `RawRepresentation`, the
-   provider's original object, which still holds the unredacted text (`:111-114`). It
+   (`:136`, `:148-149`), copied by the internal helper both shipped policies share
+   (`Guardrails/ContentMetadata.cs:22`), but not `RawRepresentation`, the provider's original
+   object, which still holds the unredacted text (`:112-115`, `ContentMetadata.cs:13-16`). It
    leaves the application's own `Instructions` alone (`:35-37`), and is registered as one singleton
    under both contracts by `AddPiiRedactionGuardrail()`
    (`Guardrails/GuardrailServiceCollectionExtensions.cs:33`, `:37-41`).
@@ -247,17 +254,21 @@ start, and the evaluation harness ships beside the package.**
    `act-as-unrestricted`, `developer-mode` and `do-anything-now`. `AdditionalRequestPatterns`
    (`ContentPolicySettings.cs:45`) merges an application's own regular expressions into that list, and
    `BlockedResponsePatterns` (`:57`) is the other half: inspected on the buffered response
-   (`ContentPolicyGuardrail.cs:164`) and on each streamed update (`:181`), refusing by pattern index
-   and never echoing the text that matched (`:267`, `:283`). Only user-role messages are ever
+   (`ContentPolicyGuardrail.cs:167`) and on each streamed update (`:184`), refusing by pattern index
+   and never echoing the text that matched (`:270`, `:283`). Only user-role messages are ever
    rewritten, never the application's system prompt or a prior assistant turn
-   (`ContentPolicyGuardrail.cs:115-133`). A configured pattern that does not compile fails the host at
+   (`ContentPolicyGuardrail.cs:111-138`, role filter at `:134`). Within a rewritten message an item
+   with no marker passes through by reference and a rebuilt text item keeps its
+   `AdditionalProperties` and `Annotations` (`:337-341`), and both policies keep
+   `ChatMessage.CreatedAt` on the message they rebuild (`:356`, `PiiRedactionGuardrail.cs:97`),
+   since v1.261.0 (`MMCA.Common/CHANGELOG.md:22`, L244). A configured pattern that does not compile fails the host at
    startup rather than on a user's request (`ContentPolicySettings.cs:83`, `ValidateOnStart` at
    `Guardrails/GuardrailServiceCollectionExtensions.cs:67-70`), and
    `AddContentPolicyGuardrail(IConfiguration)` (`GuardrailServiceCollectionExtensions.cs:62`)
    registers one singleton under both interfaces (`:72-76`), so registering it satisfies
    `Ai:RequireGuardrail` exactly as the PII policy does. `PiiRedactionGuardrail` ships from
-   MMCA.Common v1.207.0 and `ContentPolicyGuardrail` from v1.208.0 (`MMCA.Common/CHANGELOG.md:1117`,
-   `:1071`).
+   MMCA.Common v1.207.0 and `ContentPolicyGuardrail` from v1.208.0 (`MMCA.Common/CHANGELOG.md:1332`,
+   `:1286`).
 
 8. **The configuration surface is one section, validated, and the switch is the registration.**
    `AiSettings` (`MMCA.Common/Source/Core/MMCA.Common.AI/AiSettings.cs:22`) binds `Ai` (`:25`) and
@@ -309,8 +320,8 @@ start, and the evaluation harness ships beside the package.**
     `model`, `prompt_name`, `prompt_version` and `provider` (`:158-168`). `UsageRecordingChatClient`
     (`Chat/UsageRecordingChatClient.cs:38`) records the provider's own reported numbers rather than
     an estimate, on the buffered path (`:109-114`) and on the streaming path from the `UsageContent`
-    item the provider delivers (`:179-190`). The `provider` tag is read from the inner client itself:
-    `ResolveProviderName` (`:68`) takes `ChatClientMetadata.ProviderName` when the adapter reports
+    item the provider delivers (`RecordUsageIn` at `:185-195`). The `provider` tag is read from the
+    inner client itself: `ResolveProviderName` (`:68`) takes `ChatClientMetadata.ProviderName` when the adapter reports
     one (`:72-76`), so a foreign client supplied through the factory overload is metered as what it
     is, and falls back to the configured name, lower-cased to match the convention the adapters use
     (`:78-80`). A usage the provider did not report records nothing: an absent number must not read
@@ -373,13 +384,13 @@ start, and the evaluation harness ships beside the package.**
 - **Spend is queried under framework names, and the `provider` dimension changed value.** ADC's token
   counters report on `MMCA.Common.AI` under the framework's counter names, so the App Insights spend
   alert and any saved query key on those rather than on a per-service meter
-  (`MMCA.ADC.Conference.Service/Program.cs:173-174`). Reading the tag from the client's metadata also
+  (`MMCA.ADC.Conference.Service/Program.cs:179-180`). Reading the tag from the client's metadata also
   moves the value from `Anthropic` to `anthropic`, which a saved query has to follow in the same
-  release (`MMCA.Common/UPGRADING.md:917-919`).
+  release (`MMCA.Common/UPGRADING.md:1145-1147`).
 - **Two defaults can now refuse a host that used to start.** `Ai:RequireGuardrail` true and
   `Ai:AllowTools` with no `IChatToolPolicy` are both startup failures, and pinning the model turns a
   `PromptContract` that disagrees with `Ai:Model` into a refused call
-  (`MMCA.Common/UPGRADING.md:921-932`). That is the intended direction, and it is a breaking one.
+  (`MMCA.Common/UPGRADING.md:1149-1160`). That is the intended direction, and it is a breaking one.
 - **The input budget is an estimate, and says so.** It reads message text plus instructions only, so
   images, tool schemas, provider-side additions and non-Latin scripts are under-counted
   (`BoundedChatClient.cs:52-58`). It is a runaway guardrail with headroom, never a billing figure.
@@ -425,21 +436,21 @@ start, and the evaluation harness ships beside the package.**
   free-standing model literal and no per-service meter; its output ceiling is one named constant
   (`:71`) that `Ai:MaxOutputTokens` clamps again.
 - **Upgrading across this release is a mapped change, not a silent one.**
-  `MMCA.Common/UPGRADING.md:887-936` carries the old-to-new table (the removed `AiProvider` enum, the
+  `MMCA.Common/UPGRADING.md:1115-1164` carries the old-to-new table (the removed `AiProvider` enum, the
   `string? configuredProvider` constructor, the factory), the four mechanical steps for a host on the
   Anthropic provider, the `provider` tag casing change and the three new default bounds.
 - **ADC runs on the adapter package, the shipped guardrails and the harness.** The Conference module
   references `MMCA.Common.AI` alone (`MMCA.ADC.Conference.Infrastructure.csproj:19`); the host
   references the adapter (`MMCA.ADC.Conference.Service.csproj:34`) and calls
-  `AddAnthropicAiProvider()` (`MMCA.ADC.Conference.Service/Program.cs:141`),
-  `AddConferenceAiGuardrails(configuration)` (`:152`) and `AddMmcaChatClient` (`:154`).
+  `AddAnthropicAiProvider()` (`MMCA.ADC.Conference.Service/Program.cs:147`),
+  `AddConferenceAiGuardrails(configuration)` (`:158`) and `AddMmcaChatClient` (`:160`).
   `AddConferenceAiGuardrails` (`MMCA.ADC.Conference.Infrastructure/DependencyInjection.cs:85`)
   registers `AddPiiRedactionGuardrail()` (`:95`), `AddContentPolicyGuardrail(configuration)` (`:96`)
   and the module's own `SessionScoreResponseGuardrail` (`:99`). The golden suite runs on the shipped
   bases (`GoldenReplayTests.cs:35`, `PromptContractTests.cs:180`).
 - **Store and Helpdesk adopt nothing.** Section 16 remains N/A for both until a product feature of
   theirs calls a model.
-- **Section 16 scores M4/I10 for ADC.** Token usage, model id and prompt version reach telemetry
+- **Section 16 scores M4/I9 for ADC.** Token usage, model id and prompt version reach telemetry
   through one shared source, the per-call ceiling is clamped by configuration at the framework
   boundary, and `GuardrailChatClient` is composed because `AddConferenceAiGuardrails` registers three
   guardrails (`Website/docs-src/governance/adc-ArchitectureScorecard.md:80`). The framework side of
@@ -519,6 +530,42 @@ pins moved, and the release and UPGRADING anchors moved as later blocks landed a
    (`MMCA.Common/CHANGELOG.md:1117`, `:1071`), and the `[1.207.0]` block of
    `MMCA.Common/UPGRADING.md` (`:887-936`, casing note at `:917-919`, defaults at `:921-932`). The
    earlier revisions keep their anchors as written.
+
+## Revision (2026-10-26)
+Re-verified against current source. No decision, rationale or trade-off changed in direction; the
+Anthropic SDK took a major-version bump, the content policy gained the PII policy's item fidelity
+in v1.261.0, the live sections' section 16 score is corrected, and many anchors moved.
+
+1. Decision item 2 states the Anthropic SDK pin as 13.3.0
+   (`MMCA.Common/Directory.Packages.props:112`); the adapter's construction is unchanged
+   (`MMCA.Common/Source/Core/MMCA.Common.AI.Anthropic/AnthropicAiProviderFactory.cs:48`).
+2. The Context and Consequences state ADC's section 16 score as M4/I9, which is what the scorecard
+   row carries (`Website/docs-src/governance/adc-ArchitectureScorecard.md:80`) and what the
+   2026-09-19 Status sentence already said; they read M4/I10.
+3. Decision item 7 states that `ContentPolicyGuardrail` passes a user content item with no marker
+   through by reference, keeps `AdditionalProperties` and `Annotations` on a rebuilt text item,
+   and that both shipped policies keep `ChatMessage.CreatedAt`
+   (`MMCA.Common/Source/Core/MMCA.Common.AI/Guardrails/ContentPolicyGuardrail.cs:337-341`, `:356`,
+   `PiiRedactionGuardrail.cs:97`), released in v1.261.0 (`MMCA.Common/CHANGELOG.md:22`, L244). The
+   metadata copy now lives in one internal helper both policies call
+   (`Guardrails/ContentMetadata.cs:22`, `RawRepresentation` still not copied, `:13-16`).
+4. Decision item 3 states that the type-level rule matches the undotted namespace root
+   `MMCA.Common.AI` while assembly classification keeps the dotted prefix
+   (`MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Rules/Layering/ArchitectureRules.Ai.cs:19`,
+   `:25`, reason at `:10-18`).
+5. Anchors re-verified against current source: `Directory.Packages.props` (`:105`, `:112`,
+   `:117-118`), `ArchitectureRules.Ai.cs` (SDK list at `:38-44`, rules at `:50` and `:75`,
+   classification at `:99-107`), `ChatToolPolicy` (confirmed-tools key at `:43`, read at
+   `:78-109`), `PiiRedactionGuardrail` (content switch at `:123-157`, `RedactArgument` at
+   `:159-164`, `RedactText` at `:192`, `RedactJson` at `:200`, `WriteRedacted` at `:212-244`),
+   `ContentPolicyGuardrail` (`InspectResponseAsync` at `:167`, `InspectStreamedUpdateAsync` at
+   `:184`, `InspectAnswerText` at `:270`, user-role rewrite at `:111-138`),
+   `UsageRecordingChatClient` (`RecordUsageIn` at `:185-195`), ADC's Conference host
+   (`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:147`, `:158`, `:160`,
+   `:179-180`), the release entries for `PiiRedactionGuardrail` and `ContentPolicyGuardrail`
+   (`MMCA.Common/CHANGELOG.md:1332`, `:1286`), and the `[1.207.0]` block of
+   `MMCA.Common/UPGRADING.md` (`:1115-1164`, casing note at `:1145-1147`, defaults at
+   `:1149-1160`). The earlier revisions keep their anchors as written.
 
 ## Related
 [ADR-111](111-ai-session-scoring-governance.md) (the record this one extends: every scoring-specific

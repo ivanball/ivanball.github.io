@@ -120,7 +120,7 @@
         <div class="stats">
           <!-- BEGIN platform-stats -->
           <div class="stat"><div class="num">26</div><div class="label">NuGet packages</div></div>
-          <div class="stat"><div class="num">134</div><div class="label">Architecture Decision Records</div></div>
+          <div class="stat"><div class="num">135</div><div class="label">Architecture Decision Records</div></div>
           <div class="stat"><div class="num">161</div><div class="label">Architecture fitness tests</div></div>
           <div class="stat"><div class="num">3</div><div class="label">Reference applications</div></div>
           <!-- END platform-stats -->
@@ -429,7 +429,7 @@
           <p class="eyebrow">Why, not just what</p>
           <h2>Architecture Decision Records</h2>
           <!-- BEGIN adr-count -->
-          <p>134 ADRs capture the context and trade-offs behind each cross-cutting pattern, so the design is teachable, not tribal knowledge. Every entry below links to the full record.</p>
+          <p>135 ADRs capture the context and trade-offs behind each cross-cutting pattern, so the design is teachable, not tribal knowledge. Every entry below links to the full record.</p>
           <!-- END adr-count -->
         </div>
         <div class="adr-list">
@@ -562,12 +562,13 @@
           <a class="adr" href="docs/adr/126-event-sourcing-not-adopted.html"><span class="adr-num">126</span><span><span class="adr-title">Event Sourcing Is Not Adopted</span><span class="adr-sum">Accepted (2026-09-22) as a documented rejection. Nothing ships with this record: no event store, no stream table, no projection host, no new package.…</span></span></a>
           <a class="adr" href="docs/adr/127-actor-model-not-adopted.html"><span class="adr-num">127</span><span><span class="adr-title">The Actor Model Is Not Adopted</span><span class="adr-sum">Accepted (2026-09-22) as a documented rejection. Nothing ships with this record: no grain interface, no silo, no placement configuration, no new…</span></span></a>
           <a class="adr" href="docs/adr/128-time-as-an-input.html"><span class="adr-num">128</span><span><span class="adr-title">Time as an Input (No Ambient Clock Reads in Domain and Application)</span><span class="adr-sum">Accepted (2026-10-01). Revised 2026-10-06: async-lambda clock reads are attributed to, and exempted with, their source member. Revised 2026-10-07:…</span></span></a>
-          <a class="adr" href="docs/adr/129-tactical-aggregate-contract.html"><span class="adr-num">129</span><span><span class="adr-title">The Tactical Aggregate Contract</span><span class="adr-sum">Accepted (2026-10-01). Revised 2026-10-21: anchors refreshed after the ADC Speaker aggregate moved its child-access call sites.</span></span></a>
-          <a class="adr" href="docs/adr/130-per-engine-data-source-strategy.html"><span class="adr-num">130</span><span><span class="adr-title">Per-Engine Data Source Strategy (Engine Facts Instead of Branching on the Enum)</span><span class="adr-sum">Accepted (2026-10-01). Shipped in MMCA.Common v1.218.0 (MMCA.Common/CHANGELOG.md:623). Revised 2026-10-06: the release status now records v1.218.0 as…</span></span></a>
+          <a class="adr" href="docs/adr/129-tactical-aggregate-contract.html"><span class="adr-num">129</span><span><span class="adr-title">The Tactical Aggregate Contract</span><span class="adr-sum">Accepted (2026-10-01). Revised 2026-10-21: anchors refreshed after the ADC Speaker aggregate moved its child-access call sites. Revised 2026-10-26:…</span></span></a>
+          <a class="adr" href="docs/adr/130-per-engine-data-source-strategy.html"><span class="adr-num">130</span><span><span class="adr-title">Per-Engine Data Source Strategy (Engine Facts Instead of Branching on the Enum)</span><span class="adr-sum">Accepted (2026-10-01). Shipped in MMCA.Common v1.218.0 (MMCA.Common/CHANGELOG.md:838). Revised 2026-10-06: the release status now records v1.218.0 as…</span></span></a>
           <a class="adr" href="docs/adr/131-same-origin-api-proxy.html"><span class="adr-num">131</span><span><span class="adr-title">Same-Origin API Proxy (a Backend-for-Frontend That Keeps Tokens Out of Browser Script)</span><span class="adr-sum">Accepted (2026-10-01). Shipped in MMCA.Common v1.218.0. Revised 2026-10-06: v1.218.0 is released, ADC adopted it through 1.218.1, HTTP/2 WebSocket…</span></span></a>
           <a class="adr" href="docs/adr/132-build-strictness-analyzer-policy.html"><span class="adr-num">132</span><span><span class="adr-title">Build Strictness: Analyzers at Error Severity, a Shared Baseline, and CI Test Floors</span><span class="adr-sum">Accepted (2026-10-07). The policy predates this record: all four .NET repos have built this way for some time, and this is the first written decision…</span></span></a>
-          <a class="adr" href="docs/adr/133-versioned-password-hash-work-factor.html"><span class="adr-num">133</span><span><span class="adr-title">Versioned Password Hash Work Factor</span><span class="adr-sum">Accepted (2026-10-23). Supersedes ADR-102. The change is the MMCA.Common v1.252.0 entry of the framework changelog (MMCA.Common/CHANGELOG.md:7, :16,…</span></span></a>
-          <a class="adr" href="docs/adr/134-cloud-neutral-core-vendor-adapters.html"><span class="adr-num">134</span><span><span class="adr-title">Cloud-Neutral Core With Vendor Adapter Packages</span><span class="adr-sum">Accepted (2026-10-24). The change is the MMCA.Common v1.255.0 entry of the framework changelog (MMCA.Common/CHANGELOG.md:7, Added at :11-17, Fixed at…</span></span></a>
+          <a class="adr" href="docs/adr/133-versioned-password-hash-work-factor.html"><span class="adr-num">133</span><span><span class="adr-title">Versioned Password Hash Work Factor</span><span class="adr-sum">Accepted (2026-10-23). Supersedes ADR-102. The change is the MMCA.Common v1.252.0 entry of the framework changelog (MMCA.Common/CHANGELOG.md:171,…</span></span></a>
+          <a class="adr" href="docs/adr/134-cloud-neutral-core-vendor-adapters.html"><span class="adr-num">134</span><span><span class="adr-title">Cloud-Neutral Core With Vendor Adapter Packages</span><span class="adr-sum">Accepted (2026-10-24). The change is the MMCA.Common v1.255.0 entry of the framework changelog (MMCA.Common/CHANGELOG.md:111, Added at :115-121, Fixed…</span></span></a>
+          <a class="adr" href="docs/adr/135-application-namespace-keyspace-isolation.html"><span class="adr-num">135</span><span><span class="adr-title">One Application Namespace Isolates Shared Infrastructure Keyspaces</span><span class="adr-sum">Accepted (2026-10-26).</span></span></a>
           <!-- END adr-list -->
         </div>
 
@@ -593,9 +594,9 @@
         <div class="grid grid--2">
           <!-- BEGIN library-cards -->
           <a class="card card--link" href="docs/index.html">
-            <span class="kicker kicker--accent">199 documents</span>
+            <span class="kicker kicker--accent">200 documents</span>
             <h3>Open the reference library</h3>
-            <p>Every collection indexed in one place: 134 Architecture Decision Records, the 39-document onboarding guide, 7 governance artifacts, and 19 guides and specifications.</p>
+            <p>Every collection indexed in one place: 135 Architecture Decision Records, the 39-document onboarding guide, 7 governance artifacts, and 19 guides and specifications.</p>
             <div class="card-foot"><span class="go">Browse the collections →</span></div>
           </a>
           <!-- END library-cards -->
