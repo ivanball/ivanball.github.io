@@ -270,7 +270,10 @@
           sessions when the host passes the session store, a password reset persists the session revocation
           before it applies the password while a password change saves the revocation before its own password
           save (atomic with the password only on a single data source), an administrator&#39;s read-only sessions
-          view sits over the same store, and anchors are refreshed after 1.250.0.</p>
+          view sits over the same store, and anchors are refreshed after 1.250.0.
+          Revised 2026-10-25: a token already swept by reuse detection fails alone instead of re-revoking the
+          user&#39;s newer sessions (1.261.0), because the flagged row is dead by construction and re-revoking
+          bought no theft containment, only an extra sign-out per stale device.</p>
           <h2 id="context">Context</h2>
           <p>ADR-050 stores a user&#39;s refresh token as a single nullable <code>RefreshToken</code> string plus its
           <code>RefreshTokenExpiry</code> on the app&#39;s <code>User</code> aggregate. That model settles rotation and reuse detection
@@ -333,11 +336,11 @@
           re-reads the row as the database now holds it, through <code>IRefreshSessionStore.FindByIdUntrackedAsync</code>
           (<code>IRefreshSessionStore.cs:105-121</code>; the EF store&#39;s <code>AsNoTracking</code> override at
           <code>EFRefreshSessionStore.cs:144-147</code>), and is answered by what that row says
-          (<code>.../Application/Auth/Sessions/AuthSessionIssuer.cs:394-454</code>, the losing branch at <code>:421-451</code>): a
-          sign-out or cap eviction of the same row fails that request alone (<code>:430-436</code>), a rotation less than
-          <code>ReuseGraceSeconds</code> ago answers <code>409 Auth.RefreshSuperseded</code> with nothing revoked (<code>:438-441</code>), and
-          anything else gets the replay answer, every live session of that user going and
-          <code>Auth.InvalidRefreshToken</code> coming back (<code>:443-450</code>). The interface default of the re-read returns
+          (<code>.../Application/Auth/Sessions/AuthSessionIssuer.cs:396-455</code>, the losing branch at <code>:422-452</code>): a
+          sign-out, a cap eviction or an earlier reuse sweep of the same row fails that request alone
+          (<code>:431-437</code>), a rotation less than <code>ReuseGraceSeconds</code> ago answers <code>409 Auth.RefreshSuperseded</code> with
+          nothing revoked (<code>:439-442</code>), and anything else gets the replay answer, every live session of that
+          user going and <code>Auth.InvalidRefreshToken</code> coming back (<code>:444-451</code>). The interface default of the re-read returns
           null (<code>IRefreshSessionStore.cs:120-121</code>), which lands on that last branch, so a store that does not
           override it keeps the conservative family revoke.</li>
           <li><strong>Reuse detection revokes the live family, and only on the right signal.</strong> The session workflow
@@ -346,30 +349,34 @@
           <code>AuthenticationServiceBase&lt;TUser&gt;</code> takes as a required <code>IAuthSessionIssuer</code> constructor parameter
           (<code>.../Application/Auth/AuthenticationServiceBase.cs:64-71</code>): the base decides who is signed in, the
           issuer decides what they are handed (<code>:40-45</code>). The issuer resolves a presented token to its session
-          (<code>AuthSessionIssuer.cs:298-345</code>) and separates the rejections, which answer the caller with the same
+          (<code>AuthSessionIssuer.cs:300-348</code>) and separates the rejections, which answer the caller with the same
           <code>Auth.InvalidRefreshToken</code> failure (<code>:267-271</code>) except for the rotation race below. An unknown hash
-          (or one belonging to another account) fails alone (<code>:313-316</code>), because revoking the family on it
+          (or one belonging to another account) fails alone (<code>:315-318</code>), because revoking the family on it
           would let anyone holding one of a user&#39;s expired access tokens sign them out everywhere by posting a
-          random string. A <strong>revoked</strong> row splits by why it was revoked (<code>:318-340</code>): one already rotated away
-          (it carries a successor hash) or already flagged as reuse has come back, which is the reuse signal
-          that revokes every live session the user holds (<code>IsReuseSignal</code> at <code>:462-470</code>, the family sweep at
-          <code>:489-501</code>), while one that was signed out or evicted by the session cap only lost its session, so
-          that request fails alone and the user&#39;s other devices keep working (<code>:320-326</code>). Any other or missing
+          random string. A <strong>revoked</strong> row splits by why it was revoked (<code>:320-343</code>): one already rotated away
+          (it carries a successor hash or the <code>Rotated</code> reason) has come back, which is the reuse signal that
+          revokes every live session the user holds (<code>IsReuseSignal</code> at <code>:457-476</code>, the family sweep at
+          <code>:497-508</code>), while one that was signed out, evicted by the session cap or already swept by an
+          earlier reuse event only lost its session, so that request fails alone and the user&#39;s other devices
+          keep working (<code>:322-329</code>). A row flagged <code>ReuseDetected</code> is dead by construction: re-revoking on it
+          would only sign the user out of the sessions they re-established, on demand of anyone holding a
+          swept token, and a genuine replay lands on a rotated row instead (<code>:457-465</code>). Any other or missing
           reason, <code>AccountDeleted</code> included, counts as the reuse signal, the conservative answer for a row the
-          code does not recognize (<code>:456-461</code>, <code>:469</code>). An <strong>expired</strong> row
+          code does not recognize (<code>:462-464</code>, <code>:473-475</code>). An <strong>expired</strong> row
           is an ordinary end of life: that device re-authenticates and the user&#39;s other devices keep working
-          (<code>:342-344</code>). The cases are argued together in the method&#39;s own summary (<code>:284-297</code>).</li>
+          (<code>:345-347</code>). The cases are argued together in the method&#39;s own summary (<code>:284-299</code>).</li>
           <li><strong>A rotation race inside the reuse grace revokes nothing (since 1.233.0).</strong> A row revoked as
           <code>Rotated</code> less than <code>RefreshSessions:ReuseGraceSeconds</code> ago (default 10, <code>[Range(0, 300)]</code>,
           <code>.../Application/Auth/RefreshSessionSettings.cs:97-98</code>, the trade-off argued at <code>:82-96</code>) is a
           sibling request (another tab, or the same browser served by another replica) that rotated the token
           a moment ago, so instead of the family revoke it answers <code>409 Conflict</code> with
           <code>Auth.RefreshSuperseded</code> (<code>AuthSessionIssuer.cs:278-282</code>) and nothing is revoked, on the lookup path
-          (<code>:328-333</code>) as on the lost rotation claim above. The predicate admits only the <code>Rotated</code> reason
-          (<code>:479-487</code>), so a row already flagged as reuse still revokes the family however recent, and a grace
-          of <code>0</code> restores the original answer for every rotated row; it does not restore the family revoke for
-          a lost claim whose row was signed out or cap-evicted, which fails alone at any grace (<code>:430-436</code>,
-          pinned by <code>AuthSessionIssuerReuseGraceTests.cs:96</code>). <code>AuthControllerBase</code>&#39;s refresh action documents and
+          (<code>:331-336</code>) as on the lost rotation claim above. The predicate admits only the <code>Rotated</code> reason
+          (<code>:478-494</code>), and a row already flagged as reuse never reaches it: <code>IsReuseSignal</code> fails that request
+          alone first, however recent. A grace of <code>0</code> restores the original answer for every rotated row; it
+          does not restore the family revoke for a lost claim whose row was signed out, cap-evicted or already
+          swept by reuse detection, which fails alone at any grace (<code>:431-437</code>, pinned by
+          <code>AuthSessionIssuerReuseGraceTests.cs:98</code>). <code>AuthControllerBase</code>&#39;s refresh action documents and
           declares the 409 (<code>AuthControllerBase.cs:116-121</code>, <code>:129</code>), and the clients treat it as transient:
           <code>CookieSessionRefresher</code> keeps the cookie
           (<code>.../MMCA.Common.API/SessionCookies/CookieSessionRefresher.cs:117</code>), <code>DirectApiTokenRefresher</code>
@@ -637,14 +644,16 @@
           (<code>MMCA.Common/Tests/Core/MMCA.Common.Application.Tests/Auth/AuthenticationServiceBaseTests.cs:29</code>,
           hash-only storage at <code>:257</code>, other devices left alone at <code>:271</code> and <code>:627</code>, cap eviction at <code>:287</code>,
           rotation at <code>:600</code>, replay revoking the family at <code>:647</code>, a signed-out or evicted session failing
-          alone at <code>:673</code> and a rotated or flagged-as-reuse one revoking the family at <code>:698</code>, the lost and the
-          won rotation claim at <code>:720</code> and <code>:745</code>, expiry and unknown tokens failing alone at
-          <code>:764</code> and <code>:787</code>, per-device and all-device sign-out at <code>:836</code>, <code>:852</code> and <code>:868</code>), the reuse grace
-          (<code>.../MMCA.Common.Application.Tests/Auth/Sessions/AuthSessionIssuerReuseGraceTests.cs:24</code>, the
-          10-second default at <code>:33</code>, a lost claim inside the grace answering 409 and keeping the family at
-          <code>:38</code>, a rotated token inside the grace doing the same at <code>:114</code>, a flagged-as-reuse row still
-          revoking the family inside the grace at <code>:149</code>, and a zero grace treating every rotated token as
-          reuse at <code>:195</code>), and the mapping
+          alone at <code>:673</code>, a rotated one revoking the family at <code>:697</code> and a flagged-as-reuse one failing alone
+          and keeping the family at <code>:719</code>, the lost and the won rotation claim at <code>:740</code> and <code>:765</code>, expiry
+          and unknown tokens failing alone at <code>:784</code> and <code>:807</code>, per-device and all-device sign-out at <code>:856</code>,
+          <code>:872</code> and <code>:888</code>), the reuse grace
+          (<code>.../MMCA.Common.Application.Tests/Auth/Sessions/AuthSessionIssuerReuseGraceTests.cs:25</code>, the
+          10-second default at <code>:34</code>, a lost claim inside the grace answering 409 and keeping the family at
+          <code>:39</code>, a lost claim to an earlier reuse sweep failing alone at <code>:78</code>, a rotated token inside the
+          grace answering 409 and keeping the family at <code>:116</code>, a flagged-as-reuse row failing alone and
+          keeping the family at any age at <code>:154</code>, and a zero grace treating every rotated token as
+          reuse at <code>:200</code>), and the mapping
           (<code>MMCA.Common/Tests/Core/MMCA.Common.Infrastructure.Tests/Persistence/Auth/RefreshSessionModelBuilderExtensionsTests.cs:14</code>).</li>
           <li><strong>The 2026-08-27 additions are pinned at five layers</strong>, which is what lets the trade-offs above be
           stated as facts: the claim and the projection
@@ -686,11 +695,12 @@
           <li><strong>Reuse detection still revokes a family on a benign race that outlasts the grace.</strong> Two client
           tabs refreshing near simultaneously reach that outcome, once the reuse grace has passed, through
           either of two branches: the second tab presents the just-rotated-away token and lands on its revoked
-          row, which carries its successor&#39;s hash (<code>AuthSessionIssuer.cs:318-340</code>, <code>:462-470</code>), or both
+          row, which carries its successor&#39;s hash (<code>AuthSessionIssuer.cs:320-343</code>, <code>:457-476</code>), or both
           present the same still-live token and the one that loses the store&#39;s rotation claim re-reads a row
-          rotated longer ago than the grace (<code>:438-450</code>). Neither is distinguishable from theft, so both sign
-          out every device rather than one. A loser whose row was signed out or cap-evicted instead fails
-          alone (<code>:430-436</code>), and inside the grace both branches answer 409 with nothing revoked (next
+          rotated longer ago than the grace (<code>:439-451</code>). Neither is distinguishable from theft, so both sign
+          out every device rather than one. A loser whose row was signed out, cap-evicted or already swept by
+          reuse detection instead fails alone (<code>:431-437</code>), and inside the grace both branches answer 409 with
+          nothing revoked (next
           bullet). This is ADR-050&#39;s aggressive-by-design trade-off with a wider blast radius. As first
           recorded it was taken in full, rejecting a grace window because a genuinely stolen token works
           inside one; that window is now adopted (see the 2026-10-07 revision below), so the trade-off holds
@@ -698,8 +708,9 @@
           <li><strong>A replay inside the reuse grace revokes nothing (2026-10-07).</strong> A stolen refresh token presented
           within <code>ReuseGraceSeconds</code> (default 10) of a legitimate rotation is answered 409 like a racing
           sibling tab instead of revoking the user&#39;s whole session family, because the two cannot be told
-          apart in that window (<code>RefreshSessionSettings.cs:90-94</code>). Past the window, and for a row flagged as
-          reuse at any age, the family revoke applies unchanged (<code>AuthSessionIssuer.cs:479-487</code>). The price
+          apart in that window (<code>RefreshSessionSettings.cs:90-94</code>). Past the window the family revoke applies
+          unchanged to a rotated row (<code>AuthSessionIssuer.cs:478-494</code>); a row flagged as reuse fails alone at
+          any age, because an earlier reuse event already revoked that device (<code>:457-476</code>). The price
           buys a concurrent refresh from two tabs or two replicas that no longer signs every device out.</li>
           <li><strong>&quot;Nothing ages the table out&quot; is retired (2026-08-27).</strong> <code>RefreshSessionCleanupService</code> ships the
           sweep, so a consumer no longer schedules its own. The cap still bounds only the <em>live</em> set; the
