@@ -568,6 +568,24 @@
           <td><code>Sales.ExpireUnpaidOrder</code> internal command (no HTTP surface)</td>
           <td>Sales</td>
           </tr>
+          <tr>
+          <td>72</td>
+          <td>Cancel Guest Order</td>
+          <td><code>POST /orders/guest/{id}/cancel</code></td>
+          <td>Sales</td>
+          </tr>
+          <tr>
+          <td>73</td>
+          <td>Request Guest Order Link</td>
+          <td><code>POST /orders/guest/lookup</code></td>
+          <td>Sales</td>
+          </tr>
+          <tr>
+          <td>74</td>
+          <td>Browse Storefront Products</td>
+          <td><code>GET /products/storefront</code></td>
+          <td>Catalog</td>
+          </tr>
           </tbody></table></div>
           <hr>
           <h2 id="1-identity-module-workflows">1. Identity Module Workflows</h2>
@@ -1117,6 +1135,11 @@
           <td>Returns ID + name pairs for dropdowns</td>
           </tr>
           <tr>
+          <td><code>GET /products/storefront</code></td>
+          <td>AllowAnonymous</td>
+          <td>One page of the public shop: <code>search</code>, <code>categoryId</code>, <code>onSale</code>, <code>sort</code>, <code>pageNumber</code>, <code>pageSize</code> (default 12); returns the paged products with category, variants and images plus the <code>X-Pagination</code> header (<code>ProductsController.cs:96-118</code>)</td>
+          </tr>
+          <tr>
           <td><code>GET /products/variant-lookup</code></td>
           <td>AllowAnonymous</td>
           <td>Returns <code>ProductVariantCartInfoDTO</code> rows: the variant detail the cart UI needs without a per-variant round trip</td>
@@ -1129,13 +1152,24 @@
           <tr>
           <td><code>GET /products/export</code></td>
           <td><code>catalog:products:manage</code></td>
-          <td>CSV export (<code>ProductsController.cs:108-109</code>)</td>
+          <td>CSV export (<code>ProductsController.cs:148-149</code>)</td>
           </tr>
           </tbody></table></div>
           <p>The anonymous reads ride the <code>ProductsCache</code> output-cache policy, whose TTL is 60 seconds rather than
           the 5 minutes the other Catalog policies use: a variant&#39;s effective price moves on the clock when a
           discount window opens or closes, with no mutation to evict on
           (<a href="../adr/040-authenticated-output-caching-for-public-reads.html">ADR-040</a>).</p>
+          <p><strong>Storefront page:</strong> <code>GetStorefrontProductsHandler</code> runs <code>StorefrontProductsSpecification</code>. The
+          search matches the product name OR its description (a contains match, joined only when a term is
+          given), the category and on-sale filters join only when asked for, and on-sale keeps a product with
+          at least one variant whose discount is in force now (<code>StorefrontProductsSpecification.cs:70-86</code>).
+          The six orderings are typed members of <code>StorefrontProductSort</code> rather than client-chosen column names
+          (<code>StorefrontProductSort.cs:13-32</code>): <code>NameAsc</code> (the default), <code>NameDesc</code>, <code>Newest</code>, <code>PriceAsc</code>,
+          <code>PriceDesc</code> and <code>TopRated</code>. The two price orderings sort by the lowest price any variant sells at
+          right now, the effective price after a discount in force, restated as a translatable expression at
+          the caller&#39;s clock, with a product that has no variants last in both directions; <code>TopRated</code> sorts
+          by average rating and then review count; every ordering ends on name and id so a page boundary is
+          stable (<code>StorefrontProductsSpecification.cs:91-124</code>).</p>
           <hr>
           <h3 id="23-product-variant-management">2.3 Product Variant Management</h3>
           <h4 id="add-product-variant">Add Product Variant</h4>
@@ -1645,14 +1679,16 @@ Catalog: OrderFulfilledHandler
      -&gt; success (Debug log, nothing to do) (ExpireUnpaidOrderInternalCommandHandler.cs:61)
   -&gt; re-derive the due instant from LastModifiedOn ?? CreatedOn (not from the schedule time),
      so an older deadline left behind by a re-arm runs as a no-op
-  -&gt; still unpaid and past the window -&gt; order.MarkAsCancelled() -&gt; raises OrderCancelled
+  -&gt; still unpaid and past the window -&gt; order.MarkAsCancelled(PaymentExpired) -&gt; raises OrderCancelled
        -&gt; OrderCancelledSagaHandler returns the stock checkout committed
+       -&gt; OrderCancelledHandler schedules the &quot;your unpaid order expired&quot; email
   -&gt; a concurrency conflict (a webhook moved the order first) -&gt; success: the concurrent writer wins</code></pre>
           <p>The window is <code>UnpaidOrderExpiry:Minutes</code> (30, <code>Enabled: true</code> in the Sales service settings).
           <code>PaymentReconciliationService</code> keeps the same window under <code>PaymentReconciliation:StuckAgeMinutes</code>
           and is the backstop for a deadline that was never written: it reconciles <code>PaymentInitiated</code> orders
           against Stripe (paid -&gt; <code>MarkAsPaid</code>, expired -&gt; <code>MarkAsPaymentFailed</code>) and expires stranded
-          <code>PendingPayment</code> and <code>PaymentFailed</code> orders.</p>
+          <code>PendingPayment</code> and <code>PaymentFailed</code> orders with the same <code>PaymentExpired</code> reason
+          (<code>PaymentReconciliationService.cs:274</code>).</p>
           <p><strong>Payment-failed path:</strong> <code>OrderPaymentFailedSagaHandler</code> schedules
           <code>SendOrderPaymentFailedEmailInternalCommand</code> (the &quot;you can retry&quot; notice) and re-arms the deadline
           from now, so a failed payment hands the customer the whole retry window again
@@ -1701,9 +1737,14 @@ Catalog: OrderFulfilledHandler
           same unit of work. Raises the in-process <code>OrderDelivered</code> and, for a customer&#39;s order, the
           <code>OrderFulfilled</code> integration event carrying the delivered line snapshot, which Catalog turns into the
           verified-purchase entitlements behind product reviews (Section 2.5). A guest order raises
-          <code>OrderDelivered</code> only, since it has no account to hold an entitlement (<code>Order.cs:698-712</code>). The snapshot travels on the event because the
+          <code>OrderDelivered</code> only, since it has no account to hold an entitlement (<code>Order.cs:743-757</code>). The snapshot travels on the event because the
           consumer lives in another service and cannot query back (<a href="../adr/006-database-per-service.html">ADR-006</a>),
           which is also why callers load <code>OrderLines</code> with the aggregate.</p>
+          <p><strong>Delivery email:</strong> <code>OrderDeliveredHandler</code> schedules <code>SendOrderDeliveredEmailInternalCommand</code>
+          (ADR-114, order id only) after the commit; a scheduling failure is logged, not thrown, because the
+          order is already Delivered (<code>OrderDeliveredHandler.cs:25-43</code>). The handler tells the order&#39;s
+          recipient (the customer through <code>ICustomerService</code>, or a guest&#39;s <code>ContactEmail</code>, <code>OrderRecipient</code>)
+          that the order arrived (<code>SendOrderDeliveredEmailInternalCommandHandler.cs:43-58</code>).</p>
           <p>The admin order grid searches tracking numbers: the filter name <code>ShipmentTrackingNumber</code> maps to the
           scalar column the owned shipment flattens onto, so it is one server-side CONTAINS rather than a client
           scan.</p>
@@ -1725,15 +1766,28 @@ Catalog: OrderFulfilledHandler
     -&gt; Skip if order.InventoryRestored is already set (idempotent under redelivery)
     -&gt; Restore stock for each OrderLine
     -&gt; order.MarkInventoryRestored()
-    -&gt; ONE SaveChangesAsync commits the marker and the inventory increases together</code></pre>
+    -&gt; ONE SaveChangesAsync commits the marker and the inventory increases together
+  -&gt; OrderCancelledHandler      [notification, independent of the saga]
+    -&gt; schedules SendOrderCancelledEmailInternalCommand(orderId, reason)   (ADR-114)
+    -&gt; SendOrderCancelledEmailInternalCommandHandler
+      -&gt; recipient: OrderRecipient (the customer, or the guest&#39;s ContactEmail)
+      -&gt; Requested: &quot;Order Cancelled&quot;; PaymentExpired: &quot;Your unpaid order expired&quot;</code></pre>
+          <p><strong>Cancellation email:</strong> every cancellation path raises the same <code>OrderCancelled</code>, which carries an
+          <code>OrderCancellationReason</code>: <code>Requested</code> for a customer, guest or admin cancel, <code>PaymentExpired</code> for
+          the payment deadline and the reconciliation sweep (<code>OrderCancellationReason.cs:13-23</code>,
+          <code>Order.cs:879</code>). The reason rides the event and the internal command row only; no column stores it.
+          <code>OrderCancelledHandler</code> schedules the notice beside the inventory saga, neither depending on the
+          other (<code>OrderCancelledHandler.cs:24-50</code>), and the send picks the wording from the reason, so an
+          order the shopper never cancelled is described as an expired unpaid order whose items were released
+          (<code>SendOrderCancelledEmailInternalCommandHandler.cs:54-78</code>).</p>
           <p><strong>Inventory Impact:</strong> All reserved inventory is restored on cancellation, by a <strong>compensating handler
           that runs after</strong> the cancellation transaction, not inside it (<a href="../adr/054-saga-compensation-and-reconciliation.html">ADR-054</a>).
           <code>Order.InventoryRestored</code> is the idempotency marker, committed by the same <code>SaveChangesAsync</code> as the
           restoration, so an at-least-once redelivery cannot double-restore; the order&#39;s rowversion token makes
           two concurrent deliveries mutually exclusive. The same saga runs whatever cancelled the order: a
-          customer or admin here, the payment deadline, or the reconciliation sweep. Splitting compensation out
-          of <code>CancelOrderHandler</code> is what lets further compensating actions (refund, notification) be added as
-          new handlers rather than edits. The one compensating step that stays inline is retiring the payment
+          customer or admin here, a guest from the private link (3.5), the payment deadline, or the
+          reconciliation sweep. Splitting compensation out of <code>CancelOrderHandler</code> is what lets further actions
+          (the cancellation email above, a refund) be added as new handlers rather than edits. The one compensating step that stays inline is retiring the payment
           session, because it has to answer &quot;has this already been paid?&quot; BEFORE the cancellation commits.</p>
           <h4 id="order-query-endpoints">Order Query Endpoints</h4>
           <div class="table-wrap"><table>
@@ -1887,6 +1941,18 @@ Catalog: OrderFulfilledHandler
           <td>Authenticated + access token, <code>[NonIdempotent]</code></td>
           <td>Moves the order into the caller&#39;s account; 403 when the account has no customer profile</td>
           </tr>
+          <tr>
+          <td>Cancel guest order</td>
+          <td><code>POST /orders/guest/{id}/cancel</code></td>
+          <td>AllowAnonymous + access token, mandatory <code>If-Match</code>, <code>[NonIdempotent]</code></td>
+          <td>Checks the token, then runs the same <code>CancelOrderCommand</code> as a customer&#39;s cancel (3.3); 204, and every refusal (a status that can no longer be cancelled included) answers 404 (<code>GuestOrdersController.cs:163-186</code>)</td>
+          </tr>
+          <tr>
+          <td>Request a new link</td>
+          <td><code>POST /orders/guest/lookup</code></td>
+          <td>AllowAnonymous, <code>[Idempotent]</code>, <code>auth-ip</code> rate limit</td>
+          <td>Order number and checkout email; always 202 with no body (<code>GuestOrdersController.cs:198-216</code>)</td>
+          </tr>
           </tbody></table></div>
           <p><strong>Place guest order:</strong></p>
           <pre class="doc-pre" tabindex="0"><code class="">GuestOrdersController.PlaceOrderAsync()
@@ -1894,7 +1960,7 @@ Catalog: OrderFulfilledHandler
     -&gt; CheckoutDeliveryMapper.ToDomain(request.Delivery)   (shipping address REQUIRED for a guest)
     -&gt; CheckOutPreflight.ResolvePricesAsync(variantIds)    [OUTSIDE the transaction]
     -&gt; CheckOutPreflight.QuoteChargesAsync(lines, prices, shipTo)
-    -&gt; mint the access token: 32 random bytes, base64url (256 bits)
+    -&gt; mint the access token: GuestOrderLinks.NewAccessToken(), 32 random bytes, base64url (256 bits)
     -&gt; unitOfWork.ExecuteInTransactionAsync(WriteAsync):
          -&gt; inventory snapshot for existence + fail-fast sufficiency
          -&gt; CheckOutDomainService.ExecuteForGuest() -&gt; Order.CreateForGuest()
@@ -1916,12 +1982,48 @@ Catalog: OrderFulfilledHandler
           <p><strong>Claim:</strong> <code>ClaimGuestOrderHandler</code> checks the token against the stored hash, then
           <code>Order.ClaimForCustomer(customerId)</code> sets <code>CustomerId</code>, clears <code>GuestAccessTokenHash</code> (the account,
           not the link, is the credential from then on) and raises <code>OrderChanged</code> (<code>Updated</code>)
-          (<code>Order.cs:555-571</code>). The guest order page offers this right after registering from the order&#39;s own
+          (<code>Order.cs:600-616</code>). The guest order page offers this right after registering from the order&#39;s own
           details.</p>
-          <p><strong>Downstream differences for a guest order:</strong> the payment, shipping and payment-failed emails go to
-          <code>ContactEmail</code> (<code>OrderRecipient</code>), the payment confirmation points the guest at the earlier
-          order-received email rather than repeating the link, and delivery raises no <code>OrderFulfilled</code>, so a
-          guest purchase earns no review entitlement until it is claimed before delivery.</p>
+          <p><strong>Cancel:</strong> the guest order page offers Cancel while the order is unpaid (PendingPayment,
+          PaymentInitiated or PaymentFailed), after a confirmation (<code>GuestOrderDetail.razor.cs:61-65</code>,
+          <code>GuestOrderDetail.Lifecycle.razor.cs:50-92</code>). The controller reads the order through the token first,
+          then runs the customer&#39;s cancel use case unchanged: the live Stripe session is retired, the
+          cancellation saga returns the stock, and the cancellation email goes to <code>ContactEmail</code> (3.3).</p>
+          <p><strong>Request a new link (find my order):</strong></p>
+          <pre class="doc-pre" tabindex="0"><code class="">GuestOrdersController.RequestLinkAsync()
+  -&gt; RequestGuestOrderLinkHandler
+    -&gt; load the order; no match unless it is an UNCLAIMED guest order whose ContactEmail equals
+       the given email (trimmed, case-insensitive; Order.IsGuestOrderFor)
+    -&gt; on a match: schedule SendGuestOrderLinkInternalCommand(orderId)   (ADR-114)
+    -&gt; every outcome (match, wrong email, customer&#39;s or claimed order, unknown number,
+       a scheduling failure) -&gt; Result.Success -&gt; 202
+  -&gt; SendGuestOrderLinkInternalCommandHandler
+    -&gt; still a guest order with a contact email and a storefront origin configured, else
+       success with a log line and NO token change
+    -&gt; mint a new token, Order.ReplaceGuestAccessToken() (raises OrderChanged, Updated)
+    -&gt; email &quot;Your order link&quot; with the new private link to the order&#39;s own ContactEmail
+    -&gt; THEN SaveChangesAsync: only after a successful send is the new hash saved</code></pre>
+          <p>The handler answers the same success whatever it found, so the endpoint cannot be used to learn which
+          orders exist or who placed them, and the link only ever goes to the address already on the order
+          (<code>RequestGuestOrderLinkHandler.cs:16-21</code>, <code>:38-55</code>). The internal command carries the order id only:
+          the token is minted inside the handler, so no row ever holds a plaintext token. The send runs before
+          the save, so a transport fault fails the row with nothing saved and the link the guest already holds
+          keeps working; a save conflict after the send fails the row too, and the retry mints and sends a
+          fresh token (<code>SendGuestOrderLinkInternalCommandHandler.cs:17-32</code>, <code>:66-99</code>). Saving the new hash
+          retires every earlier link (<code>Order.cs:571-591</code>). Both guest emails build the link the same way
+          (<code>GuestOrderLinks.cs:19-37</code>).</p>
+          <p><strong>The device bag through guest checkout:</strong> placing a guest order does not empty the browser bag.
+          Checkout remembers the order id and the lines it was placed with (<code>Checkout.razor.cs:294-298</code>,
+          <code>GuestCartStore.cs:104-111</code>); once the guest order page sees the order paid, or the Stripe success
+          return lands on an order that is neither Cancelled nor PaymentFailed, exactly those quantities are
+          subtracted from the bag, clamped at zero, so anything added since survives
+          (<code>GuestOrderDetail.Lifecycle.razor.cs:23-43</code>, <code>GuestCartStore.cs:128-150</code>). A shopper who abandons
+          the Stripe page comes back to the bag they left. The sign-in merge settles the same memory first
+          (4.1, <code>CartStateService.cs:635-681</code>).</p>
+          <p><strong>Downstream differences for a guest order:</strong> the payment, shipping, payment-failed, delivered and
+          cancelled emails go to <code>ContactEmail</code> (<code>OrderRecipient.cs:23-40</code>), the payment confirmation points the
+          guest at the earlier order-received email rather than repeating the link, and delivery raises no
+          <code>OrderFulfilled</code>, so a guest purchase earns no review entitlement until it is claimed before delivery.</p>
           <hr>
           <h3 id="36-quote-and-best-sellers">3.6 Quote and Best Sellers</h3>
           <div class="table-wrap"><table>
@@ -1965,9 +2067,16 @@ Catalog: OrderFulfilledHandler
           <li><code>/</code>, <code>StoreHome</code>: hero, the four category tiles, the material banner and promo row, a Best Sellers
           row fed by <code>GET /orders/best-sellers</code> (3.6), the gifts feature and the shopping perks. Tiles resolve
           to real catalog categories by name, and a category that does not exist yet or has no products
-          hides its tile</li>
+          hides its tile. The Special Offers banner opens <code>/catalog?sale=true</code> and renders only while the
+          storefront query with <code>onSale</code> returns at least one product (<code>StoreHome.razor:63-65</code>,
+          <code>StoreHome.razor.cs:71-74</code>)</li>
           <li>Info pages <code>/shipping</code>, <code>/returns</code>, <code>/contact</code>, <code>/privacy</code>, <code>/terms</code> (one <code>StoreInfo</code> page) and
-          <code>/about</code></li>
+          <code>/about</code>, written as the store&#39;s live copy; the contact page&#39;s support email line renders only when
+          the support email setting is set (<code>StoreInfo.razor:26-29</code>)</li>
+          <li>The Store footer on every page links the shop, find my order (<code>/orders/find</code>) and the five
+          information pages (<code>StoreFooterLinks.razor:13-19</code>)</li>
+          <li>The shop search sits in the app bar for every visitor (a public app bar component,
+          <code>CatalogUIModule.cs:31</code>) and sends the term to <code>/catalog?q=</code></li>
           </ul>
           <h4 id="cart-drawer-sole-cart-interface">Cart Drawer (Sole Cart Interface)</h4>
           <p>The CartDrawer is the only cart UI: there is no dedicated cart page. It is a 380px right-side temporary drawer accessible from any page via the bag icon in the top app bar.</p>
@@ -1975,8 +2084,9 @@ Catalog: OrderFulfilledHandler
           <ul>
           <li>View cart items with photo, product name, variant (size), unit price and line total</li>
           <li>Quantity +/- controls per item (when cart is Active)</li>
-          <li>Remove individual items (when cart is Active)</li>
-          <li>Clear all items</li>
+          <li>Remove individual items (when cart is Active) at once, with an Undo in the toast that puts the
+          same variant back at the same quantity (<code>CartDrawer.razor.cs:147-210</code>)</li>
+          <li>Clear all items, after a confirmation (<code>CartDrawer.razor.cs:212-219</code>)</li>
           <li>Subtotal plus a free-shipping line (&quot;X away from free shipping&quot; or &quot;Free shipping&quot;) from the
           server quote (<code>POST /orders/quote</code>)</li>
           <li>Checkout &amp; Pay, which navigates to <code>/checkout</code></li>
@@ -1991,7 +2101,12 @@ Catalog: OrderFulfilledHandler
           from the Catalog API. A shopper who has not signed in shops against <code>GuestCartStore</code>: variant ids and
           quantities only, kept on the device (<code>localStorage</code> on the web heads, app preferences on MAUI), with
           nothing priced or personal stored. When the shopper signs in, the device cart moves into the server
-          cart (<code>MergeGuestCartAsync</code>) on whichever surface first loads the cart.</p>
+          cart (<code>MergeGuestCartAsync</code>) on whichever surface first loads the cart. A guest order the bag was
+          placed as is settled first: its lines are subtracted when the order is paid, shipped or delivered,
+          or can no longer be read (claimed into an account, or its link replaced); the order is forgotten and
+          the bag kept whole when it was cancelled; and both stay while it is unpaid
+          (<code>CartStateService.cs:612-681</code>). The bag icon (<code>CartButton</code>) is a public app bar component, so the
+          same button serves a signed-out shopper and a customer (<code>SalesUIModule.cs:31-33</code>).</p>
           <h4 id="checkout-page">Checkout Page</h4>
           <ul>
           <li><code>/checkout</code>: every shopper confirms the ship-to address (US-only: state list, ZIP or ZIP+4; the
@@ -2001,22 +2116,24 @@ Catalog: OrderFulfilledHandler
           <code>PUT /shoppingcarts/{id}/checkout</code>, then the Stripe session opens</li>
           <li>A signed-out shopper can sign in or register (returning to <code>/checkout</code>), or continue as a guest
           with a name and an email: the device cart becomes a guest order (<code>POST /orders/guest</code>), the private
-          token is remembered on the device, the device cart is emptied, and the guest goes on to pay; if the
-          payment session cannot be opened the guest lands on the order page instead</li>
+          token is remembered on the device, the device cart is kept with the order and its lines remembered
+          (3.5), and the guest goes on to pay; if the payment session cannot be opened the guest lands on the
+          order page instead</li>
           <li><code>OrphanOrderRecovery</code> (a content-header component) detects an order left in <code>PendingPayment</code> or
           <code>PaymentInitiated</code> after the shopper backed out of Stripe Checkout and offers to resume it</li>
           </ul>
           <h4 id="catalog-browse--product-detail">Catalog Browse &amp; Product Detail</h4>
           <ul>
-          <li><code>/catalog</code>, Product grid with name search, category filter, name/newest sort, quick &quot;Add to Cart&quot; per variant (a single-variant product adds directly, a multi-variant product opens a variant menu; shown to signed-out shoppers too), and a star rating with review count on each card (read off the product&#39;s denormalized <code>RatingSummary</code>, so a grid costs no per-card aggregate query)</li>
-          <li><code>/catalog/{id}</code>, Product detail with breadcrumbs, the product name as heading, variant (size) buttons, one price, a quantity selector, &quot;Add to Cart&quot;, &quot;Buy Now&quot; (adds the variant and opens <code>/checkout</code>), info sections (materials, care, shipping, returns) and a reviews section (anchor <code>#reviews</code>) listing published reviews with the review editor for an eligible signed-in customer</li>
+          <li><code>/catalog</code>, Product grid on <code>GET /products/storefront</code> (2.2) with a search over name and description (<code>?q=</code>), a category filter (<code>?category=</code>), an On sale toggle (<code>?sale=true</code>), and six sorts (name A to Z and Z to A, newest, price low to high and high to low by the lowest effective variant price, top rated; <code>?sort=</code>), all kept in the URL; a filtered search with no result offers Clear filters and up to four best sellers (<code>CatalogBrowse.Filters.razor.cs:18</code>, <code>:77-108</code>); quick &quot;Add to Cart&quot; per variant (a single-variant product adds directly, a multi-variant product opens a variant menu; shown to signed-out shoppers too), and a star rating with review count on each card (read off the product&#39;s denormalized <code>RatingSummary</code>, so a grid costs no per-card aggregate query)</li>
+          <li><code>/catalog/{id}</code>, Product detail with breadcrumbs ending in the product&#39;s category and then the product&#39;s own name (<code>CatalogProductDetail.razor.cs:53-67</code>), the product name as heading, variant (size) buttons, one price, a quantity selector, &quot;Add to Cart&quot;, &quot;Buy Now&quot; (adds the variant and opens <code>/checkout</code>), info sections (materials, care, shipping, returns) and a reviews section (anchor <code>#reviews</code>) listing published reviews with the review editor for an eligible signed-in customer</li>
           <li>A discounted variant reads as a sale on both pages: the card shows a sale badge and an effective-price range, the variant card shows the effective price beside the struck-through list price, and the pair carries a &quot;Was X, now Y&quot; accessible label. The numbers are server-resolved, so a browser clock never decides whether a promotion is running</li>
           </ul>
           <h4 id="order-management">Order Management</h4>
           <ul>
-          <li><code>/orders</code>, MudDataGrid listing orders with ID, customer, total, status chips (Shipped included), item count; the admin search box also matches tracking numbers</li>
-          <li><code>/orders/{id}</code>, Two-column layout: order summary (status, total, payment/shipping/delivery actions, and the carrier, tracking number and tracking link once the order ships) + order lines. The delivery panel shows the shipping label to an admin only. The admin ship and correct-tracking actions open one <code>ShipOrderDialog</code>, which serves both endpoints</li>
-          <li><code>/orders/guest/{id}</code>, the guest order page opened from the private link (token in the <code>#t=</code> fragment): order number and items with photos, addresses, status, date, tracking and the full totals, pay now (or a short wait while a Stripe return is confirmed), and the offer to create an account, which registers with the order&#39;s own details, signs in and claims THIS order (<code>POST /orders/guest/{id}/claim</code>)</li>
+          <li><code>/orders</code>, for a customer a list of order cards (order number, status chip, date placed, item count and total, each opening the order) with a search box and Show more paging; for an admin a MudDataGrid listing orders with ID, customer, total, status chips (Shipped included), item count, where the search box also matches tracking numbers. The page picks the view by role (<code>OrderList.razor:24-29</code>, <code>OrderList.razor.cs:84</code>, <code>CustomerOrderList.razor:38-86</code>). The profile page links to it (&quot;My orders&quot;, <code>Profile.razor:13-16</code>)</li>
+          <li><code>/orders/{id}</code>, Two-column layout: order summary (status, date placed, total, payment/shipping/delivery actions, and the carrier, tracking number and tracking link once the order ships) + order lines. Once the Stripe return confirms payment, a thank-you block above the summary restates the order number and date, says where the receipt went and what happens next (<code>OrderDetail.razor:68-73</code>, <code>OrderConfirmation.razor:8-23</code>). A customer&#39;s Cancel asks for confirmation first (<code>OrderSummaryPanel.razor.cs:187-191</code>). The delivery panel shows the shipping label to an admin only. The admin ship and correct-tracking actions open one <code>ShipOrderDialog</code>, which serves both endpoints</li>
+          <li><code>/orders/guest/{id}</code>, the guest order page opened from the private link (token in the <code>#t=</code> fragment): order number and items with photos, addresses, status, date, tracking and the full totals, pay now (or a short wait while a Stripe return is confirmed), a thank-you block once paid, Cancel order while unpaid (after a confirmation, <code>POST /orders/guest/{id}/cancel</code>), and the offer to create an account, which registers with the order&#39;s own details, signs in and claims THIS order (<code>POST /orders/guest/{id}/claim</code>). A link that does not open the order offers find my order (<code>GuestOrderDetail.razor:22-28</code>, <code>:42-49</code>, <code>:77-95</code>)</li>
+          <li><code>/orders/find</code>, find my order: the order number and the checkout email; the page always shows the same &quot;check your email&quot; confirmation, because <code>POST /orders/guest/lookup</code> answers 202 whatever it matched (3.5, <code>FindGuestOrder.razor.cs:43-80</code>)</li>
           <li>A discounted order line reads the same way the storefront does: the struck list price beside the price charged, a chip carrying the promotion label, and a &quot;Was X, now Y&quot; sentence for assistive tech since the two bare numbers are hidden from it. The order adds a &quot;you saved&quot; row when its total savings are above zero. Every number is the one frozen at checkout, so an order page never re-prices against a promotion that has since ended</li>
           </ul>
           <h3 id="42-admin-ui-workflows">4.2 Admin UI Workflows</h3>
@@ -2146,7 +2263,7 @@ Catalog: OrderFulfilledHandler
           <tr>
           <td>Profile</td>
           <td><code>/profile</code></td>
-          <td>Edit name and address, change password, &quot;Manage devices&quot; link to the session list, and the &quot;Your data&quot; card (data-subject rights, 1.9)</td>
+          <td>&quot;My orders&quot; link, edit name and address (the state is a picker over the US postal regions by USPS code, the same list checkout uses, <code>Profile.razor:68-76</code>), change password, &quot;Manage devices&quot; link to the session list, and the &quot;Your data&quot; card (data-subject rights, 1.9)</td>
           </tr>
           </tbody></table></div>
           <h3 id="44-navigation-structure">4.4 Navigation Structure</h3>
@@ -2176,8 +2293,11 @@ Catalog: OrderFulfilledHandler
           </ul>
           <p><strong>Top App Bar:</strong></p>
           <ul>
-          <li>Shopping bag icon with badge, opening the CartDrawer: <code>CartButton</code> for a signed-in customer,
-          <code>GuestCartButton</code> over the device cart for a signed-out shopper</li>
+          <li>For every visitor, signed in or not (the modules&#39; <code>PublicAppBarComponentTypes</code>, rendered by the
+          framework since MMCA.Common v1.265.0, also in the mobile quick-actions row): the shop search
+          (<code>StoreSearchBox</code>, <code>CatalogUIModule.cs:31</code>) and the shopping bag icon with badge opening the
+          CartDrawer (<code>CartButton</code>, <code>SalesUIModule.cs:33</code>), which reads the device cart for a signed-out
+          shopper and the server cart for a customer</li>
           <li>User email display</li>
           <li>Logout button (authenticated)</li>
           <li>Login / Register buttons (anonymous)</li>
@@ -2227,7 +2347,7 @@ Catalog: OrderFulfilledHandler
           <td>Sales -&gt; Identity</td>
           <td><code>ICustomerService</code></td>
           <td><code>GetContactInfoByIdAsync()</code></td>
-          <td>Customer display name frozen at checkout (best effort); recipient of the order paid / shipped / payment-failed emails; the denormalization backfill</td>
+          <td>Customer display name frozen at checkout (best effort); recipient of the order paid / shipped / payment-failed / delivered / cancelled emails; the denormalization backfill</td>
           </tr>
           <tr>
           <td>Identity -&gt; Sales</td>
@@ -2329,7 +2449,7 @@ Catalog: OrderFulfilledHandler
           <tr>
           <td><strong>SMTP</strong></td>
           <td>Transactional email</td>
-          <td><code>IEmailSender</code> (<code>SmtpEmailSender</code> from MMCA.Common), driven by the Identity password-reset and email-confirmation flows, the Sales internal-command handlers <code>SendOrderPaidEmailInternalCommandHandler</code>, <code>SendOrderShippedEmailInternalCommandHandler</code> and <code>SendOrderPaymentFailedEmailInternalCommandHandler</code>, and the inline <code>GuestOrderPlacedNotifier</code></td>
+          <td><code>IEmailSender</code> (<code>SmtpEmailSender</code> from MMCA.Common), driven by the Identity password-reset and email-confirmation flows, the Sales internal-command handlers <code>SendOrderPaidEmailInternalCommandHandler</code>, <code>SendOrderShippedEmailInternalCommandHandler</code>, <code>SendOrderPaymentFailedEmailInternalCommandHandler</code>, <code>SendOrderDeliveredEmailInternalCommandHandler</code>, <code>SendOrderCancelledEmailInternalCommandHandler</code> and <code>SendGuestOrderLinkInternalCommandHandler</code>, and the inline <code>GuestOrderPlacedNotifier</code></td>
           </tr>
           <tr>
           <td><strong>Message broker</strong></td>
@@ -2360,12 +2480,12 @@ Catalog: OrderFulfilledHandler
           <tr>
           <td><strong>Internal Commands</strong></td>
           <td><code>IInternalCommandScheduler</code> writes a durable row run by the framework processor with backoff (<a href="../adr/114-internal-commands-durable-job-queue.html">ADR-114</a>)</td>
-          <td>Order paid / shipped / payment-failed emails, <code>Sales.ExpireUnpaidOrder</code>, <code>Catalog.PublishProductVariantChanged</code>, <code>Identity.SendEmailConfirmation</code></td>
+          <td>Order paid / shipped / payment-failed / delivered / cancelled emails, the replacement guest order link, <code>Sales.ExpireUnpaidOrder</code>, <code>Catalog.PublishProductVariantChanged</code>, <code>Identity.SendEmailConfirmation</code></td>
           </tr>
           <tr>
           <td><strong>Idempotency</strong></td>
           <td><code>[Idempotent]</code> attribute -&gt; <code>IdempotencyFilter</code> caches response by <code>Idempotency-Key</code> header for 24h with per-key locking (<code>IdempotencyFilter.cs:81</code>); <code>[NonIdempotent(&quot;reason&quot;)]</code> marks the deliberate exceptions</td>
-          <td>Create (POST) endpoints, cart checkout, guest checkout and payment, forgot/reset password, email confirmation; not login, register, refresh, revoke, the webhook, the quote, the guest claim or user lock/unlock</td>
+          <td>Create (POST) endpoints, cart checkout, guest checkout and payment, the guest link request, forgot/reset password, email confirmation; not login, register, refresh, revoke, the webhook, the quote, the guest claim and cancel, or user lock/unlock</td>
           </tr>
           <tr>
           <td><strong>Authorization</strong></td>
@@ -2384,7 +2504,7 @@ Catalog: OrderFulfilledHandler
           </tr>
           <tr>
           <td><strong>Rate Limiting</strong></td>
-          <td>Service-side global limiter: 300 req/min per authenticated user, fixed window, anonymous traffic exempt (<code>RateLimitingSettings.cs:40</code>); <code>auth-ip</code> policy 30 req/min per client IP (<code>:47</code>) on register, login, password reset, email confirmation and guest checkout; Gateway edge limiter 120 req/min per IP with <code>/Payments</code> bypassed (Gateway <code>appsettings.json:16-20</code>)</td>
+          <td>Service-side global limiter: 300 req/min per authenticated user, fixed window, anonymous traffic exempt (<code>RateLimitingSettings.cs:40</code>); <code>auth-ip</code> policy 30 req/min per client IP (<code>:47</code>) on register, login, password reset, email confirmation, guest checkout and the guest link request; Gateway edge limiter 120 req/min per IP with <code>/Payments</code> bypassed (Gateway <code>appsettings.json:16-20</code>)</td>
           <td>All API endpoints</td>
           </tr>
           <tr>
@@ -2411,7 +2531,7 @@ Catalog: OrderFulfilledHandler
           <hr>
           <h2 id="8-end-to-end-customer-journey">8. End-to-End Customer Journey</h2>
           <pre class="doc-pre" tabindex="0"><code class="">1. Register          POST /auth/register        -&gt; User + Customer created, tokens issued
-2. Browse Catalog    GET /products               -&gt; View products with variants and prices
+2. Browse Catalog    GET /products/storefront    -&gt; Search, filter and sort products with variants and prices
 3. Add to Cart       POST /shoppingcarts/{id}/shoppingcartitems  -&gt; Cart created/updated
 4. Adjust Cart       PUT/DELETE cart items        -&gt; Modify quantities or remove items
                      POST /orders/quote           -&gt; Subtotal, shipping, distance to free shipping
@@ -2421,7 +2541,8 @@ Catalog: OrderFulfilledHandler
 6. Pay               POST /orders/{id}/checkout   -&gt; Stripe session created, redirect to payment
 7. Payment Complete  POST /payments/webhook        -&gt; Stripe confirms, order marked Paid, receipt queued
 8. Shipment          PUT /orders/{id}/ship         -&gt; Admin records carrier + tracking, customer emailed
-9. Delivery          PUT /orders/{id}/deliver      -&gt; Admin marks as Delivered, OrderFulfilled published
+9. Delivery          PUT /orders/{id}/deliver      -&gt; Admin marks as Delivered, customer emailed,
+                                                     OrderFulfilled published
 10. Entitlement      (broker)                      -&gt; Catalog writes one VerifiedPurchase per product
 11. Review           POST /reviews/by-product/{id} -&gt; Customer rates the product they received</code></pre>
           <p><strong>Guest Journey:</strong></p>
@@ -2431,13 +2552,16 @@ Catalog: OrderFulfilledHandler
                                                      email with the private link
 4. Pay               POST /orders/guest/{id}/checkout -&gt; Stripe session (token in a header)
 5. Payment Complete  POST /payments/webhook        -&gt; Order marked Paid, receipt to ContactEmail
-6. Follow the order  GET /orders/guest/{id}        -&gt; Status, tracking and totals from the link
-7. Optional claim    POST /orders/guest/{id}/claim -&gt; After registering, the order joins the account</code></pre>
+6. Follow the order  GET /orders/guest/{id}        -&gt; Status, tracking and totals from the link;
+                                                     once paid, the ordered lines leave the bag
+7. Optional claim    POST /orders/guest/{id}/claim -&gt; After registering, the order joins the account
+8. Lost the link     POST /orders/guest/lookup     -&gt; Always 202; on a match a new link is emailed
+                                                     and every earlier link stops working</code></pre>
           <p><strong>Alternative Flows:</strong></p>
           <ul>
           <li>Payment fails -&gt; Order status <code>PaymentFailed</code> -&gt; retry notice emailed, payment window restarted -&gt; customer can retry (create new Stripe session)</li>
-          <li>Payment never lands -&gt; <code>Sales.ExpireUnpaidOrder</code> (or the reconciliation sweep) cancels the order after 30 minutes -&gt; inventory restored</li>
-          <li>Cancel order -&gt; Status <code>Cancelled</code> (from PendingPayment, PaymentInitiated, or PaymentFailed) -&gt; live Stripe session expired -&gt; inventory restored</li>
+          <li>Payment never lands -&gt; <code>Sales.ExpireUnpaidOrder</code> (or the reconciliation sweep) cancels the order after 30 minutes -&gt; inventory restored -&gt; &quot;your unpaid order expired&quot; email</li>
+          <li>Cancel order (customer after a confirmation, guest from the private link, or admin) -&gt; Status <code>Cancelled</code> (from PendingPayment, PaymentInitiated, or PaymentFailed) -&gt; live Stripe session expired -&gt; inventory restored -&gt; cancellation email</li>
           <li>Cart reactivation -&gt; Checked-out cart auto-reactivated on next add-item (all old items cleared)</li>
           <li>Manual payment -&gt; Admin bypasses Stripe, sets <code>StripePaymentIntentId = &quot;manual-admin-override&quot;</code></li>
           <li>Admin checkout on behalf -&gt; Admin checks a customer&#39;s cart out from <code>/shoppingcarts/{id}</code> with an empty body (no addresses, no label, no tax)</li>
@@ -2463,13 +2587,13 @@ Catalog: OrderFulfilledHandler
           <td>Confirm if this is intentional or if order amendment is planned</td>
           </tr>
           <tr>
-          <td><strong>No customer order-confirmation or delivery email</strong></td>
-          <td>Email exists for guest order placement (<code>GuestOrderPlacedNotifier</code>), payment, shipment and payment failure, but a customer&#39;s order gets nothing on <code>OrderChanged</code> (<code>Added</code>), <code>OrderDelivered</code> has no email handler, and <code>OrderCancelled</code> has only the inventory-restoring saga</td>
-          <td>Each would be an extra <code>IDomainEventHandler&lt;T&gt;</code> scheduling an internal command on an event that already exists, not new plumbing</td>
+          <td><strong>No email when a signed-in customer places an order</strong></td>
+          <td>Email exists for guest order placement (<code>GuestOrderPlacedNotifier</code>), payment, shipment, payment failure, delivery (<code>OrderDeliveredHandler</code>) and cancellation (<code>OrderCancelledHandler</code>, worded by <code>OrderCancellationReason</code>), for customers and guests alike; a customer&#39;s order gets nothing on <code>OrderChanged</code> (<code>Added</code>). The absence is a deliberate owner decision: the payment receipt is what confirms a customer&#39;s order</td>
+          <td>None; recorded so the absence is not mistaken for a gap</td>
           </tr>
           <tr>
           <td><strong>No full-text search</strong></td>
-          <td>Catalog browse offers a name-contains search box (E2E-covered); there is no full-text/fuzzy search</td>
+          <td>The storefront search is a contains match over the product name or description (<code>StorefrontProductsSpecification.cs:70-74</code>, E2E-covered); there is no full-text, fuzzy or ranked search</td>
           <td>Consider full-text search for larger catalogs</td>
           </tr>
           <tr>
@@ -2504,12 +2628,12 @@ Catalog: OrderFulfilledHandler
           </tr>
           <tr>
           <td><strong>Guest orders delivered unclaimed earn no review entitlement</strong></td>
-          <td><code>MarkAsDelivered</code> raises <code>OrderFulfilled</code> only when <code>CustomerId</code> is set but stamps <code>FulfilledPublishedOn</code> either way (<code>Order.cs:705-712</code>), so neither a later claim, the backfill nor <code>RepublishFulfillment</code> publishes it</td>
+          <td><code>MarkAsDelivered</code> raises <code>OrderFulfilled</code> only when <code>CustomerId</code> is set but stamps <code>FulfilledPublishedOn</code> either way (<code>Order.cs:750-757</code>), so neither a later claim, the backfill nor <code>RepublishFulfillment</code> publishes it</td>
           <td>Decide whether a claim after delivery should mint the entitlement</td>
           </tr>
           </tbody></table></div>
           <hr>
-          <p><em>This document is derived from source code analysis. All workflows, decisions, and behaviors described above are confirmed implementations traceable to the referenced source files. Last updated: 2026-10-27 (guest checkout, shipping and tax, payment deadline, permission-based authorization, user and role administration).</em></p>
+          <p><em>This document is derived from source code analysis. All workflows, decisions, and behaviors described above are confirmed implementations traceable to the referenced source files. Last updated: 2026-10-27 (guest checkout, shipping and tax, payment deadline, permission-based authorization, user and role administration; storefront search, find my order, guest cancel, the kept guest bag, delivered and cancelled emails).</em></p>
           
         <div class="doc-foot btn-row">
           <a class="btn btn--ghost" href="../../docs/guides/index.html">← Back to Guides &amp; Specifications</a>

@@ -18,7 +18,11 @@ wiring. Revised 2026-10-21: records that `AddCommonUiFacades()` also registers
 `IPendingToastService` and is called directly by the Helpdesk Web head, names permission gating in
 the nav-trimming rationale, and refreshes anchors that moved. Revised 2026-10-26: anchors refreshed
 after both Blazor Web hosts gained an anonymous `MapStaticAssets()` call ahead of their assembly
-wiring, and after `ResultUiExtensions.NotifyOnFailure` moved.
+wiring, and after `ResultUiExtensions.NotifyOnFailure` moved. Revised 2026-10-27: records the
+`PublicAppBarComponentTypes` member added in MMCA.Common v1.265.0, an app bar slot rendered for every
+visitor while `AppBarComponentTypes` stay signed-in only, lists the two contract members the Decision
+had not named (`FooterComponentTypes`, `NotFoundContentType`), and re-anchors the `IUIModule`,
+`MainLayout` and `NavMenu` citations.
 
 ## Context
 ADR-059 decided how a module plugs into the **server**: an `IModule` implementation is discovered by
@@ -41,10 +45,12 @@ being rendered.
 Ship the application shell in the framework package and let each module plug into it by implementing
 `IUIModule`, resolved from DI as `IEnumerable<IUIModule>`.
 
-- **The contract is five members, three of them defaulted.** `NavItems`, `Assembly`,
-  `AppBarComponentTypes`, `LayoutComponentTypes` and `ContentHeaderComponentTypes`
-  (`MMCA.Common/Source/Presentation/MMCA.Common.UI/Common/Interfaces/IUIModule.cs:14,17,20,23,29`); the
-  last three default to `[]`, so a module that only contributes pages and navigation is two properties.
+- **The contract is eight members, six of them defaulted.** `NavItems`, `Assembly`,
+  `AppBarComponentTypes`, `PublicAppBarComponentTypes`, `LayoutComponentTypes`,
+  `ContentHeaderComponentTypes`, `FooterComponentTypes` and `NotFoundContentType`
+  (`MMCA.Common/Source/Presentation/MMCA.Common.UI/Common/Interfaces/IUIModule.cs:14,17,23,31,34,40,53,62`);
+  the five component lists default to `[]` and `NotFoundContentType` to `null`, so a module that only
+  contributes pages and navigation is two properties.
   A `NavItem` is a record of title, href, icon and a required `TitleResource` that makes the title
   and group resource keys, followed by three optional visibility gates (`RequiredRole`,
   `RequiredClaim`, `RequiredPermission`), a `NavSection` and an optional collapsible `Group`
@@ -78,15 +84,21 @@ Ship the application shell in the framework package and let each module plug int
 - **The nav menu is assembled from the registrations, trimmed per user.** `NavMenu` injects the same
   enumeration (`MMCA.Common.UI/Layout/NavMenu.razor:9`), flattens every module's `NavItems`, drops
   items whose `RequiredRole`, `RequiredClaim` or `RequiredPermission` the current principal does not
-  carry (the three filters compose, each skipped when its property is null, `:257-259`), and splits the
-  remainder into the General, My Account and Administration sections (`:262-264`).
-- **Three component extension points render module-supplied types.** `MainLayout` reads
-  `AppBarComponentTypes`, `LayoutComponentTypes` and `ContentHeaderComponentTypes` off the
-  registrations (`MMCA.Common.UI/Layout/MainLayout.razor:156-158`) and renders them through
-  `DynamicComponent` in the top app bar (`:50-53`, mirrored on the mobile top row at
-  `NavMenu.razor:48-51`), as content headers inside the main landmark directly above the page body
-  (`:80-83`), and at the root of the layout (`:121-124`), so a module can add an icon with a badge, a
-  banner above the page, or a drawer without touching the layout.
+  carry (the three filters compose, each skipped when its property is null, `:263-265`), and splits the
+  remainder into the General, My Account and Administration sections (`:268-270`).
+- **Five component extension points render module-supplied types.** `MainLayout` reads the five
+  component lists off the registrations (`MMCA.Common.UI/Layout/MainLayout.razor:173-177`) and renders
+  them through `DynamicComponent`. The top app bar has two slots that differ only in who sees them:
+  `PublicAppBarComponentTypes` render for every visitor, signed in or not, ahead of the culture and
+  theme controls (`:43-46`), and `AppBarComponentTypes` render inside `AuthorizeView` for a signed-in
+  user only (`:50-57`); the mobile quick-actions row repeats both in the same order and with the same
+  gate (`NavMenu.razor:44-47`, `:50-57`). Content headers render inside the main landmark directly
+  above the page body (`MainLayout.razor:84-87`), footer components inside the page's one
+  `contentinfo` footer (`:125-128`), and layout components at the root of the layout (`:136-139`), so a
+  module can add a search box or an icon with a badge, a banner above the page, its own footer links,
+  or a drawer without touching the layout. The not-found page renders the first registered
+  `NotFoundContentType` in place of its default content (`MMCA.Common.UI/Pages/NotFound.razor:23-25`,
+  `:47`).
 - **Registration is one call.** `AddUIModule<TModule>()` runs the Scrutor scan for the module's entity
   services and then registers the descriptor as a singleton `IUIModule`
   (`MMCA.Common.UI/DependencyInjection.cs:332-341`); modules with extra services register the
@@ -137,8 +149,10 @@ Conference, Identity and Engagement
 (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/ConferenceUIModule.cs:14`,
 `Identity/MMCA.ADC.Identity.UI/IdentityUIModule.cs:17`,
 `Engagement/MMCA.ADC.Engagement.UI/EngagementUIModule.cs:18`); Store Catalog, Sales and Identity
-(`MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.UI/CatalogUIModule.cs:13`,
-`Sales/MMCA.Store.Sales.UI/SalesUIModule.cs:17`, `Identity/MMCA.Store.Identity.UI/IdentityUIModule.cs:14`);
+(`MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.UI/CatalogUIModule.cs:16`,
+`Sales/MMCA.Store.Sales.UI/SalesUIModule.cs:17`, `Identity/MMCA.Store.Identity.UI/IdentityUIModule.cs:14`),
+where the Catalog shop search and the Sales cart button are the public app bar components, because a
+signed-out shopper searches and fills a browser cart too (`CatalogUIModule.cs:31`, `SalesUIModule.cs:33`);
 the framework's own notification module
 (`MMCA.Common/Source/Presentation/MMCA.Common.UI/Notifications/NotificationUIModule.cs:15`); and the
 backend-less component gallery, whose stub descriptor is the only reason its `/components` page is
@@ -161,8 +175,14 @@ it registers the facades on their own with `AddCommonUiFacades()` instead (`:20-
   app built on this framework; shipping them in the package is what makes a new head a configuration
   exercise rather than a copy of another app's `Components` folder.
 - **Defaulted members keep the common case small.** Most modules contribute pages and nav only, so
-  `AppBarComponentTypes`, `LayoutComponentTypes` and `ContentHeaderComponentTypes` default to empty
-  rather than forcing every descriptor to spell out three empty lists.
+  the five component lists default to empty and `NotFoundContentType` to null, rather than forcing
+  every descriptor to spell out six empty members.
+- **The authentication gate belongs to the slot, not to each component.** A signed-in-only control
+  (the notification bell) and an every-visitor control (a storefront's search box or cart) need
+  different visibility, and a single gated slot left the second kind no place in the app bar. Two
+  slots keep `AppBarComponentTypes` exactly as gated as before, so no existing contributor changes
+  behavior, and a public component that should still look different per sign-in state decides that
+  itself (`IUIModule.cs:25-31`).
 - **Runtime discovery beats a compile-time list.** Because the router reads the registrations, the
   same shell serves a web head, a WASM client and a MAUI hybrid head with different module sets, and a
   head-specific module (device settings, native theme sync) is just another registration that other
@@ -296,6 +316,27 @@ the assembly wiring.
    `ResultUiExtensions.NotifyOnFailure` (`MMCA.Common/Source/Presentation/MMCA.Common.UI/Common/ResultUiExtensions.cs:255-257`
    for `Result`, `:276-278` for `Result<T>`). The 2026-10-07 revision's anchors are left as written
    there.
+
+## Revision (2026-10-27)
+Re-verified against MMCA.Common v1.265.0. The composition model, the router, the nav trimming, the
+vendor choice and the facades are unchanged; the app bar gained a second contribution slot.
+
+1. `IUIModule.PublicAppBarComponentTypes` (default empty,
+   `MMCA.Common/Source/Presentation/MMCA.Common.UI/Common/Interfaces/IUIModule.cs:25-31`) renders for
+   every visitor ahead of the culture and theme controls, in `MainLayout`'s app bar
+   (`MMCA.Common.UI/Layout/MainLayout.razor:43-46`) and in `NavMenu`'s mobile quick-actions row
+   (`NavMenu.razor:44-47`). `AppBarComponentTypes` keep their signed-in-only gate
+   (`MainLayout.razor:50-57`, `NavMenu.razor:50-57`). The Decision and Rationale now describe both
+   slots; MMCA.Store's `CatalogUIModule` (shop search) and `SalesUIModule` (cart button) are the
+   first adopters (`CatalogUIModule.cs:31`, `SalesUIModule.cs:33`).
+2. The Decision named five contract members, but `FooterComponentTypes` (`IUIModule.cs:53`) and
+   `NotFoundContentType` (`:62`) were already part of it. The contract is now stated as eight
+   members, six defaulted, and the extension-points bullet names the footer slot
+   (`MainLayout.razor:125-128`) and the not-found content (`Pages/NotFound.razor:23-25`, `:47`).
+3. Anchors re-verified against current source: `IUIModule.cs:14,17,23,31,34,40,53,62`;
+   `MainLayout.razor` (list reads `:173-177`, content header `:84-87`, layout root `:136-139`);
+   `NavMenu.razor` (filters `:263-265`, section split `:268-270`); Store `CatalogUIModule.cs:16`. The
+   2026-10-21 revision's `MainLayout.razor` anchors are left as written there.
 
 ## Related
 ADR-059 (the server-side `IModule` contract this mirrors in the presentation layer), ADR-056 (the
