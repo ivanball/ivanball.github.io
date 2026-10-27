@@ -95,7 +95,7 @@
       <div class="doc-layout">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 135 ADRs</summary>
+        <summary>All 136 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html" aria-current="page">Overview</a></li>
@@ -234,6 +234,7 @@
         <li><a href="133-versioned-password-hash-work-factor.html">133 · Versioned Password Hash Work Factor</a></li>
         <li><a href="134-cloud-neutral-core-vendor-adapters.html">134 · Cloud-Neutral Core With Vendor Adapter Packages</a></li>
         <li><a href="135-application-namespace-keyspace-isolation.html">135 · One Application Namespace Isolates Shared Infrastructure Keyspaces</a></li>
+        <li><a href="136-installable-web-app-service-worker.html">136 · Installable Web App Through a Framework Service Worker That Never Caches a Page</a></li>
           </ol>
         </nav>
       </details>
@@ -243,7 +244,7 @@
           <h1 id="architecture-decision-records">Architecture Decision Records</h1>
           <p>Accepted ADRs explaining <em>why</em> the core cross-cutting patterns exist. Read these before changing a
           pattern they describe: they capture context and trade-offs that aren&#39;t obvious from the code.</p>
-          <p><strong>135 accepted ADRs</strong>, 001-135, numbered contiguously with one row per ADR in the table below.
+          <p><strong>136 accepted ADRs</strong>, 001-136, numbered contiguously with one row per ADR in the table below.
           This file owns the ADR count and range (<code>MMCA.Common/FACTS.md</code>): read them here rather than
           recounting, and when you add an ADR, update this line with its row. <code>tools/adr-index.ps1</code> in this
           repo re-derives both from the files and fails if this line, the table, or a link drifts from them;
@@ -930,6 +931,11 @@
           <td><a href="135-application-namespace-keyspace-isolation.html">135</a></td>
           <td>One application namespace isolates shared infrastructure keyspaces</td>
           <td>One resolver, <code>ApplicationNamespace.Resolve</code>, names every shared-infrastructure keyspace: <code>Application:Namespace</code> when set, else the host application name, else <code>app</code>, sanitized to <code>[a-zA-Z0-9_-]</code> and never empty, so isolation is the default rather than an opt-in (SEC-Common-53). It prefixes distributed cache and <code>RedisDistributedLock</code> keys (unless <code>Cache:KeyPrefix</code> pins them), distributed rate-limit counters, the SignalR Redis backplane channel and broker endpoint names (unless <code>MessageBus:EndpointPrefix</code> is set or <code>MessageBus:PreserveDefaultEndpointNames</code> keeps MassTransit&#39;s names). Set the override only when two hosts of the SAME application must share a keyspace. ADC pins <code>adc</code> across its four services, Store pins one value per service, both preserve default broker endpoint names, and Helpdesk takes the default. Cost: adopting the default renames keys, channels and queues; the <code>app</code> fallback is shared; the Redis output-cache store is not namespaced. Consolidates the revision lines in ADR-019, 021, 024, 039, 108 and 114.</td>
+          </tr>
+          <tr>
+          <td><a href="136-installable-web-app-service-worker.html">136</a></td>
+          <td>Installable web app through a framework service worker that never caches a page</td>
+          <td><code>app.MapCommonServiceWorker()</code> (MMCA.Common.UI.Web) serves <code>/service-worker.js</code> at the site root, anonymous, <code>no-cache</code> and stamped with the package version, and <code>_content/MMCA.Common.UI.Web/pwa-register.js</code> registers it after <code>load</code> (a file, because the CSP forbids inline script). The worker handles GET navigations only, network first with navigation preload, and falls back to a precached offline page; it never caches a page or a response, because prerendered pages carry the signed-in user&#39;s data. <code>Pwa:ServiceWorker:Enabled=false</code> serves a retired worker with no fetch handler (the kill switch). Each host owns its manifest, icons and <code>theme-color</code> (ADC teal, Store C.A.S.A petal, Helpdesk placeholder). No CSP or rate-limiter change. A native Windows head and caching pages in the worker were rejected.</td>
           </tr>
           </tbody></table></div>
           <h2 id="writing-a-new-adr">Writing a new ADR</h2>

@@ -2,17 +2,17 @@
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   <url>
     <loc>https://ivanball.github.io/</loc>
-    <lastmod>2026-10-26</lastmod>
+    <lastmod>2026-10-27</lastmod>
     <priority>1.0</priority>
   </url>
   <url>
     <loc>https://ivanball.github.io/resume.html</loc>
-    <lastmod>2026-10-26</lastmod>
+    <lastmod>2026-10-27</lastmod>
     <priority>0.9</priority>
   </url>
   <url>
     <loc>https://ivanball.github.io/platform.html</loc>
-    <lastmod>2026-10-26</lastmod>
+    <lastmod>2026-10-27</lastmod>
     <priority>0.9</priority>
   </url>
   <url>
@@ -32,12 +32,12 @@
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/index.html</loc>
-    <lastmod>2026-10-26</lastmod>
+    <lastmod>2026-10-27</lastmod>
     <priority>0.8</priority>
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/adr/index.html</loc>
-    <lastmod>2026-10-26</lastmod>
+    <lastmod>2026-10-27</lastmod>
     <priority>0.8</priority>
   </url>
   <url>
@@ -713,6 +713,11 @@
   <url>
     <loc>https://ivanball.github.io/docs/adr/135-application-namespace-keyspace-isolation.html</loc>
     <lastmod>2026-10-26</lastmod>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://ivanball.github.io/docs/adr/136-installable-web-app-service-worker.html</loc>
+    <lastmod>2026-10-27</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
