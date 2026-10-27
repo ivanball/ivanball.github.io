@@ -6,21 +6,21 @@
   <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#0e151f" media="(prefers-color-scheme: dark)">
   <title>MMCA Business Specification Document · MMCA · Ivan Ball-llovera</title>
-  <meta name="description" content="As of: 2026-09-07.">
+  <meta name="description" content="As of: 2026-10-27 (MMCA.Store 4b9505a3, MMCA.Common v1.264.0).">
   <link rel="canonical" href="https://ivanball.github.io/docs/guides/store-Specification.html">
   <link rel="icon" href="../../assets/img/favicon.svg" type="image/svg+xml">
   <link rel="alternate" type="application/rss+xml" title="Ivan Ball-llovera: deep dives on enterprise .NET" href="https://ivanball.github.io/feed.xml">
   <meta property="og:type" content="article">
   <meta property="og:site_name" content="Ivan Ball-llovera">
   <meta property="og:title" content="MMCA Business Specification Document">
-  <meta property="og:description" content="As of: 2026-09-07.">
+  <meta property="og:description" content="As of: 2026-10-27 (MMCA.Store 4b9505a3, MMCA.Common v1.264.0).">
   <meta property="og:url" content="https://ivanball.github.io/docs/guides/store-Specification.html">
   <meta property="og:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <meta property="og:image:alt" content="Ivan Ball-llovera, Principal Software Architect">
   <meta property="og:locale" content="en_US">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="MMCA Business Specification Document">
-  <meta name="twitter:description" content="As of: 2026-09-07.">
+  <meta name="twitter:description" content="As of: 2026-10-27 (MMCA.Store 4b9505a3, MMCA.Common v1.264.0).">
   <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Platform","item":"https://ivanball.github.io/platform.html"},{"@type":"ListItem","position":2,"name":"Reference","item":"https://ivanball.github.io/docs/index.html"},{"@type":"ListItem","position":3,"name":"Guides & Specifications","item":"https://ivanball.github.io/docs/guides/index.html"},{"@type":"ListItem","position":4,"name":"Store · Business Specification Document","item":"https://ivanball.github.io/docs/guides/store-Specification.html"}]}</script>
   <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);if(localStorage.getItem('mmca-rail')==='hidden')document.documentElement.setAttribute('data-rail','hidden');if(localStorage.getItem('mmca-cites')==='shown')document.documentElement.setAttribute('data-cites','shown');}catch(e){}})();</script>
@@ -126,26 +126,28 @@
         <article class="doc-content">
           <p class="eyebrow doc-kicker">Guides &amp; specifications</p>
           <h1 id="mmca-business-specification-document">MMCA Business Specification Document</h1>
-          <p><em>As of: 2026-09-07.</em></p>
+          <p><em>As of: 2026-10-27 (MMCA.Store <code>4b9505a3</code>, MMCA.Common v1.264.0).</em></p>
           <h2 id="1-system-overview">1. System Overview</h2>
-          <p>MMCA is an <strong>e-commerce platform</strong> built with .NET 10.0 using DDD and Clean Architecture. The business logic is organized as modules (Catalog, Sales, Identity) that have been extracted into per-module service hosts behind a YARP Gateway. It enables customers to browse a product catalog, manage shopping carts, place orders, and process payments. Administrators manage the product catalog, inventory, and order fulfillment.</p>
+          <p>MMCA is an <strong>e-commerce platform</strong> built with .NET 10.0 using DDD and Clean Architecture. The business logic is organized as modules (Catalog, Sales, Identity), each running as its own service host behind a YARP Gateway. The storefront is branded <strong>C.A.S.A Boutique</strong>. It enables shoppers to browse a product catalog, fill a bag, check out with or without an account, and pay; customers additionally keep a server-side cart, an order history and a profile. Administrators manage the product catalog, inventory, order fulfillment, user accounts and role permissions.</p>
           <p>The system operates in the <strong>online retail / e-commerce</strong> domain, supporting the full purchase lifecycle from product browsing through payment and delivery.</p>
           <p><strong>Major Business Areas:</strong></p>
           <ul>
-          <li><strong>Product Catalog Management</strong>: categories, products, and product variants with pricing</li>
-          <li><strong>Shopping &amp; Ordering</strong>: cart management, checkout, order placement</li>
-          <li><strong>Payment Processing</strong>: Stripe-integrated checkout with webhook confirmation</li>
+          <li><strong>Product Catalog Management</strong>: categories, products, and product variants with pricing and promotions</li>
+          <li><strong>Shopping &amp; Ordering</strong>: cart management, customer checkout, guest checkout (no account), order placement</li>
+          <li><strong>Shipping &amp; Tax</strong>: a flat shipping rate with a free-shipping threshold, optional Stripe Tax sales tax, a shipping label per order</li>
+          <li><strong>Payment Processing</strong>: Stripe-integrated checkout with webhook confirmation, a per-order payment deadline, and a reconciliation sweep</li>
           <li><strong>Order Fulfilment</strong>: carrier shipment tracking from payment through delivery</li>
           <li><strong>Inventory Management</strong>: stock tracking per product variant</li>
           <li><strong>Product Reviews</strong>: verified-purchase star ratings and reviews, with moderation</li>
-          <li><strong>Customer Identity &amp; Authentication</strong>: registration, login, JWT-based sessions</li>
+          <li><strong>Customer Identity &amp; Authentication</strong>: registration, login, multi-device refresh sessions, password reset, email confirmation</li>
+          <li><strong>Administration</strong>: user accounts (lock, unlock, change role) and role-to-permission grants</li>
           </ul>
           <p><strong>Technical Stack:</strong></p>
           <ul>
-          <li>.NET 10.0 (LangVersion: preview), Blazor Server + WebAssembly hybrid (InteractiveAuto), MudBlazor UI</li>
-          <li>SQL Server (primary, via Aspire), SQLite, Cosmos DB (alternative, via strategy pattern)</li>
-          <li>Stripe payment gateway, PBKDF2-HMAC-SHA512 password hashing, JWT authentication</li>
-          <li>.NET Aspire orchestration (SQL Server container + Gateway :6001 + 3 service hosts + UI)</li>
+          <li>.NET 10.0 (LangVersion: preview), Blazor Server + WebAssembly hybrid (InteractiveAuto), MudBlazor UI, installable web app (manifest plus service worker)</li>
+          <li>SQL Server, one database per service (<code>Store_Catalog</code>, <code>Store_Identity</code>, <code>Store_Sales</code>)</li>
+          <li>Stripe payment gateway and Stripe Tax, PBKDF2-HMAC-SHA512 password hashing, JWT authentication</li>
+          <li>.NET Aspire orchestration (SQL Server container, Redis, a message broker, MailDev, the Stripe CLI, Gateway :6001, 3 service hosts, UI :6002)</li>
           </ul>
           <hr>
           <h2 id="2-core-business-entities">2. Core Business Entities</h2>
@@ -269,6 +271,7 @@
           <li>A Shopping Cart belongs to exactly one Customer (1:1 relationship, ID = CustomerId)</li>
           <li>A Shopping Cart contains zero or more Shopping Cart Items</li>
           </ul>
+          <p>A shopper who has not signed in has no Shopping Cart aggregate: their bag lives on the device (variant ids and quantities only) and is merged into the server cart when they sign in (Section 11.2).</p>
           <p><strong>Source:</strong> <code>Source/Modules/Sales/MMCA.Store.Sales.Domain/ShoppingCarts/ShoppingCart.cs</code></p>
           <hr>
           <h3 id="25-shopping-cart-item">2.5 Shopping Cart Item</h3>
@@ -298,7 +301,7 @@
           <p><strong>Source:</strong> <code>Source/Modules/Sales/MMCA.Store.Sales.Domain/ShoppingCarts/ShoppingCartItem.cs</code></p>
           <hr>
           <h3 id="26-order">2.6 Order</h3>
-          <p><strong>Description:</strong> A confirmed purchase transaction created when a customer checks out their shopping cart. Orders track payment status and progress through a defined lifecycle.</p>
+          <p><strong>Description:</strong> A confirmed purchase transaction created when a customer checks out their shopping cart, or when a shopper with no account places a guest order. Orders track payment status and progress through a defined lifecycle.</p>
           <p><strong>Key Properties:</strong></p>
           <div class="table-wrap"><table>
           <thead>
@@ -309,11 +312,51 @@
           </thead>
           <tbody><tr>
           <td>CustomerId</td>
-          <td>The customer who placed the order</td>
+          <td>The customer who placed the order, or null for a guest order (<code>Order.cs:49</code>)</td>
+          </tr>
+          <tr>
+          <td>IsGuest</td>
+          <td>Computed: true when CustomerId is null (<code>Order.cs:52</code>)</td>
+          </tr>
+          <tr>
+          <td>CustomerName</td>
+          <td>The customer&#39;s full name frozen at checkout (the guest&#39;s name on a guest order), max 201 characters. Marked <code>[Pii]</code></td>
+          </tr>
+          <tr>
+          <td>ContactEmail</td>
+          <td>The guest&#39;s email, where a guest order&#39;s mail goes; null on a customer&#39;s order, whose address Identity owns. Max 100 characters. Marked <code>[Pii]</code> (<code>Order.cs:59</code>)</td>
+          </tr>
+          <tr>
+          <td>ContactPhone</td>
+          <td>Optional contact phone given at checkout for the carrier, max 30 characters. Marked <code>[Pii]</code></td>
+          </tr>
+          <tr>
+          <td>ShippingAddress / BillingAddress</td>
+          <td>Frozen at checkout exactly as entered (Address value objects); billing equals shipping when the shopper says so. Marked <code>[Pii]</code></td>
+          </tr>
+          <tr>
+          <td>ShippingLabel</td>
+          <td>The label generated when the order was placed, attached only when the order has a shipping address (value object)</td>
+          </tr>
+          <tr>
+          <td>GuestAccessTokenHash</td>
+          <td>Hex SHA-256 of a guest order&#39;s private access token; null on a customer&#39;s order and once a guest order is claimed into an account (<code>Order.cs:90</code>)</td>
+          </tr>
+          <tr>
+          <td>Subtotal</td>
+          <td>The sum of all line totals: what the merchandise costs before shipping and tax</td>
+          </tr>
+          <tr>
+          <td>ShippingCost / TaxAmount</td>
+          <td>The shipping and sales tax charged, zero when free or when none applies</td>
+          </tr>
+          <tr>
+          <td>TaxCalculationId</td>
+          <td>The tax provider&#39;s id for the calculation behind TaxAmount, or null when none was made</td>
           </tr>
           <tr>
           <td>Total</td>
-          <td>Calculated order total (Money value, sum of all line totals)</td>
+          <td>What the order charges: Subtotal + ShippingCost + TaxAmount. The amount the payment session asks for and a payment has to match (<code>Order.cs:111</code>)</td>
           </tr>
           <tr>
           <td>TotalSavings</td>
@@ -324,12 +367,20 @@
           <td>Current lifecycle stage (see state machine below)</td>
           </tr>
           <tr>
+          <td>LineCount</td>
+          <td>The number of lines the order was created with, denormalized for list views</td>
+          </tr>
+          <tr>
           <td>StripeSessionId</td>
           <td>Payment gateway session reference</td>
           </tr>
           <tr>
           <td>StripePaymentIntentId</td>
-          <td>Payment confirmation reference</td>
+          <td>Payment confirmation reference (<code>&quot;manual-admin-override&quot;</code> for a manual payment)</td>
+          </tr>
+          <tr>
+          <td>InventoryRestored</td>
+          <td>The idempotency marker for the compensation that returns stock after a cancellation</td>
           </tr>
           <tr>
           <td>Shipment</td>
@@ -342,10 +393,13 @@
           </tbody></table></div>
           <p><strong>Relationships:</strong></p>
           <ul>
-          <li>An Order belongs to one Customer</li>
+          <li>An Order belongs to one Customer, or to no account (a guest order) until it is claimed</li>
           <li>An Order contains one or more Order Lines</li>
           </ul>
-          <p><strong>Source:</strong> <code>Source/Modules/Sales/MMCA.Store.Sales.Domain/Orders/Order.cs</code></p>
+          <p><strong>Erasure:</strong> the aggregate is <code>IAnonymizable</code>: anonymizing clears CustomerName, ContactEmail, ContactPhone and both addresses (<code>Order.cs:432</code>).</p>
+          <p><strong>Source:</strong> <code>Source/Modules/Sales/MMCA.Store.Sales.Domain/Orders/Order.cs</code>,
+          <code>Source/Modules/Sales/MMCA.Store.Sales.Domain/Orders/OrderCharges.cs</code>,
+          <code>Source/Modules/Sales/MMCA.Store.Sales.Domain/Orders/OrderDelivery.cs</code></p>
           <hr>
           <h3 id="27-order-line">2.7 Order Line</h3>
           <p><strong>Description:</strong> A single item within an order, capturing the product variant, quantity, and price at time of purchase.</p>
@@ -411,6 +465,10 @@
           <td>IsOutOfStock</td>
           <td>Computed: true when AvailableQuantity equals 0</td>
           </tr>
+          <tr>
+          <td>Sku / ProductId / ProductName</td>
+          <td>Catalog labels copied across the database boundary (SKU max 50, product name max 100), so the inventory grid can sort and filter on them. Written from the <code>ProductVariantChanged</code> and <code>ProductInfoChanged</code> integration events, the create and bulk-set paths, and a startup backfill (<code>InventoryItem.cs:33</code>, <code>:47</code>)</td>
+          </tr>
           </tbody></table></div>
           <p><strong>Relationships:</strong></p>
           <ul>
@@ -454,7 +512,7 @@
           <p><strong>Source:</strong> <code>Source/Modules/Identity/MMCA.Store.Identity.Domain/Customers/Customer.cs</code></p>
           <hr>
           <h3 id="210-user">2.10 User</h3>
-          <p><strong>Description:</strong> An authentication account with credentials and role-based access. Users are either administrators or customers.</p>
+          <p><strong>Description:</strong> An authentication account with credentials and role-based access. Users are either administrators or customers, and each account holds exactly one role.</p>
           <p><strong>Key Properties:</strong></p>
           <div class="table-wrap"><table>
           <thead>
@@ -465,34 +523,40 @@
           </thead>
           <tbody><tr>
           <td>Email</td>
-          <td>Login email (unique, required)</td>
+          <td>Login email (Email value object, unique, required). Marked <code>[Pii]</code></td>
           </tr>
           <tr>
           <td>PasswordHash / PasswordSalt</td>
-          <td>Securely stored credentials (PBKDF2-HMAC-SHA512, 600,000 iterations)</td>
+          <td>Securely stored credentials: PBKDF2-HMAC-SHA512 at 210,000 iterations for new hashes, with the work factor stored in each hash; the earlier 600,000-iteration format still verifies and is upgraded at the next sign-in (<code>PasswordHasher.cs:34</code>, <code>:37</code>)</td>
           </tr>
           <tr>
           <td>Role</td>
           <td>&quot;Admin&quot; or &quot;Customer&quot;</td>
           </tr>
           <tr>
-          <td>RefreshToken / RefreshTokenExpiry</td>
-          <td>Session refresh mechanism (7-day expiry)</td>
+          <td>IsActive</td>
+          <td>Account active status; &quot;locked&quot; in the administration surface maps onto this flag</td>
           </tr>
           <tr>
-          <td>IsActive</td>
-          <td>Account active status</td>
+          <td>IsEmailConfirmed</td>
+          <td>Whether the account redeemed an email-confirmation token (<code>User.cs:60</code>). Recorded, not enforced: sign-in does not require it</td>
           </tr>
           <tr>
           <td>CustomerId</td>
           <td>Link to Customer profile (for Customer role)</td>
           </tr>
+          <tr>
+          <td>PreferredCulture / PreferredTheme</td>
+          <td>UI preferences that follow the account across devices</td>
+          </tr>
           </tbody></table></div>
+          <p>Refresh tokens are not part of this aggregate: each signed-in device holds its own row in the framework&#39;s <code>RefreshSessions</code> table, hashed at rest (<a href="../adr/097-multi-device-refresh-sessions.html">ADR-097</a>).</p>
           <p><strong>Relationships:</strong></p>
           <ul>
           <li>A User with &quot;Customer&quot; role is linked 1:1 to a Customer entity</li>
           <li>Admin users have no Customer record</li>
           </ul>
+          <p><strong>Erasure:</strong> <code>Anonymize()</code> replaces the email with a <code>deleted-{id}@anonymized.invalid</code> placeholder, clears the credentials and deactivates the account.</p>
           <p><strong>Source:</strong> <code>Source/Modules/Identity/MMCA.Store.Identity.Domain/Users/User.cs</code></p>
           <hr>
           <h3 id="211-value-objects">2.11 Value Objects</h3>
@@ -509,19 +573,31 @@
           <td><strong>Money</strong></td>
           <td>Amount (decimal), Currency (Currency)</td>
           <td>Cannot have negative amount; currency mismatch on add</td>
-          <td><code>MMCA.Common.Shared/ValueObjects/Money.cs</code></td>
+          <td><code>MMCA.Common.Shared/ValueObjects/Financial/Money.cs</code></td>
           </tr>
           <tr>
           <td><strong>Currency</strong></td>
           <td>Code (string)</td>
           <td>Must be &quot;USD&quot; or &quot;EUR&quot;</td>
-          <td><code>MMCA.Common.Shared/ValueObjects/Currency.cs</code></td>
+          <td><code>MMCA.Common.Shared/ValueObjects/Financial/Currency.cs</code></td>
           </tr>
           <tr>
           <td><strong>Address</strong></td>
-          <td>AddressLine1 (required, max 200), AddressLine2, City, State, ZipCode, Country</td>
+          <td>AddressLine1 (required, max 200), AddressLine2 (max 200), City (max 100), State (max 100), ZipCode (max 20), Country (max 100)</td>
           <td>AddressLine1 required; all fields have max lengths</td>
-          <td><code>MMCA.Common.Shared/ValueObjects/Address.cs</code></td>
+          <td><code>MMCA.Common.Shared/ValueObjects/Contact/Address.cs</code>, <code>AddressInvariants.cs</code></td>
+          </tr>
+          <tr>
+          <td><strong>Email</strong></td>
+          <td>Value (string)</td>
+          <td>Trimmed and validated as an email address at creation</td>
+          <td><code>MMCA.Common.Shared/ValueObjects/Contact/Email.cs</code></td>
+          </tr>
+          <tr>
+          <td><strong>ShippingLabel</strong></td>
+          <td>LabelNumber, TrackingNumber, CarrierName, ServiceLevel, CreatedOn</td>
+          <td>Every field present and at most 100 characters; the ship-to is the order&#39;s own frozen ShippingAddress</td>
+          <td><code>Sales.Shared/Orders/ShippingLabel.cs</code></td>
           </tr>
           <tr>
           <td><strong>Shipment</strong></td>
@@ -624,39 +700,43 @@
           <p><strong>Trigger:</strong> A new user submits registration with first name, last name, email, and password.</p>
           <p><strong>Steps:</strong></p>
           <ol>
-          <li>Validate registration request (email format, password requirements)</li>
+          <li>Validate registration request (email format, password requirements) and apply the registration rate limit</li>
           <li>Verify email is not already registered (uniqueness check)</li>
-          <li>Hash the password using PBKDF2-HMAC-SHA512 (600,000 iterations) with a per-user salt</li>
+          <li>Hash the password using PBKDF2-HMAC-SHA512 (210,000 iterations) with a per-user salt</li>
           <li>Create a User entity with &quot;Customer&quot; role</li>
-          <li>Generate JWT access token (15 min, with claims: sub, jti, iat, user_id, email, role, customer_id) and refresh token (7-day expiry, 64-byte random)</li>
-          <li><strong>Domain event <code>UserRegistered</code> is published</strong>, which triggers automatic Customer creation:<ul>
-          <li>A new Customer entity is created with the same name, email, and address</li>
-          <li>The User is linked to the newly created Customer via <code>CustomerId</code></li>
+          <li><strong>Domain event <code>UserRegistered</code> is published</strong>, which drives two independent handlers:<ul>
+          <li><code>UserRegisteredHandler</code> creates a Customer with the same name, email, and address and links the User to it via <code>CustomerId</code>, both in one transaction. When a Customer with that email already exists (typically created by an administrator) the account is deliberately left unlinked, because registration does not prove ownership of the address; an administrator links it by hand (Section 3.15)</li>
+          <li><code>UserRegisteredEmailConfirmationHandler</code> schedules the confirmation email as the <code>Identity.SendEmailConfirmation</code> internal command (Section 3.14)</li>
           </ul>
           </li>
-          <li>Return authentication tokens to the caller</li>
+          <li>Re-read the user untracked so the first token already carries the <code>customer_id</code> claim</li>
+          <li>Issue a JWT access token (15 min; claims <code>sub</code>, <code>jti</code>, <code>iat</code>, name, email, role, <code>customer_id</code> when linked, <code>sid</code>, and one <code>permission</code> claim per capability the role holds) and a refresh token (7 days) stored as its own refresh-session row</li>
+          <li>Return authentication tokens to the caller (HTTP 201)</li>
           </ol>
           <p><strong>Implemented in:</strong></p>
           <ul>
-          <li><code>Source/Modules/Identity/MMCA.Store.Identity.Application/Users/AuthenticationService.cs</code> (RegisterAsync)</li>
+          <li><code>Source/Modules/Identity/MMCA.Store.Identity.Application/Users/AuthenticationService.cs</code> (over the framework&#39;s <code>AuthenticationServiceBase&lt;User&gt;</code>)</li>
           <li><code>Source/Modules/Identity/MMCA.Store.Identity.Application/Users/DomainEventHandlers/UserRegisteredHandler.cs</code></li>
+          <li><code>Source/Modules/Identity/MMCA.Store.Identity.Application/Users/DomainEventHandlers/UserRegisteredEmailConfirmationHandler.cs</code></li>
           </ul>
           <hr>
           <h3 id="32-customer-login">3.2 Customer Login</h3>
           <p><strong>Trigger:</strong> A registered user submits email and password.</p>
           <p><strong>Steps:</strong></p>
           <ol>
-          <li>Validate login request</li>
+          <li>Validate login request and check the lockout state for the address (<a href="../adr/029-authentication-brute-force-protection.html">ADR-029</a>)</li>
           <li>Look up user by email</li>
-          <li>Verify password using PBKDF2-HMAC-SHA512 with constant-time comparison (legacy HMAC-SHA512 hashes still verify via salt-length detection)</li>
-          <li>Verify user is active</li>
-          <li>Generate new access token and refresh token</li>
-          <li>Update refresh token expiry (7 days from now)</li>
+          <li>Verify password using PBKDF2-HMAC-SHA512 with constant-time comparison; a miss counts as a failed attempt</li>
+          <li>Verify user is active (<code>Auth.UserDeactivated</code>, checked after the password so only the account owner learns it, <code>AuthenticationService.cs:112</code>)</li>
+          <li>Reset the failed-attempt counter and issue a new access token plus a new refresh-session row (one per signed-in device)</li>
+          <li>Upgrade the stored hash when it is in the earlier format or at another iteration count; a rehash failure never fails a sign-in that already succeeded</li>
           <li>Return authentication response with both tokens</li>
           </ol>
+          <p><strong>Token refresh</strong> (<code>POST /Auth/refresh</code>) rotates the presented refresh token and treats a token that was already rotated as reuse (<a href="../adr/050-jwt-refresh-token-rotation.html">ADR-050</a>); the deactivated-account gate runs on refresh too, so a locked account stops refreshing immediately. A signed-in user can list their sessions (<code>GET /Auth/my-sessions</code>) and sign one device out (<code>POST /Auth/revoke/{sessionId}</code>) or the current one (<code>POST /Auth/revoke</code>).</p>
           <p><strong>Implemented in:</strong></p>
           <ul>
-          <li><code>Source/Modules/Identity/MMCA.Store.Identity.Application/Users/AuthenticationService.cs</code> (LoginAsync)</li>
+          <li><code>Source/Modules/Identity/MMCA.Store.Identity.Application/Users/AuthenticationService.cs</code> (over the framework&#39;s <code>AuthenticationServiceBase&lt;User&gt;</code>)</li>
+          <li><code>Source/Modules/Identity/MMCA.Store.Identity.API/Controllers/AuthController.cs</code></li>
           </ul>
           <hr>
           <h3 id="33-add-item-to-shopping-cart">3.3 Add Item to Shopping Cart</h3>
@@ -686,24 +766,35 @@
           </ul>
           <hr>
           <h3 id="34-checkout-cart-to-order">3.4 Checkout (Cart to Order)</h3>
-          <p><strong>Trigger:</strong> A customer initiates checkout on their active shopping cart.</p>
+          <p><strong>Trigger:</strong> A customer (or an admin on the customer&#39;s behalf) checks out an active shopping cart
+          with <code>PUT /ShoppingCarts/{id}/checkout</code>. The optional body carries the shipping address, the billing
+          address and a phone; an empty body checks out with no addresses and therefore no shipping label, which
+          is how the admin cart page checks a cart out on a customer&#39;s behalf.</p>
           <p><strong>Steps:</strong></p>
           <ol>
-          <li>Fetch the customer&#39;s shopping cart with all items</li>
+          <li>Fetch the customer&#39;s shopping cart with all items, and validate the delivery addresses (a missing
+          billing address takes the shipping address) before any cross-service call</li>
           <li>Retrieve current pricing for all product variants from the Catalog module (cross-module call): the
-          effective price, the list price it was struck from, and the active promotion&#39;s label</li>
-          <li>Fetch inventory items for all product variants</li>
-          <li>Reject the checkout if any variant is missing from the price map (it was soft-deleted between
-          cart-add and checkout), naming the offending variant</li>
-          <li>Execute the checkout domain service which:
+          effective price, the list price it was struck from, and the active promotion&#39;s label. Reject the
+          checkout if any variant is missing from the price map (it was soft-deleted between cart-add and
+          checkout), naming the offending variant. Resolve the customer&#39;s display name from Identity (best
+          effort)</li>
+          <li>Quote the charges: a flat shipping rate waived at the free-shipping threshold, and sales tax when tax
+          is enabled and a ship-to address is known (Section 3.16)</li>
+          <li>Inside one retriable transaction, fetch inventory items for all product variants and execute the
+          checkout domain service, which:
           a. Validates the cart is not empty
           b. Validates inventory exists for every item in the cart
           c. Runs a <strong>fail-fast sufficiency check</strong> per item against the loaded snapshot
           d. Creates Order Lines with the current pricing triple (price snapshot at time of purchase)
-          e. Creates the Order with status <code>PendingPayment</code>
+          e. Creates the Order with status <code>PendingPayment</code>, the frozen customer name, addresses and phone
           f. Transitions the cart to <code>CheckedOut</code> status</li>
-          <li>Commit the write phase inside one explicit transaction: the <strong>atomic conditional inventory
-          decrements</strong> first, then the order insert and cart transition</li>
+          <li>Apply the quoted shipping and tax to the order (<code>Order.ApplyCharges</code>), refuse the checkout when the
+          bag changed between the quote and the order (<code>Order.Charges.BagChanged</code>, <code>OrderQuoteApplier.cs:28</code>),
+          and refuse a total below what the payment provider can charge (<code>CheckOutHandler.cs:188</code>)</li>
+          <li>In the same transaction: the order insert, the <strong>atomic conditional inventory decrements</strong>, the cart
+          transition, then the shipping label (only when the order has a shipping address; a label failure is
+          logged, never fatal) and the order&#39;s payment deadline (Section 3.17)</li>
           <li>Return the Order details</li>
           </ol>
           <p><strong>Business Rules Applied:</strong></p>
@@ -713,6 +804,7 @@
           <li>All product variants must have corresponding inventory records</li>
           <li>Sufficient inventory must be available for each item</li>
           <li>Prices are locked at checkout time (not at cart-add time)</li>
+          <li>The order total is Subtotal + ShippingCost + TaxAmount, and it must be chargeable by the payment provider</li>
           <li>The price locked is the <strong>effective</strong> price: Catalog resolves each variant&#39;s list price against any
           active discount at the instant of the call, so the order line, the receipt and the Stripe total all
           carry the discounted amount and Sales never reasons about promotions
@@ -732,44 +824,67 @@
           <p><strong>Implemented in:</strong></p>
           <ul>
           <li><code>Source/Modules/Sales/MMCA.Store.Sales.Application/ShoppingCarts/UseCases/CheckOut/CheckOutHandler.cs</code></li>
-          <li><code>Source/Modules/Sales/MMCA.Store.Sales.Domain/Services/CheckOutDomainService.cs</code></li>
-          <li><code>Source/Modules/Sales/MMCA.Store.Sales.Infrastructure/Services/InventoryAllocationService.cs</code></li>
+          <li><code>Source/Modules/Sales/MMCA.Store.Sales.Application/ShoppingCarts/UseCases/CheckOut/CheckOutPreflight.cs</code></li>
+          <li><code>Source/Modules/Sales/MMCA.Store.Sales.Application/ShoppingCarts/UseCases/CheckOut/PlacedOrderFinalizer.cs</code></li>
+          <li><code>Source/Modules/Sales/MMCA.Store.Sales.Domain/Orders/CheckOutDomainService.cs</code></li>
+          <li><code>Source/Modules/Sales/MMCA.Store.Sales.Infrastructure/Inventory/InventoryAllocationService.cs</code></li>
           </ul>
           <hr>
           <h3 id="35-payment-processing-stripe">3.5 Payment Processing (Stripe)</h3>
-          <p><strong>Trigger:</strong> After checkout, the customer initiates payment for a pending order.</p>
+          <p><strong>Trigger:</strong> After checkout, the customer initiates payment for a pending order
+          (<code>POST /Orders/{id}/checkout</code>); a guest pays through <code>POST /Orders/guest/{id}/checkout</code> with the
+          order&#39;s access token, which runs the same use case (Section 3.18).</p>
           <p><strong>Steps:</strong></p>
           <ol>
-          <li>Fetch the order with its order lines</li>
-          <li>Call Stripe API to create a checkout session (converts Money to smallest currency unit: cents)</li>
+          <li>Fetch the order with its order lines and check it is payable before Stripe is called: a
+          <code>PendingPayment</code> order, or a <code>PaymentFailed</code> order on retry, gets a new session; a
+          <code>PaymentInitiated</code> order resumes the session it is waiting on rather than opening a second one (an
+          expired session is retired through <code>PaymentFailed</code> first); every other status is refused</li>
+          <li>Call Stripe API to create a checkout session (converts Money to smallest currency unit: cents). The
+          session carries the subtotal, shipping and tax, which must add up to the order total
+          (<code>Payment.Stripe.ChargesDoNotAddUp</code>, <code>StripePaymentService.cs:153</code>), and it expires when the order&#39;s
+          unpaid window closes, clamped to what Stripe accepts (<code>StripePaymentService.cs:166</code>)</li>
           <li>Transition order status to <code>PaymentInitiated</code></li>
           <li>Store the Stripe session ID on the order</li>
           <li>Return the checkout URL for the customer to complete payment</li>
           </ol>
           <p><strong>Webhook Confirmation (asynchronous):</strong></p>
           <ol>
-          <li>Stripe sends a webhook notification to <code>POST /payments/webhook</code></li>
-          <li>System verifies the webhook signature using Stripe&#39;s <code>EventUtility.ConstructEvent()</code></li>
+          <li>Stripe sends a webhook notification to <code>POST /Payments/webhook</code></li>
+          <li>System verifies the webhook signature with Stripe&#39;s <code>EventUtility.ValidateSignature()</code> against
+          either trusted signing secret (the runtime one and the configured <code>Stripe:WebhookSecret</code>), then
+          parses the body as a separate step with <code>EventUtility.ParseEvent()</code>
+          (<code>StripePaymentService.cs:644</code>, <code>:374</code>)</li>
           <li>Based on event type:<ul>
-          <li><code>checkout.session.completed</code> -&gt; Mark order as <code>Paid</code>, store payment intent ID</li>
+          <li><code>checkout.session.completed</code> -&gt; Mark order as <code>Paid</code>, store payment intent ID, but only when the
+          session is paid and the amount and currency it collected match the order total (<code>PaymentProof</code>,
+          the one rule every path that marks an order paid from provider data applies)</li>
           <li><code>checkout.session.expired</code> or <code>payment_intent.payment_failed</code> -&gt; Mark order as <code>PaymentFailed</code></li>
           </ul>
           </li>
           <li>Idempotent: skips processing if order is already in the appropriate terminal state</li>
           </ol>
+          <p>In production <code>StripeWebhookRegistrationService</code> verifies (or creates) the Stripe webhook endpoint at
+          startup; locally the Stripe CLI started by the Aspire AppHost forwards events to the Gateway.</p>
           <p><strong>Implemented in:</strong></p>
           <ul>
           <li><code>Source/Modules/Sales/MMCA.Store.Sales.Application/Orders/UseCases/CreateCheckoutSession/CreateCheckoutSessionHandler.cs</code></li>
           <li><code>Source/Modules/Sales/MMCA.Store.Sales.Application/Orders/UseCases/ProcessPaymentWebhook/ProcessPaymentWebhookHandler.cs</code></li>
-          <li><code>Source/Modules/Sales/MMCA.Store.Sales.Infrastructure/Services/StripePaymentService.cs</code></li>
+          <li><code>Source/Modules/Sales/MMCA.Store.Sales.Application/Orders/Interfaces/PaymentProof.cs</code></li>
+          <li><code>Source/Modules/Sales/MMCA.Store.Sales.Infrastructure/Payments/Stripe/StripePaymentService.cs</code></li>
           </ul>
           <hr>
           <h3 id="36-order-cancellation">3.6 Order Cancellation</h3>
-          <p><strong>Trigger:</strong> A customer or admin cancels an order.</p>
+          <p><strong>Trigger:</strong> A customer or admin cancels an order (<code>PUT /Orders/{id}/cancel</code>, mandatory <code>If-Match</code>).
+          The order&#39;s payment deadline (Section 3.17) and the reconciliation sweep reach the same <code>Cancelled</code>
+          state and the same compensation.</p>
           <p><strong>Steps:</strong></p>
           <ol>
           <li>Fetch the order with its order lines</li>
           <li>Validate the order is in a cancellable state (PendingPayment, PaymentInitiated, or PaymentFailed)</li>
+          <li>For a <code>PaymentInitiated</code> order, retire the Stripe checkout session first, so the hosted page can no
+          longer take money; a session Stripe reports already paid refuses the cancellation (the order needs a
+          refund, not a cancel)</li>
           <li>Transition order status to <code>Cancelled</code> and persist. The cancellation commits on its own; no
           inventory work happens inside this transaction.</li>
           <li><strong>After the commit</strong>, the <code>OrderCancelled</code> domain event drives <code>OrderCancelledSagaHandler</code>, which
@@ -792,11 +907,13 @@
           </ul>
           <hr>
           <h3 id="37-manual-payment-override">3.7 Manual Payment Override</h3>
-          <p><strong>Trigger:</strong> An administrator manually marks an order as paid (e.g., for cash payments or payment system issues).</p>
+          <p><strong>Trigger:</strong> An administrator manually marks an order as paid (e.g., for cash payments or payment system issues): <code>PUT /Orders/{id}/pay</code>, <code>sales:orders:manage</code> permission, mandatory <code>If-Match</code>.</p>
           <p><strong>Steps:</strong></p>
           <ol>
           <li>Fetch the order</li>
           <li>Validate order status allows manual payment (PendingPayment, PaymentInitiated, or PaymentFailed)</li>
+          <li>For a <code>PaymentInitiated</code> order, retire the Stripe checkout session first; when Stripe reports that
+          session already paid, the order is marked paid with the real payment intent instead of the override</li>
           <li>Set payment intent ID to <code>&quot;manual-admin-override&quot;</code></li>
           <li>Transition status to <code>Paid</code></li>
           <li>Persist changes</li>
@@ -816,7 +933,7 @@
           <li>Validate status is <code>Paid</code> (the only state that may ship)</li>
           <li>Build the <code>Shipment</code> value object: carrier, tracking number, ship date, optional estimated delivery</li>
           <li>Transition status to <code>Shipped</code> and raise <code>OrderShipped</code></li>
-          <li>Persist changes; the domain-event handler emails the customer the carrier, the tracking number and the tracking link</li>
+          <li>Persist changes; <code>OrderShippedHandler</code> schedules the <code>Sales.SendOrderShippedEmail</code> internal command, which emails the order&#39;s recipient (the customer, or a guest&#39;s contact email) the carrier, the tracking number and the tracking link</li>
           </ol>
           <p><strong>Correct the shipment (<code>PUT /Orders/{id}/shipment</code>, <code>OrdersManage</code> permission, mandatory <code>If-Match</code>):</strong>
           Same request body, because the shipment is a value object and a correction replaces it whole rather
@@ -829,9 +946,10 @@
           <ol>
           <li>Fetch the order</li>
           <li>Validate status is <code>Paid</code> or <code>Shipped</code> (the carrier leg is optional; see the state machine)</li>
-          <li>Transition status to <code>Delivered</code>, stamp <code>FulfilledPublishedOn</code>, and raise both the in-process
-          <code>OrderDelivered</code> domain event and the <code>OrderFulfilled</code> integration event carrying the delivered
-          line snapshot</li>
+          <li>Transition status to <code>Delivered</code>, stamp <code>FulfilledPublishedOn</code>, and raise the in-process
+          <code>OrderDelivered</code> domain event; on a customer&#39;s order also raise the <code>OrderFulfilled</code> integration
+          event carrying the delivered line snapshot. A guest order has no account to hold a verified
+          purchase, so it raises no <code>OrderFulfilled</code> (<code>Order.cs:711</code>)</li>
           <li>Persist changes; <code>OrderFulfilled</code> leaves through the outbox and Catalog turns it into the
           verified-purchase entitlements behind product reviews (Section 3.13)</li>
           </ol>
@@ -850,7 +968,9 @@
           <li><code>Source/Modules/Sales/MMCA.Store.Sales.Application/Orders/UseCases/Ship/ShipOrderHandler.cs</code></li>
           <li><code>Source/Modules/Sales/MMCA.Store.Sales.Application/Orders/UseCases/UpdateShipment/UpdateShipmentHandler.cs</code></li>
           <li><code>Source/Modules/Sales/MMCA.Store.Sales.Application/Orders/UseCases/Deliver/DeliverOrderHandler.cs</code></li>
+          <li><code>Source/Modules/Sales/MMCA.Store.Sales.API/Controllers/OrderFulfillmentController.cs</code></li>
           <li><code>Source/Modules/Sales/MMCA.Store.Sales.Application/Orders/DomainEventHandlers/OrderShippedHandler.cs</code></li>
+          <li><code>Source/Modules/Sales/MMCA.Store.Sales.Application/Orders/InternalCommands/SendOrderShippedEmailInternalCommandHandler.cs</code></li>
           <li><code>Source/Modules/Sales/MMCA.Store.Sales.Infrastructure/Persistence/Backfill/OrderFulfilledBackfillService.cs</code></li>
           </ul>
           <hr>
@@ -859,9 +979,10 @@
           arrived, typically from a &quot;Retry / check payment&quot; affordance on the order.</p>
           <p><strong>Steps:</strong></p>
           <ol>
-          <li>Validate ownership (owner or admin)</li>
+          <li>Validate ownership (owner or admin) for <code>PUT /Orders/{id}/verify-payment</code></li>
           <li>Query Stripe directly for the order&#39;s checkout session</li>
-          <li>If Stripe reports the session paid, mark the order <code>Paid</code> exactly as the webhook path would</li>
+          <li>If Stripe reports the session paid and its amount and currency match the order total
+          (<code>PaymentProof</code>), mark the order <code>Paid</code> exactly as the webhook path would</li>
           <li>If the order is already <code>Paid</code>, or is not in a verifiable state, succeed without changes</li>
           </ol>
           <p><strong>Business Rules Applied:</strong></p>
@@ -869,10 +990,15 @@
           <li>Webhooks are the fast path but are not guaranteed; this is the reconciliation backstop that keeps a
           paid customer from sitting in <code>PaymentInitiated</code> indefinitely (<a href="../adr/054-saga-compensation-and-reconciliation.html">ADR-054</a>)</li>
           <li>The operation is idempotent by construction: it converges the order onto whatever Stripe says</li>
+          <li><code>PaymentReconciliationService</code> is the scheduled backstop behind it: every <code>PollIntervalMinutes</code>
+          (10) it reconciles <code>PaymentInitiated</code> orders older than <code>StuckAgeMinutes</code> (30) against Stripe (paid
+          -&gt; <code>MarkAsPaid</code>, expired -&gt; <code>MarkAsPaymentFailed</code>) and cancels stranded <code>PendingPayment</code> and
+          <code>PaymentFailed</code> orders past the same window (<code>PaymentReconciliationService.cs:274</code>)</li>
           </ul>
           <p><strong>Implemented in:</strong></p>
           <ul>
           <li><code>Source/Modules/Sales/MMCA.Store.Sales.Application/Orders/UseCases/VerifyPayment/VerifyPaymentHandler.cs</code></li>
+          <li><code>Source/Modules/Sales/MMCA.Store.Sales.Infrastructure/Payments/Reconciliation/PaymentReconciliationService.cs</code></li>
           </ul>
           <hr>
           <h3 id="310-product-images">3.10 Product Images</h3>
@@ -884,9 +1010,12 @@
           deliberately storage-agnostic, so moving to blob storage later is an infrastructure swap rather than
           a handler change. Uploads are capped at 6 MB of request body
           (the 5 MB domain constraint plus multipart overhead). Reads are anonymous and output-cached for 300
-          seconds; every mutation evicts the products cache. Both a legacy single-image route set (<code>/image</code>) and
-          the current collection route set (<code>/images</code>) are exposed, sharing one upload handler. Reordering
-          reassigns display order from the supplied id list, and the first id becomes the primary image.</p>
+          seconds; every mutation evicts the products cache. The routes form one collection set under
+          <code>/Products/{productId}/images</code>: <code>GET .../{imageId}</code> (anonymous), <code>POST</code> (upload, <code>[Idempotent]</code>),
+          <code>DELETE .../{imageId}</code> and <code>PUT .../order</code> (reorder, mandatory <code>If-Match</code>), all mutations under
+          <code>catalog:product-images:manage</code>. A product holds at most 10 images
+          (<code>ProductImageInvariants.cs:29</code>). Reordering reassigns display order from the supplied id list, and
+          the first id becomes the primary image.</p>
           <p><strong>Implemented in:</strong></p>
           <ul>
           <li><code>Source/Modules/Catalog/MMCA.Store.Catalog.API/Controllers/ProductImagesController.cs</code></li>
@@ -898,9 +1027,28 @@
           account and irreversibly anonymizes its personal data, which is distinct from the soft-delete used for
           ordinary lifecycle (<a href="../adr/005-soft-delete-vs-erasure.html">ADR-005</a>). Both endpoints authorize the
           owner or an Admin, enforced in the handlers rather than by a controller-wide policy.</p>
+          <div class="table-wrap"><table>
+          <thead>
+          <tr>
+          <th>Endpoint</th>
+          <th>Purpose</th>
+          </tr>
+          </thead>
+          <tbody><tr>
+          <td><code>GET /Users/{userId}/export</code></td>
+          <td>Portable JSON of the personal data held for the user, aggregating the Sales section (orders, cart) and the Catalog section (reviews) over gRPC, best effort</td>
+          </tr>
+          <tr>
+          <td><code>DELETE /Users/{userId}</code></td>
+          <td>Erase the account: soft-delete and anonymize the User and its linked Customer in one unit of work, revoke and anonymize every refresh session; the <code>CustomerErased</code> integration event carries the erasure into Sales and Catalog</td>
+          </tr>
+          </tbody></table></div>
           <p><strong>Implemented in:</strong></p>
           <ul>
+          <li><code>Source/Modules/Identity/MMCA.Store.Identity.API/Controllers/UsersDataExportController.cs</code></li>
           <li><code>Source/Modules/Identity/MMCA.Store.Identity.API/Controllers/UsersController.cs</code></li>
+          <li><code>Source/Modules/Identity/MMCA.Store.Identity.Application/Users/UseCases/ExportUserData/ExportUserDataHandler.cs</code></li>
+          <li><code>Source/Modules/Identity/MMCA.Store.Identity.Application/Users/UseCases/DeleteUser/DeleteUserHandler.cs</code></li>
           </ul>
           <hr>
           <h3 id="312-password-reset">3.12 Password Reset</h3>
@@ -911,18 +1059,19 @@
           <li>Look up the account behind the address without tracking it</li>
           <li>Increment the per-address request counter and check it against the rolling-hour throttle</li>
           <li>Mint a 256-bit single-use token, store only its SHA-256 hash under the address with the configured TTL, and hand the raw token back</li>
-          <li>Email the reset link (<code>{PasswordReset:ResetUrl}?email=...&amp;token=...</code>) plus the raw token, so a client that cannot follow a deep link can have the token entered by hand</li>
+          <li>Email the reset link (<code>{PasswordReset:ResetUrl}#email=...&amp;token=...</code>) plus the raw token, so a client that cannot follow a deep link can have the token entered by hand. The address and token ride in the URL fragment, which a browser never sends to a server, so the live token stays out of access logs, telemetry and <code>Referer</code> headers (<code>ForgotPasswordHandlerBase.cs:155</code>)</li>
           <li>Return <strong>HTTP 202 Accepted</strong>, which is also what an unknown address, a throttled address and a failed email send return: the response never discloses whether an address holds an account</li>
           </ol>
           <p><strong>Steps (reset):</strong></p>
           <ol>
           <li><code>POST /Auth/reset-password</code> with <code>{ &quot;email&quot;: &quot;...&quot;, &quot;token&quot;: &quot;...&quot;, &quot;newPassword&quot;: &quot;...&quot; }</code>. The new password goes through the same strength rules registration uses</li>
           <li>Validate the presented token against the stored hash in constant time and <strong>consume</strong> it before any write, so it cannot be redeemed twice</li>
-          <li>Load the account, hash the new password (PBKDF2-HMAC-SHA512), and apply it through the aggregate</li>
+          <li>Revoke every live refresh session on the account (persisted before the password is applied), because a reset is the remediation for a suspected intruder</li>
+          <li>Load the account, hash the new password (PBKDF2-HMAC-SHA512), and apply it through the aggregate (<code>User.ChangePassword</code>, which raises <code>UserPasswordChanged</code>)</li>
           <li>Persist, then clear the account&#39;s login brute-force counters so a customer who was locked out can sign in immediately</li>
           <li>Return <strong>HTTP 204 No Content</strong>. Every rejection (unknown, expired, replayed, mismatched or attempt-capped token, or an unresolvable account) collapses to one generic <code>Auth.InvalidResetToken</code> <strong>HTTP 401</strong></li>
           </ol>
-          <p>Both endpoints are anonymous by necessity (the caller has lost the credential), carry the <code>auth-ip</code> per-IP rate limit that login and register carry, and are idempotent. They live on their own controller routed to the same <code>Auth</code> prefix, which the Gateway&#39;s <code>/Auth/{**catch-all}</code> route already forwards.</p>
+          <p>Both endpoints are anonymous by necessity (the caller has lost the credential), carry the <code>auth-ip</code> per-IP rate limit that login and register carry, and are <code>[Idempotent]</code>. They come from the framework&#39;s <code>PasswordResetAuthControllerBase</code>, bound to Store&#39;s commands by a controller routed to the same <code>Auth</code> prefix, which the Gateway&#39;s <code>/Auth/{**catch-all}</code> route already forwards.</p>
           <p><strong>No schema change:</strong> the token lifecycle lives entirely in the cache, so expired tokens are reaped by cache TTL rather than by a sweeper and the feature ships without a migration. A cache eviction invalidates outstanding tokens, which costs the user one more request. See <a href="../adr/091-cache-backed-password-reset.html">ADR-091</a>.</p>
           <p><strong>Implemented in:</strong></p>
           <ul>
@@ -1027,41 +1176,252 @@
           <li><code>Source/Modules/Catalog/MMCA.Store.Catalog.Application/Reviews/DomainEventHandlers/ProductReviewChangedHandler.cs</code></li>
           </ul>
           <hr>
+          <h3 id="314-email-confirmation">3.14 Email Confirmation</h3>
+          <p><strong>Trigger:</strong> A new account registers (the confirmation email is scheduled automatically), or a user
+          asks for a fresh link and then redeems it.</p>
+          <p><strong>Steps:</strong></p>
+          <ol>
+          <li><code>UserRegisteredEmailConfirmationHandler</code> schedules the <code>Identity.SendEmailConfirmation</code> internal
+          command, so the mail survives a host that dies between the 201 and the SMTP call; a scheduling
+          failure is logged, never thrown (<a href="../adr/114-internal-commands-durable-job-queue.html">ADR-114</a>)</li>
+          <li><code>POST /Auth/send-email-confirmation</code> re-sends the link. Every outcome (malformed or unknown address,
+          already confirmed, throttled, failed send) answers <strong>HTTP 202</strong>, so the response never discloses
+          which addresses hold accounts</li>
+          <li>The link is <code>{Authentication:EmailConfirmation:ConfirmationUrl}#email=...&amp;token=...</code>, the token
+          single-use and carried in the URL fragment</li>
+          <li><code>POST /Auth/confirm-email</code> redeems the token, calls <code>User.ConfirmEmail()</code> (idempotent: an already
+          confirmed account succeeds unchanged) and raises <code>UserEmailConfirmed</code> the first time; <strong>HTTP 204</strong></li>
+          </ol>
+          <p><strong>Business Rules Applied:</strong></p>
+          <ul>
+          <li>Confirmation is recorded, not enforced: <code>Authentication:EmailConfirmation:RequireConfirmedEmail</code> is
+          <code>false</code> in the Identity service settings, so an unconfirmed account still signs in
+          (<a href="../adr/116-identity-completions-opt-in.html">ADR-116</a>)</li>
+          <li>Both endpoints are anonymous, <code>[Idempotent]</code> and throttled by the <code>auth-ip</code> rate limit</li>
+          </ul>
+          <p><strong>Implemented in:</strong></p>
+          <ul>
+          <li><code>Source/Modules/Identity/MMCA.Store.Identity.API/Controllers/EmailConfirmationController.cs</code></li>
+          <li><code>Source/Modules/Identity/MMCA.Store.Identity.Application/Users/UseCases/EmailConfirmation/SendEmailConfirmationHandler.cs</code></li>
+          <li><code>Source/Modules/Identity/MMCA.Store.Identity.Application/Users/UseCases/EmailConfirmation/ConfirmEmailHandler.cs</code></li>
+          </ul>
+          <hr>
+          <h3 id="315-user-and-role-administration">3.15 User and Role Administration</h3>
+          <p><strong>Trigger:</strong> An operator locks, unlocks or re-roles an account, edits which permissions a role holds,
+          or repairs the link between an account and a customer profile.</p>
+          <div class="table-wrap"><table>
+          <thead>
+          <tr>
+          <th>Endpoint</th>
+          <th>Permission</th>
+          <th>Behavior</th>
+          </tr>
+          </thead>
+          <tbody><tr>
+          <td><code>GET /Admin/Users/paged</code></td>
+          <td><code>users:manage</code></td>
+          <td>The user roster through the generic paged entity contract over <code>UserDTO</code>, page size capped at 100 (<code>AdminUsersController.cs:63</code>)</td>
+          </tr>
+          <tr>
+          <td><code>GET /Admin/Users/{userId}</code></td>
+          <td><code>users:manage</code></td>
+          <td>One account</td>
+          </tr>
+          <tr>
+          <td><code>GET /Admin/Users/{userId}/sessions</code></td>
+          <td><code>users:manage</code></td>
+          <td>The account&#39;s refresh sessions</td>
+          </tr>
+          <tr>
+          <td><code>POST /Admin/Users/{userId}/lock</code></td>
+          <td><code>users:manage</code></td>
+          <td><code>User.Deactivate()</code> (raises <code>UserDeactivated</code>), then revoke every live refresh session (<code>UserAdministrationService.cs:72</code>, <code>:82</code>)</td>
+          </tr>
+          <tr>
+          <td><code>POST /Admin/Users/{userId}/unlock</code></td>
+          <td><code>users:manage</code></td>
+          <td><code>User.Reactivate()</code> (raises <code>UserReactivated</code>)</td>
+          </tr>
+          <tr>
+          <td><code>PUT /Admin/Users/{userId}/roles</code></td>
+          <td><code>users:manage</code></td>
+          <td>Exactly one role (<code>User.Role.ExactlyOne</code> otherwise); <code>User.ChangeRole()</code> raises <code>UserRoleChanged</code>, then every live session is revoked. Assigning the role the account already holds is a no-op success (<code>UserAdministrationService.cs:103</code>, <code>:134</code>)</td>
+          </tr>
+          <tr>
+          <td><code>GET /Admin/Roles</code>, <code>GET /Admin/Roles/catalog</code>, <code>GET /Admin/Roles/{role}</code></td>
+          <td><code>roles:manage</code></td>
+          <td>The roles with their compiled and stored grants, and the catalog of every permission an endpoint checks</td>
+          </tr>
+          <tr>
+          <td><code>PUT /Admin/Roles/{role}/permissions</code></td>
+          <td><code>roles:manage</code></td>
+          <td>Replaces the role&#39;s STORED grants only</td>
+          </tr>
+          <tr>
+          <td><code>PUT /Users/{userId}/customer-link</code></td>
+          <td><code>identity:users:manage</code></td>
+          <td>Manual counterpart to the registration link: both records must carry the same address, neither may be linked already, and both must still exist</td>
+          </tr>
+          </tbody></table></div>
+          <p><strong>Business Rules Applied:</strong></p>
+          <ul>
+          <li>&quot;Locked&quot; maps onto <code>User.IsActive</code>, so a lock takes effect through the login and refresh gates
+          (<code>Auth.UserDeactivated</code>), and the session revocation makes it bite immediately rather than at the
+          next refresh</li>
+          <li>Lock and unlock are <code>[NonIdempotent]</code> state setters: a replay re-evaluates the account and answers
+          <code>User.AlreadyDeactivated</code> or <code>User.AlreadyActive</code> (409) rather than a cached 204</li>
+          <li><code>roles:manage</code> is granted in compiled code and never from a stored row, because it protects the very
+          screen that edits stored rows (<a href="../adr/020-permission-based-authorization.html">ADR-020</a>)</li>
+          </ul>
+          <p><strong>Implemented in:</strong></p>
+          <ul>
+          <li><code>Source/Modules/Identity/MMCA.Store.Identity.API/Controllers/AdminUsersController.cs</code> (over the framework&#39;s <code>UsersAdminControllerBase</code>)</li>
+          <li><code>Source/Modules/Identity/MMCA.Store.Identity.API/Controllers/AdminRolesController.cs</code> (over the framework&#39;s <code>RolesAdminControllerBase</code>)</li>
+          <li><code>Source/Modules/Identity/MMCA.Store.Identity.Application/Users/Administration/UserAdministrationService.cs</code></li>
+          <li><code>Source/Modules/Identity/MMCA.Store.Identity.Application/Users/UseCases/LinkCustomer/LinkUserCustomerHandler.cs</code></li>
+          </ul>
+          <hr>
+          <h3 id="316-shipping-tax-and-quotes">3.16 Shipping, Tax and Quotes</h3>
+          <p><strong>Trigger:</strong> The cart drawer or checkout page asks what a bag costs (<code>POST /Orders/quote</code>), and every
+          checkout prices the bag the same way before it places the order.</p>
+          <p><strong>Rules:</strong></p>
+          <ul>
+          <li><strong>Shipping</strong> is a flat <code>Shipping:FlatRate</code> (5.99) waived once the merchandise subtotal reaches
+          <code>Shipping:FreeShippingThreshold</code> (50) (<code>ShippingSettings.cs:16</code>, <code>:20</code>)</li>
+          <li><strong>Sales tax</strong> comes from Stripe Tax on the merchandise and the shipping, tax-exclusive, and only when
+          <code>Tax:Enabled</code> is on (off by default) and a ship-to address is known; otherwise tax is zero. Once on, a
+          failed calculation fails the quote, so checkout never charges a guessed tax (<code>TaxSettings.cs:18</code>)</li>
+          <li>A quote is anonymous and <code>[NonIdempotent]</code>: it writes nothing and reserves nothing, and checkout prices
+          the bag again when the order is placed. The response carries the subtotal, shipping, tax (null when
+          not calculated), total, the free-shipping threshold and the amount still needed for free shipping</li>
+          <li><strong>Shipping label:</strong> every order with a shipping address gets a label at placement from
+          <code>IShippingLabelProvider</code>. The registered provider is a mock carrier that issues an invented label
+          number (<code>CASA-{order}-{random}</code>) and a tracking number starting with <code>MOCK</code>, with no network call</li>
+          </ul>
+          <p><strong>Best sellers:</strong> <code>GET /Orders/best-sellers?count=8</code> (anonymous, <code>count</code> 1 to 24) ranks variants by units
+          sold on orders that were actually paid for (Paid, Shipped or Delivered) in the last 90 days, returning
+          variant ids and unit counts only (<code>GetBestSellingVariantsHandler.cs:23</code>). The storefront home page
+          resolves them to products through the catalog.</p>
+          <p><strong>Implemented in:</strong></p>
+          <ul>
+          <li><code>Source/Modules/Sales/MMCA.Store.Sales.API/Controllers/OrderQuotesController.cs</code></li>
+          <li><code>Source/Modules/Sales/MMCA.Store.Sales.Application/Orders/UseCases/Quote/GetOrderQuoteHandler.cs</code></li>
+          <li><code>Source/Modules/Sales/MMCA.Store.Sales.Application/Orders/Charges/OrderChargesCalculator.cs</code></li>
+          <li><code>Source/Modules/Sales/MMCA.Store.Sales.Infrastructure/Payments/Stripe/StripeTaxCalculator.cs</code></li>
+          <li><code>Source/Modules/Sales/MMCA.Store.Sales.Infrastructure/Shipping/MockShippingLabelProvider.cs</code></li>
+          <li><code>Source/Modules/Sales/MMCA.Store.Sales.Application/Orders/UseCases/BestSellers/GetBestSellingVariantsHandler.cs</code></li>
+          </ul>
+          <hr>
+          <h3 id="317-payment-deadline-expire-unpaid-order">3.17 Payment Deadline (Expire Unpaid Order)</h3>
+          <p><strong>Trigger:</strong> Every placed order (customer or guest) is given a payment deadline: checkout schedules the
+          <code>Sales.ExpireUnpaidOrder</code> internal command in the same transaction that places the order, and
+          <code>OrderPaymentFailedSagaHandler</code> re-arms it from the moment of every failed payment, so a failed payment
+          hands the shopper the whole retry window again.</p>
+          <p><strong>Steps (when the command runs):</strong></p>
+          <ol>
+          <li>Load the order; an order that is gone, or is no longer <code>PendingPayment</code> or <code>PaymentFailed</code>, is a
+          no-op success (<code>ExpireUnpaidOrderInternalCommandHandler.cs:61</code>)</li>
+          <li>Re-derive the due instant from the order&#39;s own <code>LastModifiedOn ?? CreatedOn</code> rather than the
+          schedule time, so an older deadline left behind by a re-arm runs as a no-op (<code>:67</code>)</li>
+          <li>Still unpaid and past the window: <code>Order.MarkAsCancelled()</code>, which raises <code>OrderCancelled</code>, and
+          <code>OrderCancelledSagaHandler</code> returns the stock checkout committed</li>
+          <li>A concurrency conflict (a webhook moved the order first) completes successfully: the concurrent writer wins</li>
+          </ol>
+          <p><strong>Business Rules Applied:</strong></p>
+          <ul>
+          <li>The window is <code>UnpaidOrderExpiry:Minutes</code> (30, <code>Enabled: true</code>) (<code>UnpaidOrderExpirySettings.cs:34</code>, <code>:43</code>)</li>
+          <li>The Stripe checkout session expires at the same moment, so the hosted page stops taking money when
+          the deadline cancels the order (Section 3.5)</li>
+          <li><code>PaymentReconciliationService</code> keeps the same window and is the backstop for a deadline that was
+          never written (Section 3.9)</li>
+          </ul>
+          <p><strong>Implemented in:</strong></p>
+          <ul>
+          <li><code>Source/Modules/Sales/MMCA.Store.Sales.Application/ShoppingCarts/UseCases/CheckOut/CheckOutDeadlineScheduler.cs</code></li>
+          <li><code>Source/Modules/Sales/MMCA.Store.Sales.Application/Orders/InternalCommands/ExpireUnpaidOrderInternalCommandHandler.cs</code></li>
+          <li><code>Source/Modules/Sales/MMCA.Store.Sales.Application/Orders/Saga/OrderPaymentFailedSagaHandler.cs</code></li>
+          </ul>
+          <hr>
+          <h3 id="318-guest-checkout">3.18 Guest Checkout</h3>
+          <p><strong>Trigger:</strong> A shopper who has not signed in buys without an account, from the bag kept on their device.</p>
+          <p><strong>Endpoints:</strong> every action but the claim is anonymous; the order&#39;s private access token travels in a
+          request header, and every refusal (wrong token, a customer&#39;s order, an already claimed order, an order
+          that does not exist) answers the same 404, so the endpoints cannot be used to learn which order numbers
+          exist.</p>
+          <div class="table-wrap"><table>
+          <thead>
+          <tr>
+          <th>Endpoint</th>
+          <th>Auth</th>
+          <th>Behavior</th>
+          </tr>
+          </thead>
+          <tbody><tr>
+          <td><code>POST /Orders/guest</code></td>
+          <td>Anonymous, <code>[Idempotent]</code>, <code>auth-ip</code> rate limit</td>
+          <td>Place the order; 201 with the order and its access token</td>
+          </tr>
+          <tr>
+          <td><code>GET /Orders/guest/{id}</code></td>
+          <td>Anonymous + access token</td>
+          <td>Read the order</td>
+          </tr>
+          <tr>
+          <td><code>POST /Orders/guest/{id}/checkout</code></td>
+          <td>Anonymous + access token, <code>[Idempotent]</code></td>
+          <td>Open or resume the Stripe session (the same use case as Section 3.5)</td>
+          </tr>
+          <tr>
+          <td><code>POST /Orders/guest/{id}/claim</code></td>
+          <td>Authenticated + access token, <code>[NonIdempotent]</code></td>
+          <td>Move the order into the signed-in customer&#39;s account</td>
+          </tr>
+          </tbody></table></div>
+          <p><strong>Steps (place order):</strong></p>
+          <ol>
+          <li>Map and validate the delivery details (a shipping address is required for a guest)</li>
+          <li>Price the lines from the catalog and quote shipping and tax, outside the transaction, exactly as the
+          customer checkout does (Section 3.4)</li>
+          <li>Mint the access token: 32 random bytes, base64url (<code>GuestCheckOutHandler.cs:38</code>)</li>
+          <li>In one retriable transaction: inventory snapshot and fail-fast sufficiency check,
+          <code>Order.CreateForGuest()</code> (guest name required, contact email validated, only the token&#39;s SHA-256
+          hash kept), apply the charges, refuse an unchargeable total, insert, take the atomic inventory
+          decrements, save, then attach the shipping label and arm the payment deadline (Section 3.17)</li>
+          <li>After the commit, email the &quot;order received&quot; message carrying the private link (the token in the
+          URL fragment). It is sent inline rather than as an internal command, because a command row would put
+          the plaintext token back at rest; a send failure is logged and does not fail the checkout</li>
+          <li>Return the order and the token</li>
+          </ol>
+          <p><strong>Claim:</strong> the token is checked against the stored hash in constant time, then <code>Order.ClaimForCustomer()</code>
+          sets <code>CustomerId</code>, clears <code>GuestAccessTokenHash</code> (the account, not the link, is the credential from
+          then on) and raises <code>OrderChanged</code> with the <code>Updated</code> state (<code>Order.cs:555</code>, <code>:569</code>).</p>
+          <p><strong>Downstream differences for a guest order:</strong> the payment, shipping and payment-failed emails go to the
+          order&#39;s <code>ContactEmail</code> (<code>OrderRecipient</code>), and delivery raises no <code>OrderFulfilled</code>, so a guest purchase
+          earns no review entitlement unless it is claimed before delivery.</p>
+          <p><strong>Implemented in:</strong></p>
+          <ul>
+          <li><code>Source/Modules/Sales/MMCA.Store.Sales.API/Controllers/GuestOrdersController.cs</code></li>
+          <li><code>Source/Modules/Sales/MMCA.Store.Sales.Application/Orders/UseCases/GuestCheckout/GuestCheckOutHandler.cs</code></li>
+          <li><code>Source/Modules/Sales/MMCA.Store.Sales.Application/Orders/UseCases/GuestCheckout/GuestOrderPlacedNotifier.cs</code></li>
+          <li><code>Source/Modules/Sales/MMCA.Store.Sales.Application/Orders/UseCases/GuestOrders/ClaimGuestOrderHandler.cs</code></li>
+          <li><code>Source/Modules/Sales/MMCA.Store.Sales.Application/Orders/UseCases/GuestOrders/GetGuestOrderHandler.cs</code></li>
+          </ul>
+          <hr>
           <h2 id="4-order-status-state-machine">4. Order Status State Machine</h2>
-          <pre class="doc-pre" tabindex="0"><code class="">                    +------------------------------------------+
-                    |                                          |
-                    v                                          |
- +-----------------+----+    InitiatePayment    +--------------+------+
- |   PendingPayment     |---------------------&gt;|  PaymentInitiated    |
- +----------------------+                      +---------------------+
-        |       ^                                    |           |
-        |       |                                    |           |
-        |       +------------ PaymentFailed &lt;--------+           |
-        |                    (can retry)                         |
-        |                         |                              |
-   MarkAsCancelled           MarkAsCancelled               MarkAsPaid
-        |                         |                       (webhook or manual)
-        v                         v                              |
- +--------------+                                    +-----------+-----+
- |  Cancelled   | &lt;---- MarkAsCancelled ------------ |      Paid       |
- +--------------+   (from PaymentInitiated)          +-----------------+
-                                                          |       |
-                                                        Ship      |
-                                                          |       |
-                                                          v       |
-                                                  +-----------+   |
-                                                  |  Shipped  |   | MarkAsDelivered
-                                                  +-----------+   | (no carrier leg)
-                                                          |       |
-                                                   MarkAsDelivered|
-                                                          |       |
-                                                          v       v
-                                                     +-----------------+
-                                                     |    Delivered    |
-                                                     +-----------------+
+          <pre class="doc-pre" tabindex="0"><code class="">                  InitiatePayment                     MarkAsPaid
+ PendingPayment ------------------&gt; PaymentInitiated -------------&gt; Paid -----Ship-----&gt; Shipped
+       |                              |          ^                   |                     |
+       |         MarkAsPaymentFailed  |          | InitiatePayment   | MarkAsDelivered     | MarkAsDelivered
+       |                              v          | (retry)           | (no carrier leg)    |
+       |                          PaymentFailed -+                   v                     |
+       |                              |                          Delivered &lt;---------------+
+       |  MarkAsCancelled             |  MarkAsCancelled
+       +-----------------&gt; Cancelled &lt;+  (PaymentInitiated cancels the same way)
 
- UpdateShipment is a self-transition on Shipped: it replaces the recorded
- shipment and re-raises OrderShipped without moving the status.</code></pre>
+ MarkAsPaidManually (admin) reaches Paid from PendingPayment, PaymentInitiated or PaymentFailed.
+ MarkAsPaid (webhook, verify-payment, reconciliation sweep) reaches Paid from PaymentInitiated only.
+ UpdateShipment is a self-transition on Shipped: it replaces the recorded shipment and
+ re-raises OrderShipped without moving the status.</code></pre>
           <p><strong>Cancellable States:</strong> PendingPayment, PaymentInitiated, PaymentFailed. <code>Shipped</code> is deliberately NOT
           cancellable, for the same reason <code>Paid</code> is not: the goods and the money have both already moved.
           <strong>Shippable States:</strong> Paid (only)
@@ -1069,7 +1429,13 @@
           <strong>Deliverable States:</strong> Paid, Shipped. The carrier leg is optional: a fulfilment with no tracking to
           record still goes Paid -&gt; Delivered directly, which is why Paid keeps both outgoing edges.
           <strong>Manual Payment States:</strong> PendingPayment, PaymentInitiated, PaymentFailed
+          <strong>Payment-initiating States:</strong> PendingPayment, PaymentFailed (a <code>PaymentInitiated</code> order resumes its existing session instead)
+          <strong>Payment-failure States:</strong> PaymentInitiated (only)
           <strong>Terminal States:</strong> Cancelled, Delivered</p>
+          <p>The Cancelled edges are taken by a customer or admin cancel (Section 3.6), by the order&#39;s own payment
+          deadline (Section 3.17, from <code>PendingPayment</code> or <code>PaymentFailed</code>) and by the reconciliation sweep
+          (Section 3.9); all three land in the same <code>OrderCancelled</code> compensation. Each state is its own
+          <code>IOrderState</code> class under <code>Sales.Domain/Orders/States/</code>, selected from the order&#39;s <code>Status</code>.</p>
           <p>The <code>OrderStatus</code> numeric values are persisted and travel on the <code>user_sales_export</code> gRPC contract, so
           members are only ever appended: <code>Shipped</code> is last in the enum even though it sits mid-lifecycle.</p>
           <hr>
@@ -1097,6 +1463,21 @@
           <td>Category name uniqueness</td>
           <td>Category names must be unique (database-enforced)</td>
           <td><code>CategoryConfiguration.cs</code></td>
+          </tr>
+          <tr>
+          <td>Category delete guards</td>
+          <td>A category with products assigned (<code>Category.HasProducts</code>) or with child categories (<code>Category.HasChildCategories</code>) cannot be deleted; the operator decides where a subtree goes rather than it being reparented</td>
+          <td><code>Category.cs:87</code>, <code>CategoryInvariants.cs:37</code>, <code>:53</code></td>
+          </tr>
+          <tr>
+          <td>No parent cycles</td>
+          <td>A category cannot be its own parent (<code>Category.SelfReferencing</code>), and assigning a parent walks the ancestor chain to refuse a multi-level cycle</td>
+          <td><code>CategoryInvariants.cs</code>, <code>CategoryAssignParentUpdateHandler.cs</code></td>
+          </tr>
+          <tr>
+          <td>Image limit</td>
+          <td>A product holds at most 10 images, each at most 5 MB</td>
+          <td><code>ProductImageInvariants.cs:29</code></td>
           </tr>
           <tr>
           <td>Product name required</td>
@@ -1300,8 +1681,58 @@
           </thead>
           <tbody><tr>
           <td>Orders via checkout only</td>
-          <td>Orders can only be created through the shopping cart checkout process</td>
-          <td><code>CheckOutHandler.cs</code></td>
+          <td>Orders can only be created through the shopping cart checkout or the guest checkout</td>
+          <td><code>CheckOutHandler.cs</code>, <code>GuestCheckOutHandler.cs</code></td>
+          </tr>
+          <tr>
+          <td>Guest order identity</td>
+          <td>A guest order needs the guest&#39;s name (<code>Order.GuestName.Required</code>) and a valid contact email of at most 100 characters (<code>Order.ContactEmail.Invalid</code>); the access token is exactly 43 characters (32 bytes, base64url) and only its 64-character hex SHA-256 hash is stored</td>
+          <td><code>OrderInvariants.cs:147</code>, <code>:153</code>, <code>:162</code>, <code>:168</code></td>
+          </tr>
+          <tr>
+          <td>Contact phone length</td>
+          <td>The optional checkout phone is at most 30 characters</td>
+          <td><code>OrderInvariants.cs:150</code></td>
+          </tr>
+          <tr>
+          <td>Guest access by token only</td>
+          <td>Reading, paying for or claiming a guest order requires its access token, compared in constant time; every refusal answers 404</td>
+          <td><code>Order.cs:541</code>, <code>GetGuestOrderHandler.cs</code>, <code>ClaimGuestOrderHandler.cs</code></td>
+          </tr>
+          <tr>
+          <td>Claim only a guest order</td>
+          <td>Only a guest order can be claimed into an account (<code>Order.Claim.NotAGuestOrder</code>); claiming clears the token hash</td>
+          <td><code>Order.cs:555</code></td>
+          </tr>
+          <tr>
+          <td>Charges before payment</td>
+          <td>Shipping and tax can only be applied while the order is <code>PendingPayment</code> with no payment session (<code>Order.Charges.PaymentStarted</code>); neither charge can be negative</td>
+          <td><code>Order.cs:485</code>, <code>OrderInvariants.cs</code></td>
+          </tr>
+          <tr>
+          <td>Total is the sum of its parts</td>
+          <td><code>Total = Subtotal + ShippingCost + TaxAmount</code>, and a payment session whose subtotal, shipping and tax do not add up to the total is refused</td>
+          <td><code>Order.cs:485</code>, <code>StripePaymentService.cs:153</code></td>
+          </tr>
+          <tr>
+          <td>Bag unchanged since the quote</td>
+          <td>Checkout refuses an order whose subtotal differs from the quote it was charged from (<code>Order.Charges.BagChanged</code>, 409)</td>
+          <td><code>OrderQuoteApplier.cs:28</code></td>
+          </tr>
+          <tr>
+          <td>Chargeable total</td>
+          <td>A total below the payment provider&#39;s minimum (<code>Stripe:MinimumChargeAmount</code>, 0.50) is refused before anything is written (<code>Order.Total.BelowMinimumCharge</code>)</td>
+          <td><code>CheckOutHandler.cs:188</code>, <code>StripeSettings.cs:55</code></td>
+          </tr>
+          <tr>
+          <td>Payment matches the order</td>
+          <td>An order is marked paid from provider data only when the session is paid and its amount and currency match the order total</td>
+          <td><code>PaymentProof.cs:26</code></td>
+          </tr>
+          <tr>
+          <td>Shipping label needs an address</td>
+          <td>A label attaches once, and only to an order with a shipping address</td>
+          <td><code>Order.cs:450</code></td>
           </tr>
           <tr>
           <td>Non-empty order</td>
@@ -1336,22 +1767,22 @@
           <tr>
           <td>Cancellation restriction</td>
           <td>Only PendingPayment, PaymentInitiated, or PaymentFailed orders can be cancelled</td>
-          <td><code>OrderInvariants.cs</code></td>
+          <td><code>States/*State.cs</code> (<code>CanMarkAsCancelled</code>)</td>
           </tr>
           <tr>
           <td>Payment initiation restriction</td>
           <td>Payment can only be initiated from PendingPayment or PaymentFailed states</td>
-          <td><code>OrderInvariants.cs</code></td>
+          <td><code>PendingPaymentState.cs</code>, <code>PaymentFailedState.cs</code></td>
           </tr>
           <tr>
           <td>Payment confirmation restriction</td>
-          <td>Only PaymentInitiated orders can be marked as paid (via webhook)</td>
-          <td><code>OrderInvariants.cs</code></td>
+          <td>Only PaymentInitiated orders can be marked as paid from provider data (webhook, verify-payment, reconciliation)</td>
+          <td><code>PaymentInitiatedState.cs</code></td>
           </tr>
           <tr>
           <td>Manual payment restriction</td>
           <td>Manual payment allowed from PendingPayment, PaymentInitiated, or PaymentFailed</td>
-          <td><code>OrderInvariants.cs</code></td>
+          <td><code>States/*State.cs</code> (<code>CanMarkAsPaidManually</code>)</td>
           </tr>
           <tr>
           <td>Delivery restriction</td>
@@ -1400,8 +1831,18 @@
           </tr>
           <tr>
           <td>Inventory restoration</td>
-          <td>Cancelling an order restores all order line quantities to inventory</td>
-          <td><code>CancelOrderHandler.cs</code></td>
+          <td>Cancelling an order restores all order line quantities to inventory, once, after the cancellation commits</td>
+          <td><code>OrderCancelledSagaHandler.cs</code>, <code>InventoryRestorationDomainService.cs</code></td>
+          </tr>
+          <tr>
+          <td>Unpaid orders expire</td>
+          <td>An order still <code>PendingPayment</code> or <code>PaymentFailed</code> when its window (30 minutes) closes is cancelled and its stock returned</td>
+          <td><code>ExpireUnpaidOrderInternalCommandHandler.cs:61</code>, <code>UnpaidOrderExpirySettings.cs:43</code></td>
+          </tr>
+          <tr>
+          <td>Fulfilment notice for accounts only</td>
+          <td>Delivery raises <code>OrderFulfilled</code> only for an order that belongs to a customer</td>
+          <td><code>Order.cs:711</code></td>
           </tr>
           <tr>
           <td>Price snapshot</td>
@@ -1440,8 +1881,18 @@
           </tr>
           <tr>
           <td>Variant must exist</td>
-          <td>Inventory can only be created for existing product variants</td>
-          <td><code>AdjustInventoryHandler.cs</code></td>
+          <td>Inventory can only be created or adjusted for existing product variants (<code>Inventory.InvalidProductVariant</code>), checked across the module boundary</td>
+          <td><code>InventoryProductVariantGuard.cs</code>, <code>BulkSetInventoryHandler.cs</code></td>
+          </tr>
+          <tr>
+          <td>Bulk set bounds</td>
+          <td>A bulk set carries 1 to 500 items with no duplicate variant</td>
+          <td><code>BulkSetInventoryRequestValidator.cs</code></td>
+          </tr>
+          <tr>
+          <td>Seed never resets live stock</td>
+          <td>Startup seeding lifts only a row still at zero; any other count is live stock</td>
+          <td><code>SalesModuleDbSeeder.cs:97</code></td>
           </tr>
           </tbody></table></div>
           <h3 id="55-identity--authentication-rules">5.5 Identity &amp; Authentication Rules</h3>
@@ -1465,18 +1916,48 @@
           </tr>
           <tr>
           <td>Valid role</td>
-          <td>User roles must be either &quot;Admin&quot; or &quot;Customer&quot;</td>
-          <td><code>UserInvariants.cs</code></td>
+          <td>User roles must be either &quot;Admin&quot; or &quot;Customer&quot; (case-insensitive, <code>User.Role.Invalid</code>)</td>
+          <td><code>UserInvariants.cs</code>, <code>UserRole.cs</code></td>
+          </tr>
+          <tr>
+          <td>Exactly one role</td>
+          <td>An administrator role change names exactly one role (<code>User.Role.ExactlyOne</code>)</td>
+          <td><code>UserAdministrationService.cs:103</code></td>
+          </tr>
+          <tr>
+          <td>Deactivated accounts refused</td>
+          <td>Login and token refresh refuse an inactive account (<code>Auth.UserDeactivated</code>)</td>
+          <td><code>AuthenticationService.cs:112</code></td>
+          </tr>
+          <tr>
+          <td>Credential and privilege changes end sessions</td>
+          <td>Locking an account, changing its role, changing the password and resetting it revoke every live refresh session</td>
+          <td><code>UserAdministrationService.cs:82</code>, <code>:134</code>, <code>ResetPasswordHandlerBase.cs</code></td>
+          </tr>
+          <tr>
+          <td>Lock and unlock are state setters</td>
+          <td>Locking a locked account (<code>User.AlreadyDeactivated</code>) or unlocking an active one (<code>User.AlreadyActive</code>) is a 409</td>
+          <td><code>User.cs:229</code>, <code>:257</code></td>
+          </tr>
+          <tr>
+          <td>Email confirmation is recorded, not enforced</td>
+          <td><code>RequireConfirmedEmail</code> is false, so an unconfirmed account signs in</td>
+          <td><code>User.cs:60</code>, <code>EmailConfirmationSettings.cs:55</code></td>
+          </tr>
+          <tr>
+          <td>Registration never auto-links an existing profile</td>
+          <td>A Customer that already holds the registering address is left unlinked until an administrator links it</td>
+          <td><code>UserRegisteredHandler.cs</code>, <code>LinkUserCustomerHandler.cs</code></td>
           </tr>
           <tr>
           <td>Access token expiry</td>
           <td>Access tokens expire after 15 minutes (configurable)</td>
-          <td><code>JwtSettings</code></td>
+          <td><code>JwtSettings.cs:66</code></td>
           </tr>
           <tr>
           <td>Refresh token expiry</td>
-          <td>Refresh tokens expire after 7 days (configurable)</td>
-          <td><code>JwtSettings</code></td>
+          <td>Refresh tokens expire after 7 days (configurable); each device holds its own rotating session</td>
+          <td><code>JwtSettings.cs:73</code></td>
           </tr>
           <tr>
           <td>Auto customer creation</td>
@@ -1563,12 +2044,22 @@
           <tr>
           <td>Refresh session</td>
           <td>Any authenticated</td>
-          <td>Obtain new tokens using a valid refresh token</td>
+          <td>Obtain new tokens using a valid refresh token (rotated on every use)</td>
           </tr>
           <tr>
           <td>Revoke session</td>
           <td>Any authenticated</td>
-          <td>Invalidate refresh token to end session</td>
+          <td>Invalidate the current refresh token to end the session</td>
+          </tr>
+          <tr>
+          <td>Manage devices</td>
+          <td>Any authenticated</td>
+          <td>List the signed-in devices (refresh sessions) and sign one out</td>
+          </tr>
+          <tr>
+          <td>Confirm email</td>
+          <td>Anonymous</td>
+          <td>Redeem the confirmation link sent at registration, or ask for a fresh one</td>
           </tr>
           <tr>
           <td>Request password reset</td>
@@ -1579,6 +2070,11 @@
           <td>Reset password</td>
           <td>Anonymous</td>
           <td>Set a new password by redeeming the single-use token from the reset email</td>
+          </tr>
+          <tr>
+          <td>Visit the storefront home</td>
+          <td>Anonymous</td>
+          <td>Hero, category tiles, a Best Sellers row and the store information pages</td>
           </tr>
           <tr>
           <td>Browse catalog</td>
@@ -1592,8 +2088,13 @@
           </tr>
           <tr>
           <td>Add item to cart</td>
-          <td>Customer</td>
-          <td>Add a product variant with quantity to shopping cart (via drawer)</td>
+          <td>Anonymous or Customer</td>
+          <td>Add a product variant with quantity to the bag: a signed-out shopper&#39;s bag lives on the device, a customer&#39;s in the server cart</td>
+          </tr>
+          <tr>
+          <td>See what the bag costs</td>
+          <td>Anonymous or Customer</td>
+          <td>Subtotal, shipping, the amount still needed for free shipping and, once an address is entered, sales tax (<code>POST /Orders/quote</code>)</td>
           </tr>
           <tr>
           <td>Change cart item quantity</td>
@@ -1613,12 +2114,32 @@
           <tr>
           <td>Checkout</td>
           <td>Customer</td>
-          <td>Convert shopping cart into an order (reserves inventory)</td>
+          <td>Confirm the shipping and billing addresses on <code>/checkout</code> and convert the shopping cart into an order (reserves inventory)</td>
+          </tr>
+          <tr>
+          <td>Guest checkout</td>
+          <td>Anonymous</td>
+          <td>Place an order from the device bag with a name, an email and the addresses; receive a private order link</td>
+          </tr>
+          <tr>
+          <td>View guest order</td>
+          <td>Anonymous (access token)</td>
+          <td>Open the order from its private link: items, addresses, status, tracking and totals; pay for it</td>
+          </tr>
+          <tr>
+          <td>Claim guest order</td>
+          <td>Customer</td>
+          <td>Create an account from the guest order page and move the order into it</td>
           </tr>
           <tr>
           <td>Initiate payment</td>
+          <td>Customer or guest</td>
+          <td>Start (or resume) the Stripe checkout session for a pending order</td>
+          </tr>
+          <tr>
+          <td>Resume an abandoned payment</td>
           <td>Customer</td>
-          <td>Start Stripe checkout session for a pending order</td>
+          <td>Pick an order left in <code>PendingPayment</code> or <code>PaymentInitiated</code> back up after backing out of Stripe Checkout</td>
           </tr>
           <tr>
           <td>View my orders</td>
@@ -1664,6 +2185,21 @@
           <td>Change password</td>
           <td>Customer</td>
           <td>Update account password via profile page</td>
+          </tr>
+          <tr>
+          <td>Change preferences</td>
+          <td>Any authenticated</td>
+          <td>Persist the UI culture and theme to the account</td>
+          </tr>
+          <tr>
+          <td>Export my data</td>
+          <td>Account owner</td>
+          <td>Download the personal data held for the account as JSON</td>
+          </tr>
+          <tr>
+          <td>Erase my account</td>
+          <td>Account owner</td>
+          <td>Delete the account and anonymize its personal data</td>
           </tr>
           </tbody></table></div>
           <h3 id="administrator-facing">Administrator-Facing</h3>
@@ -1743,12 +2279,42 @@
           <tr>
           <td>View cart details</td>
           <td>Admin</td>
-          <td>See cart contents, manage items, checkout on behalf</td>
+          <td>See cart contents, manage items, check out on the customer&#39;s behalf (no addresses, no shipping label)</td>
           </tr>
           <tr>
           <td>Manage customers</td>
           <td>Admin</td>
-          <td>Create, view, edit, and delete customer profiles</td>
+          <td>Create, view, edit, delete and export customer profiles</td>
+          </tr>
+          <tr>
+          <td>Manage users</td>
+          <td>Admin (<code>users:manage</code>)</td>
+          <td>Browse accounts, lock (deactivate) and unlock (reactivate) one, change its role, list its sessions</td>
+          </tr>
+          <tr>
+          <td>Manage roles</td>
+          <td>Admin (<code>roles:manage</code>)</td>
+          <td>View each role&#39;s permissions and edit its stored grants</td>
+          </tr>
+          <tr>
+          <td>Link user to customer</td>
+          <td>Admin (<code>identity:users:manage</code>)</td>
+          <td>Attach an existing customer profile to an account that registration left unlinked</td>
+          </tr>
+          <tr>
+          <td>Bulk set inventory</td>
+          <td>Admin</td>
+          <td>Set the stock of up to 500 variants in one request</td>
+          </tr>
+          <tr>
+          <td>Export data</td>
+          <td>Admin</td>
+          <td>CSV export of products, customers, orders and carts</td>
+          </tr>
+          <tr>
+          <td>Act for an account owner</td>
+          <td>Admin</td>
+          <td>Export or erase another account&#39;s personal data</td>
           </tr>
           </tbody></table></div>
           <hr>
@@ -1834,9 +2400,9 @@
           </tr>
           <tr>
           <td><code>OrderChanged</code></td>
-          <td>Lifecycle: <code>Added</code>, <code>Deleted</code> (no <code>Updated</code> is raised)</td>
-          <td><code>Order.Create</code> at checkout; <code>Order.Delete</code> (soft delete)</td>
-          <td>A purchase order is recorded or its record is withdrawn</td>
+          <td>Lifecycle: <code>Added</code>, <code>Updated</code>, <code>Deleted</code></td>
+          <td><code>Order.Create</code> and <code>Order.CreateForGuest</code> at checkout (<code>Added</code>); <code>Order.ClaimForCustomer</code> when a guest order moves into an account (<code>Updated</code>); <code>Order.Delete</code> (soft delete)</td>
+          <td>A purchase order is recorded, claimed into an account, or its record is withdrawn</td>
           </tr>
           <tr>
           <td><code>OrderPaymentInitiated</code></td>
@@ -1847,26 +2413,26 @@
           <tr>
           <td><code>OrderPaid</code></td>
           <td>Business event (carries the total, the order&#39;s total savings, and a snapshot of every order line including its list price and promotion label)</td>
-          <td><code>Order.MarkAsPaid</code> (webhook) and <code>Order.MarkAsPaidManually</code></td>
-          <td>Revenue collected; <code>OrderPaidHandler</code> emails the payment confirmation</td>
+          <td><code>Order.MarkAsPaid</code> (webhook, verify-payment, reconciliation) and <code>Order.MarkAsPaidManually</code></td>
+          <td>Revenue collected; <code>OrderPaidHandler</code> schedules the payment confirmation email (<code>Sales.SendOrderPaidEmail</code> internal command)</td>
           </tr>
           <tr>
           <td><code>OrderPaymentFailed</code></td>
           <td>Business event</td>
           <td><code>Order.MarkAsPaymentFailed</code></td>
-          <td><code>OrderPaymentFailedSagaHandler</code> tells the customer the payment needs a retry</td>
+          <td><code>OrderPaymentFailedSagaHandler</code> schedules the &quot;you can retry&quot; email (<code>Sales.SendOrderPaymentFailedEmail</code>) and re-arms the order&#39;s payment deadline from now</td>
           </tr>
           <tr>
           <td><code>OrderShipped</code></td>
           <td>Business event (carries carrier, tracking number, tracking link, ship date and estimated delivery date)</td>
           <td><code>Order.Ship</code>, and again on <code>Order.UpdateShipment</code> for every correction to the recorded shipment</td>
-          <td><code>OrderShippedHandler</code> emails the carrier, tracking number and tracking link, re-sending on a correction</td>
+          <td><code>OrderShippedHandler</code> schedules the shipping email (<code>Sales.SendOrderShippedEmail</code>) with the carrier, tracking number and tracking link, re-sending on a correction</td>
           </tr>
           <tr>
           <td><code>OrderDelivered</code></td>
           <td>Business event</td>
           <td><code>Order.MarkAsDelivered</code></td>
-          <td>Fulfillment completed; raised alongside the <code>OrderFulfilled</code> integration event</td>
+          <td>Fulfillment completed; raised alongside the <code>OrderFulfilled</code> integration event on a customer&#39;s order. No handler</td>
           </tr>
           <tr>
           <td><code>OrderCancelled</code></td>
@@ -1901,19 +2467,37 @@
           <td><code>UserRegistered</code></td>
           <td>Business event (carries the email, name, role and address)</td>
           <td><code>User.Create</code></td>
-          <td><code>UserRegisteredHandler</code> creates the linked <code>Customer</code> profile for non-admin accounts</td>
+          <td><code>UserRegisteredHandler</code> creates the linked <code>Customer</code> profile for non-admin accounts; <code>UserRegisteredEmailConfirmationHandler</code> schedules the confirmation email</td>
           </tr>
           <tr>
           <td><code>UserPasswordChanged</code></td>
           <td>Business event</td>
-          <td><code>User.ChangePassword</code></td>
-          <td>Security credentials rotated. No handler today: the event is an extension point</td>
+          <td><code>User.ChangePassword</code>, reached by both the change-password and the password-reset workflows</td>
+          <td>Security credentials rotated. No handler: the event is an extension point</td>
           </tr>
           <tr>
           <td><code>UserDeactivated</code></td>
           <td>Business event</td>
-          <td><code>User.Deactivate</code></td>
-          <td>User can no longer access the system. No handler today</td>
+          <td><code>User.Deactivate</code>, reached by <code>POST /Admin/Users/{userId}/lock</code></td>
+          <td>User can no longer sign in or refresh. No handler</td>
+          </tr>
+          <tr>
+          <td><code>UserReactivated</code></td>
+          <td>Business event</td>
+          <td><code>User.Reactivate</code>, reached by <code>POST /Admin/Users/{userId}/unlock</code></td>
+          <td>A deactivated account is back in service. No handler</td>
+          </tr>
+          <tr>
+          <td><code>UserRoleChanged</code></td>
+          <td>Business event (carries the previous and the new role)</td>
+          <td><code>User.ChangeRole</code>, only when the role actually differs</td>
+          <td>Privilege change announced rather than only stamped on the audited row. No handler</td>
+          </tr>
+          <tr>
+          <td><code>UserEmailConfirmed</code></td>
+          <td>Business event</td>
+          <td><code>User.ConfirmEmail</code>, the first time only</td>
+          <td>The account proved it receives mail at its address. No handler</td>
           </tr>
           <tr>
           <td><code>CustomerChanged</code></td>
@@ -1943,7 +2527,7 @@
           <td><code>ProductVariantChanged</code></td>
           <td><code>Catalog.ProductVariantChanged.v1</code></td>
           <td><code>State</code>, <code>ProductId</code>, <code>ProductVariantId</code>, <code>Sku</code>, <code>Price</code>, <code>ProductName</code></td>
-          <td>Catalog -&gt; Sales: raised by <code>Product</code> for <code>Updated</code> and <code>Deleted</code>, and published by <code>AddVariantHandler</code> after the commit for <code>Added</code>. Consumer <code>ProductVariantChangedHandler</code></td>
+          <td>Catalog -&gt; Sales: raised by <code>Product</code> for <code>Updated</code> and <code>Deleted</code>; for <code>Added</code>, <code>AddVariantHandler</code> schedules the <code>Catalog.PublishProductVariantChanged</code> internal command after the save, so the publish is durable. Consumer <code>ProductVariantChangedHandler</code></td>
           <td>Variant lifecycle; Sales auto-creates the zero-stock inventory record and refreshes its denormalized SKU/product sort labels. <code>Price</code> is always the <strong>list</strong> price</td>
           </tr>
           <tr>
@@ -1957,7 +2541,7 @@
           <td><code>OrderFulfilled</code></td>
           <td><code>Sales.OrderFulfilled.v1</code></td>
           <td><code>OrderId</code>, <code>CustomerId</code>, <code>DeliveredOn</code>, <code>Lines</code> (variant id and quantity)</td>
-          <td>Sales -&gt; Catalog: raised by <code>Order.MarkAsDelivered</code> and <code>Order.RepublishFulfillment</code>. Consumer <code>OrderFulfilledHandler</code></td>
+          <td>Sales -&gt; Catalog: raised by <code>Order.MarkAsDelivered</code> and <code>Order.RepublishFulfillment</code>, for a customer&#39;s order only (a guest order has no account to entitle). Consumer <code>OrderFulfilledHandler</code></td>
           <td>A delivered order, with its line snapshot; Catalog turns it into the verified-purchase entitlements behind product reviews</td>
           </tr>
           <tr>
@@ -1975,65 +2559,200 @@
           <p><strong>Business Impact:</strong> Enables the system to collect payments from customers and confirm payment success or failure asynchronously via webhooks.</p>
           <p><strong>Integration Points:</strong></p>
           <ul>
-          <li><strong>Checkout Session Creation</strong>: Creates hosted payment pages with order details, converting internal Money values to Stripe&#39;s smallest currency unit (cents). Maps order lines to Stripe line items with product name, quantity, and unit amount.</li>
-          <li><strong>Webhook Processing</strong>: Receives and verifies payment status notifications using Stripe&#39;s signature verification (<code>EventUtility.ConstructEvent()</code>). Handles <code>checkout.session.completed</code>, <code>checkout.session.expired</code>, and <code>payment_intent.payment_failed</code> events.</li>
-          <li><strong>Error Handling</strong>: Stripe API errors return <code>Result.Failure</code> with code <code>&quot;Payment.Stripe.SessionCreationFailed&quot;</code>. Signature verification failures return <code>&quot;Payment.SignatureVerification.Failed&quot;</code>.</li>
-          <li><strong>Configuration</strong>: Stripe API key (<code>SecretKey</code>) and webhook secret (<code>WebhookSecret</code>) configured per environment via <code>StripeSettings</code> (user secrets recommended).</li>
+          <li><strong>Checkout Session Creation</strong>: Creates hosted payment pages with order details, converting internal Money values to Stripe&#39;s smallest currency unit (cents). Maps order lines to Stripe line items with product name, quantity, and unit amount, plus the order&#39;s shipping and tax; the session expires with the order&#39;s unpaid window.</li>
+          <li><strong>Session status and expiry</strong>: Reads a session&#39;s status (verify-payment, reconciliation, resume) and expires a session when an order leaves <code>PaymentInitiated</code> by cancellation or manual payment.</li>
+          <li><strong>Webhook Processing</strong>: Receives payment status notifications, verifies the signature (<code>EventUtility.ValidateSignature()</code>) against either trusted secret, then parses the event (<code>EventUtility.ParseEvent()</code>). Handles <code>checkout.session.completed</code>, <code>checkout.session.expired</code>, and <code>payment_intent.payment_failed</code> events. <code>StripeWebhookRegistrationService</code> verifies or creates the webhook endpoint at startup when <code>WebhookBaseUrl</code> is set.</li>
+          <li><strong>Stripe Tax</strong>: <code>StripeTaxCalculator</code> calculates sales tax on the merchandise and the shipping from the ship-to address, only while <code>Tax:Enabled</code> is on (Section 3.16).</li>
+          <li><strong>Resilience</strong>: every Stripe call runs under a retry (3 attempts) and a circuit breaker (<code>Payment.Stripe.CircuitOpen</code> while open).</li>
+          <li><strong>Error Handling</strong>: Stripe API errors return <code>Result.Failure</code> with codes <code>&quot;Payment.Stripe.SessionCreationFailed&quot;</code>, <code>&quot;Payment.Stripe.SessionRetrievalFailed&quot;</code>, <code>&quot;Payment.Stripe.SessionExpirationFailed&quot;</code>, <code>&quot;Payment.Stripe.UnsupportedCurrency&quot;</code> and <code>&quot;Payment.Stripe.ChargesDoNotAddUp&quot;</code>. Signature verification failures return <code>&quot;Payment.SignatureVerification.Failed&quot;</code>.</li>
+          <li><strong>Configuration</strong>: Stripe API key (<code>SecretKey</code>), webhook secret (<code>WebhookSecret</code>), <code>WebhookBaseUrl</code> and <code>MinimumChargeAmount</code> (0.50) configured per environment via <code>StripeSettings</code> (user secrets recommended).</li>
           </ul>
-          <p><strong>Source:</strong> <code>Source/Modules/Sales/MMCA.Store.Sales.Infrastructure/Services/StripePaymentService.cs</code></p>
+          <p><strong>Source:</strong> <code>Source/Modules/Sales/MMCA.Store.Sales.Infrastructure/Payments/Stripe/StripePaymentService.cs</code>,
+          <code>Source/Modules/Sales/MMCA.Store.Sales.Infrastructure/Payments/Stripe/StripeTaxCalculator.cs</code>,
+          <code>Source/Modules/Sales/MMCA.Store.Sales.Infrastructure/Payments/Stripe/StripeWebhookRegistrationService.cs</code></p>
           <h3 id="82-smtp-email-service">8.2 SMTP Email Service</h3>
           <p><strong>Purpose:</strong> Infrastructure for sending email notifications.</p>
           <p><strong>Business Impact:</strong> Provides the capability for system-to-user communication.</p>
           <p><strong>Configuration:</strong></p>
           <ul>
-          <li>Host, Port (default 25), Username, Password, EnableSsl, From, To</li>
-          <li>Default: <code>localhost:25</code> with SSL disabled</li>
+          <li>Host, Port (default 25), Username, Password, EnableSsl, From, To (the <code>Smtp</code> section)</li>
+          <li>The service hosts point at <code>localhost:1025</code> (MailDev, started by the Aspire AppHost) in their default settings</li>
           </ul>
-          <p><strong>Source:</strong> <code>Source/Common/MMCA.Common.Infrastructure/Services/SmtpEmailSender.cs</code></p>
-          <p><strong>Consumers:</strong> the forgot-password handler (Section 3.12) sends the reset email through <code>IEmailSender</code>, alongside the Sales domain-event handlers <code>OrderPaidHandler</code>, <code>OrderShippedHandler</code> (carrier, tracking number and tracking link, re-sent on every correction to the recorded shipment) and <code>OrderPaymentFailedSagaHandler</code>. Every one of those resolves the customer&#39;s contact details through <code>ICustomerService</code> and treats a send failure as non-fatal: the order transition is already committed before the handler runs. On the reset path delivery is awaited but never fatal: a send failure is logged and the request still answers 202, because reporting it would be an enumeration oracle, and the token stays live so the customer can retry.</p>
-          <hr>
-          <h2 id="9-authorization-model">9. Authorization Model</h2>
+          <p><strong>Source:</strong> <code>MMCA.Common.Infrastructure/Mail/SmtpEmailSender.cs</code>, <code>MMCA.Common.Infrastructure/Mail/SmtpSettings.cs</code></p>
+          <p><strong>Consumers:</strong> every email goes through <code>IEmailSender</code>:</p>
           <div class="table-wrap"><table>
           <thead>
           <tr>
-          <th>Policy</th>
+          <th>Email</th>
+          <th>Sent by</th>
+          <th>Delivery</th>
+          </tr>
+          </thead>
+          <tbody><tr>
+          <td>Password reset (Section 3.12)</td>
+          <td><code>ForgotPasswordHandler</code></td>
+          <td>Inline; a send failure is logged and the request still answers 202, because reporting it would be an enumeration oracle, and the token stays live so the customer can retry</td>
+          </tr>
+          <tr>
+          <td>Email confirmation (Section 3.14)</td>
+          <td><code>SendEmailConfirmationHandler</code></td>
+          <td>The <code>Identity.SendEmailConfirmation</code> internal command at registration; inline on a re-send request</td>
+          </tr>
+          <tr>
+          <td>Order received, guest only (Section 3.18)</td>
+          <td><code>GuestOrderPlacedNotifier</code></td>
+          <td>Inline after the commit, because only the token&#39;s hash is stored; best effort</td>
+          </tr>
+          <tr>
+          <td>Payment confirmation</td>
+          <td><code>SendOrderPaidEmailInternalCommandHandler</code></td>
+          <td>The <code>Sales.SendOrderPaidEmail</code> internal command scheduled by <code>OrderPaidHandler</code></td>
+          </tr>
+          <tr>
+          <td>Shipping and tracking (re-sent on every correction)</td>
+          <td><code>SendOrderShippedEmailInternalCommandHandler</code></td>
+          <td>The <code>Sales.SendOrderShippedEmail</code> internal command scheduled by <code>OrderShippedHandler</code></td>
+          </tr>
+          <tr>
+          <td>Payment failed, you can retry</td>
+          <td><code>SendOrderPaymentFailedEmailInternalCommandHandler</code></td>
+          <td>The <code>Sales.SendOrderPaymentFailedEmail</code> internal command scheduled by <code>OrderPaymentFailedSagaHandler</code></td>
+          </tr>
+          </tbody></table></div>
+          <p>The three order emails resolve their recipient through <code>OrderRecipient</code>: a customer&#39;s address is looked up in Identity through <code>ICustomerService</code> (so mail follows a later address change), a guest order uses its own frozen <code>ContactEmail</code>. Scheduling them as durable internal commands keeps the mail alive across a host that dies after the order transition committed (<a href="../adr/114-internal-commands-durable-job-queue.html">ADR-114</a>).</p>
+          <h3 id="83-shipping-label-provider">8.3 Shipping Label Provider</h3>
+          <p><strong>Purpose:</strong> Issues the shipping label every order with a ship-to address gets at placement.</p>
+          <p><strong>Integration Points:</strong> <code>IShippingLabelProvider</code>. The registered implementation is <code>MockShippingLabelProvider</code>: it issues a label the moment the order is created, with an invented label number (<code>CASA-{order}-{random}</code>) and a 20-character tracking number that starts with <code>MOCK</code>, and makes no network call. A real carrier integration replaces the provider, not the <code>ShippingLabel</code> shape.</p>
+          <p><strong>Source:</strong> <code>Source/Modules/Sales/MMCA.Store.Sales.Infrastructure/Shipping/MockShippingLabelProvider.cs</code></p>
+          <hr>
+          <h2 id="9-authorization-model">9. Authorization Model</h2>
+          <p>Authorization is capability-based (<a href="../adr/020-permission-based-authorization.html">ADR-020</a>): an endpoint
+          is anonymous, requires any signed-in user (<code>[Authorize]</code>), or names the capability it needs with
+          <code>[HasPermission(...)]</code>; ownership of a record is a separate check layered on top. There are no
+          role-named policies.</p>
+          <div class="table-wrap"><table>
+          <thead>
+          <tr>
+          <th>Gate</th>
           <th>Access Level</th>
-          <th>Description</th>
+          <th>Where it applies</th>
           </tr>
           </thead>
           <tbody><tr>
           <td>Anonymous</td>
           <td>No auth required</td>
-          <td>Catalog browsing (GET categories, products), published product reviews (<code>GET /Reviews/by-product/{productId}/paged</code>), login, registration, password reset (<code>POST /Auth/forgot-password</code>, <code>POST /Auth/reset-password</code>), payment webhooks</td>
+          <td>Catalog browsing (GET categories, products, the variant lookup, product images), published product reviews (<code>GET /Reviews/by-product/{productId}/paged</code>), login, registration, token refresh, password reset, email confirmation, the order quote, best sellers, guest checkout and the guest order endpoints (which require the order&#39;s access token instead), payment webhooks</td>
           </tr>
           <tr>
-          <td>RequireAuthenticated</td>
+          <td>Authenticated</td>
           <td>Any logged-in user</td>
-          <td>Shopping cart operations, order viewing (own), profile management, writing and revising own reviews</td>
+          <td>Shopping cart operations, order viewing and paying (own), cancelling an own order, profile management, preferences, session management, writing and revising own reviews, claiming a guest order</td>
           </tr>
           <tr>
-          <td>RequireCustomer</td>
-          <td>Customer role</td>
-          <td>Customer-specific operations</td>
-          </tr>
-          <tr>
-          <td>RequireAdmin</td>
-          <td>Admin role</td>
-          <td>Catalog management, inventory management, manual payment, shipping and delivery confirmation</td>
+          <td>Permission</td>
+          <td>A role granted the capability</td>
+          <td>Catalog, inventory and fulfilment management, manual payment, review moderation, customer, user and role administration (table below)</td>
           </tr>
           </tbody></table></div>
-          <p><strong>Permission-based endpoints:</strong> an endpoint states the capability it needs with <code>[HasPermission(...)]</code>
-          over a constant from the owning module&#39;s <code>{Module}Permissions</code>, and each module grants those to roles
-          in its API <code>DependencyInjection</code> (Admin holds all of them today). The shipment endpoints
-          (<code>PUT /Orders/{id}/ship</code>, <code>PUT /Orders/{id}/shipment</code>) carry <code>sales:orders:manage</code> alongside <code>pay</code>
-          and <code>deliver</code>; the review moderation surface (<code>GET /Reviews/paged</code>, <code>PUT /Reviews/{id}/hide</code>,
-          <code>PUT /Reviews/{id}/unhide</code>) carries <code>catalog:reviews:moderate</code>.</p>
+          <p><strong>Permissions:</strong> each module declares its capabilities in <code>{Module}Permissions</code> and grants them to roles
+          in <code>{Module}PermissionGrants</code> (Shared layer), applied both by the module&#39;s own API registration and by
+          the token-minting host. Admin holds every one; Customer holds none. The token carries one <code>permission</code>
+          claim per capability its role holds, so a client gates its own surface on a capability rather than a
+          role name.</p>
+          <div class="table-wrap"><table>
+          <thead>
+          <tr>
+          <th>Module</th>
+          <th>Permission</th>
+          <th>Guards</th>
+          </tr>
+          </thead>
+          <tbody><tr>
+          <td>Catalog</td>
+          <td><code>catalog:categories:manage</code></td>
+          <td>Category create, rename, re-parent, delete</td>
+          </tr>
+          <tr>
+          <td>Catalog</td>
+          <td><code>catalog:products:manage</code></td>
+          <td>Product create, delete, attribute edits, CSV export</td>
+          </tr>
+          <tr>
+          <td>Catalog</td>
+          <td><code>catalog:product-variants:manage</code></td>
+          <td>Variant add, remove, SKU and list price</td>
+          </tr>
+          <tr>
+          <td>Catalog</td>
+          <td><code>catalog:product-images:manage</code></td>
+          <td>Image upload, delete, reorder</td>
+          </tr>
+          <tr>
+          <td>Catalog</td>
+          <td><code>catalog:pricing:manage</code></td>
+          <td>Variant and product-wide discounts</td>
+          </tr>
+          <tr>
+          <td>Catalog</td>
+          <td><code>catalog:reviews:moderate</code></td>
+          <td><code>GET /Reviews/paged</code>, <code>PUT /Reviews/{id}/hide</code>, <code>PUT /Reviews/{id}/unhide</code></td>
+          </tr>
+          <tr>
+          <td>Sales</td>
+          <td><code>sales:orders:manage</code></td>
+          <td><code>pay</code>, <code>ship</code>, <code>shipment</code>, <code>deliver</code>, the order lookup</td>
+          </tr>
+          <tr>
+          <td>Sales</td>
+          <td><code>sales:inventory:manage</code></td>
+          <td>Every <code>/InventoryItems</code> endpoint</td>
+          </tr>
+          <tr>
+          <td>Sales</td>
+          <td><code>sales:shopping-carts:manage</code></td>
+          <td>The shopping cart lookup</td>
+          </tr>
+          <tr>
+          <td>Identity</td>
+          <td><code>identity:customers:manage</code></td>
+          <td>Customer list, lookup, export, create, delete</td>
+          </tr>
+          <tr>
+          <td>Identity</td>
+          <td><code>identity:users:manage</code></td>
+          <td><code>PUT /Users/{userId}/customer-link</code></td>
+          </tr>
+          <tr>
+          <td>Identity (framework)</td>
+          <td><code>users:manage</code></td>
+          <td><code>/Admin/Users</code></td>
+          </tr>
+          <tr>
+          <td>Identity (framework)</td>
+          <td><code>roles:manage</code></td>
+          <td><code>/Admin/Roles</code>; granted in compiled code only, never from a stored row</td>
+          </tr>
+          </tbody></table></div>
+          <p>Beyond the compiled grants, an operator can attach further STORED grants to a role through
+          <code>PUT /Admin/Roles/{role}/permissions</code> (Section 3.15).</p>
           <p><strong>Writing a review needs a customer profile, not a role.</strong> The reviews controller resolves the caller
           through the <code>customer_id</code> claim and fails closed when the token carries none; admins are deliberately
           not exempted, because writing a review is an act by a customer and an admin account with no customer
           profile has nothing to write one as.</p>
-          <p><strong>Ownership Enforcement:</strong> The <code>OwnerOrAdminFilter</code> validates that the route parameter <code>id</code> (CustomerIdentifierType) matches the authenticated user&#39;s customer ID, or that the user has the Admin role. Applied to shopping cart and order endpoints. Returns 403 Forbidden if unauthorized.</p>
-          <p><strong>JWT Claims:</strong> Access tokens contain: <code>sub</code>, <code>jti</code>, <code>iat</code>, <code>user_id</code>, <code>email</code>, <code>role</code>, and <code>customer_id</code> (when applicable).</p>
+          <p><strong>Ownership Enforcement</strong> (<a href="../adr/033-resource-ownership-authorization.html">ADR-033</a>):</p>
+          <ul>
+          <li><code>OwnerOrAdminFilter</code> guards the shopping cart and customer controllers: the route parameter <code>id</code> must
+          match the caller&#39;s <code>customer_id</code> claim, or the caller holds the Admin role. It denies by default when
+          the owner cannot be resolved and returns 403 Forbidden.</li>
+          <li>Orders scope every query to the caller through <code>OrdersByCustomerSpecification</code> and check ownership on
+          every mutation; a resolvable caller who does not own the order is answered 404, not 403, so another
+          customer&#39;s order ids cannot be probed. A caller with no resolvable <code>customer_id</code> is refused outright.</li>
+          <li>Data-subject export and erasure authorize the owner or an Admin inside the handlers.</li>
+          </ul>
+          <p><strong>JWT Claims:</strong> Access tokens contain: <code>sub</code>, <code>jti</code>, <code>iat</code>, name (the linked customer&#39;s display name, never the email), <code>email</code>, <code>role</code>, <code>customer_id</code> (when applicable), <code>sid</code> (the refresh session) and one <code>permission</code> claim per capability (<code>TokenService.cs:116-121</code>, <code>:141</code>).</p>
+          <p><strong>Service-to-service calls:</strong> the Identity customer gRPC service requires either an end user&#39;s JWT or a
+          service token minted with the shared <code>Grpc:ServiceToken</code> signing key, because the order emails run
+          from the anonymous Stripe webhook with no user token to forward.</p>
           <hr>
           <h2 id="10-cross-module-communication">10. Cross-Module Communication</h2>
           <p>The system enforces strict module boundaries. Modules communicate only through shared interface contracts:</p>
@@ -2050,13 +2769,13 @@
           <td><code>IProductVariantService</code></td>
           <td>Catalog</td>
           <td>Sales</td>
-          <td>Verify variant existence, check SKU uniqueness, fetch unit pricing (effective price, list price and promotion label), get ID by SKU</td>
+          <td>Verify variant existence (one or a batch), check SKU uniqueness, fetch unit pricing (effective price, list price and promotion label), get ID by SKU, and fetch the denormalizable catalog labels (product id and name, SKU) for a batch of variants</td>
           </tr>
           <tr>
           <td><code>ICustomerService</code></td>
           <td>Identity</td>
           <td>Sales</td>
-          <td>Resolve customer contact details for the order notification emails</td>
+          <td>Resolve customer contact details for the order notification emails and the display name frozen on an order at checkout</td>
           </tr>
           <tr>
           <td><code>IUserSalesExportService</code></td>
@@ -2072,68 +2791,90 @@
           </tr>
           </tbody></table></div>
           <p>Across process boundaries these interfaces are satisfied by gRPC clients, resolved through service
-          discovery (<a href="../adr/007-grpc-extraction.html">ADR-007</a>). Both export edges out of Identity are
+          discovery (<a href="../adr/007-grpc-extraction.html">ADR-007</a>). The contracts are four <code>.proto</code> files:
+          <code>product_variants.proto</code> (<code>Exists</code>, <code>SkuExists</code>, <code>GetIdBySku</code>, <code>GetUnitPrices</code>, <code>GetExistingIds</code>,
+          <code>GetCatalogInfo</code>), <code>user_catalog_export.proto</code>, <code>customer_service.proto</code> (<code>GetContactInfoById</code>) and
+          <code>user_sales_export.proto</code>, in the <code>MMCA.Store.{Module}.Contracts</code> projects. Both export edges out of Identity are
           <strong>best-effort</strong>: an unreachable peer degrades that one section of the export rather than failing the
           export, so neither carries a startup wait.</p>
           <p><strong>Confirmed behaviors:</strong></p>
           <ul>
           <li>Sales module cannot directly access Catalog domain entities</li>
-          <li>When Catalog module is disabled, a stub <code>DisabledProductVariantService</code> is registered</li>
-          <li>Sales module declares a hard dependency on Catalog (<code>RequiresDependencies = true</code>): it will not start without Catalog</li>
+          <li>When a provider module is disabled, a stub is registered in its place (<code>DisabledProductVariantService</code>, <code>DisabledCustomerService</code>, <code>DisabledUserSalesExportService</code>, <code>DisabledUserCatalogExportService</code>)</li>
+          <li>Sales module declares hard dependencies on Catalog and Identity (<code>RequiresDependencies = true</code>): it will not start without them (<code>SalesModule.cs:30</code>, <code>:37</code>)</li>
+          <li>Asynchronous edges travel as the four integration events of Section 7 through the outbox and the message broker (RabbitMQ locally, Azure Service Bus in production)</li>
           <li>Module discovery uses reflection; registration follows topological dependency order (Kahn&#39;s algorithm)</li>
           </ul>
           <hr>
           <h2 id="11-user-interface">11. User Interface</h2>
           <h3 id="111-technology">11.1 Technology</h3>
-          <p>The UI is a <strong>Blazor Server + WebAssembly hybrid</strong> (<code>InteractiveAuto</code> render mode) using <strong>MudBlazor</strong> component library. It supports multiple hosting targets:</p>
+          <p>The UI is a <strong>Blazor Server + WebAssembly hybrid</strong> (<code>InteractiveAuto</code> render mode) using <strong>MudBlazor</strong> component library, branded <strong>C.A.S.A Boutique</strong>. It supports multiple hosting targets:</p>
           <ul>
-          <li><strong>Web</strong> (Server + WASM): <code>Source/UI/Hosts/MMCA.Store.UI.Web</code></li>
-          <li><strong>WebAssembly Client</strong>: <code>Source/UI/Hosts/MMCA.Store.UI.Web.Client</code></li>
-          <li><strong>MAUI</strong> (iOS, Android, macOS, Windows): <code>Source/UI/Hosts/MMCA.Store.UI</code></li>
+          <li><strong>Web</strong> (Server + WASM): <code>Source/Hosts/UI/MMCA.Store.UI.Web</code></li>
+          <li><strong>WebAssembly Client</strong>: <code>Source/Hosts/UI/MMCA.Store.UI.Web.Client</code></li>
+          <li><strong>MAUI</strong> (iOS, Android, macOS, Windows): <code>Source/Hosts/UI/MMCA.Store.UI</code></li>
           </ul>
+          <p>The web head is an <strong>installable web app</strong>: it serves <code>manifest.webmanifest</code> and maps the framework
+          service worker, which supplies an offline page (<code>MMCA.Store.UI.Web/Program.cs:281</code>,
+          <a href="../adr/136-installable-web-app-service-worker.html">ADR-136</a>).</p>
           <h3 id="112-shopping-cart-ux">11.2 Shopping Cart UX</h3>
-          <p>The shopping cart is exclusively accessible through a <strong>380px right-side drawer</strong> (CartDrawer), opened via the cart icon in the top app bar. There is no dedicated cart page.</p>
+          <p>The shopping cart is exclusively accessible through a <strong>380px right-side drawer</strong> (CartDrawer), opened via the bag icon in the top app bar. There is no dedicated cart page.</p>
           <p><strong>Features:</strong></p>
           <ul>
           <li>Quantity +/- controls per item when cart is Active</li>
           <li>Remove individual items, clear all items</li>
-          <li>&quot;Checkout &amp; Pay&quot; button triggers order creation + Stripe redirect</li>
+          <li>Subtotal plus a free-shipping line (&quot;X away from free shipping&quot; or &quot;Free shipping&quot;) from the server quote (<code>POST /Orders/quote</code>)</li>
+          <li>&quot;Checkout &amp; Pay&quot; button navigates to the checkout page (<code>/checkout</code>)</li>
           <li>&quot;Checked Out&quot; chip and read-only mode for checked-out carts</li>
           <li>Empty state with &quot;Browse Products&quot; navigation</li>
           <li>&quot;Continue Shopping&quot; link to catalog</li>
           </ul>
-          <p><strong>State Management:</strong> The <code>ICartStateService</code> singleton manages cart state centrally. It enriches cart items with product names and SKUs from the Catalog API after each refresh.</p>
-          <h3 id="113-catalog-browse">11.3 Catalog Browse</h3>
+          <p><strong>State Management:</strong> The <code>ICartStateService</code> manages cart state centrally. It enriches cart items with product names and SKUs from the Catalog API (the batch <code>/Products/variant-lookup</code> endpoint) after each refresh. A shopper who has not signed in shops against <code>GuestCartStore</code>: variant ids and quantities only, kept on the device, with nothing priced or personal stored. When the shopper signs in, the device cart moves into the server cart (<code>MergeGuestCartAsync</code>). The top app bar shows <code>CartButton</code> for a signed-in customer and <code>GuestCartButton</code> over the device cart otherwise.</p>
+          <h3 id="113-checkout-and-guest-orders">11.3 Checkout and Guest Orders</h3>
+          <p>The checkout page (<code>/checkout</code>) provides:</p>
+          <ul>
+          <li>Shipping address and billing address (billing equals shipping by default) plus an optional phone; the summary shows the quote, with sales tax once the address is complete</li>
+          <li>For a signed-in customer: the saved profile address pre-fills the form, the cart becomes the order (<code>PUT /ShoppingCarts/{id}/checkout</code>), then the Stripe session opens</li>
+          <li>For a signed-out shopper: sign in or register and return to <code>/checkout</code>, or continue as a guest with a name and an email; the device cart becomes a guest order (<code>POST /Orders/guest</code>), the private token is remembered on the device, and the guest goes on to pay</li>
+          </ul>
+          <p>The guest order page (<code>/orders/guest/{id}</code>) opens from the private link (the token in the URL fragment): the items, addresses, status, tracking and totals, a pay action, and an offer to create an account from the order&#39;s own details, which signs in and claims that order.</p>
+          <p><code>OrphanOrderRecovery</code> (a content-header component) detects an order left in <code>PendingPayment</code> or <code>PaymentInitiated</code> after the shopper backed out of Stripe Checkout and offers to resume it.</p>
+          <h3 id="114-storefront-and-catalog-browse">11.4 Storefront and Catalog Browse</h3>
+          <p>The home page (<code>/</code>, <code>StoreHome</code>) shows the hero, category tiles, a Best Sellers row fed by <code>GET /Orders/best-sellers</code>, and the store perks. The information pages are <code>/shipping</code>, <code>/returns</code>, <code>/contact</code>, <code>/privacy</code>, <code>/terms</code> (one <code>StoreInfo</code> page) and <code>/about</code>.</p>
           <p>The catalog browse page (<code>/catalog</code>) provides:</p>
           <ul>
           <li>Product grid with search by name</li>
           <li>Category filter dropdown</li>
-          <li>Sort by name or price</li>
+          <li>Sort by name (ascending or descending) or newest</li>
           <li>Star rating and review count on each card, read straight off the product&#39;s denormalized <code>RatingSummary</code> so a grid of cards costs no per-card aggregate query</li>
           <li>Effective-price range per card, with a sale badge and the struck-through list price when any variant on the card carries an active discount</li>
-          <li>Quick &quot;Add to Cart&quot; buttons per variant</li>
+          <li>Quick &quot;Add to Cart&quot; per variant, shown to signed-out shoppers too</li>
           <li>&quot;View Details&quot; navigation to product detail page</li>
           </ul>
           <p>The product detail page (<code>/catalog/{id}</code>) shows:</p>
           <ul>
           <li>Breadcrumbs (Home &gt; Catalog &gt; Product)</li>
           <li>Product description, brand, category</li>
-          <li>Variant list with SKU, price, quantity selector, and &quot;Add to Cart&quot;. A discounted variant shows the effective price beside the struck-through list price and a sale badge, and carries an accessible &quot;Was X, now Y&quot; label so a screen reader hears both numbers rather than the visual strike alone</li>
-          <li>&quot;Buy Now&quot; option (direct Stripe checkout for single variant)</li>
+          <li>Variant choice, price, quantity selector, and &quot;Add to Cart&quot;. A discounted variant shows the effective price beside the struck-through list price and a sale badge, and carries an accessible &quot;Was X, now Y&quot; label so a screen reader hears both numbers rather than the visual strike alone</li>
+          <li>&quot;Buy Now&quot; (adds the variant and opens <code>/checkout</code>)</li>
+          <li>Information sections (materials, care, shipping, returns)</li>
           <li>A reviews section (anchor <code>#reviews</code>) listing the published reviews, plus the review editor for a signed-in customer who is eligible to write or revise one</li>
           </ul>
-          <h3 id="114-navigation-structure">11.4 Navigation Structure</h3>
-          <p><strong>Sidebar</strong> (role-based, dynamically populated from <code>IUIModule</code> registrations):</p>
+          <h3 id="115-navigation-structure">11.5 Navigation Structure</h3>
+          <p><strong>Sidebar</strong> (role-based, dynamically populated from <code>IUIModule</code> registrations; Home comes from the framework navigation):</p>
           <ul>
           <li>Customer: Home, Shop, My Orders, My Profile</li>
-          <li>Admin: Home, Categories, Products, Reviews, Inventory, Shopping Carts, Orders, Customers, My Profile</li>
+          <li>Admin: Home, Shop, Categories, Products, Reviews, Inventory, Shopping Carts, Orders, Customers, Users, Roles, My Profile</li>
           </ul>
-          <p><strong>Top App Bar</strong>: Cart icon with badge count, user email, Logout button (authenticated) or Login/Register buttons (anonymous)</p>
-          <h3 id="115-module-registration">11.5 Module Registration</h3>
+          <p><strong>Top App Bar</strong>: Bag icon with badge count, user email, Logout button (authenticated) or Login/Register buttons (anonymous)</p>
+          <p><strong>Administration pages:</strong> <code>/users</code> and <code>/users/{id}</code> (lock, unlock, change role), <code>/roles</code> and <code>/roles/{role}</code> (edit stored grants), alongside the catalog, inventory, cart, order and customer pages. The profile page (<code>/profile</code>) links to the device list (&quot;Manage devices&quot;) and carries the &quot;Your data&quot; card for export and erasure.</p>
+          <h3 id="116-module-registration">11.6 Module Registration</h3>
           <p>UI modules implement <code>IUIModule</code> (providing <code>NavItems</code> and <code>Assembly</code> for route discovery). Modules can be conditionally enabled via <code>UIModuleConfiguration.IsModuleEnabled(configuration, moduleName)</code>.</p>
           <hr>
           <h2 id="12-cross-cutting-infrastructure">12. Cross-Cutting Infrastructure</h2>
           <h3 id="121-commandquery-pipeline-decorators">12.1 Command/Query Pipeline Decorators</h3>
+          <p>Every command and query handler runs inside the framework&#39;s decorator pipeline, listed here from the
+          outermost wrapper inward (<code>MMCA.Common.Application/DependencyInjection.cs:134-148</code>).</p>
           <div class="table-wrap"><table>
           <thead>
           <tr>
@@ -2143,9 +2884,24 @@
           </tr>
           </thead>
           <tbody><tr>
-          <td><code>TransactionalCommandDecorator</code></td>
-          <td><code>ITransactional</code></td>
-          <td>Wraps command in database transaction (begin/commit/rollback)</td>
+          <td><code>ProfilingCommandDecorator</code> / <code>ProfilingQueryDecorator</code></td>
+          <td>(all)</td>
+          <td>Records MiniProfiler step (when <code>UseMiniProfiler=true</code>; registered after the pipeline, so outermost)</td>
+          </tr>
+          <tr>
+          <td><code>FeatureGateCommandDecorator</code> / <code>FeatureGateQueryDecorator</code></td>
+          <td><code>IFeatureGated</code></td>
+          <td>Refuses the request while its feature flag is off</td>
+          </tr>
+          <tr>
+          <td><code>AuthorizationCommandDecorator</code> / <code>AuthorizationQueryDecorator</code></td>
+          <td><code>IRequiresPermission</code></td>
+          <td>Refuses the request when none of the caller&#39;s roles grants the permission</td>
+          </tr>
+          <tr>
+          <td><code>LoggingCommandDecorator</code> / <code>LoggingQueryDecorator</code></td>
+          <td>(all)</td>
+          <td>Structured logging around the handler</td>
           </tr>
           <tr>
           <td><code>CachingCommandDecorator</code></td>
@@ -2153,38 +2909,64 @@
           <td>Invalidates cache entries by prefix on successful command execution</td>
           </tr>
           <tr>
-          <td><code>ProfilingCommandDecorator</code></td>
-          <td>(all commands)</td>
-          <td>Records MiniProfiler step (when <code>UseMiniProfiler=true</code>)</td>
+          <td><code>CachingQueryDecorator</code></td>
+          <td><code>IQueryCacheable</code></td>
+          <td>Caches query results</td>
           </tr>
           <tr>
-          <td><code>ProfilingQueryDecorator</code></td>
-          <td>(all queries)</td>
-          <td>Records MiniProfiler step (when <code>UseMiniProfiler=true</code>)</td>
+          <td><code>ValidatingCommandDecorator</code> / <code>ValidatingQueryDecorator</code></td>
+          <td>(all with a validator)</td>
+          <td>Runs the FluentValidation rules before the handler</td>
+          </tr>
+          <tr>
+          <td><code>TimeoutCommandDecorator</code> / <code>TimeoutQueryDecorator</code></td>
+          <td><code>IHasTimeout</code></td>
+          <td>Applies a per-request execution budget</td>
+          </tr>
+          <tr>
+          <td><code>TransactionalCommandDecorator</code></td>
+          <td><code>ITransactional</code></td>
+          <td>Wraps command in database transaction (begin/commit/rollback); innermost</td>
           </tr>
           </tbody></table></div>
           <h3 id="122-idempotency">12.2 Idempotency</h3>
-          <p>The <code>IdempotencyFilter</code> (applied via <code>[Idempotent]</code> attribute on Create endpoints) caches the first response for a given <code>Idempotency-Key</code> header value for 24 hours. Duplicate requests receive the cached response with an <code>X-Idempotent-Replay: true</code> header. Per-key <code>SemaphoreSlim</code> locking prevents concurrent duplicate execution.</p>
+          <p>The <code>IdempotencyFilter</code> (applied via <code>[Idempotent]</code> on create and checkout endpoints) caches the first response for a given <code>Idempotency-Key</code> header value for 24 hours (<code>IdempotencyFilter.cs:81</code>). Duplicate requests receive the cached response with an <code>X-Idempotent-Replay: true</code> header. The cache key binds the caller&#39;s identity, the HTTP method and the route template, and a key reused with a different request body is answered 422 rather than replayed. Concurrent duplicates are serialized by a distributed lock when the host registers one (both deployed apps run more than one replica) and by a per-process keyed lock otherwise; a cache or lock fault degrades to executing without the guarantee rather than failing the request. Endpoints that must re-evaluate state on every call are marked <code>[NonIdempotent]</code> with a reason.</p>
           <h3 id="123-exception-handling">12.3 Exception Handling</h3>
           <p>Five exception handlers (registered as middleware in priority order):</p>
           <ol>
-          <li><strong>DomainExceptionHandler</strong> -&gt; HTTP 400</li>
-          <li><strong>ValidationExceptionHandler</strong> (FluentValidation) -&gt; HTTP 400 with grouped errors</li>
-          <li><strong>DbUpdateExceptionHandler</strong> -&gt; HTTP 409 Conflict</li>
           <li><strong>OperationCanceledExceptionHandler</strong> -&gt; HTTP 499</li>
+          <li><strong>DomainExceptionHandler</strong> -&gt; HTTP 400</li>
+          <li><strong>DbUpdateExceptionHandler</strong> -&gt; HTTP 409 Conflict (a concurrency conflict is counted on its own metric)</li>
+          <li><strong>ValidationExceptionHandler</strong> (FluentValidation) -&gt; HTTP 400 with grouped errors</li>
           <li><strong>GlobalExceptionHandler</strong> -&gt; HTTP 500 (catch-all)</li>
           </ol>
-          <h3 id="124-multi-database-strategy">12.4 Multi-Database Strategy</h3>
-          <p>The <code>IDbContextFactory</code> implements a strategy pattern supporting three data sources:</p>
-          <ul>
-          <li><strong>SQL Server</strong> (default, via Aspire container)</li>
-          <li><strong>SQLite</strong> (alternative)</li>
-          <li><strong>Cosmos DB</strong> (alternative, no transaction support)</li>
-          </ul>
-          <p>Entity types are routed to data sources via <code>[UseDataSource]</code> attribute on EF configurations. The <code>IDataSourceService</code> caches entity-to-datasource mappings.</p>
+          <h3 id="124-data-storage">12.4 Data Storage</h3>
+          <p>Each service owns its database and outbox (<a href="../adr/006-database-per-service.html">ADR-006</a>): Catalog,
+          Identity and Sales each read the <code>DataSources:{Module}</code> connection (<code>Store_Catalog</code>, <code>Store_Identity</code>,
+          <code>Store_Sales</code>) and migrate through their own <code>MMCA.Store.Migrations.SqlServer.{Module}</code> assembly. Every
+          Store data source is SQL Server; the framework&#39;s <code>IDbContextFactory</code> strategy also supports SQLite and
+          Cosmos DB engines, which no Store data source selects. Entity types are routed to data sources via the
+          <code>[UseDataSource]</code> attribute, and the <code>IDataSourceService</code> caches entity-to-datasource mappings.</p>
+          <h3 id="125-optimistic-concurrency">12.5 Optimistic Concurrency</h3>
+          <p>Conditional writes carry <code>[SupportsIfMatch]</code>: the response to a read carries an ETag, the <code>If-Match</code>
+          header is mandatory on the guarded mutation, a stale tag is answered <strong>412 Precondition Failed</strong> and a
+          missing one <strong>428 Precondition Required</strong> (<code>SupportsIfMatchAttribute.cs:16</code>,
+          <a href="../adr/035-optimistic-concurrency.html">ADR-035</a>). It guards the rename, re-parent, attribute, SKU, price
+          and discount edits, image reordering, inventory increase and decrease, the order transitions (pay, ship,
+          shipment, deliver, cancel), review revision and moderation, and the customer profile edits.</p>
+          <h3 id="126-internal-commands-and-the-outbox">12.6 Internal Commands and the Outbox</h3>
+          <p>Work that must survive a host restart after the triggering transaction committed is scheduled as a
+          durable internal command row and run by the framework&#39;s processor
+          (<a href="../adr/114-internal-commands-durable-job-queue.html">ADR-114</a>). Store defines six:
+          <code>Catalog.PublishProductVariantChanged</code>, <code>Identity.SendEmailConfirmation</code>, <code>Sales.ExpireUnpaidOrder</code>,
+          <code>Sales.SendOrderPaidEmail</code>, <code>Sales.SendOrderShippedEmail</code> and <code>Sales.SendOrderPaymentFailedEmail</code>. Each
+          handler is idempotent and treats &quot;nothing left to do&quot; as success. Integration events leave through each
+          service&#39;s transactional outbox.</p>
           <hr>
           <h2 id="13-testing">13. Testing</h2>
           <h3 id="131-test-structure">13.1 Test Structure</h3>
+          <p>All test projects run on Microsoft Testing Platform with xUnit v3. Counts from
+          <code>git ls-files &#39;Tests/*.csproj&#39;</code> (27 projects).</p>
           <div class="table-wrap"><table>
           <thead>
           <tr>
@@ -2195,23 +2977,28 @@
           </thead>
           <tbody><tr>
           <td><strong>Unit</strong></td>
-          <td>15 projects (per module per layer + common)</td>
-          <td>Entity creation, invariants, domain events, handlers, mappers, validators</td>
+          <td>18 module projects (Domain, Application, Infrastructure, API, Shared and UI for each of Catalog, Sales and Identity) plus 2 host projects (Gateway, UI.Web)</td>
+          <td>Entity creation, invariants, domain events, handlers, mappers, validators, controllers, bUnit component tests</td>
           </tr>
           <tr>
           <td><strong>Architecture</strong></td>
-          <td>1 project (12 test files)</td>
-          <td>NetArchTest.Rules: layer dependencies, module isolation, domain purity, naming conventions</td>
+          <td>1 project (63 <code>*Tests.cs</code> files)</td>
+          <td>NetArchTest: layer dependencies, module isolation, domain purity, naming conventions, folder width, and <code>IntegrationEventContractTests</code>, which freezes every integration event payload</td>
           </tr>
           <tr>
           <td><strong>Integration</strong></td>
           <td>3 per-service projects (Catalog, Sales, Identity)</td>
-          <td>Each boots one service host via <code>WebApplicationFactory</code>; Testcontainers.MsSql + Respawn for DB reset (or a real SQL Server via <code>STORE_TEST_SQL_BASE</code>), JWT token generation, full HTTP endpoint testing. Runs via <code>MMCA.Store.Integration.slnf</code> and gates deploy. The old combined single-host <code>MMCA.Store.IntegrationTests</code> has been removed.</td>
+          <td>Each boots one service host via <code>WebApplicationFactory</code>; Testcontainers.MsSql + Respawn for DB reset (or a real SQL Server via <code>STORE_TEST_SQL_BASE</code>), JWT token generation, full HTTP endpoint testing, OpenAPI baseline checks. Runs via <code>MMCA.Store.Integration.slnf</code> and gates deploy</td>
+          </tr>
+          <tr>
+          <td><strong>Cross-service / broker</strong></td>
+          <td>2 projects (CrossService, ServiceBusEmulator)</td>
+          <td>Container-backed, non-gating tiers: the integration-event round trips (<code>ProductVariantChanged</code>, <code>OrderFulfilled</code>) between real service hosts, and the Azure Service Bus emulator transport</td>
           </tr>
           <tr>
           <td><strong>E2E</strong></td>
-          <td>1 project</td>
-          <td>Playwright (Chromium), page objects, Blazor wait helpers, full user journey tests</td>
+          <td>1 project (33 <code>*Tests.cs</code> files)</td>
+          <td>Playwright, page objects, Blazor wait helpers: full user journeys including checkout, Buy Now, Stripe payment, orphaned-order recovery, password reset, role administration, accessibility, phone viewport, the installable web app and web vitals</td>
           </tr>
           </tbody></table></div>
           <h3 id="132-key-test-scenarios">13.2 Key Test Scenarios</h3>
@@ -2220,15 +3007,15 @@
           <li>Order lifecycle: all state transitions including cancellation with inventory restoration</li>
           <li>Cart operations: add, change quantity, remove, clear, checkout</li>
           <li>Authorization: anonymous, customer, admin role enforcement</li>
-          <li>Cross-module: Catalog -&gt; Sales pricing, inventory validation</li>
+          <li>Cross-module: Catalog -&gt; Sales pricing, inventory validation, and the integration-event round trips</li>
           </ul>
           <hr>
           <h2 id="14-missing-or-unclear-business-logic">14. Missing or Unclear Business Logic</h2>
-          <h3 id="141-email-notifications-cover-payment-and-shipping-only">14.1 Email Notifications Cover Payment and Shipping Only</h3>
-          <p><strong>Observation:</strong> Four handlers send email today: the password-reset request (Section 3.12), <code>OrderPaidHandler</code> (payment receipt, which prints a struck &quot;Was&quot; amount and the promotion label on a discounted line and a &quot;You saved&quot; total when the order saved anything), <code>OrderShippedHandler</code> (carrier, tracking number and tracking link, re-sent on every shipment correction) and <code>OrderPaymentFailedSagaHandler</code>. There is still no email at order placement (<code>OrderChanged</code> with the <code>Added</code> state), at delivery (<code>OrderDelivered</code>), or at cancellation (<code>OrderCancelled</code>).
-          <strong>Recommendation:</strong> Confirm whether an order-confirmation and a delivery-confirmation message are wanted; both would be additional <code>IDomainEventHandler&lt;T&gt;</code> registrations on events that already exist, not new plumbing.</p>
+          <h3 id="141-no-email-at-customer-order-placement-delivery-or-cancellation">14.1 No Email at Customer Order Placement, Delivery or Cancellation</h3>
+          <p><strong>Observation:</strong> Email goes out for the password reset and the email confirmation (Sections 3.12, 3.14), the guest&#39;s order-received message (Section 3.18), the payment confirmation (which prints a struck &quot;Was&quot; amount and the promotion label on a discounted line and a &quot;You saved&quot; total when the order saved anything), the shipping notice (re-sent on every shipment correction) and the payment-failed notice. A customer (not a guest) gets no email when the order is placed (<code>OrderChanged</code> with the <code>Added</code> state), and nobody gets one at delivery (<code>OrderDelivered</code>) or at cancellation (<code>OrderCancelled</code>), including the cancellation the payment deadline performs.
+          <strong>Recommendation:</strong> Confirm whether order-confirmation, delivery and cancellation messages are wanted; each would be an <code>IDomainEventHandler&lt;T&gt;</code> that schedules a send internal command, on events that already exist, not new plumbing.</p>
           <h3 id="142-no-returnrefund-workflow">14.2 No Return/Refund Workflow</h3>
-          <p><strong>Observation:</strong> Once an order reaches <code>Paid</code> or <code>Delivered</code> status, there are no further state transitions available. No return, refund, or exchange workflow exists. Cancellation is only possible before payment succeeds.
+          <p><strong>Observation:</strong> Once an order reaches <code>Paid</code> or <code>Delivered</code> status, there are no further state transitions available. No return, refund, or exchange workflow exists. Cancellation is only possible before payment succeeds, and a cancel that finds the Stripe session already paid is refused with a message saying the order must be refunded instead, which the system cannot do.
           <strong>Recommendation:</strong> Clarify whether returns/refunds are in scope and whether Stripe refund integration is needed.</p>
           <h3 id="143-no-inventory-check-at-cart-add-time">14.3 No Inventory Check at Cart-Add Time</h3>
           <p><strong>Observation:</strong> When a customer adds an item to the cart, the system verifies the product variant exists but does <strong>not</strong> check if inventory is available. Inventory is only validated at checkout.
@@ -2236,8 +3023,8 @@
           <h3 id="144-cart-reactivation-clears-all-items">14.4 Cart Reactivation Clears All Items</h3>
           <p><strong>Observation:</strong> When a customer adds an item to a previously checked-out cart, all previous items are deleted and the cart is reactivated empty (with only the new item). The business intent behind clearing the cart rather than preserving previous items is unclear.
           <strong>Recommendation:</strong> Confirm this is the desired behavior: some systems prefer to retain unchecked-out items.</p>
-          <h3 id="145-no-price-change-protection">14.5 No Price Change Protection</h3>
-          <p><strong>Observation:</strong> Product variant prices can be changed at any time by administrators. If a customer has items in their cart and prices change before checkout, the customer will be charged the new price (prices are fetched at checkout, not at cart-add time).
+          <h3 id="145-no-price-change-protection-between-bag-and-checkout">14.5 No Price Change Protection Between Bag and Checkout</h3>
+          <p><strong>Observation:</strong> Product variant prices can be changed at any time by administrators, and prices are fetched at checkout, not at cart-add time. The cart drawer and the checkout page show the server quote at current prices, and checkout refuses an order whose subtotal no longer matches the quote it was charged from (<code>Order.Charges.BagChanged</code>). Nothing tells the shopper which line moved or that a price changed since the item was added.
           <strong>Recommendation:</strong> Determine if customers should be notified of price changes or if cart items should display price warnings.</p>
           <h3 id="146-one-parcel-per-order">14.6 One Parcel Per Order</h3>
           <p><strong>Observation:</strong> Delivery tracking exists (Section 3.8): an order carries a single <code>Shipment</code> value object with a carrier, a tracking number and the two dates. An order that physically leaves in two parcels can therefore only record one of them, and correcting the recorded shipment replaces it rather than adding to it.
@@ -2245,33 +3032,37 @@
           <h3 id="147-no-partial-order-fulfillment">14.7 No Partial Order Fulfillment</h3>
           <p><strong>Observation:</strong> Orders are delivered as a whole: there is no concept of partial shipments or split deliveries, and <code>Shipped</code> applies to the order rather than to individual lines.
           <strong>Recommendation:</strong> Clarify if partial fulfillment is a future requirement.</p>
-          <h3 id="148-no-customeruser-deactivation-endpoint">14.8 No Customer/User Deactivation Endpoint</h3>
-          <p><strong>Observation:</strong> <code>User.Deactivate()</code> method and <code>UserDeactivated</code> domain event exist in the domain model, but no API endpoint or UI action exposes this functionality.
-          <strong>Recommendation:</strong> May be an admin feature not yet implemented.</p>
-          <h3 id="149-category-deletion-has-no-cascade-check">14.9 Category Deletion Has No Cascade Check</h3>
-          <p><strong>Observation:</strong> Deleting a category doesn&#39;t check for assigned products. Products with a deleted category may have an orphaned <code>CategoryId</code>.
-          <strong>Recommendation:</strong> Consider validating no products reference the category before deletion, or cascading the nullification.</p>
-          <h3 id="1410-inventory-list-endpoint-not-exposed">14.10 Inventory List Endpoint Not Exposed</h3>
-          <p><strong>Observation:</strong> The <code>InventoryItemsController</code> only exposes <code>GetById</code>, the <code>GetAll</code>, <code>GetPaged</code>, and <code>Lookup</code> endpoints from the base class are not overridden. The UI <code>InventoryItemList</code> page may need these endpoints.
-          <strong>Recommendation:</strong> Verify how the inventory list page fetches its data and whether list endpoints should be added.</p>
+          <h3 id="148-shipping-labels-come-from-a-mock-carrier">14.8 Shipping Labels Come From a Mock Carrier</h3>
+          <p><strong>Observation:</strong> Every order with a ship-to address gets a <code>ShippingLabel</code> at placement, but the only registered <code>IShippingLabelProvider</code> is <code>MockShippingLabelProvider</code>, which invents a <code>CASA-</code> label number and a <code>MOCK</code> tracking number with no carrier call. The label and the shipment the admin records when shipping (Section 3.8) are separate records: nothing carries the label&#39;s tracking number into the shipment, which the admin types into the ship dialog.
+          <strong>Recommendation:</strong> Decide on a carrier integration and whether the label&#39;s tracking number should seed the recorded shipment.</p>
+          <h3 id="149-sales-tax-is-off-by-default">14.9 Sales Tax Is Off by Default</h3>
+          <p><strong>Observation:</strong> <code>Tax:Enabled</code> defaults to false (<code>TaxSettings.cs:18</code>), so every quote and every order carries zero tax until Stripe Tax and the store&#39;s registrations are activated on the account.
+          <strong>Recommendation:</strong> Confirm the tax registrations and the go-live date for collecting sales tax.</p>
+          <h3 id="1410-email-confirmation-is-not-enforced">14.10 Email Confirmation Is Not Enforced</h3>
+          <p><strong>Observation:</strong> Accounts are sent a confirmation link and <code>IsEmailConfirmed</code> is recorded, but <code>RequireConfirmedEmail</code> is false, so an unconfirmed account signs in and checks out exactly like a confirmed one. Registration also deliberately leaves an account unlinked from an existing Customer with the same address, which an administrator must link by hand.
+          <strong>Recommendation:</strong> Decide whether confirmation should gate sign-in (or the automatic link to an existing profile) before turning the setting on.</p>
+          <h3 id="1411-guest-purchases-earn-no-review-entitlement-unless-claimed">14.11 Guest Purchases Earn No Review Entitlement Unless Claimed</h3>
+          <p><strong>Observation:</strong> A guest order raises no <code>OrderFulfilled</code> at delivery, so a guest who never creates an account cannot review what they bought, and a guest who claims the order only after it was delivered stays without the entitlement: the backfill sweep skips an order whose <code>FulfilledPublishedOn</code> is already stamped.
+          <strong>Recommendation:</strong> Confirm whether a claim after delivery should publish the fulfilment for the new account.</p>
           <hr>
           <h2 id="15-seed-data-initial-system-state">15. Seed Data (Initial System State)</h2>
-          <p>The system seeds the following data at startup:</p>
-          <p><strong>Users:</strong></p>
+          <p>The system seeds the following data at startup, each module only when it is enabled and only when its
+          configuration flag is on:</p>
+          <p><strong>Users</strong> (when <code>Seeding:IncludeSampleUsers</code> is true, <code>IdentityModuleSeeder.cs:28</code>):</p>
           <ul>
           <li>Admin: one seeded administrator account (Admin role, no Customer record; credentials are environment-specific and not published)</li>
           <li>Customer: one seeded demo customer account (Customer role)</li>
           </ul>
-          <p><strong>Catalog:</strong></p>
+          <p><strong>Catalog</strong> (when <code>Seeding:IncludeSampleCatalog</code> is true, <code>CatalogModuleSeeder.cs:27</code>):</p>
           <ul>
           <li>Categories: &quot;Jewelry&quot; (id=1), &quot;Watches&quot; (id=2)</li>
-          <li>Product: &quot;Gold Ring&quot; (id=11, brand: &quot;WhatNot&quot;, category: Jewelry)</li>
-          <li>Variants: &quot;Gold Ring - Size 6&quot; ($15.00), &quot;Gold Ring - Size 7&quot; ($15.50), &quot;Gold Ring - Size 8&quot; ($16.00): all USD</li>
+          <li>Product: &quot;Gold Ring&quot; (id=11, description &quot;18K Gold Ring&quot;, brand: &quot;WhatNot&quot;, category: Jewelry)</li>
+          <li>Variants: &quot;Gold Ring - Size 6&quot; ($15.00), &quot;Gold Ring - Size 7&quot; ($15.50), &quot;Gold Ring - Size 8&quot; ($16.00): all USD, the SKU doubling as the variant name (<code>CatalogModuleDbSeeder.cs:166-168</code>)</li>
           </ul>
-          <p><strong>Inventory:</strong> 100,000 units per variant (for all 3 Gold Ring sizes)</p>
-          <p><strong>Seeding is idempotent</strong>: seeders check for existing data via <code>ExistsAsync()</code> before inserting, and only run for enabled modules.</p>
+          <p><strong>Inventory</strong> (Sales, under the same <code>Seeding:IncludeSampleCatalog</code> flag): 100 units per variant for all 3 Gold Ring sizes (<code>SalesModuleDbSeeder.cs:135-137</code>). Sales resolves each SKU to its variant id through Catalog&#39;s gRPC service and skips a SKU when Catalog is unreachable; the <code>ProductVariantChanged</code> event creates the row later.</p>
+          <p><strong>Seeding is idempotent</strong>: the Identity and Catalog seeders check for existing data via <code>ExistsAsync()</code> before inserting. The inventory seeder creates a missing row and lifts an existing row only while it still holds zero, because any other count is live stock (<code>SalesModuleDbSeeder.cs:97</code>).</p>
           <hr>
-          <p><em>This specification is derived entirely from the source code. All business rules, workflows, and behaviors described above are confirmed implementations traceable to the referenced source files. Last updated: 2026-09-05 (order shipment tracking and product reviews).</em></p>
+          <p><em>This specification is derived entirely from the source code. All business rules, workflows, and behaviors described above are confirmed implementations traceable to the referenced source files. Last updated: 2026-10-27 (guest checkout, shipping and tax, payment deadline, user and role administration, email confirmation, installable web app).</em></p>
           
         <div class="doc-foot btn-row">
           <a class="btn btn--ghost" href="../../docs/guides/index.html">← Back to Guides &amp; Specifications</a>
