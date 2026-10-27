@@ -1,6 +1,6 @@
 # Navigation Flow
 
-_As of: 2026-10-27 (C.A.S.A Boutique storefront with guest checkout, Store #232 and #233; detail routes typed `{Id:int}`, Store #214; app bar search and cart for every visitor, find my order and guest cancel, Store `b7f56f40` on MMCA.Common v1.265.0)._
+_As of: 2026-10-27 (C.A.S.A Boutique storefront with guest checkout, Store #232 and #233; detail routes typed `{Id:int}`, Store #214; app bar search and cart for every visitor, find my order and guest cancel, Store #236 on MMCA.Common v1.265.0)._
 
 This document maps the site navigation flow for each actor in the MMCA.Store application. Each mermaid diagram shows the pages accessible to that actor and the directional navigation links between them. (Companion to MMCA.ADC's `NavigationFlow.md`; same per-actor format.)
 

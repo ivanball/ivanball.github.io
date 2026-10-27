@@ -1,6 +1,6 @@
 # MMCA Business Specification Document
 
-_As of: 2026-10-27 (MMCA.Store `b7f56f40`, MMCA.Common v1.265.0)._
+_As of: 2026-10-27 (MMCA.Store #236, MMCA.Common v1.265.0)._
 
 ## 1. System Overview
 
