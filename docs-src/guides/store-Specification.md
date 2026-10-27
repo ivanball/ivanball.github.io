@@ -1573,24 +1573,24 @@ All test projects run on Microsoft Testing Platform with xUnit v3. Counts from
 ## 14. Missing or Unclear Business Logic
 
 ### 14.1 No Email at Customer Order Placement, Delivery or Cancellation
-**Observation:** Email goes out for the password reset and the email confirmation (Sections 3.12, 3.14), the guest's order-received message (Section 3.18), the payment confirmation (which prints a struck "Was" amount and the promotion label on a discounted line and a "You saved" total when the order saved anything), the shipping notice (re-sent on every shipment correction) and the payment-failed notice. A customer (not a guest) gets no email when the order is placed (`OrderChanged` with the `Added` state), and nobody gets one at delivery (`OrderDelivered`) or at cancellation (`OrderCancelled`), including the cancellation the payment deadline performs.
+**Observation:** Email goes out for the password reset and the email confirmation (Sections 3.12, 3.14), the guest's order-received message (Section 3.18), the payment confirmation (which prints a struck "Was" amount and the promotion label on a discounted line and a "You saved" total when the order saved anything), the shipping notice (re-sent on every shipment correction) and the payment-failed notice. A customer (not a guest) gets no email when the order is placed (`OrderChanged` with the `Added` state), and nobody gets one at delivery (`OrderDelivered`) or at cancellation (`OrderCancelled`). That holds for all three cancellation paths: a customer or administrator cancel (`CancelOrderHandler`), the payment deadline (`Sales.ExpireUnpaidOrder`) and the payment reconciliation sweep (`PaymentReconciliationService`). The one `OrderCancelled` handler restores inventory and sends nothing.
 **Recommendation:** Confirm whether order-confirmation, delivery and cancellation messages are wanted; each would be an `IDomainEventHandler<T>` that schedules a send internal command, on events that already exist, not new plumbing.
 
 ### 14.2 No Return/Refund Workflow
-**Observation:** Once an order reaches `Paid` or `Delivered` status, there are no further state transitions available. No return, refund, or exchange workflow exists. Cancellation is only possible before payment succeeds, and a cancel that finds the Stripe session already paid is refused with a message saying the order must be refunded instead, which the system cannot do.
+**Observation:** Cancellation is possible only from `PendingPayment`, `PaymentInitiated` and `PaymentFailed`. Once an order is `Paid` it can only move forward: to `Shipped` or straight to `Delivered`, then from `Shipped` to `Delivered`, with shipment corrections allowed while `Shipped`. `Delivered` and `Cancelled` are terminal. No return, refund or exchange workflow exists, and the payment service has no refund operation. A cancel that finds the Stripe session already paid is refused with a message saying the order must be refunded instead, which the system cannot do, so any refund happens outside the system and the order keeps its paid status.
 **Recommendation:** Clarify whether returns/refunds are in scope and whether Stripe refund integration is needed.
 
 ### 14.3 No Inventory Check at Cart-Add Time
-**Observation:** When a customer adds an item to the cart, the system verifies the product variant exists but does **not** check if inventory is available. Inventory is only validated at checkout.
+**Observation:** When a customer adds an item to the cart, the system verifies the product variant exists but does **not** check if inventory is available. Stock is checked and reserved only at checkout (an atomic conditional decrement), and the cart shows no stock indicator; only the administrator inventory pages show in-stock and out-of-stock status.
 **Recommendation:** This may be intentional (allowing customers to add items that are temporarily out of stock) or may warrant a stock availability indicator on the cart.
 
-### 14.4 Cart Reactivation Clears All Items
-**Observation:** When a customer adds an item to a previously checked-out cart, all previous items are deleted and the cart is reactivated empty (with only the new item). The business intent behind clearing the cart rather than preserving previous items is unclear.
-**Recommendation:** Confirm this is the desired behavior: some systems prefer to retain unchecked-out items.
+### 14.4 A Failed or Cancelled Order Does Not Restore the Bag
+**Observation:** The cart turns `CheckedOut` when checkout creates the order, before payment. The next add reactivates it and soft-deletes the previous lines (`ShoppingCart.Reactivate`), which is correct for an order that goes on to be paid, because those lines have become the order. When the order's payment fails, its payment deadline expires or it is cancelled, the lines are not returned to the bag: the shopper rebuilds it by hand. A `PaymentFailed` order can still be paid again from the order itself, but a cancelled or expired one cannot.
+**Recommendation:** Decide whether a cancellation (and possibly a payment failure) should restore the order's lines to the bag, which would be a handler on `OrderCancelled` or `OrderPaymentFailed`, or whether starting over is the intended recovery.
 
-### 14.5 No Price Change Protection Between Bag and Checkout
-**Observation:** Product variant prices can be changed at any time by administrators, and prices are fetched at checkout, not at cart-add time. The cart drawer and the checkout page show the server quote at current prices, and checkout refuses an order whose subtotal no longer matches the quote it was charged from (`Order.Charges.BagChanged`). Nothing tells the shopper which line moved or that a price changed since the item was added.
-**Recommendation:** Determine if customers should be notified of price changes or if cart items should display price warnings.
+### 14.5 Prices Can Change Between Bag and Checkout Without Notice
+**Observation:** Product variant prices can be changed at any time by administrators, and a cart line stores no price: every line is priced at checkout, not at cart-add time. The cart drawer and the checkout page show a server quote at the prices current when it was drawn, but checkout does not compare against that displayed quote. It builds a fresh quote from the prices it fetches in the same request, and `Order.Charges.BagChanged` compares the order against that fresh quote, so it fires only when the bag's contents change during the checkout request itself (an item added in another tab), never on a price change. A price that moved after the shopper last saw the drawer is charged at the new amount with nothing flagged; the Stripe payment page is the only place the final amount appears before payment.
+**Recommendation:** Decide whether checkout should carry the displayed quote (or its subtotal) and refuse or re-confirm when the charge differs, and whether the bag should mark lines whose price moved since they were added, which needs the add-time price stored on the cart line.
 
 ### 14.6 One Parcel Per Order
 **Observation:** Delivery tracking exists (Section 3.8): an order carries a single `Shipment` value object with a carrier, a tracking number and the two dates. An order that physically leaves in two parcels can therefore only record one of them, and correcting the recorded shipment replaces it rather than adding to it.
@@ -1601,19 +1601,19 @@ All test projects run on Microsoft Testing Platform with xUnit v3. Counts from
 **Recommendation:** Clarify if partial fulfillment is a future requirement.
 
 ### 14.8 Shipping Labels Come From a Mock Carrier
-**Observation:** Every order with a ship-to address gets a `ShippingLabel` at placement, but the only registered `IShippingLabelProvider` is `MockShippingLabelProvider`, which invents a `CASA-` label number and a `MOCK` tracking number with no carrier call. The label and the shipment the admin records when shipping (Section 3.8) are separate records: nothing carries the label's tracking number into the shipment, which the admin types into the ship dialog.
+**Observation:** Every order with a ship-to address gets a `ShippingLabel` at placement, but the only registered `IShippingLabelProvider` is `MockShippingLabelProvider`, which invents a `CASA-` label number and a `MOCK` tracking number with no carrier call. The label and the shipment the admin records when shipping (Section 3.8) are separate records: nothing carries the label's tracking number into the shipment, which the admin types into the ship dialog. The dialog pre-fills only from an already-recorded shipment, when correcting one, never from the label.
 **Recommendation:** Decide on a carrier integration and whether the label's tracking number should seed the recorded shipment.
 
 ### 14.9 Sales Tax Is Off by Default
-**Observation:** `Tax:Enabled` defaults to false (`TaxSettings.cs:18`), so every quote and every order carries zero tax until Stripe Tax and the store's registrations are activated on the account.
+**Observation:** `Tax:Enabled` defaults to false (`TaxSettings.cs:18`) and no appsettings or infrastructure file sets the `Tax` section, so every quote and every order carries zero tax until Stripe Tax and the store's registrations are activated on the account.
 **Recommendation:** Confirm the tax registrations and the go-live date for collecting sales tax.
 
 ### 14.10 Email Confirmation Is Not Enforced
-**Observation:** Accounts are sent a confirmation link and `IsEmailConfirmed` is recorded, but `RequireConfirmedEmail` is false, so an unconfirmed account signs in and checks out exactly like a confirmed one. Registration also deliberately leaves an account unlinked from an existing Customer with the same address, which an administrator must link by hand.
+**Observation:** Accounts are sent a confirmation link and `IsEmailConfirmed` is recorded, but `RequireConfirmedEmail` is false, so an unconfirmed account signs in and checks out exactly like a confirmed one. Registration also deliberately leaves an account unlinked from an existing Customer with the same address, which an administrator must link by hand (`PUT /Users/{userId}/customer-link`).
 **Recommendation:** Decide whether confirmation should gate sign-in (or the automatic link to an existing profile) before turning the setting on.
 
 ### 14.11 Guest Purchases Earn No Review Entitlement Unless Claimed
-**Observation:** A guest order raises no `OrderFulfilled` at delivery, so a guest who never creates an account cannot review what they bought, and a guest who claims the order only after it was delivered stays without the entitlement: the backfill sweep skips an order whose `FulfilledPublishedOn` is already stamped.
+**Observation:** A guest order raises no `OrderFulfilled` at delivery, so a guest who never creates an account cannot review what they bought, and a guest who claims the order only after it was delivered stays without the entitlement: delivery stamps `FulfilledPublishedOn` even though it published nothing, the claim raises no fulfilment, and the backfill sweep skips an order whose `FulfilledPublishedOn` is already stamped. A guest who claims the order before delivery does earn the entitlement, because delivery reads the order's customer at that moment.
 **Recommendation:** Confirm whether a claim after delivery should publish the fulfilment for the new account.
 
 ---
