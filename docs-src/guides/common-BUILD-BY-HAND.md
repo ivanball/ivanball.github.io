@@ -1,6 +1,6 @@
 # Building on MMCA.Common by Hand
 
-_As of: 2026-09-13._
+_As of: 2026-10-28 (framework v1.265.1)._
 
 This is the long-form walkthrough: every project, every file, and every load-bearing line that goes
 into an application on the MMCA.Common framework, in the order you would create them. MMCA.Common is
@@ -86,7 +86,7 @@ and pull Orders out into a microservice.
 > phantom `CS0103` errors against new members. Build MMCA.Common with `-c Debug`, then build your app.
 
 **Pick the framework version.** Every package moves together. Use the latest released tag
-(see [FACTS.md](https://github.com/ivanball/MMCA.Common/blob/main/FACTS.md) for the current version; the `1.135.0` in the samples below was
+(see [FACTS.md](https://github.com/ivanball/MMCA.Common/blob/main/FACTS.md) for the current version; the `1.265.1` in the samples below was
 current when this guide was last refreshed). Choose one version and use it for every `MMCA.Common.*` entry (Phase 1). See
 [ADR-016](../adr/016-lockstep-versioning-masstransit-pin.md): there is no phased rollout and no version
 skew across the set. The rule is enforced, not just advisory: the shared
@@ -100,8 +100,8 @@ pins in `Directory.Packages.props` disagree, so a half-finished sweep cannot shi
 > **Scaffolded.** `dotnet new mmca-app` writes every file in this phase. Read it to know what each
 > one does; you do not need to type any of it.
 
-The plumbing files are the load-bearing, easy-to-get-wrong part: about 1,170 lines across eight
-files, including an 823-line `.editorconfig` and 114 package pins. Copy them from `MMCA.Helpdesk`
+The plumbing files are the load-bearing, easy-to-get-wrong part: about 1,070 lines across eight
+files, including an 827-line `.editorconfig` and 57 package pins. Copy them from `MMCA.Helpdesk`
 (already a trimmed single-module scaffold) or from `MMCA.ADC`. Lay out the repo like this:
 
 ```
@@ -140,22 +140,22 @@ to v8** (v9 needs a commercial license, enforced by a build gate in MMCA.Common,
   </PropertyGroup>
   <ItemGroup>
     <!-- MMCA Common packages: all at one version, bumped in lockstep -->
-    <PackageVersion Include="MMCA.Common.Shared" Version="1.135.0" />
-    <PackageVersion Include="MMCA.Common.Domain" Version="1.135.0" />
-    <PackageVersion Include="MMCA.Common.Application" Version="1.135.0" />
-    <PackageVersion Include="MMCA.Common.Infrastructure" Version="1.135.0" />
-    <PackageVersion Include="MMCA.Common.API" Version="1.135.0" />
-    <PackageVersion Include="MMCA.Common.Grpc" Version="1.135.0" />
-    <PackageVersion Include="MMCA.Common.UI" Version="1.135.0" />
-    <PackageVersion Include="MMCA.Common.UI.Web" Version="1.135.0" />
+    <PackageVersion Include="MMCA.Common.Shared" Version="1.265.1" />
+    <PackageVersion Include="MMCA.Common.Domain" Version="1.265.1" />
+    <PackageVersion Include="MMCA.Common.Application" Version="1.265.1" />
+    <PackageVersion Include="MMCA.Common.Infrastructure" Version="1.265.1" />
+    <PackageVersion Include="MMCA.Common.API" Version="1.265.1" />
+    <PackageVersion Include="MMCA.Common.Grpc" Version="1.265.1" />
+    <PackageVersion Include="MMCA.Common.UI" Version="1.265.1" />
+    <PackageVersion Include="MMCA.Common.UI.Web" Version="1.265.1" />
     <!-- MAUI heads only: the one MAUI-TFM package (ADR-042); web-only apps skip it -->
-    <PackageVersion Include="MMCA.Common.UI.Maui" Version="1.135.0" />
-    <PackageVersion Include="MMCA.Common.Aspire" Version="1.135.0" />
-    <PackageVersion Include="MMCA.Common.Aspire.Hosting" Version="1.135.0" />
-    <PackageVersion Include="MMCA.Common.Testing" Version="1.135.0" />
-    <PackageVersion Include="MMCA.Common.Testing.E2E" Version="1.135.0" />
-    <PackageVersion Include="MMCA.Common.Testing.UI" Version="1.135.0" />
-    <PackageVersion Include="MMCA.Common.Testing.Architecture" Version="1.135.0" />
+    <PackageVersion Include="MMCA.Common.UI.Maui" Version="1.265.1" />
+    <PackageVersion Include="MMCA.Common.Aspire" Version="1.265.1" />
+    <PackageVersion Include="MMCA.Common.Aspire.Hosting" Version="1.265.1" />
+    <PackageVersion Include="MMCA.Common.Testing" Version="1.265.1" />
+    <PackageVersion Include="MMCA.Common.Testing.E2E" Version="1.265.1" />
+    <PackageVersion Include="MMCA.Common.Testing.UI" Version="1.265.1" />
+    <PackageVersion Include="MMCA.Common.Testing.Architecture" Version="1.265.1" />
     <!-- Third-party versions: copy the relevant rows from MMCA.ADC/Directory.Packages.props -->
     <!-- (EF Core, FluentValidation, Riok.Mapperly, Scrutor, xunit.v3, Aspire.*, Yarp, the 5 analyzers, etc.) -->
   </ItemGroup>
@@ -186,6 +186,7 @@ your modules. The critical pieces:
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
     <AnalysisLevel>latest</AnalysisLevel>
     <AnalysisMode>All</AnalysisMode>
+    <CodeAnalysisTreatWarningsAsErrors>true</CodeAnalysisTreatWarningsAsErrors>
     <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <NoWarn>$(NoWarn);CS1591;RMG020;EXTEXP0001</NoWarn>
@@ -310,7 +311,7 @@ Each business module is a set of layered projects under `Source/Modules/<Module>
 | Project | References | Holds |
 |---|---|---|
 | `Contoso.Support.Orders.Shared` | `MMCA.Common.Shared`, `MMCA.Common.Domain` | DTOs, request records, **identifier aliases**, the status enum, integration events |
-| `Contoso.Support.Orders.Domain` | `MMCA.Common.Domain` | aggregate, child entities, invariants, domain events |
+| `Contoso.Support.Orders.Domain` | `MMCA.Common.Domain`, the Shared project | aggregate, child entities, invariants, domain events |
 | `Contoso.Support.Orders.Application` | `MMCA.Common.Application`, Riok.Mapperly, the Shared + Domain projects | use cases (command/query + handler), validators, mappers, event handlers, module DI |
 | `Contoso.Support.Orders.Infrastructure` | `MMCA.Common.Infrastructure`, the Application project | EF entity configurations, the abstract module DbContext, infra DI |
 | `Contoso.Support.Orders.API` | `MMCA.Common.API`, the Application + Infrastructure projects | REST controller, the `IModule`, the module-composition DI |
@@ -466,6 +467,9 @@ public record class OrderDTO : IBaseDTO<OrderIdentifierType>, IConcurrencyAware
 
 // Integration events derive BaseIntegrationEvent, which supplies SchemaVersion (default 1,
 // fitness-enforced): a breaking change uses a NEW event type + upcaster, never a reshape. See ADR-010.
+// [EventName] is the stable outbox/inbox identity, and EventConventionTestsBase fails an
+// integration event that does not declare one.
+[EventName("Orders.OrderOpened.v1")]
 public sealed record class OrderOpenedIntegrationEvent(OrderIdentifierType OrderId, int RequesterUserId)
     : BaseIntegrationEvent;
 ```
@@ -507,40 +511,41 @@ A command handler implements `ICommandHandler<TCommand, TResult>` and stays thin
 pipeline supplies logging, caching, validation, and the transaction around it. The request is turned
 into the aggregate by an `IEntityRequestMapper` (which calls the domain factory), and a FluentValidation
 validator + the Mapperly `*RequestMapper`/`*DTOMapper` are all auto-discovered by convention scanning.
+A create handler derives the framework's `CreateEntityHandlerBase<TCreateRequest, TEntity, TId, TDTO>`,
+which runs the mapper, adds the entity, calls `SaveChangesAsync`, and maps the result to the DTO.
 Because the id is DB-generated, the handler publishes the **integration event after the commit**, when
-the real id exists:
+the real id exists, from the base's `OnCreatedAsync` hook:
 
 ```csharp
 public sealed class CreateOrderHandler(
     IUnitOfWork unitOfWork,
     IEntityRequestMapper<Order, OrderCreateRequest, OrderIdentifierType> requestMapper,
     IEventBus eventBus,
-    OrderDTOMapper dtoMapper) : ICommandHandler<OrderCreateRequest, Result<OrderDTO>>
+    OrderDTOMapper dtoMapper)
+    : CreateEntityHandlerBase<OrderCreateRequest, Order, OrderIdentifierType, OrderDTO>(
+        unitOfWork, requestMapper, dtoMapper)
 {
-    public async Task<Result<OrderDTO>> HandleAsync(OrderCreateRequest command, CancellationToken cancellationToken = default)
+    // Runs after SaveChangesAsync, so the DB-generated entity.Id is populated. PublishAsync writes to
+    // the outbox: in-process now, over the broker once Orders is extracted (no handler change).
+    protected override Task OnCreatedAsync(Order entity, CancellationToken cancellationToken)
     {
-        var result = await requestMapper.CreateEntityAsync(command, cancellationToken);   // runs Order.Create
-        if (result.IsFailure) { return Result.Failure<OrderDTO>(result.Errors); }
+        ArgumentNullException.ThrowIfNull(entity);
 
-        var entity = result.Value!;
-        var repository = unitOfWork.GetRepository<Order, OrderIdentifierType>();
-        await repository.AddAsync(entity, cancellationToken);
-        await unitOfWork.SaveChangesAsync(cancellationToken);   // stamps audit, captures domain events to outbox, dispatches
-
-        // After commit: the DB-generated entity.Id is now populated. PublishAsync writes to the outbox
-        // and dispatches in-process now, over the broker once Orders is extracted (no handler change).
-        await eventBus.PublishAsync(
+        return eventBus.PublishAsync(
             new OrderOpenedIntegrationEvent(entity.Id, entity.RequesterUserId), cancellationToken);
-
-        return Result.Success(dtoMapper.MapToDTO(entity));
     }
 }
 ```
 
 Module DI uses C# extension types (the framework's registration idiom). You make a few explicit
-registrations (the entity query service that powers read endpoints, and a navigation populator), then
-let `ScanModuleApplicationServices` find your handlers, validators, mappers, and event handlers by
-convention:
+registrations (the entity query service that powers read endpoints, and a navigation populator), let
+`ScanModuleApplicationServices` find your handlers, validators, mappers, update appliers, and event
+handlers by convention, then call `AddEntityCrud<...>()`, which closes the framework's generic
+create, update, and delete handlers over the module's types. It registers with `TryAdd`, so it goes
+**after** the scan: a verb the module handles itself (here, create) keeps its own handler, and moving
+the call above the scan hands that verb to the generic handler silently. The same call registers the
+validator bridge for the closed `UpdateEntityCommand<,,>`, which is what keeps an
+`OrderUpdateRequestValidator` running in the validating decorator:
 
 ```csharp
 public static class DependencyInjection
@@ -556,6 +561,9 @@ public static class DependencyInjection
                 EntityQueryService<Order, OrderDTO, OrderIdentifierType>>();
 
             services.ScanModuleApplicationServices<ClassReference>();   // ClassReference = an anchor type in this assembly
+
+            // AFTER the scan: TryAdd keeps CreateOrderHandler for the create verb.
+            services.AddEntityCrud<Order, OrderDTO, OrderIdentifierType, OrderCreateRequest, OrderUpdateRequest>();
             return services;
         }
     }
@@ -640,6 +648,7 @@ public sealed class OrdersController(
     : EntityControllerBase<Order, OrderDTO, OrderIdentifierType>(queryService, logger)
 {
     [HttpPost]
+    [Idempotent]   // an Idempotency-Key header replays the first response instead of creating twice
     public async Task<ActionResult<OrderDTO>> CreateAsync(OrderCreateRequest request, CancellationToken cancellationToken)
     {
         var result = await createHandler.HandleAsync(request, cancellationToken);
@@ -663,28 +672,30 @@ precondition with 428 before the action runs, answers 400 to a malformed tag, an
 outcome to 412, which is what turns a stale write into a refusal instead of an overwrite:
 
 ```csharp
-// updateHandler is ICommandHandler<UpdateOrderCommand, Result<OrderDTO>>, injected into the
-// controller's primary constructor beside createHandler.
+// updateHandler is ICommandHandler<UpdateEntityCommand<Order, OrderUpdateRequest, OrderIdentifierType>,
+// Result<OrderDTO>>, injected into the controller's primary constructor beside createHandler.
 [HttpPut("{id}")]
 [SupportsIfMatch]
 public async Task<ActionResult<OrderDTO>> UpdateAsync(
     OrderIdentifierType id, OrderUpdateRequest request, CancellationToken cancellationToken)
 {
     var result = await updateHandler.HandleAsync(
-        new UpdateOrderCommand(id, request.Title, request.Description)
-        {
-            RowVersion = SupportsIfMatchAttribute.RequiredToken(HttpContext),
-        },
+        new UpdateEntityCommand<Order, OrderUpdateRequest, OrderIdentifierType>(
+            id,
+            request,
+            SupportsIfMatchAttribute.RequiredToken(HttpContext)),
         cancellationToken);
     return result.IsFailure ? HandleFailure(result.Errors) : Ok(result.Value);
 }
 ```
 
-The command's `RowVersion` is a non-nullable `byte[]`, because a conditional write with no
-precondition never reaches a handler. A plain-CRUD update can skip the hand-written command entirely
-and construct the framework's generic `UpdateEntityCommand<TEntity, TUpdateRequest, TId>(id, request,
-SupportsIfMatchAttribute.RequiredToken(HttpContext))`, whose third positional parameter is the same
-token; the mutation then lives on the aggregate behind an `IEntityUpdateApplier`.
+`UpdateEntityCommand<TEntity, TUpdateRequest, TId>` is the framework's generic command that
+`AddEntityCrud` registered a handler for; its third positional parameter, `RowVersion`, is a
+non-nullable `byte[]`, because a conditional write with no precondition never reaches a handler. The
+mutation lives on the aggregate behind an `IEntityUpdateApplier`. A verb that is not a plain update
+(the reference app's `PUT {id}/status`) uses a hand-written command instead and passes the same
+token as its init-only `RowVersion`: `new ChangeOrderStatusCommand(id, request.Status) { RowVersion =
+SupportsIfMatchAttribute.RequiredToken(HttpContext) }`.
 
 ### What the pipeline does for you
 
@@ -692,13 +703,15 @@ Once `AddMmcaApplicationPipeline(...)` closes the pipeline (Phase 5), every hand
 chain (outermost first). See [ADR-014](../adr/014-cqrs-decorator-pipeline.md):
 
 ```
-Commands: FeatureGate -> Logging -> Caching -> Validating -> Transactional -> your handler
-Queries:  FeatureGate -> Logging -> Caching -> your handler
+Commands: FeatureGate -> Authorization -> Logging -> Caching -> Validating -> Timeout -> Transactional -> your handler
+Queries:  FeatureGate -> Authorization -> Logging -> Caching -> Validating -> Timeout -> your handler
 ```
 
-The order is load-bearing: validation runs before the transaction opens; cache invalidation happens
-after a successful commit (outside the transaction); a business `Result.Failure` commits the
-transaction but skips cache invalidation; an exception rolls the transaction back.
+The order is load-bearing: authorization runs outside caching, so a denied query never reads or
+populates the cache; validation runs before the transaction opens; cache invalidation happens after a
+successful commit (outside the transaction). For a command that opts into a transaction
+(`ITransactional`), both an exception and a business `Result.Failure` roll the transaction back, and a
+failure also skips cache invalidation.
 
 #### Caching is a pair, and you wire both halves
 
@@ -890,7 +903,8 @@ builder.AddServiceDefaults();        // from MMCA.Common.Aspire: OpenTelemetry, 
 var services = builder.Services;
 services.AddOptions<ApplicationSettings>().Bind(builder.Configuration.GetSection(ApplicationSettings.SectionName))
     .ValidateDataAnnotations().ValidateOnStart();
-var applicationSettings = builder.Configuration.GetSection(ApplicationSettings.SectionName).Get<ApplicationSettings>()!;
+var applicationSettings = builder.Configuration.GetSection(ApplicationSettings.SectionName).Get<ApplicationSettings>()
+    ?? throw new InvalidOperationException("ApplicationSettings section is not configured.");
 
 // Health checks. The database is REQUIRED: a host that cannot resolve its own connection string
 // should fail fast rather than report healthy and take traffic it cannot serve. The flag is
@@ -920,12 +934,24 @@ if (!string.IsNullOrWhiteSpace(jwtAuthority))
 else
 {
     services.AddAuthentication();
-    services.AddAuthorization();
+    // AddAuthorizationPolicies, not the bare AddAuthorization, so both branches register the same
+    // model: its fallback policy makes an endpoint that declares no authorization metadata require
+    // an authenticated caller instead of publishing it anonymously.
+    services.AddAuthorizationPolicies();
 }
 
 services.AddCommonExceptionHandlers();
 
 services.AddInfrastructure(builder.Configuration); // repos, UoW, context, caching, outbox
+// Optional opt-ins on top of AddInfrastructure, each inert until its configuration section turns it
+// on: field-level audit trail, the cron job runner (it runs the audit-trail retention job), and
+// multi-tenancy (its resolution middleware is already part of UseCommonMiddlewarePipeline()).
+services.AddAuditTrail(builder.Configuration);
+services.AddScheduledJobs(builder.Configuration);
+services.AddMultiTenancy(builder.Configuration);
+
+services.AddOptions<ModulesSettings>().Bind(builder.Configuration.GetSection(ModulesSettings.SectionName))
+    .ValidateDataAnnotations().ValidateOnStart();
 var modulesSettings = builder.Configuration.GetSection(ModulesSettings.SectionName).Get<ModulesSettings>() ?? [];
 services.AddAPI(modulesSettings);                // controllers, idempotency, exception handlers
 
@@ -957,9 +983,9 @@ services.AddModuleHealthChecks(moduleLoader);    // per-module readiness, after 
 
 var app = builder.Build();
 await app.Services.InitializeDatabaseAsync(applicationSettings, moduleLoader);   // applies migrations / seeds
-app.MapDefaultEndpoints();             // /health, /alive
+app.MapDefaultEndpoints();             // /health, /health/ready, /alive
 // exception -> correlation -> request localization -> forwarded headers -> HTTPS -> compression ->
-// routing -> CORS -> authentication -> rate limiting -> soft-deleted-user filter -> authorization ->
+// routing -> CORS -> authentication -> tenant resolution -> rate limiting -> soft-deleted-user filter -> authorization ->
 // output cache -> JWKS/OIDC endpoints -> controllers. Rate limiting sits AFTER authentication on
 // purpose (ADR-019): the partition keys off the authenticated principal.
 app.UseCommonMiddlewarePipeline();
@@ -1068,9 +1094,9 @@ Gate the admin entry on a capability, not on a role name. `OrdersPermissions.Man
 `RequiredPermission` is matched against the
 caller's `permission` claims
 (`MMCA.Common/Source/Presentation/MMCA.Common.UI/Common/NavItem.cs:20`,
-`MMCA.Common/Source/Presentation/MMCA.Common.UI/Layout/NavMenu.razor:223-225`), which the access token
+`MMCA.Common/Source/Presentation/MMCA.Common.UI/Layout/NavMenu.razor:265`), which the access token
 carries, one per permission your registry grants the token's role
-(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Auth/TokenService.cs:128-131`). The framework
+(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Auth/TokenService.cs:129-142`). The framework
 declares no role vocabulary, so `RequiredRole` would name one of your own `RoleNames` constants and
 would then have to change every time you re-cut the grants; `RequiredPermission` states what the entry
 needs and leaves who gets it to the `AddPermissions(...)` call in your module registration.
@@ -1088,7 +1114,12 @@ var db = sql.AddDatabase("support", "Support");
 
 var web = builder.AddProject<Projects.Contoso_Support_Web>("web")
     .WithSQLServerDataSource(db, "Orders")   // injects DataSources__Orders__SQLServerConnectionString
+    // The top-level string too: WithSQLServerDataSource sets only the module's own DataSources entry,
+    // so without this the appsettings localhost value survives under Aspire, the Default source and
+    // the readiness check miss the container, and web never turns healthy.
+    .WithEnvironment("ConnectionStrings__SQLServerConnectionString", db.Resource.ConnectionStringExpression)
     .WaitFor(sql)                    // wait on the SQL server, NOT the database (see warning below)
+    .WithHttpHealthCheck("/health/ready")   // makes WaitFor(web) mean "API healthy", not "process started"
     .WithExternalHttpEndpoints();
 
 // The Blazor UI calls the API server-side; WithReference("web") gives its typed HttpClient the endpoint
@@ -1152,12 +1183,13 @@ out, and that an outbox row was written for the `OrderOpenedIntegrationEvent`.
 
 ## Phase 6: Tests and the architecture-fitness map
 
-> **Scaffolded, with one deliberate gap.** All three test projects and the map are generated. The
-> `IntegrationEventContractTests` subclass is NOT: its frozen literal lists members alphabetically,
-> so an inherited one stops being correct the moment the aggregate is renamed, and a wire contract
-> inherited from someone else's sample module guarantees nothing anyway. Freeze your own, once. The
-> generated README and the [templates guide](common-TEMPLATES.md) carry the class and the command
-> that prints the value.
+> **Scaffolded.** All three test projects and the map are generated, and so is the
+> `IntegrationEventContractTests` subclass: the contract compares each event's members as a set and
+> keys it on the `[EventName]` value, both of which the template renames with everything else, so
+> the generated app arrives with its OWN wire contract already frozen and green on the first run.
+> `build/add-module.ps1` appends a later module's event to it. Setting `MMCA_CONTRACT_SNAPSHOT_OUT`
+> to a file path makes the test write the live contract there as ready-to-paste literals when you
+> evolve a contract on purpose.
 
 ### Test projects
 
@@ -1223,7 +1255,7 @@ public sealed class LayerDependencyTests : LayerDependencyTestsBase
 
 The package ships far more bases than the four structural ones (the authoritative base and method
 counts live in [FACTS.md](https://github.com/ivanball/MMCA.Common/blob/main/FACTS.md)), and the
-reference app subclasses nineteen. That is the realistic target for a new app, not a stretch goal:
+reference app subclasses thirty-two. That is the realistic target for a new app, not a stretch goal:
 each base is a few lines. Start with the structural group and add the rest as the corresponding
 feature appears:
 
@@ -1234,11 +1266,14 @@ feature appears:
 | Conventions | `NamingConventionTestsBase`, `HandlerConventionTestsBase`, `ControllerConventionTestsBase`, `EntityConventionTestsBase`, `ImmutabilityTestsBase`, `SliceCohesionTestsBase`, `SpecificationConventionTestsBase` | factory-name, handler, controller, and entity drift away from the framework shape |
 | Policy gates | `ConcurrencyConventionTestsBase` (ADR-035), `FrameworkVersionConsistencyTestsBase` (ADR-016), `PiiConventionTestsBase` (ADR-005) | an `*UpdateRequest` that implements `IConcurrencyAware` (the token belongs in `If-Match`, not the body), a half-finished version sweep, unmarked personal data |
 | i18n (ADR-027) | `LocalizationResourceTestsBase`, `LocalizedTextConventionTestsBase` | a base `.resx` with no complete `es` sibling; a hard-coded user-visible literal |
+| Pipeline and endpoints | `DecoratorPipelineOrderTestsBase<T>`, `MiddlewarePipelineOrderTestsBase`, `AnonymousEndpointTestsBase`, `IdempotencyConventionTestsBase`, `CommandValidatorCoverageTestsBase`, `FeatureFlagLifecycleTestsBase` | a handler the decorators do not wrap, a reordered middleware step, an anonymous endpoint, a POST that states neither `[Idempotent]` nor `[NonIdempotent("why")]`, a command with no validator, a temporary feature flag past its `RemoveBy` |
+| More conventions | `ContractImplementationTestsBase`, `ServiceContractPurityTestsBase`, `IntegrationEventPayloadPurityTestsBase`, `DeleteBehaviorConventionTestsBase`, `RawSqlConventionTestsBase`, `AiDependencyIsolationTestsBase`, `FolderWidthTestsBase` | drift in marked contract and service-contract types and in integration-event payloads, a relationship's delete behavior, raw SQL, the AI package boundary, a folder over the 12-file cap |
 
 Two things to know before you copy the list wholesale:
 
 - **`IntegrationEventContractTestsBase` freezes your wire contract.** You override `ExpectedContract`
-  with the literal shape of every integration event (`"...OrderOpenedIntegrationEvent { RequesterUserId:Int32, OrderId:Int32 }"`).
+  with the literal shape of every integration event, keyed on its `[EventName]`
+  (`"Orders.OrderOpened.v1 { RequesterUserId:Int32, OrderId:Int32 }"`).
   Editing that list is the deliberate act of evolving the contract, so a silent reshape fails the build.
 - **Some bases fail deliberately when they find nothing**, which is an anti-vacuity guard rather than a
   bug. `ConstructorDependencyCountTestsBase` scans Application `*Service` classes and fails when there

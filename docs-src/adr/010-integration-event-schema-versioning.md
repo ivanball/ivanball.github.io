@@ -1,7 +1,7 @@
 # ADR-010: Integration-Event Schema Versioning & Upcaster Policy
 
 ## Status
-Accepted (2026-06-19). Updated 2026-06-27 (Helpdesk enforcement gap closed; all three consumers now gate the convention). Updated 2026-08-14 (ADC now gates seven events, and a fourth tree, the local MMCA.ECommerce sample, subclasses the same base). Revised 2026-08-18 (MMCA.Common now ships its own concrete integration event, `OutputCacheEvictionRequested`, so the framework's convention test is no longer vacuous: enforcement runs at five points, not four). Updated 2026-08-21: the upcaster registration extension point named below as follow-up work now ships; see [ADR-090](090-event-upcaster-registration.md). Amended 2026-09-11: **payload purity** is now part of the contract and is build-gated, so an integration event may neither ship from outside a `*.Shared` assembly nor expose a type declared in a `*.Domain` assembly on its wire shape (see the amendment section at the end). Updated 2026-09-19 (Store now ships four concrete integration events, not one: `ProductVariantChanged`, `ProductInfoChanged`, `OrderFulfilled` and `CustomerErased`). Revised 2026-10-21: `EventConventionTestsBase` now carries the `[EventName]` rule as a third event-shape companion rule, the ECommerce sample is disclosed as pinned to an older rule set, and anchors moved.
+Accepted (2026-06-19). Updated 2026-06-27 (Helpdesk enforcement gap closed; all three consumers now gate the convention). Updated 2026-08-14 (ADC now gates seven events, and a fourth tree, the local MMCA.ECommerce sample, subclasses the same base). Revised 2026-08-18 (MMCA.Common now ships its own concrete integration event, `OutputCacheEvictionRequested`, so the framework's convention test is no longer vacuous: enforcement runs at five points, not four). Updated 2026-08-21: the upcaster registration extension point named below as follow-up work now ships; see [ADR-090](090-event-upcaster-registration.md). Amended 2026-09-11: **payload purity** is now part of the contract and is build-gated, so an integration event may neither ship from outside a `*.Shared` assembly nor expose a type declared in a `*.Domain` assembly on its wire shape (see the amendment section at the end). Updated 2026-09-19 (Store now ships four concrete integration events, not one: `ProductVariantChanged`, `ProductInfoChanged`, `OrderFulfilled` and `CustomerErased`). Revised 2026-10-21: `EventConventionTestsBase` now carries the `[EventName]` rule as a third event-shape companion rule, the ECommerce sample is disclosed as pinned to an older rule set, and anchors moved. Updated 2026-10-28: the MMCA.ECommerce sample is retired, so three consumer trees gate the convention and all of them resolve the current rule set.
 
 ## Context
 Integration events cross service boundaries (Identity → Conference, Conference ↔ Engagement, …) and
@@ -64,14 +64,14 @@ a shape may evolve. Rubric §6 flags this as the one substantive CQRS/event gap.
   record inheriting `BaseIntegrationEvent`, and `CommonArchitectureMap` registers the Domain assembly it
   lives in (`Tests/Architecture/MMCA.Common.Architecture.Tests/CommonArchitectureMap.cs:22`), so
   `EventVersioningConventionTests` gates a real event in Common's own build. Enforcement therefore runs
-  at five points, not four. (Common's map declares no modules, so the namespace rule's Shared-layer half
+  at four points. (Common's map declares no modules, so the namespace rule's Shared-layer half
   is relaxed there: `ArchitectureRules.IntegrationEventsResideInSharedIntegrationEventsNamespace`
   (`Source/Hosting/MMCA.Common.Testing.Architecture/Rules/Contracts/ArchitectureRules.Events.cs:44-54`) applies the
   `sharedAssemblies` check only when `map.ModuleNames.Count > 0`, which is why the framework's own
   event may sit in a Domain-assembly `*.IntegrationEvents` namespace while every module-bearing consumer
-  is still held to Shared.) The other four are the consumer trees, which subclass
+  is still held to Shared.) The other three are the consumer trees, which subclass
   `EventConventionTestsBase` and run its rules against their own event assemblies (each at the rule
-  set of the MMCA.Common release it resolves; see the `MMCA.ECommerce` qualification below):
+  set of the MMCA.Common release it resolves; all three track the current release):
   `EventConventionTests` in `MMCA.ADC.Architecture.Tests` (ADC's seven events, spread across the
   Identity, Conference and Engagement Shared assemblies the map registers) and
   `MMCA.Store.Architecture.Tests`
@@ -84,20 +84,11 @@ a shape may evolve. Rubric §6 flags this as the one substantive CQRS/event gap.
   (`Source/Modules/Sales/MMCA.Store.Sales.Shared/Orders/IntegrationEvents/OrderFulfilled.cs:24`) in
   Sales Shared, and `CustomerErased`
   (`Source/Modules/Identity/MMCA.Store.Identity.Shared/Customers/IntegrationEvents/CustomerErased.cs:22`)
-  in Identity Shared), a matching `EventConventionTests` in
+  in Identity Shared), and a matching `EventConventionTests` in
   `MMCA.Helpdesk.Architecture.Tests` (`ArchitectureTests.cs`) that gates the seed's
-  `TicketOpenedIntegrationEvent`, and one in the two-module `MMCA.ECommerce` sample
-  (`Tests/Architecture/MMCA.ECommerce.Architecture.Tests/ArchitectureTests.cs:38`, a local-only sample
-  repo that is not published) gating its `ProductCreatedIntegrationEvent` and
-  `OrderPlacedIntegrationEvent`. The earlier Helpdesk gap (the rule was once subclassed only in ADC and
-  Store) is **closed**: every concrete integration event across the four consumer trees is enforced, and
-  so is the framework's own. One qualification: the `MMCA.ECommerce` sample pins
-  `MMCA.Common.Testing.Architecture` `1.142.0` (`MMCA.ECommerce/Directory.Packages.props:123`), so in
-  package mode it runs the rule set of that release rather than the current one: the 1.142.0 base
-  carries only the SchemaVersion, inherit and namespace rules, so it runs neither the `[EventName]`
-  rule nor the two ADR-090 upcaster rules. (With a `local.props` from `local.props.template`, which
-  sets `UseLocalMMCA=true`, `MMCA.ECommerce/Directory.Build.targets:71` swaps in the current
-  `Testing.Architecture` source instead; no `local.props` exists in that tree today.)
+  `TicketOpenedIntegrationEvent`. The earlier Helpdesk gap (the rule was once subclassed only in ADC and
+  Store) is **closed**: every concrete integration event across the three consumer trees is enforced, and
+  so is the framework's own.
 - In a module-bearing map the shared event scan covers only module assemblies, so framework-shipped
   events such as `OutputCacheEvictionRequested` are gated in Common's own build and not re-gated in
   consumer runs (`IntegrationEvents(map)` at

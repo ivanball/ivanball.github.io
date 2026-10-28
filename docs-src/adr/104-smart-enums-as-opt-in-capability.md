@@ -156,7 +156,7 @@ whose members need behavior or data, and nothing in the framework pushes a consu
     in place is a decision rather than an oversight.
 
 13. **Adoption is zero and this record says so.** No production type in MMCA.Common, MMCA.Store,
-    MMCA.ADC, MMCA.Helpdesk or the MMCA.ECommerce sample derives from `Enumeration<T>`. The only
+    MMCA.ADC or MMCA.Helpdesk derives from `Enumeration<T>`. The only
     code that references it is the base file itself, the EF converters, the `AddAPI` registration
     of its JSON converter factory (`DependencyInjection.cs:19`, `:59`) and the three test files.
     Everywhere else it appears only as text, in comments and in one `SuppressMessage`

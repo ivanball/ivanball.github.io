@@ -1,6 +1,6 @@
 # Getting Started: Build a New App on MMCA.Common
 
-_As of: 2026-10-09 (MMCA.Templates 1.13.0, framework v1.235.0)._
+_As of: 2026-10-28 (MMCA.Templates 1.23.0, framework v1.265.1)._
 
 MMCA.Common is a .NET 10 framework for DDD, Clean Architecture, and CQRS, shipped as a set of
 lockstep-versioned NuGet packages (the authoritative list and count live in
@@ -321,9 +321,10 @@ before mutating, is the same shape with a different rule; see
 
 **Give the command its payload.** `--domain-method` carries only a name, so the scaffolded record
 holds just the aggregate id and the generated handler calls `order.TransferToRequester()` with no
-arguments. Two one-line edits finish the slice: add the field to the command record, and pass it at
-the call site (rewrite the scaffolded summary comments while you are in there; they describe the
-delete slice the template is staged from):
+arguments. Three one-line edits finish the slice: add the field to the command record, pass it at
+the call site, and give the generated `TransferOrderCommandCacheBuilder` in the Application test
+project the extra constructor argument (rewrite the scaffolded summary comments while you are in
+there; they describe the delete slice the template is staged from):
 
 ```csharp
 public sealed record TransferOrderCommand(OrderIdentifierType OrderId, int RequesterUserId) : ICacheInvalidating
@@ -332,6 +333,14 @@ public sealed record TransferOrderCommand(OrderIdentifierType OrderId, int Reque
 ```csharp
 var result = order.TransferToRequester(command.RequesterUserId);
 ```
+
+```csharp
+public ICacheInvalidating Build() => new TransferOrderCommand(default, default);
+```
+
+That builder is how the module's cache-invalidation test reaches the new command: it discovers every
+`ICacheInvalidating` command and fails by name on one it has no builder for, so the slice ships one
+and it has to keep constructing the record.
 
 **Name a child collection when the handler needs one eager-loaded.** Both slices load through
 `GetByIdAsync`, whose `includes:` argument is required, so there is always a list. The

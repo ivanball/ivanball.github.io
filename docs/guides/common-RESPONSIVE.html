@@ -6,21 +6,21 @@
   <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#0e151f" media="(prefers-color-scheme: dark)">
   <title>Responsive Design &amp; Cross-Browser Support (rubric §22) · MMCA · Ivan Ball-llovera</title>
-  <meta name="description" content="As of: 2026-07-20.">
+  <meta name="description" content="As of: 2026-10-28 (framework v1.265.1).">
   <link rel="canonical" href="https://ivanball.github.io/docs/guides/common-RESPONSIVE.html">
   <link rel="icon" href="../../assets/img/favicon.svg" type="image/svg+xml">
   <link rel="alternate" type="application/rss+xml" title="Ivan Ball-llovera: deep dives on enterprise .NET" href="https://ivanball.github.io/feed.xml">
   <meta property="og:type" content="article">
   <meta property="og:site_name" content="Ivan Ball-llovera">
   <meta property="og:title" content="Responsive Design &amp; Cross-Browser Support (rubric §22)">
-  <meta property="og:description" content="As of: 2026-07-20.">
+  <meta property="og:description" content="As of: 2026-10-28 (framework v1.265.1).">
   <meta property="og:url" content="https://ivanball.github.io/docs/guides/common-RESPONSIVE.html">
   <meta property="og:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <meta property="og:image:alt" content="Ivan Ball-llovera, Principal Software Architect">
   <meta property="og:locale" content="en_US">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="Responsive Design &amp; Cross-Browser Support (rubric §22)">
-  <meta name="twitter:description" content="As of: 2026-07-20.">
+  <meta name="twitter:description" content="As of: 2026-10-28 (framework v1.265.1).">
   <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Platform","item":"https://ivanball.github.io/platform.html"},{"@type":"ListItem","position":2,"name":"Reference","item":"https://ivanball.github.io/docs/index.html"},{"@type":"ListItem","position":3,"name":"Guides & Specifications","item":"https://ivanball.github.io/docs/guides/index.html"},{"@type":"ListItem","position":4,"name":"Common · Responsive Design & Cross-Browser Support (rubric §22)","item":"https://ivanball.github.io/docs/guides/common-RESPONSIVE.html"}]}</script>
   <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);if(localStorage.getItem('mmca-rail')==='hidden')document.documentElement.setAttribute('data-rail','hidden');if(localStorage.getItem('mmca-cites')==='shown')document.documentElement.setAttribute('data-cites','shown');}catch(e){}})();</script>
@@ -126,14 +126,13 @@
         <article class="doc-content">
           <p class="eyebrow doc-kicker">Guides &amp; specifications</p>
           <h1 id="responsive-design--cross-browser-support-rubric-22">Responsive Design &amp; Cross-Browser Support (rubric §22)</h1>
-          <p><em>As of: 2026-07-20.</em></p>
+          <p><em>As of: 2026-10-28 (framework v1.265.1).</em></p>
           <p>This document is the <strong>supported-device and browser matrix</strong> for the shared <code>MMCA.Common.UI</code>
-          component library. It makes the responsive contract explicit (the rubric §22 note that it was
-          previously implicit) so consumers know which viewports, touch-target sizes, and browser engines
-          the framework targets and gates.</p>
+          component library. It makes the responsive contract explicit (rubric section 22) so consumers know which
+          viewports, touch-target sizes, and browser engines the framework targets and gates.</p>
           <h2 id="breakpoints">Breakpoints</h2>
-          <p>The framework keeps C# viewport detection and CSS media queries aligned around one mobile
-          threshold.</p>
+          <p>The framework keeps C# viewport detection and CSS media queries aligned around two thresholds: the
+          MudBlazor <code>960px</code> grid-vs-card switch and the CSS <code>1024px</code> desktop floor.</p>
           <div class="table-wrap"><table>
           <thead>
           <tr>
@@ -147,7 +146,7 @@
           <td>C# (MudBlazor)</td>
           <td><code>BreakpointConstants.IsMobileBreakpoint</code> (<code>Source/Presentation/MMCA.Common.UI/Common/BreakpointConstants.cs:16</code>)</td>
           <td><code>Xs</code>/<code>Sm</code>, i.e. <code>&lt; 960px</code></td>
-          <td>Switches list pages between desktop data grids and mobile card layouts</td>
+          <td>Switches list pages between desktop data grids and mobile card layouts (<code>DataGridListPageBase</code> sets <code>IsMobile</code> from the viewport breakpoint)</td>
           </tr>
           <tr>
           <td>CSS</td>
@@ -157,27 +156,22 @@
           </tr>
           <tr>
           <td>CSS</td>
-          <td><code>@media (max-width: 599px)</code></td>
-          <td><code>&lt;= 599px</code></td>
-          <td>Cart drawer expands to full viewport width</td>
+          <td><code>@media (max-width: 1023.98px)</code> (<code>Layout/MainLayout.razor.css</code>)</td>
+          <td><code>&lt;= 1023.98px</code></td>
+          <td>Hamburger navigation: the app bar is hidden (its actions move to the NavMenu top row) and content padding tightens</td>
           </tr>
           <tr>
           <td>CSS</td>
-          <td><code>@media (min-width: 1024px)</code></td>
+          <td><code>@media (min-width: 1024px)</code> (<code>Layout/MainLayout.razor.css</code>, <code>Layout/NavMenu.razor.css</code>, <code>wwwroot/app.css</code>)</td>
           <td><code>&gt;= 1024px</code></td>
-          <td>Desktop auth-page top margin</td>
-          </tr>
-          <tr>
-          <td>CSS</td>
-          <td><code>@media (min-width: 1920px)</code></td>
-          <td><code>&gt;= 1920px</code></td>
-          <td>Wide cart drawer</td>
+          <td>Persistent sidebar (nav toggler and backdrop hidden), desktop auth-page top margin, desktop full-bleed margins</td>
           </tr>
           </tbody></table></div>
           <blockquote>
           <p>The C# <code>960px</code> mobile cutoff and the CSS <code>1023.98px</code> cutoff intentionally differ: <code>960px</code> is the
-          MudBlazor sidebar-collapse / grid-vs-card switch, while the <code>1023.98px</code> band carries the broader
-          &quot;small-screen polish&quot; rules (touch targets, pager wrap). Both are below the <code>1024px</code> desktop floor.</p>
+          MudBlazor grid-vs-card switch, while the <code>1023.98px</code> band carries the hamburger navigation and the
+          broader &quot;small-screen polish&quot; rules (touch targets, pager wrap). The persistent sidebar starts at the
+          <code>1024px</code> desktop floor.</p>
           </blockquote>
           <h2 id="supported-devices">Supported devices</h2>
           <div class="table-wrap"><table>
@@ -191,22 +185,27 @@
           <tbody><tr>
           <td>Phone</td>
           <td>360-599px</td>
-          <td>Card lists, full-width cart drawer, stacked forms, 48px touch targets</td>
+          <td>Card lists, hamburger navigation, stacked forms, 48px touch targets</td>
           </tr>
           <tr>
           <td>Tablet</td>
           <td>600-959px</td>
-          <td>Card lists (still mobile per the 960px cutoff), wrapping pagers</td>
+          <td>Card lists (still mobile per the 960px cutoff), hamburger navigation, wrapping pagers</td>
+          </tr>
+          <tr>
+          <td>Small laptop / landscape tablet</td>
+          <td>960-1023px</td>
+          <td>Data grids, hamburger navigation, small-screen polish (touch targets, pager wrap)</td>
           </tr>
           <tr>
           <td>Laptop / desktop</td>
-          <td>960px and up</td>
+          <td>1024px and up</td>
           <td>Data grids, persistent sidebar, multi-column detail layouts</td>
           </tr>
           <tr>
           <td>Large desktop</td>
           <td>1920px and up</td>
-          <td>Wider cart drawer; content capped by <code>--mmca-content-max-width</code></td>
+          <td>No dedicated breakpoint; detail cards stay capped by <code>--mmca-content-max-width</code> (700px)</td>
           </tr>
           </tbody></table></div>
           <h2 id="touch-targets">Touch targets</h2>

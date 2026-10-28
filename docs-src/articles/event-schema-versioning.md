@@ -201,11 +201,9 @@ ADR-010 is candid that the field is a signal, not a complete mechanism.
   event wide.** Common ships exactly one concrete integration event, the sealed record
   `OutputCacheEvictionRequested`, and `CommonArchitectureMap` registers the Domain assembly it lives
   in, so `EventVersioningConventionTests` runs against a real event in Common's own build. Enforcement
-  runs at five points: the framework itself plus four consumer trees, each subclassing the same base
-  and running its rules against its own event assemblies. ADC, Store and Helpdesk resolve the current
-  release and run the identical rules; the local-only, unpublished `MMCA.ECommerce` sample pins an
-  older `Testing.Architecture` release, so it runs neither the `[EventName]` rule nor the two upcaster
-  rules. One caveat rides along: Common's map declares no modules, so the
+  runs at four points: the framework itself plus three consumer trees (ADC, Store and Helpdesk), each
+  subclassing the same base, running its rules against its own event assemblies, and resolving the
+  current release, so all of them run the identical rules. One caveat rides along: Common's map declares no modules, so the
   Shared-layer half of the namespace rule is relaxed for the framework's own event, while every
   module-bearing consumer is still held to it. The framework supplies the rule; the consumers still
   supply the bulk of the events that exercise it.

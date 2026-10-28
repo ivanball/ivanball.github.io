@@ -1,37 +1,37 @@
 # Responsive Design & Cross-Browser Support (rubric §22)
 
-_As of: 2026-07-20._
+_As of: 2026-10-28 (framework v1.265.1)._
 
 This document is the **supported-device and browser matrix** for the shared `MMCA.Common.UI`
-component library. It makes the responsive contract explicit (the rubric §22 note that it was
-previously implicit) so consumers know which viewports, touch-target sizes, and browser engines
-the framework targets and gates.
+component library. It makes the responsive contract explicit (rubric section 22) so consumers know which
+viewports, touch-target sizes, and browser engines the framework targets and gates.
 
 ## Breakpoints
 
-The framework keeps C# viewport detection and CSS media queries aligned around one mobile
-threshold.
+The framework keeps C# viewport detection and CSS media queries aligned around two thresholds: the
+MudBlazor `960px` grid-vs-card switch and the CSS `1024px` desktop floor.
 
 | Layer | Constant / query | Threshold | Purpose |
 |-------|------------------|-----------|---------|
-| C# (MudBlazor) | `BreakpointConstants.IsMobileBreakpoint` (`Source/Presentation/MMCA.Common.UI/Common/BreakpointConstants.cs:16`) | `Xs`/`Sm`, i.e. `< 960px` | Switches list pages between desktop data grids and mobile card layouts |
+| C# (MudBlazor) | `BreakpointConstants.IsMobileBreakpoint` (`Source/Presentation/MMCA.Common.UI/Common/BreakpointConstants.cs:16`) | `Xs`/`Sm`, i.e. `< 960px` | Switches list pages between desktop data grids and mobile card layouts (`DataGridListPageBase` sets `IsMobile` from the viewport breakpoint) |
 | CSS | `@media (max-width: 1023.98px)` (`wwwroot/app.css`) | `<= 1023.98px` | Mobile data-grid behaviors (column hiding, pager wrap, horizontal scroll), 48px touch targets, mobile snackbar z-index |
-| CSS | `@media (max-width: 599px)` | `<= 599px` | Cart drawer expands to full viewport width |
-| CSS | `@media (min-width: 1024px)` | `>= 1024px` | Desktop auth-page top margin |
-| CSS | `@media (min-width: 1920px)` | `>= 1920px` | Wide cart drawer |
+| CSS | `@media (max-width: 1023.98px)` (`Layout/MainLayout.razor.css`) | `<= 1023.98px` | Hamburger navigation: the app bar is hidden (its actions move to the NavMenu top row) and content padding tightens |
+| CSS | `@media (min-width: 1024px)` (`Layout/MainLayout.razor.css`, `Layout/NavMenu.razor.css`, `wwwroot/app.css`) | `>= 1024px` | Persistent sidebar (nav toggler and backdrop hidden), desktop auth-page top margin, desktop full-bleed margins |
 
 > The C# `960px` mobile cutoff and the CSS `1023.98px` cutoff intentionally differ: `960px` is the
-> MudBlazor sidebar-collapse / grid-vs-card switch, while the `1023.98px` band carries the broader
-> "small-screen polish" rules (touch targets, pager wrap). Both are below the `1024px` desktop floor.
+> MudBlazor grid-vs-card switch, while the `1023.98px` band carries the hamburger navigation and the
+> broader "small-screen polish" rules (touch targets, pager wrap). The persistent sidebar starts at the
+> `1024px` desktop floor.
 
 ## Supported devices
 
 | Class | Reference width | Layout |
 |-------|-----------------|--------|
-| Phone | 360-599px | Card lists, full-width cart drawer, stacked forms, 48px touch targets |
-| Tablet | 600-959px | Card lists (still mobile per the 960px cutoff), wrapping pagers |
-| Laptop / desktop | 960px and up | Data grids, persistent sidebar, multi-column detail layouts |
-| Large desktop | 1920px and up | Wider cart drawer; content capped by `--mmca-content-max-width` |
+| Phone | 360-599px | Card lists, hamburger navigation, stacked forms, 48px touch targets |
+| Tablet | 600-959px | Card lists (still mobile per the 960px cutoff), hamburger navigation, wrapping pagers |
+| Small laptop / landscape tablet | 960-1023px | Data grids, hamburger navigation, small-screen polish (touch targets, pager wrap) |
+| Laptop / desktop | 1024px and up | Data grids, persistent sidebar, multi-column detail layouts |
+| Large desktop | 1920px and up | No dedicated breakpoint; detail cards stay capped by `--mmca-content-max-width` (700px) |
 
 ## Touch targets
 

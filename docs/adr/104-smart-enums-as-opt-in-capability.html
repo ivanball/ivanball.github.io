@@ -393,7 +393,7 @@
           in place is a decision rather than an oversight.</p>
           </li>
           <li><p><strong>Adoption is zero and this record says so.</strong> No production type in MMCA.Common, MMCA.Store,
-          MMCA.ADC, MMCA.Helpdesk or the MMCA.ECommerce sample derives from <code>Enumeration&lt;T&gt;</code>. The only
+          MMCA.ADC or MMCA.Helpdesk derives from <code>Enumeration&lt;T&gt;</code>. The only
           code that references it is the base file itself, the EF converters, the <code>AddAPI</code> registration
           of its JSON converter factory (<code>DependencyInjection.cs:19</code>, <code>:59</code>) and the three test files.
           Everywhere else it appears only as text, in comments and in one <code>SuppressMessage</code>

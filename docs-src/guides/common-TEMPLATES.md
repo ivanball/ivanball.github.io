@@ -1,6 +1,6 @@
 # Templates: scaffolding an MMCA app
 
-_As of: 2026-10-09 (MMCA.Templates 1.13.0, framework v1.235.0)._
+_As of: 2026-10-28 (MMCA.Templates 1.23.0, framework v1.265.1)._
 
 `MMCA.Templates` is a `dotnet new` pack that scaffolds solutions, modules, and vertical slices on the
 [MMCA.Common](https://www.nuget.org/packages?q=MMCA.Common) framework. It exists because standing up
@@ -49,7 +49,7 @@ below): it drives `mmca-module` and then performs every wire-up `dotnet new` can
 | `--no-status` | off | generate the module with no status axis (1.3.0) |
 | `--no-description` | off | generate the module with no long-text property (1.4.0) |
 | `--no-owner` | off | generate the module with no owning-user property (1.4.0) |
-| `--database` | `sqlserver` | relational engine for the sample module: `sqlserver` or `sqlite` |
+| `--database` | `sqlserver` | relational engine for the sample module: `sqlserver`, `sqlite` or `postgresql` |
 | `--no-aspire` | off | generate the solution with no Aspire AppHost |
 | `-f, --framework-version` | the version the pack was cut against | the `MMCA.Common.*` version to pin |
 | `--local-mmca` | off | emit a `local.props` that builds against `../MMCA.Common/Source` instead of the published packages |
@@ -98,7 +98,7 @@ gives you a `ShipmentLine` entity and DTO, `AddLine` / `EditLine` / `RemoveLine`
 `--title` renames the aggregate's main text property, and everything that names it moves with it: the
 domain property and its invariant, the `<Aggregate>.<Title>.Empty` / `.TooLong` error codes, the
 `<Title>MaxLength` constant, the DTO and request properties, the EF column, the FluentValidation
-rule, the UI field and column resources, and the domain tests. A camel-case form is derived for
+rule, the UI field and column resources, the typed API client, and the domain tests. A camel-case form is derived for
 parameters, private fields, named arguments and `nameof()` targets, using first-letter lowering
 rather than full lowering so a multi-word value stays a valid identifier (`CustomerName` to
 `customerName`, not `customername`). The price of a substring replacement is that the camel-case form
@@ -140,7 +140,7 @@ The `Order` aggregate arrives fully worked: a `Result`-returning factory, invari
 mutations raising domain events, a child entity, soft-delete cascade, the caching pair (a cacheable
 read plus invalidating commands, both keyed through one `*CacheKeys` type), an integration event
 through the outbox, `en-US` and `es` resource pairs, a REST controller, and two Blazor pages. The
-child entity and the status axis are optional: see the shape options below.
+child entity and the status axis are optional: see the shape options above.
 
 That is twelve projects. Two of them are decided by the solution-shape options below: the AppHost
 disappears under `--no-aspire`, and the migrations project is named for the engine
@@ -154,7 +154,7 @@ small-app floor that [Small Apps](common-SMALL-APPS.md) is written about.
 
 | Option | Default | What changes |
 |---|---|---|
-| `--database sqlserver\|sqlite` | `sqlserver` | The relational engine. Under `sqlite`: entity configurations inherit `EntityTypeConfigurationSqlite`, the migrations project becomes `<App>.Migrations.Sqlite.<Module>` against `Microsoft.EntityFrameworkCore.Sqlite`, the design-time factory becomes `DesignTimeSqliteDbContextFactory` over `SqliteDbContext`, the API host asks for a database rather than for SQL Server specifically (`AddInfrastructureHealthChecks(requireDatabase: true)`), the app is configured single-tenant, and the whole database is one file beside the host. |
+| `--database sqlserver\|sqlite\|postgresql` | `sqlserver` | The relational engine. Under `sqlite`: entity configurations inherit `EntityTypeConfigurationSqlite`, the migrations project becomes `<App>.Migrations.Sqlite.<Module>` against `Microsoft.EntityFrameworkCore.Sqlite`, the design-time factory becomes `DesignTimeSqliteDbContextFactory` over `SqliteDbContext`, the app is configured single-tenant, and the whole database is one file beside the host. Under `postgresql` ([ADR-113](../adr/113-postgresql-as-a-first-class-engine.md)): the AppHost declares a Postgres container and its databases, entity configurations inherit `EntityTypeConfigurationPostgreSQL`, the migrations project becomes `<App>.Migrations.PostgreSQL.<Module>` against `Npgsql.EntityFrameworkCore.PostgreSQL`, the context is `PostgreSQLDbContext`, and the two-tenant demo is kept, so database-per-tenant is exercised as on SQL Server. |
 | `--no-aspire` | off | No orchestration project: no AppHost, no `Aspire.Hosting.*` pins, and the UI host reaches the API at the fixed dev address `https://localhost:60801` instead of through service discovery. Both hosts keep `AddServiceDefaults()` and `MapDefaultEndpoints()`, so telemetry, `/health` + `/alive` and the resilience pipeline are all still there and adding an AppHost later is additive. |
 
 ```powershell
@@ -168,11 +168,12 @@ Three properties are worth knowing before you pick:
   is untouched: the same module, handlers, controller and tests build against either engine, which
   is the point of the framework's data-source routing
   ([ADR-018](../adr/018-polyglot-persistence.md)).
-- **`--database sqlite` drops the checked-in sample migration**, for the same reason any shape flag
-  does and for a second one: those migrations are SQL Server DDL and their model snapshot names
+- **A non-default `--database` drops the checked-in sample migration**, for the same reason any shape
+  flag does and for a second one: those migrations are SQL Server DDL and their model snapshot names
   `SQLServerDbContext`. Run `dotnet ef migrations add InitialCreate` against the generated
-  `.Migrations.Sqlite.<Module>` project with `--context SqliteDbContext`, and run it **before the
-  first run of the API host**. The generated `DataSources` entry names a `SqliteMigrationsAssembly`,
+  `.Migrations.Sqlite.<Module>` project with `--context SqliteDbContext` (or the
+  `.Migrations.PostgreSQL.<Module>` project with `--context PostgreSQLDbContext`), and run it
+  **before the first run of the API host**. The generated `DataSources` entry names a `SqliteMigrationsAssembly`,
   and a SQLite source that names one is migrated at startup rather than created outright, so an empty
   migrations assembly leaves the host with an empty database file and a first request that fails on a
   missing table. The generated README says the same thing in its own "Before the first run" section.
@@ -235,14 +236,13 @@ delta plus the command above is the supported answer.
 
 ### Your integration-event contract ships frozen
 
-This used to be a second fixup: a subclass to paste in, run once, and fill from the failure. It is
-now emitted by the template, holding **your** event under the names you scaffolded with, and it
-passes on arrival.
+The template emits the `IntegrationEventContractTestsBase` subclass, holding **your** event under the
+names you scaffolded with, and it passes on arrival.
 
-What made that possible is that `IntegrationEventContractTestsBase` compares each event's member
+What makes that possible is that `IntegrationEventContractTestsBase` compares each event's member
 list as a **set** rather than a sequence. JSON carries no member order, so reordering two properties
 changes nothing a consumer can observe, and the aggregate's own id moving position in the literal is
-no longer a difference. Everything observable is still a failure: a missing member, an extra member,
+not a difference. Everything observable is still a failure: a missing member, an extra member,
 a changed type, and any change to the set of events itself.
 
 `build/add-module.ps1` appends each new module's integration event to `ExpectedContract` as one of
@@ -266,7 +266,7 @@ dotnet new mmca-module -n Billing --app Contoso.Support --aggregate Invoice
 
 | Parameter | Default | Meaning |
 |---|---|---|
-| `-n, --name` | none | the module, plural PascalCase, for example `Billing` |
+| `-n, --name` | `Sample` | the module, plural PascalCase, for example `Billing` |
 | `--app` | none | your solution / root namespace, for example `Contoso.Support` (required) |
 | `-p:a, --aggregate` | none | the module's aggregate root, singular PascalCase (required) |
 | `-c, --child` | `Comment` | the aggregate's child entity, singular PascalCase (1.3.0) |
@@ -276,12 +276,12 @@ dotnet new mmca-module -n Billing --app Contoso.Support --aggregate Invoice
 | `--no-status` | off | generate the module with no status axis (1.3.0) |
 | `--no-description` | off | generate the module with no long-text property (1.4.0) |
 | `--no-owner` | off | generate the module with no owning-user property (1.4.0) |
-| `--database` | `sqlserver` | relational engine for this module: `sqlserver` or `sqlite` (1.7.0) |
+| `--database` | `sqlserver` | relational engine for this module: `sqlserver`, `sqlite` (1.7.0) or `postgresql` (1.11.0) |
 
 The six shape options behave exactly as they do for `mmca-app`, and they are per module: a solution
 can hold a flat, status-less catalog module beside one whose aggregate owns a growing child
 collection and a guarded lifecycle. The one difference is that `--title` here does not reach UI
-resources, because `mmca-module` generates no Blazor pages.
+resources or the typed API client, because `mmca-module` generates no UI host code.
 
 `--database` is the seventh, and it is not a shape option: it **must match the engine the surrounding
 solution was generated with**, because the engine decides which configuration base the module's EF
@@ -289,7 +289,9 @@ configurations inherit and which provider package its migrations project referen
 built for the other engine does not compile in the solution it was added to. Under
 `--database sqlite` the migrations project arrives named `.Migrations.Sqlite.<Module>` against
 `Microsoft.EntityFrameworkCore.Sqlite`, with a `DesignTimeSqliteDbContextFactory` over
-`SqliteDbContext`, and the wire-up instructions it prints name `SqliteMigrationsAssembly`.
+`SqliteDbContext`, and the wire-up instructions it prints name `SqliteMigrationsAssembly`. Under
+`--database postgresql` it arrives named `.Migrations.PostgreSQL.<Module>` against
+`Npgsql.EntityFrameworkCore.PostgreSQL`, with a design-time factory over `PostgreSQLDbContext`.
 `build/add-module.ps1` detects the solution's engine and passes this flag for you.
 
 **If your solution came from `mmca-app`, use `build/add-module.ps1` instead** (below): it runs this
@@ -317,7 +319,7 @@ compile.
 
 1. **Solution.** `dotnet sln <App>.slnx add Source/Modules/<Module>/*/*.csproj Tests/Modules/<Module>/*/*.csproj Source/Hosting/<App>.Migrations.SqlServer.<Module>/*.csproj`
    (bash globbing; in PowerShell expand with `(Get-ChildItem ...).FullName`, as the printed
-   instructions now show)
+   instructions show)
 2. **Project references.** `<App>.Web.csproj` needs `<App>.<Module>.API` and
    `<App>.Migrations.SqlServer.<Module>`. `<App>.Architecture.Tests.csproj` needs **all five** layer
    projects, because the map in step 4 names a type from each.
@@ -326,8 +328,10 @@ compile.
    Without it the alias is invisible outside its own project.
 4. **Architecture map.** Five lines in your `*ArchitectureMap.cs`, one per layer. **A module missing
    from the map is silently not covered by the layering and isolation rules** (ADR-015).
-5. **Host.** `services.AddErrorResources<<Module>ErrorResources>();` next to the existing ones.
-   `ModuleLoader` discovers the `IModule` itself, so nothing else needs registering.
+5. **Host.** Two edits in the Web host's `Program.cs`. Add `typeof(<Module>Module).Assembly` to the
+   assembly list handed to `ModuleLoader.DiscoverAndRegister`, beside the existing entry: discovery
+   scans only the assemblies the host names, so a module left out of that list registers nothing.
+   Then add `services.AddErrorResources<<Module>ErrorResources>();` next to the existing ones.
 6. **Database.** An AppHost database resource plus a `DataSources` entry per module in the Web
    host's appsettings, the top-level migrations-assembly pin deleted, and a top-level
    `"Outbox": { "DatabaseName": "<FirstModule>" }` pin (IEventBus writes handler-published
@@ -374,7 +378,7 @@ pwsh build/add-module.ps1 -Name Orders -Aggregate Order -Child Item -EventVerb P
 | `-NoStatus` | `--no-status` | no status axis |
 | `-NoOwner` | `--no-owner` | no owning-user property |
 | `-NoDescription` | `--no-description` | no long-text property |
-| `-Database` | `--database` | override the engine the solution is read to be running on: `sqlserver` or `sqlite` (1.7.0) |
+| `-Database` | `--database` | override the engine the solution is read to be running on: `sqlserver`, `sqlite` or `postgresql` |
 | `-SkipMigration` | | print the `dotnet ef migrations add` command instead of running it |
 
 Run it with `-?` for the full help, and run it **from the solution root**: it refuses to run anywhere
@@ -389,7 +393,8 @@ Four properties worth knowing before you run it:
 
 - **The engine is detected, so `-Database` is the exception rather than the rule.** The script reads
   it off the API host's own `appsettings.json`, from the key spelling inside the top-level
-  `ConnectionStrings` section (`SQLServerConnectionString` or `SqliteConnectionString`). That file
+  `ConnectionStrings` section (`SQLServerConnectionString`, `SqliteConnectionString` or
+  `PostgreSQLConnectionString`). That file
   was picked over the alternatives because it is the file the script also **writes**: detecting from
   the same place the new data source is written into is what makes the two impossible to disagree.
   The existing `<App>.Migrations.<Engine>.<Module>` folder is then cross-checked against that
@@ -422,8 +427,13 @@ page-level localization resources. It prints both reminders when it finishes. Th
 
 ## `mmca-command` and `mmca-query`
 
-Run these from the module's `UseCases` folder. Each creates a folder named after the slice holding
-its two files.
+Run these from the module's `UseCases` folder. Each creates a folder named after the slice: the
+query's holds its query record and handler, the command's holds its command record, validator and
+handler. The command slice also writes `<Name>CommandCacheBuilder.cs` into
+`Tests/Modules/<Module>/<App>.<Module>.Application.Tests/<Module>/UseCases/<Name>/`, which the
+module's cache-invalidation test needs for every `ICacheInvalidating` command. That file is placed
+relative to the slice folder, so it only lands in the right project when the slice is generated from
+`<App>.<Module>.Application/<Module>/UseCases`; anywhere else, move it there.
 
 ```powershell
 cd Source/Modules/Billing/Contoso.Support.Billing.Application/Billing/UseCases
@@ -448,8 +458,7 @@ dotnet new mmca-query -n GetInvoiceByNumber --app Contoso.Support --module Billi
 argument is **required**: there is always a list, so the only question is what goes in it. Naming a
 navigation eager-loads it, and leaving the parameter off passes an empty list. The name goes straight
 into `nameof(...)`, so pass one your aggregate actually has (`Comments` is the only one a scaffolded
-aggregate owns). Before `MMCA.Templates` 1.1.0 the slices named the reference app's own child
-collection unconditionally, which did not compile on an aggregate shaped differently.
+aggregate owns).
 
 Handlers are convention-scanned by Scrutor, so there is no DI registration to add. Two things do
 need you:
@@ -496,6 +505,11 @@ the two modules' outbox tables), the outbox pinned to the first module, a migrat
 `SqliteDbContext`, and a green Release build and test run of the two-module solution. That run is
 deliberately thin (no slices, no child rename, no rerun check) to keep the third case's wall clock
 down, and only the first case scaffolds slices.
+
+`--database postgresql` has a job of its own beside `template-smoke`: an advisory PostgreSQL canary
+(`build/templates/canary-postgresql.ps1`) generates a solution with that engine, builds and tests it
+in package mode, scaffolds the first migration and applies it to a `postgres:17` service container,
+which is the one place the SQL the framework emits for PostgreSQL is executed.
 
 To work on the templates:
 

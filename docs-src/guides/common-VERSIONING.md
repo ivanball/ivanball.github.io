@@ -1,6 +1,6 @@
 # Versioning & Breaking-Change Policy
 
-_As of: 2026-09-03._
+_As of: 2026-10-28 (framework v1.265.1)._
 
 MMCA.Common publishes its NuGet packages (the authoritative list and count live in
 [FACTS.md](https://github.com/ivanball/MMCA.Common/blob/main/FACTS.md)) versioned and released
@@ -9,7 +9,7 @@ compatibility. (`MMCA.Common.UI.Maui` rides the same tag but is built and packed
 windows job in `release.yml`, since its MAUI target frameworks cannot build on the ubuntu runner.)
 
 Every release goes to **two registries** ([ADR-053](../adr/053-dual-registry-package-publishing.md)):
-nuget.org (the public install path, credential-free) and GitHub Packages (retained for versions
+nuget.org (the public install path, credential-free) and GitHub Packages (retained as a mirror, and the only home of versions
 predating nuget.org publishing, which were not backfilled). One tag drives both pushes. The nuget.org
 push authenticates with **OIDC trusted publishing**, not a stored API key: each publishing job mints a
 short-lived key immediately before the push, so no long-lived credential exists in the repository.
@@ -22,9 +22,12 @@ Versions follow [SemVer 2.0](https://semver.org/): `MAJOR.MINOR.PATCH`:
 - **MINOR**: new capability, and the channel breaking changes currently ship in.
 - **PATCH**: backward-compatible bug fix.
 
-Versions are produced by **MinVer** from annotated git tags of the form `vMAJOR.MINOR.PATCH`
-(e.g. `v1.51.0`). Untagged builds get a height-based pre-release suffix. There is no hand-edited
-version property; tag the commit and the release workflow packs and pushes.
+A release version is the git tag of the form `vMAJOR.MINOR.PATCH`
+(e.g. `v1.265.1`): `release.yml` strips the `v` and passes it as the build and package version with
+MinVer skipped, and **MinVer** (referenced by the packable projects) versions every other build
+from git history. There is no hand-edited
+version property; tag a commit on merged `main` and the release workflow packs and pushes. It
+refuses to publish a tag whose commit is not reachable from `origin/main`.
 
 ## What counts as breaking
 
@@ -47,18 +50,19 @@ breaking.
 reliable breakage signal on its own. This is deliberate and follows from the lockstep model: the
 framework and every first-party consumer are released and swept by the same owner in one pass
 ([ADR-016](../adr/016-lockstep-versioning-masstransit-pin.md)), so a removal is only ever observed
-together with the change set that fixes it. Recent examples: `v1.79.0` renamed the Aspire.Hosting
+together with the change set that fixes it. Two examples: `v1.79.0` renamed the Aspire.Hosting
 extension `WithDataSource` to `WithSQLServerDataSource`, and `v1.123.0` removed the
 `IIntegrationEventPublisher` interface and its `IntegrationEventPublisher` adapter outright, callers
 moving to `IEventBus`.
 
 **What this means for you:** read the
 [CHANGELOG](https://github.com/ivanball/MMCA.Common/blob/main/CHANGELOG.md) before every bump, not
-just before a major one. Each release that contains a breaking change opens with a bold
-**Breaking:** line and lists the affected APIs under **Removed** or **Changed (Behavior)**. For the
-releases that move namespaces (the feature-by-folder passes, v1.183.0 onward), the repo root
+just before a major one. Each release that contains a breaking change carries a bold
+**Breaking:** line and lists the affected APIs under **Removed** or **Changed (Behavior)**. For every
+release that breaks a consumer (v1.183.0 onward), the repo root
 [UPGRADING.md](https://github.com/ivanball/MMCA.Common/blob/main/UPGRADING.md) keeps the durable
-old-to-new map per release plus the mechanical `using` fix; the same map opens the pull request that
+old-to-new map per release plus the mechanical fix, identical to the CHANGELOG block; the same map
+opens the pull request that
 made the change. Pin an exact version and upgrade deliberately; do not use a floating version range.
 
 ## Consumer rollout

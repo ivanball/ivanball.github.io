@@ -6,21 +6,21 @@
   <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#0e151f" media="(prefers-color-scheme: dark)">
   <title>Versioning &amp; Breaking-Change Policy · MMCA · Ivan Ball-llovera</title>
-  <meta name="description" content="As of: 2026-09-03.">
+  <meta name="description" content="As of: 2026-10-28 (framework v1.265.1).">
   <link rel="canonical" href="https://ivanball.github.io/docs/guides/common-VERSIONING.html">
   <link rel="icon" href="../../assets/img/favicon.svg" type="image/svg+xml">
   <link rel="alternate" type="application/rss+xml" title="Ivan Ball-llovera: deep dives on enterprise .NET" href="https://ivanball.github.io/feed.xml">
   <meta property="og:type" content="article">
   <meta property="og:site_name" content="Ivan Ball-llovera">
   <meta property="og:title" content="Versioning &amp; Breaking-Change Policy">
-  <meta property="og:description" content="As of: 2026-09-03.">
+  <meta property="og:description" content="As of: 2026-10-28 (framework v1.265.1).">
   <meta property="og:url" content="https://ivanball.github.io/docs/guides/common-VERSIONING.html">
   <meta property="og:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <meta property="og:image:alt" content="Ivan Ball-llovera, Principal Software Architect">
   <meta property="og:locale" content="en_US">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="Versioning &amp; Breaking-Change Policy">
-  <meta name="twitter:description" content="As of: 2026-09-03.">
+  <meta name="twitter:description" content="As of: 2026-10-28 (framework v1.265.1).">
   <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Platform","item":"https://ivanball.github.io/platform.html"},{"@type":"ListItem","position":2,"name":"Reference","item":"https://ivanball.github.io/docs/index.html"},{"@type":"ListItem","position":3,"name":"Guides & Specifications","item":"https://ivanball.github.io/docs/guides/index.html"},{"@type":"ListItem","position":4,"name":"Common · Versioning & Breaking-Change Policy","item":"https://ivanball.github.io/docs/guides/common-VERSIONING.html"}]}</script>
   <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);if(localStorage.getItem('mmca-rail')==='hidden')document.documentElement.setAttribute('data-rail','hidden');if(localStorage.getItem('mmca-cites')==='shown')document.documentElement.setAttribute('data-cites','shown');}catch(e){}})();</script>
@@ -126,14 +126,14 @@
         <article class="doc-content">
           <p class="eyebrow doc-kicker">Guides &amp; specifications</p>
           <h1 id="versioning--breaking-change-policy">Versioning &amp; Breaking-Change Policy</h1>
-          <p><em>As of: 2026-09-03.</em></p>
+          <p><em>As of: 2026-10-28 (framework v1.265.1).</em></p>
           <p>MMCA.Common publishes its NuGet packages (the authoritative list and count live in
           <a href="https://github.com/ivanball/MMCA.Common/blob/main/FACTS.md" target="_blank" rel="noopener">FACTS.md</a>) versioned and released
           <strong>together</strong> as a single unit. They share one version number so a consumer never has to reason about cross-package
           compatibility. (<code>MMCA.Common.UI.Maui</code> rides the same tag but is built and packed by a dedicated
           windows job in <code>release.yml</code>, since its MAUI target frameworks cannot build on the ubuntu runner.)</p>
           <p>Every release goes to <strong>two registries</strong> (<a href="../adr/053-dual-registry-package-publishing.html">ADR-053</a>):
-          nuget.org (the public install path, credential-free) and GitHub Packages (retained for versions
+          nuget.org (the public install path, credential-free) and GitHub Packages (retained as a mirror, and the only home of versions
           predating nuget.org publishing, which were not backfilled). One tag drives both pushes. The nuget.org
           push authenticates with <strong>OIDC trusted publishing</strong>, not a stored API key: each publishing job mints a
           short-lived key immediately before the push, so no long-lived credential exists in the repository.</p>
@@ -144,9 +144,12 @@
           <li><strong>MINOR</strong>: new capability, and the channel breaking changes currently ship in.</li>
           <li><strong>PATCH</strong>: backward-compatible bug fix.</li>
           </ul>
-          <p>Versions are produced by <strong>MinVer</strong> from annotated git tags of the form <code>vMAJOR.MINOR.PATCH</code>
-          (e.g. <code>v1.51.0</code>). Untagged builds get a height-based pre-release suffix. There is no hand-edited
-          version property; tag the commit and the release workflow packs and pushes.</p>
+          <p>A release version is the git tag of the form <code>vMAJOR.MINOR.PATCH</code>
+          (e.g. <code>v1.265.1</code>): <code>release.yml</code> strips the <code>v</code> and passes it as the build and package version with
+          MinVer skipped, and <strong>MinVer</strong> (referenced by the packable projects) versions every other build
+          from git history. There is no hand-edited
+          version property; tag a commit on merged <code>main</code> and the release workflow packs and pushes. It
+          refuses to publish a tag whose commit is not reachable from <code>origin/main</code>.</p>
           <h2 id="what-counts-as-breaking">What counts as breaking</h2>
           <p>A change is <strong>breaking</strong> if it is any of:</p>
           <ul>
@@ -165,17 +168,18 @@
           reliable breakage signal on its own. This is deliberate and follows from the lockstep model: the
           framework and every first-party consumer are released and swept by the same owner in one pass
           (<a href="../adr/016-lockstep-versioning-masstransit-pin.html">ADR-016</a>), so a removal is only ever observed
-          together with the change set that fixes it. Recent examples: <code>v1.79.0</code> renamed the Aspire.Hosting
+          together with the change set that fixes it. Two examples: <code>v1.79.0</code> renamed the Aspire.Hosting
           extension <code>WithDataSource</code> to <code>WithSQLServerDataSource</code>, and <code>v1.123.0</code> removed the
           <code>IIntegrationEventPublisher</code> interface and its <code>IntegrationEventPublisher</code> adapter outright, callers
           moving to <code>IEventBus</code>.</p>
           <p><strong>What this means for you:</strong> read the
           <a href="https://github.com/ivanball/MMCA.Common/blob/main/CHANGELOG.md" target="_blank" rel="noopener">CHANGELOG</a> before every bump, not
-          just before a major one. Each release that contains a breaking change opens with a bold
-          <strong>Breaking:</strong> line and lists the affected APIs under <strong>Removed</strong> or <strong>Changed (Behavior)</strong>. For the
-          releases that move namespaces (the feature-by-folder passes, v1.183.0 onward), the repo root
+          just before a major one. Each release that contains a breaking change carries a bold
+          <strong>Breaking:</strong> line and lists the affected APIs under <strong>Removed</strong> or <strong>Changed (Behavior)</strong>. For every
+          release that breaks a consumer (v1.183.0 onward), the repo root
           <a href="https://github.com/ivanball/MMCA.Common/blob/main/UPGRADING.md" target="_blank" rel="noopener">UPGRADING.md</a> keeps the durable
-          old-to-new map per release plus the mechanical <code>using</code> fix; the same map opens the pull request that
+          old-to-new map per release plus the mechanical fix, identical to the CHANGELOG block; the same map
+          opens the pull request that
           made the change. Pin an exact version and upgrade deliberately; do not use a floating version range.</p>
           <h2 id="consumer-rollout">Consumer rollout</h2>
           <p>Per project convention, framework upgrades are <strong>swept across all consumers in one pass</strong>:
