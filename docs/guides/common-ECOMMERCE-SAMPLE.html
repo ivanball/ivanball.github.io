@@ -6,21 +6,21 @@
   <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#0e151f" media="(prefers-color-scheme: dark)">
   <title>Build MMCA.ECommerce: a Two-Module Store from the Templates · MMCA · Ivan Ball-llovera</title>
-  <meta name="description" content="As of: 2026-08-06.">
+  <meta name="description" content="As of: 2026-10-28 (MMCA.Templates 1.23.0, framework v1.265.1).">
   <link rel="canonical" href="https://ivanball.github.io/docs/guides/common-ECOMMERCE-SAMPLE.html">
   <link rel="icon" href="../../assets/img/favicon.svg" type="image/svg+xml">
   <link rel="alternate" type="application/rss+xml" title="Ivan Ball-llovera: deep dives on enterprise .NET" href="https://ivanball.github.io/feed.xml">
   <meta property="og:type" content="article">
   <meta property="og:site_name" content="Ivan Ball-llovera">
   <meta property="og:title" content="Build MMCA.ECommerce: a Two-Module Store from the Templates">
-  <meta property="og:description" content="As of: 2026-08-06.">
+  <meta property="og:description" content="As of: 2026-10-28 (MMCA.Templates 1.23.0, framework v1.265.1).">
   <meta property="og:url" content="https://ivanball.github.io/docs/guides/common-ECOMMERCE-SAMPLE.html">
   <meta property="og:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <meta property="og:image:alt" content="Ivan Ball-llovera, Principal Software Architect">
   <meta property="og:locale" content="en_US">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="Build MMCA.ECommerce: a Two-Module Store from the Templates">
-  <meta name="twitter:description" content="As of: 2026-08-06.">
+  <meta name="twitter:description" content="As of: 2026-10-28 (MMCA.Templates 1.23.0, framework v1.265.1).">
   <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Platform","item":"https://ivanball.github.io/platform.html"},{"@type":"ListItem","position":2,"name":"Reference","item":"https://ivanball.github.io/docs/index.html"},{"@type":"ListItem","position":3,"name":"Guides & Specifications","item":"https://ivanball.github.io/docs/guides/index.html"},{"@type":"ListItem","position":4,"name":"Common · Build MMCA.ECommerce: a Two-Module Store from the Templates","item":"https://ivanball.github.io/docs/guides/common-ECOMMERCE-SAMPLE.html"}]}</script>
   <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);if(localStorage.getItem('mmca-rail')==='hidden')document.documentElement.setAttribute('data-rail','hidden');if(localStorage.getItem('mmca-cites')==='shown')document.documentElement.setAttribute('data-cites','shown');}catch(e){}})();</script>
@@ -126,9 +126,9 @@
         <article class="doc-content">
           <p class="eyebrow doc-kicker">Guides &amp; specifications</p>
           <h1 id="build-mmcaecommerce-a-two-module-store-from-the-templates">Build MMCA.ECommerce: a Two-Module Store from the Templates</h1>
-          <p><em>As of: 2026-08-06.</em></p>
-          <p><a href="https://github.com/ivanball/MMCA.ECommerce" target="_blank" rel="noopener">MMCA.ECommerce</a> is the simplest e-commerce application
-          on the <a href="https://www.nuget.org/packages?q=MMCA.Common" target="_blank" rel="noopener">MMCA.Common</a> framework: a <strong>Products</strong> catalog
+          <p><em>As of: 2026-10-28 (MMCA.Templates 1.23.0, framework v1.265.1).</em></p>
+          <p>MMCA.ECommerce is the simplest e-commerce application on the
+          <a href="https://www.nuget.org/packages?q=MMCA.Common" target="_blank" rel="noopener">MMCA.Common</a> framework: a <strong>Products</strong> catalog
           module and an <strong>Orders</strong> module with line items, behind a REST API host and a Blazor Server +
           MudBlazor UI host, orchestrated by Aspire. No Identity module, no payment provider, no search: two
           aggregates, wired end to end through all five layers, with the architecture fitness rules watching.</p>
@@ -138,9 +138,9 @@
           both modules, the hosts, the tests, and the migrations projects, and the <code>build/add-module.ps1</code>
           script it ships inside every generated app performs the wire-ups <code>dotnet new</code> cannot patch into
           existing files. That leaves your hands on two things only: the domain code that is genuinely yours,
-          and the UI pages that show it. Every step below maps to real, build-verified code in the
-          <a href="https://github.com/ivanball/MMCA.ECommerce" target="_blank" rel="noopener">MMCA.ECommerce repo</a>, so wherever this guide
-          abbreviates, the repo is the full answer.</p>
+          and the UI pages that show it. Every step below is build-verified against what the templates
+          generate, every test count is the one that run observed, and every path is relative to the
+          solution root of the tree you generate.</p>
           <hr>
           <h2 id="before-you-start">Before you start</h2>
           <ul>
@@ -149,6 +149,9 @@
           <li><strong>EF Core tools</strong>: <code>dotnet tool install --global dotnet-ef</code>.</li>
           <li>Commands are shown for <strong>PowerShell</strong> (<code>pwsh</code>, cross-platform). Almost everything is plain
           <code>dotnet</code> CLI, so any shell works, but step 3 runs a <code>.ps1</code> script, so <code>pwsh</code> has to be on PATH.</li>
+          <li>On Windows, keep the folder you generate into short (for example <code>C:\src</code>): the deepest build
+          outputs sit about 130 characters below the solution root, and a path past 260 characters fails the
+          build with <code>MSB3030 Could not copy the file</code> unless long paths are enabled.</li>
           </ul>
           <p>This guide follows the current <code>MMCA.Templates</code> (<strong>1.23.0</strong>): <code>--title</code>, <code>--event-verb</code>,
           <code>--no-owner</code>, <code>--no-description</code>, the shipped <code>build/add-module.ps1</code>, the framework&#39;s generic update
@@ -162,24 +165,23 @@
           <pre class="doc-pre" tabindex="0" data-lang="PowerShell"><code class="language-powershell hljs">dotnet new mmca<span class="hljs-literal">-app</span> <span class="hljs-literal">-n</span> MMCA.ECommerce <span class="hljs-literal">--module</span> Products <span class="hljs-literal">--aggregate</span> Product `
   <span class="hljs-literal">--flat</span> <span class="hljs-literal">--no-status</span> <span class="hljs-literal">--no-owner</span> <span class="hljs-literal">--title</span> Name <span class="hljs-literal">--event-verb</span> Created
 <span class="hljs-built_in">cd</span> MMCA.ECommerce</code></pre>
-          <p>Five options do most of this guide&#39;s old work. Three remove an axis a catalog product does not have,
-          and the code for an axis you turn off is never generated: <code>--flat</code> drops the child collection
-          entirely, <code>--no-status</code> drops the status axis, and <code>--no-owner</code> drops the <code>RequesterUserId</code> property
-          and everything that named it. Two are renames: <code>--title Name</code> renames the aggregate&#39;s main text
+          <p>Five options do most of the work. Three remove an axis a catalog product does not have, and the
+          code for an axis you turn off is never generated: <code>--flat</code> drops the child collection entirely,
+          <code>--no-status</code> drops the status axis, and <code>--no-owner</code> drops the <code>RequesterUserId</code> property and
+          everything that named it. Two are renames: <code>--title Name</code> renames the aggregate&#39;s main text
           property everywhere (property, invariant, error codes, max-length constant, DTO, requests, EF column,
           validator rule, UI resources, domain tests), and <code>--event-verb Created</code> gives you
           <code>ProductCreatedIntegrationEvent</code> and its <code>ProductCreatedHandler</code> instead of the sample&#39;s <code>Opened</code>
           pair. The <a href="common-TEMPLATES.html">templates guide</a> lists exactly what each one generates or omits.
-          Together those two are the entire rename pass this guide used to spend a section on, so step 4 has
-          exactly one property left to add.</p>
+          Together those two are the entire rename pass, so step 4 has exactly one property left to add.</p>
           <p>One command, and the whole monolith exists: the Products module across all five layers, the REST
           host, the Blazor UI host, the Aspire AppHost, a migrations project, three test projects including the
           architecture fitness rules, and <code>build/add-module.ps1</code>.</p>
           <p>Get your green baseline before changing anything:</p>
           <pre class="doc-pre" tabindex="0" data-lang="PowerShell"><code class="language-powershell hljs">dotnet build MMCA.ECommerce.slnx
 dotnet test  <span class="hljs-literal">--solution</span> MMCA.ECommerce.slnx</code></pre>
-          <p>That is a warning-free build under five analyzers at error severity and <strong>81 passing tests</strong>, with no
-          database needed. (The unflagged scaffold ships more, because each axis carries tests of its own; 81
+          <p>That is a warning-free build under five analyzers at error severity and <strong>129 passing tests</strong>, with no
+          database needed. (The unflagged scaffold ships more, because each axis carries tests of its own; 129
           is the flat, status-less, owner-less baseline.) This is the line you bisect against later.</p>
           <h2 id="3-add-the-orders-module">3. Add the Orders module</h2>
           <pre class="doc-pre" tabindex="0" data-lang="PowerShell"><code class="language-powershell hljs">pwsh build/<span class="hljs-built_in">add-module</span>.ps1 <span class="hljs-literal">-Name</span> Orders <span class="hljs-literal">-Aggregate</span> Order <span class="hljs-literal">-Child</span> Item `
@@ -196,11 +198,12 @@ dotnet test  <span class="hljs-literal">--solution</span> MMCA.ECommerce.slnx</c
           avoids creating the Orders migration against the still-unreshaped scaffold, since step 7 would delete
           and regenerate it anyway.</p>
           <h3 id="what-the-script-just-wired">What the script just wired</h3>
-          <p><code>git diff</code> shows nine existing files touched: the eight new projects in <code>MMCA.ECommerce.slnx</code>; the
-          Orders API and migrations <code>ProjectReference</code>s on the web host and <strong>all five</strong> layers on the
-          architecture-test project; the identifier-alias <code>&lt;Compile Include ... Link&gt;</code> block in
-          <code>Directory.Build.props</code>; five <code>Module(...)</code> lines in <code>ECommerceArchitectureMap.cs</code>, without which the
-          layering and isolation rules silently stop covering the module
+          <p>The script ends by listing every edit it applied. Nine existing files are touched (commit the
+          scaffold before running it and <code>git diff</code> shows exactly these): the eight new projects in
+          <code>MMCA.ECommerce.slnx</code>; the Orders API and migrations <code>ProjectReference</code>s on the web host and <strong>all
+          five</strong> layers on the architecture-test project; the identifier-alias <code>&lt;Compile Include ... Link&gt;</code>
+          block in <code>Directory.Build.props</code>; five <code>Module(...)</code> lines in <code>ECommerceArchitectureMap.cs</code>, without
+          which the layering and isolation rules silently stop covering the module
           (<a href="../adr/015-architecture-fitness-functions.html">ADR-015</a>); the two registrations the web host&#39;s
           <code>Program.cs</code> owns, <code>typeof(OrdersModule).Assembly</code> in the assembly list handed to
           <code>ModuleLoader.DiscoverAndRegister</code> (an assembly no code path has touched is never loaded, so without
@@ -216,7 +219,7 @@ dotnet test  <span class="hljs-literal">--solution</span> MMCA.ECommerce.slnx</c
           modules migrated into one database collide on them. One database per module is also exactly the
           topology that makes extraction free later
           (<a href="../adr/006-database-per-service.html">ADR-006</a>). In
-          <a href="https://github.com/ivanball/MMCA.ECommerce/blob/main/Source/Hosting/MMCA.ECommerce.AppHost/Program.cs" target="_blank" rel="noopener">the AppHost</a>
+          <code>Source/Hosting/MMCA.ECommerce.AppHost/Program.cs</code>
           the script added <code>sql.AddDatabase(&quot;ecommerce-orders&quot;, &quot;ECommerce_Orders&quot;)</code> and chained
           <code>.WithSQLServerDataSource(ordersDb, &quot;Orders&quot;)</code> onto the web project, above the first module&#39;s call.
           Note what it did <strong>not</strong> do: the first module keeps the database the scaffold gave it, so the pair is
@@ -226,8 +229,7 @@ dotnet test  <span class="hljs-literal">--solution</span> MMCA.ECommerce.slnx</c
           the module&#39;s own <code>DataSources</code> entry. The <code>WaitFor(sql)</code> on the web project stays as
           generated: the host CREATES the databases via EF <code>Migrate</code> at startup, so waiting on a database
           resource would deadlock, because it never exists until the app that is waiting runs.</p>
-          <p>In
-          <a href="https://github.com/ivanball/MMCA.ECommerce/blob/main/Source/Hosts/MMCA.ECommerce.Web/appsettings.json" target="_blank" rel="noopener">appsettings.json</a>
+          <p>In <code>Source/Hosts/MMCA.ECommerce.Web/appsettings.json</code>
           the script enabled the module under <code>Modules</code> and added a <code>DataSources</code> section with an entry per
           module, each holding a connection string (derived from the one already there with the database name
           swapped) and that module&#39;s <code>SQLServerMigrationsAssembly</code>. Those connection strings are the
@@ -249,7 +251,7 @@ dotnet test  <span class="hljs-literal">--solution</span> MMCA.ECommerce.slnx</c
           <code>Default</code>, which is whichever database the top-level connection string names. The AppHost pins that
           to the first module, but <code>appsettings.json</code>, a deployment, or a hand edit can name another, and an
           implicit outbox would silently move with it.</p>
-          <p>Build and test again: still green, now at <strong>99 tests</strong> with the Orders module&#39;s scaffolded suites
+          <p>Build and test again: still green, now at <strong>164 tests</strong> with the Orders module&#39;s scaffolded suites
           included. There is no new kind of thing in the solution, just a second copy of the shape you already
           had, this time with its child collection and status axis intact. Neither database has a schema until
           step 7 creates the migrations.</p>
@@ -263,8 +265,10 @@ dotnet test  <span class="hljs-literal">--solution</span> MMCA.ECommerce.slnx</c
           event through the outbox.</p>
           <p>Each table below is one layer&#39;s edit sequence, top to bottom: Shared first (every layer above
           compiles against those contracts), then Domain, Application, Infrastructure, API, and the tests.
-          &quot;Replace with&quot; means the linked file is the whole finished file from the build-verified sample, so
-          you can copy it as-is. All paths are relative to the solution root, and every command is PowerShell.</p>
+          Every edit is to a file the scaffold generated, and the snippets show the code that changes. A new
+          public member needs a <code>/// &lt;summary&gt;</code> doc comment (a new <code>record</code> parameter a <code>&lt;param&gt;</code> tag), because
+          the documentation analyzers run at error severity. All paths are relative to the solution root, and
+          every command is PowerShell.</p>
           <h3 id="41-shared-contracts">4.1 Shared contracts</h3>
           <p>Under <code>Source/Modules/Products/MMCA.ECommerce.Products.Shared/</code>:</p>
           <div class="table-wrap"><table>
@@ -276,19 +280,19 @@ dotnet test  <span class="hljs-literal">--solution</span> MMCA.ECommerce.slnx</c
           </tr>
           </thead>
           <tbody><tr>
-          <td><code>Products/</code><a href="https://github.com/ivanball/MMCA.ECommerce/blob/main/Source/Modules/Products/MMCA.ECommerce.Products.Shared/Products/ProductDTO.cs" target="_blank" rel="noopener">ProductDTO.cs</a></td>
+          <td><code>Products/ProductDTO.cs</code></td>
           <td>edit</td>
-          <td>one line: <code>public required decimal Price { get; init; }</code></td>
+          <td>one property: <code>public required decimal Price { get; init; }</code></td>
           </tr>
           <tr>
-          <td><code>Products/</code><a href="https://github.com/ivanball/MMCA.ECommerce/blob/main/Source/Modules/Products/MMCA.ECommerce.Products.Shared/Products/ProductUpdateRequest.cs" target="_blank" rel="noopener">ProductUpdateRequest.cs</a></td>
+          <td><code>Products/ProductUpdateRequest.cs</code></td>
           <td>edit</td>
-          <td><code>Price</code> is <code>required</code> like the other two, so a client cannot silently blank a price by omitting it. Keep the <code>*UpdateRequest</code> suffix exactly: the shared <code>UpdateRequestsAreNotConcurrencyAware</code> fitness rule finds it by name and fails it if it carries a concurrency token, which travels in the <code>If-Match</code> header instead (<a href="../adr/035-optimistic-concurrency.html">ADR-035</a>), and a rename silently drops the request out of that rule&#39;s scope</td>
+          <td>the same <code>required decimal Price</code>, required like the other two, so a client cannot silently blank a price by omitting it. Keep the <code>*UpdateRequest</code> suffix exactly: the shared <code>UpdateRequestsAreNotConcurrencyAware</code> fitness rule finds it by name and fails it if it carries a concurrency token, which travels in the <code>If-Match</code> header instead (<a href="../adr/035-optimistic-concurrency.html">ADR-035</a>), and a rename silently drops the request out of that rule&#39;s scope</td>
           </tr>
           <tr>
-          <td><code>Products/IntegrationEvents/</code><a href="https://github.com/ivanball/MMCA.ECommerce/blob/main/Source/Modules/Products/MMCA.ECommerce.Products.Shared/Products/IntegrationEvents/ProductCreatedIntegrationEvent.cs" target="_blank" rel="noopener">ProductCreatedIntegrationEvent.cs</a></td>
+          <td><code>Products/IntegrationEvents/ProductCreatedIntegrationEvent.cs</code></td>
           <td>edit</td>
-          <td>the event was generated carrying the product id alone; it gains <code>Name</code> and <code>Price</code></td>
+          <td>the event was generated carrying the product id alone; it gains <code>Name</code> and <code>Price</code>: <code>ProductCreatedIntegrationEvent(ProductIdentifierType ProductId, string Name, decimal Price)</code></td>
           </tr>
           </tbody></table></div>
           <h3 id="42-domain">4.2 Domain</h3>
@@ -302,20 +306,19 @@ dotnet test  <span class="hljs-literal">--solution</span> MMCA.ECommerce.slnx</c
           </tr>
           </thead>
           <tbody><tr>
-          <td><a href="https://github.com/ivanball/MMCA.ECommerce/blob/main/Source/Modules/Products/MMCA.ECommerce.Products.Domain/Products/ProductInvariants.cs" target="_blank" rel="noopener">ProductInvariants.cs</a></td>
+          <td><code>ProductInvariants.cs</code></td>
           <td>edit</td>
           <td>the two string rules arrive correct; <code>EnsurePriceIsValid</code> is new</td>
           </tr>
           <tr>
-          <td><a href="https://github.com/ivanball/MMCA.ECommerce/blob/main/Source/Modules/Products/MMCA.ECommerce.Products.Domain/Products/Product.cs" target="_blank" rel="noopener">Product.cs</a></td>
-          <td>replace with</td>
-          <td>the <code>Price</code> property, the private constructor, the <code>Create</code> factory, and <code>UpdateDetails</code></td>
+          <td><code>Product.cs</code></td>
+          <td>edit</td>
+          <td>a <code>public decimal Price { get; private set; }</code> property, a third <code>price</code> parameter on the private constructor, on <code>Create</code>, and on <code>UpdateDetails</code>, and the price invariant added to both <code>Result.Combine</code> calls</td>
           </tr>
           </tbody></table></div>
           <p>The string rules still delegate to the framework&#39;s <code>CommonInvariants</code>, so each field keeps its
-          distinct empty vs too-long error code. The price is the only app-specific rule, and the one part of
-          <a href="https://github.com/ivanball/MMCA.ECommerce/blob/main/Source/Modules/Products/MMCA.ECommerce.Products.Domain/Products/ProductInvariants.cs" target="_blank" rel="noopener">ProductInvariants.cs</a>
-          worth reading rather than pasting:</p>
+          distinct empty vs too-long error code. The price is the only app-specific rule, appended to
+          <code>ProductInvariants.cs</code>:</p>
           <pre class="doc-pre" tabindex="0" data-lang="C#"><code class="language-csharp hljs">    <span class="hljs-function"><span class="hljs-keyword">public</span> <span class="hljs-keyword">static</span> Result <span class="hljs-title">EnsurePriceIsValid</span>(<span class="hljs-params"><span class="hljs-built_in">decimal</span> price, <span class="hljs-built_in">string</span> source</span>)</span>
         =&gt; price &lt;= <span class="hljs-number">0</span>
             ? Result.Failure(Error.Invariant(
@@ -324,25 +327,29 @@ dotnet test  <span class="hljs-literal">--solution</span> MMCA.ECommerce.slnx</c
                 source: source,
                 target: <span class="hljs-keyword">nameof</span>(price)))
             : Result.Success();</code></pre>
-          <p>The aggregate is the other one, and
-          <a href="https://github.com/ivanball/MMCA.ECommerce/blob/main/Source/Modules/Products/MMCA.ECommerce.Products.Domain/Products/Product.cs" target="_blank" rel="noopener">Product.cs</a>
-          is worth reading rather than pasting blind. <code>Create</code> accumulates all three invariants through
-          <code>Result.Combine</code> before it constructs anything, <code>UpdateDetails</code> runs the same three and raises
-          <code>ProductChanged(DomainEntityState.Updated, Id)</code> only once they passed, and <code>Delete()</code> calls
-          <code>base.Delete()</code> then raises the Deleted event. The signature and the one comment that explains an
-          absence:</p>
+          <p>The aggregate is the other edit, and <code>Product.cs</code> is worth reading rather than editing blind.
+          <code>Create</code> accumulates all three invariants through <code>Result.Combine</code> before it constructs anything,
+          <code>UpdateDetails</code> runs the same three and raises <code>ProductChanged(DomainEntityState.Updated, Id)</code> only
+          once they passed (it assigns <code>Price = price;</code> beside the other two fields), and <code>Delete()</code> calls
+          <code>base.Delete()</code> then raises the Deleted event. The edited factory, with the comment that explains an
+          absence kept as generated:</p>
           <pre class="doc-pre" tabindex="0" data-lang="C#"><code class="language-csharp hljs">    <span class="hljs-function"><span class="hljs-keyword">public</span> <span class="hljs-keyword">static</span> Result&lt;Product&gt; <span class="hljs-title">Create</span>(<span class="hljs-params">
         ProductIdentifierType? id,
         <span class="hljs-built_in">string</span> name,
         <span class="hljs-built_in">string</span> description,
         <span class="hljs-built_in">decimal</span> price</span>)</span>
     {
-        <span class="hljs-comment">/* Result.Combine over the three invariants, returning Result.Failure&lt;Product&gt; on breach,
-           then construct with Id = isIdValueGenerated ? default : id!.Value */</span>
+        <span class="hljs-keyword">var</span> validation = Result.Combine(
+            ProductInvariants.EnsureNameIsValid(name, <span class="hljs-keyword">nameof</span>(Create)),
+            ProductInvariants.EnsureDescriptionIsValid(description, <span class="hljs-keyword">nameof</span>(Create)),
+            ProductInvariants.EnsurePriceIsValid(price, <span class="hljs-keyword">nameof</span>(Create)));
+        <span class="hljs-comment">/* return Result.Failure&lt;Product&gt; on breach, then construct
+           new Product(name, description, price) with Id = isIdValueGenerated ? default : id!.Value */</span>
 
         <span class="hljs-comment">// No &quot;Added&quot; domain event here: the Id is database-generated (still 0 at this point), so an</span>
         <span class="hljs-comment">// event captured now would carry a meaningless id. Creation is signalled by the</span>
-        <span class="hljs-comment">// ProductCreatedIntegrationEvent that CreateProductHandler publishes AFTER the commit.</span>
+        <span class="hljs-comment">// ProductCreatedIntegrationEvent that CreateProductHandler publishes AFTER the commit, with the</span>
+        <span class="hljs-comment">// real id.</span>
         <span class="hljs-keyword">return</span> Result.Success(product);
     }</code></pre>
           <h3 id="43-application">4.3 Application</h3>
@@ -356,24 +363,24 @@ dotnet test  <span class="hljs-literal">--solution</span> MMCA.ECommerce.slnx</c
           </tr>
           </thead>
           <tbody><tr>
-          <td><code>Products/UseCases/Create/</code><a href="https://github.com/ivanball/MMCA.ECommerce/blob/main/Source/Modules/Products/MMCA.ECommerce.Products.Application/Products/UseCases/Create/ProductCreateRequest.cs" target="_blank" rel="noopener">ProductCreateRequest.cs</a></td>
+          <td><code>Products/UseCases/Create/ProductCreateRequest.cs</code></td>
           <td>edit</td>
-          <td>the create command gains <code>Price</code></td>
+          <td>the create command gains <code>public required decimal Price { get; init; }</code></td>
           </tr>
           <tr>
-          <td><code>Products/UseCases/Create/</code><a href="https://github.com/ivanball/MMCA.ECommerce/blob/main/Source/Modules/Products/MMCA.ECommerce.Products.Application/Products/UseCases/Create/ProductCreateRequestMapper.cs" target="_blank" rel="noopener">ProductCreateRequestMapper.cs</a></td>
+          <td><code>Products/UseCases/Create/ProductCreateRequestMapper.cs</code></td>
           <td>edit</td>
-          <td>the factory call gains <code>price:</code> (fragment below). The scaffold keeps that call on one line and says why in a comment: an argument list cannot lose a middle element to a whole-line conditional, so the staging script rewrites it per shape. Once the shape is yours, the comment goes with it</td>
+          <td>the factory call gains <code>price:</code> (fragment below). The scaffold keeps that call on one line and says why in a comment: an argument list cannot lose a middle element to a whole-line conditional, so the reference repo&#39;s staging script rewrites it per shape. Once the shape is yours, the comment goes with it</td>
           </tr>
           <tr>
-          <td><code>Products/UseCases/Create/</code><a href="https://github.com/ivanball/MMCA.ECommerce/blob/main/Source/Modules/Products/MMCA.ECommerce.Products.Application/Products/UseCases/Create/ProductCreateRequestValidator.cs" target="_blank" rel="noopener">ProductCreateRequestValidator.cs</a></td>
+          <td><code>Products/UseCases/Create/ProductCreateRequestValidator.cs</code></td>
           <td>edit</td>
           <td>one rule, <code>RuleFor(x =&gt; x.Price).GreaterThan(0m);</code>. The other two mirror the invariants and reuse their constants, so a limit is stated once</td>
           </tr>
           <tr>
-          <td><code>Products/UseCases/Create/</code><a href="https://github.com/ivanball/MMCA.ECommerce/blob/main/Source/Modules/Products/MMCA.ECommerce.Products.Application/Products/UseCases/Create/CreateProductHandler.cs" target="_blank" rel="noopener">CreateProductHandler.cs</a></td>
+          <td><code>Products/UseCases/Create/CreateProductHandler.cs</code></td>
           <td>edit</td>
-          <td>the whole write path on one screen, worth reading rather than just pasting: domain factory, unit of work, then the integration event published <em>after</em> the commit, now carrying the name and the price</td>
+          <td>the whole write path on one screen, worth reading rather than just editing: domain factory, unit of work, then the integration event published <em>after</em> the commit, which now carries the name and the price: <code>new ProductCreatedIntegrationEvent(entity.Id, entity.Name, entity.Price),</code></td>
           </tr>
           <tr>
           <td><code>Products/UseCases/Update/ProductUpdateApplier.cs</code></td>
@@ -386,9 +393,9 @@ dotnet test  <span class="hljs-literal">--solution</span> MMCA.ECommerce.slnx</c
           <td>one rule, <code>RuleFor(x =&gt; x.Price).GreaterThan(0m);</code>. The scaffold already mirrors the create validator field for field, because an update that accepted what a create refuses would let a product reach a state it could never have been created in</td>
           </tr>
           <tr>
-          <td><code>Products/IntegrationEventHandlers/</code><a href="https://github.com/ivanball/MMCA.ECommerce/blob/main/Source/Modules/Products/MMCA.ECommerce.Products.Application/Products/IntegrationEventHandlers/ProductCreatedHandler.cs" target="_blank" rel="noopener">ProductCreatedHandler.cs</a></td>
+          <td><code>Products/IntegrationEventHandlers/ProductCreatedHandler.cs</code></td>
           <td>edit</td>
-          <td>the consumer arrives generated and wired; it logs the new <code>Name</code> too, and it is where a search-index, notification, or analytics side effect would live</td>
+          <td>the consumer arrives generated and wired; it logs the new <code>Name</code> too (a <code>{ProductName}</code> placeholder in the <code>[LoggerMessage]</code> template and a <code>string productName</code> parameter on the partial method), and it is where a search-index, notification, or analytics side effect would live</td>
           </tr>
           </tbody></table></div>
           <p>The <code>ProductCreateRequestMapper</code> fragment:</p>
@@ -397,43 +404,46 @@ dotnet test  <span class="hljs-literal">--solution</span> MMCA.ECommerce.slnx</c
             name: request.Name,
             description: request.Description,
             price: request.Price));</code></pre>
-          <p>Both the Delete and GetById handlers resolve their repository through <code>IUnitOfWork</code>, never by
+          <p>The DTO mapper and projector need no edit: both are Mapperly-generated, so <code>Price</code> maps by name.
+          Both the Delete and GetById handlers resolve their repository through <code>IUnitOfWork</code>, never by
           constructor-injecting <code>IRepository&lt;,&gt;</code>: a directly injected repository is not enlisted in the unit of
           work&#39;s transaction, and mocks happily hide the difference until a real database run. The scaffold
           already does this; keep it.</p>
-          <p><strong>Doc-comment-only touch-ups</strong>, if you want a tree identical to the sample&#39;s, none of which changes
-          behavior: four summaries in <code>UseCases/Delete/</code> and <code>UseCases/GetById/</code> still mention children,
-          <code>ProductChanged.cs</code> still says the event fires on creation, the identifier-alias file speaks of
-          aliases in the plural where it now declares one, and <code>DependencyInjection.cs</code>&#39;s populator comment can
-          now say the aggregate is a leaf rather than merely un-eager-loaded.</p>
+          <p>A few doc comments still describe the template&#39;s support-ticket example. Rewording them is optional
+          and changes no behavior.</p>
           <h3 id="44-infrastructure">4.4 Infrastructure</h3>
-          <p><strong>Edit</strong> <code>Source/Modules/Products/MMCA.ECommerce.Products.Infrastructure/Persistence/EntityConfiguration/ProductConfiguration.cs</code>
-          (<a href="https://github.com/ivanball/MMCA.ECommerce/blob/main/Source/Modules/Products/MMCA.ECommerce.Products.Infrastructure/Persistence/EntityConfiguration/ProductConfiguration.cs" target="_blank" rel="noopener">finished file</a>).
+          <p><strong>Edit</strong> <code>Source/Modules/Products/MMCA.ECommerce.Products.Infrastructure/Persistence/EntityConfiguration/ProductConfiguration.cs</code>.
           <code>base.Configure</code> still supplies the id, the soft-delete flag and its query filter, the audit columns,
-          and the concurrency token, so only the product&#39;s own columns are there. Three additions: a
-          <code>using Microsoft.EntityFrameworkCore;</code> (which <code>HasColumnType</code> needs), <code>Price</code> as <code>decimal(18,2)</code>
-          explicitly, because SQL Server&#39;s default for a mapped decimal is <code>decimal(18,0)</code> and would round
-          every price to whole currency units, and a filtered index on <code>Name</code>, which is what a catalog is
-          actually browsed by (filter it with <code>HasSoftDeleteFilter(DataSource.SQLServer)</code>, as the scaffold&#39;s
-          own filtered indexes do, never a SQL literal, so the index stays engine-aware). Nothing else in Infrastructure changes: <code>--flat</code> already emitted a
-          <code>ModuleApplicationDbContext</code> with one <code>DbSet</code>.</p>
+          and the concurrency token, so only the product&#39;s own columns are there. Three usings come first:
+          <code>using Microsoft.EntityFrameworkCore;</code> (which <code>HasColumnType</code> needs),
+          <code>using MMCA.Common.Application.Interfaces.Infrastructure.Persistence;</code> (for <code>DataSource</code>), and
+          <code>using MMCA.Common.Infrastructure.Persistence.Configuration;</code> (for <code>HasSoftDeleteFilter</code>). Then two
+          additions after the <code>Description</code> property:</p>
+          <pre class="doc-pre" tabindex="0" data-lang="C#"><code class="language-csharp hljs">        <span class="hljs-comment">// Explicit precision: SQL Server maps an unannotated decimal to decimal(18,0), which would</span>
+        <span class="hljs-comment">// round every price to whole currency units.</span>
+        builder.Property(p =&gt; p.Price)
+            .HasColumnType(<span class="hljs-string">&quot;decimal(18,2)&quot;</span>)
+            .IsRequired();
+
+        <span class="hljs-comment">// A catalog is browsed by name.</span>
+        builder.HasIndex(p =&gt; p.Name)
+            .HasSoftDeleteFilter(DataSource.SQLServer);</code></pre>
+          <p>The index is filtered with the framework&#39;s <code>HasSoftDeleteFilter</code>, never a SQL literal, so it stays
+          engine-aware and follows a renamed column. Nothing else in Infrastructure changes: <code>--flat</code> already
+          emitted a <code>ModuleApplicationDbContext</code> with one <code>DbSet</code>.</p>
           <h3 id="45-api">4.5 API</h3>
-          <p><strong>Edit</strong> <code>Source/Modules/Products/MMCA.ECommerce.Products.API/Controllers/ProductsController.cs</code>
-          (<a href="https://github.com/ivanball/MMCA.ECommerce/blob/main/Source/Modules/Products/MMCA.ECommerce.Products.API/Controllers/ProductsController.cs" target="_blank" rel="noopener">finished file</a>).
-          The routes, the injected handlers, and the inherited list/paged reads are all unchanged, and so is
-          every line of code. <code>UpdateAsync</code> constructs the generic command from the request whole, with the
-          concurrency token read from the <code>If-Match</code> header that <code>[SupportsIfMatch]</code> requires
+          <p><code>Source/Modules/Products/MMCA.ECommerce.Products.API/Controllers/ProductsController.cs</code> needs no
+          edit. The routes, the injected handlers, and the inherited list/paged reads are all unchanged.
+          <code>UpdateAsync</code> constructs the generic command from the request whole, with the concurrency token read
+          from the <code>If-Match</code> header that <code>[SupportsIfMatch]</code> requires
           (<a href="../adr/035-optimistic-concurrency.html">ADR-035</a>), so the action names no product field and <code>Price</code>
           reaches the applier with no edit here:</p>
           <pre class="doc-pre" tabindex="0" data-lang="C#"><code class="language-csharp hljs">            <span class="hljs-keyword">new</span> UpdateEntityCommand&lt;Product, ProductUpdateRequest, ProductIdentifierType&gt;(
                 id,
                 request,
                 SupportsIfMatchAttribute.RequiredToken(HttpContext)),</code></pre>
-          <p>What is left is wording in the doc comments.</p>
-          <p><strong>Edit</strong> the two error-resource files,
-          <a href="https://github.com/ivanball/MMCA.ECommerce/blob/main/Source/Modules/Products/MMCA.ECommerce.Products.API/Resources/ProductsErrorResources.resx" target="_blank" rel="noopener">ProductsErrorResources.resx</a>
-          and
-          <a href="https://github.com/ivanball/MMCA.ECommerce/blob/main/Source/Modules/Products/MMCA.ECommerce.Products.API/Resources/ProductsErrorResources.es.resx" target="_blank" rel="noopener">ProductsErrorResources.es.resx</a>.
+          <p><strong>Edit</strong> the two error-resource files, <code>Resources/ProductsErrorResources.resx</code> and
+          <code>Resources/ProductsErrorResources.es.resx</code> in the same project.
           Keep the resx envelope exactly as generated (the <code>&lt;xsd:schema&gt;</code> block and the four <code>&lt;resheader&gt;</code>
           elements) and touch only the <code>&lt;data&gt;</code> elements. <code>--title Name</code> already named the four scaffolded
           codes correctly, so the English file needs a single new entry; the Spanish file needs that entry plus
@@ -450,17 +460,17 @@ dotnet test  <span class="hljs-literal">--solution</span> MMCA.ECommerce.slnx</c
           <tbody><tr>
           <td><code>Product.Description.Empty</code></td>
           <td>Product description cannot be empty.</td>
-          <td>La descripción del producto no puede estar vacía.</td>
+          <td>La descripcion del producto no puede estar vacia.</td>
           </tr>
           <tr>
           <td><code>Product.Description.TooLong</code></td>
           <td>Product description cannot exceed 4000 characters.</td>
-          <td>La descripción del producto no puede superar los 4000 caracteres.</td>
+          <td>La descripcion del producto no puede superar los 4000 caracteres.</td>
           </tr>
           <tr>
           <td><code>Product.Name.Empty</code></td>
           <td>Product name cannot be empty.</td>
-          <td>El nombre del producto no puede estar vacío.</td>
+          <td>El nombre del producto no puede estar vacio.</td>
           </tr>
           <tr>
           <td><code>Product.Name.TooLong</code></td>
@@ -473,23 +483,17 @@ dotnet test  <span class="hljs-literal">--solution</span> MMCA.ECommerce.slnx</c
           <td>El precio del producto debe ser mayor que cero.</td>
           </tr>
           </tbody></table></div>
-          <p>Every code here is one an invariant in 4.2 actually emits, and an unmapped code degrades gracefully
+          <p>(The Spanish values are shown without accents; type them with the accents your locale expects.)
+          Every code here is one an invariant in 4.2 actually emits, and an unmapped code degrades gracefully
           to its English message, so a typo shows up as English text in a Spanish browser rather than as an
           exception. Each entry is a <code>&lt;data name=&quot;...&quot; xml:space=&quot;preserve&quot;&gt;</code> element wrapping a single
           <code>&lt;value&gt;</code>, exactly like the ones you are editing.</p>
-          <p>At this point the solution builds again. The tests do not yet.</p>
+          <p>At this point every source project builds, the UI host included. The solution build still fails, in
+          the two Products test projects only (16 errors, <code>CS9035</code> and <code>CS7036</code>, all on the missing <code>Price</code>),
+          until 4.6.</p>
           <h3 id="46-tests">4.6 Tests</h3>
-          <p><strong>Edit</strong> <a href="https://github.com/ivanball/MMCA.ECommerce/blob/main/Tests/Modules/Products/MMCA.ECommerce.Products.Application.Tests/MMCA.ECommerce.Products.Application.Tests.csproj" target="_blank" rel="noopener">MMCA.ECommerce.Products.Application.Tests.csproj</a>.
-          The handler tests need the framework&#39;s test base, which the application-test scaffold does not
-          reference (it already ships <code>Moq</code>). Add one line at the top of the package <code>ItemGroup</code> so it reads:</p>
-          <pre class="doc-pre" tabindex="0" data-lang="XML"><code class="language-xml hljs">  <span class="hljs-tag">&lt;<span class="hljs-name">ItemGroup</span>&gt;</span>
-    <span class="hljs-tag">&lt;<span class="hljs-name">PackageReference</span> <span class="hljs-attr">Include</span>=<span class="hljs-string">&quot;MMCA.Common.Testing&quot;</span> /&gt;</span>
-    <span class="hljs-tag">&lt;<span class="hljs-name">PackageReference</span> <span class="hljs-attr">Include</span>=<span class="hljs-string">&quot;xunit.v3&quot;</span> /&gt;</span>
-    <span class="hljs-tag">&lt;<span class="hljs-name">PackageReference</span> <span class="hljs-attr">Include</span>=<span class="hljs-string">&quot;AwesomeAssertions&quot;</span> /&gt;</span>
-    <span class="hljs-tag">&lt;<span class="hljs-name">PackageReference</span> <span class="hljs-attr">Include</span>=<span class="hljs-string">&quot;Moq&quot;</span> /&gt;</span></code></pre>
-          <p>No version attribute: the package is already pinned in the solution&#39;s <code>Directory.Packages.props</code>
-          under Central Package Management, so a version here would be an error rather than a nicety. Then the
-          test files themselves, under <code>Tests/Modules/Products/</code>:</p>
+          <p>No project file changes: the scaffolded test projects already reference <code>xunit.v3</code>,
+          <code>AwesomeAssertions</code> and <code>Moq</code>. The test files, under <code>Tests/Modules/Products/</code>:</p>
           <div class="table-wrap"><table>
           <thead>
           <tr>
@@ -499,52 +503,57 @@ dotnet test  <span class="hljs-literal">--solution</span> MMCA.ECommerce.slnx</c
           </tr>
           </thead>
           <tbody><tr>
-          <td><code>MMCA.ECommerce.Products.Domain.Tests/Products/</code><a href="https://github.com/ivanball/MMCA.ECommerce/blob/main/Tests/Modules/Products/MMCA.ECommerce.Products.Domain.Tests/Products/ProductTests.cs" target="_blank" rel="noopener">ProductTests.cs</a></td>
-          <td>replace with</td>
-          <td>13 tests over the aggregate. Read the accumulation test near the end: <code>Result.Combine</code> reports every broken invariant at once, which is the behavior that makes one round trip enough for a form</td>
-          </tr>
-          <tr>
-          <td><code>MMCA.ECommerce.Products.Application.Tests/Caching/</code><a href="https://github.com/ivanball/MMCA.ECommerce/blob/main/Tests/Modules/Products/MMCA.ECommerce.Products.Application.Tests/Caching/ProductCacheInvalidationTests.cs" target="_blank" rel="noopener">ProductCacheInvalidationTests.cs</a></td>
+          <td><code>MMCA.ECommerce.Products.Domain.Tests/Products/ProductTests.cs</code></td>
           <td>edit</td>
-          <td>the 4 scaffolded tests still pass; their fixtures gain a price and become a catalog product instead of a support ticket. The last one earns its keep: nothing at compile time ties a command&#39;s <code>CachePrefix</code> to a query&#39;s <code>CacheKey</code>, so this is what stops a rename from quietly leaving stale reads behind</td>
+          <td>9 tests over the aggregate. The five scaffolded tests pass a price as the fourth <code>Create</code> argument and the third <code>UpdateDetails</code> argument (the update test also asserts it), and four new ones cover the price: a <code>[Theory]</code> over <code>0</code> and <code>-1</code> expecting <code>Product.InvalidPrice</code>, the accumulation test below, and <code>UpdateDetails</code> with a zero price leaving the name, the price, and the domain events untouched</td>
           </tr>
           <tr>
-          <td><code>MMCA.ECommerce.Products.Application.Tests/UseCases/</code><a href="https://github.com/ivanball/MMCA.ECommerce/blob/main/Tests/Modules/Products/MMCA.ECommerce.Products.Application.Tests/UseCases/CreateProductHandlerTests.cs" target="_blank" rel="noopener">CreateProductHandlerTests.cs</a></td>
-          <td>create</td>
-          <td>3 tests: the request maps through the domain factory, the aggregate is added and committed, and the integration event is published AFTER the save so it carries the database-generated id</td>
+          <td><code>MMCA.ECommerce.Products.Application.Tests/Caching/ProductCacheInvalidationTests.cs</code></td>
+          <td>edit</td>
+          <td>the scaffolded tests pass once their fixtures carry a price: <code>Price = 10m,</code> in the <code>ProductUpdateRequest</code>, <code>ProductCreateRequest</code>, and <code>ProductDTO</code> initializers. The suite is what stops a rename from quietly leaving stale reads behind, because nothing at compile time ties a command&#39;s <code>CachePrefix</code> to a query&#39;s <code>CacheKey</code></td>
           </tr>
           <tr>
-          <td><code>MMCA.ECommerce.Products.Application.Tests/UseCases/</code><a href="https://github.com/ivanball/MMCA.ECommerce/blob/main/Tests/Modules/Products/MMCA.ECommerce.Products.Application.Tests/UseCases/UpdateProductHandlerTests.cs" target="_blank" rel="noopener">UpdateProductHandlerTests.cs</a></td>
-          <td>skip</td>
-          <td>the sample&#39;s file covers a hand-written update handler; the scaffold&#39;s update slice is the framework&#39;s generic handler plus <code>ProductUpdateApplier</code> (4.3), so there is no module handler here to cover</td>
+          <td><code>MMCA.ECommerce.Products.Application.Tests/Concurrency/ProductConcurrencyTokenTests.cs</code></td>
+          <td>edit</td>
+          <td><code>Price = 10m,</code> in the <code>ProductUpdateRequest</code> initializer and a price on the <code>Product.Create</code> call</td>
           </tr>
           <tr>
-          <td><code>MMCA.ECommerce.Products.Application.Tests/UseCases/</code><a href="https://github.com/ivanball/MMCA.ECommerce/blob/main/Tests/Modules/Products/MMCA.ECommerce.Products.Application.Tests/UseCases/DeleteProductHandlerTests.cs" target="_blank" rel="noopener">DeleteProductHandlerTests.cs</a></td>
-          <td>create</td>
-          <td>2 tests: the aggregate is loaded tracked, soft-deleted through its own guarded method, and committed once</td>
+          <td><code>MMCA.ECommerce.Products.Application.Tests/Deletion/DeleteProductCascadeTests.cs</code></td>
+          <td>edit</td>
+          <td><code>Price = 10m,</code> in the <code>ProductCreateRequest</code> initializer</td>
           </tr>
           <tr>
-          <td><code>MMCA.ECommerce.Products.Application.Tests/UseCases/</code><a href="https://github.com/ivanball/MMCA.ECommerce/blob/main/Tests/Modules/Products/MMCA.ECommerce.Products.Application.Tests/UseCases/GetProductByIdHandlerTests.cs" target="_blank" rel="noopener">GetProductByIdHandlerTests.cs</a></td>
-          <td>create</td>
-          <td>3 tests; its <code>GetReadRepository</code> assertion is what pins the read path to a non-tracking read</td>
+          <td><code>MMCA.ECommerce.Products.Application.Tests/Projections/ProductDTOProjectorTests.cs</code></td>
+          <td>edit</td>
+          <td>a price on the <code>Product.Create</code> call; the projection-equals-mapper assertion then covers <code>Price</code> too</td>
           </tr>
           </tbody></table></div>
-          <p>The handler test classes all extend the framework&#39;s <code>HandlerTestBase&lt;THandler&gt;</code>, whose
-          <code>RegisterRepository</code> wires a mocked repository into a mocked unit of work, so the handler resolves it
-          exactly the way it does at run time.</p>
+          <p>The accumulation test is the one worth reading: <code>Result.Combine</code> reports every broken invariant at
+          once, which is the behavior that makes one round trip enough for a form:</p>
+          <pre class="doc-pre" tabindex="0" data-lang="C#"><code class="language-csharp hljs">    [<span class="hljs-meta">Fact</span>]
+    <span class="hljs-function"><span class="hljs-keyword">public</span> <span class="hljs-keyword">void</span> <span class="hljs-title">Create_WithEveryFieldInvalid_ReportsEveryBrokenInvariant</span>()</span>
+    {
+        <span class="hljs-keyword">var</span> result = Product.Create(id: <span class="hljs-literal">null</span>, <span class="hljs-built_in">string</span>.Empty, <span class="hljs-built_in">string</span>.Empty, <span class="hljs-number">0</span>m);
+
+        result.IsFailure.Should().BeTrue();
+        result.Errors.Select(e =&gt; e.Code).Should().BeEquivalentTo(
+            <span class="hljs-string">&quot;Product.Name.Empty&quot;</span>,
+            <span class="hljs-string">&quot;Product.Description.Empty&quot;</span>,
+            <span class="hljs-string">&quot;Product.InvalidPrice&quot;</span>);
+    }</code></pre>
           <h3 id="47-verify-the-products-reshape">4.7 Verify the Products reshape</h3>
           <pre class="doc-pre" tabindex="0" data-lang="PowerShell"><code class="language-powershell hljs">dotnet build MMCA.ECommerce.slnx
 dotnet test <span class="hljs-literal">--project</span> Tests/Modules/Products/MMCA.ECommerce.Products.Domain.Tests/MMCA.ECommerce.Products.Domain.Tests.csproj
 dotnet test <span class="hljs-literal">--project</span> Tests/Modules/Products/MMCA.ECommerce.Products.Application.Tests/MMCA.ECommerce.Products.Application.Tests.csproj</code></pre>
           <p>Expect a warning-free build (five analyzers at error severity, <code>TreatWarningsAsErrors</code>), then
-          <strong>13/13</strong> passing in the Products domain suite and <strong>16/16</strong> in the Products application suite. No
+          <strong>9/9</strong> passing in the Products domain suite and <strong>17/17</strong> in the Products application suite. No
           database is involved in either.</p>
           <p>To run a single class or method, pass a Microsoft Testing Platform filter <strong>after a bare <code>--</code></strong>;
           these projects are MTP, not VSTest, so a VSTest-style <code>--filter</code> before the separator silently runs
           zero tests and still exits non-zero:</p>
           <pre class="doc-pre" tabindex="0" data-lang="PowerShell"><code class="language-powershell hljs">dotnet test <span class="hljs-literal">--project</span> Tests/Modules/Products/MMCA.ECommerce.Products.Domain.Tests/MMCA.ECommerce.Products.Domain.Tests.csproj <span class="hljs-literal">--</span> <span class="hljs-literal">--filter-class</span> <span class="hljs-string">&quot;*ProductTests*&quot;</span></code></pre>
           <p>The full solution run is red at this point, in the architecture suite: <code>ProductCreatedIntegrationEvent</code>
-          gained <code>Name</code> and <code>Price</code>, so it no longer matches the frozen wire contract. Step 8 updates that
+          gained <code>Name</code> and <code>Price</code>, so it differs from the frozen wire contract. Step 8 updates that
           literal once both creation events have their final shape.</p>
           <h2 id="5-reshape-orders-into-an-order-with-line-items">5. Reshape Orders into an order with line items</h2>
           <p>Orders keeps the child-collection pattern the template scaffolded, retargeted. <code>-Child Item</code> already
@@ -567,7 +576,8 @@ dotnet test <span class="hljs-literal">--project</span> Tests/Modules/Products/M
           <p>The phase order matches step 4, with Infrastructure pulled up ahead of Application: Orders grows new
           types rather than only renaming them, and it is easier to settle the entities and their mapping before
           the slices that orchestrate them. The scaffolded before-state, for orientation: <code>OrderItem</code> carries
-          <code>Body</code> and <code>AuthorUserId</code>, and <code>OrderStatus</code> is <code>Open</code> / <code>InProgress</code> / <code>Resolved</code> / <code>Closed</code>.</p>
+          <code>Body</code> and <code>AuthorUserId</code>, <code>OrderStatus</code> is <code>Open</code> / <code>InProgress</code> / <code>Resolved</code> / <code>Closed</code>, and the
+          only item guard is <code>EnsureStatusAllowsItems</code>, which refuses a <code>Closed</code> order with <code>Order.Closed</code>.</p>
           <h3 id="51-shared-contracts">5.1 Shared contracts</h3>
           <p>The identifier aliases need no edit: <code>-Child Item</code> emitted both <code>OrderIdentifierType</code> and
           <code>OrderItemIdentifierType</code>, and the one thing that is off about that file (their sort order) is what
@@ -582,39 +592,39 @@ dotnet test <span class="hljs-literal">--project</span> Tests/Modules/Products/M
           </tr>
           </thead>
           <tbody><tr>
-          <td><a href="https://github.com/ivanball/MMCA.ECommerce/blob/main/Source/Modules/Orders/MMCA.ECommerce.Orders.Shared/Orders/OrderStatus.cs" target="_blank" rel="noopener">OrderStatus.cs</a></td>
-          <td>replace with</td>
-          <td>the scaffold ships a flat set of ticket states; this is a lifecycle (<code>Pending</code>, <code>Paid</code>, <code>Shipped</code>, <code>Cancelled</code>), and its doc comment is where the legal transitions are written down for a reader who will not go looking for the invariant</td>
+          <td><code>OrderStatus.cs</code></td>
+          <td>rewrite</td>
+          <td>the scaffold ships a flat set of ticket states; this is a lifecycle (<code>Pending = 0</code>, <code>Paid = 1</code>, <code>Shipped = 2</code>, <code>Cancelled = 3</code>), and its doc comment is where the legal transitions are written down (Pending to Paid or Cancelled, Paid to Shipped or Cancelled, the last two terminal) for a reader who will not go looking for the invariant</td>
           </tr>
           <tr>
-          <td><a href="https://github.com/ivanball/MMCA.ECommerce/blob/main/Source/Modules/Orders/MMCA.ECommerce.Orders.Shared/Orders/OrderDTO.cs" target="_blank" rel="noopener">OrderDTO.cs</a></td>
+          <td><code>OrderDTO.cs</code></td>
           <td>edit</td>
-          <td><code>Total</code> is new. Its remarks are load-bearing documentation, not decoration: only the detail read eager-loads <code>Items</code>, so <code>Total</code> is 0 on the list and paged projections, and the fix for a caller who needs the number is to ask the detail endpoint, not to widen the list query</td>
+          <td><code>public decimal Total { get; init; }</code> is new. Its remarks are load-bearing documentation, not decoration: only the detail read eager-loads <code>Items</code>, so <code>Total</code> is 0 on the list and paged projections, and the fix for a caller who needs the number is to ask the detail endpoint, not to widen the list query</td>
           </tr>
           <tr>
-          <td><a href="https://github.com/ivanball/MMCA.ECommerce/blob/main/Source/Modules/Orders/MMCA.ECommerce.Orders.Shared/Orders/OrderItemDTO.cs" target="_blank" rel="noopener">OrderItemDTO.cs</a></td>
-          <td>replace with</td>
-          <td>the scaffold&#39;s <code>Body</code> and <code>AuthorUserId</code> become the four snapshot properties</td>
-          </tr>
-          <tr>
-          <td><a href="https://github.com/ivanball/MMCA.ECommerce/blob/main/Source/Modules/Orders/MMCA.ECommerce.Orders.Shared/Orders/OrderUpdateRequest.cs" target="_blank" rel="noopener">OrderUpdateRequest.cs</a></td>
+          <td><code>OrderItemDTO.cs</code></td>
           <td>edit</td>
-          <td>doc-only, but the <code>*UpdateRequest</code> suffix must survive: the shared <code>UpdateRequestsAreNotConcurrencyAware</code> fitness rule matches on that name</td>
+          <td>the scaffold&#39;s <code>Body</code> and <code>AuthorUserId</code> become the four snapshot properties: <code>required int ProductId</code>, <code>required string ProductName</code>, <code>required decimal UnitPrice</code>, <code>required int Quantity</code></td>
           </tr>
           <tr>
-          <td><a href="https://github.com/ivanball/MMCA.ECommerce/blob/main/Source/Modules/Orders/MMCA.ECommerce.Orders.Shared/Orders/AddOrderItemRequest.cs" target="_blank" rel="noopener">AddOrderItemRequest.cs</a></td>
+          <td><code>OrderUpdateRequest.cs</code></td>
+          <td>leave</td>
+          <td>the <code>*UpdateRequest</code> suffix must survive: the shared <code>UpdateRequestsAreNotConcurrencyAware</code> fitness rule matches on that name</td>
+          </tr>
+          <tr>
+          <td><code>AddOrderItemRequest.cs</code></td>
           <td>create</td>
-          <td>read its doc comment: the caller supplies the name and price to snapshot, and that is the wire-level half of the module-isolation decision above</td>
+          <td>the caller supplies the name and price to snapshot, and that is the wire-level half of the module-isolation decision above (record below)</td>
           </tr>
           <tr>
-          <td><a href="https://github.com/ivanball/MMCA.ECommerce/blob/main/Source/Modules/Orders/MMCA.ECommerce.Orders.Shared/Orders/ChangeOrderItemQuantityRequest.cs" target="_blank" rel="noopener">ChangeOrderItemQuantityRequest.cs</a></td>
+          <td><code>ChangeOrderItemQuantityRequest.cs</code></td>
           <td>create</td>
-          <td>replaces the scaffold&#39;s free-text <code>EditItemRequest(string Body)</code></td>
+          <td>replaces the scaffold&#39;s free-text <code>EditItemRequest(string Body)</code> (record below)</td>
           </tr>
           <tr>
-          <td><code>IntegrationEvents/</code><a href="https://github.com/ivanball/MMCA.ECommerce/blob/main/Source/Modules/Orders/MMCA.ECommerce.Orders.Shared/Orders/IntegrationEvents/OrderPlacedIntegrationEvent.cs" target="_blank" rel="noopener">OrderPlacedIntegrationEvent.cs</a></td>
+          <td><code>IntegrationEvents/OrderPlacedIntegrationEvent.cs</code></td>
           <td>edit</td>
-          <td>the event name and its consumer arrived generated; the payload gains <code>CustomerName</code></td>
+          <td>the event name and its consumer arrived generated; the payload gains <code>CustomerName</code>: <code>OrderPlacedIntegrationEvent(OrderIdentifierType OrderId, string CustomerName)</code></td>
           </tr>
           <tr>
           <td><code>AddItemRequest.cs</code>, <code>EditItemRequest.cs</code></td>
@@ -622,6 +632,10 @@ dotnet test <span class="hljs-literal">--project</span> Tests/Modules/Products/M
           <td>the two the new request records replace</td>
           </tr>
           </tbody></table></div>
+          <p>The two new request records, each with a <code>&lt;summary&gt;</code> and one <code>&lt;param&gt;</code> tag per parameter:</p>
+          <pre class="doc-pre" tabindex="0" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-function"><span class="hljs-keyword">public</span> <span class="hljs-keyword">sealed</span> <span class="hljs-keyword">record</span> <span class="hljs-title">AddOrderItemRequest</span>(<span class="hljs-params"><span class="hljs-built_in">int</span> ProductId, <span class="hljs-built_in">string</span> ProductName, <span class="hljs-built_in">decimal</span> UnitPrice, <span class="hljs-built_in">int</span> Quantity</span>)</span>;
+
+<span class="hljs-function"><span class="hljs-keyword">public</span> <span class="hljs-keyword">sealed</span> <span class="hljs-keyword">record</span> <span class="hljs-title">ChangeOrderItemQuantityRequest</span>(<span class="hljs-params"><span class="hljs-built_in">int</span> Quantity</span>)</span>;</code></pre>
           <p><code>ChangeOrderStatusRequest.cs</code> stays exactly as generated:
           <code>record ChangeOrderStatusRequest(OrderStatus Status)</code> is already the right shape, and the enum it
           names is the one you just rewrote.</p>
@@ -639,19 +653,19 @@ dotnet test <span class="hljs-literal">--project</span> Tests/Modules/Products/M
           </tr>
           </thead>
           <tbody><tr>
-          <td><a href="https://github.com/ivanball/MMCA.ECommerce/blob/main/Source/Modules/Orders/MMCA.ECommerce.Orders.Domain/Orders/OrderInvariants.cs" target="_blank" rel="noopener">OrderInvariants.cs</a></td>
-          <td>replace with</td>
-          <td>six methods and eight error codes: the two customer-name codes, the two product-name codes, the unit price, the quantity, the item lock, and the status transition. Every one of them is a code you will localize in 5.5</td>
+          <td><code>OrderInvariants.cs</code></td>
+          <td>rewrite</td>
+          <td>six methods and eight error codes: the two customer-name codes, the two product-name codes, the unit price, the quantity, the item lock, and the status transition. Every one of them is a code you will localize in 5.5. <code>ItemBodyMaxLength</code>, <code>EnsureItemBodyIsValid</code> and <code>EnsureStatusAllowsItems</code> go; <code>ProductNameMaxLength = 200</code>, <code>EnsureProductNameIsValid</code>, <code>EnsureUnitPriceIsValid</code>, <code>EnsureQuantityIsValid</code>, <code>EnsureStatusAllowsItemChanges</code> and <code>EnsureStatusTransitionIsValid</code> arrive</td>
           </tr>
           <tr>
-          <td><a href="https://github.com/ivanball/MMCA.ECommerce/blob/main/Source/Modules/Orders/MMCA.ECommerce.Orders.Domain/Orders/OrderItem.cs" target="_blank" rel="noopener">OrderItem.cs</a></td>
-          <td>replace with</td>
-          <td><code>Body</code> and <code>AuthorUserId</code> become the four snapshot properties, and <code>EditBody</code> becomes <code>ChangeQuantity</code></td>
+          <td><code>OrderItem.cs</code></td>
+          <td>rewrite</td>
+          <td><code>Body</code> and <code>AuthorUserId</code> become the four snapshot properties, the private constructor and <code>Create</code> take them (<code>Create(id, productId, productName, unitPrice, quantity)</code>, combining the product-name, unit-price and quantity invariants), and <code>EditBody</code> becomes <code>ChangeQuantity(int quantity)</code></td>
           </tr>
           <tr>
-          <td><a href="https://github.com/ivanball/MMCA.ECommerce/blob/main/Source/Modules/Orders/MMCA.ECommerce.Orders.Domain/Orders/Order.cs" target="_blank" rel="noopener">Order.cs</a></td>
-          <td>replace with</td>
-          <td>a guarded <code>Status</code>, a computed <code>Total</code>, and item mutations that ask the status first</td>
+          <td><code>Order.cs</code></td>
+          <td>edit</td>
+          <td>a guarded <code>Status</code> that starts at <code>OrderStatus.Pending</code>, a computed <code>Total</code>, and item mutations that ask the status first (details below)</td>
           </tr>
           <tr>
           <td><code>DomainEvents/OrderChanged.cs</code></td>
@@ -661,17 +675,39 @@ dotnet test <span class="hljs-literal">--project</span> Tests/Modules/Products/M
           </tbody></table></div>
           <p><code>EnsureCustomerNameIsValid</code> is generated but its two messages are not quite English: <code>--title</code> is a
           substring replacement, so the camel-case identifier form reaches the shipped prose and the message
-          arrives as &quot;Order customerName cannot be empty.&quot; Fixing those two strings (and their resx twins in
-          5.5) is a documented one-line consequence of a multi-word <code>--title</code>, not a surprise.</p>
-          <p>The two app-specific rules at the bottom of <code>OrderInvariants</code> (<code>Order.ItemsLocked</code> and
-          <code>Order.InvalidStatusTransition</code>) are the invariant half of the second architecture decision. Its
-          transition switch lists every enum member explicitly rather than leaning on the discard arm, which is
-          both what <code>IDE0072</code> asks for and what turns adding a status into a compile-time prompt to decide where
-          it can go.</p>
-          <p>In <a href="https://github.com/ivanball/MMCA.ECommerce/blob/main/Source/Modules/Orders/MMCA.ECommerce.Orders.Domain/Orders/OrderItem.cs" target="_blank" rel="noopener">OrderItem.cs</a>,
-          <code>ProductId</code> is a plain <code>int</code>, deliberately not a <code>ProductIdentifierType</code> and deliberately not a
-          foreign key: the Orders module must not name a Products type at all. The four snapshot properties and
-          the comment above them are the point of the file:</p>
+          arrives as &quot;Order customerName cannot be empty.&quot; Fixing those two strings to &quot;Order customer name
+          ...&quot; (and their resx twins in 5.5) is a documented one-line consequence of a multi-word <code>--title</code>,
+          not a surprise.</p>
+          <p>The new methods follow the shape of the generated ones: the product name delegates to
+          <code>CommonInvariants</code> like the customer name (<code>Order.Item.ProductName.Empty</code> / <code>.TooLong</code>), and the unit
+          price and the quantity are <code>&lt;= 0</code> checks returning <code>Error.Invariant</code> with <code>Order.InvalidUnitPrice</code> and
+          <code>Order.InvalidQuantity</code>. The two app-specific rules at the bottom (<code>Order.ItemsLocked</code>, returned
+          whenever <code>status != OrderStatus.Pending</code>, and <code>Order.InvalidStatusTransition</code>) are the invariant half
+          of the second architecture decision. The transition switch lists every enum member explicitly rather
+          than leaning on the discard arm, which is both what <code>IDE0072</code> asks for and what turns adding a status
+          into a compile-time prompt to decide where it can go:</p>
+          <pre class="doc-pre" tabindex="0" data-lang="C#"><code class="language-csharp hljs">    <span class="hljs-function"><span class="hljs-keyword">public</span> <span class="hljs-keyword">static</span> Result <span class="hljs-title">EnsureStatusTransitionIsValid</span>(<span class="hljs-params">OrderStatus current, OrderStatus next, <span class="hljs-built_in">string</span> source</span>)</span>
+    {
+        <span class="hljs-built_in">bool</span> allowed = current <span class="hljs-keyword">switch</span>
+        {
+            OrderStatus.Pending =&gt; next <span class="hljs-keyword">is</span> OrderStatus.Paid <span class="hljs-keyword">or</span> OrderStatus.Cancelled,
+            OrderStatus.Paid =&gt; next <span class="hljs-keyword">is</span> OrderStatus.Shipped <span class="hljs-keyword">or</span> OrderStatus.Cancelled,
+            OrderStatus.Shipped =&gt; <span class="hljs-literal">false</span>,
+            OrderStatus.Cancelled =&gt; <span class="hljs-literal">false</span>,
+            _ =&gt; <span class="hljs-literal">false</span>,
+        };
+
+        <span class="hljs-keyword">return</span> allowed
+            ? Result.Success()
+            : Result.Failure(Error.Invariant(
+                code: <span class="hljs-string">&quot;Order.InvalidStatusTransition&quot;</span>,
+                message: <span class="hljs-string">&quot;The order cannot move to that status from its current one.&quot;</span>,
+                source: source,
+                target: <span class="hljs-keyword">nameof</span>(next)));
+    }</code></pre>
+          <p>In <code>OrderItem.cs</code>, <code>ProductId</code> is a plain <code>int</code>, deliberately not a <code>ProductIdentifierType</code> and
+          deliberately not a foreign key: the Orders module must not name a Products type at all. The four
+          snapshot properties and the comment above them are the point of the file:</p>
           <pre class="doc-pre" tabindex="0" data-lang="C#"><code class="language-csharp hljs">    <span class="hljs-comment">// Product snapshot, not a live reference: the name and the price are copied in at the moment</span>
     <span class="hljs-comment">// the item is added, so a later catalog rename or repricing cannot rewrite what was ordered.</span>
     <span class="hljs-comment">// It is also what keeps this module free of any reference to the Products module: the caller</span>
@@ -683,21 +719,25 @@ dotnet test <span class="hljs-literal">--project</span> Tests/Modules/Products/M
     <span class="hljs-keyword">public</span> <span class="hljs-built_in">decimal</span> UnitPrice { <span class="hljs-keyword">get</span>; <span class="hljs-keyword">private</span> <span class="hljs-keyword">set</span>; }
 
     <span class="hljs-keyword">public</span> <span class="hljs-built_in">int</span> Quantity { <span class="hljs-keyword">get</span>; <span class="hljs-keyword">private</span> <span class="hljs-keyword">set</span>; }</code></pre>
-          <p>Paste
-          <a href="https://github.com/ivanball/MMCA.ECommerce/blob/main/Source/Modules/Orders/MMCA.ECommerce.Orders.Domain/Orders/Order.cs" target="_blank" rel="noopener">Order.cs</a>
-          whole, and notice three things on the way past:</p>
+          <p>The edits to <code>Order.cs</code>, in file order: the constructor sets <code>Status = OrderStatus.Pending;</code>; a
+          <code>Total</code> property follows <code>Items</code>; <code>AddItem(id, string body, int authorUserId)</code> becomes
+          <code>AddItem(id, int productId, string productName, decimal unitPrice, int quantity)</code> and hands those to
+          <code>OrderItem.Create</code>; <code>EditItem(itemId, string body)</code> becomes <code>ChangeItemQuantity(itemId, int quantity)</code>
+          and calls <code>item.ChangeQuantity(quantity)</code>; every <code>EnsureStatusAllowsItems</code> guard becomes
+          <code>EnsureStatusAllowsItemChanges</code>; and <code>ChangeStatus</code> runs <code>EnsureStatusTransitionIsValid(Status, newStatus, nameof(ChangeStatus))</code> after its early return and before it assigns. Notice three things
+          on the way past:</p>
           <ul>
           <li><strong>Every item mutation asks <code>EnsureStatusAllowsItemChanges</code> first.</strong> <code>AddItem</code>,
           <code>ChangeItemQuantity</code> and <code>RemoveItem</code> all open with that guard and return its errors before they
           touch the collection, which is where the Pending-only rule actually lives. <code>UpdateDetails</code> does
           not: renaming the customer is legal at any point in the lifecycle.</li>
           <li><strong><code>Total</code> is computed, never stored</strong>
-          (<code>_items.Where(i =&gt; !i.IsDeleted).Sum(i =&gt; i.UnitPrice * i.Quantity)</code>), so it cannot drift from the
-          lines it summarizes, and it reads 0 whenever the collection was not loaded.</li>
+          (<code>public decimal Total =&gt; _items.Where(i =&gt; !i.IsDeleted).Sum(i =&gt; i.UnitPrice * i.Quantity);</code>), so
+          it cannot drift from the lines it summarizes, and it reads 0 whenever the collection was not loaded.</li>
           <li><strong>Re-asserting the current status is an idempotent no-op success that raises no event.</strong>
           <code>ChangeStatus</code> returns <code>Result.Success()</code> before consulting the transition rule when
-          <code>Status == newStatus</code>, which is what makes an at-least-once delivered command safe on its second
-          arrival.</li>
+          <code>Status == newStatus</code> (the scaffold&#39;s early return, kept), which is what makes an at-least-once
+          delivered command safe on its second arrival.</li>
           </ul>
           <p><code>Create</code> raises no &quot;Added&quot; event for the same reason <code>Product.Create</code> does not, and the cascade
           soft-delete in <code>Delete()</code> is the scaffold&#39;s, kept as generated.</p>
@@ -712,21 +752,21 @@ dotnet test <span class="hljs-literal">--project</span> Tests/Modules/Products/M
           </tr>
           </thead>
           <tbody><tr>
-          <td><a href="https://github.com/ivanball/MMCA.ECommerce/blob/main/Source/Modules/Orders/MMCA.ECommerce.Orders.Infrastructure/Persistence/EntityConfiguration/OrderConfiguration.cs" target="_blank" rel="noopener">OrderConfiguration.cs</a></td>
+          <td><code>OrderConfiguration.cs</code></td>
           <td>edit</td>
-          <td><code>builder.Ignore(o =&gt; o.Total)</code>, a filtered index on <code>CustomerName</code>, and the <code>using Microsoft.EntityFrameworkCore;</code> those need. The customer-name column, the string-persisted status, and the items relationship all arrive generated</td>
+          <td><code>builder.Ignore(p =&gt; p.Total)</code>, a filtered index on <code>CustomerName</code> (<code>builder.HasIndex(p =&gt; p.CustomerName).HasSoftDeleteFilter(DataSource.SQLServer);</code>), and the two usings that index needs, <code>MMCA.Common.Application.Interfaces.Infrastructure.Persistence</code> and <code>MMCA.Common.Infrastructure.Persistence.Configuration</code> (<code>Microsoft.EntityFrameworkCore</code> is already there). The customer-name column, the string-persisted status, and the items relationship all arrive generated</td>
           </tr>
           <tr>
-          <td><a href="https://github.com/ivanball/MMCA.ECommerce/blob/main/Source/Modules/Orders/MMCA.ECommerce.Orders.Infrastructure/Persistence/EntityConfiguration/OrderItemConfiguration.cs" target="_blank" rel="noopener">OrderItemConfiguration.cs</a></td>
-          <td>replace with</td>
-          <td>the item&#39;s four columns; the <code>using Microsoft.EntityFrameworkCore;</code> at the top is new, because <code>HasColumnType</code> needs it</td>
+          <td><code>OrderItemConfiguration.cs</code></td>
+          <td>edit</td>
+          <td>the <code>Body</code> and <code>AuthorUserId</code> columns become the item&#39;s four: <code>ProductId</code> required, <code>ProductName</code> with <code>HasMaxLength(OrderInvariants.ProductNameMaxLength)</code>, <code>UnitPrice</code> with <code>HasColumnType(&quot;decimal(18,2)&quot;)</code>, and <code>Quantity</code> required; the <code>using Microsoft.EntityFrameworkCore;</code> at the top is new, because <code>HasColumnType</code> needs it</td>
           </tr>
           </tbody></table></div>
-          <p><code>builder.Ignore(o =&gt; o.Total)</code> is the one line you cannot skip: without it the model build fails
-          outright on the computed getter. <code>Status</code> stays persisted as a <strong>string</strong> (the scaffold&#39;s line, kept),
-          so a later reordering of the enum cannot silently reinterpret stored rows, and <code>UnitPrice</code> gets an
-          explicit <code>decimal(18,2)</code> so a price never rounds on the way in. <code>ModuleApplicationDbContext</code> needs no
-          edit: <code>-Child Item</code> already declared <code>DbSet&lt;OrderItem&gt;</code> alongside <code>DbSet&lt;Order&gt;</code>.</p>
+          <p><code>builder.Ignore(p =&gt; p.Total)</code> states in the mapping that <code>Total</code> is a computed getter and never a
+          column. <code>Status</code> stays persisted as a <strong>string</strong> (the scaffold&#39;s line, kept), so a later reordering of
+          the enum cannot silently reinterpret stored rows, and <code>UnitPrice</code> gets an explicit <code>decimal(18,2)</code> so
+          a price never rounds on the way in. <code>ModuleApplicationDbContext</code> needs no edit: <code>-Child Item</code> already
+          declared <code>DbSet&lt;OrderItem&gt;</code> alongside <code>DbSet&lt;Order&gt;</code>.</p>
           <h3 id="54-application">5.4 Application</h3>
           <p>An order is placed empty and grows lines afterwards, so the create payload is just a customer name,
           which is what <code>-NoDescription -NoOwner -Title CustomerName</code> already generated. Under
@@ -740,12 +780,12 @@ dotnet test <span class="hljs-literal">--project</span> Tests/Modules/Products/M
           </tr>
           </thead>
           <tbody><tr>
-          <td><code>UseCases/Create/</code><a href="https://github.com/ivanball/MMCA.ECommerce/blob/main/Source/Modules/Orders/MMCA.ECommerce.Orders.Application/Orders/UseCases/Create/OrderCreateRequestMapper.cs" target="_blank" rel="noopener">OrderCreateRequestMapper.cs</a></td>
+          <td><code>UseCases/Create/OrderCreateRequestMapper.cs</code></td>
           <td>edit</td>
-          <td>the one-line factory call and its staging comment become the plain <code>Order.Create(id: null, customerName: request.CustomerName)</code> form</td>
+          <td>delete the staging comment above the factory call; the call itself, <code>Order.Create(id: null, customerName: request.CustomerName)</code>, is already right</td>
           </tr>
           <tr>
-          <td><code>UseCases/Create/</code><a href="https://github.com/ivanball/MMCA.ECommerce/blob/main/Source/Modules/Orders/MMCA.ECommerce.Orders.Application/Orders/UseCases/Create/CreateOrderHandler.cs" target="_blank" rel="noopener">CreateOrderHandler.cs</a></td>
+          <td><code>UseCases/Create/CreateOrderHandler.cs</code></td>
           <td>edit</td>
           <td>one line of code, the published event: <code>new OrderPlacedIntegrationEvent(entity.Id, entity.CustomerName),</code>. The handler still publishes after the commit, so the database-generated id is populated by the time the event reaches consumers</td>
           </tr>
@@ -755,65 +795,60 @@ dotnet test <span class="hljs-literal">--project</span> Tests/Modules/Products/M
           <td>the update slice is the framework&#39;s generic <code>UpdateEntityCommand</code>, so there is no module command to edit: <code>OrderUpdateHandler</code> (kept because it eager-loads the items the update response carries), <code>OrderUpdateApplier</code> and <code>OrderUpdateRequestValidator</code> arrive shaped by the flags</td>
           </tr>
           <tr>
-          <td><code>UseCases/AddItem/</code><a href="https://github.com/ivanball/MMCA.ECommerce/blob/main/Source/Modules/Orders/MMCA.ECommerce.Orders.Application/Orders/UseCases/AddItem/AddItemCommand.cs" target="_blank" rel="noopener">AddItemCommand.cs</a></td>
-          <td>replace with</td>
-          <td>the two scaffolded scalars become four, and the doc comment records why they travel on the command instead of being looked up</td>
+          <td><code>UseCases/AddItem/AddItemCommand.cs</code></td>
+          <td>edit</td>
+          <td>the two scaffolded scalars become four: <code>AddItemCommand(OrderIdentifierType OrderId, int ProductId, string ProductName, decimal UnitPrice, int Quantity)</code>, and the doc comment records why they travel on the command instead of being looked up</td>
           </tr>
           <tr>
           <td><code>UseCases/AddItem/AddItemCommandValidator.cs</code></td>
           <td>edit</td>
-          <td>the scaffolded rule validates the retired <code>Body</code>; validate the four snapshot scalars instead, mirroring <code>OrderInvariants</code></td>
+          <td>the scaffolded rule validates the retired <code>Body</code>; validate the snapshot instead, mirroring <code>OrderInvariants</code>: <code>RuleFor(x =&gt; x.ProductName).NotEmpty().MaximumLength(OrderInvariants.ProductNameMaxLength);</code>, <code>RuleFor(x =&gt; x.UnitPrice).GreaterThan(0m);</code>, <code>RuleFor(x =&gt; x.Quantity).GreaterThan(0);</code></td>
           </tr>
           <tr>
-          <td><code>UseCases/AddItem/</code><a href="https://github.com/ivanball/MMCA.ECommerce/blob/main/Source/Modules/Orders/MMCA.ECommerce.Orders.Application/Orders/UseCases/AddItem/AddItemHandler.cs" target="_blank" rel="noopener">AddItemHandler.cs</a></td>
+          <td><code>UseCases/AddItem/AddItemHandler.cs</code></td>
           <td>edit</td>
-          <td>the aggregate call takes the four scalars (fragment below). It already returns <code>Result&lt;OrderItemDTO&gt;</code> and already loads <code>includes: [nameof(Order.Items)]</code> tracked, which is what lets the aggregate enforce the item lock and recompute the total, so neither changes</td>
-          </tr>
-          <tr>
-          <td><code>UseCases/ChangeItemQuantity/</code><a href="https://github.com/ivanball/MMCA.ECommerce/blob/main/Source/Modules/Orders/MMCA.ECommerce.Orders.Application/Orders/UseCases/ChangeItemQuantity/ChangeItemQuantityCommand.cs" target="_blank" rel="noopener">ChangeItemQuantityCommand.cs</a></td>
-          <td>create</td>
-          <td>quantity is the only mutable field on a line: the product snapshot and its price stay as captured</td>
-          </tr>
-          <tr>
-          <td><code>UseCases/ChangeItemQuantity/</code><a href="https://github.com/ivanball/MMCA.ECommerce/blob/main/Source/Modules/Orders/MMCA.ECommerce.Orders.Application/Orders/UseCases/ChangeItemQuantity/ChangeItemQuantityHandler.cs" target="_blank" rel="noopener">ChangeItemQuantityHandler.cs</a></td>
-          <td>create</td>
-          <td>loads the order tracked with its items, then changes the quantity through the aggregate root</td>
+          <td>the aggregate call in <code>Apply</code> takes the four scalars (fragment below). The handler derives from the framework&#39;s <code>AddChildEntityHandlerBase</code>, already answers with the new item&#39;s <code>OrderItemDTO</code>, and its <code>Includes</code> override already names <code>nameof(Order.Items)</code>, so the order is loaded tracked with its lines, which is what lets the aggregate enforce the item lock and recompute the total</td>
           </tr>
           <tr>
           <td><code>UseCases/EditItem/</code></td>
-          <td>delete</td>
-          <td>the slice <code>ChangeItemQuantity</code> replaces (the folder holds three files: the command, its handler, and its validator)</td>
+          <td>rename</td>
+          <td>the slice becomes <code>UseCases/ChangeItemQuantity/</code> (commands below), its three files and types become <code>ChangeItemQuantityCommand</code>, <code>ChangeItemQuantityCommandValidator</code> and <code>ChangeItemQuantityHandler</code>, and the namespace follows the folder. Quantity is the only mutable field on a line, so the command&#39;s <code>string Body</code> becomes <code>int Quantity</code>, the validator rule becomes <code>RuleFor(x =&gt; x.Quantity).GreaterThan(0);</code>, and the handler&#39;s <code>MutateAsync</code> calls <code>order.ChangeItemQuantity(command.ItemId, command.Quantity)</code>. The command keeps its required <code>RowVersion</code>, because the endpoint stays conditional on <code>If-Match</code></td>
           </tr>
           <tr>
-          <td><code>IntegrationEventHandlers/</code><a href="https://github.com/ivanball/MMCA.ECommerce/blob/main/Source/Modules/Orders/MMCA.ECommerce.Orders.Application/Orders/IntegrationEventHandlers/OrderPlacedHandler.cs" target="_blank" rel="noopener">OrderPlacedHandler.cs</a></td>
+          <td><code>IntegrationEventHandlers/OrderPlacedHandler.cs</code></td>
           <td>edit</td>
           <td>the consumer arrives generated and wired; it logs the new <code>CustomerName</code> too</td>
           </tr>
           </tbody></table></div>
-          <pre class="doc-pre" tabindex="0" data-lang="C#"><code class="language-csharp hljs">        <span class="hljs-keyword">var</span> result = order.AddItem(
+          <pre class="doc-pre" tabindex="0" data-lang="C#"><code class="language-csharp hljs">        <span class="hljs-keyword">return</span> parent.AddItem(
             id: <span class="hljs-literal">null</span>,
             command.ProductId,
             command.ProductName,
             command.UnitPrice,
             command.Quantity);</code></pre>
-          <pre class="doc-pre" tabindex="0" data-lang="PowerShell"><code class="language-powershell hljs"><span class="hljs-built_in">Remove-Item</span> <span class="hljs-literal">-Recurse</span> `
-  Source\Modules\Orders\MMCA.ECommerce.Orders.Application\Orders\UseCases\EditItem</code></pre>
+          <pre class="doc-pre" tabindex="0" data-lang="PowerShell"><code class="language-powershell hljs"><span class="hljs-variable">$slice</span> = <span class="hljs-string">&#x27;Source\Modules\Orders\MMCA.ECommerce.Orders.Application\Orders\UseCases&#x27;</span>
+<span class="hljs-built_in">Rename-Item</span> <span class="hljs-string">&quot;<span class="hljs-variable">$slice</span>\EditItem&quot;</span> ChangeItemQuantity
+<span class="hljs-built_in">Rename-Item</span> <span class="hljs-string">&quot;<span class="hljs-variable">$slice</span>\ChangeItemQuantity\EditItemCommand.cs&quot;</span> ChangeItemQuantityCommand.cs
+<span class="hljs-built_in">Rename-Item</span> <span class="hljs-string">&quot;<span class="hljs-variable">$slice</span>\ChangeItemQuantity\EditItemCommandValidator.cs&quot;</span> ChangeItemQuantityCommandValidator.cs
+<span class="hljs-built_in">Rename-Item</span> <span class="hljs-string">&quot;<span class="hljs-variable">$slice</span>\ChangeItemQuantity\EditItemHandler.cs&quot;</span> ChangeItemQuantityHandler.cs</code></pre>
           <p>Nothing else in the Application layer moves. The Delete, GetById, RemoveItem and ChangeStatus slices,
-          the create validator, both DTO mappers, the DTO projector, <code>OrderCacheKeys</code>, the audit domain-event
-          handler, and <code>DependencyInjection.cs</code> are all correct exactly as generated, because each of them
-          talks about items and none of them names a renamed field. <code>OrderCreateRequest.cs</code> differs from the
-          sample only in doc comments, which you can skip.</p>
+          the create validator, all three DTO mappers (Mapperly maps the new item properties by name), the DTO
+          projector, <code>OrderCacheKeys</code>, the audit domain-event handler, and <code>DependencyInjection.cs</code> are all
+          correct exactly as generated, because each of them talks about items and none of them names a
+          renamed field.</p>
           <h3 id="55-api">5.5 API</h3>
-          <p><strong>Replace</strong> <code>Source/Modules/Orders/MMCA.ECommerce.Orders.API/Controllers/OrdersController.cs</code> with
-          <a href="https://github.com/ivanball/MMCA.ECommerce/blob/main/Source/Modules/Orders/MMCA.ECommerce.Orders.API/Controllers/OrdersController.cs" target="_blank" rel="noopener">OrdersController.cs</a>.
+          <p><strong>Edit</strong> <code>Source/Modules/Orders/MMCA.ECommerce.Orders.API/Controllers/OrdersController.cs</code>.
           The routes are unchanged, including <code>POST /Orders/{id}/items</code>, <code>PUT /Orders/{id}/items/{itemId}</code>, and
-          <code>DELETE /Orders/{id}/items/{itemId}</code>: <code>-Child Item</code> produced them. What changes is the injected
-          <code>ChangeItemQuantityCommand</code> handler in place of the <code>EditItemCommand</code> one, the action renamed from
-          <code>EditItemAsync</code> to <code>ChangeItemQuantityAsync</code>, and the two new request types.</p>
-          <p><strong>Edit</strong> the two error-resource files,
-          <a href="https://github.com/ivanball/MMCA.ECommerce/blob/main/Source/Modules/Orders/MMCA.ECommerce.Orders.API/Resources/OrdersErrorResources.resx" target="_blank" rel="noopener">OrdersErrorResources.resx</a>
-          and
-          <a href="https://github.com/ivanball/MMCA.ECommerce/blob/main/Source/Modules/Orders/MMCA.ECommerce.Orders.API/Resources/OrdersErrorResources.es.resx" target="_blank" rel="noopener">OrdersErrorResources.es.resx</a>.
+          <code>DELETE /Orders/{id}/items/{itemId}</code>: <code>-Child Item</code> produced them. What changes is the
+          <code>using ...UseCases.EditItem;</code> (now <code>...UseCases.ChangeItemQuantity;</code>), the injected
+          <code>ICommandHandler&lt;ChangeItemQuantityCommand, Result&gt;</code> in place of the <code>EditItemCommand</code> one, the action
+          renamed from <code>EditItemAsync</code> to <code>ChangeItemQuantityAsync</code>, and the two new request types:
+          <code>AddItemAsync</code> takes an <code>AddOrderItemRequest</code> and builds
+          <code>new AddItemCommand(id, request.ProductId, request.ProductName, request.UnitPrice, request.Quantity)</code>,
+          and <code>ChangeItemQuantityAsync</code> takes a <code>ChangeOrderItemQuantityRequest</code> and builds
+          <code>new ChangeItemQuantityCommand(id, itemId, request.Quantity)</code>.</p>
+          <p><strong>Edit</strong> the two error-resource files, <code>Resources/OrdersErrorResources.resx</code> and
+          <code>Resources/OrdersErrorResources.es.resx</code> in the same project.
           Keep the resx envelope exactly as generated (the <code>&lt;xsd:schema&gt;</code> block and the four <code>&lt;resheader&gt;</code>
           elements) and touch only the <code>&lt;data&gt;</code> elements: delete the three the reshape retires
           (<code>Order.Closed</code>, <code>Order.Item.Body.*</code>), reword the two <code>Order.CustomerName.*</code> values the camel-case
@@ -831,7 +866,7 @@ dotnet test <span class="hljs-literal">--project</span> Tests/Modules/Products/M
           <tbody><tr>
           <td><code>Order.CustomerName.Empty</code></td>
           <td>Order customer name cannot be empty.</td>
-          <td>El nombre del cliente del pedido no puede estar vacío.</td>
+          <td>El nombre del cliente del pedido no puede estar vacio.</td>
           </tr>
           <tr>
           <td><code>Order.CustomerName.TooLong</code></td>
@@ -841,27 +876,27 @@ dotnet test <span class="hljs-literal">--project</span> Tests/Modules/Products/M
           <tr>
           <td><code>Order.Item.ProductName.Empty</code></td>
           <td>Item product name cannot be empty.</td>
-          <td>El nombre del producto de la línea no puede estar vacío.</td>
+          <td>El nombre del producto de la linea no puede estar vacio.</td>
           </tr>
           <tr>
           <td><code>Order.Item.ProductName.TooLong</code></td>
           <td>Item product name cannot exceed 200 characters.</td>
-          <td>El nombre del producto de la línea no puede superar los 200 caracteres.</td>
+          <td>El nombre del producto de la linea no puede superar los 200 caracteres.</td>
           </tr>
           <tr>
           <td><code>Order.InvalidUnitPrice</code></td>
           <td>Item unit price must be greater than zero.</td>
-          <td>El precio unitario de la línea debe ser mayor que cero.</td>
+          <td>El precio unitario de la linea debe ser mayor que cero.</td>
           </tr>
           <tr>
           <td><code>Order.InvalidQuantity</code></td>
           <td>Item quantity must be greater than zero.</td>
-          <td>La cantidad de la línea debe ser mayor que cero.</td>
+          <td>La cantidad de la linea debe ser mayor que cero.</td>
           </tr>
           <tr>
           <td><code>Order.ItemsLocked</code></td>
           <td>Items can only be changed while the order is pending.</td>
-          <td>Las líneas solo se pueden modificar mientras el pedido está pendiente.</td>
+          <td>Las lineas solo se pueden modificar mientras el pedido esta pendiente.</td>
           </tr>
           <tr>
           <td><code>Order.InvalidStatusTransition</code></td>
@@ -872,12 +907,13 @@ dotnet test <span class="hljs-literal">--project</span> Tests/Modules/Products/M
           <p>Each entry is a <code>&lt;data name=&quot;...&quot; xml:space=&quot;preserve&quot;&gt;</code> element wrapping a single <code>&lt;value&gt;</code>, exactly
           like the ones you are replacing. The module&#39;s <code>OrdersErrorResources.cs</code> anchor type needs no edit:
           <code>-Title CustomerName</code> already made its example code the one that exists.</p>
-          <p>The solution builds again at this point.</p>
+          <p>Every source project builds again at this point. The solution build fails only in the two Orders
+          test projects (23 errors on the retired <code>EditItem</code> slice, <code>OrderStatus</code> members, and <code>AddItem</code>
+          signature) until 5.6.</p>
           <h3 id="56-tests">5.6 Tests</h3>
-          <p><strong>Leave</strong> <a href="https://github.com/ivanball/MMCA.ECommerce/blob/main/Tests/Modules/Orders/MMCA.ECommerce.Orders.Application.Tests/MMCA.ECommerce.Orders.Application.Tests.csproj" target="_blank" rel="noopener">MMCA.ECommerce.Orders.Application.Tests.csproj</a>
-          as generated. The handler tests mock the unit of work directly, and the scaffolded project already
-          references <code>Moq</code> beside <code>xunit.v3</code> and <code>AwesomeAssertions</code>, so it needs nothing new. Then the test
-          files themselves, all under <code>Tests/Modules/Orders/</code>:</p>
+          <p>Leave <code>Tests/Modules/Orders/MMCA.ECommerce.Orders.Application.Tests/MMCA.ECommerce.Orders.Application.Tests.csproj</code>
+          as generated: it already references <code>Moq</code> beside <code>xunit.v3</code> and <code>AwesomeAssertions</code>, so it needs
+          nothing new. Then the test files themselves, all under <code>Tests/Modules/Orders/</code>:</p>
           <div class="table-wrap"><table>
           <thead>
           <tr>
@@ -887,29 +923,47 @@ dotnet test <span class="hljs-literal">--project</span> Tests/Modules/Products/M
           </tr>
           </thead>
           <tbody><tr>
-          <td><code>MMCA.ECommerce.Orders.Domain.Tests/Orders/</code><a href="https://github.com/ivanball/MMCA.ECommerce/blob/main/Tests/Modules/Orders/MMCA.ECommerce.Orders.Domain.Tests/Orders/OrderTests.cs" target="_blank" rel="noopener">OrderTests.cs</a></td>
-          <td>replace with</td>
-          <td>33 tests over the aggregate, the item lock, and the lifecycle. Keep the comment inside <code>Total_ExcludesSoftDeletedItems</code> verbatim: it documents a real consequence of database-generated ids (every unpersisted line still carries Id 0, so <code>GetChildOrNotFound</code> resolves the first live one), and without it the <code>RemoveItem(itemId: 0)</code> call below it looks like a mistake</td>
+          <td><code>MMCA.ECommerce.Orders.Domain.Tests/Orders/OrderTests.cs</code></td>
+          <td>rewrite</td>
+          <td>27 tests over the aggregate, the item lock, and the lifecycle: creation as Pending with a zero total, the product snapshot on <code>AddItem</code>, accumulated item invariants, <code>Order.ItemsLocked</code> on add, change and remove after Pending, <code>Total</code> over live lines, <code>ChangeItemQuantity</code>, a <code>[Theory]</code> over the four allowed and four refused transitions, the idempotent re-assert, <code>UpdateDetails</code> after Pending, and the cascade delete. Keep the comment inside <code>Total_ExcludesSoftDeletedItems</code> (below): it documents a real consequence of database-generated ids, and without it the <code>RemoveItem(itemId: 0)</code> call looks like a mistake</td>
           </tr>
           <tr>
-          <td><code>MMCA.ECommerce.Orders.Application.Tests/Caching/</code><a href="https://github.com/ivanball/MMCA.ECommerce/blob/main/Tests/Modules/Orders/MMCA.ECommerce.Orders.Application.Tests/Caching/OrderCacheInvalidationTests.cs" target="_blank" rel="noopener">OrderCacheInvalidationTests.cs</a></td>
+          <td><code>MMCA.ECommerce.Orders.Application.Tests/Caching/OrderCacheInvalidationTests.cs</code></td>
           <td>edit</td>
-          <td>the scaffolded suite discovers every <code>ICacheInvalidating</code> command and fails by name when one has no builder, so <code>ChangeItemQuantityCommand</code> needs an entry in its <code>HandWrittenBuilders()</code> table and <code>EditItemCommand</code> loses its own. That discovery is what catches a slice added later without a <code>CachePrefix</code> here rather than in production</td>
+          <td>the scaffolded suite discovers every <code>ICacheInvalidating</code> command and fails by name when one has no builder, so <code>EditItemCommand</code> becomes <code>ChangeItemQuantityCommand</code> (built as <code>new ChangeItemQuantityCommand(OrderId, ItemId: 1, Quantity: 3) { RowVersion = ClientToken }</code>) in both its <code>HandListedBeforeDiscovery</code> list and its <code>HandWrittenBuilders()</code> table, the <code>AddItemCommand</code> builder passes the snapshot (<code>new AddItemCommand(OrderId, ProductId: 1, &quot;Espresso cup&quot;, 12.50m, Quantity: 1)</code>), and the fixture statuses <code>OrderStatus.Closed</code> and <code>OrderStatus.Open</code> become <code>OrderStatus.Paid</code> and <code>OrderStatus.Pending</code>. That discovery is what catches a slice added later without a <code>CachePrefix</code> here rather than in production</td>
           </tr>
           <tr>
-          <td><code>MMCA.ECommerce.Orders.Application.Tests/Orders/</code><a href="https://github.com/ivanball/MMCA.ECommerce/blob/main/Tests/Modules/Orders/MMCA.ECommerce.Orders.Application.Tests/Orders/OrderHandlerTests.cs" target="_blank" rel="noopener">OrderHandlerTests.cs</a></td>
-          <td>create</td>
-          <td>19 tests, one class covering every Orders use case. Every handler in the module has the same shape, so one set of fakes covers all of them, and the shared <code>HandlerMocks</code> helper is what keeps the file from repeating that setup nine times</td>
+          <td><code>MMCA.ECommerce.Orders.Application.Tests/Concurrency/OrderConcurrencyTokenTests.cs</code></td>
+          <td>edit</td>
+          <td>the same <code>EditItem</code> to <code>ChangeItemQuantity</code> retarget (using, test name, handler type, command), <code>OrderStatus.Paid</code> for <code>Closed</code>, and the new <code>AddItem</code> arguments</td>
+          </tr>
+          <tr>
+          <td><code>MMCA.ECommerce.Orders.Application.Tests/Deletion/DeleteOrderCascadeTests.cs</code> and <code>.../Projections/OrderDTOProjectorTests.cs</code></td>
+          <td>edit</td>
+          <td>each <code>AddItem(id: null, &quot;...&quot;, authorUserId: N)</code> call becomes <code>AddItem(id: null, productId: N, &quot;...&quot;, 10m, 1)</code></td>
           </tr>
           </tbody></table></div>
+          <pre class="doc-pre" tabindex="0" data-lang="C#"><code class="language-csharp hljs">    [<span class="hljs-meta">Fact</span>]
+    <span class="hljs-function"><span class="hljs-keyword">public</span> <span class="hljs-keyword">void</span> <span class="hljs-title">Total_ExcludesSoftDeletedItems</span>()</span>
+    {
+        <span class="hljs-keyword">var</span> order = CreatePendingOrder();
+        order.AddItem(id: <span class="hljs-literal">null</span>, productId: <span class="hljs-number">1</span>, <span class="hljs-string">&quot;Cup&quot;</span>, <span class="hljs-number">12.50</span>m, <span class="hljs-number">2</span>);
+        order.AddItem(id: <span class="hljs-literal">null</span>, productId: <span class="hljs-number">2</span>, <span class="hljs-string">&quot;Saucer&quot;</span>, <span class="hljs-number">4</span>m, <span class="hljs-number">3</span>);
+
+        <span class="hljs-comment">// Ids are database-generated, so every line that has not been persisted still carries Id 0,</span>
+        <span class="hljs-comment">// and GetChildOrNotFound resolves the first live one: this removes the cup, not the saucer.</span>
+        order.RemoveItem(itemId: <span class="hljs-number">0</span>);
+
+        order.Total.Should().Be(<span class="hljs-number">12</span>m);
+    }</code></pre>
           <h3 id="57-verify-both-reshapes">5.7 Verify both reshapes</h3>
           <pre class="doc-pre" tabindex="0" data-lang="PowerShell"><code class="language-powershell hljs">dotnet build MMCA.ECommerce.slnx
 dotnet test <span class="hljs-literal">--project</span> Tests/Modules/Orders/MMCA.ECommerce.Orders.Domain.Tests/MMCA.ECommerce.Orders.Domain.Tests.csproj
 dotnet test <span class="hljs-literal">--project</span> Tests/Modules/Orders/MMCA.ECommerce.Orders.Application.Tests/MMCA.ECommerce.Orders.Application.Tests.csproj
 dotnet test <span class="hljs-literal">--project</span> Tests/Architecture/MMCA.ECommerce.Architecture.Tests/MMCA.ECommerce.Architecture.Tests.csproj</code></pre>
-          <p>Expect a warning-free build, then <strong>33/33</strong> passing in the Orders domain suite, <strong>23/23</strong> in the
-          Orders application suite, and the architecture suite green except <code>IntegrationEventContractTests</code>,
-          which step 8 settles. No database is involved in any of them.</p>
+          <p>Expect a warning-free build, then <strong>27/27</strong> passing in the Orders domain suite, <strong>21/21</strong> in the
+          Orders application suite, and the architecture suite at 106 of 107, the one failure being
+          <code>IntegrationEventContractTests</code>, which step 8 settles. No database is involved in any of them.</p>
           <p>That last run is the one worth watching, and it is only worth watching because <em>both</em> modules were
           reshaped: a flat, status-less catalog module beside an aggregate that owns a growing child collection
           and a guarded lifecycle is what makes the layering, module-isolation, and event-convention rules say
@@ -921,40 +975,61 @@ dotnet test <span class="hljs-literal">--project</span> Tests/Architecture/MMCA.
           <p><code>dotnet test --solution MMCA.ECommerce.slnx</code> runs everything in one pass, and it goes fully green once
           step 8 brings the frozen integration-event wire contract up to date.</p>
           <h2 id="6-point-the-ui-at-the-new-domain">6. Point the UI at the new domain</h2>
-          <p>The scaffolded Blazor host already has the load-bearing parts: the typed
-          <a href="https://github.com/ivanball/MMCA.ECommerce/blob/main/Source/Hosts/UI/MMCA.ECommerce.UI.Web/Services/ECommerceApiClient.cs" target="_blank" rel="noopener">ECommerceApiClient</a>
+          <p>The scaffolded Blazor host already has the load-bearing parts: the typed <code>ECommerceApiClient</code>
+          (<code>Source/Hosts/UI/MMCA.ECommerce.UI.Web/Services/ECommerceApiClient.cs</code>)
           calling the API server-side through Aspire service discovery (no CORS, no token), the
-          <code>en</code>/<code>es</code> resource pairs, and the theme/culture chrome. Reshape the Products pages to
-          Name/Description/Price, and add two Orders pages that mirror them. All four live under
-          <code>Source/Hosts/UI/MMCA.ECommerce.UI.Web/Components/Pages/</code>:</p>
+          <code>en</code>/<code>es</code> resource pairs, and the theme/culture chrome. What it does not have is the new domain, so
+          the client grows first, then the pages.</p>
+          <p><strong>The client.</strong> <code>CreateProductAsync</code> and <code>UpdateProductAsync</code> gain a <code>decimal price</code> parameter
+          (before the cancellation token, and before <code>rowVersion</code> on the update) and send
+          <code>new { Name = name, Description = description, Price = price }</code>. The Orders calls copy the shape of
+          the Products ones: <code>GetOrdersAsync</code> (<code>GET Orders</code>, read as <code>CollectionResult&lt;OrderDTO&gt;</code>),
+          <code>GetOrderAsync</code> (<code>GET Orders/{id}/details</code>), <code>CreateOrderAsync</code>, <code>UpdateOrderAsync</code>,
+          <code>ChangeOrderStatusAsync</code> (<code>PUT /Orders/{id}/status</code> with a <code>ChangeOrderStatusRequest</code>),
+          <code>AddOrderItemAsync</code> (an <code>AddOrderItemRequest</code>), <code>ChangeOrderItemQuantityAsync</code>,
+          <code>RemoveOrderItemAsync</code>, and <code>DeleteOrderAsync</code>. Three rules come from the controller&#39;s attributes and
+          the analyzers. The writes marked <code>[SupportsIfMatch]</code> (update, status, item quantity) go through the
+          existing <code>ConditionalPut</code> helper with the order&#39;s <code>RowVersion</code>. The two <code>[Idempotent]</code> posts (create,
+          add item) send a fresh <code>Idempotency-Key</code> header per user action. And a helper that sends a request it
+          did not build takes a <code>Func&lt;HttpRequestMessage&gt;</code> and disposes the message inside, because handing it
+          a constructed <code>HttpRequestMessage</code> trips <code>CA2000</code>.</p>
+          <p><strong>The pages.</strong> Reshape the Products pages to Name/Description/Price, and add two Orders pages that
+          mirror them. All four live under <code>Source/Hosts/UI/MMCA.ECommerce.UI.Web/Components/Pages/</code>:</p>
           <ul>
-          <li><a href="https://github.com/ivanball/MMCA.ECommerce/blob/main/Source/Hosts/UI/MMCA.ECommerce.UI.Web/Components/Pages/Products.razor" target="_blank" rel="noopener">Products.razor</a>
-          and
-          <a href="https://github.com/ivanball/MMCA.ECommerce/blob/main/Source/Hosts/UI/MMCA.ECommerce.UI.Web/Components/Pages/ProductDetail.razor" target="_blank" rel="noopener">ProductDetail.razor</a>:
-          the catalog list and the create/edit form, on Name/Description/Price.</li>
-          <li><a href="https://github.com/ivanball/MMCA.ECommerce/blob/main/Source/Hosts/UI/MMCA.ECommerce.UI.Web/Components/Pages/Orders.razor" target="_blank" rel="noopener">Orders.razor</a>
-          and
-          <a href="https://github.com/ivanball/MMCA.ECommerce/blob/main/Source/Hosts/UI/MMCA.ECommerce.UI.Web/Components/Pages/OrderDetail.razor" target="_blank" rel="noopener">OrderDetail.razor</a>:
+          <li><code>Products.razor</code> and <code>ProductDetail.razor</code>: the catalog list and the create/edit form, on
+          Name/Description/Price. The price is a <code>MudNumericField&lt;decimal&gt;</code> with its own invalid flag
+          (<code>_priceInvalid = _price &lt;= 0;</code>) and focus target, and the list shows it formatted with
+          <code>ToString(&quot;C&quot;, CultureInfo.CurrentCulture)</code>.</li>
+          <li><code>Orders.razor</code> and <code>OrderDetail.razor</code> (<code>@page &quot;/orders&quot;</code> and <code>@page &quot;/orders/{Id:int}&quot;</code>):
           create and list orders, then edit the customer name, walk the status lifecycle (the page offers
           only the transitions the domain allows), and manage items while the order is Pending. The add-item
           form is a product picker filled from <code>GetProductsAsync()</code>: selecting a product snapshots its id,
-          name, and price into the request, which is the UI half of the module-isolation decision above.</li>
+          name, and price into the <code>AddOrderItemRequest</code>, which is the UI half of the module-isolation
+          decision above. A page that names <code>Result</code> (a write helper typed <code>Func&lt;Task&lt;Result&gt;&gt;</code>, for example)
+          needs <code>@using MMCA.Common.Shared.Abstractions</code>, which <code>_Imports.razor</code> does not carry.</li>
           </ul>
-          <p>Mirror the scaffold&#39;s page conventions, because an older sample would not have them: a page opens
-          with <code>&lt;PageHeading Text=&quot;@(L[&quot;Browser.Tab&quot;].Value)&quot; /&gt;</code> and marks its panels with <code>&lt;SectionHeading&gt;</code>
+          <p>Mirror the scaffold&#39;s page conventions: a page opens with
+          <code>&lt;PageHeading Text=&quot;@(L[&quot;Browser.Tab&quot;].Value)&quot; /&gt;</code> and marks its panels with <code>&lt;SectionHeading&gt;</code>
           (both generated components, not MudBlazor ones), the delete dialog and the required-field warning
           read the fixed chrome keys <code>Dialog.Delete.Heading</code> and <code>Snackbar.RequiredFields</code>, and the
           required-field check accumulates one line at a time
-          (<code>missingRequired = missingRequired || string.IsNullOrWhiteSpace(_field);</code>) rather than as one
-          compound condition, so an optional axis can drop a line without breaking the expression.</p>
-          <p>Three files outside <code>Pages/</code> also move: the UI project needs a <code>ProjectReference</code> to
-          <code>MMCA.ECommerce.Orders.Shared</code> (contracts only, never a module&#39;s Application or Domain layer),
-          <code>Components/_Imports.razor</code> gains <code>@using System.Globalization</code> for the currency formatting, and
-          <a href="https://github.com/ivanball/MMCA.ECommerce/blob/main/Source/Hosts/UI/MMCA.ECommerce.UI.Web/Components/Layout/MainLayout.razor" target="_blank" rel="noopener">MainLayout.razor</a>
-          gains the Products and Orders app-bar links. Every string goes through the <code>L[...]</code> localizer, and
-          every key needs an entry in both the <code>.resx</code> and <code>.es.resx</code> file beside the page; the
-          <a href="https://github.com/ivanball/MMCA.ECommerce/tree/main/Source/Hosts/UI/MMCA.ECommerce.UI.Web" target="_blank" rel="noopener">UI host in the repo</a>
-          is the complete reference.</p>
+          (<code>missingRequired = missingRequired || _priceInvalid;</code>) rather than as one compound condition, so an
+          optional axis can drop a line without breaking the expression.</p>
+          <p>Every string goes through the <code>L[...]</code> localizer, and every key needs an entry in both the <code>.resx</code>
+          and <code>.es.resx</code> file beside the page: <code>Field.Price</code>, <code>Column.Price</code> and <code>Validation.PricePositive</code> on
+          the Products pair, and a fresh pair per Orders page (start from a copy of <code>Products.resx</code> with its
+          <code>&lt;data&gt;</code> elements removed, which keeps the envelope). Status labels read well as <code>Status.{value}</code>
+          keys (<code>L[$&quot;Status.{order.Status}&quot;]</code>), one per <code>OrderStatus</code> member.</p>
+          <p>Four files outside <code>Pages/</code> also move. The UI project needs a <code>ProjectReference</code> to
+          <code>..\..\..\Modules\Orders\MMCA.ECommerce.Orders.Shared\MMCA.ECommerce.Orders.Shared.csproj</code> (contracts
+          only, never a module&#39;s Application or Domain layer). <code>Components/_Imports.razor</code> gains
+          <code>@using System.Globalization</code> for the currency formatting and
+          <code>@using MMCA.ECommerce.Orders.Shared.Orders</code>. And <code>Components/Layout/MainLayout.razor</code> gains the
+          Products and Orders app-bar links (<code>&lt;MudButton Href=&quot;/products&quot; ...&gt;</code> and <code>Href=&quot;/orders&quot;</code>, before
+          the <code>&lt;MudSpacer /&gt;</code>). Its <code>L</code> is the framework&#39;s <code>SharedResource</code> localizer, which has no key for
+          either link, so inject a second one, <code>IStringLocalizer&lt;MainLayout&gt;</code>, and give it a
+          <code>MainLayout.resx</code> / <code>MainLayout.es.resx</code> pair beside the layout.</p>
+          <p>Build the solution once more: it is warning-free with the pages in.</p>
           <h2 id="7-create-the-migrations">7. Create the migrations</h2>
           <p>Neither module has a migration yet: any shape flag makes <code>mmca-app</code> drop the template&#39;s sample one
           (it described the sample shape), and <code>-SkipMigration</code> deferred the Orders one to here. Each
@@ -970,28 +1045,45 @@ dotnet ef migrations add InitialCreate `
   <span class="hljs-literal">--project</span> Source/Hosting/MMCA.ECommerce.Migrations.SqlServer.Orders `
   <span class="hljs-literal">--startup-project</span> Source/Hosting/MMCA.ECommerce.Migrations.SqlServer.Orders `
   <span class="hljs-literal">--context</span> SQLServerDbContext</code></pre>
-          <p>Each migration creates its module&#39;s tables in the module schema plus that database&#39;s own
-          outbox/inbox tables: two databases, two outboxes, no contention.</p>
+          <p>Each migration creates its module&#39;s tables in the module schema (<code>Products.Product</code>, and
+          <code>Orders.Order</code> plus <code>Orders.OrderItem</code>) plus that database&#39;s own <code>dbo</code> infrastructure tables
+          (<code>OutboxMessages</code>, <code>InboxMessages</code>, <code>InternalCommands</code>, <code>AuditTrailEntries</code>, and <code>ScheduledJobs</code> in
+          the Products database, which is the pinned outbox source): two databases, two outboxes, no
+          contention. <code>Price</code> and <code>UnitPrice</code> come out as <code>decimal(18,2)</code>, and both name indexes carry the
+          <code>[IsDeleted] = 0</code> filter.</p>
           <h2 id="8-the-two-one-time-fixups-then-run-it">8. The two one-time fixups, then run it</h2>
           <p>Apply the two one-time fixups: the sort order the scaffold deliberately leaves to you (it is
           name-dependent, so no generated value could be right), and the wire-contract update your reshape made
           necessary. First, sort the using directives and the identifier aliases:</p>
           <pre class="doc-pre" tabindex="0" data-lang="PowerShell"><code class="language-powershell hljs">dotnet format analyzers MMCA.ECommerce.slnx <span class="hljs-literal">--diagnostics</span> SA1210 SA1211 <span class="hljs-literal">--severity</span> info</code></pre>
-          <p>Then delete the <code>SCAFFOLD DELTA</code> block at the bottom of <code>.editorconfig</code>, which restores the full
-          analyzer baseline. It relaxes three rules, not two: <code>SA1210</code> and <code>SA1211</code> for the sort order the
-          command above just fixed, and <code>IDE0021</code> because a heavily flagged aggregate can end up with a private
-          constructor holding a single statement, which the baseline would require you to write as an
-          expression body. This sample never trips that: both aggregates assign at least two fields, so the
-          <code>IDE0021</code> line has nothing to relax and goes with the rest of the block.</p>
+          <p>Then delete the <code>SCAFFOLD DELTA</code> block at the bottom of <code>.editorconfig</code> (from its dashed comment
+          rule to the end of the file), which restores the full analyzer baseline. For this shape the block
+          holds two severity lines, <code>SA1210</code> and <code>SA1211</code>, for the sort order the command above just fixed. Its
+          comment also explains <code>IDE0021</code>, which a heavily flagged aggregate can need relaxed when its private
+          constructor ends up holding a single statement (the baseline would then require an expression body).
+          This sample never trips that: both aggregates assign at least two fields. The build stays green with
+          the block gone.</p>
           <p>Second, bring the frozen integration-event wire contract up to date. <code>ArchitectureTests.cs</code> ships an
           <code>IntegrationEventContractTests</code> subclass holding the Products event as scaffolded, and
           <code>build/add-module.ps1</code> appended <code>Orders.OrderPlaced.v1 { OrderId:Int32 }</code>. Entries are keyed on each
           event&#39;s <code>[EventName]</code> wire identity, not its CLR type name. Both reshapes added members, so the test
-          fails and prints the live value: paste it into <code>ExpectedContract</code>, which is the wire contract evolving
-          on purpose rather than by accident
-          (<a href="../adr/010-integration-event-schema-versioning.html">ADR-010</a>). The
-          <a href="common-GETTING-STARTED.html#6-the-one-time-fixup">getting-started guide</a> covers the sort fixup and the
-          frozen contract in full.</p>
+          fails and lists each one (<code>Orders.OrderPlaced.v1: EXTRA member CustomerName:String</code>, and <code>Name:String</code>
+          and <code>Price:Decimal</code> on <code>Products.ProductCreated.v1</code>). Set <code>MMCA_CONTRACT_SNAPSHOT_OUT</code> to a file path
+          and re-run it to get the live contract as ready-to-paste literals:</p>
+          <pre class="doc-pre" tabindex="0" data-lang="PowerShell"><code class="language-powershell hljs"><span class="hljs-variable">$env:MMCA_CONTRACT_SNAPSHOT_OUT</span> = <span class="hljs-string">&quot;<span class="hljs-variable">$PWD</span>\contract.txt&quot;</span>
+dotnet test <span class="hljs-literal">--project</span> Tests/Architecture/MMCA.ECommerce.Architecture.Tests/MMCA.ECommerce.Architecture.Tests.csproj <span class="hljs-literal">--</span> <span class="hljs-literal">--filter-class</span> <span class="hljs-string">&quot;*IntegrationEventContractTests*&quot;</span>
+<span class="hljs-built_in">Remove-Item</span> Env:MMCA_CONTRACT_SNAPSHOT_OUT</code></pre>
+          <p>Replace the two <code>ExpectedContract</code> entries with what the file holds, which is the wire contract
+          evolving on purpose rather than by accident
+          (<a href="../adr/010-integration-event-schema-versioning.html">ADR-010</a>):</p>
+          <pre class="doc-pre" tabindex="0" data-lang="C#"><code class="language-csharp hljs">        <span class="hljs-string">&quot;Orders.OrderPlaced.v1 { CustomerName:String, OrderId:Int32 }&quot;</span>,
+        <span class="hljs-string">&quot;Products.ProductCreated.v1 { Name:String, Price:Decimal, ProductId:Int32 }&quot;</span>,</code></pre>
+          <p>The <a href="common-GETTING-STARTED.html#6-the-one-time-fixup">getting-started guide</a> covers the sort fixup and
+          the frozen contract in full. Then the final pass:</p>
+          <pre class="doc-pre" tabindex="0" data-lang="PowerShell"><code class="language-powershell hljs">dotnet build MMCA.ECommerce.slnx
+dotnet test  <span class="hljs-literal">--solution</span> MMCA.ECommerce.slnx</code></pre>
+          <p>A warning-free build and <strong>181 passing tests</strong>: 9 Products domain, 17 Products application, 27
+          Orders domain, 21 Orders application, and 107 architecture.</p>
           <blockquote>
           <p><strong>Re-running the walkthrough on the same machine?</strong> The Aspire SQL container is persistent by
           design, so databases created by an earlier MMCA.ECommerce build survive a re-scaffold, and their
@@ -1010,11 +1102,12 @@ dotnet ef migrations add InitialCreate `
           <hr>
           <h2 id="verification-checklist">Verification checklist</h2>
           <ol>
-          <li>Baseline green immediately after <code>mmca-app</code>, before any edit: <strong>81 tests</strong>.</li>
-          <li>After <code>build/add-module.ps1</code>: still green at <strong>99 tests</strong>, both modules&#39; scaffolded suites running.</li>
-          <li>After both reshapes: <code>dotnet build MMCA.ECommerce.slnx</code> warning-free and
-          <code>dotnet test --solution MMCA.ECommerce.slnx</code> fully green, with the architecture rules passing:
-          layering, module isolation, event conventions, and your updated frozen wire contract.</li>
+          <li>Baseline green immediately after <code>mmca-app</code>, before any edit: <strong>129 tests</strong>.</li>
+          <li>After <code>build/add-module.ps1</code>: still green at <strong>164 tests</strong>, both modules&#39; scaffolded suites running.</li>
+          <li>After both reshapes and the fixups: <code>dotnet build MMCA.ECommerce.slnx</code> warning-free and
+          <code>dotnet test --solution MMCA.ECommerce.slnx</code> fully green at <strong>181 tests</strong>, with the architecture
+          rules passing: layering, module isolation, event conventions, and your updated frozen wire
+          contract.</li>
           <li>Both <code>InitialCreate</code> migrations generated, each with its module&#39;s tables plus its own
           <code>OutboxMessages</code> table.</li>
           <li>Interactively: products created, an order walked Pending to Shipped, items locked after Pending,
@@ -1023,8 +1116,6 @@ dotnet ef migrations add InitialCreate `
           <hr>
           <h2 id="where-to-look-next">Where to look next</h2>
           <ul>
-          <li><strong><a href="https://github.com/ivanball/MMCA.ECommerce" target="_blank" rel="noopener">MMCA.ECommerce</a></strong>: the finished result of this
-          guide, build- and test-verified.</li>
           <li><strong><a href="common-GETTING-STARTED.html">Getting started</a></strong>: the single-module path, the vertical-slice
           templates (<code>mmca-command</code> / <code>mmca-query</code>), and the framework-upgrade and extraction notes.</li>
           <li><strong><a href="common-TEMPLATES.html">Templates</a></strong>: every parameter of all four templates, plus

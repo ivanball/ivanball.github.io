@@ -214,7 +214,7 @@ publishing through MassTransit, transport-neutral); `MessageBusProvider` has thr
 :241/:246/:251). Transport-leak fitness rule: the forbidden set is MassTransit, Grpc **and** Google.Protobuf
 (`MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Rules/Layering/ArchitectureRules.Transport.cs:11-16`),
 asserted by `MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Bases/Layering/MicroserviceExtractionTestsBase.cs:13`
-and subclassed in Common, ADC, Store, Helpdesk and the MMCA.ECommerce sample. Data sources: `DataSourceKey`
+and subclassed in Common, ADC, Store and Helpdesk. Data sources: `DataSourceKey`
 (`MMCA.Common/Source/Core/MMCA.Common.Application/Interfaces/Infrastructure/Persistence/DataSourceKey.cs:15`,
 `DefaultName = "Default"` at :18), `DataSourceResolver`
 (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DataSources/DataSourceResolver.cs:16`, the

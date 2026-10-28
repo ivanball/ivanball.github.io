@@ -211,7 +211,7 @@ the framework pushes a consumer toward a wrapper.**
     ADR-104 records for `Enumeration<T>` sitting outside that rule.
 
 13. **Adoption is zero and this record says so.** No production type in MMCA.Common, MMCA.Store,
-    MMCA.ADC, MMCA.Helpdesk or the MMCA.ECommerce sample implements `IStronglyTypedId<,>`. The only
+    MMCA.ADC or MMCA.Helpdesk implements `IStronglyTypedId<,>`. The only
     implementations anywhere are the fixtures in seven of the framework's own test files. The 49
     aliases in force across the four repositories on 2026-10-21 (47 `int`, two `System.Guid`) are
     untouched, and no consumer needs a version-bump behaviour change:

@@ -37,7 +37,7 @@
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/adr/index.html</loc>
-    <lastmod>2026-10-27</lastmod>
+    <lastmod>2026-10-28</lastmod>
     <priority>0.8</priority>
   </url>
   <url>
@@ -87,7 +87,7 @@
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/adr/010-integration-event-schema-versioning.html</loc>
-    <lastmod>2026-10-22</lastmod>
+    <lastmod>2026-10-28</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
@@ -452,7 +452,7 @@
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/adr/083-crud-lifecycle-event-taxonomy.html</loc>
-    <lastmod>2026-10-22</lastmod>
+    <lastmod>2026-10-28</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
@@ -557,7 +557,7 @@
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/adr/104-smart-enums-as-opt-in-capability.html</loc>
-    <lastmod>2026-10-26</lastmod>
+    <lastmod>2026-10-28</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
@@ -612,7 +612,7 @@
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/adr/115-strongly-typed-identifiers-opt-in.html</loc>
-    <lastmod>2026-10-26</lastmod>
+    <lastmod>2026-10-28</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
@@ -767,7 +767,7 @@
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/onboarding/group-05-cqrs-pipeline.html</loc>
-    <lastmod>2026-10-22</lastmod>
+    <lastmod>2026-10-28</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
@@ -777,7 +777,7 @@
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/onboarding/group-07-persistence-ef-core.html</loc>
-    <lastmod>2026-10-22</lastmod>
+    <lastmod>2026-10-28</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
@@ -822,7 +822,7 @@
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/onboarding/group-16-aspire-orchestration.html</loc>
-    <lastmod>2026-10-22</lastmod>
+    <lastmod>2026-10-28</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
@@ -1072,7 +1072,7 @@
   </url>
   <url>
     <loc>https://ivanball.github.io/articles/modular-monolith-to-microservices.html</loc>
-    <lastmod>2026-10-22</lastmod>
+    <lastmod>2026-10-28</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
@@ -1137,7 +1137,7 @@
   </url>
   <url>
     <loc>https://ivanball.github.io/articles/event-schema-versioning.html</loc>
-    <lastmod>2026-10-22</lastmod>
+    <lastmod>2026-10-28</lastmod>
     <priority>0.6</priority>
   </url>
   <url>

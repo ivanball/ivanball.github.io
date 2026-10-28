@@ -23,6 +23,8 @@ Revised 2026-10-21: the list of integration-event fitness rules now names the `[
 `*.IntegrationEvents` namespace, upcaster and payload-purity rules, records the domain-free purity
 rule as a partial enforcer of the Shared-typed wire discriminator, and the contract snapshot
 builder citation was re-anchored after the `[EventName]` rule landed above it.
+Updated 2026-10-28: the MMCA.ECommerce sample is retired, so its two adopters leave the count (17
+records derive the base, all in the four repos).
 
 ## Context
 ADR-003 decides how a domain event **moves**: captured into the outbox inside `SaveChangesAsync`,
@@ -160,11 +162,7 @@ aggregate deliberately raises **no** `Added` event, with creation signalled afte
 integration event instead
 (`.../Tickets.Domain/Tickets/Ticket.cs:81-84`, published at
 `.../Tickets.Application/Tickets/UseCases/Create/CreateTicketHandler.cs:43-45`); the audit handler's doc
-records exactly that gap (`TicketChangedAuditHandler.cs:13-14`). Outside the four repos, the two-module
-`MMCA.ECommerce` companion sample carries two more adopters on the same pattern
-(`MMCA.ECommerce/Source/Modules/Products/MMCA.ECommerce.Products.Domain/Products/DomainEvents/ProductChanged.cs:15`,
-`.../Orders/MMCA.ECommerce.Orders.Domain/Orders/DomainEvents/OrderChanged.cs:15`), which brings the
-total number of records deriving the base to **19**.
+records exactly that gap (`TicketChangedAuditHandler.cs:13-14`).
 
 ## Rationale
 - **One type per entity is one subscription surface.** A subscriber declares interest in the entity,
