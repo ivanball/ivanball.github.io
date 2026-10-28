@@ -1,18 +1,22 @@
 # Manual Screen-Reader Pass: Runbook (§21 Accessibility)
 
-_As of: 2026-07-20._
+_As of: 2026-10-28._
 
-The automated layer (axe-core WCAG 2.1 AA scans in `Tests/E2E/MMCA.ADC.E2E.Tests/AccessibilityTests.cs`
-plus the shared Login/Register/Profile bases in `MMCA.Common.Testing.E2E`) catches programmatic
-violations: missing labels, contrast, ARIA misuse, landmark gaps. It cannot judge whether the experience
-is actually usable with a screen reader: focus order, meaningful announcements, live-region updates, and
-keyboard operability. This runbook is the manual complement the rubric (§21) calls for. Record a dated
+The automated layer (axe-core WCAG 2.1 AA scans in
+`Tests/E2E/MMCA.ADC.E2E.Tests/Workflows/AccessibilityTests.cs`, plus the shared `UserLoginTestsBase`,
+`UserRegistrationTestsBase` and `ProfileManagementTestsBase` in `MMCA.Common.Testing.E2E`) catches
+programmatic violations: missing labels, contrast, ARIA misuse, landmark gaps. Keyboard operability is
+automated for one dialog only (`LiveModerationKeyboardTests` on the shared `KeyboardOperabilityTestsBase`).
+It cannot judge whether the experience is actually usable with a screen reader: focus order, meaningful
+announcements, live-region updates, and keyboard operability across the app. This runbook is the manual complement the rubric (§21) calls for. Record a dated
 pass in the results table below; that record is the evidence the scorecard reads.
 
 > Scope note: this is a manual, periodic pass (run it before a release and when a flow changes), not a CI
-> gate. The CI a11y gate is the separate axe + E2E merge-gate promotion tracked in `RemediationBacklog.md`
-> (TD-06/TD-07). The two are complementary: automation catches regressions cheaply, the manual pass catches
-> what automation cannot.
+> gate. The CI a11y gate is the axe suite inside the chromium E2E run of the `e2e-gate` job in `deploy.yml`
+> (TD-06/TD-07, resolved in `adc-RemediationBacklog.md`), which runs on a push to `main` that changes the
+> UI and blocks the deploy, not on PRs; the scheduled firefox (Monday) and webkit (Thursday) legs of `e2e.yml` are advisory per run. The
+> manual pass itself is the open accessibility item (#21) in that backlog. The two are complementary:
+> automation catches regressions cheaply, the manual pass catches what automation cannot.
 
 ## Tools
 
@@ -28,7 +32,8 @@ the UI through the Gateway. Test with the **keyboard only** (no mouse) for the w
 
 1. **Landmarks and headings.** The SR's landmark/heading list (NVDA `Insert`+`F7`) exposes a logical
    `banner` / `navigation` / `main` structure and a sensible `h1...hN` outline (one `h1` per page).
-2. **Skip link.** The first `Tab` reaches a working "skip to main content" link (`MainLayout.razor`).
+2. **Skip link.** The first `Tab` reaches a working "skip to main content" link (`MainLayout.razor` in
+   `MMCA.Common.UI`).
 3. **Focus order.** `Tab` / `Shift`+`Tab` move in reading order; focus is always visible; no focus is
    trapped (you can always `Tab` back out of menus, dialogs, the data grid).
 4. **Accessible names.** Every control announces a meaningful name plus role (icon-only buttons announce
@@ -50,9 +55,9 @@ the UI through the Gateway. Test with the **keyboard only** (no mouse) for the w
 | 2 | **Register** (`/register`) | Same; password-rule helper text announced |
 | 3 | **Profile** (`/profile`) | Change-password per-field errors plus summary announced; delete-account confirm dialog focus trap |
 | 4 | **Theme + culture switch** | Toggling dark mode / `es` announces the change and does not lose focus |
-| 5 | **Anonymous browse** (`/events`, `/sessions`, `/speakers`) | Grid navigation; "view" links announce the target |
+| 5 | **Anonymous browse** (`/conference/events`, `/conference/sessions`, `/conference/speakers`; an anonymous reader of `/conference/events` is redirected to the current or next event's detail page, so check that the redirect moves focus sensibly) | Grid navigation; "view" links announce the target |
 | 6 | **Attendee**, bookmark a session | Bookmark toggle announces on/off state |
-| 7 | **Speaker dashboard**, "My Sessions" | Empty/loaded state announced |
+| 7 | **Speaker dashboard** (`/speaker/dashboard`), "My Sessions" | Empty/loaded state announced |
 | 8 | **Organizer admin**, create/edit an event | Required-field errors, unsaved-changes guard prompt announced |
 
 ## Results log
