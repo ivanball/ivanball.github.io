@@ -6,21 +6,21 @@
   <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#0e151f" media="(prefers-color-scheme: dark)">
   <title>MMCA Business Specification Document · MMCA · Ivan Ball-llovera</title>
-  <meta name="description" content="As of: 2026-10-27 (MMCA.Store 236, MMCA.Common v1.265.0).">
+  <meta name="description" content="As of: 2026-10-28 (MMCA.Store 236, MMCA.Common v1.265.1).">
   <link rel="canonical" href="https://ivanball.github.io/docs/guides/store-Specification.html">
   <link rel="icon" href="../../assets/img/favicon.svg" type="image/svg+xml">
   <link rel="alternate" type="application/rss+xml" title="Ivan Ball-llovera: deep dives on enterprise .NET" href="https://ivanball.github.io/feed.xml">
   <meta property="og:type" content="article">
   <meta property="og:site_name" content="Ivan Ball-llovera">
   <meta property="og:title" content="MMCA Business Specification Document">
-  <meta property="og:description" content="As of: 2026-10-27 (MMCA.Store 236, MMCA.Common v1.265.0).">
+  <meta property="og:description" content="As of: 2026-10-28 (MMCA.Store 236, MMCA.Common v1.265.1).">
   <meta property="og:url" content="https://ivanball.github.io/docs/guides/store-Specification.html">
   <meta property="og:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <meta property="og:image:alt" content="Ivan Ball-llovera, Principal Software Architect">
   <meta property="og:locale" content="en_US">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="MMCA Business Specification Document">
-  <meta name="twitter:description" content="As of: 2026-10-27 (MMCA.Store 236, MMCA.Common v1.265.0).">
+  <meta name="twitter:description" content="As of: 2026-10-28 (MMCA.Store 236, MMCA.Common v1.265.1).">
   <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Platform","item":"https://ivanball.github.io/platform.html"},{"@type":"ListItem","position":2,"name":"Reference","item":"https://ivanball.github.io/docs/index.html"},{"@type":"ListItem","position":3,"name":"Guides & Specifications","item":"https://ivanball.github.io/docs/guides/index.html"},{"@type":"ListItem","position":4,"name":"Store · Business Specification Document","item":"https://ivanball.github.io/docs/guides/store-Specification.html"}]}</script>
   <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);if(localStorage.getItem('mmca-rail')==='hidden')document.documentElement.setAttribute('data-rail','hidden');if(localStorage.getItem('mmca-cites')==='shown')document.documentElement.setAttribute('data-cites','shown');}catch(e){}})();</script>
@@ -126,7 +126,7 @@
         <article class="doc-content">
           <p class="eyebrow doc-kicker">Guides &amp; specifications</p>
           <h1 id="mmca-business-specification-document">MMCA Business Specification Document</h1>
-          <p><em>As of: 2026-10-27 (MMCA.Store #236, MMCA.Common v1.265.0).</em></p>
+          <p><em>As of: 2026-10-28 (MMCA.Store #236, MMCA.Common v1.265.1).</em></p>
           <h2 id="1-system-overview">1. System Overview</h2>
           <p>MMCA is an <strong>e-commerce platform</strong> built with .NET 10.0 using DDD and Clean Architecture. The business logic is organized as modules (Catalog, Sales, Identity), each running as its own service host behind a YARP Gateway. The storefront is branded <strong>C.A.S.A Boutique</strong>. It enables shoppers to browse a product catalog, fill a bag, check out with or without an account, and pay; customers additionally keep a server-side cart, an order history and a profile. Administrators manage the product catalog, inventory, order fulfillment, user accounts and role permissions.</p>
           <p>The system operates in the <strong>online retail / e-commerce</strong> domain, supporting the full purchase lifecycle from product browsing through payment and delivery.</p>
@@ -163,7 +163,7 @@
           </thead>
           <tbody><tr>
           <td>Name</td>
-          <td>Display name (max 255 chars, required)</td>
+          <td>Display name (max 255 chars, required, unique among non-deleted categories)</td>
           </tr>
           <tr>
           <td>ParentCategoryId</td>
@@ -178,7 +178,7 @@
           <p><strong>Source:</strong> <code>Source/Modules/Catalog/MMCA.Store.Catalog.Domain/Categories/Category.cs</code></p>
           <hr>
           <h3 id="22-product">2.2 Product</h3>
-          <p><strong>Description:</strong> A saleable item in the catalog. Products have descriptive attributes and belong to a category. Each product has one or more purchasable variants.</p>
+          <p><strong>Description:</strong> A saleable item in the catalog. Products have descriptive attributes and belong to a category. A product is sold through its purchasable variants; creating a product does not require one.</p>
           <p><strong>Key Properties:</strong></p>
           <div class="table-wrap"><table>
           <thead>
@@ -203,11 +203,16 @@
           <td>CategoryId</td>
           <td>Category this product belongs to (optional)</td>
           </tr>
+          <tr>
+          <td>RatingSummary</td>
+          <td>Derived average star rating and review count over the product&#39;s published reviews (Section 2.11); zero until the first review</td>
+          </tr>
           </tbody></table></div>
           <p><strong>Relationships:</strong></p>
           <ul>
           <li>A Product belongs to zero or one Category</li>
-          <li>A Product contains one or more Product Variants</li>
+          <li>A Product contains zero or more Product Variants</li>
+          <li>A Product has zero or more Product Images (at most 10, Section 3.10)</li>
           </ul>
           <p><strong>Source:</strong> <code>Source/Modules/Catalog/MMCA.Store.Catalog.Domain/Products/Product.cs</code></p>
           <hr>
@@ -467,7 +472,7 @@
           </tr>
           <tr>
           <td>Sku / ProductId / ProductName</td>
-          <td>Catalog labels copied across the database boundary (SKU max 50, product name max 100), so the inventory grid can sort and filter on them. Written from the <code>ProductVariantChanged</code> and <code>ProductInfoChanged</code> integration events, the create and bulk-set paths, and a startup backfill (<code>InventoryItem.cs:33</code>, <code>:47</code>)</td>
+          <td>Catalog labels copied across the database boundary (SKU max 50, product name max 100), so the inventory grid can sort and filter on them. Written from the <code>ProductVariantChanged</code> and <code>ProductInfoChanged</code> integration events, the create, set and bulk-set paths, and a startup backfill (<code>InventoryItem.cs:33</code>, <code>:47</code>)</td>
           </tr>
           </tbody></table></div>
           <p><strong>Relationships:</strong></p>
@@ -496,19 +501,21 @@
           </tr>
           <tr>
           <td>Email</td>
-          <td>Email address (max 100 chars, unique, required)</td>
+          <td>Email address (Email value object, max 100 chars, unique, required)</td>
           </tr>
           <tr>
           <td>Address</td>
           <td>Optional mailing address (value object)</td>
           </tr>
           </tbody></table></div>
+          <p>Every field is marked <code>[Pii]</code>.</p>
           <p><strong>Relationships:</strong></p>
           <ul>
           <li>A Customer is linked 1:1 with a User account</li>
           <li>A Customer has one Shopping Cart</li>
           <li>A Customer has zero or more Orders</li>
           </ul>
+          <p><strong>Erasure:</strong> the aggregate is <code>IAnonymizable</code>: <code>Anonymize()</code> sets the name to &quot;Deleted Account&quot;, replaces the email with a <code>deleted-{id}@anonymized.invalid</code> placeholder, clears the address and raises <code>CustomerErased</code>, which carries the erasure into Sales and Catalog.</p>
           <p><strong>Source:</strong> <code>Source/Modules/Identity/MMCA.Store.Identity.Domain/Customers/Customer.cs</code></p>
           <hr>
           <h3 id="210-user">2.10 User</h3>
@@ -572,7 +579,7 @@
           <tbody><tr>
           <td><strong>Money</strong></td>
           <td>Amount (decimal), Currency (Currency)</td>
-          <td>Cannot have negative amount; currency mismatch on add</td>
+          <td>A currency is required (<code>Money.NoCurrency</code>); adding two amounts in different currencies fails (<code>Money.CurrencyMismatch</code>). Non-negativity is enforced by the owning entity&#39;s invariants (prices and charges), not by Money itself</td>
           <td><code>MMCA.Common.Shared/ValueObjects/Financial/Money.cs</code></td>
           </tr>
           <tr>
@@ -641,7 +648,7 @@
           </tr>
           <tr>
           <td>Title / Body</td>
-          <td>Optional headline and text</td>
+          <td>Optional headline and text. Marked <code>[Pii]</code></td>
           </tr>
           <tr>
           <td>ReviewerName</td>
@@ -838,8 +845,11 @@
           <ol>
           <li>Fetch the order with its order lines and check it is payable before Stripe is called: a
           <code>PendingPayment</code> order, or a <code>PaymentFailed</code> order on retry, gets a new session; a
-          <code>PaymentInitiated</code> order resumes the session it is waiting on rather than opening a second one (an
-          expired session is retired through <code>PaymentFailed</code> first); every other status is refused</li>
+          <code>PaymentInitiated</code> order resumes the session it is waiting on rather than opening a second one (a
+          session Stripe already reports paid, with an amount and currency <code>PaymentProof</code> accepts as this
+          order&#39;s total, marks the order <code>Paid</code> with no webhook, while a paid session with a mismatched amount
+          is logged for an operator and leaves the order unchanged; an expired session is retired through
+          <code>PaymentFailed</code> first); every other status is refused</li>
           <li>Call Stripe API to create a checkout session (converts Money to smallest currency unit: cents). The
           session carries the subtotal, shipping and tax, which must add up to the order total
           (<code>Payment.Stripe.ChargesDoNotAddUp</code>, <code>StripePaymentService.cs:153</code>), and it expires when the order&#39;s
@@ -859,10 +869,20 @@
           <li><code>checkout.session.completed</code> -&gt; Mark order as <code>Paid</code>, store payment intent ID, but only when the
           session is paid and the amount and currency it collected match the order total (<code>PaymentProof</code>,
           the one rule every path that marks an order paid from provider data applies)</li>
-          <li><code>checkout.session.expired</code> or <code>payment_intent.payment_failed</code> -&gt; Mark order as <code>PaymentFailed</code></li>
+          <li><code>checkout.session.expired</code> -&gt; Mark order as <code>PaymentFailed</code></li>
+          <li><code>payment_intent.payment_failed</code> -&gt; a declined card on a session that is still open: logged only,
+          the order status does not move, so the customer can retry on the same session</li>
+          <li>Any other event type is acknowledged and ignored</li>
           </ul>
           </li>
           <li>Idempotent: skips processing if order is already in the appropriate terminal state</li>
+          <li>After the commit, <code>OrderPaidHandler</code> schedules the <code>Sales.SendOrderPaidEmail</code> internal command, and
+          <code>OrderPaymentFailedSagaHandler</code> schedules <code>Sales.SendOrderPaymentFailedEmail</code> (and re-arms the
+          payment deadline, Section 3.17); both emails go to the order&#39;s recipient. <code>OrderPaymentFailed</code> is
+          raised only by <code>Order.MarkAsPaymentFailed</code>, from <code>PaymentInitiated</code>, on three paths: the
+          <code>checkout.session.expired</code> webhook, the payment reconciliation sweep finding the session expired,
+          and a resumed checkout finding it expired (which sends the retry email just before the replacement
+          session opens). A declined card (<code>payment_intent.payment_failed</code>) never raises it</li>
           </ol>
           <p>In production <code>StripeWebhookRegistrationService</code> verifies (or creates) the Stripe webhook endpoint at
           startup; locally the Stripe CLI started by the Aspire AppHost forwards events to the Gateway.</p>
@@ -899,7 +919,7 @@
           <p><strong>Business Rules Applied:</strong></p>
           <ul>
           <li>Orders in PendingPayment, PaymentInitiated, or PaymentFailed can be cancelled</li>
-          <li>Paid or delivered orders cannot be cancelled (no refund workflow)</li>
+          <li>Paid, shipped or delivered orders cannot be cancelled (no refund workflow)</li>
           <li>The customer page and the guest page both ask for confirmation before cancelling
           (<code>OrderSummaryPanel.razor.cs:187-191</code>, <code>GuestOrderDetail.Lifecycle.razor.cs:57-65</code>)</li>
           <li>The reason is not stored: it rides the event and the email command row only
@@ -925,7 +945,10 @@
           <li>Fetch the order</li>
           <li>Validate order status allows manual payment (PendingPayment, PaymentInitiated, or PaymentFailed)</li>
           <li>For a <code>PaymentInitiated</code> order, retire the Stripe checkout session first; when Stripe reports that
-          session already paid, the order is marked paid with the real payment intent instead of the override</li>
+          session already paid, the order is marked paid with the real payment intent instead of the override;
+          when the expire call fails and a re-read does not show the session paid or expired (including a
+          re-read that shows it still open), the override is refused with HTTP 400
+          (<code>Order.Pay.SessionStillPayable</code>), because proceeding risks a double charge</li>
           <li>Set payment intent ID to <code>&quot;manual-admin-override&quot;</code></li>
           <li>Transition status to <code>Paid</code></li>
           <li>Persist changes</li>
@@ -1181,14 +1204,17 @@
           </tr>
           </tbody></table></div>
           <p>A caller who is not the owner is answered 404 rather than 403, so the existence of another customer&#39;s
-          review id cannot be probed for. Every mutation evicts the <code>catalog:products</code> output-cache tag,
-          because a review moves the stars the product reads carry. The Gateway forwards <code>/Reviews/**</code> to the
+          review id cannot be probed for. Every mutation evicts the <code>catalog:products</code> and <code>catalog:categories</code>
+          output-cache tags, because a review moves the stars the product reads carry and a category read can
+          embed its products. The Gateway forwards <code>/Reviews/**</code> to the
           Catalog cluster (<code>catalog-reviews</code> route).</p>
           <p><strong>Field rules:</strong> rating 1 to 5, title at most 120 characters, body at most 2,000, frozen reviewer
           name at most 201; title and body are both optional and a review with neither is a bare star rating.</p>
           <p><strong>Implemented in:</strong></p>
           <ul>
           <li><code>Source/Modules/Catalog/MMCA.Store.Catalog.API/Controllers/ReviewsController.cs</code></li>
+          <li><code>Source/Modules/Catalog/MMCA.Store.Catalog.API/Controllers/ReviewEligibilityController.cs</code></li>
+          <li><code>Source/Modules/Catalog/MMCA.Store.Catalog.API/Controllers/ReviewModerationController.cs</code></li>
           <li><code>Source/Modules/Catalog/MMCA.Store.Catalog.Application/Reviews/UseCases/</code></li>
           <li><code>Source/Modules/Catalog/MMCA.Store.Catalog.Application/Reviews/IntegrationEventHandlers/OrderFulfilledHandler.cs</code></li>
           <li><code>Source/Modules/Catalog/MMCA.Store.Catalog.Application/Reviews/IntegrationEventHandlers/CustomerErasedHandler.cs</code></li>
@@ -1328,6 +1354,7 @@
           <li><code>Source/Modules/Sales/MMCA.Store.Sales.Application/Orders/Charges/OrderChargesCalculator.cs</code></li>
           <li><code>Source/Modules/Sales/MMCA.Store.Sales.Infrastructure/Payments/Stripe/StripeTaxCalculator.cs</code></li>
           <li><code>Source/Modules/Sales/MMCA.Store.Sales.Infrastructure/Shipping/MockShippingLabelProvider.cs</code></li>
+          <li><code>Source/Modules/Sales/MMCA.Store.Sales.API/Controllers/BestSellersController.cs</code></li>
           <li><code>Source/Modules/Sales/MMCA.Store.Sales.Application/Orders/UseCases/BestSellers/GetBestSellingVariantsHandler.cs</code></li>
           </ul>
           <hr>
@@ -1884,17 +1911,17 @@
           <tr>
           <td>Tracking number required</td>
           <td>A shipment must carry a tracking number, max 100 characters</td>
-          <td><code>ShipmentInvariants.cs</code></td>
+          <td><code>Shipment.cs</code> (<code>ShipmentInvariants</code>)</td>
           </tr>
           <tr>
           <td>Estimated delivery not before shipping</td>
           <td>The estimated delivery date cannot fall before the day the parcel shipped (same-day is allowed)</td>
-          <td><code>ShipmentInvariants.cs</code></td>
+          <td><code>Shipment.cs</code> (<code>ShipmentInvariants</code>)</td>
           </tr>
           <tr>
           <td>Tracking URL only for <code>Other</code></td>
           <td>A caller-supplied absolute https tracking URL (max 500) is accepted only for carrier <code>Other</code>; every known carrier&#39;s link is computed from its template</td>
-          <td><code>ShipmentInvariants.cs</code>, <code>CarrierTrackingUrls.cs</code></td>
+          <td><code>Shipment.cs</code> (<code>ShipmentInvariants</code>), <code>Carrier.cs</code> (<code>CarrierTrackingUrls</code>)</td>
           </tr>
           <tr>
           <td>Fulfilment published once</td>
@@ -2739,12 +2766,12 @@
           <tbody><tr>
           <td>Anonymous</td>
           <td>No auth required</td>
-          <td>Catalog browsing (GET categories, products, the storefront product page, the variant lookup, product images), published product reviews (<code>GET /Reviews/by-product/{productId}/paged</code>), login, registration, token refresh, password reset, email confirmation, the order quote, best sellers, guest checkout and the guest order endpoints (read, pay and cancel require the order&#39;s access token instead), the guest link request (always 202), payment webhooks</td>
+          <td>Catalog browsing (GET categories, products, the storefront product page, the variant lookup, product images), published product reviews (<code>GET /Reviews/by-product/{productId}/paged</code>), login, registration, token refresh, password reset, email confirmation, the order quote, best sellers, guest checkout and the guest order endpoints (read, pay and cancel require the order&#39;s access token instead), the guest link request (202 whether or not the order matched), payment webhooks</td>
           </tr>
           <tr>
           <td>Authenticated</td>
           <td>Any logged-in user</td>
-          <td>Shopping cart operations, order viewing and paying (own), cancelling an own order, profile management, preferences, session management, writing and revising own reviews, claiming a guest order</td>
+          <td>Shopping cart operations, order viewing and paying (own), cancelling an own order, profile management, preferences, session management, writing, revising and withdrawing own reviews, claiming a guest order</td>
           </tr>
           <tr>
           <td>Permission</td>
@@ -3091,12 +3118,12 @@
           <tr>
           <td><strong>Integration</strong></td>
           <td>3 per-service projects (Catalog, Sales, Identity)</td>
-          <td>Each boots one service host via <code>WebApplicationFactory</code>; Testcontainers.MsSql + Respawn for DB reset (or a real SQL Server via <code>STORE_TEST_SQL_BASE</code>), JWT token generation, full HTTP endpoint testing, OpenAPI baseline checks. Runs via <code>MMCA.Store.Integration.slnf</code> and gates deploy</td>
+          <td>Each boots one service host via <code>WebApplicationFactory</code> against a throwaway SQL Server database (LocalDB by default, the server named by <code>STORE_TEST_SQL_BASE</code> in CI) with Respawn resetting data between tests, JWT token generation, full HTTP endpoint testing, OpenAPI baseline checks. Runs via <code>MMCA.Store.Integration.slnf</code> in the pull-request-only <code>integration-tests</code> job, a required PR check that is not in the deploy job&#39;s <code>needs</code></td>
           </tr>
           <tr>
           <td><strong>Cross-service / broker</strong></td>
           <td>2 projects (CrossService, ServiceBusEmulator)</td>
-          <td>Container-backed, non-gating tiers: the integration-event round trips (<code>ProductVariantChanged</code>, <code>OrderFulfilled</code>) between real service hosts, and the Azure Service Bus emulator transport</td>
+          <td>Testcontainers-backed tiers run by the weeknight <code>cross-service-tests.yml</code>, never inside the deploy chain: the integration-event round trips (<code>ProductVariantChanged</code>, <code>OrderFulfilled</code>) between real service hosts, and the Azure Service Bus emulator transport. Their recency gates the deploy: the <code>cross-service-freshness</code> step needs a run within 5 days in which both the <code>cross-service</code> and <code>servicebus-emulator-smoke</code> jobs succeeded</td>
           </tr>
           <tr>
           <td><strong>E2E</strong></td>
@@ -3165,7 +3192,7 @@
           <p><strong>Inventory</strong> (Sales, under the same <code>Seeding:IncludeSampleCatalog</code> flag): 100 units per variant for all 3 Gold Ring sizes (<code>SalesModuleDbSeeder.cs:135-137</code>). Sales resolves each SKU to its variant id through Catalog&#39;s gRPC service and skips a SKU when Catalog is unreachable; the <code>ProductVariantChanged</code> event creates the row later.</p>
           <p><strong>Seeding is idempotent</strong>: the Identity and Catalog seeders check for existing data via <code>ExistsAsync()</code> before inserting. The inventory seeder creates a missing row and lifts an existing row only while it still holds zero, because any other count is live stock (<code>SalesModuleDbSeeder.cs:97</code>).</p>
           <hr>
-          <p><em>This specification is derived entirely from the source code. All business rules, workflows, and behaviors described above are confirmed implementations traceable to the referenced source files. Last updated: 2026-10-27 (guest checkout, shipping and tax, payment deadline, user and role administration, email confirmation, installable web app).</em></p>
+          <p><em>This specification is derived entirely from the source code. All business rules, workflows, and behaviors described above are confirmed implementations traceable to the referenced source files. Last updated: 2026-10-28.</em></p>
           
         <div class="doc-foot btn-row">
           <a class="btn btn--ghost" href="../../docs/guides/index.html">← Back to Guides &amp; Specifications</a>

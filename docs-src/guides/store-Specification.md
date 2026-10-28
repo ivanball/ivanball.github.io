@@ -1,6 +1,6 @@
 # MMCA Business Specification Document
 
-_As of: 2026-10-27 (MMCA.Store #236, MMCA.Common v1.265.0)._
+_As of: 2026-10-28 (MMCA.Store #236, MMCA.Common v1.265.1)._
 
 ## 1. System Overview
 
@@ -35,7 +35,7 @@ The system operates in the **online retail / e-commerce** domain, supporting the
 **Key Properties:**
 | Property | Description |
 |----------|-------------|
-| Name | Display name (max 255 chars, required) |
+| Name | Display name (max 255 chars, required, unique among non-deleted categories) |
 | ParentCategoryId | Optional reference to a parent category |
 
 **Relationships:**
@@ -47,7 +47,7 @@ The system operates in the **online retail / e-commerce** domain, supporting the
 ---
 
 ### 2.2 Product
-**Description:** A saleable item in the catalog. Products have descriptive attributes and belong to a category. Each product has one or more purchasable variants.
+**Description:** A saleable item in the catalog. Products have descriptive attributes and belong to a category. A product is sold through its purchasable variants; creating a product does not require one.
 
 **Key Properties:**
 | Property | Description |
@@ -56,10 +56,12 @@ The system operates in the **online retail / e-commerce** domain, supporting the
 | Description | Detailed description (max 4,000 chars, optional) |
 | Brand | Manufacturer or brand name (max 100 chars, optional, no whitespace-only) |
 | CategoryId | Category this product belongs to (optional) |
+| RatingSummary | Derived average star rating and review count over the product's published reviews (Section 2.11); zero until the first review |
 
 **Relationships:**
 - A Product belongs to zero or one Category
-- A Product contains one or more Product Variants
+- A Product contains zero or more Product Variants
+- A Product has zero or more Product Images (at most 10, Section 3.10)
 
 **Source:** `Source/Modules/Catalog/MMCA.Store.Catalog.Domain/Products/Product.cs`
 
@@ -191,7 +193,7 @@ A shopper who has not signed in has no Shopping Cart aggregate: their bag lives 
 |----------|-------------|
 | AvailableQuantity | Units currently in stock (must be >= 0) |
 | IsOutOfStock | Computed: true when AvailableQuantity equals 0 |
-| Sku / ProductId / ProductName | Catalog labels copied across the database boundary (SKU max 50, product name max 100), so the inventory grid can sort and filter on them. Written from the `ProductVariantChanged` and `ProductInfoChanged` integration events, the create and bulk-set paths, and a startup backfill (`InventoryItem.cs:33`, `:47`) |
+| Sku / ProductId / ProductName | Catalog labels copied across the database boundary (SKU max 50, product name max 100), so the inventory grid can sort and filter on them. Written from the `ProductVariantChanged` and `ProductInfoChanged` integration events, the create, set and bulk-set paths, and a startup backfill (`InventoryItem.cs:33`, `:47`) |
 
 **Relationships:**
 - One Inventory Item per Product Variant (1:1 relationship, ID = ProductVariantId)
@@ -208,13 +210,17 @@ A shopper who has not signed in has no Shopping Cart aggregate: their bag lives 
 |----------|-------------|
 | FirstName | First name (max 100 chars, required) |
 | LastName | Last name (max 100 chars, required) |
-| Email | Email address (max 100 chars, unique, required) |
+| Email | Email address (Email value object, max 100 chars, unique, required) |
 | Address | Optional mailing address (value object) |
+
+Every field is marked `[Pii]`.
 
 **Relationships:**
 - A Customer is linked 1:1 with a User account
 - A Customer has one Shopping Cart
 - A Customer has zero or more Orders
+
+**Erasure:** the aggregate is `IAnonymizable`: `Anonymize()` sets the name to "Deleted Account", replaces the email with a `deleted-{id}@anonymized.invalid` placeholder, clears the address and raises `CustomerErased`, which carries the erasure into Sales and Catalog.
 
 **Source:** `Source/Modules/Identity/MMCA.Store.Identity.Domain/Customers/Customer.cs`
 
@@ -250,7 +256,7 @@ Refresh tokens are not part of this aggregate: each signed-in device holds its o
 
 | Value Object | Properties | Validation | Source |
 |-------------|-----------|-----------|--------|
-| **Money** | Amount (decimal), Currency (Currency) | Cannot have negative amount; currency mismatch on add | `MMCA.Common.Shared/ValueObjects/Financial/Money.cs` |
+| **Money** | Amount (decimal), Currency (Currency) | A currency is required (`Money.NoCurrency`); adding two amounts in different currencies fails (`Money.CurrencyMismatch`). Non-negativity is enforced by the owning entity's invariants (prices and charges), not by Money itself | `MMCA.Common.Shared/ValueObjects/Financial/Money.cs` |
 | **Currency** | Code (string) | Must be "USD" or "EUR" | `MMCA.Common.Shared/ValueObjects/Financial/Currency.cs` |
 | **Address** | AddressLine1 (required, max 200), AddressLine2 (max 200), City (max 100), State (max 100), ZipCode (max 20), Country (max 100) | AddressLine1 required; all fields have max lengths | `MMCA.Common.Shared/ValueObjects/Contact/Address.cs`, `AddressInvariants.cs` |
 | **Email** | Value (string) | Trimmed and validated as an email address at creation | `MMCA.Common.Shared/ValueObjects/Contact/Email.cs` |
@@ -271,7 +277,7 @@ Refresh tokens are not part of this aggregate: each signed-in device holds its o
 | CustomerId | The customer who wrote it |
 | OrderId | The delivered order that entitled them to write it |
 | Rating | Star rating, 1 through 5 |
-| Title / Body | Optional headline and text |
+| Title / Body | Optional headline and text. Marked `[Pii]` |
 | ReviewerName | Display name frozen at submission from the caller's token, so a later profile rename does not rewrite published content. Marked `[Pii]` |
 | Status | `Published` (the state every review is created in) or `Hidden` (moderator action) |
 
@@ -454,8 +460,11 @@ order's access token, which runs the same use case (Section 3.18).
 **Steps:**
 1. Fetch the order with its order lines and check it is payable before Stripe is called: a
    `PendingPayment` order, or a `PaymentFailed` order on retry, gets a new session; a
-   `PaymentInitiated` order resumes the session it is waiting on rather than opening a second one (an
-   expired session is retired through `PaymentFailed` first); every other status is refused
+   `PaymentInitiated` order resumes the session it is waiting on rather than opening a second one (a
+   session Stripe already reports paid, with an amount and currency `PaymentProof` accepts as this
+   order's total, marks the order `Paid` with no webhook, while a paid session with a mismatched amount
+   is logged for an operator and leaves the order unchanged; an expired session is retired through
+   `PaymentFailed` first); every other status is refused
 2. Call Stripe API to create a checkout session (converts Money to smallest currency unit: cents). The
    session carries the subtotal, shipping and tax, which must add up to the order total
    (`Payment.Stripe.ChargesDoNotAddUp`, `StripePaymentService.cs:153`), and it expires when the order's
@@ -474,8 +483,18 @@ order's access token, which runs the same use case (Section 3.18).
    - `checkout.session.completed` -> Mark order as `Paid`, store payment intent ID, but only when the
      session is paid and the amount and currency it collected match the order total (`PaymentProof`,
      the one rule every path that marks an order paid from provider data applies)
-   - `checkout.session.expired` or `payment_intent.payment_failed` -> Mark order as `PaymentFailed`
+   - `checkout.session.expired` -> Mark order as `PaymentFailed`
+   - `payment_intent.payment_failed` -> a declined card on a session that is still open: logged only,
+     the order status does not move, so the customer can retry on the same session
+   - Any other event type is acknowledged and ignored
 4. Idempotent: skips processing if order is already in the appropriate terminal state
+5. After the commit, `OrderPaidHandler` schedules the `Sales.SendOrderPaidEmail` internal command, and
+   `OrderPaymentFailedSagaHandler` schedules `Sales.SendOrderPaymentFailedEmail` (and re-arms the
+   payment deadline, Section 3.17); both emails go to the order's recipient. `OrderPaymentFailed` is
+   raised only by `Order.MarkAsPaymentFailed`, from `PaymentInitiated`, on three paths: the
+   `checkout.session.expired` webhook, the payment reconciliation sweep finding the session expired,
+   and a resumed checkout finding it expired (which sends the retry email just before the replacement
+   session opens). A declined card (`payment_intent.payment_failed`) never raises it
 
 In production `StripeWebhookRegistrationService` verifies (or creates) the Stripe webhook endpoint at
 startup; locally the Stripe CLI started by the Aspire AppHost forwards events to the Gateway.
@@ -513,7 +532,7 @@ same `Cancelled` state, the same compensation and the same notice.
 
 **Business Rules Applied:**
 - Orders in PendingPayment, PaymentInitiated, or PaymentFailed can be cancelled
-- Paid or delivered orders cannot be cancelled (no refund workflow)
+- Paid, shipped or delivered orders cannot be cancelled (no refund workflow)
 - The customer page and the guest page both ask for confirmation before cancelling
   (`OrderSummaryPanel.razor.cs:187-191`, `GuestOrderDetail.Lifecycle.razor.cs:57-65`)
 - The reason is not stored: it rides the event and the email command row only
@@ -540,7 +559,10 @@ same `Cancelled` state, the same compensation and the same notice.
 1. Fetch the order
 2. Validate order status allows manual payment (PendingPayment, PaymentInitiated, or PaymentFailed)
 3. For a `PaymentInitiated` order, retire the Stripe checkout session first; when Stripe reports that
-   session already paid, the order is marked paid with the real payment intent instead of the override
+   session already paid, the order is marked paid with the real payment intent instead of the override;
+   when the expire call fails and a re-read does not show the session paid or expired (including a
+   re-read that shows it still open), the override is refused with HTTP 400
+   (`Order.Pay.SessionStillPayable`), because proceeding risks a double charge
 4. Set payment intent ID to `"manual-admin-override"`
 5. Transition status to `Paid`
 6. Persist changes
@@ -772,8 +794,9 @@ exported, because they duplicate order facts Sales already exports.
 | `GET /Reviews/paged` | `catalog:reviews:moderate` | The moderation list: every review whatever its status, filterable and sortable. Never cached |
 
 A caller who is not the owner is answered 404 rather than 403, so the existence of another customer's
-review id cannot be probed for. Every mutation evicts the `catalog:products` output-cache tag,
-because a review moves the stars the product reads carry. The Gateway forwards `/Reviews/**` to the
+review id cannot be probed for. Every mutation evicts the `catalog:products` and `catalog:categories`
+output-cache tags, because a review moves the stars the product reads carry and a category read can
+embed its products. The Gateway forwards `/Reviews/**` to the
 Catalog cluster (`catalog-reviews` route).
 
 **Field rules:** rating 1 to 5, title at most 120 characters, body at most 2,000, frozen reviewer
@@ -781,6 +804,8 @@ name at most 201; title and body are both optional and a review with neither is 
 
 **Implemented in:**
 - `Source/Modules/Catalog/MMCA.Store.Catalog.API/Controllers/ReviewsController.cs`
+- `Source/Modules/Catalog/MMCA.Store.Catalog.API/Controllers/ReviewEligibilityController.cs`
+- `Source/Modules/Catalog/MMCA.Store.Catalog.API/Controllers/ReviewModerationController.cs`
 - `Source/Modules/Catalog/MMCA.Store.Catalog.Application/Reviews/UseCases/`
 - `Source/Modules/Catalog/MMCA.Store.Catalog.Application/Reviews/IntegrationEventHandlers/OrderFulfilledHandler.cs`
 - `Source/Modules/Catalog/MMCA.Store.Catalog.Application/Reviews/IntegrationEventHandlers/CustomerErasedHandler.cs`
@@ -881,6 +906,7 @@ resolves them to products through the catalog.
 - `Source/Modules/Sales/MMCA.Store.Sales.Application/Orders/Charges/OrderChargesCalculator.cs`
 - `Source/Modules/Sales/MMCA.Store.Sales.Infrastructure/Payments/Stripe/StripeTaxCalculator.cs`
 - `Source/Modules/Sales/MMCA.Store.Sales.Infrastructure/Shipping/MockShippingLabelProvider.cs`
+- `Source/Modules/Sales/MMCA.Store.Sales.API/Controllers/BestSellersController.cs`
 - `Source/Modules/Sales/MMCA.Store.Sales.Application/Orders/UseCases/BestSellers/GetBestSellingVariantsHandler.cs`
 
 ---
@@ -1124,9 +1150,9 @@ members are only ever appended: `Shipped` is last in the enum even though it sit
 | Shipment correction restriction | Only a Shipped order's shipment can be corrected: there is nothing to correct before it ships, and after delivery the record is history | `IOrderState.cs`, `DeliveredState.cs` |
 | Shipped is not cancellable | Cancellation is refused from Shipped exactly as it is from Paid | `ShippedState.cs` |
 | Shipment replaces whole | A correction replaces the entire `Shipment` value object rather than patching a field, and re-raises `OrderShipped` so the customer is re-notified | `Order.UpdateShipment()` |
-| Tracking number required | A shipment must carry a tracking number, max 100 characters | `ShipmentInvariants.cs` |
-| Estimated delivery not before shipping | The estimated delivery date cannot fall before the day the parcel shipped (same-day is allowed) | `ShipmentInvariants.cs` |
-| Tracking URL only for `Other` | A caller-supplied absolute https tracking URL (max 500) is accepted only for carrier `Other`; every known carrier's link is computed from its template | `ShipmentInvariants.cs`, `CarrierTrackingUrls.cs` |
+| Tracking number required | A shipment must carry a tracking number, max 100 characters | `Shipment.cs` (`ShipmentInvariants`) |
+| Estimated delivery not before shipping | The estimated delivery date cannot fall before the day the parcel shipped (same-day is allowed) | `Shipment.cs` (`ShipmentInvariants`) |
+| Tracking URL only for `Other` | A caller-supplied absolute https tracking URL (max 500) is accepted only for carrier `Other`; every known carrier's link is computed from its template | `Shipment.cs` (`ShipmentInvariants`), `Carrier.cs` (`CarrierTrackingUrls`) |
 | Fulfilment published once | `Order.FulfilledPublishedOn` is stamped in the same unit of work that raises `OrderFulfilled`, so the startup backfill can never re-publish for an order | `Order.cs`, `OrderFulfilledBackfillService.cs` |
 | Inventory restoration | Cancelling an order restores all order line quantities to inventory, once, after the cancellation commits | `OrderCancelledSagaHandler.cs`, `InventoryRestorationDomainService.cs` |
 | Unpaid orders expire | An order still `PendingPayment` or `PaymentFailed` when its window (30 minutes) closes is cancelled and its stock returned | `ExpireUnpaidOrderInternalCommandHandler.cs:61`, `UnpaidOrderExpirySettings.cs:43` |
@@ -1392,8 +1418,8 @@ role-named policies.
 
 | Gate | Access Level | Where it applies |
 |------|-------------|-------------|
-| Anonymous | No auth required | Catalog browsing (GET categories, products, the storefront product page, the variant lookup, product images), published product reviews (`GET /Reviews/by-product/{productId}/paged`), login, registration, token refresh, password reset, email confirmation, the order quote, best sellers, guest checkout and the guest order endpoints (read, pay and cancel require the order's access token instead), the guest link request (always 202), payment webhooks |
-| Authenticated | Any logged-in user | Shopping cart operations, order viewing and paying (own), cancelling an own order, profile management, preferences, session management, writing and revising own reviews, claiming a guest order |
+| Anonymous | No auth required | Catalog browsing (GET categories, products, the storefront product page, the variant lookup, product images), published product reviews (`GET /Reviews/by-product/{productId}/paged`), login, registration, token refresh, password reset, email confirmation, the order quote, best sellers, guest checkout and the guest order endpoints (read, pay and cancel require the order's access token instead), the guest link request (202 whether or not the order matched), payment webhooks |
+| Authenticated | Any logged-in user | Shopping cart operations, order viewing and paying (own), cancelling an own order, profile management, preferences, session management, writing, revising and withdrawing own reviews, claiming a guest order |
 | Permission | A role granted the capability | Catalog, inventory and fulfilment management, manual payment, review moderation, customer, user and role administration (table below) |
 
 **Permissions:** each module declares its capabilities in `{Module}Permissions` and grants them to roles
@@ -1626,8 +1652,8 @@ All test projects run on Microsoft Testing Platform with xUnit v3. Counts from
 |------|----------|-------------|
 | **Unit** | 18 module projects (Domain, Application, Infrastructure, API, Shared and UI for each of Catalog, Sales and Identity) plus 2 host projects (Gateway, UI.Web) | Entity creation, invariants, domain events, handlers, mappers, validators, controllers, bUnit component tests |
 | **Architecture** | 1 project (63 `*Tests.cs` files) | NetArchTest: layer dependencies, module isolation, domain purity, naming conventions, folder width, and `IntegrationEventContractTests`, which freezes every integration event payload |
-| **Integration** | 3 per-service projects (Catalog, Sales, Identity) | Each boots one service host via `WebApplicationFactory`; Testcontainers.MsSql + Respawn for DB reset (or a real SQL Server via `STORE_TEST_SQL_BASE`), JWT token generation, full HTTP endpoint testing, OpenAPI baseline checks. Runs via `MMCA.Store.Integration.slnf` and gates deploy |
-| **Cross-service / broker** | 2 projects (CrossService, ServiceBusEmulator) | Container-backed, non-gating tiers: the integration-event round trips (`ProductVariantChanged`, `OrderFulfilled`) between real service hosts, and the Azure Service Bus emulator transport |
+| **Integration** | 3 per-service projects (Catalog, Sales, Identity) | Each boots one service host via `WebApplicationFactory` against a throwaway SQL Server database (LocalDB by default, the server named by `STORE_TEST_SQL_BASE` in CI) with Respawn resetting data between tests, JWT token generation, full HTTP endpoint testing, OpenAPI baseline checks. Runs via `MMCA.Store.Integration.slnf` in the pull-request-only `integration-tests` job, a required PR check that is not in the deploy job's `needs` |
+| **Cross-service / broker** | 2 projects (CrossService, ServiceBusEmulator) | Testcontainers-backed tiers run by the weeknight `cross-service-tests.yml`, never inside the deploy chain: the integration-event round trips (`ProductVariantChanged`, `OrderFulfilled`) between real service hosts, and the Azure Service Bus emulator transport. Their recency gates the deploy: the `cross-service-freshness` step needs a run within 5 days in which both the `cross-service` and `servicebus-emulator-smoke` jobs succeeded |
 | **E2E** | 1 project (33 `*Tests.cs` files) | Playwright, page objects, Blazor wait helpers: full user journeys including checkout, Buy Now, Stripe payment, orphaned-order recovery, password reset, role administration, accessibility, phone viewport, the installable web app and web vitals |
 
 ### 13.2 Key Test Scenarios
@@ -1708,4 +1734,4 @@ configuration flag is on:
 
 ---
 
-*This specification is derived entirely from the source code. All business rules, workflows, and behaviors described above are confirmed implementations traceable to the referenced source files. Last updated: 2026-10-27 (guest checkout, shipping and tax, payment deadline, user and role administration, email confirmation, installable web app).*
+*This specification is derived entirely from the source code. All business rules, workflows, and behaviors described above are confirmed implementations traceable to the referenced source files. Last updated: 2026-10-28.*

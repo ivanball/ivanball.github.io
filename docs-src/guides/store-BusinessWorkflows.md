@@ -1,6 +1,6 @@
 # MMCA Business Workflow Analysis
 
-_As of: 2026-10-27._
+_As of: 2026-10-28._
 
 **Authorization notation.** Endpoints state a capability with `[HasPermission(...)]`, never a role
 name. Each module grants its whole capability set to the Admin role in compiled code
@@ -86,6 +86,7 @@ an Admin. `[Authorize]` with no policy is the plain authenticated gate.
 | 72 | Cancel Guest Order | `POST /orders/guest/{id}/cancel` | Sales |
 | 73 | Request Guest Order Link | `POST /orders/guest/lookup` | Sales |
 | 74 | Browse Storefront Products | `GET /products/storefront` | Catalog |
+| 75 | Best Sellers | `GET /orders/best-sellers` | Sales |
 
 ---
 
@@ -212,6 +213,9 @@ AuthControllerBase.RefreshAsync()
 - Invalid/expired refresh token -> Unauthorized
 - A refresh token that was already rotated is presented again -> treated as reuse
   ([ADR-050](../adr/050-jwt-refresh-token-rotation.md))
+- A refresh token a concurrent request rotated less than `RefreshSessions:ReuseGraceSeconds` (10
+  seconds by default) ago -> 409 Conflict (`Auth.RefreshSuperseded`) with nothing revoked; the client
+  retries with the winner's token rather than signing out
 - User deactivated -> Unauthorized
 
 **State Changes:** the refresh session is rotated (the presented token retired, a successor issued)
@@ -222,9 +226,9 @@ AuthControllerBase.RefreshAsync()
 
 | Workflow | Endpoint | Auth | Notes |
 |----------|----------|------|-------|
-| Revoke current refresh token | `POST /auth/revoke` | Authenticated | `[NonIdempotent]`: every call must reach the session store |
+| Revoke all my sessions | `POST /auth/revoke` | Authenticated | Signs the account out on every device (the endpoint has no body to name one device); `[NonIdempotent]`: every call must reach the session store |
 | List my sessions | `GET /auth/my-sessions` | Authenticated | One row per signed-in device ([ADR-097](../adr/097-multi-device-refresh-sessions.md)); the Profile page links to it ("Manage devices") |
-| Revoke one session | `POST /auth/revoke/{sessionId}` | Authenticated | Signs one device out; ownership is checked by the session store, so another account's session id is not revocable |
+| Revoke one session | `POST /auth/revoke/{sessionId}` | Authenticated | Signs one device out; ownership is checked by the session store, so another account's session id answers 404 exactly as an unknown one does; an already-revoked session also answers 404 (`Auth.SessionAlreadyRevoked`) |
 
 All three come from `AuthControllerBase` in MMCA.Common and are inherited unchanged by `AuthController`.
 
@@ -239,14 +243,20 @@ All three come from `AuthControllerBase` in MMCA.Common and are inherited unchan
 ```
 AuthController.ChangePasswordAsync()
   -> ChangePasswordHandler (workflow in ChangePasswordHandlerBase, MMCA.Common)
-    -> Verify current password
+    -> account with no stored credential -> Unauthorized
+    -> loginProtection.CheckLockoutAsync("password-change:{userId}")   (ADR-029)
+    -> Verify current password (a miss counts a failed attempt)
+    -> ResetFailedAttemptsAsync()
     -> Hash new password
     -> User.ChangePassword() -> raises UserPasswordChanged
     -> revoke every live refresh session on the account
     -> SaveChangesAsync()
 ```
 
-**Decision Points:** Current password incorrect -> Unauthorized (`ChangePasswordHandler.cs:12`)
+**Decision Points:** Current password incorrect -> Unauthorized (`ChangePasswordHandler.cs:12`).
+Repeated misses lock the change-password path out through the same exponential backoff as sign-in,
+on a per-account counter kept separate from the sign-in counter, so the endpoint is not an
+unthrottled password oracle for a session holder and a lockout here does not block sign-in.
 
 ---
 
@@ -260,8 +270,11 @@ AuthController.ChangePasswordAsync()
 
 All three are owner-or-admin (`OwnerOrAdminFilter`) and conditional: `[SupportsIfMatch]` makes the
 `If-Match` header mandatory, 412 on a stale token, 428 when absent
-([ADR-035](../adr/035-optimistic-concurrency.md)). Email change includes uniqueness check across
-customers.
+([ADR-035](../adr/035-optimistic-concurrency.md)). Email change refuses an address already held by
+another user account or another customer profile (400 `Identity.Customer.EmailInUse`), and a caller
+without `identity:customers:manage` (the owner path) may only set the contact address to the sign-in
+email of the user linked to that customer (400 `Identity.Customer.EmailMustMatchLogin`);
+`CustomerChangeEmailUpdateHandler` holds both checks.
 
 ### 1.7 Customer CRUD (Admin)
 
@@ -307,7 +320,7 @@ Store's `PasswordResetController` and `EmailConfirmationController` only bind th
 | Workflow | Endpoint | Handler | Notes |
 |----------|----------|---------|-------|
 | Forgot password | `POST /auth/forgot-password` | `ForgotPasswordHandler` | Anti-enumeration answer, single-use reset token, reset email through `IEmailSender` |
-| Reset password | `POST /auth/reset-password` | `ResetPasswordHandler` | Redeems the token, re-hashes, clears the lockout; one generic rejection error |
+| Reset password | `POST /auth/reset-password` | `ResetPasswordHandler` | Redeems the token, re-hashes, clears the lockout and revokes every live refresh session on the account; one generic rejection error |
 | Send email confirmation | `POST /auth/send-email-confirmation` | `SendEmailConfirmationHandler` | Re-sends the confirmation link |
 | Confirm email | `POST /auth/confirm-email` | `ConfirmEmailHandler` | Marks the address confirmed, raises `UserEmailConfirmed` |
 
@@ -323,7 +336,7 @@ so `IsEmailConfirmed` is recorded and never gates sign-in.
 | List a user's sessions | `GET /admin/users/{userId}/sessions` | `users:manage` | |
 | Lock user | `POST /admin/users/{userId}/lock` | `users:manage` | `User.Deactivate()` (raises `UserDeactivated`) and revokes every live refresh session; `[NonIdempotent]` so a replay re-evaluates state |
 | Unlock user | `POST /admin/users/{userId}/unlock` | `users:manage` | `User.Reactivate()` (raises `UserReactivated`); `[NonIdempotent]` |
-| Change role | `PUT /admin/users/{userId}/roles` | `users:manage` | Exactly one role; `User.ChangeRole()` raises `UserRoleChanged` and revokes live sessions |
+| Change role | `PUT /admin/users/{userId}/roles` | `users:manage` | Exactly one role (400 `User.Role.ExactlyOne` otherwise); `User.ChangeRole()` raises `UserRoleChanged` and revokes live sessions; assigning the role the account already holds is a no-op success with no revocation |
 | List roles | `GET /admin/roles` | `roles:manage` | Compiled plus stored grants per role |
 | Permission catalog | `GET /admin/roles/catalog` | `roles:manage` | Every permission an endpoint checks |
 | Get role | `GET /admin/roles/{role}` | `roles:manage` | |
@@ -353,8 +366,10 @@ controller level; the reads opt out with `[AllowAnonymous]`.
 CategoriesController.CreateAsync()
   -> CreateCategoryHandler
     -> CategoryCreateRequestValidator (name: required, max 255)
+    -> a named parent must exist and not be soft-deleted -> 404 otherwise
     -> Category.Create(id, name, parentCategoryId?) -> raises CategoryChanged (Added)
     -> Repository.AddAsync() + SaveChangesAsync()
+  -> evicts the catalog:categories and catalog:products output-cache tags
 ```
 
 **Response:** 201 Created with `CategoryDTO`
@@ -368,8 +383,8 @@ CategoriesController.RenameAsync()
   -> RenameCategoryHandler
     -> Validate name (max 255)
     -> Fetch category -> category.Rename(name)
-    -> Only updates if name differs (case-insensitive comparison)
-    -> Raises CategoryChanged (Updated) if changed
+    -> The name is always written (a case-only edit is stored)
+    -> Raises CategoryChanged (Updated) only when the name differs case-insensitively
     -> Cache invalidation + evicts the catalog:categories and catalog:products output-cache tags
 ```
 
@@ -377,7 +392,11 @@ CategoriesController.RenameAsync()
 
 **Entry Point:** `PUT /categories/{id}/parentcategory`, `catalog:categories:manage`, mandatory `If-Match`
 
-Sets or clears `ParentCategoryId` to establish hierarchy. No domain event raised.
+Sets or clears `ParentCategoryId` to establish hierarchy. No domain event raised. Three refusals:
+a category named as its own parent (`Category.SelfReferencing`), a parent that does not exist or is
+soft-deleted (404), and a parent whose ancestor chain leads back to this category
+(`Category.CircularReference`; `CategoryAssignParentUpdateHandler` walks at most 32 ancestors and
+refuses on exhaustion). Evicts the `catalog:categories` and `catalog:products` output-cache tags.
 
 #### Delete Category
 
@@ -410,7 +429,8 @@ The anonymous reads are output-cached under the `CategoriesCache` policy.
 ```
 ProductsController.CreateAsync()
   -> CreateProductHandler
-    -> Validate: name (required, max 100), description (max 4000), brand (max 100, no whitespace if provided)
+    -> Validate: name (required, max 100), description (max 4000), brand (max 100, not whitespace-only if provided)
+    -> a named category must exist and not be soft-deleted -> 404 otherwise
     -> Product.Create() factory -> raises ProductChanged (Added)
     -> Repository.AddAsync() + SaveChangesAsync()
 ```
@@ -421,8 +441,8 @@ ProductsController.CreateAsync()
 |----------|----------|-----------|-------|
 | Rename | `PUT /products/{id}/name` | Max 100, required | `ProductChanged` (`Updated`) plus the `ProductInfoChanged` integration event (`Updated`) |
 | Change Description | `PUT /products/{id}/description` | Max 4000, nullable | None |
-| Change Brand | `PUT /products/{id}/brand` | Max 100, no whitespace | None |
-| Assign Category | `PUT /products/{id}/category` | Nullable FK | None |
+| Change Brand | `PUT /products/{id}/brand` | Max 100, nullable, not whitespace-only | None |
+| Assign Category | `PUT /products/{id}/category` | Nullable FK; a named category must exist and not be soft-deleted (404) | None |
 
 The four attribute edits live on `ProductAttributesController` (same `/products` prefix), which
 requires `catalog:products:manage` at the controller level; each is conditional on a mandatory
@@ -430,7 +450,7 @@ requires `catalog:products:manage` at the controller level; each is conditional 
 
 #### Delete Product
 
-**Entry Point:** `DELETE /products/{id}`, `catalog:products:manage`. Soft delete, raises `ProductChanged` with the `Deleted` state plus the `ProductInfoChanged` integration event (`Deleted`).
+**Entry Point:** `DELETE /products/{id}`, `catalog:products:manage`. Soft delete, raises `ProductChanged` with the `Deleted` state plus the `ProductInfoChanged` integration event (`Deleted`). The product's variants and images are soft-deleted with it, and a child that refuses its own delete fails the whole product delete rather than leaving an active row under a deleted product.
 
 #### Query Endpoints
 
@@ -439,7 +459,7 @@ requires `catalog:products:manage` at the controller level; each is conditional 
 | `GET /products` | AllowAnonymous | Returns all products (capped at MaxPageSize) |
 | `GET /products/paged` | AllowAnonymous | Paginated with filters, sorting, field projection |
 | `GET /products/lookup` | AllowAnonymous | Returns ID + name pairs for dropdowns |
-| `GET /products/storefront` | AllowAnonymous | One page of the public shop: `search`, `categoryId`, `onSale`, `sort`, `pageNumber`, `pageSize` (default 12); returns the paged products with category, variants and images plus the `X-Pagination` header (`ProductsController.cs:96-118`) |
+| `GET /products/storefront` | AllowAnonymous | One page of the public shop: `search`, `categoryId`, `onSale`, `sort`, `pageNumber`, `pageSize` (default 12, capped at MaxPageSize); returns the paged products with category, variants and images plus the `X-Pagination` header (`ProductsController.cs:96-118`) |
 | `GET /products/variant-lookup` | AllowAnonymous | Returns `ProductVariantCartInfoDTO` rows: the variant detail the cart UI needs without a per-variant round trip |
 | `GET /products/{id}` | AllowAnonymous | Single product with optional FK/children includes |
 | `GET /products/export` | `catalog:products:manage` | CSV export (`ProductsController.cs:148-149`) |
@@ -472,8 +492,9 @@ stable (`StorefrontProductsSpecification.cs:91-124`).
 ```
 ProductVariantsController.CreateAsync()
   -> AddVariantHandler   (AddVariantCommand: ITransactional, ICacheInvalidating)
-    -> Validate: SKU (max 50), Price (positive Money)
-    -> IProductVariantService.SkuExistsAsync() -> global SKU uniqueness check
+    -> AddVariantCommandValidator: SKU (optional, max 50), Price (required, not negative; zero allowed)
+    -> IProductVariantService.SkuExistsAsync() -> global SKU uniqueness check on the SKU as stored
+       (trimmed, blank stored as no SKU)
     -> Fetch Product with variants
     -> product.AddProductVariant(variantId, sku, price)
       -> ProductVariant.Create() validates price not negative
@@ -482,6 +503,9 @@ ProductVariantsController.CreateAsync()
     -> schedules Catalog.PublishProductVariantChanged (internal command, ADR-114) with the
        database-generated variant id; the transactional pipeline commits that row with the variant
 ```
+
+**Response:** 201 Created with `ProductVariantDTO`, located at the parent product
+(`GetProductById`); evicts the `catalog:products` and `catalog:categories` output-cache tags.
 
 **Cross-Module:** SKU uniqueness checked via `IProductVariantService`. The `ProductVariantChanged`
 (`Added`) integration event goes out when the scheduled internal command runs, so consumers always
@@ -497,10 +521,11 @@ SKU uniqueness verified globally (excluding current variant). Raises the `Produc
 
 **Entry Point:** `PUT /products/{id}/productvariants/{variantId}/price`, `catalog:product-variants:manage`, mandatory `If-Match`
 
-Price must be positive. Raises the `ProductVariantChanged` integration event with the `Updated` state if changed. The price edited here is
+Price must not be negative (zero is allowed). Raises the `ProductVariantChanged` integration event with the `Updated` state if changed. The price edited here is
 the LIST price. A variant that carries a discount re-validates it against the new price and the
 change is refused when the pair would be inconsistent (a special price no longer below the list
-price, or a percentage leaving nothing), so the discount is cleared first.
+price, or a percentage leaving nothing), so the discount is cleared first. A discount whose window
+has already ended prices nothing and does not take part; one that is active or scheduled does.
 
 #### Set Variant Discount
 
@@ -516,7 +541,7 @@ ProductVariantsController.SetDiscountAsync()
       -> ProductVariant.SetDiscount() runs VariantDiscount.ApplyTo(Price) first
       -> Publishes ProductVariantChanged (Updated) with the LIST price
     -> SaveChangesAsync()
-  -> Evicts the catalog:products output-cache tag
+  -> Evicts the catalog:products and catalog:categories output-cache tags
 ```
 
 Replaces any discount already on the variant. Returns 204; 400 on a broken invariant, 404 on an
@@ -530,7 +555,7 @@ ETag, the body carries the variant's row version).
 
 Returns the variant to its list price, which was never rewritten, so there is nothing to restore.
 Clearing a variant that carries no discount changes nothing, so clearing twice is safe. Publishes
-`ProductVariantChanged` (Updated) and evicts the `catalog:products` tag. The body carries only the
+`ProductVariantChanged` (Updated) and evicts the `catalog:products` and `catalog:categories` tags. The body carries only the
 variant's row version; the status codes match the set action.
 
 #### Discount All Variants
@@ -547,7 +572,7 @@ ProductsController.SetDiscountAsync()
       -> All-or-nothing: one refusal leaves the product exactly as it was
       -> Publishes one ProductVariantChanged (Updated) per variant, each with its LIST price
     -> SaveChangesAsync()
-  -> Evicts the catalog:products output-cache tag
+  -> Evicts the catalog:products and catalog:categories output-cache tags
 ```
 
 A product whose variants are priced differently either takes the promotion whole or is left
@@ -573,7 +598,7 @@ output-cached for 300 seconds to keep repeated BLOB reads off the database.
 | Workflow | Endpoint | Auth | Notes |
 |----------|----------|------|-------|
 | Read image by id | `GET /products/{productId}/images/{imageId}` | Anonymous | 300s response cache plus the `ProductImagesCache` output-cache policy |
-| Upload image | `POST /products/{productId}/images` | `catalog:product-images:manage` | `[Idempotent]`; 201 Created with `ProductImageDTO` and a Location header; 6 MB request limit covering the 5 MB domain constraint plus multipart overhead; `UploadProductImageCommand` is `ITransactional` |
+| Upload image | `POST /products/{productId}/images` | `catalog:product-images:manage` | `[Idempotent]`; 201 Created with `ProductImageDTO` and a Location header; 6 MB request limit covering the 5 MB domain constraint plus multipart overhead; JPEG, PNG, GIF or WebP only, at most 10 images per product; `UploadProductImageCommand` is `ITransactional` |
 | Delete image by id | `DELETE /products/{productId}/images/{imageId}` | `catalog:product-images:manage` | |
 | Reorder images | `PUT /products/{productId}/images/order` | `catalog:product-images:manage` | Mandatory `If-Match`; reassigns display order from the supplied id list, the first id becoming the primary image (order 0); `ReorderProductImagesCommand` is `ITransactional` |
 
@@ -600,9 +625,11 @@ Sales: order.MarkAsDelivered()
 
 Catalog: OrderFulfilledHandler
   -> resolve the event's variant ids to product ids in ONE projection
-     (soft-deleted variants are not resolved: a delisted product stays unreviewable)
+     (query filters ignored, so a retired variant on a product still on sale still entitles)
   -> de-duplicate: two sizes of the same shirt are one entitlement
-  -> read the order's existing entitlement rows (first idempotency guard)
+  -> re-read the owning products through the filtered reader: a delisted (soft-deleted) product
+     is logged and skipped, so it stays unreviewable
+  -> read the order's existing entitlement rows, soft-deleted ones included (first idempotency guard)
   -> VerifiedPurchase.Create() for each missing product, one SaveChangesAsync
 ```
 
@@ -637,6 +664,8 @@ ReviewsController.SubmitAsync()
   -> ProductReviewChangedHandler [own DI scope]
     -> recompute AVG/COUNT over the product's published, non-deleted reviews
     -> Product.UpdateRatingSummary(), written only when the summary actually differs
+    -> a lost concurrency race on the product is retried in a fresh scope, three attempts in all,
+       then abandoned with a warning (the next review event recomputes it)
 ```
 
 **Response:** 200 OK with `ProductReviewDTO`
@@ -649,7 +678,8 @@ Ownership is checked in the controller and a non-owner is answered **404, not 40
 of another customer's review id cannot be probed for. The revise path is conditional
 ([ADR-035](../adr/035-optimistic-concurrency.md)): the `If-Match` header is mandatory and an edit
 decided against a stale view answers 412. The delete is unconditional (soft delete; a delete has no
-field to lose to a concurrent edit). Both raise `ProductReviewChanged`, so the rating summary is
+field to lose to a concurrent edit). The owner cannot withdraw a review a moderator hid (400
+`Review.HiddenByModerator`); an Admin can. Both raise `ProductReviewChanged`, so the rating summary is
 recomputed either way. The frozen `ReviewerName` is deliberately not revisable.
 
 #### Hide / Unhide Review (Moderation)
@@ -666,13 +696,16 @@ of the product's rating summary; the moderation list still shows it.
 `CustomerErasedHandler` consumes Identity's `CustomerErased.v1` and anonymizes every review that
 customer wrote, hidden and soft-deleted rows included: name, title and body cleared, star rating kept
 ([ADR-005](../adr/005-soft-delete-vs-erasure.md)). Only rows that still carry personal data are
-loaded, so a redelivery finds nothing to do and churns no audit fields.
+loaded, so a redelivery finds nothing to do and churns no audit fields. Because the handler runs off
+a broker message with no output-cache handle, it publishes `OutputCacheEvictionRequested` for the
+`catalog:products` tag, which every replica consumes to drop the cached review list; the cache TTL
+is the backstop for a message that never lands.
 
 #### Query Endpoints
 
 | Endpoint | Auth | Notes |
 |----------|------|-------|
-| `GET /reviews/by-product/{productId}/paged` | Anonymous | Published reviews only, whoever asks, newest first; output-cached under the shared `ProductsCache` policy, which caches regardless of auth state (a role-varying response would be served to the wrong caller) |
+| `GET /reviews/by-product/{productId}/paged` | Anonymous | Published reviews only, whoever asks, newest first; served in the public review shape (no customer or order id), and a `sortColumn` outside that shape is a 400; output-cached under the shared `ProductsCache` policy, which caches regardless of auth state (a role-varying response would be served to the wrong caller) |
 | `GET /reviews/by-product/{productId}/mine` | Authenticated customer | `HasPurchased` and `CanReview` as separate booleans, plus the caller's own review; the pair is what lets the UI tell "never bought it" apart from "already had their say" |
 | `GET /reviews/paged` | `catalog:reviews:moderate` | Every review whatever its status, filterable and sortable; never cached |
 
@@ -698,8 +731,8 @@ not signed in keeps a device cart instead (4.1) and checks out through 3.5.
 
 ```
 ShoppingCartsController.CreateShoppingCartItemAsync()
+  -> ShoppingCartItemCreateRequestValidator (pipeline): quantity > 0
   -> AddItemHandler
-    -> Validate quantity > 0
     -> IProductVariantService.ExistsAsync() [cross-module: Catalog]
     -> Fetch ShoppingCart by CustomerId
     -> If no cart exists -> ShoppingCart.Create(customerId) -> ShoppingCartChanged (Added)
@@ -707,14 +740,20 @@ ShoppingCartsController.CreateShoppingCartItemAsync()
     -> shoppingCart.AddShoppingCartItem(variantId, quantity)
       -> If item already in cart -> IncreaseQuantity -> ShoppingCartItemChanged (Updated)
       -> If new item -> ShoppingCartItem.Create() -> ShoppingCartItemChanged (Added)
+    -> repository.TouchConcurrencyToken(cart)   (a line write still bumps the cart rowversion)
     -> SaveChangesAsync()
+    -> lost a race (the (cart, variant) unique index, or a concurrent checkout moved the
+       rowversion) -> re-run the upsert ONCE in a fresh scope
 ```
 
 **Decision Points:**
 
-- Product variant doesn't exist -> NotFound
-- Quantity not positive -> Invariant error
+- Product variant doesn't exist -> Validation error `ShoppingCart.InvalidProductVariant`
+- Quantity not positive -> Validation error from the request validator (the domain invariant backs it up)
 - Cart checked out -> auto-reactivated (all old items cleared)
+- A concurrent add of the same variant, or a checkout that committed in between -> one retry
+  against a fresh read: the twin line's quantity grows, or the checked-out cart is reactivated; a
+  second failure surfaces as the shared 409
 
 #### Change Item Quantity
 
@@ -861,8 +900,10 @@ ShoppingCartsController.CheckOutAsync()
 
 > **No `InventoryAdjusted` on the checkout path.** The decrement runs as `ExecuteUpdateAsync`, which
 > bypasses the save pipeline (and therefore the audit interceptor and domain-event dispatch) by design:
-> that is what makes it a single atomic statement and the real oversell guard. `InventoryAdjusted` is
-> still raised by the admin adjustment endpoints in 3.4, which go through the aggregate.
+> that is what makes it a single atomic statement and the real oversell guard. The cancellation
+> restore (3.3) returns stock the same way, through `IInventoryAllocationService.IncrementAsync`.
+> `InventoryAdjusted` is still raised by the admin adjustment endpoints in 3.4, which go through the
+> aggregate.
 
 ---
 
@@ -928,7 +969,8 @@ OrdersController.CreateCheckoutSessionAsync()
           still open                                -> hand back the SAME checkout page
           taken but unsettled                       -> tell the customer to wait, open nothing
       Paid / Shipped / Delivered / Cancelled -> refused, no provider call
-    -> Return sessionId + checkoutUri
+    -> Return sessionId + checkoutUri + CheckoutSessionOutcome (Redirect; AlreadyPaid and
+       PaymentPending carry no checkoutUri)
 ```
 
 **External Interaction:** Stripe API: creates (or reads) the hosted checkout session. A
@@ -1130,10 +1172,12 @@ OrdersController.CancelAsync()
 
   (then, after commit)
   -> OrderCancelledSagaHandler  [ADR-054 compensating action, own DI scope]
-    -> Skip if order.InventoryRestored is already set (idempotent under redelivery)
-    -> Restore stock for each OrderLine
-    -> order.MarkInventoryRestored()
-    -> ONE SaveChangesAsync commits the marker and the inventory increases together
+    -> unitOfWork.ExecuteInTransactionAsync(RestoreAsync):    <-- one transaction
+      -> Skip if order.InventoryRestored is already set (idempotent under redelivery)
+      -> validate the restore against a non-tracking inventory snapshot (soft-deleted rows included)
+      -> order.MarkInventoryRestored() + SaveChangesAsync (the order rowversion takes the row first)
+      -> IInventoryAllocationService.IncrementAsync: atomic relative UPDATE per line
+      -> the marker and the stock increases commit together
   -> OrderCancelledHandler      [notification, independent of the saga]
     -> schedules SendOrderCancelledEmailInternalCommand(orderId, reason)   (ADR-114)
     -> SendOrderCancelledEmailInternalCommandHandler
@@ -1152,7 +1196,7 @@ order the shopper never cancelled is described as an expired unpaid order whose 
 
 **Inventory Impact:** All reserved inventory is restored on cancellation, by a **compensating handler
 that runs after** the cancellation transaction, not inside it ([ADR-054](../adr/054-saga-compensation-and-reconciliation.md)).
-`Order.InventoryRestored` is the idempotency marker, committed by the same `SaveChangesAsync` as the
+`Order.InventoryRestored` is the idempotency marker, committed in the same transaction as the
 restoration, so an at-least-once redelivery cannot double-restore; the order's rowversion token makes
 two concurrent deliveries mutually exclusive. The same saga runs whatever cancelled the order: a
 customer or admin here, a guest from the private link (3.5), the payment deadline, or the
@@ -1363,7 +1407,8 @@ The CartDrawer is the only cart UI: there is no dedicated cart page. It is a 380
 - "Checked Out" chip display when cart is not Active
 - Read-only quantity display when cart is CheckedOut
 - "Continue Shopping" navigation to catalog
-- Empty cart state with "Browse Products" link
+- Empty cart state: the C.A.S.A figure, "Your bag is empty" and a Shop button that closes the
+  drawer on its way to the catalog (`ShopInvite`)
 
 **State Management:** `ICartStateService` manages cart state centrally: all cart operations go
 through this service, which refreshes the cart DTO and its quote after each mutation and notifies
@@ -1460,7 +1505,7 @@ from the framework `NavMenu`):
 - Shopping Carts (`/shoppingcarts`)
 - Orders (`/orders`)
 - Customers (`/customers`)
-- Users (`/users`)
+- User accounts (`/users`)
 - Roles (`/roles`)
 - My Profile (`/profile`)
 
@@ -1482,7 +1527,7 @@ from the framework `NavMenu`):
 |-----------|-----------|-------------|---------|
 | Sales -> Catalog | `IProductVariantService` | `ExistsAsync()` | Cart item validation, inventory adjustment guard |
 | Sales -> Catalog | `IProductVariantService` | `GetUnitPricesAsync()` | Checkout, guest checkout and quote pricing: effective price, list price and promotion label per variant |
-| Sales -> Catalog | `IProductVariantService` | `GetExistingIdsAsync()`, `GetCatalogInfoAsync()` | Bulk inventory set (existence plus the denormalized SKU / product labels); seeding |
+| Sales -> Catalog | `IProductVariantService` | `GetExistingIdsAsync()`, `GetCatalogInfoAsync()` | Bulk inventory set (existence plus the denormalized SKU / product labels); the denormalized labels on inventory create and set and in the denormalization backfill; seeding |
 | Sales -> Catalog | `IProductVariantService` | `GetIdBySkuAsync()` | Seed data inventory setup |
 | Catalog (internal) | `IProductVariantService` | `SkuExistsAsync()` | SKU uniqueness on add / change SKU |
 | Sales -> Identity | `ICustomerService` | `GetContactInfoByIdAsync()` | Customer display name frozen at checkout (best effort); recipient of the order paid / shipped / payment-failed / delivered / cancelled emails; the denormalization backfill |
@@ -1544,7 +1589,7 @@ is disabled, `CatalogModule.RegisterDisabledStubs` registers `DisabledProductVar
 | **Feature Flags** | `[FeatureGate]` on controllers, `IFeatureGated` on commands ([ADR-031](../adr/031-feature-flag-management.md)) | Product images (`CatalogFeatures.ProductImages`), verify payment (`Sales.PaymentVerification`) |
 | **Rate Limiting** | Service-side global limiter: 300 req/min per authenticated user, fixed window, anonymous traffic exempt (`RateLimitingSettings.cs:40`); `auth-ip` policy 30 req/min per client IP (`:47`) on register, login, password reset, email confirmation, guest checkout and the guest link request; Gateway edge limiter 120 req/min per IP with `/Payments` bypassed (Gateway `appsettings.json:16-20`) | All API endpoints |
 | **Exception Handling** | Registered handler chain: OperationCanceled -> Domain -> DbUpdate -> Validation -> Global (`MMCA.Common.API/DependencyInjection.cs:159-163`) | Maps errors to HTTP status codes |
-| **Timeouts** | `IHasTimeout` -> `TimeoutCommandDecorator` | Create checkout session, verify payment (20 s) |
+| **Timeouts** | `IHasTimeout` -> `TimeoutCommandDecorator` | Create checkout session (45 s), verify payment (20 s) |
 | **Profiling** | `ProfilingCommandDecorator` / `ProfilingQueryDecorator` via MiniProfiler | All handlers when `UseMiniProfiler=true` |
 | **API Versioning** | Header-based via `api-version` header, all controllers declare `[ApiVersion("1.0")]`; `GET /serviceinfo` (Catalog) serves a deprecated v1.0 and a v2.0 shape from `ServiceInfoControllerBase` | All endpoints |
 
@@ -1615,4 +1660,4 @@ is disabled, `CatalogModule.RegisterDisabledStubs` registers `DisabledProductVar
 
 ---
 
-*This document is derived from source code analysis. All workflows, decisions, and behaviors described above are confirmed implementations traceable to the referenced source files. Last updated: 2026-10-27 (guest checkout, shipping and tax, payment deadline, permission-based authorization, user and role administration; storefront search, find my order, guest cancel, the kept guest bag, delivered and cancelled emails).*
+*This document is derived from source code analysis. All workflows, decisions, and behaviors described above are confirmed implementations traceable to the referenced source files. Last updated: 2026-10-28.*

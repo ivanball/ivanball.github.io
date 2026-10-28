@@ -6,21 +6,21 @@
   <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#0e151f" media="(prefers-color-scheme: dark)">
   <title>MMCA Business Workflow Analysis · MMCA · Ivan Ball-llovera</title>
-  <meta name="description" content="As of: 2026-10-27.">
+  <meta name="description" content="As of: 2026-10-28.">
   <link rel="canonical" href="https://ivanball.github.io/docs/guides/store-BusinessWorkflows.html">
   <link rel="icon" href="../../assets/img/favicon.svg" type="image/svg+xml">
   <link rel="alternate" type="application/rss+xml" title="Ivan Ball-llovera: deep dives on enterprise .NET" href="https://ivanball.github.io/feed.xml">
   <meta property="og:type" content="article">
   <meta property="og:site_name" content="Ivan Ball-llovera">
   <meta property="og:title" content="MMCA Business Workflow Analysis">
-  <meta property="og:description" content="As of: 2026-10-27.">
+  <meta property="og:description" content="As of: 2026-10-28.">
   <meta property="og:url" content="https://ivanball.github.io/docs/guides/store-BusinessWorkflows.html">
   <meta property="og:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <meta property="og:image:alt" content="Ivan Ball-llovera, Principal Software Architect">
   <meta property="og:locale" content="en_US">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="MMCA Business Workflow Analysis">
-  <meta name="twitter:description" content="As of: 2026-10-27.">
+  <meta name="twitter:description" content="As of: 2026-10-28.">
   <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Platform","item":"https://ivanball.github.io/platform.html"},{"@type":"ListItem","position":2,"name":"Reference","item":"https://ivanball.github.io/docs/index.html"},{"@type":"ListItem","position":3,"name":"Guides & Specifications","item":"https://ivanball.github.io/docs/guides/index.html"},{"@type":"ListItem","position":4,"name":"Store · Business Workflow Analysis","item":"https://ivanball.github.io/docs/guides/store-BusinessWorkflows.html"}]}</script>
   <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);if(localStorage.getItem('mmca-rail')==='hidden')document.documentElement.setAttribute('data-rail','hidden');if(localStorage.getItem('mmca-cites')==='shown')document.documentElement.setAttribute('data-cites','shown');}catch(e){}})();</script>
@@ -126,7 +126,7 @@
         <article class="doc-content">
           <p class="eyebrow doc-kicker">Guides &amp; specifications</p>
           <h1 id="mmca-business-workflow-analysis">MMCA Business Workflow Analysis</h1>
-          <p><em>As of: 2026-10-27.</em></p>
+          <p><em>As of: 2026-10-28.</em></p>
           <p><strong>Authorization notation.</strong> Endpoints state a capability with <code>[HasPermission(...)]</code>, never a role
           name. Each module grants its whole capability set to the Admin role in compiled code
           (<code>CatalogPermissionGrants.cs:29</code>, <code>SalesPermissionGrants.cs:30</code>, <code>IdentityPermissionGrants.cs:35</code>),
@@ -586,6 +586,12 @@
           <td><code>GET /products/storefront</code></td>
           <td>Catalog</td>
           </tr>
+          <tr>
+          <td>75</td>
+          <td>Best Sellers</td>
+          <td><code>GET /orders/best-sellers</code></td>
+          <td>Sales</td>
+          </tr>
           </tbody></table></div>
           <hr>
           <h2 id="1-identity-module-workflows">1. Identity Module Workflows</h2>
@@ -688,6 +694,9 @@
           <li>Invalid/expired refresh token -&gt; Unauthorized</li>
           <li>A refresh token that was already rotated is presented again -&gt; treated as reuse
           (<a href="../adr/050-jwt-refresh-token-rotation.html">ADR-050</a>)</li>
+          <li>A refresh token a concurrent request rotated less than <code>RefreshSessions:ReuseGraceSeconds</code> (10
+          seconds by default) ago -&gt; 409 Conflict (<code>Auth.RefreshSuperseded</code>) with nothing revoked; the client
+          retries with the winner&#39;s token rather than signing out</li>
           <li>User deactivated -&gt; Unauthorized</li>
           </ul>
           <p><strong>State Changes:</strong> the refresh session is rotated (the presented token retired, a successor issued)</p>
@@ -703,10 +712,10 @@
           </tr>
           </thead>
           <tbody><tr>
-          <td>Revoke current refresh token</td>
+          <td>Revoke all my sessions</td>
           <td><code>POST /auth/revoke</code></td>
           <td>Authenticated</td>
-          <td><code>[NonIdempotent]</code>: every call must reach the session store</td>
+          <td>Signs the account out on every device (the endpoint has no body to name one device); <code>[NonIdempotent]</code>: every call must reach the session store</td>
           </tr>
           <tr>
           <td>List my sessions</td>
@@ -718,7 +727,7 @@
           <td>Revoke one session</td>
           <td><code>POST /auth/revoke/{sessionId}</code></td>
           <td>Authenticated</td>
-          <td>Signs one device out; ownership is checked by the session store, so another account&#39;s session id is not revocable</td>
+          <td>Signs one device out; ownership is checked by the session store, so another account&#39;s session id answers 404 exactly as an unknown one does; an already-revoked session also answers 404 (<code>Auth.SessionAlreadyRevoked</code>)</td>
           </tr>
           </tbody></table></div>
           <p>All three come from <code>AuthControllerBase</code> in MMCA.Common and are inherited unchanged by <code>AuthController</code>.</p>
@@ -728,12 +737,18 @@
           <p><strong>Execution Path:</strong></p>
           <pre class="doc-pre" tabindex="0"><code class="">AuthController.ChangePasswordAsync()
   -&gt; ChangePasswordHandler (workflow in ChangePasswordHandlerBase, MMCA.Common)
-    -&gt; Verify current password
+    -&gt; account with no stored credential -&gt; Unauthorized
+    -&gt; loginProtection.CheckLockoutAsync(&quot;password-change:{userId}&quot;)   (ADR-029)
+    -&gt; Verify current password (a miss counts a failed attempt)
+    -&gt; ResetFailedAttemptsAsync()
     -&gt; Hash new password
     -&gt; User.ChangePassword() -&gt; raises UserPasswordChanged
     -&gt; revoke every live refresh session on the account
     -&gt; SaveChangesAsync()</code></pre>
-          <p><strong>Decision Points:</strong> Current password incorrect -&gt; Unauthorized (<code>ChangePasswordHandler.cs:12</code>)</p>
+          <p><strong>Decision Points:</strong> Current password incorrect -&gt; Unauthorized (<code>ChangePasswordHandler.cs:12</code>).
+          Repeated misses lock the change-password path out through the same exponential backoff as sign-in,
+          on a per-account counter kept separate from the sign-in counter, so the endpoint is not an
+          unthrottled password oracle for a session holder and a lockout here does not block sign-in.</p>
           <hr>
           <h3 id="16-customer-profile-management">1.6 Customer Profile Management</h3>
           <div class="table-wrap"><table>
@@ -766,8 +781,11 @@
           </tbody></table></div>
           <p>All three are owner-or-admin (<code>OwnerOrAdminFilter</code>) and conditional: <code>[SupportsIfMatch]</code> makes the
           <code>If-Match</code> header mandatory, 412 on a stale token, 428 when absent
-          (<a href="../adr/035-optimistic-concurrency.html">ADR-035</a>). Email change includes uniqueness check across
-          customers.</p>
+          (<a href="../adr/035-optimistic-concurrency.html">ADR-035</a>). Email change refuses an address already held by
+          another user account or another customer profile (400 <code>Identity.Customer.EmailInUse</code>), and a caller
+          without <code>identity:customers:manage</code> (the owner path) may only set the contact address to the sign-in
+          email of the user linked to that customer (400 <code>Identity.Customer.EmailMustMatchLogin</code>);
+          <code>CustomerChangeEmailUpdateHandler</code> holds both checks.</p>
           <h3 id="17-customer-crud-admin">1.7 Customer CRUD (Admin)</h3>
           <div class="table-wrap"><table>
           <thead>
@@ -896,7 +914,7 @@
           <td>Reset password</td>
           <td><code>POST /auth/reset-password</code></td>
           <td><code>ResetPasswordHandler</code></td>
-          <td>Redeems the token, re-hashes, clears the lockout; one generic rejection error</td>
+          <td>Redeems the token, re-hashes, clears the lockout and revokes every live refresh session on the account; one generic rejection error</td>
           </tr>
           <tr>
           <td>Send email confirmation</td>
@@ -957,7 +975,7 @@
           <td>Change role</td>
           <td><code>PUT /admin/users/{userId}/roles</code></td>
           <td><code>users:manage</code></td>
-          <td>Exactly one role; <code>User.ChangeRole()</code> raises <code>UserRoleChanged</code> and revokes live sessions</td>
+          <td>Exactly one role (400 <code>User.Role.ExactlyOne</code> otherwise); <code>User.ChangeRole()</code> raises <code>UserRoleChanged</code> and revokes live sessions; assigning the role the account already holds is a no-op success with no revocation</td>
           </tr>
           <tr>
           <td>List roles</td>
@@ -1005,8 +1023,10 @@
           <pre class="doc-pre" tabindex="0"><code class="">CategoriesController.CreateAsync()
   -&gt; CreateCategoryHandler
     -&gt; CategoryCreateRequestValidator (name: required, max 255)
+    -&gt; a named parent must exist and not be soft-deleted -&gt; 404 otherwise
     -&gt; Category.Create(id, name, parentCategoryId?) -&gt; raises CategoryChanged (Added)
-    -&gt; Repository.AddAsync() + SaveChangesAsync()</code></pre>
+    -&gt; Repository.AddAsync() + SaveChangesAsync()
+  -&gt; evicts the catalog:categories and catalog:products output-cache tags</code></pre>
           <p><strong>Response:</strong> 201 Created with <code>CategoryDTO</code></p>
           <h4 id="rename-category">Rename Category</h4>
           <p><strong>Entry Point:</strong> <code>PUT /categories/{id}/name</code>, <code>catalog:categories:manage</code>, mandatory <code>If-Match</code></p>
@@ -1014,12 +1034,16 @@
   -&gt; RenameCategoryHandler
     -&gt; Validate name (max 255)
     -&gt; Fetch category -&gt; category.Rename(name)
-    -&gt; Only updates if name differs (case-insensitive comparison)
-    -&gt; Raises CategoryChanged (Updated) if changed
+    -&gt; The name is always written (a case-only edit is stored)
+    -&gt; Raises CategoryChanged (Updated) only when the name differs case-insensitively
     -&gt; Cache invalidation + evicts the catalog:categories and catalog:products output-cache tags</code></pre>
           <h4 id="assign-parent-category">Assign Parent Category</h4>
           <p><strong>Entry Point:</strong> <code>PUT /categories/{id}/parentcategory</code>, <code>catalog:categories:manage</code>, mandatory <code>If-Match</code></p>
-          <p>Sets or clears <code>ParentCategoryId</code> to establish hierarchy. No domain event raised.</p>
+          <p>Sets or clears <code>ParentCategoryId</code> to establish hierarchy. No domain event raised. Three refusals:
+          a category named as its own parent (<code>Category.SelfReferencing</code>), a parent that does not exist or is
+          soft-deleted (404), and a parent whose ancestor chain leads back to this category
+          (<code>Category.CircularReference</code>; <code>CategoryAssignParentUpdateHandler</code> walks at most 32 ancestors and
+          refuses on exhaustion). Evicts the <code>catalog:categories</code> and <code>catalog:products</code> output-cache tags.</p>
           <h4 id="delete-category">Delete Category</h4>
           <p><strong>Entry Point:</strong> <code>DELETE /categories/{id}</code>, <code>catalog:categories:manage</code></p>
           <p>Soft delete (<code>IsDeleted=true</code>). Refused while products are assigned (<code>Category.HasProducts</code>) or child
@@ -1067,7 +1091,8 @@
           <p><strong>Entry Point:</strong> <code>POST /products</code>, <code>catalog:products:manage</code>, <code>[Idempotent]</code></p>
           <pre class="doc-pre" tabindex="0"><code class="">ProductsController.CreateAsync()
   -&gt; CreateProductHandler
-    -&gt; Validate: name (required, max 100), description (max 4000), brand (max 100, no whitespace if provided)
+    -&gt; Validate: name (required, max 100), description (max 4000), brand (max 100, not whitespace-only if provided)
+    -&gt; a named category must exist and not be soft-deleted -&gt; 404 otherwise
     -&gt; Product.Create() factory -&gt; raises ProductChanged (Added)
     -&gt; Repository.AddAsync() + SaveChangesAsync()</code></pre>
           <h4 id="update-operations">Update Operations</h4>
@@ -1095,13 +1120,13 @@
           <tr>
           <td>Change Brand</td>
           <td><code>PUT /products/{id}/brand</code></td>
-          <td>Max 100, no whitespace</td>
+          <td>Max 100, nullable, not whitespace-only</td>
           <td>None</td>
           </tr>
           <tr>
           <td>Assign Category</td>
           <td><code>PUT /products/{id}/category</code></td>
-          <td>Nullable FK</td>
+          <td>Nullable FK; a named category must exist and not be soft-deleted (404)</td>
           <td>None</td>
           </tr>
           </tbody></table></div>
@@ -1109,7 +1134,7 @@
           requires <code>catalog:products:manage</code> at the controller level; each is conditional on a mandatory
           <code>If-Match</code> header and evicts the <code>catalog:products</code> and <code>catalog:categories</code> output-cache tags.</p>
           <h4 id="delete-product">Delete Product</h4>
-          <p><strong>Entry Point:</strong> <code>DELETE /products/{id}</code>, <code>catalog:products:manage</code>. Soft delete, raises <code>ProductChanged</code> with the <code>Deleted</code> state plus the <code>ProductInfoChanged</code> integration event (<code>Deleted</code>).</p>
+          <p><strong>Entry Point:</strong> <code>DELETE /products/{id}</code>, <code>catalog:products:manage</code>. Soft delete, raises <code>ProductChanged</code> with the <code>Deleted</code> state plus the <code>ProductInfoChanged</code> integration event (<code>Deleted</code>). The product&#39;s variants and images are soft-deleted with it, and a child that refuses its own delete fails the whole product delete rather than leaving an active row under a deleted product.</p>
           <h4 id="query-endpoints-1">Query Endpoints</h4>
           <div class="table-wrap"><table>
           <thead>
@@ -1137,7 +1162,7 @@
           <tr>
           <td><code>GET /products/storefront</code></td>
           <td>AllowAnonymous</td>
-          <td>One page of the public shop: <code>search</code>, <code>categoryId</code>, <code>onSale</code>, <code>sort</code>, <code>pageNumber</code>, <code>pageSize</code> (default 12); returns the paged products with category, variants and images plus the <code>X-Pagination</code> header (<code>ProductsController.cs:96-118</code>)</td>
+          <td>One page of the public shop: <code>search</code>, <code>categoryId</code>, <code>onSale</code>, <code>sort</code>, <code>pageNumber</code>, <code>pageSize</code> (default 12, capped at MaxPageSize); returns the paged products with category, variants and images plus the <code>X-Pagination</code> header (<code>ProductsController.cs:96-118</code>)</td>
           </tr>
           <tr>
           <td><code>GET /products/variant-lookup</code></td>
@@ -1176,8 +1201,9 @@
           <p><strong>Entry Point:</strong> <code>POST /products/{id}/productvariants</code>, <code>catalog:product-variants:manage</code>, <code>[Idempotent]</code></p>
           <pre class="doc-pre" tabindex="0"><code class="">ProductVariantsController.CreateAsync()
   -&gt; AddVariantHandler   (AddVariantCommand: ITransactional, ICacheInvalidating)
-    -&gt; Validate: SKU (max 50), Price (positive Money)
-    -&gt; IProductVariantService.SkuExistsAsync() -&gt; global SKU uniqueness check
+    -&gt; AddVariantCommandValidator: SKU (optional, max 50), Price (required, not negative; zero allowed)
+    -&gt; IProductVariantService.SkuExistsAsync() -&gt; global SKU uniqueness check on the SKU as stored
+       (trimmed, blank stored as no SKU)
     -&gt; Fetch Product with variants
     -&gt; product.AddProductVariant(variantId, sku, price)
       -&gt; ProductVariant.Create() validates price not negative
@@ -1185,6 +1211,8 @@
     -&gt; SaveChangesAsync()
     -&gt; schedules Catalog.PublishProductVariantChanged (internal command, ADR-114) with the
        database-generated variant id; the transactional pipeline commits that row with the variant</code></pre>
+          <p><strong>Response:</strong> 201 Created with <code>ProductVariantDTO</code>, located at the parent product
+          (<code>GetProductById</code>); evicts the <code>catalog:products</code> and <code>catalog:categories</code> output-cache tags.</p>
           <p><strong>Cross-Module:</strong> SKU uniqueness checked via <code>IProductVariantService</code>. The <code>ProductVariantChanged</code>
           (<code>Added</code>) integration event goes out when the scheduled internal command runs, so consumers always
           see the real variant id (<code>AddVariantHandler.cs:19-23</code>).</p>
@@ -1193,10 +1221,11 @@
           <p>SKU uniqueness verified globally (excluding current variant). Raises the <code>ProductVariantChanged</code> integration event with the <code>Updated</code> state if changed.</p>
           <h4 id="change-variant-price">Change Variant Price</h4>
           <p><strong>Entry Point:</strong> <code>PUT /products/{id}/productvariants/{variantId}/price</code>, <code>catalog:product-variants:manage</code>, mandatory <code>If-Match</code></p>
-          <p>Price must be positive. Raises the <code>ProductVariantChanged</code> integration event with the <code>Updated</code> state if changed. The price edited here is
+          <p>Price must not be negative (zero is allowed). Raises the <code>ProductVariantChanged</code> integration event with the <code>Updated</code> state if changed. The price edited here is
           the LIST price. A variant that carries a discount re-validates it against the new price and the
           change is refused when the pair would be inconsistent (a special price no longer below the list
-          price, or a percentage leaving nothing), so the discount is cleared first.</p>
+          price, or a percentage leaving nothing), so the discount is cleared first. A discount whose window
+          has already ended prices nothing and does not take part; one that is active or scheduled does.</p>
           <h4 id="set-variant-discount">Set Variant Discount</h4>
           <p><strong>Entry Point:</strong> <code>PUT /products/{id}/productvariants/{variantId}/discount</code>, <code>catalog:pricing:manage</code></p>
           <pre class="doc-pre" tabindex="0"><code class="">ProductVariantsController.SetDiscountAsync()
@@ -1208,7 +1237,7 @@
       -&gt; ProductVariant.SetDiscount() runs VariantDiscount.ApplyTo(Price) first
       -&gt; Publishes ProductVariantChanged (Updated) with the LIST price
     -&gt; SaveChangesAsync()
-  -&gt; Evicts the catalog:products output-cache tag</code></pre>
+  -&gt; Evicts the catalog:products and catalog:categories output-cache tags</code></pre>
           <p>Replaces any discount already on the variant. Returns 204; 400 on a broken invariant, 404 on an
           unknown product or variant, 412 on a stale ETag, 428 when <code>If-Match</code> is missing
           (<a href="../adr/035-optimistic-concurrency.html">ADR-035</a> two-token rule: the header carries the product&#39;s
@@ -1217,7 +1246,7 @@
           <p><strong>Entry Point:</strong> <code>DELETE /products/{id}/productvariants/{variantId}/discount</code>, <code>catalog:pricing:manage</code></p>
           <p>Returns the variant to its list price, which was never rewritten, so there is nothing to restore.
           Clearing a variant that carries no discount changes nothing, so clearing twice is safe. Publishes
-          <code>ProductVariantChanged</code> (Updated) and evicts the <code>catalog:products</code> tag. The body carries only the
+          <code>ProductVariantChanged</code> (Updated) and evicts the <code>catalog:products</code> and <code>catalog:categories</code> tags. The body carries only the
           variant&#39;s row version; the status codes match the set action.</p>
           <h4 id="discount-all-variants">Discount All Variants</h4>
           <p><strong>Entry Point:</strong> <code>PUT /products/{id}/discount</code>, <code>catalog:pricing:manage</code></p>
@@ -1230,7 +1259,7 @@
       -&gt; All-or-nothing: one refusal leaves the product exactly as it was
       -&gt; Publishes one ProductVariantChanged (Updated) per variant, each with its LIST price
     -&gt; SaveChangesAsync()
-  -&gt; Evicts the catalog:products output-cache tag</code></pre>
+  -&gt; Evicts the catalog:products and catalog:categories output-cache tags</code></pre>
           <p>A product whose variants are priced differently either takes the promotion whole or is left
           untouched, so a half-discounted catalog page is not reachable. A product with nothing to discount,
           because it has no variants yet or every one is soft-deleted, is a 400 rather than a write that
@@ -1264,7 +1293,7 @@
           <td>Upload image</td>
           <td><code>POST /products/{productId}/images</code></td>
           <td><code>catalog:product-images:manage</code></td>
-          <td><code>[Idempotent]</code>; 201 Created with <code>ProductImageDTO</code> and a Location header; 6 MB request limit covering the 5 MB domain constraint plus multipart overhead; <code>UploadProductImageCommand</code> is <code>ITransactional</code></td>
+          <td><code>[Idempotent]</code>; 201 Created with <code>ProductImageDTO</code> and a Location header; 6 MB request limit covering the 5 MB domain constraint plus multipart overhead; JPEG, PNG, GIF or WebP only, at most 10 images per product; <code>UploadProductImageCommand</code> is <code>ITransactional</code></td>
           </tr>
           <tr>
           <td>Delete image by id</td>
@@ -1296,9 +1325,11 @@
 
 Catalog: OrderFulfilledHandler
   -&gt; resolve the event&#39;s variant ids to product ids in ONE projection
-     (soft-deleted variants are not resolved: a delisted product stays unreviewable)
+     (query filters ignored, so a retired variant on a product still on sale still entitles)
   -&gt; de-duplicate: two sizes of the same shirt are one entitlement
-  -&gt; read the order&#39;s existing entitlement rows (first idempotency guard)
+  -&gt; re-read the owning products through the filtered reader: a delisted (soft-deleted) product
+     is logged and skipped, so it stays unreviewable
+  -&gt; read the order&#39;s existing entitlement rows, soft-deleted ones included (first idempotency guard)
   -&gt; VerifiedPurchase.Create() for each missing product, one SaveChangesAsync</code></pre>
           <p><strong>Idempotency:</strong> twice over. The existing-rows read means a redelivered event inserts nothing, and the
           unique <code>(OrderId, ProductId)</code> index is the backstop for two deliveries racing. Deliveries are
@@ -1325,7 +1356,9 @@ Catalog: OrderFulfilledHandler
   (then, after commit)
   -&gt; ProductReviewChangedHandler [own DI scope]
     -&gt; recompute AVG/COUNT over the product&#39;s published, non-deleted reviews
-    -&gt; Product.UpdateRatingSummary(), written only when the summary actually differs</code></pre>
+    -&gt; Product.UpdateRatingSummary(), written only when the summary actually differs
+    -&gt; a lost concurrency race on the product is retried in a fresh scope, three attempts in all,
+       then abandoned with a warning (the next review event recomputes it)</code></pre>
           <p><strong>Response:</strong> 200 OK with <code>ProductReviewDTO</code></p>
           <h4 id="revise--withdraw-review">Revise / Withdraw Review</h4>
           <p><strong>Entry Point:</strong> <code>PUT /reviews/{id}</code> and <code>DELETE /reviews/{id}</code>, owner or Admin</p>
@@ -1333,7 +1366,8 @@ Catalog: OrderFulfilledHandler
           of another customer&#39;s review id cannot be probed for. The revise path is conditional
           (<a href="../adr/035-optimistic-concurrency.html">ADR-035</a>): the <code>If-Match</code> header is mandatory and an edit
           decided against a stale view answers 412. The delete is unconditional (soft delete; a delete has no
-          field to lose to a concurrent edit). Both raise <code>ProductReviewChanged</code>, so the rating summary is
+          field to lose to a concurrent edit). The owner cannot withdraw a review a moderator hid (400
+          <code>Review.HiddenByModerator</code>); an Admin can. Both raise <code>ProductReviewChanged</code>, so the rating summary is
           recomputed either way. The frozen <code>ReviewerName</code> is deliberately not revisable.</p>
           <h4 id="hide--unhide-review-moderation">Hide / Unhide Review (Moderation)</h4>
           <p><strong>Entry Point:</strong> <code>PUT /reviews/{id}/hide</code>, <code>PUT /reviews/{id}/unhide</code>, <code>catalog:reviews:moderate</code></p>
@@ -1345,7 +1379,10 @@ Catalog: OrderFulfilledHandler
           <p><code>CustomerErasedHandler</code> consumes Identity&#39;s <code>CustomerErased.v1</code> and anonymizes every review that
           customer wrote, hidden and soft-deleted rows included: name, title and body cleared, star rating kept
           (<a href="../adr/005-soft-delete-vs-erasure.html">ADR-005</a>). Only rows that still carry personal data are
-          loaded, so a redelivery finds nothing to do and churns no audit fields.</p>
+          loaded, so a redelivery finds nothing to do and churns no audit fields. Because the handler runs off
+          a broker message with no output-cache handle, it publishes <code>OutputCacheEvictionRequested</code> for the
+          <code>catalog:products</code> tag, which every replica consumes to drop the cached review list; the cache TTL
+          is the backstop for a message that never lands.</p>
           <h4 id="query-endpoints-2">Query Endpoints</h4>
           <div class="table-wrap"><table>
           <thead>
@@ -1358,7 +1395,7 @@ Catalog: OrderFulfilledHandler
           <tbody><tr>
           <td><code>GET /reviews/by-product/{productId}/paged</code></td>
           <td>Anonymous</td>
-          <td>Published reviews only, whoever asks, newest first; output-cached under the shared <code>ProductsCache</code> policy, which caches regardless of auth state (a role-varying response would be served to the wrong caller)</td>
+          <td>Published reviews only, whoever asks, newest first; served in the public review shape (no customer or order id), and a <code>sortColumn</code> outside that shape is a 400; output-cached under the shared <code>ProductsCache</code> policy, which caches regardless of auth state (a role-varying response would be served to the wrong caller)</td>
           </tr>
           <tr>
           <td><code>GET /reviews/by-product/{productId}/mine</code></td>
@@ -1385,8 +1422,8 @@ Catalog: OrderFulfilledHandler
           not signed in keeps a device cart instead (4.1) and checks out through 3.5.</p>
           <p><strong>Entry Point:</strong> <code>POST /shoppingcarts/{customerId}/shoppingcartitems</code>, Authenticated (owner or admin via <code>OwnerOrAdminFilter</code>), <code>[Idempotent]</code>, 201 Created</p>
           <pre class="doc-pre" tabindex="0"><code class="">ShoppingCartsController.CreateShoppingCartItemAsync()
+  -&gt; ShoppingCartItemCreateRequestValidator (pipeline): quantity &gt; 0
   -&gt; AddItemHandler
-    -&gt; Validate quantity &gt; 0
     -&gt; IProductVariantService.ExistsAsync() [cross-module: Catalog]
     -&gt; Fetch ShoppingCart by CustomerId
     -&gt; If no cart exists -&gt; ShoppingCart.Create(customerId) -&gt; ShoppingCartChanged (Added)
@@ -1394,12 +1431,18 @@ Catalog: OrderFulfilledHandler
     -&gt; shoppingCart.AddShoppingCartItem(variantId, quantity)
       -&gt; If item already in cart -&gt; IncreaseQuantity -&gt; ShoppingCartItemChanged (Updated)
       -&gt; If new item -&gt; ShoppingCartItem.Create() -&gt; ShoppingCartItemChanged (Added)
-    -&gt; SaveChangesAsync()</code></pre>
+    -&gt; repository.TouchConcurrencyToken(cart)   (a line write still bumps the cart rowversion)
+    -&gt; SaveChangesAsync()
+    -&gt; lost a race (the (cart, variant) unique index, or a concurrent checkout moved the
+       rowversion) -&gt; re-run the upsert ONCE in a fresh scope</code></pre>
           <p><strong>Decision Points:</strong></p>
           <ul>
-          <li>Product variant doesn&#39;t exist -&gt; NotFound</li>
-          <li>Quantity not positive -&gt; Invariant error</li>
+          <li>Product variant doesn&#39;t exist -&gt; Validation error <code>ShoppingCart.InvalidProductVariant</code></li>
+          <li>Quantity not positive -&gt; Validation error from the request validator (the domain invariant backs it up)</li>
           <li>Cart checked out -&gt; auto-reactivated (all old items cleared)</li>
+          <li>A concurrent add of the same variant, or a checkout that committed in between -&gt; one retry
+          against a fresh read: the twin line&#39;s quantity grows, or the checked-out cart is reactivated; a
+          second failure surfaces as the shared 409</li>
           </ul>
           <h4 id="change-item-quantity">Change Item Quantity</h4>
           <p><strong>Entry Point:</strong> <code>PUT /shoppingcarts/{id}/shoppingcartitems/{variantId}/quantity</code></p>
@@ -1551,8 +1594,10 @@ Catalog: OrderFulfilledHandler
           <blockquote>
           <p><strong>No <code>InventoryAdjusted</code> on the checkout path.</strong> The decrement runs as <code>ExecuteUpdateAsync</code>, which
           bypasses the save pipeline (and therefore the audit interceptor and domain-event dispatch) by design:
-          that is what makes it a single atomic statement and the real oversell guard. <code>InventoryAdjusted</code> is
-          still raised by the admin adjustment endpoints in 3.4, which go through the aggregate.</p>
+          that is what makes it a single atomic statement and the real oversell guard. The cancellation
+          restore (3.3) returns stock the same way, through <code>IInventoryAllocationService.IncrementAsync</code>.
+          <code>InventoryAdjusted</code> is still raised by the admin adjustment endpoints in 3.4, which go through the
+          aggregate.</p>
           </blockquote>
           <hr>
           <h3 id="33-order-lifecycle">3.3 Order Lifecycle</h3>
@@ -1605,7 +1650,8 @@ Catalog: OrderFulfilledHandler
           still open                                -&gt; hand back the SAME checkout page
           taken but unsettled                       -&gt; tell the customer to wait, open nothing
       Paid / Shipped / Delivered / Cancelled -&gt; refused, no provider call
-    -&gt; Return sessionId + checkoutUri</code></pre>
+    -&gt; Return sessionId + checkoutUri + CheckoutSessionOutcome (Redirect; AlreadyPaid and
+       PaymentPending carry no checkoutUri)</code></pre>
           <p><strong>External Interaction:</strong> Stripe API: creates (or reads) the hosted checkout session. A
           PaymentInitiated order never re-runs <code>InitiatePayment</code>, because the webhook finds the order BY the
           stored session id and a second session would orphan the first one&#39;s confirmation
@@ -1763,10 +1809,12 @@ Catalog: OrderFulfilledHandler
 
   (then, after commit)
   -&gt; OrderCancelledSagaHandler  [ADR-054 compensating action, own DI scope]
-    -&gt; Skip if order.InventoryRestored is already set (idempotent under redelivery)
-    -&gt; Restore stock for each OrderLine
-    -&gt; order.MarkInventoryRestored()
-    -&gt; ONE SaveChangesAsync commits the marker and the inventory increases together
+    -&gt; unitOfWork.ExecuteInTransactionAsync(RestoreAsync):    &lt;-- one transaction
+      -&gt; Skip if order.InventoryRestored is already set (idempotent under redelivery)
+      -&gt; validate the restore against a non-tracking inventory snapshot (soft-deleted rows included)
+      -&gt; order.MarkInventoryRestored() + SaveChangesAsync (the order rowversion takes the row first)
+      -&gt; IInventoryAllocationService.IncrementAsync: atomic relative UPDATE per line
+      -&gt; the marker and the stock increases commit together
   -&gt; OrderCancelledHandler      [notification, independent of the saga]
     -&gt; schedules SendOrderCancelledEmailInternalCommand(orderId, reason)   (ADR-114)
     -&gt; SendOrderCancelledEmailInternalCommandHandler
@@ -1782,7 +1830,7 @@ Catalog: OrderFulfilledHandler
           (<code>SendOrderCancelledEmailInternalCommandHandler.cs:54-78</code>).</p>
           <p><strong>Inventory Impact:</strong> All reserved inventory is restored on cancellation, by a <strong>compensating handler
           that runs after</strong> the cancellation transaction, not inside it (<a href="../adr/054-saga-compensation-and-reconciliation.html">ADR-054</a>).
-          <code>Order.InventoryRestored</code> is the idempotency marker, committed by the same <code>SaveChangesAsync</code> as the
+          <code>Order.InventoryRestored</code> is the idempotency marker, committed in the same transaction as the
           restoration, so an at-least-once redelivery cannot double-restore; the order&#39;s rowversion token makes
           two concurrent deliveries mutually exclusive. The same saga runs whatever cancelled the order: a
           customer or admin here, a guest from the private link (3.5), the payment deadline, or the
@@ -2093,7 +2141,8 @@ Catalog: OrderFulfilledHandler
           <li>&quot;Checked Out&quot; chip display when cart is not Active</li>
           <li>Read-only quantity display when cart is CheckedOut</li>
           <li>&quot;Continue Shopping&quot; navigation to catalog</li>
-          <li>Empty cart state with &quot;Browse Products&quot; link</li>
+          <li>Empty cart state: the C.A.S.A figure, &quot;Your bag is empty&quot; and a Shop button that closes the
+          drawer on its way to the catalog (<code>ShopInvite</code>)</li>
           </ul>
           <p><strong>State Management:</strong> <code>ICartStateService</code> manages cart state centrally: all cart operations go
           through this service, which refreshes the cart DTO and its quote after each mutation and notifies
@@ -2287,7 +2336,7 @@ Catalog: OrderFulfilledHandler
           <li>Shopping Carts (<code>/shoppingcarts</code>)</li>
           <li>Orders (<code>/orders</code>)</li>
           <li>Customers (<code>/customers</code>)</li>
-          <li>Users (<code>/users</code>)</li>
+          <li>User accounts (<code>/users</code>)</li>
           <li>Roles (<code>/roles</code>)</li>
           <li>My Profile (<code>/profile</code>)</li>
           </ul>
@@ -2329,7 +2378,7 @@ Catalog: OrderFulfilledHandler
           <td>Sales -&gt; Catalog</td>
           <td><code>IProductVariantService</code></td>
           <td><code>GetExistingIdsAsync()</code>, <code>GetCatalogInfoAsync()</code></td>
-          <td>Bulk inventory set (existence plus the denormalized SKU / product labels); seeding</td>
+          <td>Bulk inventory set (existence plus the denormalized SKU / product labels); the denormalized labels on inventory create and set and in the denormalization backfill; seeding</td>
           </tr>
           <tr>
           <td>Sales -&gt; Catalog</td>
@@ -2515,7 +2564,7 @@ Catalog: OrderFulfilledHandler
           <tr>
           <td><strong>Timeouts</strong></td>
           <td><code>IHasTimeout</code> -&gt; <code>TimeoutCommandDecorator</code></td>
-          <td>Create checkout session, verify payment (20 s)</td>
+          <td>Create checkout session (45 s), verify payment (20 s)</td>
           </tr>
           <tr>
           <td><strong>Profiling</strong></td>
@@ -2633,7 +2682,7 @@ Catalog: OrderFulfilledHandler
           </tr>
           </tbody></table></div>
           <hr>
-          <p><em>This document is derived from source code analysis. All workflows, decisions, and behaviors described above are confirmed implementations traceable to the referenced source files. Last updated: 2026-10-27 (guest checkout, shipping and tax, payment deadline, permission-based authorization, user and role administration; storefront search, find my order, guest cancel, the kept guest bag, delivered and cancelled emails).</em></p>
+          <p><em>This document is derived from source code analysis. All workflows, decisions, and behaviors described above are confirmed implementations traceable to the referenced source files. Last updated: 2026-10-28.</em></p>
           
         <div class="doc-foot btn-row">
           <a class="btn btn--ghost" href="../../docs/guides/index.html">← Back to Guides &amp; Specifications</a>
