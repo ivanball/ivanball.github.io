@@ -6,21 +6,21 @@
   <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#0e151f" media="(prefers-color-scheme: dark)">
   <title>MMCA.Common Capability Catalog · MMCA · Ivan Ball-llovera</title>
-  <meta name="description" content="As of: 2026-09-10 (framework v1.187.0).">
+  <meta name="description" content="As of: 2026-10-28 (framework v1.265.1).">
   <link rel="canonical" href="https://ivanball.github.io/docs/guides/common-CAPABILITIES.html">
   <link rel="icon" href="../../assets/img/favicon.svg" type="image/svg+xml">
   <link rel="alternate" type="application/rss+xml" title="Ivan Ball-llovera: deep dives on enterprise .NET" href="https://ivanball.github.io/feed.xml">
   <meta property="og:type" content="article">
   <meta property="og:site_name" content="Ivan Ball-llovera">
   <meta property="og:title" content="MMCA.Common Capability Catalog">
-  <meta property="og:description" content="As of: 2026-09-10 (framework v1.187.0).">
+  <meta property="og:description" content="As of: 2026-10-28 (framework v1.265.1).">
   <meta property="og:url" content="https://ivanball.github.io/docs/guides/common-CAPABILITIES.html">
   <meta property="og:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <meta property="og:image:alt" content="Ivan Ball-llovera, Principal Software Architect">
   <meta property="og:locale" content="en_US">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="MMCA.Common Capability Catalog">
-  <meta name="twitter:description" content="As of: 2026-09-10 (framework v1.187.0).">
+  <meta name="twitter:description" content="As of: 2026-10-28 (framework v1.265.1).">
   <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Platform","item":"https://ivanball.github.io/platform.html"},{"@type":"ListItem","position":2,"name":"Reference","item":"https://ivanball.github.io/docs/index.html"},{"@type":"ListItem","position":3,"name":"Guides & Specifications","item":"https://ivanball.github.io/docs/guides/index.html"},{"@type":"ListItem","position":4,"name":"Common · MMCA.Common Capability Catalog","item":"https://ivanball.github.io/docs/guides/common-CAPABILITIES.html"}]}</script>
   <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);if(localStorage.getItem('mmca-rail')==='hidden')document.documentElement.setAttribute('data-rail','hidden');if(localStorage.getItem('mmca-cites')==='shown')document.documentElement.setAttribute('data-cites','shown');}catch(e){}})();</script>
@@ -126,8 +126,8 @@
         <article class="doc-content">
           <p class="eyebrow doc-kicker">Guides &amp; specifications</p>
           <h1 id="mmcacommon-capability-catalog">MMCA.Common Capability Catalog</h1>
-          <p><em>As of: 2026-09-10 (framework v1.187.0).</em></p>
-          <p>Everything an adopting team gets from the MMCA.Common framework: a .NET 10 package set for building a modular monolith on DDD, Clean Architecture, and CQRS, with a tested path to extract modules into microservices later. Every item below is grounded in a real shipped type, guide, CI job, or consumer call site (MMCA.ADC, MMCA.Store, MMCA.Helpdesk), verified against framework source at v1.187.0.</p>
+          <p><em>As of: 2026-10-28 (framework v1.265.1).</em></p>
+          <p>Everything an adopting team gets from the MMCA.Common framework: a .NET 10 package set for building a modular monolith on DDD, Clean Architecture, and CQRS, with a tested path to extract modules into microservices later. Every item below is grounded in a real shipped type, guide, CI job, or consumer call site (MMCA.ADC, MMCA.Store, MMCA.Helpdesk), verified against framework source at v1.265.1.</p>
           <div class="table-wrap"><table>
           <thead>
           <tr>
@@ -136,15 +136,15 @@
           </tr>
           </thead>
           <tbody><tr>
-          <td><strong>17</strong></td>
+          <td><strong>26</strong></td>
           <td>NuGet packages, lockstep versioned</td>
           </tr>
           <tr>
-          <td><strong>124</strong></td>
-          <td>architecture fitness methods (47 bases)</td>
+          <td><strong>160</strong></td>
+          <td>architecture fitness methods (64 bases)</td>
           </tr>
           <tr>
-          <td><strong>111</strong></td>
+          <td><strong>136</strong></td>
           <td>ADRs documenting every pattern</td>
           </tr>
           <tr>
@@ -152,7 +152,7 @@
           <td>named middleware steps, order under test</td>
           </tr>
           <tr>
-          <td><strong>23</strong></td>
+          <td><strong>24</strong></td>
           <td>device capability contracts, web and native</td>
           </tr>
           <tr>
@@ -161,7 +161,7 @@
           </tr>
           </tbody></table></div>
           <h2 id="package-map">Package map</h2>
-          <p>Seventeen packages, one version number. The layer rule is enforced at compile time inside the framework and at test time in every consumer: <code>API/Grpc</code> depend on <code>Infrastructure</code>, which depends on <code>Application</code>, then <code>Domain</code>, then <code>Shared</code>. <code>UI</code> and <code>Grpc</code> reference <code>Shared</code> only, so the UI runs in the browser and the transport stays pure.</p>
+          <p>Twenty-six packages, one version number. The layer rule is enforced at compile time inside the framework and at test time in every consumer: <code>API/Grpc</code> depend on <code>Infrastructure</code>, which depends on <code>Application</code>, then <code>Domain</code>, then <code>Shared</code>. <code>UI</code> and <code>Grpc</code> reference <code>Shared</code> only, so the UI runs in the browser and the transport stays pure.</p>
           <div class="table-wrap"><table>
           <thead>
           <tr>
@@ -188,7 +188,7 @@
           <tr>
           <td>Core</td>
           <td><code>MMCA.Common.Infrastructure</code></td>
-          <td>EF Core contexts for three engines, outbox and inbox, MassTransit broker adapters, scheduler, cache and lock implementations, audit trail, tenancy, encryption, identity stores, email, blob storage, push delivery.</td>
+          <td>EF Core contexts for four engines, outbox and inbox, internal commands, MassTransit broker transports (in-process, RabbitMQ, PostgreSQL), scheduler, cache and lock implementations, audit trail, tenancy, encryption, identity stores, email, file storage and native push contracts with null fallbacks, SignalR push delivery. No cloud vendor SDK.</td>
           </tr>
           <tr>
           <td>Core</td>
@@ -198,12 +198,37 @@
           <tr>
           <td>Core</td>
           <td><code>MMCA.Common.Aspire</code></td>
-          <td>Service defaults: OpenTelemetry, health checks, warm-up, Redis wiring, security headers and CSP, Serilog, Key Vault, data protection, gateway rate limiting and correlation, cost knobs.</td>
+          <td>Service defaults: OpenTelemetry, health checks, warm-up, Redis wiring, security headers and CSP, Serilog, gateway rate limiting and correlation, cost knobs, and a startup check that fails a host configured for a cloud capability whose adapter call is missing. OTLP is the only built-in exporter.</td>
           </tr>
           <tr>
           <td>Core</td>
           <td><code>MMCA.Common</code></td>
           <td>Metapackage bundling the six packages above as one reference (<a href="../adr/101-common-metapackage.html">ADR-101</a>).</td>
+          </tr>
+          <tr>
+          <td>AI</td>
+          <td><code>MMCA.Common.AI</code></td>
+          <td>Optional language-model boundary on Microsoft.Extensions.AI: <code>AddMmcaChatClient</code> registers one bounded, guardrailed, metered <code>IChatClient</code> only when <code>Ai:Enabled</code> is true. It references no vendor SDK and no other MMCA package, and nothing in the framework references it.</td>
+          </tr>
+          <tr>
+          <td>AI</td>
+          <td><code>MMCA.Common.AI.Anthropic</code>, <code>MMCA.Common.AI.OpenAI</code></td>
+          <td>One <code>IAiProviderFactory</code> each (<code>AddAnthropicAiProvider()</code>, <code>AddOpenAiProvider()</code>), matched by the <code>Ai:Provider</code> string.</td>
+          </tr>
+          <tr>
+          <td>Cloud</td>
+          <td><code>MMCA.Common.Azure</code></td>
+          <td>Vendor adapter, one call per capability: <code>AddAzureKeyVaultConfiguration</code>, <code>AddAzureDataProtection</code> (key ring on Blob Storage, optional Key Vault key), <code>AddAzureMonitorExporter</code>, <code>AddAzureBlobFileStorage</code>, <code>AddAzureNotificationHubsPush</code>, <code>AddAzureServiceBusTransport</code>.</td>
+          </tr>
+          <tr>
+          <td>Cloud</td>
+          <td><code>MMCA.Common.Aws</code></td>
+          <td>Vendor adapter: <code>AddS3FileStorage</code> (S3-compatible stores), <code>AddAmazonSqsTransport</code>, <code>AddAmazonSnsPush</code>, <code>AddAwsSecretsManagerConfiguration</code>, and a Parameter Store DataProtection key ring.</td>
+          </tr>
+          <tr>
+          <td>Cloud</td>
+          <td><code>MMCA.Common.Gcp</code></td>
+          <td>Vendor adapter: <code>AddGoogleCloudStorage</code>, <code>AddGoogleSecretManagerConfiguration</code>, <code>AddFirebaseCloudMessagingPush</code>, <code>AddGoogleCloudTelemetryExporter</code>, and a Cloud Storage DataProtection key ring.</td>
           </tr>
           <tr>
           <td>Presentation</td>
@@ -213,7 +238,7 @@
           <tr>
           <td>Presentation</td>
           <td><code>MMCA.Common.UI</code></td>
-          <td>Shared Blazor component layer: shell, pages, list-page bases, typed API clients, auth state, 23 device capability contracts, notifications, theming, localization.</td>
+          <td>Shared Blazor component layer: shell, pages, list-page bases, typed API clients, auth state, 24 device capability contracts, notifications, theming, localization.</td>
           </tr>
           <tr>
           <td>Presentation</td>
@@ -238,12 +263,12 @@
           <tr>
           <td>Testing</td>
           <td><code>MMCA.Common.Testing</code></td>
-          <td>Integration and cross-service fixtures, Service Bus emulator fixture, production-mode host factory, runtime conformance suites, JWT and feature-flag helpers, handler test base.</td>
+          <td>Integration and cross-service fixtures, production-mode host factory, runtime conformance suites, JWT and feature-flag helpers, handler test base.</td>
           </tr>
           <tr>
           <td>Testing</td>
           <td><code>MMCA.Common.Testing.Architecture</code></td>
-          <td>47 fitness-function bases over a 30-file <code>ArchitectureRules</code> library, parameterized by your architecture map. Folder-only organized (<code>Rules/</code>, <code>Bases/</code> by topic) so the flat namespace consumers subclass never moves (<a href="../adr/015-architecture-fitness-functions.html">ADR-015</a>).</td>
+          <td>64 fitness-function bases over a 44-file <code>ArchitectureRules</code> library, parameterized by your architecture map. Folder-only organized (<code>Rules/</code>, <code>Bases/</code> by topic) so the flat namespace consumers subclass never moves (<a href="../adr/015-architecture-fitness-functions.html">ADR-015</a>).</td>
           </tr>
           <tr>
           <td>Testing</td>
@@ -255,9 +280,24 @@
           <td><code>MMCA.Common.Testing.UI</code></td>
           <td>bUnit component-test base with MudBlazor provider handles, mutable auth state, capturing HTTP doubles, markup snapshots (<a href="../adr/103-bunit-component-test-tier.html">ADR-103</a>).</td>
           </tr>
+          <tr>
+          <td>Testing</td>
+          <td><code>MMCA.Common.Testing.Aspire</code></td>
+          <td>AppHost tier: <code>AppHostFixtureBase&lt;TAppHost&gt;</code> boots a real AppHost and waits for readiness per resource, and <code>AppHostTestBase&lt;TFixture&gt;</code> carries the wiring assertions (<a href="../adr/117-apphost-integration-test-base.html">ADR-117</a>).</td>
+          </tr>
+          <tr>
+          <td>Testing</td>
+          <td><code>MMCA.Common.Testing.Azure</code></td>
+          <td>The Service Bus emulator fixture, <code>ServiceBusEmulatorFixtureBase</code>.</td>
+          </tr>
+          <tr>
+          <td>Testing</td>
+          <td><code>MMCA.Common.AI.Testing</code></td>
+          <td><code>ReplayChatClient</code>, <code>GoldenReplayTestsBase</code>, and <code>PromptContractPinTestsBase</code>, keyed on the prompt contract hash.</td>
+          </tr>
           </tbody></table></div>
           <h2 id="support-tiers">Support tiers</h2>
-          <p>Every configuration axis the startup summary names (data source engines, message bus, cache, tenancy; <code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Configuration/StartupConfigurationSummaryService.cs:137</code>) compiles and is unit-tested, but not every value carries the same evidence. <strong>Tier 1</strong> is production-proven (deployed by ADC or Store), <strong>Tier 2</strong> is exercised in CI against a real engine or end to end, and <strong>Tier 3</strong> compiles and is unit-tested only; an adopter choosing a Tier 2 or Tier 3 value is running ahead of the first-party consumers and should plan their own integration testing for it. Where the evidence read does not settle a tier, the row says so rather than rounding up.</p>
+          <p>Every configuration axis the startup summary names (data source engines, message bus, cache, tenancy; <code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Configuration/StartupConfigurationSummaryService.cs:138</code>) compiles and is unit-tested, but not every value carries the same evidence. <strong>Tier 1</strong> is production-proven (deployed by ADC or Store), <strong>Tier 2</strong> is exercised in CI against a real engine or end to end, and <strong>Tier 3</strong> compiles and is unit-tested only; an adopter choosing a Tier 2 or Tier 3 value is running ahead of the first-party consumers and should plan their own integration testing for it. Where the evidence read does not settle a tier, the row says so rather than rounding up.</p>
           <div class="table-wrap"><table>
           <thead>
           <tr>
@@ -271,19 +311,19 @@
           <td>Data source</td>
           <td><code>SQLServer</code></td>
           <td>1</td>
-          <td>Azure SQL in both deployed consumers (<code>MMCA.ADC/infra/main.bicep:1007</code>, <code>MMCA.Store/infra/main.bicep:877</code>); also the <code>sqlserver-integration</code> Testcontainers job (<code>MMCA.Common/.github/workflows/ci.yml:806</code>, run at <code>:844</code>)</td>
+          <td>Azure SQL in both deployed consumers (<code>MMCA.ADC/infra/main.bicep:1008</code>, <code>MMCA.Store/infra/main.bicep:878</code>); also the <code>sqlserver-integration</code> Testcontainers job (<code>MMCA.Common/.github/workflows/ci.yml:894</code>, run at <code>:932</code>)</td>
           </tr>
           <tr>
           <td>Data source</td>
           <td><code>PostgreSQL</code></td>
           <td>2</td>
-          <td><code>postgresql-integration</code> Testcontainers job (<code>MMCA.Common/.github/workflows/ci.yml:769</code>, run at <code>:804</code>); no deployed consumer</td>
+          <td><code>postgresql-integration</code> Testcontainers job (<code>MMCA.Common/.github/workflows/ci.yml:854</code>, run at <code>:892</code>); no deployed consumer</td>
           </tr>
           <tr>
           <td>Data source</td>
           <td><code>Sqlite</code></td>
           <td>2</td>
-          <td>the <code>apphost-testing</code> job boots the sample AppHost with a SQLite file (<code>MMCA.Common/.github/workflows/ci.yml:846</code>, <code>:859</code>); no deployed consumer</td>
+          <td>the <code>apphost-testing</code> job boots the sample AppHost with a SQLite file (<code>MMCA.Common/.github/workflows/ci.yml:1021</code>, <code>:1034</code>); no deployed consumer</td>
           </tr>
           <tr>
           <td>Data source</td>
@@ -295,37 +335,49 @@
           <td>Message bus</td>
           <td><code>InProcess</code></td>
           <td>Ambiguous (2 or 3)</td>
-          <td>the default (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Messaging/MessageBusSettings.cs:241</code>); both deployed consumers override it, and no CI job read for this table confirms an end-to-end in-process run</td>
+          <td>the default (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Messaging/MessageBusSettings.cs:25</code>); both deployed consumers override it, and no CI job read for this table confirms an end-to-end in-process run</td>
           </tr>
           <tr>
           <td>Message bus</td>
           <td><code>RabbitMq</code></td>
           <td>2</td>
-          <td>weeknight cross-service tiers against a Testcontainers RabbitMQ (<code>MMCA.ADC/.github/workflows/cross-service-tests.yml:106</code>, <code>MMCA.Store/.github/workflows/cross-service-tests.yml:110</code>); RabbitMQ is in the ADC E2E stack (<code>MMCA.ADC/.github/workflows/e2e.yml:320</code>); no deployed consumer</td>
+          <td>weeknight cross-service tiers against a Testcontainers RabbitMQ (<code>MMCA.ADC/.github/workflows/cross-service-tests.yml:106</code>, <code>MMCA.Store/.github/workflows/cross-service-tests.yml:110</code>); RabbitMQ is in the ADC E2E stack (<code>MMCA.ADC/.github/workflows/e2e.yml:335</code>); no deployed consumer</td>
+          </tr>
+          <tr>
+          <td>Message bus</td>
+          <td><code>PostgreSql</code></td>
+          <td>2</td>
+          <td>the <code>postgresql-integration</code> Testcontainers job runs the built-in PostgreSql broker transport against a real PostgreSQL (<code>MMCA.Common/.github/workflows/ci.yml:863</code>, run at <code>:892</code>); no deployed consumer</td>
+          </tr>
+          <tr>
+          <td>Message bus</td>
+          <td><code>AmazonSqs</code></td>
+          <td>2</td>
+          <td>the <code>aws-integration</code> LocalStack job runs the SQS/SNS broker transport (<code>MMCA.Common/.github/workflows/ci.yml:934</code>, <code>:940</code>, run at <code>:972</code>); not a required check; no deployed consumer</td>
           </tr>
           <tr>
           <td>Message bus</td>
           <td><code>AzureServiceBus</code></td>
           <td>1</td>
-          <td>Service Bus namespace and <code>MessageBus__Provider</code> in both deployed consumers (<code>MMCA.ADC/infra/main.bicep:1268</code>, <code>:1982</code>; <code>MMCA.Store/infra/main.bicep:1077</code>, <code>:1606</code>)</td>
+          <td>Service Bus namespace and <code>MessageBus__Provider</code> in both deployed consumers (<code>MMCA.ADC/infra/main.bicep:1269</code>, <code>:1980</code>; <code>MMCA.Store/infra/main.bicep:1079</code>, <code>:1608</code>)</td>
           </tr>
           <tr>
           <td>Cache</td>
           <td><code>memory</code></td>
           <td>Ambiguous (2 or 3)</td>
-          <td>the fallback when no distributed cache is registered (<code>StartupConfigurationSummaryService.cs:112-114</code>); the deployed consumers run hybrid, and no CI job read for this table confirms a memory-only end-to-end run</td>
+          <td>the fallback when no distributed cache is registered (<code>StartupConfigurationSummaryService.cs:114-115</code>); the deployed consumers run hybrid, and no CI job read for this table confirms a memory-only end-to-end run</td>
           </tr>
           <tr>
           <td>Cache</td>
           <td><code>distributed</code></td>
           <td>2</td>
-          <td><code>redis-integration</code> Testcontainers job (<code>MMCA.Common/.github/workflows/ci.yml:725</code>, run at <code>:767</code>, which includes <code>DistributedCacheServiceRedisTests.cs</code>); no deployed consumer runs distributed-only</td>
+          <td><code>redis-integration</code> Testcontainers job (<code>MMCA.Common/.github/workflows/ci.yml:810</code>, run at <code>:852</code>, which includes <code>DistributedCacheServiceRedisTests.cs</code>); no deployed consumer runs distributed-only</td>
           </tr>
           <tr>
           <td>Cache</td>
           <td><code>hybrid</code></td>
           <td>1</td>
-          <td><code>ConnectionStrings__redis</code> upgrades <code>ICacheService</code> to the hybrid cache in both deployed consumers (<code>MMCA.ADC/infra/main.bicep:1589-1591</code>, <code>:1944</code>; <code>MMCA.Store/infra/main.bicep:1157</code>, <code>:1603</code>); also <code>HybridCacheServiceRedisTests.cs</code> in the <code>redis-integration</code> job</td>
+          <td><code>ConnectionStrings__redis</code> upgrades <code>ICacheService</code> to the hybrid cache in both deployed consumers (<code>MMCA.ADC/infra/main.bicep:1587</code>, <code>:1942</code>; <code>MMCA.Store/infra/main.bicep:1159</code>, <code>:1605</code>); also <code>HybridCacheServiceRedisTests.cs</code> in the <code>redis-integration</code> job</td>
           </tr>
           <tr>
           <td>Tenancy</td>
@@ -337,7 +389,7 @@
           <td>Tenancy</td>
           <td><code>shared-database</code></td>
           <td>Ambiguous (2 or 3)</td>
-          <td>mode named at <code>StartupConfigurationSummaryService.cs:123</code>, unit-tested at <code>Tests/Core/MMCA.Common.Infrastructure.Tests/Configuration/StartupConfigurationSummaryServiceTests.cs:162</code>; a SQLite multi-source test in the CI unit tier references tenancy, but its scope was not confirmed for this table; no deployed consumer</td>
+          <td>mode named at <code>StartupConfigurationSummaryService.cs:131-133</code>, unit-tested at <code>Tests/Core/MMCA.Common.Infrastructure.Tests/Configuration/StartupConfigurationSummaryServiceTests.cs:162</code>; a SQLite multi-source test in the CI unit tier references tenancy, but its scope was not confirmed for this table; no deployed consumer</td>
           </tr>
           <tr>
           <td>Tenancy</td>
@@ -353,20 +405,20 @@
           <li><strong>Four templates at four grain sizes.</strong> <code>mmca-app</code> (solution), <code>mmca-module</code> (an 8-project module across all five layers plus tests and a migrations project), <code>mmca-command</code> and <code>mmca-query</code> (single vertical slice; handlers, validators, and mappers are convention-scanned, so no DI registration to write). A generated command slice arrives already passing the command-validator coverage rule.</li>
           <li><strong>A wire-up script, not printed instructions.</strong> Generated apps ship <code>build/add-module.ps1</code>, which runs the module template and then performs the wire-ups <code>dotnet new</code> cannot patch: solution entries, project references, identifier-alias link, architecture-map lines, error resources, AppHost database routing, the first EF migration, and the new module&#39;s integration event appended to the frozen wire-contract test so the freeze stays green.</li>
           <li><strong>The script refuses to half-apply.</strong> It detects the relational engine from the API host&#39;s own settings, cross-checks the existing migrations project, fails at preflight on a duplicate module name or an ambiguous architecture map, makes only anchored insertions so the diff shows added lines and nothing else, and is safe to rerun step by step.</li>
-          <li><strong>Shape flags remove code instead of leaving dead weight.</strong> <code>--flat</code>, <code>--no-status</code>, <code>--no-description</code>, <code>--no-owner</code>, <code>--child</code>, <code>--title</code>, <code>--event-verb</code>, plus solution axes <code>--database sqlserver|sqlite</code>, <code>--no-aspire</code>, and <code>-f|--framework-version</code> to pin which framework release the generated app restores, so a scaffold is reproducible months later.</li>
+          <li><strong>Shape flags remove code instead of leaving dead weight.</strong> <code>--flat</code>, <code>--no-status</code>, <code>--no-description</code>, <code>--no-owner</code>, <code>--child</code>, <code>--title</code>, <code>--event-verb</code>, plus solution axes <code>--database sqlserver|sqlite|postgresql</code>, <code>--no-aspire</code>, and <code>-f|--framework-version</code> to pin which framework release the generated app restores, so a scaffold is reproducible months later.</li>
           <li><strong>Green baseline on arrival.</strong> The generated solution builds warning-free under <code>TreatWarningsAsErrors</code> with five analyzers at error severity, and its domain, application, and architecture test suites pass with no database.</li>
           <li><strong>Credential-free install.</strong> All packages are on public nuget.org; no feed configuration or token. The <code>MMCA.Common</code> metapackage bundles the core six packages as one reference.</li>
           <li><strong>A deliberately low floor.</strong> <code>--database sqlite --no-aspire</code> gives two hosts, one database file, no Docker, no orchestrator, with nothing in the framework disabled that cannot be re-enabled by a config switch and a restart (not a migration). The Small Apps guide says when to flip each switch back on.</li>
           <li><strong>Source-mode development.</strong> A gitignored <code>local.props</code> flips every <code>PackageReference</code> to a <code>ProjectReference</code> against framework source, so you can develop the framework and your app side by side.</li>
           <li><strong>The generated app is gated, not just the seed.</strong> Templates are packed from MMCA.Helpdesk, the runnable reference app, and a dedicated <code>template-smoke</code> CI job packs, generates, builds, and tests a fresh app in package mode against a released framework, then sweeps the tree for residual reference-app tokens (<a href="../adr/065-scaffolding-templates.html">ADR-065</a>).</li>
-          <li><strong>Templates release on their own cadence.</strong> <code>MMCA.Templates</code> ships on <code>templates-vX.Y.Z</code> tags through its own keyless trusted-publishing job (current line 1.11.0, cut at framework v1.206.0, MIT licensed), deliberately outside the framework&#39;s lockstep family so the framework version stays a parameter rather than a coupling.</li>
+          <li><strong>Templates release on their own cadence.</strong> <code>MMCA.Templates</code> ships on <code>templates-vX.Y.Z</code> tags through its own keyless trusted-publishing job (current line 1.23.0, MIT licensed), deliberately outside the framework&#39;s lockstep family so the framework version stays a parameter rather than a coupling.</li>
           <li><strong>Retrofit path for existing code.</strong> The Building by Hand guide walks the same solution phase by phase for teams adopting the framework inside an existing codebase; the two-module e-commerce sample shows the multi-module shape end to end.</li>
           </ul>
           <h2 id="architectural-core">Architectural core</h2>
           <p>The opinionated backbone: errors as values, one sealed pipeline, DDD building blocks, and module composition.</p>
           <h3 id="errors-as-values">Errors as values</h3>
           <ul>
-          <li><strong>Result pattern end to end.</strong> <code>Result</code> / <code>Result</code> with nine <code>ErrorType</code> classifications (Validation, Invariant, NotFound, Conflict, Unauthorized, Forbidden, UnprocessableEntity, Failure, Unexpected), severity ranking, <code>Combine</code>, and a full combinator surface: map, bind, tap, <code>Ensure</code>, <code>Match</code>, <code>OnFailure</code>, implicit conversions, and <code>Task&gt;</code> mirrors of each. Failures map to RFC 9457 ProblemDetails at the HTTP edge and to gRPC status on the wire, and <code>ProblemDetailsResultReader</code> reads them back into typed errors on the client, so pages branch instead of catch.</li>
+          <li><strong>Result pattern end to end.</strong> <code>Result</code> / <code>Result</code> with ten <code>ErrorType</code> classifications (Validation, Invariant, NotFound, Conflict, Unauthorized, Forbidden, UnprocessableEntity, Failure, Unexpected, TooManyRequests), severity ranking, <code>Combine</code>, and a full combinator surface: map, bind, tap, <code>Ensure</code>, <code>Match</code>, <code>OnFailure</code>, implicit conversions, and <code>Task&gt;</code> mirrors of each. Failures map to RFC 9457 ProblemDetails at the HTTP edge and to gRPC status on the wire, and <code>ProblemDetailsResultReader</code> reads them back into typed errors on the client, so pages branch instead of catch.</li>
           <li><strong>Results survive a cache.</strong> <code>ResultJsonConverterFactory</code> makes <code>Result</code> round-trippable through Redis, so a cached query result keeps its typed failure shape.</li>
           <li><strong>A reusable invariant library.</strong> <code>CommonInvariants</code> ships 22 <code>Result</code>-returning guards (string bounds, ids, enums, ranges, URLs, time zones, uniqueness, collection size, culture, theme) that module invariant classes compose with <code>Result.Combine</code>.</li>
           </ul>
@@ -391,9 +443,14 @@
           <h3 id="module-composition">Module composition</h3>
           <ul>
           <li><strong>Module system.</strong> Modules implement <code>IModule</code> (a leaf module is a name plus <code>Register</code>); <code>ModuleLoader</code> discovers them by reflection and registers them in topological (Kahn) order. Seeding is a separate <code>IModuleSeeder</code> contract invoked in the same order. A module disabled by <code>ModulesSettings</code> gets stub registrations so cross-module interfaces still resolve, and <code>RemoteDependencies</code> declares that a disabled dependency is satisfied out of process.</li>
-          <li><strong>Identifier type aliases.</strong> Entity ID types are solution-wide <code>global using</code> aliases linked into every project, so switching an ID type is a one-line change.</li>
+          <li><strong>Identifier type aliases.</strong> Entity ID types are solution-wide <code>global using</code> aliases linked into every project, so switching an ID type is a one-line change. Strongly typed identifiers are the opt-in alternative: <code>AddStronglyTypedIds(assembly)</code> wires JSON, MVC binding, filtering, OpenAPI, and EF in one call (<a href="../adr/115-strongly-typed-identifiers-opt-in.html">ADR-115</a>).</li>
           <li><strong>Feature by folder, enforced.</strong> The aggregate names the first folder level in Domain, Application, and Shared; UI, API, and Infrastructure put a technical root first with the aggregate beneath it; no folder holds more than twelve direct code files, and namespaces follow folders. The framework&#39;s own packages are organized the same way (<code>Messaging/</code>, <code>Notifications/Push/</code>, <code>Capabilities/Geo/</code>), and <code>FolderWidthTestsBase</code> makes the cap a merge gate in every consumer (<a href="../adr/109-feature-by-folder-convention.html">ADR-109</a>).</li>
           <li><strong>Shared utilities you would otherwise write.</strong> <code>KeyedSemaphoreStripe</code> (bounded per-key locking), <code>IcsCalendarBuilder</code> (RFC 5545 export), <code>ConcurrencyETag</code>, <code>IdempotencyHeaders</code>, <code>ModuleNameConventions</code>, <code>ClaimsPrincipalExtensions</code>, and one shared set of HTTP, gRPC, and broker resilience defaults.</li>
+          </ul>
+          <h3 id="optional-ai-boundary">Optional AI boundary</h3>
+          <ul>
+          <li><strong>A governed chat client, off by default.</strong> <code>AddMmcaChatClient(configuration)</code> binds the <code>Ai</code> section and, only when <code>Ai:Enabled</code> is true, registers one <code>IChatClient</code> wrapped outermost by <code>BoundedChatClient</code> (output-token clamp, per-call timeout, pinned model, tool policy, input-token budget) and <code>GuardrailChatClient</code> (registered redactors and guardrails on the request, the response, and each streamed update). <code>AddPiiRedactionGuardrail()</code> and <code>AddContentPolicyGuardrail(configuration)</code> are the shipped guardrails. With <code>Ai:Enabled</code> false nothing is registered, so a consumer gates on resolving <code>IChatClient</code>.</li>
+          <li><strong>Vendor-neutral by construction.</strong> The provider is an adapter package (<code>AddAnthropicAiProvider()</code>, <code>AddOpenAiProvider()</code>) chosen by the <code>Ai:Provider</code> string; the AI packages take no MMCA.Common reference and nothing in the framework references them (<code>AiDependencyIsolationTestsBase</code> holds both directions); <code>MMCA.Common.AI.Testing</code> pins prompts with <code>PromptContractPinTestsBase</code> and replays recorded answers with <code>GoldenReplayTestsBase</code>.</li>
           </ul>
           <h2 id="monolith-now-services-later">Monolith now, services later</h2>
           <p>The framework&#39;s central promise, and it is a tested property, not a slogan.</p>
@@ -401,7 +458,7 @@
           <li><strong>Host-only extraction.</strong> Turning a module into its own service changes hosting code only; Domain, Application, Shared, Infrastructure, and API code stay untouched. You add a service host (<code>AddModuleHost</code> boots one module per process), a <code>.Contracts</code> proto project, a gateway route, broker transport, and JWKS auth.</li>
           <li><strong>Database per module from day one.</strong> Even inside the monolith each module owns its database with its own outbox and inbox tables, and relationships that cross a database boundary degrade automatically (FK constraint and navigation removed, scalar column and index kept), so extraction costs no data migration rework.</li>
           <li><strong>YARP gateway as a package.</strong> <code>AddMmcaGateway()</code> composes four things from configuration: cluster request profiles layered per property (defaults, then per-cluster overrides), health-check defaults (passive on by default, active probing configured and one flag away), trace headers that strip any client-supplied value before stamping the gateway&#39;s own, and named per-route rate-limiter policies. <code>UseCommonForwardedHeaders()</code> ships alongside. The package&#39;s only runtime dependency is YARP; the host still loads its route table and maps the proxy.</li>
-          <li><strong>gRPC cross-service calls with Result over the wire.</strong> <code>AddTypedGrpcClient</code> gives service discovery over h2c, JWT forwarding, the standard resilience pipeline, and a pinned <code>SocketsHttpHandler</code> so HTTP/2 negotiation and connection rollover survive the global client defaults. <code>AddGrpcServiceDefaults()</code> adds the <code>Result</code> interceptor, turns detailed errors off, and enables reflection. <code>ResultGrpcExtensions</code> maps all nine error types in both directions, so a caller branches on <code>Result</code> instead of catching <code>RpcException</code>. Any <code>*.Contracts</code> project auto-compiles its protos. The hand-written adapter over the generated client is the consuming module&#39;s Anti-Corruption Layer, the one place the peer&#39;s wire model is translated into the module&#39;s own contract (<a href="../adr/007-grpc-extraction.html">ADR-007</a>), and lifting a module out follows the Strangler Fig route: stand the service host up beside the monolith, move traffic through the typed client, retire the in-process path last (<a href="../adr/008-service-extraction-topology.html">ADR-008</a>).</li>
+          <li><strong>gRPC cross-service calls with Result over the wire.</strong> <code>AddTypedGrpcClient</code> gives service discovery over h2c, JWT forwarding, the standard resilience pipeline, and a pinned <code>SocketsHttpHandler</code> so HTTP/2 negotiation and connection rollover survive the global client defaults. <code>AddGrpcServiceDefaults()</code> adds the <code>Result</code> interceptor, turns detailed errors off, and enables reflection. <code>ResultGrpcExtensions</code> maps all ten error types in both directions, so a caller branches on <code>Result</code> instead of catching <code>RpcException</code>. Any <code>*.Contracts</code> project auto-compiles its protos. The hand-written adapter over the generated client is the consuming module&#39;s Anti-Corruption Layer, the one place the peer&#39;s wire model is translated into the module&#39;s own contract (<a href="../adr/007-grpc-extraction.html">ADR-007</a>), and lifting a module out follows the Strangler Fig route: stand the service host up beside the monolith, move traffic through the typed client, retire the in-process path last (<a href="../adr/008-service-extraction-topology.html">ADR-008</a>).</li>
           <li><strong>Transport-agnostic eventing.</strong> The same <code>IEventBus</code> publish call works in-process (monolith) or over RabbitMQ / Azure Service Bus (extracted), selected purely by <code>MessageBus:Provider</code>; the outbox turns itself on when a broker appears (<a href="../adr/100-outbox-opt-in-resolved-from-messaging-mode.html">ADR-100</a>).</li>
           <li><strong>Broker parity locally.</strong> The AppHost can provision the official Azure Service Bus emulator, so a development stack exercises the production transport rather than a stand-in.</li>
           <li><strong>Cross-service trust without shared secrets.</strong> <code>WithJwksDiscovery(identity, gateway)</code> routes JWT metadata discovery through the gateway (extracted services listen HTTP/2-only on cleartext), <code>GetRequiredJwtAuthority()</code> fails at startup if the authority was never injected, and OIDC discovery lets each service derive the issuer instead of pinning it.</li>
@@ -412,7 +469,7 @@
           <p>EF Core with the cross-cutting concerns every production system eventually rebuilds, already built.</p>
           <h3 id="routing-and-contexts">Routing and contexts</h3>
           <ul>
-          <li><strong>Multi-database routing.</strong> Every entity resolves to a <code>DataSourceKey</code> (engine, name): the engine from its configuration base class, the database from <code>[UseDatabase]</code>, the module namespace, or <code>Default</code>. One sealed context class per engine (<code>SQLServerDbContext</code>, <code>CosmosDbContext</code>, <code>SqliteDbContext</code>) over the abstract <code>ApplicationDbContext</code>, one instance per database, with EF&#39;s model cache keyed per source (<a href="../adr/006-database-per-service.html">ADR-006</a>).</li>
+          <li><strong>Multi-database routing.</strong> Every entity resolves to a <code>DataSourceKey</code> (engine, name): the engine from its configuration base class, the database from <code>[UseDatabase]</code>, the module namespace, or <code>Default</code>. One sealed context class per engine (<code>SQLServerDbContext</code>, <code>PostgreSQLDbContext</code>, <code>SqliteDbContext</code>, <code>CosmosDbContext</code>) over the abstract <code>ApplicationDbContext</code>, one instance per database, with EF&#39;s model cache keyed per source (<a href="../adr/006-database-per-service.html">ADR-006</a>).</li>
           <li><strong>Logical-to-physical collapse.</strong> Logical names that share a connection string collapse onto one physical source, and a framework table asking for an engine the host never configured gets the configured one, so a single-database SQLite host runs the whole framework unchanged.</li>
           <li><strong>Cross-source navigation.</strong> <code>INavigationPopulator</code> batch-loads navigations that span physical databases (<a href="../adr/002-navigation-populators.html">ADR-002</a>); transactions are per source, best-effort sequential, with cross-source consistency left to the outbox.</li>
           <li><strong>Repository, unit of work, and narrow read interfaces.</strong> <code>IRepository</code> / <code>IUnitOfWork</code> with transaction control, narrowed <code>IEntityReader</code> / <code>IEntityQuerier</code> for read paths, an <code>ExecuteUpdate</code> builder for set-based writes, and a repository factory that wraps every repository in MiniProfiler timing when profiling is on.</li>
@@ -433,7 +490,7 @@
           <li><strong>Persistent cron scheduler.</strong> <code>IScheduledJob</code> with claim-lease execution so an occurrence runs exactly once across replicas, per-job cron overrides from configuration (<code>Scheduler:Jobs:{Name}:Cron</code>), a run-history row per job (outcome, duration, truncated error), and three metrics.</li>
           <li><strong>A sweep base for your own jobs.</strong> <code>PeriodicBackgroundService</code> gives an enablement gate, startup delay, a fixed-interval loop that survives a failing cycle, and <code>TimeProvider</code>-driven waits so the loop is testable with a fake clock.</li>
           <li><strong>Keyset and offset pagination.</strong> Opaque cursor encoding and a keyset query builder for stable deep paging, classic offset paging with <code>X-Pagination</code> metadata, a 1,000-row ceiling on any unbounded read inside the query pipeline, and <code>Id</code> appended as a total-order tie-break on every page.</li>
-          <li><strong>Migration ergonomics.</strong> Design-time factories for SQL Server and SQLite that never open a connection (<code>dotnet ef ... -- --datasource Name</code>), per-service migrations assemblies, a startup sole-migrator pattern, expand/contract schema evolution enforced as a CI gate, and the consumer canary applying MMCA.Helpdesk&#39;s real migrations to an ephemeral SQL Server on every framework PR.</li>
+          <li><strong>Migration ergonomics.</strong> Design-time factories for SQL Server, PostgreSQL, and SQLite that never open a connection (<code>dotnet ef ... -- --datasource Name</code>), per-service migrations assemblies, a startup sole-migrator pattern, expand/contract schema evolution enforced as a CI gate, and the consumer canary applying MMCA.Helpdesk&#39;s real migrations to an ephemeral SQL Server on every framework PR.</li>
           <li><strong>Seeding as a shipped base.</strong> <code>IDbSeeder</code> handles int or Guid seed identifiers, and <code>IdentityModuleDbSeederBase</code> seeds development accounts (normalize, skip existing, hash, create, save) behind two hooks.</li>
           <li><strong>Schema ships with the framework.</strong> Outbox, inbox, audit trail, scheduler, notification, and refresh-session tables arrive as scaffolded consumer migrations when you enable the feature or bump the framework. One <code>Persistence:CommandTimeoutSeconds</code> knob applies to every relational source; <code>CosmosIntIdValueGenerator</code> covers the engine without identity columns.</li>
           </ul>
@@ -442,10 +499,11 @@
           <ul>
           <li><strong>Transactional outbox.</strong> The save interceptor writes every captured domain event to <code>OutboxMessages</code> in the same transaction as the data; local events dispatch in-process after commit and their rows are stamped processed, while integration event rows stay pending for <code>OutboxProcessor</code>. The processor drains on signal or a smart wait, batches, retries with jittered exponential backoff capped at the claim lease, dead-letters loudly, claims rows under a lease so replicas scale out safely, delivers in order per key for events implementing <code>IHasOrderingKey</code>, and captures W3C trace context so a consumer&#39;s work correlates back to the request that caused it (<a href="../adr/003-outbox-dual-dispatch.html">ADR-003</a>).</li>
           <li><strong>An operator surface, not a SQL script.</strong> <code>IOutboxAdministration</code> lists and replays dead letters and counts pending rows across every source the host owns; replay resets the retry count and lease but keeps the last error and original timestamp.</li>
+          <li><strong>Durable deferred commands.</strong> <code>IInternalCommandScheduler.ScheduleAsync(command, runAt)</code> writes its row on the caller&#39;s own context, so scheduling inside an <code>ITransactional</code> command is atomic with the aggregate change; <code>InternalCommandProcessor</code> claims due rows under a lease and runs each in a fresh scope through the full decorator pipeline, restoring the scheduling user, tenant, and correlation id (<a href="../adr/114-internal-commands-durable-job-queue.html">ADR-114</a>).</li>
           <li><strong>Failure isolation.</strong> A circuit breaker guards the broker publish call only, so a broker outage stops publishing without stopping retry-state persistence. Five instruments (<code>outbox.processed.count</code>, <code>dead_letter.count</code>, <code>dispatch.lag</code>, <code>pending.depth</code>, <code>oldest_pending.age</code>) plus broker fault and breaker counters report health.</li>
           <li><strong>Retention as a privacy control.</strong> Processed rows purge after <code>Outbox:RetentionDays</code> (payloads can carry personal data); dead-lettered rows keep a separate, wider window so they stay long enough to diagnose and replay. Eleven outbox knobs in all.</li>
           <li><strong>Consumer-side inbox.</strong> <code>EfInboxStore</code> dedups broker redeliveries inside the handler&#39;s own transaction, giving effectively-once handling on top of at-least-once delivery.</li>
-          <li><strong>Broker choice by config.</strong> MassTransit (pinned v8) behind <code>IMessageBus</code>: InProcess, RabbitMQ, or Azure Service Bus by <code>MessageBus:Provider</code>. Two retry tiers: in-process exponential retry (5 attempts, 1s to 30s) then broker-scheduled delayed redelivery (60s, 600s, 3600s), unconditional on Service Bus and plugin-gated on RabbitMQ. <code>EndpointPrefix</code> namespaces queues on a shared broker; a broker paired with <code>EnableOutbox=false</code> fails at startup; a host running with the outbox or inbox off logs one startup notice.</li>
+          <li><strong>Broker choice by config.</strong> MassTransit (pinned v8) behind <code>IMessageBus</code>, chosen by <code>MessageBus:Provider</code>: InProcess, RabbitMQ, and PostgreSQL are built in, while Azure Service Bus (<code>AddAzureServiceBusTransport()</code>, MMCA.Common.Azure) and Amazon SQS (<code>AddAmazonSqsTransport()</code>, MMCA.Common.Aws) come from adapter packages, and a provider with no registered transport fails, naming the package and the call. Two retry tiers: in-process exponential retry (5 attempts, 1s to 30s) then broker-scheduled delayed redelivery (60s, 600s, 3600s), unconditional on the brokers that schedule natively (PostgreSQL, Service Bus, and SQS, which defaults to 60s, 300s, 900s under its 15-minute delay cap) and plugin-gated on RabbitMQ. <code>EndpointPrefix</code> namespaces queues on a shared broker; a broker paired with <code>EnableOutbox=false</code> fails at startup; a host running with the outbox or inbox off logs one startup notice.</li>
           <li><strong>Schema-versioned events with upcasting.</strong> <code>BaseIntegrationEvent</code> carries a <code>SchemaVersion</code>; <code>IEventUpcaster</code> registrations migrate old payloads on consumption. <code>EventUpcasterRegistry</code> rejects duplicate sources, self-maps, and cycles at construction and restamps message identity after each hop so inbox dedup keeps working; a startup validator and a contract fitness test freeze the wire shape.</li>
           <li><strong>Two event paths, one aggregate API.</strong> <code>AddDomainEvent</code> on the aggregate feeds both in-process dispatch (post-commit, compiled-delegate dispatcher) and outbox-backed integration events. Three consumer verbs: <code>RegisterIntegrationEventConsumer</code> (with an automatic fault consumer that turns an exhausted retry into one structured error plus a metric), <code>RegisterUpcastedIntegrationEventConsumer</code> for draining a retired contract, and <code>RegisterOutputCacheEvictionConsumer</code>.</li>
           <li><strong>Handler bases that keep the retry promise honest.</strong> <code>SafeDomainEventHandler</code> logs a failure with full context and then lets it propagate so the outbox actually redelivers; <code>ScopedIntegrationEventHandlerBase</code> gives a cross-module handler its own DI scope.</li>
@@ -467,7 +525,7 @@
           <ul>
           <li><strong>Generic write endpoints and handlers.</strong> <code>AggregateRootEntityControllerBase</code> ships idempotent <code>POST</code> and <code>DELETE</code>; <code>CrudEntityControllerBase</code> adds <code>PUT</code> carrying both <code>[Idempotent]</code> and <code>[SupportsIfMatch]</code>. <code>AddEntityCrud()</code> registers the create, update, and delete commands and the update validator bridge; <code>AddEntityUpdateVerb</code> and <code>AddEntityUpdate</code> cover derived update commands that carry route-derived ids or server-decided flags (<a href="../adr/099-generic-write-side-entity-commands.html">ADR-099</a>).</li>
           <li><strong>Handler bases for richer writes.</strong> <code>MutateEntityHandlerCore</code> supplies the load-mutate-save workflow with three subclasses for the three return shapes, plus <code>CreateEntityHandlerBase</code> and the add-child / remove-child pair for aggregate children. <code>MutationContext</code> carries typed values from load to post-save hooks, and <code>SkipSave()</code> is an idempotent no-op signal.</li>
-          <li><strong>Validators written once, against the request.</strong> <code>CommandRequestValidator</code> bridges a command to its embedded request&#39;s rules, registered automatically by the module scan. Seventeen reusable FluentValidation rule classes (required and optional strings, email, absolute URL with a <code>javascript:</code> / <code>data:</code> guard, positive and non-negative numbers, required and optional ids, password and strong password, six address fields) each accept an optional machine-readable error code.</li>
+          <li><strong>Validators written once, against the request.</strong> <code>CommandRequestValidator</code> bridges a command to its embedded request&#39;s rules, registered automatically by the module scan. Twenty reusable FluentValidation rule classes: eleven general ones (required and optional strings, email, absolute URL with a <code>javascript:</code> / <code>data:</code> guard, positive and non-negative numbers, required and optional ids, password and strong password), each accepting an optional machine-readable error code, plus six address fields and three US address variants (city, state, ZIP code).</li>
           <li><strong>HTTP idempotency.</strong> <code>[Idempotent]</code> caches responses by <code>Idempotency-Key</code> for 24 hours under a composite SHA-256 key (subject, method, route, client key), holds a distributed lock across the execute-then-store window, answers an in-flight duplicate with 409, and marks replays with <code>X-Idempotent-Replay</code> (<a href="../adr/017-request-idempotency.html">ADR-017</a>). <code>[NonIdempotent(justification)]</code> is the required marker for the rest, and a fitness rule fails any POST carrying neither.</li>
           </ul>
           <h3 id="pipeline-and-errors">Pipeline and errors</h3>
@@ -493,14 +551,14 @@
           </ul>
           <h3 id="credentials">Credentials</h3>
           <ul>
-          <li><strong>Password security.</strong> PBKDF2-HMAC-SHA512 with 600,000 iterations, a 32-byte salt, and constant-time verification as the only supported algorithm (<a href="../adr/102-pbkdf2-only-password-hashing.html">ADR-102</a>), pinned by known-answer tests.</li>
+          <li><strong>Password security.</strong> PBKDF2-HMAC-SHA512 with 210,000 iterations (OWASP&#39;s SHA-512 figure) recorded in each hash&#39;s versioned header so a changed count re-derives the record at its next sign-in (for a user type that implements <code>IPasswordRehashableUser</code>), a 32-byte salt, and constant-time verification as the only supported algorithm (<a href="../adr/102-pbkdf2-only-password-hashing.html">ADR-102</a>), pinned by known-answer tests.</li>
           <li><strong>Brute-force protection is five configured numbers.</strong> <code>ILoginProtectionService</code> applies per-email lockout with exponential backoff and a per-IP registration rate limit on cache-backed counters keyed on normalized identity, so capitalization cannot defeat the backoff. The counters are read-modify-write rather than atomic (an accepted trade-off): sequential guessing trips the limits, while a burst of truly concurrent attempts can slip under them.</li>
           <li><strong>Reset tokens are hashed, capped, and throttled.</strong> <code>IPasswordResetTokenService</code> keeps one active token per address, stores only its digest, discards it after a bounded number of wrong guesses, and throttles requests per email per window, all on cache TTL with no schema and no sweeper (<a href="../adr/091-cache-backed-password-reset.html">ADR-091</a>).</li>
           <li><strong>External OAuth.</strong> Google, GitHub, and Apple via <code>AddExternalAuthProviders</code>, each gated independently on its <code>ClientId</code>, with a ten-minute <code>ExternalLogin</code> cookie carrying the external principal to completion, GitHub&#39;s email scope requested explicitly, Apple&#39;s ES256 client secret minted from key material rather than a static secret, and a <code>POST exchange</code> action for the native mobile callback.</li>
           </ul>
           <h3 id="authorization">Authorization</h3>
           <ul>
-          <li><strong>Permission-based authorization.</strong> Endpoints declare capabilities with <code>[HasPermission]</code> against a permission registry; policies materialize on first use, so nothing is pre-registered per role. Modules declare grants additively with <code>AddPermissions</code>, and a host that never declares any gets a registry that denies everything and logs once naming the fix. <code>RoleValue</code> gives case-insensitive role equality against a per-app known set.</li>
+          <li><strong>Permission-based authorization.</strong> Endpoints declare capabilities with <code>[HasPermission]</code> against a permission registry; policies materialize on first use, so nothing is pre-registered per role. Modules declare grants additively with <code>AddPermissions</code>, and a host that never declares any gets a registry that denies everything and logs once naming the fix. <code>RoleValue</code> gives case-insensitive role equality against a per-app known set. Opt-in <code>AddStoredPermissionGrants(configuration)</code> layers a stored grant table over the compiled registry (union only, never a stored denial).</li>
           <li><strong>Resource-ownership authorization.</strong> <code>OwnerOrAdminFilter</code> reads the owner id from the route or bound arguments, parses invariantly, and denies when it cannot resolve one; <code>[AllowMissingOwner]</code> is the explicit opt-out. On the handler side, <code>UserOwnershipRule.CheckOwnership</code> with <code>IUserOwnedRequest</code> / <code>IUserScopedRequest</code> markers is what every shipped account handler uses.</li>
           <li><strong>Session-cookie (BFF) auth for Blazor SSR.</strong> <code>MapSessionCookieEndpoints()</code> maps the cookie set and clear endpoints plus a same-origin validate-or-refresh call that hydrates the browser&#39;s in-memory access token while the refresh token stays server-side; it rejects cross-site fetches on top of SameSite, and a single-flight refresher collapses a thundering herd so a token is never double-rotated.</li>
           <li><strong>Soft-deleted-user revocation.</strong> A pipeline step rejects requests from confirmed deleted accounts with 401, backed by a 30-second cache marker and a database validator fallback; on a cache or validator error it logs and lets the request through (fail open, by design). The shared erasure workflow writes the marker itself right after commit and before any app-specific tail runs, so every app gets the identical token-revocation window without hand-rolling the write (<a href="../adr/047-soft-deleted-user-session-revocation.html">ADR-047</a>).</li>
@@ -509,6 +567,7 @@
           <ul>
           <li><strong>Reusable account use cases.</strong> <code>AuthenticationServiceBase</code> implements login, register, refresh, revoke, sessions, and external login; seven handler bases cover change password, change and get preferences, forgot and reset password, delete account, and data export; three controller bases expose login, register, refresh, revoke, my-sessions, revoke-by-session, password, preferences, forgot-password, and reset-password. An Identity module becomes thin subclassing.</li>
           <li><strong>Auth UI included.</strong> Login, register, forgot and reset password, OAuth completion, and session management pages ship in the UI package, every return URL passes through an open-redirect guard, and client-side password and URL validation attributes mirror the server rules (section 10).</li>
+          <li><strong>Opt-in identity completions.</strong> <code>AddTwoFactorAuthentication(configuration)</code> (RFC 6238 codes; the consumer supplies <code>ITwoFactorStore</code>), <code>AddEmailConfirmation(configuration)</code> (hashed single-use tokens), and the <code>UsersAdminControllerBase&lt;TUserDto&gt;</code> / <code>RolesAdminControllerBase</code> admin surface; a consumer adopting none changes nothing (<a href="../adr/116-identity-completions-opt-in.html">ADR-116</a>).</li>
           </ul>
           <h2 id="caching-resilience-and-performance">Caching, resilience, and performance</h2>
           <h3 id="server-side">Server side</h3>
@@ -541,20 +600,21 @@
           <li><strong>Vendor-neutral toast and dialog facades.</strong> <code>IToastService</code> and <code>IAppDialogService</code> are the only types that name MudBlazor&#39;s snackbar and dialog services, so the component library stays replaceable and a bUnit test records toasts without a rendered host.</li>
           <li><strong>Full auth UI stack.</strong> Authentication state provider, a two-layer token store (raw persistence beneath a freshness-checking layer, so a refresh can never re-enter the acquisition that started it) with per-head implementations for WASM, server cookie, and MAUI secure storage, token refreshers, session-cookie sync, <code>ReturnUrlProtector</code> against open redirects, a drop-in <code>BiometricGate</code>, and a native OAuth broker for the system-browser round trip.</li>
           <li><strong>Client-side validation parity.</strong> <code>PasswordComplexityAttribute</code> and <code>AbsoluteUrlAttribute</code> mirror the server rules so an <code>EditForm</code> gives the verdict the API would, with every message resolved through the page&#39;s localizer.</li>
-          <li><strong>Device capability abstraction.</strong> Twenty-three contracts registered by one call: share, clipboard, haptics, geolocation, geocoding, map navigation, external links, biometrics, barcode scanning, media picker, local notifications, push registration, push device token, connectivity, battery, preferences, speech-to-text, text-to-speech, accessibility announcer, screenshots, deep links, external auth broker, and a local cache store, grouped into nine families (accessibility, auth, device status, device storage, geo, interop, media, navigation, notifications) where each family holds the contract, its browser implementation, and its null fallback together. Browser implementations override eight, MAUI overrides twenty-two, and null fallbacks cover the rest, so one component tree runs on web and device.</li>
-          <li><strong>Push notifications end to end.</strong> SignalR hub for live in-app delivery with scoped channels (<code>JoinChannelAsync</code> / <code>LeaveChannelAsync</code> reference-counted so one component leaving cannot disconnect another), a configurable notification bell, an inbox with unread counts, native push via FCM and APNs through Azure Notification Hubs with token-rotation handling (<a href="../adr/044-native-push-delivery.html">ADR-044</a>), and a singleton deep-link dispatcher that buffers cold-start taps until the router is alive.</li>
+          <li><strong>Device capability abstraction.</strong> Twenty-four contracts registered by one call: share, clipboard, haptics, geolocation, geocoding, map navigation, external links, biometrics, barcode scanning, media picker, local notifications, push registration, push device token, connectivity, battery, preferences, speech-to-text, text-to-speech, accessibility announcer, screenshots, deep links, external auth broker, a local cache store, and an app lifecycle notifier, grouped into nine families (accessibility, auth, device status, device storage, geo, interop, media, navigation, notifications) where each family holds the contract, its browser implementation, and its null fallback together. Browser implementations override eight, MAUI overrides twenty-two, and null fallbacks cover the rest, so one component tree runs on web and device.</li>
+          <li><strong>Push notifications end to end.</strong> SignalR hub for live in-app delivery with scoped channels (<code>JoinChannelAsync</code> / <code>LeaveChannelAsync</code> reference-counted so one component leaving cannot disconnect another), a configurable notification bell, an inbox with unread counts, native push via FCM and APNs through Azure Notification Hubs (<code>AddAzureNotificationHubsPush</code>, MMCA.Common.Azure), Amazon SNS (<code>AddAmazonSnsPush</code>, MMCA.Common.Aws), or FCM HTTP v1 (<code>AddFirebaseCloudMessagingPush</code>, MMCA.Common.Gcp), with token-rotation handling (<a href="../adr/044-native-push-delivery.html">ADR-044</a>), and a singleton deep-link dispatcher that buffers cold-start taps until the router is alive.</li>
           <li><strong>Navigation that behaves like an app.</strong> Real <code>history.back()</code> with route fallback, the Android hardware back and iOS swipe routed into the WebView history stack, <code>IPublicLinkBuilder</code> so shared links never point at the WebView&#39;s internal origin, and <code>IFormFactor</code> per head. The shared layout clips horizontal overflow at every width, so an off-screen drawer cannot widen the mobile layout viewport and push centered snackbars and dialogs to the screen edge.</li>
           <li><strong>Theming and dark mode.</strong> Shared theme with brand color tokens, OS-preference default, a toggle component, the choice persisted per user through the API, and mirrored into the native MAUI app theme.</li>
-          <li><strong>Internationalization.</strong> English and Spanish resources at string-for-string parity (182 shared strings plus 145 MudBlazor chrome strings), a culture switcher with cookie forwarding, a document-language component, an in-process culture path for MAUI heads that persists the choice in device preferences, pseudo-localization for testing, and translation completeness enforced as a fitness gate.</li>
+          <li><strong>Internationalization.</strong> English and Spanish resources at string-for-string parity (259 shared strings plus 145 MudBlazor chrome strings), a culture switcher with cookie forwarding, a document-language component, an in-process culture path for MAUI heads that persists the choice in device preferences, pseudo-localization for testing, and translation completeness enforced as a fitness gate.</li>
           <li><strong>MAUI hosting one-liners.</strong> <code>UseMauiDeviceCapabilities()</code> registers the native implementations and culture path, <code>UseMmcaMauiErrorHandling()</code> installs last-chance unhandled and unobserved exception handlers with an optional crash-reporter callback, and <code>AddMauiPushDeviceTokenProvider()</code> selects FCM or APNs by target framework, inert until push credentials exist.</li>
           <li><strong>Utility components.</strong> Error summary, delete confirmation, unsaved-changes guard, empty, loading, and error states, page header (guaranteeing the axe-required h1), QR code display, file download button with a sanitized file name, share button, offline banner, infinite-scroll sentinel, mobile card list, external link, lazy JS module loader, and a bfcache-restore refetch scope.</li>
+          <li><strong>Installable web app.</strong> <code>MapCommonServiceWorker()</code> (MMCA.Common.UI.Web) serves <code>/service-worker.js</code>, which never caches a page or a response: navigations go to the network and fall back to an offline page, and <code>Pwa:ServiceWorker:Enabled=false</code> serves a retired worker as the kill switch (<a href="../adr/136-installable-web-app-service-worker.html">ADR-136</a>).</li>
           <li><strong>Accessibility built in.</strong> WCAG 2.1 AA is a shipped, CI-enforced test contract across three browser engines, not an aspiration (section 12).</li>
           </ul>
           <h2 id="hosting-orchestration-and-operations">Hosting, orchestration, and operations</h2>
           <p>Aspire-first local orchestration and one-line production plumbing.</p>
           <h3 id="apphost-and-service-defaults">AppHost and service defaults</h3>
           <ul>
-          <li><strong>AppHost DSL.</strong> Thirteen extensions: <code>WithSQLServerDataSource</code>, <code>WithCosmosDataSource</code>, <code>WithSqliteDataSource</code> (per-module databases), <code>AddMessageBroker</code> and <code>AddServiceBusEmulatorBroker</code> with matching <code>WithBroker</code> overloads, <code>WithJwksDiscovery</code>, <code>AddMailDev</code> (local SMTP sink with a web inbox on fixed ports), <code>WithH2cHealthCheck</code>, and three E2E helpers: <code>WithE2eRsaKeys</code>, <code>WithE2eRegistrationThrottleLift</code>, <code>WithE2eGatewayRateLimitLift</code>, all triggered by one environment variable absent locally and in production (<a href="../adr/098-aspire-orchestration-not-testing-or-dashboards.html">ADR-098</a>).</li>
+          <li><strong>AppHost DSL.</strong> Seventeen extensions: <code>WithSQLServerDataSource</code>, <code>WithPostgreSQLDataSource</code>, <code>WithCosmosDataSource</code>, <code>WithSqliteDataSource</code> (per-module databases), <code>AddMessageBroker</code> and <code>AddServiceBusEmulatorBroker</code> with matching <code>WithBroker</code> overloads, <code>AddSelectedBroker</code> and <code>WithSelectedBroker</code> (one environment variable picks RabbitMQ or the Service Bus emulator for every service), <code>WithJwksDiscovery</code>, <code>AddMailDev</code> (local SMTP sink with a web inbox on fixed ports), <code>WithH2cHealthCheck</code>, and four E2E helpers: <code>WithE2eRsaKeys</code>, <code>WithE2eRegistrationThrottleLift</code>, <code>WithE2eForceServer</code>, <code>WithE2eGatewayRateLimitLift</code>, each triggered by an environment variable the E2E workflow sets and absent locally and in production (<a href="../adr/098-aspire-orchestration-not-testing-or-dashboards.html">ADR-098</a>).</li>
           <li><strong>Service defaults in one call.</strong> <code>AddServiceDefaults()</code> wires OpenTelemetry, service discovery, standard resilience, default health checks, and warm-up readiness; <code>MapDefaultEndpoints()</code> maps <code>/health</code>, <code>/alive</code>, and <code>/health/ready</code>. Three tags decide what each endpoint consults: <code>live</code>, <code>ready</code>, and <code>optional</code>, the last so a degradable dependency shows on <code>/health</code> without turning every replica unready at once.</li>
           <li><strong>Infrastructure health from configuration alone.</strong> <code>AddInfrastructureHealthChecks(requireDatabase)</code> registers one check per declared relational database plus optional-tagged Redis and RabbitMQ checks, and throws at startup when a host that requires a database has none configured.</li>
           <li><strong>h2c endpoint profiles with a probe listener.</strong> <code>ConfigureEndpointsWithHealthProbe</code> configures cleartext HTTP/2 (for gRPC behind a gateway) or mixed HTTP/1+2 profiles, and adds a dedicated HTTP/1.1 listener when <code>HealthProbe:Port</code> is set, because platform probes speak HTTP/1.1 and an HTTP/2-only endpoint answers <code>HTTP_1_1_REQUIRED</code>. <code>WithH2cHealthCheck</code> gates Aspire <code>WaitFor</code> edges on a prior-knowledge probe and defaults to <code>/alive</code>, since gating startup on readiness can deadlock the graph.</li>
@@ -568,10 +628,10 @@
           </ul>
           <h3 id="observability-and-production-plumbing">Observability and production plumbing</h3>
           <ul>
-          <li><strong>Observability with framework meters.</strong> Seven meters (CQRS, outbox, broker, scheduler, idempotency, output cache, best-effort) and two trace sources, exported to OTLP and Azure Monitor simultaneously when both are configured; outbox poll spans and probe telemetry are filtered from export by processors, and correlation IDs propagate from gateway to service.</li>
+          <li><strong>Observability with framework meters.</strong> Ten meters (CQRS, outbox, broker, scheduler, idempotency, output cache, best-effort, internal commands, persistence, AI) and three framework trace sources (outbox, internal commands, AI), exported over OTLP, with <code>AddAzureMonitorExporter()</code> (MMCA.Common.Azure) or <code>AddGoogleCloudTelemetryExporter()</code> (MMCA.Common.Gcp) adding a vendor exporter after <code>AddServiceDefaults()</code>; outbox poll spans and probe telemetry are filtered from export by processors, and correlation IDs propagate from gateway to service.</li>
           <li><strong>Serilog that does not silence Application Insights.</strong> <code>AddCommonSerilog</code> registers Serilog as one provider rather than replacing the logger factory, so application log lines still reach the OpenTelemetry export; a bootstrap logger covers startup diagnostics.</li>
-          <li><strong>Secrets and keys.</strong> <code>AddCommonKeyVaultConfiguration</code> layers a vault over host configuration under managed identity, gated on <code>KeyVault:Uri</code> so local hosts take no Azure dependency, with a reload interval so a rotated secret reaches the process without a redeploy. <code>AddCommonDataProtection</code> persists the key ring to blob storage with an optional, deliberately decoupled Key Vault encryption step, so a lagging role assignment cannot break sign-in.</li>
-          <li><strong>Storage and email.</strong> <code>AddAzureBlobFileStorage</code> behind <code>IFileStorage</code>, and <code>SmtpEmailSender</code> behind <code>IEmailSender</code>, both in the Infrastructure package.</li>
+          <li><strong>Secrets and keys.</strong> <code>AddAzureKeyVaultConfiguration</code> (MMCA.Common.Azure) layers a vault over host configuration under managed identity, gated on <code>KeyVault:Uri</code> so local hosts take no Azure dependency, with a reload interval so a rotated secret reaches the process without a redeploy. <code>AddAzureDataProtection</code> persists the key ring to blob storage with an optional, deliberately decoupled Key Vault encryption step, so a lagging role assignment cannot break sign-in. The AWS and GCP adapters carry the same pair (Secrets Manager or Secret Manager configuration, a Parameter Store or Cloud Storage key ring).</li>
+          <li><strong>Storage and email.</strong> <code>IFileStorageService</code> with a null fallback in Infrastructure and one adapter call per vendor (<code>AddAzureBlobFileStorage</code>, <code>AddS3FileStorage</code>, <code>AddGoogleCloudStorage</code>), plus the dependency-free <code>ImageContentSniffer</code> and <code>DocumentContentSniffer</code> upload guards; <code>SmtpEmailSender</code> behind <code>IEmailSender</code> in the Infrastructure package.</li>
           <li><strong>Security headers and CSP.</strong> One-call security response headers with a complete default policy sized for Blazor and MudBlazor, a per-request <code>{nonce}</code> path exposed through <code>CspNonce.Get</code> as the supported way off <code>unsafe-inline</code>, a Report-Only mode for rolling a tightened policy out in observation first, configurable HSTS, frame, referrer, and permissions headers, and a Blazor-aware provider that fails closed on a misconfigured API endpoint.</li>
           <li><strong>Fail-fast configuration.</strong> Settings on the fail-fast contract bind with data-annotation validation and <code>ValidateOnStart()</code>, and two cross-section validators (connection strings, tenancy) catch mismatches a single section cannot see, so a misconfigured host dies at startup, not at first request (<a href="../adr/070-fail-fast-configuration-contract.html">ADR-070</a>).</li>
           <li><strong>Ops as executable practice.</strong> SLO alert-to-runbook pairing is a fitness test that reads the Bicep alerts and the operations runbook in both directions; deploy proof-of-recency preconditions, automatic revision rollback, cost baseline as a deploy gate, container image posture (<a href="../adr/093-container-image-posture.html">ADR-093</a>), and a tested restore drill with a measured RTO baseline are ADR-documented practices the production apps run.</li>
@@ -581,25 +641,25 @@
           <p>The framework ships its own enforcement: adopters subclass, and drift fails the build.</p>
           <h3 id="architecture-fitness-functions">Architecture fitness functions</h3>
           <ul>
-          <li><strong>124 test methods across 47 abstract bases.</strong> Thirty-seven are parameterized by your <code>IArchitectureMap</code> and are a three-line subclass per repo; the other ten take an allow-list, a resource assembly, a package-version file, a module type, a source tree, infrastructure files, or a frozen snapshot, with non-vacuity floors so a renamed folder cannot pass with zero findings. The rule bodies live in a 30-file <code>ArchitectureRules</code> library you can also call directly, and <code>CallGraphIndex</code> walks IL so rules catch what signatures cannot: a domain event handler reaching <code>SaveChanges</code>, a hard delete outside the allow-list, raw <code>IQueryable</code> in Application. The families:<ul>
+          <li><strong>160 test methods across 64 abstract bases.</strong> Most are parameterized by your <code>IArchitectureMap</code> and are a three-line subclass per repo; the rest take an allow-list, a resource assembly, a package-version file, a module type, a source tree, infrastructure files, or a frozen snapshot, with non-vacuity floors so a renamed folder cannot pass with zero findings. The rule bodies live in a 44-file <code>ArchitectureRules</code> library you can also call directly, and <code>CallGraphIndex</code> walks IL so rules catch what signatures cannot: a domain event handler reaching <code>SaveChanges</code>, a hard delete outside the allow-list, raw <code>IQueryable</code> in Application. The families:<ul>
           <li>Layer pairs and layer-map completeness, per-module layer overrides, module isolation across the full internal cross product, module Shared purity, namespace acyclicity</li>
-          <li>Domain and Shared framework purity, Application free of EF Core and ASP.NET Core, transport containment, service contract purity and non-public implementations</li>
+          <li>Domain and Shared framework purity, Application free of EF Core and ASP.NET Core, transport containment, AI and cloud-vendor isolation in both directions, service contract purity and non-public implementations</li>
           <li>Entity and aggregate conventions, factory-returns-Result, immutability of DTOs, commands, queries, events, and value objects, naming and sealing across ten type families, domain throw discipline</li>
           <li>Handler placement, handler-injection bans, constructor arity ceiling, handler result typing, vertical slice cohesion, command validator coverage, cancellation-token conventions</li>
           <li>Soft delete allow-list and cascade soft delete, specification navigation limits, raw queryable ban, concurrency-attribute placement</li>
           <li>Idempotency intent on every POST, controller conventions, route authorization, anonymous-endpoint allow-list, PII and anonymizability, data residency versus deployed region (<a href="../adr/105-data-residency-build-gate.html">ADR-105</a>)</li>
           <li>Error-code catalog uniqueness and module prefixes, integration event versioning and base type, upcaster registry rules, frozen wire contracts for events and protos</li>
           <li>Localization completeness and localized user-visible text, sortable grid columns, brand color tokens, create-form guards, UI code-behind caps, Blazor Server static-state safety</li>
-          <li>Module conformance (declared name, dependencies, disabled stubs), dependency-pin governance, folder width (twelve direct code files per folder), SLO alert-to-runbook pairing</li>
+          <li>Module conformance (declared name, dependencies, disabled stubs), dependency-pin governance, feature-flag lifecycle, folder width (twelve direct code files per folder), SLO alert-to-runbook pairing</li>
           </ul>
           </li>
-          <li><strong>Compile-time layer guard for the framework itself.</strong> An MSBuild targets file fails a framework build on a forbidden project reference between the seven layered packages before the build resolves, the same rule set the runtime tests assert against compiled assemblies in every consumer.</li>
-          <li><strong>Runtime conformance suites.</strong> Eight shipped bases prove you wired the framework correctly: decorator pipeline order, middleware pipeline order, security headers, ProblemDetails contract, OpenAPI contract, service-info versioning, gateway hardening (eight assertions covering throttling, per-route policies, bypasses, correlation, downstream readiness, active probes, and partitioning by forwarded client IP), and graceful shutdown.</li>
+          <li><strong>Compile-time layer guard for the framework itself.</strong> An MSBuild targets file fails a framework build on a forbidden project reference between framework packages (the layered core, the AI boundary, the cloud adapters, the UI heads, and the testing packages) before the build resolves, the same rule set the runtime tests assert against compiled assemblies in every consumer.</li>
+          <li><strong>Runtime conformance suites.</strong> Nine shipped bases prove you wired the framework correctly: decorator pipeline order, middleware pipeline order, security headers, ProblemDetails contract, OpenAPI contract, service-info versioning, tenant resolution, gateway hardening (eight assertions covering throttling, per-route policies, bypasses, correlation, downstream readiness, active probes, and partitioning by forwarded client IP), and graceful shutdown.</li>
           <li><strong>Guard rails on dependencies.</strong> <code>DependencyVersionTestsBase</code> fails if any pinned MassTransit package reaches v9 (a commercial-license boundary); <code>FrameworkVersionConsistencyTestsBase</code> fails if a consumer&#39;s framework pins drift out of lockstep.</li>
           </ul>
           <h3 id="integration-and-unit-infrastructure">Integration and unit infrastructure</h3>
           <ul>
-          <li><strong>Integration fixtures at three scales.</strong> <code>SqlServerIntegrationTestFixtureBase</code> creates one throwaway database and resets it per test; <code>CrossServiceFixtureBase</code> boots several hosts in one process against Testcontainers SQL Server and RabbitMQ with one physical database per logical source, so database-per-module is exercised rather than simulated; <code>ServiceBusEmulatorFixtureBase</code> runs the broker-parity tier against the Service Bus emulator with wall-clock-bounded start and stop phases that name the phase that hung.</li>
+          <li><strong>Integration fixtures at three scales.</strong> <code>SqlServerIntegrationTestFixtureBase</code> creates one throwaway database and resets it per test; <code>CrossServiceFixtureBase</code> boots several hosts in one process against Testcontainers SQL Server and RabbitMQ with one physical database per logical source, so database-per-module is exercised rather than simulated; <code>ServiceBusEmulatorFixtureBase</code> (MMCA.Common.Testing.Azure) runs the broker-parity tier against the Service Bus emulator with wall-clock-bounded start and stop phases that name the phase that hung.</li>
           <li><strong>Host and helper doubles.</strong> <code>ProductionHostApplicationFactory</code> boots a host with the environment pinned to Production so restrictive CORS, HSTS, and production-only branches are exercised; <code>JwtTokenGenerator</code> mints tokens and configures in-process validation so a fixture needs no JWKS endpoint; <code>ConfigureTestFeatureFlags</code> layers flags without blanking connection strings; <code>NeutralizeGlobalRateLimiter</code> removes only the global limiter; <code>RecordingHttpForwarder</code> stands in for YARP&#39;s forwarder.</li>
           <li><strong>Unit test ergonomics.</strong> <code>HandlerTestBase</code> with an auto-mocked unit of work and repository registration helpers, <code>EntityBuilderBase</code> for arranging aggregates, <code>TestPolling.PollUntilAsync</code> for eventually-consistent assertions without sleeps, and a registration-idempotence assertion for <code>Add*</code> extensions.</li>
           </ul>
@@ -623,8 +683,8 @@
           </ul>
           <h2 id="governance-versioning-and-supply-chain">Governance, versioning, and supply chain</h2>
           <ul>
-          <li><strong>117 ADRs.</strong> Every framework pattern is documented as an architecture decision record with context and consequences, published publicly and indexed in one place; adopters inherit the reasoning, not just the code.</li>
-          <li><strong>Lockstep SemVer with a stated policy.</strong> All 17 packages release at one version from a git tag; consumers bump once per release, no phased rollout (<a href="../adr/016-lockstep-versioning-masstransit-pin.html">ADR-016</a>). Breaking changes ship as minor bumps inside 1.x with the call site named in the CHANGELOG, and there is no obsolete grace period, so read the entry at bump time.</li>
+          <li><strong>136 ADRs.</strong> Every framework pattern is documented as an architecture decision record with context and consequences, published publicly and indexed in one place; adopters inherit the reasoning, not just the code.</li>
+          <li><strong>Lockstep SemVer with a stated policy.</strong> All 26 packages release at one version from a git tag; consumers bump once per release, no phased rollout (<a href="../adr/016-lockstep-versioning-masstransit-pin.html">ADR-016</a>). Breaking changes ship as minor bumps inside 1.x with the call site named in the CHANGELOG, and there is no obsolete grace period, so read the entry at bump time.</li>
           <li><strong>An upgrade map for every breaking release.</strong> <code>UPGRADING.md</code> at the repo root carries one section per breaking release, newest first, with the old-to-new map and the mechanical fix (a namespace move is a <code>using</code> rewrite; a constructor change names the parameter to forward), kept identical to the CHANGELOG block so a consumer outside the workspace has the same recipe the in-workspace script applies.</li>
           <li><strong>The public API surface is a reviewable diff.</strong> Every packable project declares its shipped surface in <code>PublicAPI.Shipped.txt</code>, and the build fails on an undeclared public member or a disappeared declared one, so widening or breaking a package API is caught in review rather than by a consumer after release.</li>
           <li><strong>Supply-chain provenance.</strong> CycloneDX SBOM on both release jobs, committed lock files, a build-time vulnerability audit promoted to error, and package source mapping cleared to a single nuget.org source as a dependency-confusion defense. The nuget.org push is keyless OIDC trusted publishing pinned to the release workflow file; GitHub Packages receives the same set via the workflow token (<a href="../adr/053-dual-registry-package-publishing.html">ADR-053</a>).</li>
@@ -650,7 +710,7 @@
           <li><strong><a href="common-RESILIENCE.html">Resilience and Business Continuity</a>.</strong> What a library can guarantee versus what the consumer&#39;s infrastructure owns, plus the restore-drill baseline.</li>
           <li><strong><a href="common-RESPONSIVE.html">Responsive Design and Cross-Browser Support</a>.</strong> The supported viewport, touch-target, and browser-engine matrix.</li>
           <li><strong><a href="common-COST.html">Cost and FinOps Notes</a>.</strong> The cost-relevant defaults the framework ships and the levers consumers should set.</li>
-          <li><strong><a href="../adr/index.html">ADRs</a>, <a href="../governance/index.html">governance</a>, <a href="../onboarding/index.html">onboarding</a>.</strong> 111 decision records with one-line summaries; the 34-category rubric with three scorecards and three backlogs; thirty-plus onboarding chapters walking every first-party type plus DevOps chapters for Aspire, CI/CD, infrastructure, runbooks, and testing. In the repo: <code>FACTS.md</code>, <code>CHANGELOG.md</code>, <code>UPGRADING.md</code>, <code>SECURITY.md</code>, and the deployment sample&#39;s <code>DEPLOYMENT.md</code>.</li>
+          <li><strong><a href="../adr/index.html">ADRs</a>, <a href="../governance/index.html">governance</a>, <a href="../onboarding/index.html">onboarding</a>.</strong> 136 decision records with one-line summaries; the 34-category rubric with three scorecards and three backlogs; thirty-plus onboarding chapters walking every first-party type plus DevOps chapters for Aspire, CI/CD, infrastructure, runbooks, and testing. In the repo: <code>FACTS.md</code>, <code>CHANGELOG.md</code>, <code>UPGRADING.md</code>, <code>SECURITY.md</code>, and the deployment sample&#39;s <code>DEPLOYMENT.md</code>.</li>
           </ul>
           <h2 id="constraints-worth-knowing">Constraints worth knowing</h2>
           <p>Design choices an adopter should read before sizing a plan around them. None is a defect; each is documented in source or an ADR.</p>
@@ -669,10 +729,10 @@
           <li><strong>The MAUI package builds separately.</strong> <code>MMCA.Common.UI.Maui</code> lives outside the main solution and is built and packed by Windows jobs (<a href="../adr/042-device-capability-abstraction.html">ADR-042</a>).</li>
           </ul>
           <blockquote>
-          <p><strong>The one-paragraph pitch:</strong> adopt MMCA.Common and a small team gets, on day one, the architecture a platform team would take years to build: a scaffolded modular monolith with errors-as-values, a sealed CQRS pipeline, reliable messaging, multi-tenancy, full identity, a shared Blazor, desktop, and mobile UI layer, and 124 architecture tests guarding it all, plus a proven, host-only path to split into microservices when (and only when) an observable constraint demands it.</p>
+          <p><strong>The one-paragraph pitch:</strong> adopt MMCA.Common and a small team gets, on day one, the architecture a platform team would take years to build: a scaffolded modular monolith with errors-as-values, a sealed CQRS pipeline, reliable messaging, multi-tenancy, full identity, a shared Blazor, desktop, and mobile UI layer, and 160 architecture tests guarding it all, plus a proven, host-only path to split into microservices when (and only when) an observable constraint demands it.</p>
           </blockquote>
           <hr>
-          <p>Compiled 2026-09-06 against MMCA.Common v1.187.0. The authoritative package and fitness counts live in <a href="https://github.com/ivanball/MMCA.Common/blob/main/FACTS.md" target="_blank" rel="noopener">FACTS.md</a> and the ADR range in the <a href="../adr/index.html">ADR index</a>; the figures above are a snapshot at that version. Every capability is verified in framework source and in consumer use (MMCA.ADC, MMCA.Store, MMCA.Helpdesk).</p>
+          <p>Compiled 2026-10-28 against MMCA.Common v1.265.1. The authoritative package and fitness counts live in <a href="https://github.com/ivanball/MMCA.Common/blob/main/FACTS.md" target="_blank" rel="noopener">FACTS.md</a> and the ADR range in the <a href="../adr/index.html">ADR index</a>; the figures above match FACTS.md at v1.265.1. Every capability is verified in framework source and in consumer use (MMCA.ADC, MMCA.Store, MMCA.Helpdesk).</p>
           
         <div class="doc-foot btn-row">
           <a class="btn btn--ghost" href="../../docs/guides/index.html">← Back to Guides &amp; Specifications</a>

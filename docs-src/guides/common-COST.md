@@ -1,18 +1,19 @@
 # Cost & FinOps Notes (rubric §31)
 
-_As of: 2026-09-02._
+_As of: 2026-10-28 (framework v1.265.1)._
 
 MMCA.Common is a library, so it cannot *provision* anything: right-sizing, scale rules, budgets,
 and per-service cost attribution live in the consumer apps' IaC (e.g. MMCA.ADC's `infra/main.bicep`,
 `cost-guard.yml`, and budget alerts). What the framework *can* do is keep its own cost-relevant
 defaults sane and document the levers consumers should set. This note consolidates the cost rationale
-that previously lived only in code comments.
+the code comments carry.
 
 ## What the framework does for cost
 
 - **Telemetry ingestion is the real line item, so high-volume / low-value spans are dropped.**
   `OutboxPollFilterProcessor` (`MMCA.Common.Aspire`) suppresses the recurring `OutboxPoll` activity
-  (and its `SqlClient` children) from OpenTelemetry export, so idle outbox polling does not dominate
+  and the `InternalCommandProcessor`'s queue poll (and their `SqlClient` children) from OpenTelemetry
+  export, so idle polling does not dominate
   Log Analytics / App Insights ingestion. This is on by default in `AddServiceDefaults()`.
 - **Head-based trace sampling is a built-in knob.** Set `Telemetry:TracesSampleRatio` to a value in
   `(0,1)` (e.g. `0.1` to keep 10% of traces) and `ConfigureOpenTelemetry` installs a
@@ -27,11 +28,22 @@ that previously lived only in code comments.
   and the .NET runtime metrics (`dotnet.gc.*` / `jit.*` / `thread_pool.*`: ~17 instruments emitted every
   collection interval regardless of traffic). Neither carries an end-user-visible signal. Set
   `Telemetry:DisableHttpClientMetrics=true` and/or `Telemetry:DisableRuntimeMetrics=true` and
-  `ConfigureOpenTelemetry` skips that instrumentation; outbound-dependency latency is still captured as
-  `AppDependencies` traces, and server-side RED metrics (`http.server.*` / `aspnetcore.*` / `kestrel.*`)
-  are untouched. Unset (default) keeps them, so a host that does not opt in sees no change. Anything but
+  `ConfigureOpenTelemetry` skips that instrumentation and adds a metrics View that drops the whole meter
+  (`System.Net.Http` + `System.Net.NameResolution`, or `System.Runtime`), so the toggle holds even when a
+  vendor exporter distro (the Azure Monitor one behind `AddAzureMonitorExporter()`) adds those meters on
+  its own. Outbound-dependency latency is still captured as `AppDependencies` traces. A third knob,
+  `Telemetry:DisableAspNetCoreMetrics=true`, drops the ASP.NET Core family (`http.server.*` /
+  `kestrel.*` / `aspnetcore.*` / `signalr.server.*`, every meter under the `Microsoft.AspNetCore.`
+  prefix) the same way; request latency and failures stay observable through `AppRequests` traces.
+  Unset (default) keeps each family, so a host that does not opt in sees no change. Anything but
   a boolean `true` keeps the family, so a typo cannot silently blind it. On the MMCA apps this cut total
   Log Analytics ingestion ~70% (AppMetrics is ~80% of the workspace bill).
+- **Polly's duration histograms are off by default.** The standard resilience handler runs on every
+  outbound call, and its two histograms (`resilience.polly.strategy.attempt.duration`,
+  `resilience.polly.pipeline.duration`) re-measure what `http.client.request.duration` and the
+  dependency traces already report, so a View drops them unless a host sets
+  `Telemetry:EnablePollyDurationMetrics=true` (only a boolean `true` turns them on). The
+  `resilience.polly.strategy.events` counter (retry, circuit opened/closed, timeout) is never dropped.
 - **Health-probe traces are dropped by default.** On a Container Apps deployment the platform's
   liveness / readiness probes, the gateway's downstream `/alive` aggregate, YARP active health checks
   and the availability web test are 100% of the `AppRequests` rows and most of `AppDependencies` (the
@@ -59,8 +71,11 @@ that previously lived only in code comments.
   polling: set it high in deployed environments (MMCA.ADC uses **300s** vs the 2s local default) to
   cut idle DB chatter and telemetry without adding message latency.
 - **Outbox/inbox rows are purged, not kept forever.** `OutboxCleanupService` purges processed rows
-  after `Outbox:RetentionDays` (default 7), bounding table growth (and the storage/scan cost of an
-  ever-growing audit trail). Set `Outbox:RetentionDays = 0` to retain indefinitely if a consumer needs it.
+  after `Outbox:RetentionDays` (default 7), sweeping every relational data source every
+  `Outbox:CleanupIntervalHours` (default 6), and purges inbox rows on the same cutoff when the inbox is
+  enabled, bounding table growth (and the storage/scan cost of an ever-growing audit trail).
+  Dead-lettered rows use `Outbox:DeadLetterRetentionDays` (default 0, which falls back to
+  `RetentionDays`). Set `Outbox:RetentionDays = 0` to retain indefinitely if a consumer needs it.
 
 ## Recommended consumer defaults (set these downstream)
 
@@ -69,10 +84,11 @@ that previously lived only in code comments.
   knob above) on high-volume services. The framework emits at sensible levels; the
   *volume × retention* bill is a deployment choice.
 - **Right-size from measured load, not worst case.** Size compute/database tiers to observed peak
-  (MMCA.ADC sizes to its measured ~67-VU conference peak and runs Basic-tier SQL), and back scale
+  (MMCA.ADC sizes to its measured ~67 concurrent-user conference peak and runs Basic-tier SQL), and back scale
   rules with real traffic. A k6/load test that establishes the peak is cheaper than guessing high.
 - **Make temporary scale-ups reversible.** Any conference-day / launch surge should have an automated
-  or scheduled revert (MMCA.ADC's `cost-guard.yml` fails if a surge wasn't reverted to Basic tier).
+  or scheduled revert (MMCA.ADC's `cost-guard.yml` fails if a surge was not reverted to Basic tier, and
+  runs as a deploy gate as well as on its daily schedule).
 - **Attribute spend.** Tag resources per service/environment so the bill is attributable, and add a
   budget + alert (MMCA.ADC sets a monthly RG budget with 80%/100% alerts).
 - **Use the cheap tier for intermittent/archival workloads** (Basic-tier DBs, serverless/consumption
@@ -116,8 +132,8 @@ running (the rubric's "scale-ups left running after the event" red flag). Distil
 `cost-guard.yml`:
 
 ```yaml
-# .github/workflows/cost-guard.yml: weekly + manual; READ-ONLY, never deploys.
-on: { schedule: [{ cron: '0 7 * * 1' }], workflow_dispatch: {} }
+# .github/workflows/cost-guard.yml: daily + manual + callable as a deploy gate; READ-ONLY, never deploys.
+on: { schedule: [{ cron: '0 7 * * *' }], workflow_dispatch: {}, workflow_call: {} }
 jobs:
   drift:
     steps:

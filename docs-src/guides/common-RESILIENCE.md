@@ -1,6 +1,6 @@
 # Resilience & Business Continuity (rubric §29)
 
-_As of: 2026-09-15._
+_As of: 2026-10-28 (framework v1.265.1)._
 
 MMCA.Common is a library, so it cannot *operate* a deployment: restores, RTO/RPO, and SLO alerting
 are executed in the consumer apps' IaC (e.g. MMCA.ADC's `infra/DISASTER-RECOVERY.md`,
@@ -18,10 +18,10 @@ defined once and adopted, not reinvented per app. This complements
 
 | Mechanism | Where | Test |
 |-----------|-------|------|
-| Standard Polly resilience handler (timeout + retry w/ backoff + circuit breaker) on **every** outbound `HttpClient` and typed gRPC client | `Aspire/Extensions.cs` (`AddStandardResilienceHandler` via `ConfigureHttpClientDefaults`), `Grpc/DependencyInjection.cs`, `Infrastructure/DependencyInjection.cs` | `ResilienceCircuitBreakerFaultInjectionTests` (trips a breaker, asserts `BrokenCircuit` short-circuiting), `ResilienceHandlerTests` |
+| Standard Polly resilience handler (timeout + retry w/ backoff + circuit breaker) on **every** outbound `HttpClient` and typed gRPC client | `Aspire/Extensions.cs` (`AddStandardResilienceHandler` via `ConfigureHttpClientDefaults`), `Grpc/DependencyInjection.cs` (typed gRPC clients), every timeout and socket value in `Shared/Resilience/HttpResilienceDefaults.cs` | `ResilienceCircuitBreakerFaultInjectionTests` (trips a breaker, asserts `BrokenCircuit` short-circuiting), `ResilienceHandlerTests` |
 | Graceful degradation: integration-event publish failure buffers for redelivery (at-least-once) | `Infrastructure/Persistence/Outbox/OutboxProcessor.cs` | `OutboxProcessorTests.IntegrationEventPublishFailure_DegradesGracefully_BuffersForRedelivery` |
-| Broker retry (exponential) on RabbitMQ / Azure Service Bus | `Infrastructure` (`ConfigureBrokerTransport`, `MessageBusSettings.RetryLimit/RetryMin/MaxIntervalSeconds`) | covered by messaging tests |
-| Broker backpressure (consumer prefetch and concurrency ceiling) on RabbitMQ / Azure Service Bus | `Infrastructure` (`ConfigureBrokerTransport`, `MessageBusSettings.PrefetchCount` / `MessageBusSettings.ConcurrentMessageLimit`; both optional, null keeps the transport default, applied to every receive endpoint, so a burst is bounded per replica instead of running on provider defaults) | covered by the broker-messaging binding tests |
+| Broker retry (exponential in-process retry, then delayed redelivery through the broker) on every broker transport (RabbitMQ, PostgreSQL, Azure Service Bus, Amazon SQS) | `Infrastructure` (`Messaging/Transports/BrokerTransportPolicies.cs`, `MessageBusSettings.RetryLimit` (5) / `RetryMinIntervalSeconds` (1) / `RetryMaxIntervalSeconds` (30), `RedeliveryIntervalsSeconds` (default 60 s, 600 s, 3600 s; Amazon SQS keeps its own default inside its 15-minute delay cap; RabbitMQ redelivers only with `EnableDelayedRedelivery`)) | covered by messaging tests |
+| Broker backpressure (consumer prefetch and concurrency ceiling) on every broker transport | `Infrastructure` (`BrokerTransportPolicies`, `MessageBusSettings.PrefetchCount` / `MessageBusSettings.ConcurrentMessageLimit`; both optional, null keeps the transport default, applied to every receive endpoint, so a burst is bounded per replica instead of running on provider defaults) | covered by the broker-messaging binding tests |
 | Warm-up / readiness gate: holds `/health/ready` closed until startup warm-up runs, opens **even on task failure** (availability over warmth), pre-warms OIDC discovery to kill ACA cold-start | `Aspire/Warmup/` (`WarmupHostedService`, `WarmupReadinessGate`, `WarmupReadinessHealthCheck`, `OpenIdConnectMetadataWarmupTask`): wired by `AddServiceDefaults` | `WarmupReadinessGateTests`, `WarmupReadinessHealthCheckTests`, `WarmupHostedServiceTests` (ADR-025) |
 | **Restore drill (central, in-repo)**: seed a database → take a backup → simulate catastrophic data loss → restore from the backup → verify zero data loss, timing the recovery (RTO) | `Tests/Core/MMCA.Common.Infrastructure.Tests/Resilience/DatabaseRestoreDrillTests.cs` (ephemeral SQLite via the SQLite online-backup API, the same primitive a real backup/restore uses) | `DatabaseRestoreDrillTests` (recovers every row after simulated loss; completes within a bounded RTO ceiling; emits the measured restore time to test output) |
 
@@ -62,7 +62,7 @@ still answers correctly. There is no stale-serving tier (nothing like FusionCach
 keeps returning an expired entry while the backing store is unreachable). That absence is the
 deliberate half of the tradeoff, not a gap.
 
-`CacheSettings` (`Source/Core/MMCA.Common.Infrastructure/Settings/CacheSettings.cs`, bound from the
+`CacheSettings` (`Source/Core/MMCA.Common.Infrastructure/Caching/CacheSettings.cs`, bound from the
 `Cache` section) makes the policy configurable per host without changing that posture. The section is
 optional: every default is the same value `CacheOptions` states in code, so a host that configures
 nothing gets the framework policy.

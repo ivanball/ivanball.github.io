@@ -6,21 +6,21 @@
   <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#0e151f" media="(prefers-color-scheme: dark)">
   <title>Cost &amp; FinOps Notes (rubric §31) · MMCA · Ivan Ball-llovera</title>
-  <meta name="description" content="As of: 2026-09-02.">
+  <meta name="description" content="As of: 2026-10-28 (framework v1.265.1).">
   <link rel="canonical" href="https://ivanball.github.io/docs/guides/common-COST.html">
   <link rel="icon" href="../../assets/img/favicon.svg" type="image/svg+xml">
   <link rel="alternate" type="application/rss+xml" title="Ivan Ball-llovera: deep dives on enterprise .NET" href="https://ivanball.github.io/feed.xml">
   <meta property="og:type" content="article">
   <meta property="og:site_name" content="Ivan Ball-llovera">
   <meta property="og:title" content="Cost &amp; FinOps Notes (rubric §31)">
-  <meta property="og:description" content="As of: 2026-09-02.">
+  <meta property="og:description" content="As of: 2026-10-28 (framework v1.265.1).">
   <meta property="og:url" content="https://ivanball.github.io/docs/guides/common-COST.html">
   <meta property="og:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <meta property="og:image:alt" content="Ivan Ball-llovera, Principal Software Architect">
   <meta property="og:locale" content="en_US">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="Cost &amp; FinOps Notes (rubric §31)">
-  <meta name="twitter:description" content="As of: 2026-09-02.">
+  <meta name="twitter:description" content="As of: 2026-10-28 (framework v1.265.1).">
   <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Platform","item":"https://ivanball.github.io/platform.html"},{"@type":"ListItem","position":2,"name":"Reference","item":"https://ivanball.github.io/docs/index.html"},{"@type":"ListItem","position":3,"name":"Guides & Specifications","item":"https://ivanball.github.io/docs/guides/index.html"},{"@type":"ListItem","position":4,"name":"Common · Cost & FinOps Notes (rubric §31)","item":"https://ivanball.github.io/docs/guides/common-COST.html"}]}</script>
   <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);if(localStorage.getItem('mmca-rail')==='hidden')document.documentElement.setAttribute('data-rail','hidden');if(localStorage.getItem('mmca-cites')==='shown')document.documentElement.setAttribute('data-cites','shown');}catch(e){}})();</script>
@@ -126,17 +126,18 @@
         <article class="doc-content">
           <p class="eyebrow doc-kicker">Guides &amp; specifications</p>
           <h1 id="cost--finops-notes-rubric-31">Cost &amp; FinOps Notes (rubric §31)</h1>
-          <p><em>As of: 2026-09-02.</em></p>
+          <p><em>As of: 2026-10-28 (framework v1.265.1).</em></p>
           <p>MMCA.Common is a library, so it cannot <em>provision</em> anything: right-sizing, scale rules, budgets,
           and per-service cost attribution live in the consumer apps&#39; IaC (e.g. MMCA.ADC&#39;s <code>infra/main.bicep</code>,
           <code>cost-guard.yml</code>, and budget alerts). What the framework <em>can</em> do is keep its own cost-relevant
           defaults sane and document the levers consumers should set. This note consolidates the cost rationale
-          that previously lived only in code comments.</p>
+          the code comments carry.</p>
           <h2 id="what-the-framework-does-for-cost">What the framework does for cost</h2>
           <ul>
           <li><strong>Telemetry ingestion is the real line item, so high-volume / low-value spans are dropped.</strong>
           <code>OutboxPollFilterProcessor</code> (<code>MMCA.Common.Aspire</code>) suppresses the recurring <code>OutboxPoll</code> activity
-          (and its <code>SqlClient</code> children) from OpenTelemetry export, so idle outbox polling does not dominate
+          and the <code>InternalCommandProcessor</code>&#39;s queue poll (and their <code>SqlClient</code> children) from OpenTelemetry
+          export, so idle polling does not dominate
           Log Analytics / App Insights ingestion. This is on by default in <code>AddServiceDefaults()</code>.</li>
           <li><strong>Head-based trace sampling is a built-in knob.</strong> Set <code>Telemetry:TracesSampleRatio</code> to a value in
           <code>(0,1)</code> (e.g. <code>0.1</code> to keep 10% of traces) and <code>ConfigureOpenTelemetry</code> installs a
@@ -151,11 +152,22 @@
           and the .NET runtime metrics (<code>dotnet.gc.*</code> / <code>jit.*</code> / <code>thread_pool.*</code>: ~17 instruments emitted every
           collection interval regardless of traffic). Neither carries an end-user-visible signal. Set
           <code>Telemetry:DisableHttpClientMetrics=true</code> and/or <code>Telemetry:DisableRuntimeMetrics=true</code> and
-          <code>ConfigureOpenTelemetry</code> skips that instrumentation; outbound-dependency latency is still captured as
-          <code>AppDependencies</code> traces, and server-side RED metrics (<code>http.server.*</code> / <code>aspnetcore.*</code> / <code>kestrel.*</code>)
-          are untouched. Unset (default) keeps them, so a host that does not opt in sees no change. Anything but
+          <code>ConfigureOpenTelemetry</code> skips that instrumentation and adds a metrics View that drops the whole meter
+          (<code>System.Net.Http</code> + <code>System.Net.NameResolution</code>, or <code>System.Runtime</code>), so the toggle holds even when a
+          vendor exporter distro (the Azure Monitor one behind <code>AddAzureMonitorExporter()</code>) adds those meters on
+          its own. Outbound-dependency latency is still captured as <code>AppDependencies</code> traces. A third knob,
+          <code>Telemetry:DisableAspNetCoreMetrics=true</code>, drops the ASP.NET Core family (<code>http.server.*</code> /
+          <code>kestrel.*</code> / <code>aspnetcore.*</code> / <code>signalr.server.*</code>, every meter under the <code>Microsoft.AspNetCore.</code>
+          prefix) the same way; request latency and failures stay observable through <code>AppRequests</code> traces.
+          Unset (default) keeps each family, so a host that does not opt in sees no change. Anything but
           a boolean <code>true</code> keeps the family, so a typo cannot silently blind it. On the MMCA apps this cut total
           Log Analytics ingestion ~70% (AppMetrics is ~80% of the workspace bill).</li>
+          <li><strong>Polly&#39;s duration histograms are off by default.</strong> The standard resilience handler runs on every
+          outbound call, and its two histograms (<code>resilience.polly.strategy.attempt.duration</code>,
+          <code>resilience.polly.pipeline.duration</code>) re-measure what <code>http.client.request.duration</code> and the
+          dependency traces already report, so a View drops them unless a host sets
+          <code>Telemetry:EnablePollyDurationMetrics=true</code> (only a boolean <code>true</code> turns them on). The
+          <code>resilience.polly.strategy.events</code> counter (retry, circuit opened/closed, timeout) is never dropped.</li>
           <li><strong>Health-probe traces are dropped by default.</strong> On a Container Apps deployment the platform&#39;s
           liveness / readiness probes, the gateway&#39;s downstream <code>/alive</code> aggregate, YARP active health checks
           and the availability web test are 100% of the <code>AppRequests</code> rows and most of <code>AppDependencies</code> (the
@@ -183,8 +195,11 @@
           polling: set it high in deployed environments (MMCA.ADC uses <strong>300s</strong> vs the 2s local default) to
           cut idle DB chatter and telemetry without adding message latency.</li>
           <li><strong>Outbox/inbox rows are purged, not kept forever.</strong> <code>OutboxCleanupService</code> purges processed rows
-          after <code>Outbox:RetentionDays</code> (default 7), bounding table growth (and the storage/scan cost of an
-          ever-growing audit trail). Set <code>Outbox:RetentionDays = 0</code> to retain indefinitely if a consumer needs it.</li>
+          after <code>Outbox:RetentionDays</code> (default 7), sweeping every relational data source every
+          <code>Outbox:CleanupIntervalHours</code> (default 6), and purges inbox rows on the same cutoff when the inbox is
+          enabled, bounding table growth (and the storage/scan cost of an ever-growing audit trail).
+          Dead-lettered rows use <code>Outbox:DeadLetterRetentionDays</code> (default 0, which falls back to
+          <code>RetentionDays</code>). Set <code>Outbox:RetentionDays = 0</code> to retain indefinitely if a consumer needs it.</li>
           </ul>
           <h2 id="recommended-consumer-defaults-set-these-downstream">Recommended consumer defaults (set these downstream)</h2>
           <ul>
@@ -193,10 +208,11 @@
           knob above) on high-volume services. The framework emits at sensible levels; the
           <em>volume × retention</em> bill is a deployment choice.</li>
           <li><strong>Right-size from measured load, not worst case.</strong> Size compute/database tiers to observed peak
-          (MMCA.ADC sizes to its measured ~67-VU conference peak and runs Basic-tier SQL), and back scale
+          (MMCA.ADC sizes to its measured ~67 concurrent-user conference peak and runs Basic-tier SQL), and back scale
           rules with real traffic. A k6/load test that establishes the peak is cheaper than guessing high.</li>
           <li><strong>Make temporary scale-ups reversible.</strong> Any conference-day / launch surge should have an automated
-          or scheduled revert (MMCA.ADC&#39;s <code>cost-guard.yml</code> fails if a surge wasn&#39;t reverted to Basic tier).</li>
+          or scheduled revert (MMCA.ADC&#39;s <code>cost-guard.yml</code> fails if a surge was not reverted to Basic tier, and
+          runs as a deploy gate as well as on its daily schedule).</li>
           <li><strong>Attribute spend.</strong> Tag resources per service/environment so the bill is attributable, and add a
           budget + alert (MMCA.ADC sets a monthly RG budget with 80%/100% alerts).</li>
           <li><strong>Use the cheap tier for intermittent/archival workloads</strong> (Basic-tier DBs, serverless/consumption
@@ -228,8 +244,8 @@
           <p><strong>Surge-revert guard</strong>: a scheduled, read-only check that fails if a temporary scale-up was left
           running (the rubric&#39;s &quot;scale-ups left running after the event&quot; red flag). Distilled from
           <code>cost-guard.yml</code>:</p>
-          <pre class="doc-pre" tabindex="0" data-lang="YAML"><code class="language-yaml hljs"><span class="hljs-comment"># .github/workflows/cost-guard.yml: weekly + manual; READ-ONLY, never deploys.</span>
-<span class="hljs-attr">on:</span> { <span class="hljs-attr">schedule:</span> [{ <span class="hljs-attr">cron:</span> <span class="hljs-string">&#x27;0 7 * * 1&#x27;</span> }], <span class="hljs-attr">workflow_dispatch:</span> {} }
+          <pre class="doc-pre" tabindex="0" data-lang="YAML"><code class="language-yaml hljs"><span class="hljs-comment"># .github/workflows/cost-guard.yml: daily + manual + callable as a deploy gate; READ-ONLY, never deploys.</span>
+<span class="hljs-attr">on:</span> { <span class="hljs-attr">schedule:</span> [{ <span class="hljs-attr">cron:</span> <span class="hljs-string">&#x27;0 7 * * *&#x27;</span> }], <span class="hljs-attr">workflow_dispatch:</span> {}, <span class="hljs-attr">workflow_call:</span> {} }
 <span class="hljs-attr">jobs:</span>
   <span class="hljs-attr">drift:</span>
     <span class="hljs-attr">steps:</span>

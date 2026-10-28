@@ -10,7 +10,7 @@ aggregates, wired end to end through all five layers, with the architecture fitn
 
 This guide builds it from nothing, and the point is *how little of it you type*. The
 [getting-started guide](common-GETTING-STARTED.md) scaffolds one module and stops; this one takes
-the same scaffold to a working two-module domain. `MMCA.Templates` 1.4.0 generates the solution,
+the same scaffold to a working two-module domain. `MMCA.Templates` generates the solution,
 both modules, the hosts, the tests, and the migrations projects, and the `build/add-module.ps1`
 script it ships inside every generated app performs the wire-ups `dotnet new` cannot patch into
 existing files. That leaves your hands on two things only: the domain code that is genuinely yours,
@@ -28,9 +28,9 @@ abbreviates, the repo is the full answer.
 - Commands are shown for **PowerShell** (`pwsh`, cross-platform). Almost everything is plain
   `dotnet` CLI, so any shell works, but step 3 runs a `.ps1` script, so `pwsh` has to be on PATH.
 
-`MMCA.Templates` **1.4.0** is the floor for this guide: `--title`, `--event-verb`, `--no-owner`,
-`--no-description` and the shipped `build/add-module.ps1` all arrive in it, and each one deletes a
-step the 1.3.0 version of this walkthrough asked you to do by hand.
+This guide follows the current `MMCA.Templates` (**1.23.0**): `--title`, `--event-verb`,
+`--no-owner`, `--no-description`, the shipped `build/add-module.ps1`, the framework's generic update
+slice, and the shipped wire-contract test all appear below as that pack generates them.
 
 No credentials, tokens, or extra feeds: `MMCA.Templates` and every `MMCA.Common.*` package restore
 from nuget.org ([ADR-053](../adr/053-dual-registry-package-publishing.md)).
@@ -100,14 +100,17 @@ and regenerate it anyway.
 
 ### What the script just wired
 
-`git diff` shows six existing files touched: the eight new projects in `MMCA.ECommerce.slnx`; the
-Orders `ProjectReference`s on the web host and **all five** layers on the architecture-test project;
-the identifier-alias `<Compile Include ... Link>` block in `Directory.Build.props`; five
-`Module(...)` lines in `ECommerceArchitectureMap.cs`, without which the layering and isolation rules
-silently stop covering the module
-([ADR-015](../adr/015-architecture-fitness-functions.md)); the
-`services.AddErrorResources<OrdersErrorResources>();` call in the web host's `Program.cs`, the one
-registration the host still owns because `ModuleLoader` discovers the `IModule` itself; and the
+`git diff` shows nine existing files touched: the eight new projects in `MMCA.ECommerce.slnx`; the
+Orders API and migrations `ProjectReference`s on the web host and **all five** layers on the
+architecture-test project; the identifier-alias `<Compile Include ... Link>` block in
+`Directory.Build.props`; five `Module(...)` lines in `ECommerceArchitectureMap.cs`, without which the
+layering and isolation rules silently stop covering the module
+([ADR-015](../adr/015-architecture-fitness-functions.md)); the two registrations the web host's
+`Program.cs` owns, `typeof(OrdersModule).Assembly` in the assembly list handed to
+`ModuleLoader.DiscoverAndRegister` (an assembly no code path has touched is never loaded, so without
+it the module compiles and registers nothing) and `services.AddErrorResources<OrdersErrorResources>();`;
+the `Orders.OrderPlaced.v1 { OrderId:Int32 }` entry appended to `ExpectedContract` in
+`ArchitectureTests.cs`, so the frozen wire contract keeps passing with a second module in it; and the
 AppHost plus `appsettings.json` database wiring below. Every edit is anchored on something the
 scaffold generated, and a missing anchor aborts the run with the manual edit printed instead, so a
 half-wired solution is never the outcome of a silent skip. The
@@ -121,9 +124,12 @@ topology that makes extraction free later
 ([ADR-006](../adr/006-database-per-service.md)). In
 [the AppHost](https://github.com/ivanball/MMCA.ECommerce/blob/main/Source/Hosting/MMCA.ECommerce.AppHost/Program.cs)
 the script added `sql.AddDatabase("ecommerce-orders", "ECommerce_Orders")` and chained
-`.WithSQLServerDataSource(ordersDb, "Orders")` onto the web project. Note what it did **not** do: the
-first module keeps the database the scaffold gave it, so the pair is `ecommerce` / `ECommerce` for
-Products, not a matched `_Products` / `_Orders` set. The `WaitFor(sql)` on the web project stays as
+`.WithSQLServerDataSource(ordersDb, "Orders")` onto the web project, above the first module's call.
+Note what it did **not** do: the first module keeps the database the scaffold gave it, so the pair is
+`ecommerce` / `ECommerce` for Products, not a matched `_Products` / `_Orders` set, and it keeps the
+explicit `ConnectionStrings__SQLServerConnectionString` override that pins the top-level connection
+string (and so the `Default` source) to that database, because `WithSQLServerDataSource` injects only
+the module's own `DataSources` entry. The `WaitFor(sql)` on the web project stays as
 generated: the host CREATES the databases via EF `Migrate` at startup, so waiting on a database
 resource would deadlock, because it never exists until the app that is waiting runs.
 
@@ -139,15 +145,18 @@ the file names. The migrations assembly per entry is what matters in both modes.
 Two normalizations in the same file are easy to miss and expensive to omit, and the script does both.
 First, the top-level `SQLServerMigrationsAssembly` pin is **deleted** (the connection string itself
 stays: it is the `Default` fallback the `[Required]` validation and health checks use). The scaffold
-pinned the Products assembly there because it had one module and no `DataSources` section. With two
-modules under Aspire, every `WithSQLServerDataSource` call also rewrites the top-level connection
-string and the last one wins, so one module always collapses onto `Default`; a top-level pin naming
-the *other* module's assembly then fails startup with "conflicting SQLServerMigrationsAssembly
-values". Second, a top-level `"Outbox": { "DatabaseName": "Products" }` is added, pinning where
-handler-published integration events are written. `IEventBus` persists them to ONE configured outbox
-source per host, defaulting to `Default`, and `Default` is whichever module's call ran last. Pinned
-to the first module, event publishing no longer depends on wiring order (and, mid-guide, a created
-Product does not try to outbox into the not-yet-migrated Orders database).
+pinned the Products assembly there because it had one module and no `DataSources` section. From here
+on every module names its migrations assembly on its own `DataSources` entry, and an entry whose
+connection string equals the top-level one collapses onto `Default` and contributes its assembly
+there. A second declaration at top level would have to agree with whichever entry collapses: today
+that is Products, because the AppHost pins the top-level connection to it, but the day the top-level
+connection names the other database, startup fails because the sources collapsing onto one physical
+database declare conflicting migrations assemblies. Second, a top-level
+`"Outbox": { "DatabaseName": "Products" }` is added, pinning where handler-published integration
+events are written. `IEventBus` persists them to ONE configured outbox source per host, defaulting to
+`Default`, which is whichever database the top-level connection string names. The AppHost pins that
+to the first module, but `appsettings.json`, a deployment, or a hand edit can name another, and an
+implicit outbox would silently move with it.
 
 Build and test again: still green, now at **99 tests** with the Orders module's scaffolded suites
 included. There is no new kind of thing in the solution, just a second copy of the shape you already
@@ -176,7 +185,7 @@ Under `Source/Modules/Products/MMCA.ECommerce.Products.Shared/`:
 | File | Action | What changes |
 |---|---|---|
 | `Products/`[ProductDTO.cs](https://github.com/ivanball/MMCA.ECommerce/blob/main/Source/Modules/Products/MMCA.ECommerce.Products.Shared/Products/ProductDTO.cs) | edit | one line: `public required decimal Price { get; init; }` |
-| `Products/`[ProductUpdateRequest.cs](https://github.com/ivanball/MMCA.ECommerce/blob/main/Source/Modules/Products/MMCA.ECommerce.Products.Shared/Products/ProductUpdateRequest.cs) | edit | `Price` is `required` like the other two, so a client cannot silently blank a price by omitting it. Keep the `*UpdateRequest` suffix exactly: the shared `UpdateRequestsAreConcurrencyAware` fitness rule finds it by name, and a rename silently drops the request out of that rule's scope |
+| `Products/`[ProductUpdateRequest.cs](https://github.com/ivanball/MMCA.ECommerce/blob/main/Source/Modules/Products/MMCA.ECommerce.Products.Shared/Products/ProductUpdateRequest.cs) | edit | `Price` is `required` like the other two, so a client cannot silently blank a price by omitting it. Keep the `*UpdateRequest` suffix exactly: the shared `UpdateRequestsAreNotConcurrencyAware` fitness rule finds it by name and fails it if it carries a concurrency token, which travels in the `If-Match` header instead ([ADR-035](../adr/035-optimistic-concurrency.md)), and a rename silently drops the request out of that rule's scope |
 | `Products/IntegrationEvents/`[ProductCreatedIntegrationEvent.cs](https://github.com/ivanball/MMCA.ECommerce/blob/main/Source/Modules/Products/MMCA.ECommerce.Products.Shared/Products/IntegrationEvents/ProductCreatedIntegrationEvent.cs) | edit | the event was generated carrying the product id alone; it gains `Name` and `Price` |
 
 ### 4.2 Domain
@@ -239,9 +248,8 @@ Under `Source/Modules/Products/MMCA.ECommerce.Products.Application/`:
 | `Products/UseCases/Create/`[ProductCreateRequestMapper.cs](https://github.com/ivanball/MMCA.ECommerce/blob/main/Source/Modules/Products/MMCA.ECommerce.Products.Application/Products/UseCases/Create/ProductCreateRequestMapper.cs) | edit | the factory call gains `price:` (fragment below). The scaffold keeps that call on one line and says why in a comment: an argument list cannot lose a middle element to a whole-line conditional, so the staging script rewrites it per shape. Once the shape is yours, the comment goes with it |
 | `Products/UseCases/Create/`[ProductCreateRequestValidator.cs](https://github.com/ivanball/MMCA.ECommerce/blob/main/Source/Modules/Products/MMCA.ECommerce.Products.Application/Products/UseCases/Create/ProductCreateRequestValidator.cs) | edit | one rule, `RuleFor(x => x.Price).GreaterThan(0m);`. The other two mirror the invariants and reuse their constants, so a limit is stated once |
 | `Products/UseCases/Create/`[CreateProductHandler.cs](https://github.com/ivanball/MMCA.ECommerce/blob/main/Source/Modules/Products/MMCA.ECommerce.Products.Application/Products/UseCases/Create/CreateProductHandler.cs) | edit | the whole write path on one screen, worth reading rather than just pasting: domain factory, unit of work, then the integration event published *after* the commit, now carrying the name and the price |
-| `Products/UseCases/Update/`[UpdateProductCommand.cs](https://github.com/ivanball/MMCA.ECommerce/blob/main/Source/Modules/Products/MMCA.ECommerce.Products.Application/Products/UseCases/Update/UpdateProductCommand.cs) | edit | a fourth positional parameter, `decimal Price`; the client's last-seen `RowVersion` ([ADR-035](../adr/035-optimistic-concurrency.md)) stays as generated |
-| `Products/UseCases/Update/`[UpdateProductCommandValidator.cs](https://github.com/ivanball/MMCA.ECommerce/blob/main/Source/Modules/Products/MMCA.ECommerce.Products.Application/Products/UseCases/Update/UpdateProductCommandValidator.cs) | create | the scaffold validates only the create path, and a catalog that accepts a negative price on update is a catalog with a hole in it |
-| `Products/UseCases/Update/`[UpdateProductHandler.cs](https://github.com/ivanball/MMCA.ECommerce/blob/main/Source/Modules/Products/MMCA.ECommerce.Products.Application/Products/UseCases/Update/UpdateProductHandler.cs) | edit | `UpdateDetails` takes a third argument now: `var result = product.UpdateDetails(command.Name, command.Description, command.Price);` |
+| `Products/UseCases/Update/ProductUpdateApplier.cs` | edit | the update slice is the framework's generic `UpdateEntityCommand<Product, ProductUpdateRequest, ProductIdentifierType>`, run by the generic handler `AddEntityCrud` registers, and this applier is the module's whole part in it: `UpdateDetails` takes a third argument, `entity.UpdateDetails(request.Name, request.Description, request.Price)` |
+| `Products/UseCases/Update/ProductUpdateRequestValidator.cs` | edit | one rule, `RuleFor(x => x.Price).GreaterThan(0m);`. The scaffold already mirrors the create validator field for field, because an update that accepted what a create refuses would let a product reach a state it could never have been created in |
 | `Products/IntegrationEventHandlers/`[ProductCreatedHandler.cs](https://github.com/ivanball/MMCA.ECommerce/blob/main/Source/Modules/Products/MMCA.ECommerce.Products.Application/Products/IntegrationEventHandlers/ProductCreatedHandler.cs) | edit | the consumer arrives generated and wired; it logs the new `Name` too, and it is where a search-index, notification, or analytics side effect would live |
 
 The `ProductCreateRequestMapper` fragment:
@@ -274,22 +282,28 @@ and the concurrency token, so only the product's own columns are there. Three ad
 `using Microsoft.EntityFrameworkCore;` (which `HasColumnType` needs), `Price` as `decimal(18,2)`
 explicitly, because SQL Server's default for a mapped decimal is `decimal(18,0)` and would round
 every price to whole currency units, and a filtered index on `Name`, which is what a catalog is
-actually browsed by. Nothing else in Infrastructure changes: `--flat` already emitted a
+actually browsed by (filter it with `HasSoftDeleteFilter(DataSource.SQLServer)`, as the scaffold's
+own filtered indexes do, never a SQL literal, so the index stays engine-aware). Nothing else in Infrastructure changes: `--flat` already emitted a
 `ModuleApplicationDbContext` with one `DbSet`.
 
 ### 4.5 API
 
 **Edit** `Source/Modules/Products/MMCA.ECommerce.Products.API/Controllers/ProductsController.cs`
 ([finished file](https://github.com/ivanball/MMCA.ECommerce/blob/main/Source/Modules/Products/MMCA.ECommerce.Products.API/Controllers/ProductsController.cs)).
-The routes, the injected handlers, and the inherited list/paged reads are all unchanged. One line of
-real code changes, the command construction in `UpdateAsync`:
+The routes, the injected handlers, and the inherited list/paged reads are all unchanged, and so is
+every line of code. `UpdateAsync` constructs the generic command from the request whole, with the
+concurrency token read from the `If-Match` header that `[SupportsIfMatch]` requires
+([ADR-035](../adr/035-optimistic-concurrency.md)), so the action names no product field and `Price`
+reaches the applier with no edit here:
 
 ```csharp
-            new UpdateProductCommand(id, request.Name, request.Description, request.Price) { RowVersion = request.RowVersion },
+            new UpdateEntityCommand<Product, ProductUpdateRequest, ProductIdentifierType>(
+                id,
+                request,
+                SupportsIfMatchAttribute.RequiredToken(HttpContext)),
 ```
 
-The rest is wording: the class summary says "support products" and the three action summaries still
-mention children and a generic "editable details".
+What is left is wording in the doc comments.
 
 **Edit** the two error-resource files,
 [ProductsErrorResources.resx](https://github.com/ivanball/MMCA.ECommerce/blob/main/Source/Modules/Products/MMCA.ECommerce.Products.API/Resources/ProductsErrorResources.resx)
@@ -319,17 +333,18 @@ At this point the solution builds again. The tests do not yet.
 ### 4.6 Tests
 
 **Edit** [MMCA.ECommerce.Products.Application.Tests.csproj](https://github.com/ivanball/MMCA.ECommerce/blob/main/Tests/Modules/Products/MMCA.ECommerce.Products.Application.Tests/MMCA.ECommerce.Products.Application.Tests.csproj).
-The handler tests need the framework's test base and a mocking library, neither of which the
-application-test scaffold references. Add two lines at the top of the package `ItemGroup` so it reads:
+The handler tests need the framework's test base, which the application-test scaffold does not
+reference (it already ships `Moq`). Add one line at the top of the package `ItemGroup` so it reads:
 
 ```xml
   <ItemGroup>
     <PackageReference Include="MMCA.Common.Testing" />
-    <PackageReference Include="Moq" />
     <PackageReference Include="xunit.v3" />
+    <PackageReference Include="AwesomeAssertions" />
+    <PackageReference Include="Moq" />
 ```
 
-No version attributes: both packages are already pinned in the solution's `Directory.Packages.props`
+No version attribute: the package is already pinned in the solution's `Directory.Packages.props`
 under Central Package Management, so a version here would be an error rather than a nicety. Then the
 test files themselves, under `Tests/Modules/Products/`:
 
@@ -338,11 +353,11 @@ test files themselves, under `Tests/Modules/Products/`:
 | `MMCA.ECommerce.Products.Domain.Tests/Products/`[ProductTests.cs](https://github.com/ivanball/MMCA.ECommerce/blob/main/Tests/Modules/Products/MMCA.ECommerce.Products.Domain.Tests/Products/ProductTests.cs) | replace with | 13 tests over the aggregate. Read the accumulation test near the end: `Result.Combine` reports every broken invariant at once, which is the behavior that makes one round trip enough for a form |
 | `MMCA.ECommerce.Products.Application.Tests/Caching/`[ProductCacheInvalidationTests.cs](https://github.com/ivanball/MMCA.ECommerce/blob/main/Tests/Modules/Products/MMCA.ECommerce.Products.Application.Tests/Caching/ProductCacheInvalidationTests.cs) | edit | the 4 scaffolded tests still pass; their fixtures gain a price and become a catalog product instead of a support ticket. The last one earns its keep: nothing at compile time ties a command's `CachePrefix` to a query's `CacheKey`, so this is what stops a rename from quietly leaving stale reads behind |
 | `MMCA.ECommerce.Products.Application.Tests/UseCases/`[CreateProductHandlerTests.cs](https://github.com/ivanball/MMCA.ECommerce/blob/main/Tests/Modules/Products/MMCA.ECommerce.Products.Application.Tests/UseCases/CreateProductHandlerTests.cs) | create | 3 tests: the request maps through the domain factory, the aggregate is added and committed, and the integration event is published AFTER the save so it carries the database-generated id |
-| `MMCA.ECommerce.Products.Application.Tests/UseCases/`[UpdateProductHandlerTests.cs](https://github.com/ivanball/MMCA.ECommerce/blob/main/Tests/Modules/Products/MMCA.ECommerce.Products.Application.Tests/UseCases/UpdateProductHandlerTests.cs) | create | 4 tests: a missing aggregate is a NotFound failure, an invariant breach never reaches the save, and the client's concurrency token is stamped back per ADR-035 before the mutation |
+| `MMCA.ECommerce.Products.Application.Tests/UseCases/`[UpdateProductHandlerTests.cs](https://github.com/ivanball/MMCA.ECommerce/blob/main/Tests/Modules/Products/MMCA.ECommerce.Products.Application.Tests/UseCases/UpdateProductHandlerTests.cs) | skip | the sample's file covers a hand-written update handler; the scaffold's update slice is the framework's generic handler plus `ProductUpdateApplier` (4.3), so there is no module handler here to cover |
 | `MMCA.ECommerce.Products.Application.Tests/UseCases/`[DeleteProductHandlerTests.cs](https://github.com/ivanball/MMCA.ECommerce/blob/main/Tests/Modules/Products/MMCA.ECommerce.Products.Application.Tests/UseCases/DeleteProductHandlerTests.cs) | create | 2 tests: the aggregate is loaded tracked, soft-deleted through its own guarded method, and committed once |
 | `MMCA.ECommerce.Products.Application.Tests/UseCases/`[GetProductByIdHandlerTests.cs](https://github.com/ivanball/MMCA.ECommerce/blob/main/Tests/Modules/Products/MMCA.ECommerce.Products.Application.Tests/UseCases/GetProductByIdHandlerTests.cs) | create | 3 tests; its `GetReadRepository` assertion is what pins the read path to a non-tracking read |
 
-The four handler classes all extend the framework's `HandlerTestBase<THandler>`, whose
+The handler test classes all extend the framework's `HandlerTestBase<THandler>`, whose
 `RegisterRepository` wires a mocked repository into a mocked unit of work, so the handler resolves it
 exactly the way it does at run time.
 
@@ -366,8 +381,9 @@ zero tests and still exits non-zero:
 dotnet test --project Tests/Modules/Products/MMCA.ECommerce.Products.Domain.Tests/MMCA.ECommerce.Products.Domain.Tests.csproj -- --filter-class "*ProductTests*"
 ```
 
-The full solution run is still red at this point: the Orders module is untouched, and its scaffolded
-suites are about to be replaced in step 5.
+The full solution run is red at this point, in the architecture suite: `ProductCreatedIntegrationEvent`
+gained `Name` and `Price`, so it no longer matches the frozen wire contract. Step 8 updates that
+literal once both creation events have their final shape.
 
 ## 5. Reshape Orders into an order with line items
 
@@ -406,7 +422,7 @@ the `SA1211` fixup in step 8 settles. Under
 | [OrderStatus.cs](https://github.com/ivanball/MMCA.ECommerce/blob/main/Source/Modules/Orders/MMCA.ECommerce.Orders.Shared/Orders/OrderStatus.cs) | replace with | the scaffold ships a flat set of ticket states; this is a lifecycle (`Pending`, `Paid`, `Shipped`, `Cancelled`), and its doc comment is where the legal transitions are written down for a reader who will not go looking for the invariant |
 | [OrderDTO.cs](https://github.com/ivanball/MMCA.ECommerce/blob/main/Source/Modules/Orders/MMCA.ECommerce.Orders.Shared/Orders/OrderDTO.cs) | edit | `Total` is new. Its remarks are load-bearing documentation, not decoration: only the detail read eager-loads `Items`, so `Total` is 0 on the list and paged projections, and the fix for a caller who needs the number is to ask the detail endpoint, not to widen the list query |
 | [OrderItemDTO.cs](https://github.com/ivanball/MMCA.ECommerce/blob/main/Source/Modules/Orders/MMCA.ECommerce.Orders.Shared/Orders/OrderItemDTO.cs) | replace with | the scaffold's `Body` and `AuthorUserId` become the four snapshot properties |
-| [OrderUpdateRequest.cs](https://github.com/ivanball/MMCA.ECommerce/blob/main/Source/Modules/Orders/MMCA.ECommerce.Orders.Shared/Orders/OrderUpdateRequest.cs) | edit | doc-only, but the `*UpdateRequest` suffix must survive: the shared `UpdateRequestsAreConcurrencyAware` fitness rule matches on that name |
+| [OrderUpdateRequest.cs](https://github.com/ivanball/MMCA.ECommerce/blob/main/Source/Modules/Orders/MMCA.ECommerce.Orders.Shared/Orders/OrderUpdateRequest.cs) | edit | doc-only, but the `*UpdateRequest` suffix must survive: the shared `UpdateRequestsAreNotConcurrencyAware` fitness rule matches on that name |
 | [AddOrderItemRequest.cs](https://github.com/ivanball/MMCA.ECommerce/blob/main/Source/Modules/Orders/MMCA.ECommerce.Orders.Shared/Orders/AddOrderItemRequest.cs) | create | read its doc comment: the caller supplies the name and price to snapshot, and that is the wire-level half of the module-isolation decision above |
 | [ChangeOrderItemQuantityRequest.cs](https://github.com/ivanball/MMCA.ECommerce/blob/main/Source/Modules/Orders/MMCA.ECommerce.Orders.Shared/Orders/ChangeOrderItemQuantityRequest.cs) | create | replaces the scaffold's free-text `EditItemRequest(string Body)` |
 | `IntegrationEvents/`[OrderPlacedIntegrationEvent.cs](https://github.com/ivanball/MMCA.ECommerce/blob/main/Source/Modules/Orders/MMCA.ECommerce.Orders.Shared/Orders/IntegrationEvents/OrderPlacedIntegrationEvent.cs) | edit | the event name and its consumer arrived generated; the payload gains `CustomerName` |
@@ -507,12 +523,13 @@ which is what `-NoDescription -NoOwner -Title CustomerName` already generated. U
 |---|---|---|
 | `UseCases/Create/`[OrderCreateRequestMapper.cs](https://github.com/ivanball/MMCA.ECommerce/blob/main/Source/Modules/Orders/MMCA.ECommerce.Orders.Application/Orders/UseCases/Create/OrderCreateRequestMapper.cs) | edit | the one-line factory call and its staging comment become the plain `Order.Create(id: null, customerName: request.CustomerName)` form |
 | `UseCases/Create/`[CreateOrderHandler.cs](https://github.com/ivanball/MMCA.ECommerce/blob/main/Source/Modules/Orders/MMCA.ECommerce.Orders.Application/Orders/UseCases/Create/CreateOrderHandler.cs) | edit | one line of code, the published event: `new OrderPlacedIntegrationEvent(entity.Id, entity.CustomerName),`. The handler still publishes after the commit, so the database-generated id is populated by the time the event reaches consumers |
-| `UseCases/Update/`[UpdateOrderCommand.cs](https://github.com/ivanball/MMCA.ECommerce/blob/main/Source/Modules/Orders/MMCA.ECommerce.Orders.Application/Orders/UseCases/Update/UpdateOrderCommand.cs) | edit | the positional list is already right; the scaffold's one-line form and its `<remarks>` about optional axes are what go |
+| `UseCases/Update/` | leave | the update slice is the framework's generic `UpdateEntityCommand`, so there is no module command to edit: `OrderUpdateHandler` (kept because it eager-loads the items the update response carries), `OrderUpdateApplier` and `OrderUpdateRequestValidator` arrive shaped by the flags |
 | `UseCases/AddItem/`[AddItemCommand.cs](https://github.com/ivanball/MMCA.ECommerce/blob/main/Source/Modules/Orders/MMCA.ECommerce.Orders.Application/Orders/UseCases/AddItem/AddItemCommand.cs) | replace with | the two scaffolded scalars become four, and the doc comment records why they travel on the command instead of being looked up |
+| `UseCases/AddItem/AddItemCommandValidator.cs` | edit | the scaffolded rule validates the retired `Body`; validate the four snapshot scalars instead, mirroring `OrderInvariants` |
 | `UseCases/AddItem/`[AddItemHandler.cs](https://github.com/ivanball/MMCA.ECommerce/blob/main/Source/Modules/Orders/MMCA.ECommerce.Orders.Application/Orders/UseCases/AddItem/AddItemHandler.cs) | edit | the aggregate call takes the four scalars (fragment below). It already returns `Result<OrderItemDTO>` and already loads `includes: [nameof(Order.Items)]` tracked, which is what lets the aggregate enforce the item lock and recompute the total, so neither changes |
 | `UseCases/ChangeItemQuantity/`[ChangeItemQuantityCommand.cs](https://github.com/ivanball/MMCA.ECommerce/blob/main/Source/Modules/Orders/MMCA.ECommerce.Orders.Application/Orders/UseCases/ChangeItemQuantity/ChangeItemQuantityCommand.cs) | create | quantity is the only mutable field on a line: the product snapshot and its price stay as captured |
 | `UseCases/ChangeItemQuantity/`[ChangeItemQuantityHandler.cs](https://github.com/ivanball/MMCA.ECommerce/blob/main/Source/Modules/Orders/MMCA.ECommerce.Orders.Application/Orders/UseCases/ChangeItemQuantity/ChangeItemQuantityHandler.cs) | create | loads the order tracked with its items, then changes the quantity through the aggregate root |
-| `UseCases/EditItem/` | delete | the slice `ChangeItemQuantity` replaces (the folder holds two files) |
+| `UseCases/EditItem/` | delete | the slice `ChangeItemQuantity` replaces (the folder holds three files: the command, its handler, and its validator) |
 | `IntegrationEventHandlers/`[OrderPlacedHandler.cs](https://github.com/ivanball/MMCA.ECommerce/blob/main/Source/Modules/Orders/MMCA.ECommerce.Orders.Application/Orders/IntegrationEventHandlers/OrderPlacedHandler.cs) | edit | the consumer arrives generated and wired; it logs the new `CustomerName` too |
 
 ```csharp
@@ -530,10 +547,10 @@ Remove-Item -Recurse `
 ```
 
 Nothing else in the Application layer moves. The Delete, GetById, RemoveItem and ChangeStatus slices,
-the create validator, both DTO mappers, `OrderCacheKeys`, the audit domain-event handler, and
-`DependencyInjection.cs` are all correct exactly as generated, because each of them talks about items
-and none of them names a renamed field. `OrderCreateRequest.cs` and `UpdateOrderHandler.cs` differ
-from the sample only in doc comments, which you can skip.
+the create validator, both DTO mappers, the DTO projector, `OrderCacheKeys`, the audit domain-event
+handler, and `DependencyInjection.cs` are all correct exactly as generated, because each of them
+talks about items and none of them names a renamed field. `OrderCreateRequest.cs` differs from the
+sample only in doc comments, which you can skip.
 
 ### 5.5 API
 
@@ -574,26 +591,15 @@ The solution builds again at this point.
 
 ### 5.6 Tests
 
-**Edit** [MMCA.ECommerce.Orders.Application.Tests.csproj](https://github.com/ivanball/MMCA.ECommerce/blob/main/Tests/Modules/Orders/MMCA.ECommerce.Orders.Application.Tests/MMCA.ECommerce.Orders.Application.Tests.csproj).
-The handler tests mock the unit of work directly, so this project needs Moq (and nothing else new).
-Add one entry to the package `ItemGroup` so it reads:
-
-```xml
-  <ItemGroup>
-    <PackageReference Include="xunit.v3" />
-    <PackageReference Include="AwesomeAssertions" />
-    <!-- Moq for the handler tier: the repository / unit-of-work / event-bus boundaries are faked so
-         the handler tests stay database-free. Version is centrally pinned in Directory.Packages.props. -->
-    <PackageReference Include="Moq" />
-```
-
-No version attribute: `Moq` is already pinned in the solution's `Directory.Packages.props` under
-Central Package Management. Then the test files themselves, all under `Tests/Modules/Orders/`:
+**Leave** [MMCA.ECommerce.Orders.Application.Tests.csproj](https://github.com/ivanball/MMCA.ECommerce/blob/main/Tests/Modules/Orders/MMCA.ECommerce.Orders.Application.Tests/MMCA.ECommerce.Orders.Application.Tests.csproj)
+as generated. The handler tests mock the unit of work directly, and the scaffolded project already
+references `Moq` beside `xunit.v3` and `AwesomeAssertions`, so it needs nothing new. Then the test
+files themselves, all under `Tests/Modules/Orders/`:
 
 | File | Action | What it covers |
 |---|---|---|
 | `MMCA.ECommerce.Orders.Domain.Tests/Orders/`[OrderTests.cs](https://github.com/ivanball/MMCA.ECommerce/blob/main/Tests/Modules/Orders/MMCA.ECommerce.Orders.Domain.Tests/Orders/OrderTests.cs) | replace with | 33 tests over the aggregate, the item lock, and the lifecycle. Keep the comment inside `Total_ExcludesSoftDeletedItems` verbatim: it documents a real consequence of database-generated ids (every unpersisted line still carries Id 0, so `GetChildOrNotFound` resolves the first live one), and without it the `RemoveItem(itemId: 0)` call below it looks like a mistake |
-| `MMCA.ECommerce.Orders.Application.Tests/Caching/`[OrderCacheInvalidationTests.cs](https://github.com/ivanball/MMCA.ECommerce/blob/main/Tests/Modules/Orders/MMCA.ECommerce.Orders.Application.Tests/Caching/OrderCacheInvalidationTests.cs) | replace with | 4 tests. The last one enumerates **all seven** order commands, so a new slice added later without a `CachePrefix` is caught here rather than in production |
+| `MMCA.ECommerce.Orders.Application.Tests/Caching/`[OrderCacheInvalidationTests.cs](https://github.com/ivanball/MMCA.ECommerce/blob/main/Tests/Modules/Orders/MMCA.ECommerce.Orders.Application.Tests/Caching/OrderCacheInvalidationTests.cs) | edit | the scaffolded suite discovers every `ICacheInvalidating` command and fails by name when one has no builder, so `ChangeItemQuantityCommand` needs an entry in its `HandWrittenBuilders()` table and `EditItemCommand` loses its own. That discovery is what catches a slice added later without a `CachePrefix` here rather than in production |
 | `MMCA.ECommerce.Orders.Application.Tests/Orders/`[OrderHandlerTests.cs](https://github.com/ivanball/MMCA.ECommerce/blob/main/Tests/Modules/Orders/MMCA.ECommerce.Orders.Application.Tests/Orders/OrderHandlerTests.cs) | create | 19 tests, one class covering every Orders use case. Every handler in the module has the same shape, so one set of fakes covers all of them, and the shared `HandlerMocks` helper is what keeps the file from repeating that setup nine times |
 
 ### 5.7 Verify both reshapes
@@ -606,8 +612,8 @@ dotnet test --project Tests/Architecture/MMCA.ECommerce.Architecture.Tests/MMCA.
 ```
 
 Expect a warning-free build, then **33/33** passing in the Orders domain suite, **23/23** in the
-Orders application suite, and **72/72** in the architecture suite. No database is involved in any of
-them.
+Orders application suite, and the architecture suite green except `IntegrationEventContractTests`,
+which step 8 settles. No database is involved in any of them.
 
 That last run is the one worth watching, and it is only worth watching because *both* modules were
 reshaped: a flat, status-less catalog module beside an aggregate that owns a growing child collection
@@ -618,8 +624,8 @@ mistake the `ProductName` / `UnitPrice` snapshot exists to make unnecessary. Sin
 same MTP filter after a bare `--` as in 4.7, for example
 `-- --filter-method "*ChangeStatus*"`.
 
-The whole solution is green from here: `dotnet test --solution MMCA.ECommerce.slnx` runs everything in
-one pass and lands at **157** tests (158 once step 8 freezes your integration-event wire contract).
+`dotnet test --solution MMCA.ECommerce.slnx` runs everything in one pass, and it goes fully green once
+step 8 brings the frozen integration-event wire contract up to date.
 
 ## 6. Point the UI at the new domain
 
@@ -684,8 +690,9 @@ outbox/inbox tables: two databases, two outboxes, no contention.
 
 ## 8. The two one-time fixups, then run it
 
-Apply the two fixups the scaffold deliberately leaves to you (they are name-dependent, so no
-generated value could be right). First, sort the using directives and the identifier aliases:
+Apply the two one-time fixups: the sort order the scaffold deliberately leaves to you (it is
+name-dependent, so no generated value could be right), and the wire-contract update your reshape made
+necessary. First, sort the using directives and the identifier aliases:
 
 ```powershell
 dotnet format analyzers MMCA.ECommerce.slnx --diagnostics SA1210 SA1211 --severity info
@@ -698,12 +705,15 @@ constructor holding a single statement, which the baseline would require you to 
 expression body. This sample never trips that: both aggregates assign at least two fields, so the
 `IDE0021` line has nothing to relax and goes with the rest of the block.
 
-Second, freeze your integration-event wire contract by adding the `IntegrationEventContractTests`
-subclass to `ArchitectureTests.cs`, running it once, and pasting in what the failure prints. Both
-fixups are described in full in the
-[getting-started guide](common-GETTING-STARTED.md#6-the-two-one-time-fixups); the sample has both
-applied, so its frozen list names `ProductCreatedIntegrationEvent` and `OrderPlacedIntegrationEvent`
-exactly as shipped, and the suite goes from 72 to 73.
+Second, bring the frozen integration-event wire contract up to date. `ArchitectureTests.cs` ships an
+`IntegrationEventContractTests` subclass holding the Products event as scaffolded, and
+`build/add-module.ps1` appended `Orders.OrderPlaced.v1 { OrderId:Int32 }`. Entries are keyed on each
+event's `[EventName]` wire identity, not its CLR type name. Both reshapes added members, so the test
+fails and prints the live value: paste it into `ExpectedContract`, which is the wire contract evolving
+on purpose rather than by accident
+([ADR-010](../adr/010-integration-event-schema-versioning.md)). The
+[getting-started guide](common-GETTING-STARTED.md#6-the-one-time-fixup) covers the sort fixup and the
+frozen contract in full.
 
 > **Re-running the walkthrough on the same machine?** The Aspire SQL container is persistent by
 > design, so databases created by an earlier MMCA.ECommerce build survive a re-scaffold, and their
@@ -731,9 +741,8 @@ adding real RS256/JWKS auth later is the getting-started guide's "Then what" pat
 1. Baseline green immediately after `mmca-app`, before any edit: **81 tests**.
 2. After `build/add-module.ps1`: still green at **99 tests**, both modules' scaffolded suites running.
 3. After both reshapes: `dotnet build MMCA.ECommerce.slnx` warning-free and
-   `dotnet test --solution MMCA.ECommerce.slnx` fully green (the sample lands at **158 tests**), with
-   the architecture rules passing: layering, module isolation, event conventions, and your frozen
-   wire contract.
+   `dotnet test --solution MMCA.ECommerce.slnx` fully green, with the architecture rules passing:
+   layering, module isolation, event conventions, and your updated frozen wire contract.
 4. Both `InitialCreate` migrations generated, each with its module's tables plus its own
    `OutboxMessages` table.
 5. Interactively: products created, an order walked Pending to Shipped, items locked after Pending,
