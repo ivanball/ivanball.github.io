@@ -95,7 +95,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 53 articles</summary>
+        <summary>All 54 articles</summary>
         <nav class="doc-nav" aria-label="The MMCA.Common series">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -151,7 +151,8 @@
         <li><a href="governed-llm-boundary.html">50 · The governed LLM boundary</a></li>
         <li><a href="durable-internal-commands.html">51 · Four ways to do work later</a></li>
         <li><a href="identity-completions.html">52 · Finishing identity</a></li>
-        <li><a href="series-index.html">53 · The series index</a></li>
+        <li><a href="cloud-neutral-vendor-adapters.html">53 · One framework, three clouds</a></li>
+        <li><a href="series-index.html">54 · The series index</a></li>
           </ol>
         </nav>
       </details>
@@ -263,8 +264,9 @@
           <p>Two things make this more than a toy. First, the provider is real: <code>AddAPI</code> registers
           <code>services.AddFeatureManagement().WithTargeting&lt;CurrentUserTargetingContextAccessor&gt;()</code> plus the
           disabled-response handler (<code>MMCA.Common.API/DependencyInjection.cs:104-107</code>), which brings the built-in
-          Percentage, TimeWindow, and Targeting filters with a per-user audience already supplied, so &quot;roll this
-          out to 10 percent&quot; is a config change, not a code change. Second, flag
+          Percentage, TimeWindow, and Targeting filters, with the Targeting filter&#39;s per-user audience already
+          supplied, so &quot;roll this out to 10 percent of users&quot; is a config change (a Targeting rollout with a
+          <code>DefaultRolloutPercentage</code>), not a code change. Second, flag
           names are module constants, not magic strings scattered through handlers: <code>SalesFeatures.PaymentVerification</code>
           = <code>&quot;Sales.PaymentVerification&quot;</code> (<code>SalesFeatures.cs:23</code>), <code>ConferenceFeatures.SessionizeIntegration</code> =
           <code>&quot;Conference.SessionizeIntegration&quot;</code> (<code>ConferenceFeatures.cs:23</code>), <code>NotificationFeatures.PushNotifications</code>
@@ -320,21 +322,25 @@
           constant with no attribute, and <code>TemporaryFeatureFlagsAreNotPastRemoveBy</code> (<code>:70</code>) fails the day a
           temporary flag passes its date, naming the flag, the date and the owner. Both are exposed as facts on
           <code>FeatureFlagLifecycleTestsBase</code> (<code>:10</code>, the two facts at <code>:20-25</code>). The limits are real: like every
-          fitness base, the gate exists only where a repo subclasses it, so a repo that has not still carries its
-          flag debt uncounted (ADR-031), and a <code>Permanent</code> flag is deliberately outside the expiry check, so the
+          fitness base, the gate exists only where a repo subclasses it (all four repos do: Common and ADC and
+          Store each in a <code>FeatureFlagLifecycleTests</code> class, Helpdesk in <code>ArchitectureTests.cs:210</code>, ADR-031), so
+          adoption stays a per-repo choice, and a <code>Permanent</code> flag is deliberately outside the expiry check, so the
           judgement about whether a capability toggle has outlived its branch is still a human one.</li>
-          <li><strong>Rollout bucketing is per user, but only as stable as the claim behind it.</strong> Percentage and
-          Targeting filters evaluate locally, so consistent assignment needs a targeting context, and the
-          framework supplies one: <code>CurrentUserTargetingContextAccessor</code>
+          <li><strong>Rollout bucketing is per user only through the Targeting filter, and only as stable as the claim
+          behind it.</strong> Filters evaluate locally in each process, so consistent assignment needs a targeting
+          context, and the framework supplies one: <code>CurrentUserTargetingContextAccessor</code>
           (<code>CurrentUserTargetingContextAccessor.cs:54-55</code>) implements <code>ITargetingContextAccessor</code> and is wired by
           <code>AddFeatureManagement().WithTargeting&lt;CurrentUserTargetingContextAccessor&gt;()</code>
-          (<code>MMCA.Common.API/DependencyInjection.cs:105-106</code>), so every host that goes through <code>AddAPI</code> buckets a
-          given user the same way on every replica (ADR-031). The residual caveat is that the stickiness is only
-          as stable as the identifier behind it: the accessor sets <code>UserId</code> from <code>FindUserIdValue()</code>
+          (<code>MMCA.Common.API/DependencyInjection.cs:105-106</code>), so in every host that goes through <code>AddAPI</code> a
+          Targeting-filter rollout gives a given user the same answer on every replica. The built-in Percentage
+          filter never reads that context: it activates on a random percentage at each evaluation, so a
+          Percentage-filter flag can flip between requests for the same user, and a rollout that must be sticky
+          uses Targeting with a <code>DefaultRolloutPercentage</code> (ADR-031). The residual caveat is that the stickiness
+          is only as stable as the identifier behind it: the accessor sets <code>UserId</code> from <code>FindUserIdValue()</code>
           (<code>CurrentUserTargetingContextAccessor.cs:86</code>), which reads the JWT <code>sub</code> claim
           (<code>AuthClaimTypes.Subject</code>, <code>AuthClaimTypes.cs:34</code>) and falls back to the mapped
-          <code>ClaimTypes.NameIdentifier</code> (<code>ClaimsPrincipalExtensions.cs:26-28</code>) and then to <code>Identity.Name</code>. A filter
-          configured with no targeting audience gains no stickiness from the accessor at all.</li>
+          <code>ClaimTypes.NameIdentifier</code> (<code>ClaimsPrincipalExtensions.cs:26-28</code>) and then to <code>Identity.Name</code>. An
+          anonymous caller gets an empty context (<code>:67-74</code>), so it matches no named user or group.</li>
           <li><strong>It is opt-in, and the pipeline side is adopted narrowly.</strong> Three use cases implement
           <code>IFeatureGated</code> across both apps, all of them commands: ADC&#39;s <code>RefreshFromSessionizeCommand</code>
           (<code>RefreshFromSessionizeCommand.cs:15</code>) and <code>ScoreEventSessionsInternalCommand</code>

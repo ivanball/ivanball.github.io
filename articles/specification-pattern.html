@@ -95,7 +95,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 53 articles</summary>
+        <summary>All 54 articles</summary>
         <nav class="doc-nav" aria-label="The MMCA.Common series">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -151,7 +151,8 @@
         <li><a href="governed-llm-boundary.html">50 · The governed LLM boundary</a></li>
         <li><a href="durable-internal-commands.html">51 · Four ways to do work later</a></li>
         <li><a href="identity-completions.html">52 · Finishing identity</a></li>
-        <li><a href="series-index.html">53 · The series index</a></li>
+        <li><a href="cloud-neutral-vendor-adapters.html">53 · One framework, three clouds</a></li>
+        <li><a href="series-index.html">54 · The series index</a></li>
           </ol>
         </nav>
       </details>
@@ -232,7 +233,7 @@
           constructor throws <code>ArgumentException</code> instead of silently dropping the shape; an unshaped one composes
           like any other, and predicates that belong with a shaped read are composed inside its own <code>Criteria</code>.
           Composition is live in production
-          today, in six consumer read paths across two applications. Four are in ADC: the paged sessions read
+          today, in seven consumer read paths across two applications. Four are in ADC: the paged sessions read
           ANDs the public-session filter with the speaker-scoped one rather than substituting, because dropping
           the public filter for a speaker-scoped request would leak non-accepted sessions to non-privileged
           callers; the paged speakers read ANDs the public-speaker filter with an event-scoped one for the same
@@ -240,12 +241,15 @@
           predicate before projecting session ids; and the organizer user roster turns the grid&#39;s signed-in
           filter into a specification (an id <code>Contains</code> over the accounts holding a live session), negates it
           with <code>.Not()</code> for the not-signed-in case, and ANDs it with any specification the caller already
-          supplied. Two are in MMCA.Store, where the public product-reviews endpoint and the domain-event
+          supplied. Three are in MMCA.Store. The public product-reviews endpoint and the domain-event
           handler that recomputes a product&#39;s rating both AND a by-product review specification with a
-          published-reviews one. Each composed <code>Criteria</code> reaches the database as a single server-side <code>WHERE</code>.
-          That is seven composing call sites, six fluent <code>.And()</code> calls and one fluent <code>.Not()</code>, and the
+          published-reviews one, and the storefront product read is itself a <code>QuerySpecification</code> that folds
+          its optional search, category and on-sale filters into its own <code>Criteria</code> with <code>.And()</code>, so only the
+          filters a request asks for reach the predicate and the shaped specification is never an operand.
+          Each composed <code>Criteria</code> reaches the database as a single server-side <code>WHERE</code>.
+          That is ten composing call sites, nine fluent <code>.And()</code> calls and one fluent <code>.Not()</code>, and the
           hand-built <code>new AndSpecification&lt;...&gt;(a, b)</code> form appears nowhere in the three consumer repositories.
-          Seven call sites in two applications is still a narrow sample, though (MMCA.Helpdesk composes
+          Ten call sites in two applications is a narrow sample, though (MMCA.Helpdesk composes
           nothing), and <code>Or</code> ships without a caller.</p>
           <pre class="doc-pre" tabindex="0" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-comment">// A named, reusable, server-authored visibility rule (ADC, BR-49): a session is publicly</span>
 <span class="hljs-comment">// visible when it is Accepted, or carries no status (organizer-created sessions never get one).</span>
@@ -261,11 +265,14 @@
 
 <span class="hljs-comment">// The paged sessions read. publicSpecification is the public filter (null for a privileged caller):</span>
 <span class="hljs-comment">// a specification built from StatusCriteria plus a published-event scope. The speaker scope (itself a</span>
-<span class="hljs-comment">// specification, a Session.Id IN (...) filter over the SessionSpeaker join) is ANDed with it, never</span>
-<span class="hljs-comment">// substituted for it.</span>
+<span class="hljs-comment">// specification, a Session.Id IN (...) filter over the SessionSpeaker join) arrives as a Result; once</span>
+<span class="hljs-comment">// unwrapped it is ANDed with the public filter, never substituted for it.</span>
+<span class="hljs-keyword">if</span> (!speakerResult.TryGetValue(<span class="hljs-keyword">out</span> <span class="hljs-keyword">var</span> speakerSpecification))
+    <span class="hljs-keyword">return</span> publicSpecification;
+
 <span class="hljs-keyword">return</span> publicSpecification <span class="hljs-keyword">is</span> <span class="hljs-literal">null</span>
-    ? speakerResult.Value
-    : publicSpecification.And(speakerResult.Value!);</code></pre>
+    ? speakerSpecification
+    : publicSpecification.And(speakerSpecification);</code></pre>
           <p>The leaked-query bug from the opening cannot happen here. Both halves of the composed query are named
           objects, not text someone retypes at every call site: the speaker scope arrives as a specification
           built by a query handler, and the public visibility rule arrives the same way, built by another handler
@@ -340,8 +347,10 @@
           (<code>CountAsync(specification)</code>, <code>ListAsync(specification)</code>, a projecting
           <code>ListAsync&lt;TResult&gt;(specification, select)</code>, <code>AnyAsync(specification)</code>, and
           <code>FirstOrDefaultAsync(specification)</code>), a keyset-paged <code>GetPageByCursorAsync</code> whose optional
-          specification scopes the page, and expression-predicate aggregates that keep the arithmetic in the
-          database (<code>CountByAsync</code>, <code>SumByAsync</code>, and the soft-delete-aware <code>FindIncludingDeletedAsync</code>). The
+          specification scopes the page, expression-predicate aggregates that keep the arithmetic in the
+          database (<code>CountByAsync</code> and <code>SumByAsync</code>), and the soft-delete-aware <code>FindIncludingDeletedAsync</code>,
+          which returns the matching rows split into active and soft-deleted halves so a create handler can
+          reactivate a soft-deleted row instead of inserting a duplicate. The
           premise of this whole article, that query intent belongs in an object, is what the read contract
           itself assumes.
           <code>IReadRepository</code> composes exactly those two, and it alone

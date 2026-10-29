@@ -95,7 +95,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 53 articles</summary>
+        <summary>All 54 articles</summary>
         <nav class="doc-nav" aria-label="The MMCA.Common series">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -151,7 +151,8 @@
         <li><a href="governed-llm-boundary.html">50 · The governed LLM boundary</a></li>
         <li><a href="durable-internal-commands.html">51 · Four ways to do work later</a></li>
         <li><a href="identity-completions.html">52 · Finishing identity</a></li>
-        <li><a href="series-index.html">53 · The series index</a></li>
+        <li><a href="cloud-neutral-vendor-adapters.html">53 · One framework, three clouds</a></li>
+        <li><a href="series-index.html">54 · The series index</a></li>
           </ol>
         </nav>
       </details>
@@ -298,9 +299,9 @@
           check, and the same invariant-over-discipline posture the framework prefers (ADR-015): without a second
           working version, everything above would be asserted rather than proven.</p>
           <p><strong>Every REST host adopts it the same way.</strong> The extracted services call <code>AddCommonApiVersioning</code> in
-          their startup: ADC&#39;s Conference (<code>MMCA.ADC.Conference.Service/Program.cs:220</code>), Identity (<code>:155</code>),
-          Engagement (<code>:150</code>), and Notification (<code>:139</code>) hosts, Store&#39;s Catalog (<code>:140</code>), Sales (<code>:148</code>), and
-          Identity (<code>:135</code>) hosts, and the monolith reference host
+          their startup: ADC&#39;s Conference (<code>MMCA.ADC.Conference.Service/Program.cs:226</code>), Identity (<code>:162</code>),
+          Engagement (<code>:156</code>), and Notification (<code>:145</code>) hosts, Store&#39;s Catalog (<code>:146</code>), Sales (<code>:154</code>), and
+          Identity (<code>:141</code>) hosts, and the monolith reference host
           (<code>MMCA.Helpdesk.Web/Program.cs:35</code>). One call per host, and the reader, default, and reporting choices
           cannot drift apart between services. The discovery exemplar is narrower than the registration: only ADC&#39;s
           Conference and Store&#39;s Catalog hosts ship a <code>ServiceInfoController</code> subclass today.</p>
@@ -335,7 +336,7 @@
           (<code>Conformance/OpenApiContractTestsBase.cs:51</code>). ADC and Store also write that document to disk at
           build time and commit it per service host (four in ADC, three in Store, for example
           <code>MMCA.ADC.Conference.Service/openapi/MMCA.ADC.Conference.Service.json</code>), and an &quot;OpenAPI documents are
-          current&quot; CI step fails a PR whose document changed without being committed (<code>MMCA.ADC/.github/workflows/deploy.yml:305</code>,
+          current&quot; CI step fails a PR whose document changed without being committed (<code>MMCA.ADC/.github/workflows/deploy.yml:306</code>,
           <code>MMCA.Store/.github/workflows/deploy.yml:291</code>). All seven consumer OpenAPI contract tests also opt into
           a committed-baseline diff: each overrides <code>BaselineDocumentPath</code> (<code>OpenApiContractTestsBase.cs:80</code>;
           ADC Conference&#39;s <code>Contract/OpenApiContractTests.cs:29</code>, for example) to point at an

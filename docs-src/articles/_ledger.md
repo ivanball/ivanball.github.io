@@ -21,19 +21,19 @@ Working file for `/update-medium` (underscore-prefixed, so the site build skips 
 **Anchor facts (current state, verify before publishing)**
 - .NET 10, C# preview (extension types), Apache-2.0, repo `https://github.com/ivanball/MMCA.Common`
   (confirmed via git remote).
-- Framework version **v1.250.0**, tracked in lockstep by every consumer (per `MMCA.Common/FACTS.md`).
-- 22 NuGet packages released in lockstep; **132 ADRs (001-132)** (per `Website/docs-src/adr/README.md`).
-- `MMCA.Common.Testing.Architecture` defines 159 test methods across 63 base classes;
-  Common's own build runs 458, plus a compile-time MSBuild layer guard (per `FACTS.md`).
+- Framework version **v1.265.1**, tracked in lockstep by every consumer (per `MMCA.Common/FACTS.md`).
+- 26 NuGet packages released in lockstep; **136 ADRs (001-136)** (per `Website/docs-src/adr/README.md`).
+- `MMCA.Common.Testing.Architecture` defines 160 test methods across 64 base classes;
+  Common's own build runs 479, plus a compile-time MSBuild layer guard (per `FACTS.md`).
 - Two-axis architecture index (current per-repo scorecards): Common **Maturity 97.3% (319/328),
   Implementation 85.4% (700/820)** across all 34 categories (none N/A now: §27 i18n is scored after
   ADR-027 superseded the single-locale ADR-011); ADC **Maturity 97.5% (316/324), Implementation 86.0% (697/810)**; Store **Maturity 97.5% (308/316), Implementation 83.2% (657/790)**.
-- 8,386 tests executed by Common's `build-and-test` job (CI run 39625216950, 2026-10-21), no Docker; the
+- 9,122 tests executed by Common's `build-and-test` job (CI run 40870473851, 2026-10-29), no Docker; the
   CI comment's "~2,254" (`MMCA.Common/.github/workflows/ci.yml:160`) is stale. Two real consumer apps: MMCA.ADC (conference, Azure Container Apps) and
-  MMCA.Store (e-commerce, Stripe). Both consumers are pinned at 1.250.0 in lockstep.
+  MMCA.Store (e-commerce, Stripe). Both consumers are pinned at 1.265.1 in lockstep.
 
 > **Note on the scorecard:** the repo's committed `Website/docs-src/governance/common-ArchitectureScorecard.md` is now the
-> canonical **two-axis** scorecard (Maturity 97.3% (319/328) / Implementation 85.4% (700/820) as of the 2026-10-22 re-score at v1.250.0;
+> canonical **two-axis** scorecard (Maturity 97.3% (319/328) / Implementation 85.4% (700/820) as of the 2026-10-29 evidence stamp at v1.265.1;
 > re-scored clean-tree at v1.101.0, then moved by the fifteenth-wave i18n completion train 2026-07-03,
 > the sixteenth-wave clean-tree re-score at v1.106.0 2026-07-06, which lifted §14 Testability
 > Implementation 8 to 9, the seventeenth-wave re-score at v1.108.0 2026-07-09, which recalibrated
@@ -84,7 +84,7 @@ Working file for `/update-medium` (underscore-prefixed, so the site build skips 
 > workspace eval files (`Docs/Architecture/ArchitectureEvaluation-MMCA.*.md`) are now pointer stubs, so
 > cite the in-repo scorecards. Re-derive numbers before publishing.
 
-> **Note on ADRs:** the set has grown to **132 (001-132)**. Each ADR maps to an article or is a recorded
+> **Note on ADRs:** the set has grown to **136 (001-136)**. Each ADR maps to an article or is a recorded
 > scope-out. Shared homes: ADR-017 (request idempotency) and ADR-021 (consumer-side inbox idempotency) are
 > both taught in **Article 18**; ADR-018 (polyglot persistence) is **Article 11**; ADR-001 (manual DTO
 > mapping) is **Article 23**; ADR-026 (two-tier caching) is **Article 19**; ADR-024 (two-channel
@@ -386,6 +386,18 @@ Working file for `/update-medium` (underscore-prefixed, so the site build skips 
 > §10 because the scorecard's §10 row credits the decorator pipeline; Article 18's rubric cell widens to
 > §6, §9, §10, §29; Article 42's header gains ADR-071 to match its matrix cell. Every ADR in 001-132 and
 > every functional group in G01-G28 has an article cell or a recorded scope-out.
+>
+> **2026-10-29 coverage audit** (full sweep at v1.265.1, against the grown ADR set 133-136 and the new
+> functional group G29, Common Cloud Provider Adapters): one new article and two sections. **ADR-134**
+> (the cloud-neutral core with vendor adapter packages, one call per capability, the open broker string
+> and the startup tripwires) and **G29** share the new dedicated **Article 53**
+> (`cloud-neutral-vendor-adapters.md`), appended before the hub, which moves to 54. **ADR-133** (the
+> versioned password-hash work factor, superseding ADR-102) regrounds **Article 17**, whose matrix cell
+> moves from 102 to 133. **ADR-135** (one `ApplicationNamespace` for every shared keyspace) is a new
+> section of **Article 19**, beside the cache-key prefix. **ADR-136** (the installable web app whose
+> service worker never caches a page) is a new section of **Article 37**. **ADR-121** replaces the
+> superseded ADR-052 in Article 22's cell. Every ADR in 001-136 and every functional group in G01-G29 has
+> an article cell or a recorded scope-out.
 
 **Coverage history**
 
@@ -444,3 +456,7 @@ effective pricing) inside the per-module group-axis scope-out now extended to St
 internals, ADR-053 (dual-registry keyless OIDC publishing), ADR-057 (the expand/contract schema gate),
 ADR-061 (runtime secret management) and ADR-064 (deploy recency gates), which stay inside the recorded
 §17/§32 scope-outs.
+
+The 2026-10-29 audit appended one more dedicated article against the grown ADR set 133-136: the
+cloud-neutral core with vendor adapter packages (ADR-134 + G29), the new Article 53, with the series
+index moving to 54.

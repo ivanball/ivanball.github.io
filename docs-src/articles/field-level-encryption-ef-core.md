@@ -86,10 +86,12 @@ Four properties of that converter are worth naming precisely, because they are t
 
 **It is authenticated, not merely confidential.** Both directions use `AesGcm`, AES-256 in Galois/Counter
 Mode, which binds a 128-bit authentication tag to the ciphertext. Encryption gives you confidentiality;
-the tag gives you integrity for free. A value that has been tampered with, truncated, or corrupted fails
-the tag check inside `AesGcm.Decrypt` and throws rather than silently returning garbage plaintext. The
-converter also rejects, up front, any stored value too short to even hold a key version, a nonce and a
-tag, throwing a `CryptographicException` before it ever calls into the primitive.
+the tag gives you integrity for free. A value that has been tampered with or corrupted, but still decodes
+as Base64 and names a registered key version, fails the tag check inside `AesGcm.Decrypt` and throws
+rather than silently returning garbage plaintext. The converter also rejects, up front, any stored value
+too short to even hold a key version, a nonce and a tag, and any value whose version byte has no
+registered key, throwing a `CryptographicException` before it ever calls into the primitive (a value that
+is not Base64 at all fails earlier still, at decoding).
 
 **Every key is exactly 256 bits, and the converter refuses anything else.** There are two constructors.
 The single-key one takes a raw `byte[]`, null-checks it with `ArgumentNullException.ThrowIfNull`, and
@@ -136,8 +138,11 @@ or empty column stays as-is rather than becoming a block of ciphertext for the e
 
 Where do the keys come from? Not from the framework. The converter takes raw key material as a
 constructor argument, one `byte[]` or a whole ring, and stops there: no DI registration, no options type,
-no key-provider abstraction in Infrastructure, and no automatic refresh, since the ring is frozen at
-construction and adding a version means constructing a new converter. The adopting entity configuration
+no key provider for this converter, and no automatic refresh, since the ring is frozen at construction and
+adding a version means constructing a new converter. The framework's other key material does not reach it
+either: the JWKS signing-key provider and the Data Protection key ring (which a cloud adapter can protect
+with a Key Vault or KMS key, see [cloud-neutral vendor adapters](cloud-neutral-vendor-adapters.md)) supply
+none of its keys. The adopting entity configuration
 supplies the keys, and the converter's own XML documentation is explicit that they belong in Azure Key
 Vault, user-secrets, or an environment variable, and never hardcoded. That lines up with rubric §11's
 secrets criterion (in a vault or managed identity, never in source or plain config), and it keeps the
@@ -218,8 +223,9 @@ quietly instead of loudly.
   is no equality filter, index seek, sort, or join on an encrypted column. Encrypt the columns you read by
   key, not the ones you search by value.
 - **Key management is still entirely yours; the ring is a mechanism, not a service.** The converter holds
-  whatever key material you hand it, frozen at construction. There is no key-provider abstraction, no Key
-  Vault integration, no automatic refresh, and no envelope encryption over a key-encryption key. Losing a
+  whatever key material you hand it, frozen at construction. There is no key provider for it, no Key
+  Vault integration for its keys (the Azure adapter's Key Vault step protects the Data Protection key
+  ring, not this ring), no automatic refresh, and no envelope encryption over a key-encryption key. Losing a
   key still makes every row written under that version permanently unrecoverable; the ring makes that
   failure mode more granular, not less likely.
 - **Rotation is enabled, not automated.** The versioned envelope makes a zero-downtime rotation possible,
@@ -295,7 +301,7 @@ onboarding guide, or `dotnet add package MMCA.Common.Infrastructure` and try it.
 
 *Tags: .NET, C Sharp, Encryption, Data Security, EF Core*
 
-*Notes: all verified against source read on 2026-08-15, after MMCA.Common PR #247 (versioned ciphertext
+*Notes: last verified 2026-10-29 at MMCA.Common v1.265.1 (see the 2026-10-29 entry); first verified against source read on 2026-08-15, after MMCA.Common PR #247 (versioned ciphertext
 envelope plus key ring) merged to `main`; the ADR-037 status citation was re-verified on 2026-08-19 against
 its 2026-08-18 revision. Re-read in full on 2026-09-19 at MMCA.Common v1.205.0: every
 `EncryptedStringConverter.cs` anchor below still resolves to the line it names, as does every `[Fact]`
@@ -330,6 +336,27 @@ gained an illustrative two-line sketch of step 3, and Apply-this step 5 names th
 The converter file grew in v1.247.0, so the converter line numbers quoted in the 2026-10-08 entry above
 (`:125`, `:84`, `:150` through `:179`) are superseded by the anchors below; the test-file `[Fact]`
 anchors did not move. Every anchor below was re-read this run.
+2026-10-29 entry (MMCA.Common v1.265.1): ADR-037 gained two anchor-only revisions, 2026-10-26 (Status
+`:10`, section `:396-407`) and 2026-10-28 (Status `:11`, section `:409-423`), with adoption still zero, so
+every ADR-037 anchor from `:12` onward moved down two lines; the ADR paragraph below is re-anchored (the
+ADR anchors inside the dated entries above are point-in-time and left as recorded). Three body passages
+were tightened. (1) "no key-provider abstraction in Infrastructure" was overbroad: Infrastructure has the
+JWKS provider (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Auth/IJwksProvider.cs:11`); ADR-037
+item 8 (`:109-114`) scopes it as no key provider for this converter, and the body and the key-management
+trade-off now say so. The key-material question was settled from source: no adapter supplies this
+converter's keys (no reference to `EncryptedStringConverter` in `MMCA.Common.Azure`, `.Aws` or `.Gcp`);
+the Azure adapter's Key Vault step is `ProtectKeysWithAzureKeyVault` for the Data Protection key ring
+(`MMCA.Common/Source/Hosting/MMCA.Common.Azure/AzureDataProtectionExtensions.cs:86-89`), and the GCP
+adapter's Cloud KMS key likewise protects Data Protection
+(`MMCA.Common/Source/Hosting/MMCA.Common.Gcp/GoogleCloudDataProtectionExtensions.cs:44`), so one pointer to
+`cloud-neutral-vendor-adapters.md` was added. (2) The tag-check sentence now scopes itself to a value that
+decodes as Base64 and names a registered version, since `Convert.FromBase64String` throws first
+(`EncryptedStringConverter.cs:248`), the length guard next (`:250-251`), and an unregistered version byte
+before the tag check (`:254-255`). Ledger re-anchors: `MarkForReEncryption` shipped API `:1026` to
+`:1011` (`GenerateKey` `:1010`), the audit-trail rationale `:632-635` to `:632-636` with `IsRedacted` at
+`:638-641` and the converter clause `:640` to `:641`, `SECURITY.md:36` to `:40`, the onboarding chapter
+anchors re-derived (8,562 lines), and the word "primary" dropped from the rubric line (the rubric does not
+use it). The converter anchors below (`:76` through `:268`, `GenerateKey` `:129`) were re-read and hold.
 `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Encryption/EncryptedStringConverter.cs`:
 sealed `EncryptedStringConverter : ValueConverter<string, string>` (`:76`); namespace
 `MMCA.Common.Infrastructure.Persistence.Encryption` (`:7`); envelope constants `VersionSize = 1` (`:79`),
@@ -344,7 +371,7 @@ the ring (`:204-209`), then `ToFrozenDictionary()` as the defensive copy (`:211`
 captures the frozen ring in the two compiled expressions handed to the base converter (`:118-123`, encrypt
 at `:120`, decrypt at `:121`). `GenerateKey() => RandomNumberGenerator.GetBytes(KeySize)` (`:129`).
 `public static int MarkForReEncryption(EntityEntry entry)` (`:143-155`; shipped API at
-`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/PublicAPI.Shipped.txt:1026`): null guard (`:145`),
+`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/PublicAPI.Shipped.txt:1011`): null guard (`:145`),
 every property whose metadata converter is an `EncryptedStringConverter` (`:148`) set `IsModified = true`
 (`:150`), the count of marked properties returned (`:154`), and the owned-type remark that an owned entry
 has to be passed on its own (`:137-140`). `Encrypt` short-circuits null-or-empty (`:216-217`), resolves the
@@ -391,62 +418,70 @@ version 2 (`:96`). The audit-trail test harness maps an encrypted property
 that `SaveChanges_EncryptedProperty_RecordsTheRedactionToken` exercises
 (`MMCA.Common/Tests/Core/MMCA.Common.Infrastructure.Tests/Persistence/AuditTrail/AuditTrailSaveChangesInterceptorTests.cs:383`).
 The redaction itself: `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/AuditTrail/AuditTrailSaveChangesInterceptor.cs`,
-class remarks "Encrypted columns are redacted too" (`:56-58`), the decrypted-value rationale (`:632-635`),
-and the `GetValueConverter() is EncryptedStringConverter` check (`:640`).
-`Website/docs-src/adr/037-field-level-encryption-at-rest.md` (re-anchored 2026-10-22): status "Accepted
+class remarks "Encrypted columns are redacted too" (`:56-58`), the decrypted-value rationale (`:632-636`,
+XML doc `:631-637`), and `IsRedacted` (`:638-641`) with the `GetValueConverter() is EncryptedStringConverter`
+check (`:641`).
+`Website/docs-src/adr/037-field-level-encryption-at-rest.md` (re-anchored 2026-10-29): status "Accepted
 (2026-07-06; revised 2026-07-24, 2026-07-25, 2026-08-15, 2026-08-18)" (`:4`), with the 2026-10-07 anchor
-line (`:6`) and the 2026-10-21 line recording `MarkForReEncryption`, the audit-trail redaction and the
-extra test suites in v1.247.0 with production adoption still zero (`:7-9`); TDE-vs-column framing
-(`:12-17`); distinction from ADR-032 password hashing and ADR-005 erasure (`:19-23`); sealed converter
-applied per property via `HasConversion` (`:39-46`); AES-256-GCM and the fixed envelope sizes (`:48-57`);
-the versioned self-describing envelope (`:59-72`); the key ring with one version current, its validation and
-its defensive freeze (`:74-87`); the version byte as authenticated associated data (`:89-95`);
-non-deterministic ciphertext, not queryable (`:97-101`, `:208-211`); empty and null passthrough
-(`:103-105`); key management as the consumer's, no DI, options type, or key provider, plus the audit-trail
-interceptor as the one other Infrastructure type that recognizes the converter (`:107-119`, audit trail at
-`:113-119`); stateless and context-free, per-tenant selection out of scope (`:121-129`); unit-tested, two
-further suites, but zero adopted columns (`:28-33`, `:131-159`, `:200-207`); rotation as four steps with
-step 3 as load, `MarkForReEncryption`, save (`:173-183`); rotation enabled but not automated, the per-entry
-primitive and no row-count reporting (`:219-228`), and the 256-version cap of a one-byte prefix
-(`:229-233`); 29-byte overhead = 1-byte version plus 12-byte nonce plus 16-byte tag (`:237-239`);
-malformed-input coverage stopping short of a ciphertext bit-flip (`:240-245`); the format break being free
-only while adoption is zero (`:184-187`); the 2026-08-15 revision itself, including "There is no legacy
-decode path" (`:278-322`, no-legacy-path paragraph `:293-299`, test count 11 to 21 at `:313-316`, PR #247
-and v1.153.0 with adoption unchanged at zero at `:318-322`). The anchor-only revisions dated 2026-10-01
-(`:324-330`), 2026-10-06 (`:332-345`, which also corrects the `GetBytes(KeySize)` quote) and 2026-10-07
-(`:347-353`) change no decision; the 2026-10-21 revision (`:355-392`) records the rotation-step change, the
-audit-trail redaction and the extra suites, and keeps production adoption at zero (`:356-357`, `:374-378`).
+line (`:6`), the 2026-10-21 line recording `MarkForReEncryption`, the audit-trail redaction and the
+extra test suites in v1.247.0 with production adoption still zero (`:7-9`), and the anchor-only 2026-10-26
+(`:10`) and 2026-10-28 (`:11`) lines; TDE-vs-column framing (`:14-19`); distinction from ADR-032 password
+hashing and ADR-005 erasure (`:21-25`); sealed converter applied per property via `HasConversion`
+(`:41-48`); AES-256-GCM and the fixed envelope sizes (`:50-59`); the versioned self-describing envelope
+(`:61-74`); the key ring with one version current, its validation and its defensive freeze (`:76-89`); the
+version byte as authenticated associated data (`:91-97`); non-deterministic ciphertext, not queryable
+(`:99-103`, `:210-213`); empty and null passthrough (`:105-107`); key management as the consumer's, no DI,
+options type, or key provider for this converter (the JWKS provider and the Data Protection key ring do not
+supply its keys), plus the audit-trail interceptor as the one other Infrastructure type that recognizes the
+converter (`:109-121`, audit trail at `:115-121`); stateless and context-free, per-tenant selection out of
+scope (`:123-131`); unit-tested, two further suites, but zero adopted columns (`:30-35`, `:133-161`,
+`:202-209`); rotation as four steps with step 3 as load, `MarkForReEncryption`, save (`:175-185`); rotation
+enabled but not automated, the per-entry primitive and no row-count reporting (`:221-230`), and the
+256-version cap of a one-byte prefix (`:231-235`); 29-byte overhead = 1-byte version plus 12-byte nonce
+plus 16-byte tag (`:239-241`); malformed-input coverage stopping short of a ciphertext bit-flip
+(`:242-247`); the format break being free only while adoption is zero (`:186-189`); the 2026-08-15
+revision itself, including "There is no legacy decode path" (`:280-324`, no-legacy-path paragraph
+`:295-301`, test count 11 to 21 at `:315-318`, PR #247 and v1.153.0 with adoption unchanged at zero at
+`:320-324`). The anchor-only revisions dated 2026-10-01 (`:326-332`), 2026-10-06 (`:334-347`, which also
+corrects the `GetBytes(KeySize)` quote), 2026-10-07 (`:349-355`), 2026-10-26 (`:396-407`) and 2026-10-28
+(`:409-423`, which records `PublicAPI.Shipped.txt:1011` and `SECURITY.md:40`) change no decision; the
+2026-10-21 revision (`:357-394`) records the rotation-step change, the audit-trail redaction and the extra
+suites, and keeps production adoption at zero.
 Rubric `Website/docs-src/governance/ArchitectureEvaluationCriteria.md`: section 11, Security, heading at
-`:353`, primary, with "Secrets in a vault/managed identity, never in source or plain config" at `:360` and
+`:353`, with "Secrets in a vault/managed identity, never in source or plain config" at `:360` and
 "Transport security (TLS), data-at-rest protection, PII handling, and least-privilege access" at `:362`,
 default weight 3 at `:376`; section 30, Compliance, Privacy & Data Governance, heading at `:799`, whose
 intent line draws the same split this article does ("section 11 defends against attackers; this answers to
 regulators", `:801`) and whose first criterion is the "PII/sensitive-data inventory: what's collected,
-where it's stored, who can access it" at `:804`. `MMCA.Common/SECURITY.md:36` lists "Field encryption:
+where it's stored, who can access it" at `:804`. `MMCA.Common/SECURITY.md:40` lists "Field encryption:
 AES-256-GCM via `EncryptedStringConverter` for sensitive columns" as the reader-facing pointer this ADR
 backs. The footer's series index is Article #53 (`Website/docs-src/articles/series-index.md:3`).
-Corroborating chapter, re-derived 2026-10-22 against
-`Website/docs-src/onboarding/group-07-persistence-ef-core.md` (8,398 lines), which describes the same
+Corroborating chapter, re-derived 2026-10-29 against
+`Website/docs-src/onboarding/group-07-persistence-ef-core.md` (8,562 lines), which describes the same
 versioned envelope as this article. Its "Encryption, seeding, design time, and the shared helpers" section
-(`:1072`) carries a prose pointer to the converter (`:1074-1075`), naming the versioned Base64 envelope of
-one-byte key version, random 12-byte nonce, ciphertext and 16-byte tag (`:1077-1079`); the full walkthrough
-lives in the `### EncryptedStringConverter` catalog entry, which starts at `:6438`. The entry gives the
+(`:1108`) carries a prose pointer to the converter (`:1110-1111`), naming the versioned Base64 envelope of
+one-byte key version, random 12-byte nonce, ciphertext and 16-byte tag (`:1112-1116`); the full walkthrough
+lives in the `### EncryptedStringConverter` catalog entry, which starts at `:6581`. The entry gives the
 self-describing envelope, the 29 bytes of overhead before Base64 inflation, the key ring with one version
 current, the four-step rotation naming `MarkForReEncryption`, and the version byte as authenticated
-associated data (`:6465-6479`); the fixed sizes and `DefaultKeyVersion` (`:6481-6484`); both public
-constructors over the one private one (`:6485-6492`) and `ValidateAndFreeze` with its guards and its
-defensive freeze (`:6493-6498`); the `MarkForReEncryption` walkthrough (`:6501-6507`); the 21 unit tests
+associated data (`:6608-6622`); the fixed sizes and `DefaultKeyVersion` (`:6624-6627`); both public
+constructors over the one private one (`:6628-6635`) and `ValidateAndFreeze` with its guards and its
+defensive freeze (`:6636-6641`); the `MarkForReEncryption` walkthrough (`:6644-6650`); the 21 unit tests
 together with the zero-adoption statement that no entity configuration calls
 `HasConversion(new EncryptedStringConverter(...))` in any of the repos and no DI registration supplies a
-key or a ring (`:6533-6548`); and the "no legacy decode path" caveat naming v1.153.0 (`:6549-6555`),
-followed by the ciphertext bit-flip coverage gap (`:6558-6561`). It therefore corroborates the
-versioned-envelope behavior as well as the parts that did not change (AES-256-GCM, the 12-byte nonce and
-16-byte tag, the non-determinism constraint, the unadopted posture).
-Not determinable from source: any live production adoption (there is none as of ADR-037's 2026-10-21
+key or a ring (`:6676-6691`); and the "no legacy decode path" caveat naming v1.153.0 (`:6692-6698`),
+followed by the ciphertext bit-flip coverage gap (`:6701-6704`). It corroborates the versioned-envelope
+behavior and the unchanged parts (AES-256-GCM, the 12-byte nonce and 16-byte tag, the non-determinism
+constraint, the unadopted posture), with two chapter defects this article does not inherit: it quotes
+`GenerateKey()` as `GetBytes(32)` (`:6642`) where source reads `GetBytes(KeySize)`
+(`EncryptedStringConverter.cs:129`), and its "where it's used" search (`:6676-6688`) omits the audit-trail
+check (`AuditTrailSaveChangesInterceptor.cs:641`), the audit harness (`AuditTrailTestHarness.cs:264`) and
+the re-encryption suite (`EncryptedStringConverterReEncryptionTests.cs:90`, `:96`).
+Not determinable from source: any live production adoption (there is none as of ADR-037's 2026-10-28
 revision, and no `*Configuration.cs` in any of the four repositories calls
 `.HasConversion(new EncryptedStringConverter(...))`),
 any envelope encryption over a key-encryption key, any key-provider or Key Vault integration, and any
-framework-side re-encryption loop or version-inventory tooling (out of scope per ADR-037 `:219-224`; the
+framework-side re-encryption loop or version-inventory tooling (out of scope per ADR-037 `:221-226`; the
 framework ships only the per-entry `MarkForReEncryption` primitive).*
 
 - Full series index: https://ivanball.github.io/writing.html

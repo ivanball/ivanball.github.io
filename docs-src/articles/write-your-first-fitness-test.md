@@ -3,8 +3,8 @@
 > Series: MMCA.Common · Article #40 (tutorial) · Pillar P5 · Group G25 · Rubric §34 · ADR-015 ·
 > Status: grounded in `Website/docs-src/adr/015-architecture-fitness-functions.md`,
 > `MMCA.Common/AGENTS.md` ("Architecture", the two enforcement gates), `MMCA.Common/README.md` (Testing.Architecture
-> package row), and `Docs/Onboarding/parts/group-28-testing-infrastructure-p00.md` (assembled and
-> published as `Website/docs-src/onboarding/group-28-testing-infrastructure.md`). No em dashes.
+> package row), and `Docs/Onboarding/parts/group-29-testing-infrastructure-p00.md` (assembled and
+> published as `Website/docs-src/onboarding/group-29-testing-infrastructure.md`). No em dashes.
 
 **Subtitle:** Your Clean Architecture diagram is a hope, not a guarantee, until something fails the
 build when it is violated. Here is how to add NetArchTest fitness functions to your own solution in
@@ -50,7 +50,7 @@ A third gate sits alongside those two, and ADR-015 as revised records the enforc
 three layers. It is neither MSBuild nor NetArchTest: `Microsoft.CodeAnalysis.PublicApiAnalyzers` runs on
 every published package except `MMCA.Common.UI.Maui` (excluded by name, because it builds only on the
 Windows MAUI job outside the main solution) against committed baselines (a `PublicAPI.Shipped.txt` /
-`PublicAPI.Unshipped.txt` pair per gated package, twenty-one pairs), so adding or removing a public
+`PublicAPI.Unshipped.txt` pair per gated package, twenty-five pairs), so adding or removing a public
 member fails the compile until the change is declared in that package's `PublicAPI.Unshipped.txt` in the
 same pull request; the release step then folds every unshipped file into its shipped baseline. It guards the shipped package surface rather than layer
 flow, which is why the two speeds above are the ones this tutorial teaches.
@@ -64,14 +64,14 @@ This article is about adding the second layer to your own code, and optionally t
 - **Microsoft Testing Platform** as your test runner (MMCA.Common uses it via `global.json` with
   xUnit v3). The fitness tests run inside the normal `dotnet test` tier, so they gate CI like any other
   test.
-- The package you are about to install: **`MMCA.Common.Testing.Architecture`**, one of the twenty-two
+- The package you are about to install: **`MMCA.Common.Testing.Architecture`**, one of the twenty-six
   packages the framework publishes. Its README row describes it exactly: "`IArchitectureMap` + reusable
   NetArchTest rule library + abstract test bases (consumed by each repo's `*.Architecture.Tests`)."
 
 The key design idea: the rule *bodies* ship in the package once. You do not copy them. You supply a tiny
 map of your assemblies and subclass the bases, and you inherit roughly the same suite that runs across
-MMCA.Common, MMCA.Store, MMCA.ADC and MMCA.Helpdesk (159 test methods across 63 abstract `*TestsBase`
-classes; the framework's own build executes 458 of them).
+MMCA.Common, MMCA.Store, MMCA.ADC and MMCA.Helpdesk (160 test methods across 64 abstract `*TestsBase`
+classes; the framework's own build executes 479 of them).
 
 > **If you scaffolded with `dotnet new mmca-app`, steps 1 through 4 are already done.** The generated
 > solution ships the architecture-test project, the `IArchitectureMap`, and the reference app's set of
@@ -90,7 +90,7 @@ dotnet add package MMCA.Common.Testing.Architecture
 ```
 
 The package brings the NetArchTest engine (NetArchTest.eNhancedEdition), the `ArchitectureRules` rule
-library, the diagnostic helpers, and the 63 abstract `*TestsBase` classes. You will not write rule
+library, the diagnostic helpers, and the 64 abstract `*TestsBase` classes. You will not write rule
 logic; you will point the rules at your assemblies and subclass the bases.
 
 ## Step 2: implement `IArchitectureMap`, one anchor type per layer
@@ -203,15 +203,18 @@ difference between a diagram and a guarantee.
 
 The runtime suite is the broad net. For the single most common mistake, a bad project reference, you can
 get even faster feedback by also adding the compile-time guard, so the build fails before tests even
-run. MMCA.Common does this with an MSBuild target imported for every source project. The shape:
+run. MMCA.Common does this with an MSBuild targets file imported for every one of its own source
+projects (the condition scopes it to projects under `Source` whose name starts with `MMCA.Common`; use
+your own prefix). The shape:
 
 ```xml
 <!-- Imported from Directory.Build.props for each layer project (representative) -->
 <Import Project="$(MSBuildThisFileDirectory)Source\Build\MMCA.Common.LayerEnforcement.targets"
-        Condition="$(MSBuildProjectDirectory.Contains('Source'))" />
+        Condition="$(MSBuildProjectDirectory.Contains('Source')) AND $(MSBuildProjectName.StartsWith('MMCA.Common'))" />
 ```
 
-The target runs in a `BeforeTargets="ResolveProjectReferences"` step, inspects each project's
+The file holds ten targets of the same `BeforeTargets="ResolveProjectReferences"` shape, each guarding
+one reference rule; the layer target is the one to copy first. It inspects each project's
 `ProjectReference` set, and fails the build with a descriptive error if a layer references a forbidden
 upstream layer. This is the "two speeds" design from ADR-015: the MSBuild guard catches the common case
 at compile time on the developer's machine; the NetArchTest suite catches the subtler assembly-level
@@ -287,8 +290,29 @@ holds in two unrelated production systems.
 
 *Tags: .NET, C Sharp, Software Architecture, Testing, Clean Architecture*
 
-*Notes: verified facts (this run, re-verified 2026-10-22 against framework v1.250.0, `MMCA.Common/FACTS.md:14`,
-snapshot dated 2026-10-21 at `:4`). Changed this run: fitness counts 153 -> **159** test methods across
+*Notes: verified facts (re-verified 2026-10-29 against framework v1.265.1, `MMCA.Common/FACTS.md:14`,
+snapshot dated 2026-10-27 at `:4`). Changed in the 2026-10-29 run: fitness counts 159 -> **160** test
+methods across 63 -> **64** abstract `*TestsBase` classes (`MMCA.Common/FACTS.md:89`) and 458 -> **479**
+executed by MMCA.Common's own build (`:92`); published packages 22 -> **26** (`:19`), with
+`MMCA.Common.Testing.Architecture` at item 21 (`:42`), so the prerequisite reads "one of the twenty-six";
+Shipped/Unshipped pairs 21 -> **25** (ADR-015 `:54`, "public API gate covers 25 projects"; the shipped
+baselines hold 8,662 declarations at `:58`, still kept out of the body); onboarding grounding moved to
+the renumbered testing chapter, `Website/docs-src/onboarding/group-29-testing-infrastructure.md`
+(heading "29. Testing & Quality Infrastructure" at `:1`), authored as **42** parts
+`group-29-testing-infrastructure-p00.md` through `-p41.md` (counted this run; the group-28 files are now
+the cloud provider adapters chapter); the Step 5 snippet now carries the real two-part condition
+(`MMCA.Common/Directory.Build.props:149-150`), and the prose names the ten
+`BeforeTargets="ResolveProjectReferences"` targets in `MMCA.Common/Source/Build/MMCA.Common.LayerEnforcement.targets`
+(first at `:21`, counted this run). Re-anchored this run: `Directory.Build.props` public-API rationale
+`:86`, `AdditionalFiles` `:99-100`; `Directory.Packages.props` PublicApiAnalyzers 5.6.0 `:286`,
+NetArchTest.eNhancedEdition 1.4.5 `:346`; README package row `MMCA.Common/README.md:89`;
+`MMCA.Common/AGENTS.md` release/Promote line `:36`, exit code 8 `:40`, "Two enforcement gates" `:71`;
+CI floors ADC CI.slnf 5000 `MMCA.ADC/.github/workflows/deploy.yml:367`, AI golden replay 1 `:556`, live
+judge no floor `:559`, ADC Integration `:731`, Store CI.slnf 2650 `MMCA.Store/.github/workflows/deploy.yml:338`,
+Store Integration `:678`, Common floor 2000 `MMCA.Common/.github/workflows/ci.yml:163`, Helpdesk canary 40
+`:612`, UI E2E job `:377`. Anchors below that this run did not re-read carry over from the 2026-10-22
+pass (v1.250.0, FACTS snapshot 2026-10-21); where they conflict with the line above, the line above
+wins. Changed in the 2026-10-22 run: fitness counts 153 -> **159** test methods across
 61 -> **63** abstract `*TestsBase` classes (`MMCA.Common/FACTS.md:81`) and 410 -> **458** executed by
 MMCA.Common's own build (`:84`), swept in the key-design-idea paragraph and the Step 1 package description.
 Public-API gate sentence corrected: the per-PR declaration goes to `PublicAPI.Unshipped.txt`
@@ -343,7 +367,7 @@ package row quoted verbatim from `MMCA.Common/README.md:85`. `CommonArchitecture
 `Framework(...)` entries, one per layer (Shared, Domain, Application, Infrastructure, Api, Grpc, Ui)
 (`MMCA.Common/Tests/Architecture/MMCA.Common.Architecture.Tests/CommonArchitectureMap.cs:21-27`); the body
 says "one anchor per layer it scans" rather than the doc comment's "one anchor type per package" (`:7`), since
-seven anchors cover twenty-two packages and `MMCA.Common.UI.Maui` is deliberately absent (`:9-12`).
+seven anchors cover twenty-six packages and `MMCA.Common.UI.Maui` is deliberately absent (`:9-12`).
 `MicroserviceExtractionTestsBase` matches the rule list, which bans `MassTransit`, `Grpc` and
 `Google.Protobuf`
 (`MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Rules/Layering/ArchitectureRules.Transport.cs:13-15`).
@@ -352,18 +376,18 @@ Engine NetArchTest.eNhancedEdition 1.4.5 (`MMCA.Common/Directory.Packages.props:
 `ci.yml:163` (`Website/docs-src/adr/015-architecture-fitness-functions.md:83-84`), frames the pair as
 "two layers, two speeds" (`:94`) and names `FrameworkSanityTests` (`:104`). MTP's zero-discovery failure
 is exit code 8 (`MMCA.Common/AGENTS.md:39`). Compile-time import at
-`MMCA.Common/Directory.Build.props:166-167`, whose condition requires both a `Source` directory and a
-project name starting with `MMCA.Common`; the article's representative snippet shows only the `Source`
-half. Public-API gate: one ItemGroup excluding `MMCA.Common.UI.Maui` by name
+`MMCA.Common/Directory.Build.props:149-150` (re-anchored 2026-10-29), whose condition requires both a `Source` directory and a
+project name starting with `MMCA.Common`; the representative snippet shows both halves (it showed only the `Source`
+half before 2026-10-29). Public-API gate: one ItemGroup excluding `MMCA.Common.UI.Maui` by name
 (`MMCA.Common/Directory.Build.props:111`, rationale `:101-110`), RS0016 / RS0017 named at `:103`, and
 `PublicAPI.Shipped.txt` / `PublicAPI.Unshipped.txt` as `AdditionalFiles` (`:116-117`). The declaration
 count stays out of the body: ADR-015's latest revision (2026-10-21, `:699`) records 8,434 declarations
 (`:48`, `:729`), after earlier entries of 7,881 (`:577`), 8,254 (`:632`) and 8,260 (`:678`), so the
 figure moves with each release and is not printed here. Header grounding: `MMCA.Common/CLAUDE.md` is a
 stub importing `AGENTS.md`, and the two-gates rule lives in `MMCA.Common/AGENTS.md` section
-"Architecture" ("Two enforcement gates; add new rules in BOTH", `:69`). G25 is published at
-`Website/docs-src/onboarding/group-28-testing-infrastructure.md` and authored as 41 parts under
-`Docs/Onboarding/parts/`, `group-28-testing-infrastructure-p00.md` through `-p40.md` (counted this run).
+"Architecture" ("Two enforcement gates; add new rules in BOTH", `:71`). G25 is published at
+`Website/docs-src/onboarding/group-29-testing-infrastructure.md` and authored as 42 parts under
+`Docs/Onboarding/parts/`, `group-29-testing-infrastructure-p00.md` through `-p41.md` (counted 2026-10-29).
 Also re-read this run: `LayerDependencyTestsBase` holds 15 `[Fact]`s, 13 edges plus two map guards
 (`MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Bases/Layering/LayerDependencyTestsBase.cs:53`,
 `:56`); `DomainPurityTestsBase` and its `ExtraForbiddenDomainDependencies`

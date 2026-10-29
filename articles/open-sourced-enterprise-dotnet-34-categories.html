@@ -95,7 +95,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 53 articles</summary>
+        <summary>All 54 articles</summary>
         <nav class="doc-nav" aria-label="The MMCA.Common series">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -151,7 +151,8 @@
         <li><a href="governed-llm-boundary.html">50 · The governed LLM boundary</a></li>
         <li><a href="durable-internal-commands.html">51 · Four ways to do work later</a></li>
         <li><a href="identity-completions.html">52 · Finishing identity</a></li>
-        <li><a href="series-index.html">53 · The series index</a></li>
+        <li><a href="cloud-neutral-vendor-adapters.html">53 · One framework, three clouds</a></li>
+        <li><a href="series-index.html">54 · The series index</a></li>
           </ol>
         </nav>
       </details>
@@ -175,7 +176,7 @@
           <p>It is called <strong>MMCA.Common</strong> (Modular Monolith Clean Architecture), it targets .NET 10, and this
           article is the front door to a series that teaches it one pattern at a time.</p>
           <h2 id="what-it-is">What it is</h2>
-          <p>MMCA.Common is a set of <strong>twenty-two NuGet packages</strong> that give you a DDD + Clean Architecture + CQRS
+          <p>MMCA.Common is a set of <strong>twenty-six NuGet packages</strong> that give you a DDD + Clean Architecture + CQRS
           foundation as a <strong>modular monolith</strong>, plus the extraction boundaries to pull a module out into its own microservice
           later without rewriting application code.</p>
           <p>The packages layer strictly, each one only depending on the layers below it:</p>
@@ -199,15 +200,19 @@ Shared           (Result pattern, errors, DTOs, value objects)</code></pre>
           calls (ADR-120): <code>AI</code> isolates, versions, evaluates, observes, and bounds every call so a second AI
           feature inherits the rules instead of copying them; <code>AI.Anthropic</code> and <code>AI.OpenAI</code> are provider adapters
           that each register one provider factory, so the governed package never names a vendor; and <code>AI.Testing</code>
-          ships the replay harness that pins prompt contracts. The twenty-second package is <code>MMCA.Common</code> itself:
+          ships the replay harness that pins prompt contracts. <code>Azure</code>, <code>Aws</code>, and <code>Gcp</code> are the cloud vendor
+          adapters (ADR-134): the core packages reference no cloud SDK, and each adapter, built on <code>Infrastructure</code>
+          and <code>Aspire</code>, adds one registration call per vendor capability (file storage, push, secrets and, for AWS and
+          Azure, a broker transport), with <code>Testing.Azure</code> as the matching test-side fixture (<a href="cloud-neutral-vendor-adapters.html">the adapter pattern in
+          full</a>). The twenty-sixth package is <code>MMCA.Common</code> itself:
           a metapackage that ships no assembly, one <code>PackageReference</code> in place of the six a standard application
           host always takes (ADR-101).</p>
           <p>Adding it to a solution you already have is one line, and each package transitively pulls the layers
           beneath it:</p>
           <pre class="doc-pre" tabindex="0" data-lang="PowerShell"><code class="language-powershell hljs">dotnet add package MMCA.Common.API</code></pre>
           <p><code>API</code> brings <code>Infrastructure</code>, which brings <code>Application</code>, <code>Domain</code>, and <code>Shared</code>. The other packages
-          (<code>Grpc</code>, <code>UI</code>, <code>UI.Web</code>, <code>UI.Maui</code>, <code>Aspire</code>, <code>Aspire.Hosting</code>, <code>Gateway</code>, the four <code>AI</code> packages, and
-          five <code>Testing.*</code> packages) are opt-in for the surface you need.</p>
+          (<code>Grpc</code>, <code>UI</code>, <code>UI.Web</code>, <code>UI.Maui</code>, <code>Aspire</code>, <code>Aspire.Hosting</code>, <code>Gateway</code>, the four <code>AI</code> packages, the
+          <code>Azure</code>, <code>Aws</code>, and <code>Gcp</code> adapters, and six <code>Testing.*</code> packages) are opt-in for the surface you need.</p>
           <p>Starting from nothing is a different command, because a package reference is not an application. A
           solution on this framework is twelve projects and roughly 9,000 lines of C# and Razor before any business
           logic, so the framework ships a <code>dotnet new</code> pack that writes all of it:</p>
@@ -231,7 +236,7 @@ dotnet new mmca<span class="hljs-literal">-app</span> <span class="hljs-literal"
           </ol>
           <p>Those fitness functions do not live as copy-pasted test code in each repo. They live once, in a
           shipped package, <code>MMCA.Common.Testing.Architecture</code>, which exposes a reusable rule library and abstract
-          test bases (<strong>159 test methods across 63 base classes</strong>). MMCA.Common&#39;s own build executes 458 fitness
+          test bases (<strong>160 test methods across 64 base classes</strong>). MMCA.Common&#39;s own build executes 479 fitness
           tests built on them. MMCA.ADC and MMCA.Store subclass the same bases and supply their own architecture
           map, and so does MMCA.Helpdesk, the reference app the templates are staged from, so the rules are
           literally identical in every codebase that runs them.</p>
@@ -262,8 +267,8 @@ dotnet new mmca<span class="hljs-literal">-app</span> <span class="hljs-literal"
           <strong>maturity index of 97.3% and an implementation index of 85.4%</strong> across all 34 categories
           (internationalization ships in the framework as en-US plus Spanish under ADR-027, which supersedes the
           single-locale ADR-011, so it scores on both axes like every other category; nothing is excluded as
-          N/A). Then I committed the full evaluation to the repo, with every category&#39;s two scores, the evidence,
-          and the honest gaps.</p>
+          N/A). Then I published the full evaluation on the framework&#39;s documentation site, with every category&#39;s
+          two scores, the evidence, and the honest gaps.</p>
           <p>The rubric itself is versioned. Version 2 (ADR-110) keeps all 34 categories and scores category 10 as
           <strong>Messaging &amp; Integration Architecture</strong> (Maturity 4 / Implementation 8) and category 16 as <strong>AI-Native
           Application Architecture</strong> (Maturity 4 / Implementation 9), which is where the governed language-model
@@ -277,8 +282,9 @@ dotnet new mmca<span class="hljs-literal">-app</span> <span class="hljs-literal"
           throw half of LSP are enforced automatically, but OCP and ISP have no automated gate. Its Implementation
           8 is held by named code gaps (a base context that resolves about thirteen collaborators through
           <code>GetService</code>, one SQL Server-named unique-violation detector serving every engine, a few very large
-          classes). Messaging holds at Implementation 8 the same way: RabbitMQ delayed redelivery is opt-in,
-          and no CI job runs a live broker.</p>
+          classes). Messaging holds at Implementation 8 the same way: RabbitMQ delayed redelivery is opt-in, the
+          live-broker CI tiers (the built-in PostgreSql transport, and SQS/SNS against LocalStack) are not
+          required checks, and no CI job runs a live RabbitMQ or Azure Service Bus broker.</p>
           <p>Implementation is the weaker axis on purpose. A framework ships mature, well-governed mechanisms whose
           full execution often completes in the apps that consume it. Deployment and resilience recovery both
           stop at Implementation 8 precisely because the substance they reward (a real deploy, production
@@ -294,7 +300,7 @@ dotnet new mmca<span class="hljs-literal">-app</span> <span class="hljs-literal"
           <li><strong>MMCA.Store</strong>, an e-commerce app with Catalog, Sales, and Identity modules and Stripe integration.</li>
           </ul>
           <p>Both run on the same framework version, swept in lockstep when the framework releases. The test suite
-          is more than <strong>8,000 fast tests</strong> in a correct pyramid with no Docker or database dependency, held above
+          is more than <strong>9,000 fast tests</strong> in a correct pyramid with no Docker or database dependency, held above
           a 2,000-test zero-discovery floor by CI, so the inner loop stays quick and a filter regression that
           silently drops tests fails the build.</p>
           <h2 id="what-this-series-will-cover">What this series will cover</h2>
@@ -315,7 +321,8 @@ dotnet new mmca<span class="hljs-literal">-app</span> <span class="hljs-literal"
           scorecard (the gaps are the honest part) and skim the ADRs (the &quot;why&quot; behind each decision).</p>
           <ul>
           <li>⭐ Star the repo: <a href="https://github.com/ivanball/MMCA.Common" target="_blank" rel="noopener">https://github.com/ivanball/MMCA.Common</a></li>
-          <li>Read the full 34-category scorecard in the repo, gaps included.</li>
+          <li>Read the full 34-category scorecard, gaps included:
+          <a href="https://ivanball.github.io/docs/governance/common-ArchitectureScorecard.html" target="_blank" rel="noopener">https://ivanball.github.io/docs/governance/common-ArchitectureScorecard.html</a></li>
           <li><code>dotnet new install MMCA.Templates</code> then <code>dotnet new mmca-app -n Your.App</code>, and tell me what breaks.</li>
           </ul>
           <p>Next up: how a modular monolith becomes microservices without a rewrite, and

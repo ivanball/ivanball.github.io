@@ -180,7 +180,7 @@ scheme that pins `ValidAlgorithms` to HS256, refuses a token without the `svc` c
 default scheme. Only an endpoint under the `InternalCaller` policy accepts it, and that policy takes an
 authenticated caller from either scheme, so a user token on the same call is validated by the user
 scheme against the issuer's JWKS exactly as described above. Store is the one adopter: its Sales service sends the token on its Customers client, and
-its Identity service validates it (`MMCA.Store.Identity.Service/Program.cs:173`); ADC uses neither half.
+its Identity service validates it (`MMCA.Store.Identity.Service/Program.cs:179`); ADC uses neither half.
 
 ## Trade-offs, honestly
 
@@ -310,8 +310,20 @@ pattern, or `dotnet add package MMCA.Common.API` and try it.*
 
 *Tags: .NET, C Sharp, Software Architecture, Microservices, Authentication*
 
-*Notes (evidence audit, 2026-10-22, MMCA.Common v1.250.0): Re-verified this run against source; three
-body claims changed and one section added. (1) New section "When there is no user: the opt-in service
+*Notes (evidence audit, 2026-10-29, MMCA.Common v1.265.1, `MMCA.Common/FACTS.md:14`): Re-verified this
+run against the same-day audit; one body anchor moved and no claim changed. The Store service-token
+adoption anchors moved and are corrected in place in the body and in the entry below:
+`AddServiceTokenAuthentication` at `MMCA.Store/Source/Services/MMCA.Store.Identity.Service/Program.cs:179`
+(was `:173`), Customers mapped under `InternalCaller` at `:354` (was `:343`), and `AddServiceTokenClient`
+at `MMCA.Store/Source/Services/MMCA.Store.Sales.Service/Program.cs:300` (was `:289`); `.WithServiceToken()`
+stays at `MMCA.Store/Source/Services/MMCA.Store.Identity.Contracts/DependencyInjection.cs:46`, and
+`MMCA.ADC/Source` still has zero matches for any of the three calls. The 21-entry allow-list was
+recounted this run: twelve actions, six credential pages and three landing pages
+(`MMCA.Common/Tests/Architecture/MMCA.Common.Architecture.Tests/Api/AnonymousEndpointTests.cs:22-66`,
+gate `:71`, floor `MinimumScannedTypes => 21` `:75`). Current FACTS: 160 test methods across 64 abstract
+`*TestsBase` classes (`MMCA.Common/FACTS.md:89`), Common executes 479 (`:92`), 26 packages (`:19`); the
+body states none of these numbers. Earlier entry (evidence audit, 2026-10-22, MMCA.Common v1.250.0):
+three body claims changed and one section added. (1) New section "When there is no user: the opt-in service
 token" (user-approved), grounded in
 `MMCA.Common/Source/Presentation/MMCA.Common.Grpc/Authentication/ServiceTokenProvider.cs:23` (class;
 singleton and 60-second refresh remark `:17-21`, `RefreshWindow` `:26`, HS256 credentials `:46-48`,
@@ -326,10 +338,10 @@ policy over both schemes `:84-87`, `ValidAlgorithms = [HmacSha256]` `:144`, `svc
 user-token-first precedence and no-overwrite `ServiceTokenClientInterceptor.cs:20-23`, per-client only
 `:13-17`; `JwtForwardingClientInterceptor.cs:28-31` forwards only the user's token;
 `ServiceTokenDefaults.cs` scheme `:15`, policy `:21`, `svc` `:27`. Store adoption:
-`MMCA.Store/Source/Services/MMCA.Store.Sales.Service/Program.cs:289` (`AddServiceTokenClient`),
+`MMCA.Store/Source/Services/MMCA.Store.Sales.Service/Program.cs:300` (`AddServiceTokenClient`),
 `MMCA.Store/Source/Services/MMCA.Store.Identity.Contracts/DependencyInjection.cs:46` (Customers client
-`.WithServiceToken()`), `MMCA.Store/Source/Services/MMCA.Store.Identity.Service/Program.cs:173`
-(`AddServiceTokenAuthentication`) and `:343` (Customers under `InternalCaller`); zero matches for either
+`.WithServiceToken()`), `MMCA.Store/Source/Services/MMCA.Store.Identity.Service/Program.cs:179`
+(`AddServiceTokenAuthentication`) and `:354` (Customers under `InternalCaller`); zero matches for either
 call in `MMCA.ADC/Source`. ADR-007 (`Website/docs-src/adr/007-grpc-extraction.md`) typed-client bullet
 `:37-47`, federated-auth bullet with the one service-token edge `:59-78` (claim name not checked `:77`),
 revision 2026-10-21 `:11-12`. The new trade-offs bullet: any service can mint any service name

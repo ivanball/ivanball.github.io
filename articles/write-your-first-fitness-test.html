@@ -95,7 +95,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 53 articles</summary>
+        <summary>All 54 articles</summary>
         <nav class="doc-nav" aria-label="The MMCA.Common series">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -151,7 +151,8 @@
         <li><a href="governed-llm-boundary.html">50 · The governed LLM boundary</a></li>
         <li><a href="durable-internal-commands.html">51 · Four ways to do work later</a></li>
         <li><a href="identity-completions.html">52 · Finishing identity</a></li>
-        <li><a href="series-index.html">53 · The series index</a></li>
+        <li><a href="cloud-neutral-vendor-adapters.html">53 · One framework, three clouds</a></li>
+        <li><a href="series-index.html">54 · The series index</a></li>
           </ol>
         </nav>
       </details>
@@ -198,7 +199,7 @@
           three layers. It is neither MSBuild nor NetArchTest: <code>Microsoft.CodeAnalysis.PublicApiAnalyzers</code> runs on
           every published package except <code>MMCA.Common.UI.Maui</code> (excluded by name, because it builds only on the
           Windows MAUI job outside the main solution) against committed baselines (a <code>PublicAPI.Shipped.txt</code> /
-          <code>PublicAPI.Unshipped.txt</code> pair per gated package, twenty-one pairs), so adding or removing a public
+          <code>PublicAPI.Unshipped.txt</code> pair per gated package, twenty-five pairs), so adding or removing a public
           member fails the compile until the change is declared in that package&#39;s <code>PublicAPI.Unshipped.txt</code> in the
           same pull request; the release step then folds every unshipped file into its shipped baseline. It guards the shipped package surface rather than layer
           flow, which is why the two speeds above are the ones this tutorial teaches.</p>
@@ -210,14 +211,14 @@
           <li><strong>Microsoft Testing Platform</strong> as your test runner (MMCA.Common uses it via <code>global.json</code> with
           xUnit v3). The fitness tests run inside the normal <code>dotnet test</code> tier, so they gate CI like any other
           test.</li>
-          <li>The package you are about to install: <strong><code>MMCA.Common.Testing.Architecture</code></strong>, one of the twenty-two
+          <li>The package you are about to install: <strong><code>MMCA.Common.Testing.Architecture</code></strong>, one of the twenty-six
           packages the framework publishes. Its README row describes it exactly: &quot;<code>IArchitectureMap</code> + reusable
           NetArchTest rule library + abstract test bases (consumed by each repo&#39;s <code>*.Architecture.Tests</code>).&quot;</li>
           </ul>
           <p>The key design idea: the rule <em>bodies</em> ship in the package once. You do not copy them. You supply a tiny
           map of your assemblies and subclass the bases, and you inherit roughly the same suite that runs across
-          MMCA.Common, MMCA.Store, MMCA.ADC and MMCA.Helpdesk (159 test methods across 63 abstract <code>*TestsBase</code>
-          classes; the framework&#39;s own build executes 458 of them).</p>
+          MMCA.Common, MMCA.Store, MMCA.ADC and MMCA.Helpdesk (160 test methods across 64 abstract <code>*TestsBase</code>
+          classes; the framework&#39;s own build executes 479 of them).</p>
           <blockquote>
           <p><strong>If you scaffolded with <code>dotnet new mmca-app</code>, steps 1 through 4 are already done.</strong> The generated
           solution ships the architecture-test project, the <code>IArchitectureMap</code>, and the reference app&#39;s set of
@@ -231,7 +232,7 @@
           <code>Tests/Architecture/*.Architecture.Tests</code>), and reference the package:</p>
           <pre class="doc-pre" tabindex="0" data-lang="PowerShell"><code class="language-powershell hljs">dotnet add package MMCA.Common.Testing.Architecture</code></pre>
           <p>The package brings the NetArchTest engine (NetArchTest.eNhancedEdition), the <code>ArchitectureRules</code> rule
-          library, the diagnostic helpers, and the 63 abstract <code>*TestsBase</code> classes. You will not write rule
+          library, the diagnostic helpers, and the 64 abstract <code>*TestsBase</code> classes. You will not write rule
           logic; you will point the rules at your assemblies and subclass the bases.</p>
           <h2 id="step-2-implement-iarchitecturemap-one-anchor-type-per-layer">Step 2: implement <code>IArchitectureMap</code>, one anchor type per layer</h2>
           <p>This is the only real work, and it is small. <code>IArchitectureMap</code> is the single extension point every rule is
@@ -323,11 +324,14 @@ dotnet test <span class="hljs-literal">--project</span> Tests/Architecture/MyApp
           <h2 id="step-5-optional-add-the-compile-time-layer-guard-too">Step 5 (optional): add the compile-time layer guard too</h2>
           <p>The runtime suite is the broad net. For the single most common mistake, a bad project reference, you can
           get even faster feedback by also adding the compile-time guard, so the build fails before tests even
-          run. MMCA.Common does this with an MSBuild target imported for every source project. The shape:</p>
+          run. MMCA.Common does this with an MSBuild targets file imported for every one of its own source
+          projects (the condition scopes it to projects under <code>Source</code> whose name starts with <code>MMCA.Common</code>; use
+          your own prefix). The shape:</p>
           <pre class="doc-pre" tabindex="0" data-lang="XML"><code class="language-xml hljs"><span class="hljs-comment">&lt;!-- Imported from Directory.Build.props for each layer project (representative) --&gt;</span>
 <span class="hljs-tag">&lt;<span class="hljs-name">Import</span> <span class="hljs-attr">Project</span>=<span class="hljs-string">&quot;$(MSBuildThisFileDirectory)Source\Build\MMCA.Common.LayerEnforcement.targets&quot;</span>
-        <span class="hljs-attr">Condition</span>=<span class="hljs-string">&quot;$(MSBuildProjectDirectory.Contains(&#x27;Source&#x27;))&quot;</span> /&gt;</span></code></pre>
-          <p>The target runs in a <code>BeforeTargets=&quot;ResolveProjectReferences&quot;</code> step, inspects each project&#39;s
+        <span class="hljs-attr">Condition</span>=<span class="hljs-string">&quot;$(MSBuildProjectDirectory.Contains(&#x27;Source&#x27;)) AND $(MSBuildProjectName.StartsWith(&#x27;MMCA.Common&#x27;))&quot;</span> /&gt;</span></code></pre>
+          <p>The file holds ten targets of the same <code>BeforeTargets=&quot;ResolveProjectReferences&quot;</code> shape, each guarding
+          one reference rule; the layer target is the one to copy first. It inspects each project&#39;s
           <code>ProjectReference</code> set, and fails the build with a descriptive error if a layer references a forbidden
           upstream layer. This is the &quot;two speeds&quot; design from ADR-015: the MSBuild guard catches the common case
           at compile time on the developer&#39;s machine; the NetArchTest suite catches the subtler assembly-level

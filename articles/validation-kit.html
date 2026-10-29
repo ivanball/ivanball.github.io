@@ -95,7 +95,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 53 articles</summary>
+        <summary>All 54 articles</summary>
         <nav class="doc-nav" aria-label="The MMCA.Common series">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -151,7 +151,8 @@
         <li><a href="governed-llm-boundary.html">50 · The governed LLM boundary</a></li>
         <li><a href="durable-internal-commands.html">51 · Four ways to do work later</a></li>
         <li><a href="identity-completions.html">52 · Finishing identity</a></li>
-        <li><a href="series-index.html">53 · The series index</a></li>
+        <li><a href="cloud-neutral-vendor-adapters.html">53 · One framework, three clouds</a></li>
+        <li><a href="series-index.html">54 · The series index</a></li>
           </ol>
         </nav>
       </details>
@@ -271,12 +272,15 @@
           and returns a <code>Result</code> failure immediately. The registration validator shown earlier takes the other
           route into the same bridge: registration is an authentication-service call, not a command, so
           <code>AuthenticationServiceBase.RegisterAsync</code> runs the validator itself and calls <code>ToErrors(nameof(RegisterAsync))</code>.
-          The source names the method instead of a command, and the errors are the same <code>ErrorType.Validation</code> kind.</p>
+          The source names the method instead of a command, and the errors are the same <code>ErrorType.Validation</code> kind.
+          ADC&#39;s <code>AuthenticationService</code> wraps that base call in <code>UnitOfWork.ExecuteInTransactionAsync</code>, so on this
+          path the validator runs inside the transaction scope, as the first statement and before any write.</p>
           <p>Two properties of that flow matter to a caller:</p>
           <ul>
-          <li><strong>Validation runs before the transaction opens.</strong> The <code>ValidatingCommandDecorator</code> sits <em>before</em> the
-          transactional decorator in the pipeline. An invalid command short-circuits before any database
-          transaction is opened. You never pay for a transaction on input that was never going to be persisted.</li>
+          <li><strong>A command&#39;s validation runs before the transaction opens.</strong> The <code>ValidatingCommandDecorator</code> sits
+          <em>before</em> the transactional decorator in the command pipeline. An invalid command short-circuits before
+          any database transaction is opened, so you never pay for a transaction on input that was never going to
+          be persisted. (The registration call above is not a command and does not get this ordering.)</li>
           <li><strong>A validation failure is a 400, not a 500.</strong> The <code>ErrorType.Validation</code> tag is what the API edge&#39;s
           failure mapper turns into <code>400 Bad Request</code> with per-property messages, identical at the boundary
           regardless of which validator raised it. A bad request is a client error, and the status code says so.
@@ -316,9 +320,10 @@
           <code>RuleFor(x =&gt; x.Title).NotEmpty().MaximumLength(200)</code>. The payoff is reuse, but a newcomer meets a small
           generic puzzle (what is <code>T</code>, what does the selector bind) before the first <code>Include</code> reads naturally.</li>
           <li><strong>Composition is opt-in, so adoption is uneven.</strong> Nothing forces a validator to include a fragment.
-          Store&#39;s registration validator hand-writes its email and password chains with literal lengths (and its
-          password chain carries no complexity regexes), and Common&#39;s own login and forgot-password validators
-          hand-write their email rule. The kit removes the reason to copy; it does not detect a copy.</li>
+          Store&#39;s registration validator hand-writes its email, password and name chains instead of including
+          the fragments. Its password chain reads the same <code>PasswordComplexity</code> lengths and four regexes the
+          fragment uses, each with its own error code, but its email and name caps are literal 100s. Common&#39;s own
+          login and forgot-password validators hand-write their email rule. The kit removes the reason to copy; it does not detect a copy.</li>
           <li><strong>This layer is structural only.</strong> A fragment validates shape, never cross-entity or stateful rules.
           That is correct (those belong in the domain factory), but it means the validator is not the whole
           story, and a reviewer must check both altitudes to know a command is fully guarded.</li>
@@ -353,7 +358,8 @@
           <code>StrongPasswordRules&lt;T&gt;</code>, the address fragments and <code>AddressValidator</code>) compose via <code>Include(...)</code> instead
           of copy-paste, how <code>CommandRequestValidator&lt;TCommand, TRequest&gt;</code> plus <code>ICommandWithRequest</code> validate a
           command for free from its request validator, and how <code>ValidationFailureExtensions.ToErrors</code> turns a
-          failure into an <code>ErrorType.Validation</code> <code>Result</code> that the API edge maps to 400 before any transaction opens.</p>
+          failure into an <code>ErrorType.Validation</code> <code>Result</code> that the API edge maps to 400, with a command&#39;s validation
+          running before any transaction opens.</p>
           <p><strong>Next in the series:</strong> the transactional outbox, the reliability backbone that persists a domain
           event in the same transaction as the data it describes and publishes it afterwards, at least once, so a
           crash between the two never loses it.</p>

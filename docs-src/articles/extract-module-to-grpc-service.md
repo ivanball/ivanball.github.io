@@ -130,8 +130,10 @@ and resilience details ride along automatically:
   credential unless its client opts into the framework's service token with `WithServiceToken()`
   (covered in `Website/docs-src/articles/jwks-cross-service-auth.md`).
 - `AddStandardResilienceHandler()` gives every gRPC client a Polly retry, timeout, and
-  circuit-breaker pipeline whose values come from `GrpcResilienceDefaults`. The timeouts and the retry
-  budget are the HTTP clients' own. The retry fires only on a failure to reach the peer before the
+  circuit-breaker pipeline whose values come from the `Grpc`-prefixed members of
+  `HttpResilienceDefaults`. The timeouts are the east-west path's own (8 seconds per attempt, 20 in
+  total, against the HTTP clients' 30 and 90), while the retry budget of one is shared with the HTTP
+  clients. The retry fires only on a failure to reach the peer before the
   request was sent (an `HttpRequestException` whose `HttpRequestError` is name resolution, the TCP
   connect, or the TLS handshake), because every gRPC call is a POST and replaying one that reached the
   handler could run it twice; an `HttpRequestException` raised after the request frames were written is
@@ -223,7 +225,7 @@ errors on the other edge self-heal through the resilience pipeline you got for f
 
 Clients never address a service directly. A single YARP reverse-proxy gateway owns the
 route-to-service map and is the only entry point. It has no DbContext and no controllers; it is CORS,
-static files, the route table, and the edge concerns in step 8. You add the service's routes to the
+security headers, static files, the route table, and the edge concerns in step 8, among others. You add the service's routes to the
 gateway's table and reference it for discovery, and in the local AppHost you wire JWKS discovery so
 the new service resolves keys through that same gateway:
 
@@ -249,7 +251,9 @@ them ship in the `Gateway` namespace of `MMCA.Common.Aspire`. A fourth, the forw
 that makes the client IP the caller's rather than the ingress's, ships in `MMCA.Common.Gateway`
 alongside `AddMmcaGateway`, the shared YARP forwarder profile both gateways chain onto
 `AddReverseProxy`. The package placement is a constraint, not a preference: a YARP host has no
-controllers, so it references those two framework packages and nothing else from the framework, and
+controllers, so it references those two framework packages plus `MMCA.Common.Azure` (for Key Vault
+configuration and Azure Monitor export, see
+[the cloud adapters article](cloud-neutral-vendor-adapters.md)) and nothing else from the framework, and
 it cannot reach the service-tier `CorrelationIdMiddleware` or `AddCommonRateLimiting` that live in
 `MMCA.Common.API`.
 
@@ -667,4 +671,25 @@ JWT interceptor attaches the service token when `AddServiceTokenClient` register
 contradicting `JwtForwardingClientInterceptor.cs:27-32`; `GrpcResilienceDefaults.cs:9-10` says retries
 are left to the standard handler's transient classification, while `DependencyInjection.cs:142`
 overrides `Retry.ShouldHandle`; ADR-012 cites ADC Bicep `main.bicep:2159`/`:2295`/`:2449`
-(`012-grpc-host-transport.md:125-126`), each two lines short of the real `:2161`/`:2297`/`:2451`.*
+(`012-grpc-host-transport.md:125-126`), each two lines short of the real `:2161`/`:2297`/`:2451`.
+2026-10-29 pass, re-verified against MMCA.Common v1.265.1 (`MMCA.Common/FACTS.md:14`; was v1.250.0).
+Body corrections, all re-read: (1) Step 3's resilience values come from the `Grpc`-prefixed members of
+`HttpResilienceDefaults`: `GrpcResilienceDefaults` was removed in 1.252.0
+(`MMCA.Common/CHANGELOG.md:242`, heading `:214`; Grep for the type under `MMCA.Common/Source`: 0
+matches). The gRPC timeouts are the east-west path's own, `GrpcAttemptTimeout` 8 seconds and
+`GrpcTotalRequestTimeout` 20 seconds
+(`MMCA.Common/Source/Core/MMCA.Common.Shared/Resilience/HttpResilienceDefaults.cs:73`, `:76`), not the
+HTTP 30/90 (`:16`, `:22`); only `MaxRetryAttempts` 1 (`:33`) and `CircuitBreakerSamplingDuration` 60
+seconds (`:19`) are shared; breaker 0.5/10/10 seconds at `:82`/`:88`/`:94`. Wiring
+`MMCA.Common/Source/Presentation/MMCA.Common.Grpc/DependencyInjection.cs:142-168` (values `:144-146`,
+`:161-164`), retry predicate `:155-160`, optional `configureResilience` parameter `:101` invoked last
+at `:167`, `SocketsHttpHandler` override `:124-132`, h2c address `:110-111`. (2) Step 8: both gateways
+reference three framework packages, `MMCA.Common.Aspire`, `MMCA.Common.Azure` and
+`MMCA.Common.Gateway` (`MMCA.ADC/Source/Hosts/MMCA.ADC.Gateway/MMCA.ADC.Gateway.csproj:3-5`, was
+`:3-4`; `MMCA.Store/Source/Hosts/MMCA.Store.Gateway/MMCA.Store.Gateway.csproj:27-29`, was `:25-26`),
+the Azure package for `AddAzureKeyVaultConfiguration` and `AddAzureMonitorExporter` (ADC gateway
+`Program.cs:68`, `:75`; Store gateway `Program.cs:67`, `:74`); the API package stays out of reach
+because `MMCA.Common/Source/Hosting/MMCA.Common.Azure/MMCA.Common.Azure.csproj:43-44` references
+Infrastructure and Aspire only. (3) Step 7's gateway list adds security headers and "among others"
+(ADC gateway `Program.cs:126`, `:176`). The earlier `GrpcResilienceDefaults.cs` anchors and its
+side finding above are historical.*

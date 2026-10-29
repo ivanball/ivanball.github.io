@@ -95,7 +95,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 53 articles</summary>
+        <summary>All 54 articles</summary>
         <nav class="doc-nav" aria-label="The MMCA.Common series">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -151,7 +151,8 @@
         <li><a href="governed-llm-boundary.html">50 · The governed LLM boundary</a></li>
         <li><a href="durable-internal-commands.html">51 · Four ways to do work later</a></li>
         <li><a href="identity-completions.html">52 · Finishing identity</a></li>
-        <li><a href="series-index.html">53 · The series index</a></li>
+        <li><a href="cloud-neutral-vendor-adapters.html">53 · One framework, three clouds</a></li>
+        <li><a href="series-index.html">54 · The series index</a></li>
           </ol>
         </nav>
       </details>
@@ -235,8 +236,10 @@
           <h3 id="cross-source-relationships-degrade-automatically">Cross-source relationships degrade automatically</h3>
           <p>EF cannot enforce a foreign key into another database. So <code>CrossDataSourceDegradeConvention</code>, a
           model-finalizing convention, reshapes any relationship whose two ends resolve to different physical
-          sources. It removes the cross-source FK constraint but <strong>keeps the scalar FK column plus a
-          compensating index</strong>, so the value is still stored and queryable. It ignores the CLR navigation
+          sources. It removes the cross-source FK constraint but <strong>keeps the declared scalar FK column plus a
+          compensating index</strong>, so the value is still stored and queryable (a shadow FK property has no column
+          to keep, and on Cosmos, which indexes every property and rejects explicit index definitions, the
+          index is skipped). It ignores the CLR navigation
           members that point at the foreign entity, and removes the foreign entity types from this model
           entirely. Runtime navigation across the boundary then flows through the <code>INavigationPopulator</code>
           batch-loader (its own pattern, in another article), and cross-source consistency becomes the outbox&#39;s
@@ -284,10 +287,11 @@
           the system context and sees everything, which is what keeps the outbox processor, the seeders, and
           the retention jobs working: they have no request, so they have no claim. Outbox delivery narrows
           again per row: each <code>OutboxMessage</code> records the tenant its raising request resolved to, and the
-          processor restores that tenant (with the user, roles, and correlation id) onto a fresh scope for each
+          processor restores that tenant (with the user, roles, permissions, and correlation id) onto a fresh scope for each
           row before dispatch, so a handler reads and writes the same tenant&#39;s rows the original request did.</p>
-          <p>Resolution reads the signed claim by default (a host opts into the header by listing it after the
-          claim), and it fails closed. <code>TenantResolutionMiddleware</code> runs immediately after <code>UseAuthentication</code>
+          <p>Resolution reads the signed claim by default (a host opts into the header by listing it in
+          <code>Tenancy:ResolutionOrder</code>, with the claim first as the recommended order rather than a startup rule),
+          and it fails closed. <code>TenantResolutionMiddleware</code> runs immediately after <code>UseAuthentication</code>
           (the claim needs <code>HttpContext.User</code> already populated), is registered unconditionally, and passes every request straight through until
           <code>Tenancy:Enabled</code> is on. With <code>RequireTenant</code> (true by default) a request that resolves no tenant on
           a non-excluded path is answered with a 400 ProblemDetails rather than allowed through unscoped,
@@ -363,7 +367,7 @@
           service is ahead of another. That is correct for the architecture, but it is a behavior your
           product logic has to expect.</li>
           <li><strong>Referential integrity across services is the application&#39;s responsibility.</strong> The compensating
-          index survives; the FK enforcement does not. A dangling cross-service reference will not be caught
+          index survives on a relational engine; the FK enforcement does not. A dangling cross-service reference will not be caught
           by the database. You catch it, or you tolerate it.</li>
           <li><strong>More to operate.</strong> Each service gets its own migrations project and its own backup and restore
           concern. Four databases is four times the provisioning, migration, and disaster-recovery surface of

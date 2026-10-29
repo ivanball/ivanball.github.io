@@ -95,7 +95,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 53 articles</summary>
+        <summary>All 54 articles</summary>
         <nav class="doc-nav" aria-label="The MMCA.Common series">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -151,7 +151,8 @@
         <li><a href="governed-llm-boundary.html">50 · The governed LLM boundary</a></li>
         <li><a href="durable-internal-commands.html">51 · Four ways to do work later</a></li>
         <li><a href="identity-completions.html">52 · Finishing identity</a></li>
-        <li><a href="series-index.html">53 · The series index</a></li>
+        <li><a href="cloud-neutral-vendor-adapters.html">53 · One framework, three clouds</a></li>
+        <li><a href="series-index.html">54 · The series index</a></li>
           </ol>
         </nav>
       </details>
@@ -210,11 +211,13 @@
           <code>OAuth:Apple:ClientId</code> is set. With all three absent it returns the service collection untouched, so a
           host with no OAuth secrets keeps exactly the JWT-only pipeline <code>AddCommonAuthentication</code> gave it. It
           calls <code>AddAuthentication()</code> with no argument on purpose, so the new schemes append rather than
-          displacing the JWT bearer default. Fail-fast is per provider: Google and GitHub throw at startup when a
+          displacing the JWT bearer default. Fail-fast is per provider: Google and GitHub throw when a
           <code>ClientId</code> is set without its matching <code>ClientSecret</code>, while Apple has no static client secret at all
           (the handler mints a short-lived ES256 assertion instead, <code>GenerateClientSecret = true</code>) and throws on
-          a missing <code>OAuth:Apple:TeamId</code>, <code>OAuth:Apple:KeyId</code> or <code>OAuth:Apple:PrivateKeyPem</code>. Either way a
-          half-wired provider fails at startup rather than at the first sign-in.</p>
+          a missing <code>OAuth:Apple:TeamId</code>, <code>OAuth:Apple:KeyId</code> or <code>OAuth:Apple:PrivateKeyPem</code>. Those throws live
+          in each scheme&#39;s options callback, so they fire when the options are first built (the first request
+          through the authentication middleware), not at host build. Either way a half-wired provider fails with
+          a named configuration error before any sign-in reaches the provider.</p>
           <p><strong>A ten-minute cookie carries the external principal, and nothing else.</strong> The provider callback signs
           into a dedicated <code>ExternalLogin</code> cookie scheme (cookie name <code>mmca_external_login</code>, HttpOnly,
           <code>SameSite=Lax</code>, a ten-minute lifetime). That cookie exists only to hand the external claims from the
@@ -305,8 +308,11 @@
           <code>code</code> and the returned <code>state</code> off the custom-scheme callback, and hands both to the shared
           <code>/auth/oauth-complete</code> page, which already owns the same out-of-band <code>ExchangeAsync</code> the browser uses.
           The completion page refuses a code that does not belong to an attempt started on this device, so a
-          deep link carrying someone else&#39;s code cannot sign the app in as them. Web heads keep the plain anchor
-          flow; the broker reports itself unavailable when no mobile redirect scheme is configured. The code
+          deep link carrying someone else&#39;s code cannot sign the app in as them. Web heads, where the broker
+          reports itself unavailable, get a button whose click mints the same per-attempt state in device
+          storage and then navigates to the challenge URL with that state attached, so the web flow is
+          state-bound too; if storage will not keep the attempt, the page says so and disables the redirect
+          buttons instead of leaving for a provider round trip the completion page would refuse. The code
           still rides the redirect and a token never does, so the invariant holds identically across web and
           native: the only thing that differs is where the code lands.</p>
           <h2 id="finding-the-local-user-three-ways">Finding the local user, three ways</h2>
@@ -318,10 +324,13 @@
           rather than turning the next query into &quot;find the users whose email is null&quot;), then looks the account
           up by that validated value.</p>
           <p>When an account already owns that email, nothing is linked until three guards pass, and they are
-          strict on purpose. <strong>One provider link per user:</strong> an account already linked to a <em>different</em> provider
-          is refused with <code>Auth.ExternalProviderAlreadyLinked</code>, because the aggregate holds a single
+          strict on purpose. <strong>One provider link per user:</strong> any account that already carries an external
+          login is refused with <code>Auth.ExternalProviderAlreadyLinked</code>, because the aggregate holds a single
           <code>(LoginProvider, ProviderKey)</code> pair and a second link would overwrite the first and strand the
-          original login, which on a pure-OAuth account has no password to fall back on. That check runs ahead
+          original login, which on a pure-OAuth account has no password to fall back on. That includes the
+          <em>same</em> provider under a different key: this branch is reached only after the provider-plus-key lookup
+          missed, and a different key is a different account at the provider, so re-keying would hand this
+          account to it. That check runs ahead
           of the verifier, so saying no costs no external round trip. <strong>A provider-asserted verified email:</strong> an
           injected <code>IExternalLoginEmailVerifier</code> is asked whether the provider asserted this address as
           verified, and an unverified assertion is refused with <code>Auth.ExternalEmailNotVerified</code>. <strong>No local
@@ -338,8 +347,9 @@
           <code>Attendee</code> with empty password hash and salt. The verifier runs on this branch too, but it does not
           gate the create (GitHub&#39;s OAuth flow asserts nothing, and refusing would close GitHub sign-up): the
           assertion rides along as a sixth <code>emailVerified</code> argument, which starts the account confirmed when the
-          provider vouched for the address and unconfirmed otherwise, in which case it receives a confirmation
-          link exactly like a local registration.</p>
+          provider vouched for the address and unconfirmed otherwise. Nothing on the external path schedules a
+          confirmation email (only local registration does), so an unconfirmed external account gets a link
+          when its owner requests one from the confirmation page.</p>
           <p>An external user is a <code>User</code> with an empty password hash and salt, carrying <code>LoginProvider</code> and
           <code>ProviderKey</code>; <code>IsExternalLogin</code> is simply <code>LoginProvider is not null</code>, and <code>HasLocalPassword</code> is the
           complementary question the third guard asks. The linkage is two nullable columns

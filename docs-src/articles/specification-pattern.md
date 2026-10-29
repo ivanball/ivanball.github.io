@@ -91,7 +91,7 @@ spec-taking `ListAsync` honors in full. Hand a shaped one to `And`, `Or`, or `No
 constructor throws `ArgumentException` instead of silently dropping the shape; an unshaped one composes
 like any other, and predicates that belong with a shaped read are composed inside its own `Criteria`.
 Composition is live in production
-today, in six consumer read paths across two applications. Four are in ADC: the paged sessions read
+today, in seven consumer read paths across two applications. Four are in ADC: the paged sessions read
 ANDs the public-session filter with the speaker-scoped one rather than substituting, because dropping
 the public filter for a speaker-scoped request would leak non-accepted sessions to non-privileged
 callers; the paged speakers read ANDs the public-speaker filter with an event-scoped one for the same
@@ -99,12 +99,15 @@ reason; a shared visibility helper ANDs the public-session status rule with an i
 predicate before projecting session ids; and the organizer user roster turns the grid's signed-in
 filter into a specification (an id `Contains` over the accounts holding a live session), negates it
 with `.Not()` for the not-signed-in case, and ANDs it with any specification the caller already
-supplied. Two are in MMCA.Store, where the public product-reviews endpoint and the domain-event
+supplied. Three are in MMCA.Store. The public product-reviews endpoint and the domain-event
 handler that recomputes a product's rating both AND a by-product review specification with a
-published-reviews one. Each composed `Criteria` reaches the database as a single server-side `WHERE`.
-That is seven composing call sites, six fluent `.And()` calls and one fluent `.Not()`, and the
+published-reviews one, and the storefront product read is itself a `QuerySpecification` that folds
+its optional search, category and on-sale filters into its own `Criteria` with `.And()`, so only the
+filters a request asks for reach the predicate and the shaped specification is never an operand.
+Each composed `Criteria` reaches the database as a single server-side `WHERE`.
+That is ten composing call sites, nine fluent `.And()` calls and one fluent `.Not()`, and the
 hand-built `new AndSpecification<...>(a, b)` form appears nowhere in the three consumer repositories.
-Seven call sites in two applications is still a narrow sample, though (MMCA.Helpdesk composes
+Ten call sites in two applications is a narrow sample, though (MMCA.Helpdesk composes
 nothing), and `Or` ships without a caller.
 
 ```csharp
@@ -122,11 +125,14 @@ public sealed class PublicSessionStatusSpecification : Specification<Session, Se
 
 // The paged sessions read. publicSpecification is the public filter (null for a privileged caller):
 // a specification built from StatusCriteria plus a published-event scope. The speaker scope (itself a
-// specification, a Session.Id IN (...) filter over the SessionSpeaker join) is ANDed with it, never
-// substituted for it.
+// specification, a Session.Id IN (...) filter over the SessionSpeaker join) arrives as a Result; once
+// unwrapped it is ANDed with the public filter, never substituted for it.
+if (!speakerResult.TryGetValue(out var speakerSpecification))
+    return publicSpecification;
+
 return publicSpecification is null
-    ? speakerResult.Value
-    : publicSpecification.And(speakerResult.Value!);
+    ? speakerSpecification
+    : publicSpecification.And(speakerSpecification);
 ```
 
 The leaked-query bug from the opening cannot happen here. Both halves of the composed query are named
@@ -215,8 +221,10 @@ specification-first: alongside the parameter-driven `GetAllAsync`, `GetProjected
 (`CountAsync(specification)`, `ListAsync(specification)`, a projecting
 `ListAsync<TResult>(specification, select)`, `AnyAsync(specification)`, and
 `FirstOrDefaultAsync(specification)`), a keyset-paged `GetPageByCursorAsync` whose optional
-specification scopes the page, and expression-predicate aggregates that keep the arithmetic in the
-database (`CountByAsync`, `SumByAsync`, and the soft-delete-aware `FindIncludingDeletedAsync`). The
+specification scopes the page, expression-predicate aggregates that keep the arithmetic in the
+database (`CountByAsync` and `SumByAsync`), and the soft-delete-aware `FindIncludingDeletedAsync`,
+which returns the matching rows split into active and soft-deleted halves so a create handler can
+reactivate a soft-deleted row instead of inserting a duplicate. The
 premise of this whole article, that query intent belongs in an object, is what the read contract
 itself assumes.
 `IReadRepository` composes exactly those two, and it alone
@@ -310,8 +318,31 @@ transactions wrap every command and query without touching a handler.
 
 *Tags: .NET, C Sharp, Software Architecture, Programming, Entity Framework*
 
-*Notes (re-verified against the current tree, 2026-10-22, MMCA.Common v1.250.0; ADC, Store and
+*Notes (re-verified against the current tree, 2026-10-29, MMCA.Common v1.265.1; ADC, Store and
 Helpdesk read at current `main`):
+**2026-10-29 corrections (MMCA.Common v1.265.1):** the composition paragraph moves from six read
+paths to seven and from seven call sites to ten (nine `.And()`, one `.Not()`); the third Store path
+is the storefront product read. `StorefrontProductsSpecification`
+(`MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.Application/Products/UseCases/Storefront/StorefrontProductsSpecification.cs:27`)
+is a consumer `QuerySpecification` subclass whose `BuildCriteria` (`:59`) starts from an
+`_ => true` `InlineSpecification` seed (`:67-68`), ANDs the optional search, category and on-sale
+filters at `:72`, `:78` and `:84`, and returns the composed `Criteria` (`:88`), which the
+constructor assigns to the specification itself (`:46`), so the shaped specification is never a
+combinator operand. `GetStorefrontProductsHandler.cs` reads it through an `IEntityQuerier` local
+(`:46`, assigned from `GetReadRepository` at `:47`) with the spec-taking `CountAsync` (`:50`) and
+`ListAsync` (`:53`), so the specification-first `ListAsync` has six consumer call sites, the
+spec-taking `CountAsync` has a consumer caller, and MMCA.Store carries five narrow-interface
+holders. The snippet follows `SessionsController.cs`, which unwraps the speaker scope with
+`TryGetValue` (`:130-131`) before the ternary (`:133-135`); its anchors moved up one line. The
+read-contract sentence no longer lists `FindIncludingDeletedAsync` among the aggregates: it returns
+the matching rows split into active and soft-deleted halves, the BR-135 resurrection read
+(`IRepository.cs:193-217`); only `CountByAsync` (`:169`) and `SumByAsync` (`:186`) aggregate. ADC's
+narrow-interface count is 53 across 34 files, both `AGENTS.md` convention lines moved, and ADR-055
+gained the Revisions (2026-10-26) and (2026-10-28) while its earlier anchors moved. Anchors
+corrected in place below: `SessionsController.cs`, the composition call sites, the ListAsync call
+sites, the ADC and Store narrow-interface holders (`SetLeaderboardParticipationHandler.cs`,
+`CheckInProcessor.cs`, Store `UserRegisteredHandler.cs`), both `AGENTS.md` lines and the ADR-055
+lines.
 **2026-10-22 corrections (MMCA.Common v1.250.0):** the composition paragraph moves from five read
 paths to six and from five call sites to seven. ADC's organizer roster,
 `UserListEntityQueryService.GetAllAsync`
@@ -340,18 +371,19 @@ rule landed in commit `95adb84c` (v1.232.0) and is restated on the fluent class 
 `Domain/Specifications/QuerySpecification.cs:43` (`AsTracking` `:77`, `IgnoreQueryFilters` `:87`);
 `IEntityQuerier.ListAsync(specification)` documents that a `QuerySpecification` contributes its
 includes, ordering, paging, tracking and soft-delete scope (`IRepository.cs:252-258`); no consumer
-Source subclasses `QuerySpecification` today (the Store example this pass cited has since been
-deleted; see 2026-10-22). ADR-055 records the rule in its Revision (2026-10-06)
-(`055-repository-and-specification-contract.md:618-628`). Anchors corrected in place below:
+Source subclassed `QuerySpecification` at that pass's close (the Store example it cited was later
+deleted, see 2026-10-22; the storefront subclass is recorded under 2026-10-29). ADR-055 records the
+rule in its Revision (2026-10-06)
+(`055-repository-and-specification-contract.md:632`). Anchors corrected in place below:
 `Specification.cs` combinators and composer, `SpecificationExtensions.cs`, `SpeakersController.cs`,
 both question-answer controllers, `UnitOfWork.cs`, the ADC narrow-interface count and
 `ToggleUpvoteHandler.cs`, Store `CategoryAssignParentUpdateHandler.cs`, both `AGENTS.md` lines, and
 the ADR-055 revision lines.
 **2026-10-02 corrections:** the public visibility rule in the paged sessions read is not a
 `PublicSessionStatusSpecification` instance. `SessionsController.GetReadSpecificationAsync`
-(`MMCA.ADC/.../Conference.API/Controllers/Sessions/SessionsController.cs:76`) returns `null` for a
-privileged caller (`:79-80`) and otherwise the specification from `GetPublicSessionFilterHandler`
-(`:82-85`), which calls `CrossSourceSpecification.BuildAsync`
+(`MMCA.ADC/.../Conference.API/Controllers/Sessions/SessionsController.cs:75`) returns `null` for a
+privileged caller (`:78-79`) and otherwise the specification from `GetPublicSessionFilterHandler`
+(`:81-84`), which calls `CrossSourceSpecification.BuildAsync`
 (`MMCA.ADC/.../Conference.Application/Sessions/UseCases/GetPublicSessionFilter/GetPublicSessionFilterHandler.cs:29-34`)
 with `principalPredicate: e => e.IsPublished` (`:32`) and `localPredicate:
 PublicSessionStatusSpecification.StatusCriteria` (`:34`); `BuildAsync`
@@ -391,12 +423,15 @@ rationale at `:71-75`, and the lazy fields at `:90`/`:93-95`, `:116`/`:119-121`,
 (`:54`), `Or` (`:74`), and `Not` (`:91`). `Website/docs-src/onboarding/group-03-querying-specifications.md:17`
 documents the same mechanism. `Website/docs-src/governance/common-ArchitectureScorecard.md` (Rubric 2)
 cites Specification composition positively; its inline anchors are not relied on here.
-**Composition call sites, seven, in two applications, each feeding a database read:** (1)$1`SessionsController.cs:136` evaluates `publicSpecification.And(speakerResult.Value!)` inside
-`BuildPagedSessionSpecificationAsync` (`:114`, span `:114-136`), whose result is the `specification:`
-argument (`:196`) of the paged `QueryService.GetAllAsync(` call at `:193`; the never-substitute
-rationale is in that method's remarks at `:109-111`. (2)
+**Composition call sites, ten, in two applications, each feeding a database read:** (1)
+`SessionsController.cs:135` evaluates `publicSpecification.And(speakerSpecification)` inside
+`BuildPagedSessionSpecificationAsync` (`:113`, span `:113-136`), after the `TryGetValue` unwrap of
+the speaker scope (`:130-131`); its result is the `specification:`
+argument (`:195`) of the paged `QueryService.GetAllAsync(` call at `:192`; the never-substitute
+rationale is in that method's remarks at `:108-110`. (2)
 `.../Conference.API/Controllers/Speakers/SpeakersController.cs:187` ANDs the public-speaker
-specification with the event-scoped filter, feeding `GetAllAsync` at `:191` as its `specification:`$1argument at `:194`. (3) `.../Conference.Application/Common/PublicConferenceVisibility.cs:149` ANDs
+specification with the event-scoped filter, feeding `GetAllAsync` at `:191` as its `specification:`
+argument at `:194`. (3) `.../Conference.Application/Common/PublicConferenceVisibility.cs:149` ANDs
 `PublicSessionStatusSpecification` with an `InlineSpecification` event scope, and the composed
 specification feeds the spec-taking projecting `ListAsync` at `:154` (in `GetEligibleSessionIdsAsync`,
 `:141`, backing `GetVisibleSpeakerIdsAsync` at `:104`). (4)
@@ -408,18 +443,24 @@ passes the same pair to the projecting `ListAsync` (`:110`, projection `review =
 `:112`) inside `RecomputeAsync` (`:86`). (6)
 `MMCA.ADC/.../Identity.Application/Users/UserListEntityQueryService.cs:111` ANDs the caller's
 specification with the signed-in one, and the result is the specification argument (`:120`) of
-`base.GetAllAsync` (`:117-128`). (7) The same file calls `holdsLiveSession.Not()` at `:172`. The Store specifications are
+`base.GetAllAsync` (`:117-128`). (7) The same file calls `holdsLiveSession.Not()` at `:172`. (8) to
+(10) `MMCA.Store/.../Catalog.Application/Products/UseCases/Storefront/StorefrontProductsSpecification.cs:72`,
+`:78` and `:84` fold the search, category and on-sale `InlineSpecification` filters into the
+specification's own `Criteria` (`:46`), which feeds `CountAsync` and `ListAsync` in
+`GetStorefrontProductsHandler.cs` (`:50`, `:53`). The Store review specifications are
 `Catalog.Application/Reviews/Specifications/ReviewsByProductSpecification.cs:13` and
 `.../PublishedReviewsSpecification.cs` (`Criteria` override at `:17`). Grep of `MMCA.ADC/Source`,
 `MMCA.Store/Source`, and `MMCA.Helpdesk/Source` for `.And(`/`.Or(`/`.Not(` and
-`new And|Or|NotSpecification` returns exactly six `.And(` hits and one `.Not(` hit; `Or` has no
-consumer call site and MMCA.Helpdesk composes nothing. The specification-first `ListAsync` has five consumer call
+`new And|Or|NotSpecification` returns exactly nine `.And(` hits and one `.Not(` hit; `Or` has no
+consumer call site and MMCA.Helpdesk composes nothing. The specification-first `ListAsync` has six consumer call
 sites: `PublicConferenceVisibility.cs:78` and `:154`, `ProductReviewChangedHandler.cs:110`,
 `Reviews/UseCases/Submit/SubmitReviewHandler.cs:43`,
-and `Reviews/UseCases/Eligibility/GetReviewEligibilityHandler.cs:47`.
+`Reviews/UseCases/Eligibility/GetReviewEligibilityHandler.cs:47`, and
+`Products/UseCases/Storefront/GetStorefrontProductsHandler.cs:53`.
 The snippet quotes `PublicSessionStatusSpecification`
 (`MMCA.ADC/.../Conference.Application/Sessions/Specifications/PublicSessionStatusSpecification.cs:21`,
-`StatusCriteria` `:24`, `Criteria` override `:28`); the speaker scope is the `Session.Id IN (...)`
+`StatusCriteria` `:24`, `Criteria` override `:28`) and the tail of
+`BuildPagedSessionSpecificationAsync` (`SessionsController.cs:130-135`); the speaker scope is the `Session.Id IN (...)`
 `InlineSpecification` built by `GetSessionsBySpeakerFilterHandler`
 (`.../Sessions/UseCases/GetSessionsBySpeakerFilter/GetSessionsBySpeakerFilterHandler.cs:42-43`).
 `OwnedByUserSpecification<TEntity, TIdentifierType>`
@@ -443,7 +484,7 @@ has zero `using Microsoft.EntityFrameworkCore`.
 `IEntityReader` `:21` (`GetByIdAsync` `:26`/`:31`, `GetByIdsAsync` `:48`, `ExistsAsync` `:56`/`:62`);
 `IEntityQuerier` `:80` (`GetAllAsync` `:85`, `GetProjectedAsync` `:105`, `FirstOrDefaultAsync(where)`
 `:134`, `FirstOrDefaultAsync(specification)` `:150`, `CountByAsync` `:169`, `SumByAsync` `:186`,
-`FindIncludingDeletedAsync` `:217`, `GetAllForLookupAsync` `:224`, `CountAsync` `:231`/`:234`,
+`FindIncludingDeletedAsync` `:217` (active and soft-deleted halves, BR-135 rationale `:199-202`), `GetAllForLookupAsync` `:224`, `CountAsync` `:231`/`:234`,
 `CountAsync(specification)` `:245`, `ListAsync(specification)` `:262`, `ListAsync<TResult>` `:281`,
 `AnyAsync` `:293`, `GetPageByCursorAsync` `:318`); the two `FirstOrDefaultAsync` overloads carry RS0026
 suppressions at `:133`/`:149`. `IReadRepository` `:332` composes both halves and alone declares
@@ -465,32 +506,37 @@ Subclasses: MMCA.Store with an empty `AllowedFiles`
 paragraphs in the contract section and the "Half the composition surface still has no consumer"
 trade-off) were removed from the body at the author's direction, along with the recap clause that
 echoed them. Do not re-add them on a future pass.
-**Consumption of the narrow interfaces:** MMCA.ADC declares `IEntityReader`/`IEntityQuerier` 50 times$1across 31 files (Grep count: 49 in 30 Application files plus one API controller local,
+**Consumption of the narrow interfaces:** MMCA.ADC declares `IEntityReader`/`IEntityQuerier` 53 times
+across 34 files (Grep count: 52 in 33 Application files plus one API controller local,
 `Conference.API/Controllers/Sessions/SessionSelectionController.cs:142`), among them `PublicConferenceVisibility.cs:40`, `:75`,
 `:126`, `:151`, `SessionAssetAccessService.cs:32`, `:65`, `:92`, `:128`,
 `Conference.Application/Users/IntegrationEventHandlers/UserRegisteredHandler.cs:149`/`:186`,
 `SessionRoomScheduling.cs:45`, `Engagement.Application/SessionQuestions/UseCases/ToggleUpvote/ToggleUpvoteHandler.cs:164`,
 `LivePolls/UseCases/CastVote/CastVoteHandler.cs:138`/`:159`,
-`Points/UseCases/SetLeaderboardParticipation/SetLeaderboardParticipationHandler.cs:145`, and
-`CheckIns/Services/CheckInProcessor.cs:223`. MMCA.Store carries four:
+`Points/UseCases/SetLeaderboardParticipation/SetLeaderboardParticipationHandler.cs:153`, and
+`CheckIns/Services/CheckInProcessor.cs:222`. MMCA.Store carries five:
 `Identity.Application/Customers/CustomerService.cs:14` and `Identity.Application/Users/AuthenticationService.cs:49`
 (both private readonly fields assigned from `GetReadRepository`),
-`Identity.Application/Users/DomainEventHandlers/UserRegisteredHandler.cs:131` and
+`Identity.Application/Users/DomainEventHandlers/UserRegisteredHandler.cs:130` and
 `Catalog.Application/Categories/UseCases/AssignParentCategory/CategoryAssignParentUpdateHandler.cs:120`
-(helper parameters). MMCA.Helpdesk carries one,
+(helper parameters), and `Catalog.Application/Products/UseCases/Storefront/GetStorefrontProductsHandler.cs:46`
+(a handler local assigned at `:47`). MMCA.Helpdesk carries one,
 `Tickets.Application/Tickets/UseCases/GetById/GetTicketByIdHandler.cs:24`, with its reason at `:22`.
 Every holder is assigned from `GetReadRepository<...>()` by implicit reference conversion; nothing
 constructor-injects a narrow interface. The read-only/compose convention lives in each consumer's
-`AGENTS.md` (`MMCA.ADC/AGENTS.md:107`, `MMCA.Store/AGENTS.md:106`), which each `CLAUDE.md` imports
+`AGENTS.md` (`MMCA.ADC/AGENTS.md:108`, `MMCA.Store/AGENTS.md:107`), which each `CLAUDE.md` imports
 (`@AGENTS.md`, line 3).
 **ADR-055 state:** `Website/docs-src/adr/055-repository-and-specification-contract.md` carries the
-2026-08-18 revision (`:317`), the 2026-08-21 revision (`:480`), the 2026-08-31 revision (`:531`, "The
-querier carries five more members" `:535`, "MMCA.Helpdesk narrows too" `:562`), a 2026-10-01
-revision (`:586`) recording the then 40-site/23-file ADC count and the five composing call sites, and
-a 2026-10-06 revision (`:618`) recording the criteria-only `RejectShaped` rule and the 44-site/27-file
-ADC count, and a 2026-10-21 revision (`:652`) recording the seven composing call
-sites, the first `Not` caller, the 50-site/31-file ADC count and the seven-file ADC allowlist;
-Status section `:3`. The Decision section cites Store `AuthenticationService.cs:49`
-(`:215`), matching source; `:54` survives only inside the historical 2026-10-01 revision (`:594`).*
+2026-08-18 revision (`:331`), the 2026-08-21 revision (`:494`), the 2026-08-31 revision (`:545`, "The
+querier carries five more members" `:549`, "MMCA.Helpdesk narrows too" `:576`), a 2026-10-01
+revision (`:600`) recording the then 40-site/23-file ADC count and the five composing call sites,
+a 2026-10-06 revision (`:632`) recording the criteria-only `RejectShaped` rule and the 44-site/27-file
+ADC count, a 2026-10-21 revision (`:666`) recording the seven composing call
+sites, the first `Not` caller, the 50-site/31-file ADC count and the seven-file ADC allowlist, a
+2026-10-26 revision (`:707`) re-anchoring after line shifts, and a 2026-10-28 revision (`:719`)
+recording the 53-site/34-file ADC count (`:725-727`), the fifth Store holder (`:731-735`), the ten
+composing call sites (`:736-746`, "ten" at `:744`) and the returning spec-taking `CountAsync` caller
+(`:747-753`); Status section `:3`. The Decision section cites Store `AuthenticationService.cs:49`
+(`:225`), matching source; `:54` survives only inside the historical 2026-10-01 revision (`:608`).*
 
 - Full series index: https://ivanball.github.io/writing.html

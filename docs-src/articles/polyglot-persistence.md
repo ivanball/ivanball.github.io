@@ -27,8 +27,8 @@ MMCA.Common makes it reversible. A domain entity carries no persistence-engine c
 plain class. What decides whether it is stored in SQL Server, PostgreSQL, Cosmos DB, or SQLite is a
 single `[UseDataSource(<engine>)]` attribute on its EntityConfiguration, carried for you by one of four
 thin base classes. Moving an entity between engines is a one-token change in that configuration, plus
-the target engine's connection string and one AppHost line, and the entity itself never has to know it
-happened.
+the target engine's connection string and its AppHost wiring, and the entity itself never has to know
+it happened.
 
 ## Two axes, not one
 
@@ -92,13 +92,17 @@ is `ValueGeneratedNever()`, so an entity that supplies its own ids keeps them on
 
 The registry is static on purpose: model-building code (this configuration base, the EF conventions,
 the soft-delete SQL builder) runs where no DI container is reachable, and the engine set is a closed
-enum only the framework extends. Adding a fifth engine touches a short, fixed list: a new `DataSource`
-enum member, its sealed context class, the provider marker interface the engine-aware base
-implements, one strategy class, and one line in the registry. No call site changes.
-What keeps it that way is a source-scanning fitness test, `DataSourceBranchingFitnessTests`, which
-fails the test run on any reference to a concrete engine value outside the strategies and a short,
-reasoned allow-list, and also fails when an allow-list entry goes stale. A new `switch` over the
-engine cannot quietly reappear in a call site.
+enum only the framework extends. Adding a fifth engine is a bounded list rather than a one-liner: a
+new `DataSource` enum member, its sealed context class, the provider marker interface the engine-aware
+base implements, one strategy class, and one line in the registry, plus the engine's connection-string
+properties on the settings classes the strategy reads (top-level, per-source and per-tenant). A few
+places also name every engine's connection-string key directly: the startup validator that refuses a
+host with no database, the Aspire health-check registration, and the per-engine AppHost helpers.
+What keeps the engine *value* from spreading is a source-scanning fitness test,
+`DataSourceBranchingFitnessTests`, which fails the test run on any reference to a concrete engine
+value or engine context type outside the strategies and a short, reasoned allow-list, and also fails
+when an allow-list entry goes stale. A new `switch` over the engine cannot quietly reappear in a call
+site; a branch on a connection-string key name is outside what it scans.
 
 On top of the engine-aware base sit four **thin shims**: `EntityTypeConfigurationSQLServer`,
 `EntityTypeConfigurationPostgreSQL`, `EntityTypeConfigurationCosmos`, and
@@ -124,9 +128,11 @@ So what does it take to move `Session` from SQL Server to Cosmos? You change its
 class from `EntityTypeConfigurationSQLServer<Session, ...>` to
 `EntityTypeConfigurationCosmos<Session, ...>`. Or, equivalently, you derive from the engine-aware base
 directly and put `[UseDataSource(DataSource.CosmosDB)]` on the class. That is the change in code. The
-host has to configure the target engine as well: a Cosmos connection string and one AppHost helper
-line sit alongside the base-class change. Without them the resolver serves the entity from the engine
-the host does configure (the nuance below), so the token alone does not move the storage.
+host has to configure the target engine as well: a Cosmos connection string, and in the AppHost a
+Cosmos database resource handed to the `WithCosmosDataSource` helper, sit alongside the base-class
+change (production infrastructure for the account comes on top). Without them the resolver serves
+the entity from the engine the host does configure (the nuance below), so the token alone does not
+move the storage.
 
 ```csharp
 // Before: relational
@@ -171,7 +177,11 @@ the host configures that engine. A host that does not configure the declared eng
 configuration running in a PostgreSQL-only host, say) is served from the engine it does configure,
 rather than handed an empty connection string. `EntityTypeConfiguration` exposes that answer as
 `EffectiveEngine`, so any hand-written SQL in a configuration body, such as an index filter, targets
-the engine actually being built.
+the engine actually being built. The key and table mapping, by contrast, still follows the
+*declared* engine. Between SQL Server and PostgreSQL that is invisible, since they share one mapping;
+a Cosmos-declared configuration served from a relational host keeps its container mapping and
+client-side key generator, so substitution is a convenience for the relational pair rather than a
+Cosmos fallback.
 
 ## When a relationship crosses an engine boundary
 
@@ -315,7 +325,7 @@ The pattern ports to any stack with EF Core or a comparable configuration-driven
 3. **Give each engine one strategy object** that answers every engine question (mapping, capabilities,
    dialect), looked up by the engine value, so call sites read engine facts instead of branching on
    the engine. A new engine then adds its own strategy class and one registry line (plus whatever
-   per-engine types the ORM itself demands, such as a context class) instead of an edit at every call
+   per-engine types the ORM itself demands, such as a context class, and its configuration keys) instead of an edit at every call
    site, and a text-scan test can keep new branches from creeping back into call sites.
 4. **Degrade cross-engine relationships automatically** at model-build time: drop the impossible
    constraint, keep the scalar FK column, and make it a no-op when everything is on one engine.
@@ -347,10 +357,29 @@ onboarding guide, or `dotnet add package MMCA.Common.Infrastructure` and try it.
 
 *Tags: .NET, C Sharp, Software Architecture, Databases, EF Core*
 
-*Notes: re-verified 2026-10-22 against MMCA.Common v1.250.0 (`MMCA.Common/FACTS.md:14`) and the ADR
-record; every anchor below was re-read at source this run. Changed this run: the fifth-engine sentence
+*Notes: re-verified 2026-10-29 against MMCA.Common v1.265.1 (`MMCA.Common/FACTS.md:14`) and the ADR
+record (findings `11-polyglot-persistence.json`); the anchors the audit listed were re-read and
+corrected in place below. Changed this run: the fifth-engine paragraph left out work the code
+requires. Each strategy reads per-engine settings properties (`.../DataSources/Engines/SQLServerDataSourceEngine.cs:52-69`,
+`ConnectionStringSettings`, `DataSourceEntrySettings`, `TenantDataSourceOverrideSettings`), and three
+places name every engine's connection-string key: `Persistence/DataSources/ConnectionStringSettingsValidator.cs:58-61`
+and `:71-74`, `MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Extensions.Health.cs:221-223` and
+`:272-273`, and the AppHost helpers (`MMCA.Common/Source/Hosting/MMCA.Common.Aspire.Hosting/Extensions.cs`
+`WithSQLServerDataSource` `:531`, `WithPostgreSQLDataSource` `:561`, `WithCosmosDataSource` `:590`,
+`WithSqliteDataSource` `:615`); `DataSourceBranchingFitnessTests` scans engine values and context
+types, not key names (`DataSourceBranchingFitnessTests.cs:143`, per the audit). The paragraph now
+names that list and that limit, and "Apply this" step 3 adds the configuration keys. The Cosmos host
+side read "one AppHost helper line"; `WithCosmosDataSource` takes an `AzureCosmosDBDatabaseResource`
+(`Extensions.cs:590-591`), so the AppHost also declares that resource (ADC's AppHost declares SQL
+Server only, per the audit at `MMCA.ADC/Source/Hosting/MMCA.ADC.AppHost/Program.cs:15`, `:37-40`); the
+intro and the one-token section now say "AppHost wiring". The substitution nuance now states that
+the key and table mapping follows the declared engine: `ApplyEngineConventions(builder, engine)`
+receives the declared value (`EntityTypeConfiguration.cs:51`, mapping call `:77`), not
+`EffectiveEngine` (`:48-49`), so a Cosmos-declared configuration on a relational host keeps the
+Cosmos mapping. Prior pass: re-verified 2026-10-22 against MMCA.Common v1.250.0 and the ADR
+record; every anchor below was re-read at source in that pass. Changed in that pass: the fifth-engine sentence
 and "Apply this" step 3 follow ADR-018's list (a `DataSource` member, a context class, an
-`IDataSourceEngine` class, one line in `Registered`: `Website/docs-src/adr/018-polyglot-persistence.md:70-71`),
+`IDataSourceEngine` class, one line in `Registered`: `Website/docs-src/adr/018-polyglot-persistence.md:71-72`),
 which the code confirms (abstract `ApplicationDbContext`
 `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/ApplicationDbContext.cs:46`,
 each strategy builds its own sealed context `SQLServerDataSourceEngine.cs:87-91`, names its enum value
@@ -359,7 +388,7 @@ that the engine-aware base implements `EntityTypeConfiguration.cs:29-32`). The
 `SpecificationsDoNotNavigateToOtherEntities` paragraph now states the rule is best-effort
 (`MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Rules/Domain/ArchitectureRules.Specifications.cs:17-20`,
 parameterless only `:37-41`, unevaluable skipped `:55-59`). Anchors corrected in place below: the ADC
-configuration count (31), `SessionsController.cs:82`, ADR-018 items 5-6, ADR-130 status and
+configuration count (31), `SessionsController.cs:81`, ADR-018 items 5-6, ADR-130 status and
 `SupportsOutbox`, ADR-113 status, ordinals, `xmin` and no-shipped-PostgreSQL lines, and the full
 PostgreSQL/Sqlite/Cosmos shim declarations. Pass of 2026-10-08 (v1.233.0) changed: the "None of it is running in production yet" adoption claim (body, subtitle,
 trade-off bullet, recap) now follows ADR-018, which records the engine-agnostic plumbing as shipped to
@@ -373,7 +402,7 @@ the degrade convention is registered on every context
 and `CrossSourceSpecification.BuildAsync` runs on ADC read paths
 (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Sessions/UseCases/GetPublicSessionFilter/GetPublicSessionFilterHandler.cs:29`,
 `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Common/PublicConferenceVisibility.cs:63`,
-called from `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/Sessions/SessionsController.cs:82`).
+called from `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/Sessions/SessionsController.cs:81`).
 "That is the change" / "one-token change" now names the host side too: ADR-018 counts connection
 strings and one AppHost helper line (`018-polyglot-persistence.md:11-12`), and an unconfigured target
 engine is substituted (`DataSourceResolver.cs:128-129`). "Handlers do not change" is now conditional on
@@ -381,7 +410,7 @@ the engine's capabilities, and the Cosmos trade-off names the missing transactio
 `Any(predicate)` translation
 (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DataSources/Engines/DataSourceEngineCapabilities.cs:14-19`,
 `CosmosDataSourceEngine.cs:13-16`). The Cosmos compensating-index skip is no longer attributed to
-ADR-018 (ADR-018 items 5-6 at `018-polyglot-persistence.md:116-134` only say indexes are stripped);
+ADR-018 (ADR-018 items 5-6 at `018-polyglot-persistence.md:117-135` only say indexes are stripped);
 it is the convention's own `IsRelational` read
 (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Conventions/CrossDataSourceDegradeConvention.cs:66`,
 rationale `:102-105`). Anchors corrected in place below: outbox gating, ADR-113 ordinals, `xmin`, and
@@ -420,15 +449,15 @@ is built lazily and rescanned once on a miss (`:16-17`, `:61-63`) over a `Frozen
 `DataSourceKey` (`:25-28`). Engine substitution for an unconfigured engine is
 `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DataSources/DataSourceResolver.cs:109-129`.
 Outbox gating is `context.Engine.Capabilities.IsRelational && outboxEnabled`
-(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Interceptors/DomainEventSaveChangesInterceptor.cs:257`,
-in-process-only branch `:292-298`, synchronous save path `:141`); `CosmosDbContext` ignores `OutboxMessage` (`CosmosDbContext.cs:124`);
+(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Interceptors/DomainEventSaveChangesInterceptor.cs:259`,
+in-process-only branch `:294-300`, synchronous save path `:142-143`); `CosmosDbContext` ignores `OutboxMessage` (`CosmosDbContext.cs:124`);
 `SupportsOutbox` has no hit under `Persistence/DbContexts` and ADR-130 records its removal
-(`Website/docs-src/adr/130-per-engine-data-source-strategy.md:96`). The Cosmos engine test is
+(`Website/docs-src/adr/130-per-engine-data-source-strategy.md:100`). The Cosmos engine test is
 `MMCA.Common/Tests/Core/MMCA.Common.Infrastructure.Tests/Persistence/DataSources/CosmosConfigurationPortabilityTests.cs:101-103`.
 ADR-130 status and refinement of ADR-018/113: `130-per-engine-data-source-strategy.md:3-12`. ADR-113:
 accepted and revised `Website/docs-src/adr/113-postgresql-as-a-first-class-engine.md:4-11`, `xmin`
-rejected for the shared client-stamped token `:195-199`, no shipped application on PostgreSQL (advisory
-Helpdesk canary only) `:233-236`. The ADC trial-and-revert is recorded at
+rejected for the shared client-stamped token `:259-263`, no shipped application on PostgreSQL (advisory
+Helpdesk canary only) `:297-298`. The ADC trial-and-revert is recorded at
 `Website/docs-src/adr/018-polyglot-persistence.md:8-10` (moved from the adc scorecard section 8 note,
 which no longer mentions it). Changed in the 2026-10-02 pass: the enum `switch` description, the `default: throw`
 branch, the `SupportsOutbox` override, the "resolved once at startup" registry wording, the
@@ -436,13 +465,13 @@ SQLite-only `EnsureCreated` attribution, and the "Cosmos base ... factory test" 
 replaced with the source above; Cosmos's missing concurrency token and the engine-substitution nuance
 were added. Carried forward unread in the 2026-10-02 and 2026-10-08 passes and re-read in the
 2026-10-22 pass: `DataSource` ordinals (`MMCA.Common/Source/Core/MMCA.Common.Application/Interfaces/Infrastructure/Persistence/IDataSourceService.cs:22`;
-ADR-113 `:56-60`), `CrossDataSourceDegradeConvention` (`CrossDataSourceDegradeConvention.cs:34`),
+ADR-113 `:63-66`), `CrossDataSourceDegradeConvention` (`CrossDataSourceDegradeConvention.cs:34`),
 `CrossSourceSpecification.BuildAsync`
 (`MMCA.Common/Source/Core/MMCA.Common.Application/Specifications/CrossSourceSpecification.cs:39`,
 `InlineSpecification` `:62-63`, `Expression.AndAlso` with the rebound local predicate `:86-87`,
 bounded-set note `:18-19`), `NamespaceConventions` (`NamespaceConventions.cs:20`, the segment before
 `Domain` `ModuleNameConventions.cs:41-45`), the four sealed context declarations
-(`SQLServerDbContext.cs:15`, `PostgreSQLDbContext.cs:23`, `CosmosDbContext.cs:15`,
+(`SQLServerDbContext.cs:15`, `PostgreSQLDbContext.cs:24`, `CosmosDbContext.cs:15`,
 `SqliteDbContext.cs:12`), the `SpecificationsDoNotNavigateToOtherEntities` rule, and
 `GetPublicSessionFilterHandler`. The `SessionConfiguration` / `Session` / `Event` code snippets are
 illustrative of the shape described in the source, not copied verbatim from a single cited file.*

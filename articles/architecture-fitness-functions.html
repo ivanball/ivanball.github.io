@@ -95,7 +95,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 53 articles</summary>
+        <summary>All 54 articles</summary>
         <nav class="doc-nav" aria-label="The MMCA.Common series">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -151,7 +151,8 @@
         <li><a href="governed-llm-boundary.html">50 · The governed LLM boundary</a></li>
         <li><a href="durable-internal-commands.html">51 · Four ways to do work later</a></li>
         <li><a href="identity-completions.html">52 · Finishing identity</a></li>
-        <li><a href="series-index.html">53 · The series index</a></li>
+        <li><a href="cloud-neutral-vendor-adapters.html">53 · One framework, three clouds</a></li>
+        <li><a href="series-index.html">54 · The series index</a></li>
           </ol>
         </nav>
       </details>
@@ -219,8 +220,8 @@
           to <code>latest</code> with <code>AnalysisMode</code> <code>All</code> (<code>:11-12</code>), and turns on <code>EnforceCodeStyleInBuild</code> (<code>:14</code>), so the
           IDE-only style rules run in the command-line build too. Five third-party analyzer packages, Meziantou,
           Microsoft.VisualStudio.Threading, Roslynator, SonarAnalyzer and StyleCop, ride into every project except
-          a Docker Compose <code>.dcproj</code> (<code>:130-150</code>), with their versions pinned through Central Package Management
-          (<code>MMCA.Common/Directory.Packages.props:233</code>, <code>:239-242</code>). The shared <code>.editorconfig</code> then sets
+          a Docker Compose <code>.dcproj</code> (<code>:113-134</code>), with their versions pinned through Central Package Management
+          (<code>MMCA.Common/Directory.Packages.props:281</code>, <code>:287-290</code>). The shared <code>.editorconfig</code> then sets
           <code>dotnet_analyzer_diagnostic.severity = error</code> (<code>MMCA.Common/.editorconfig:312</code>): every diagnostic
           starts as an error, and a rule that does not apply here is turned off by name with its reason beside
           it, so the exception list is something a reviewer can read rather than something implied by silence.</p>
@@ -234,8 +235,8 @@
           <p><strong>An empty run is a failure.</strong> A green test step proves only that the tests which ran passed, and a
           broken filter or a discovery failure can turn a suite into zero tests and still report success. So the
           solution-wide unit runs carry <code>--minimum-expected-tests</code>: 2000 in MMCA.Common, against a suite that executes
-          8,386 tests in CI (<code>MMCA.Common/.github/workflows/ci.yml:163</code>), 5000 in MMCA.ADC
-          (<code>MMCA.ADC/.github/workflows/deploy.yml:366</code>) and 2650 in MMCA.Store
+          9,122 tests in CI (<code>MMCA.Common/.github/workflows/ci.yml:163</code>), 5000 in MMCA.ADC
+          (<code>MMCA.ADC/.github/workflows/deploy.yml:367</code>) and 2650 in MMCA.Store
           (<code>MMCA.Store/.github/workflows/deploy.yml:338</code>). That is the same vacuity guard the form-count floor
           below applies to a single gate, applied to the whole run. The line-coverage floor that sits beside it
           belongs to the test pyramid and is covered in Article 35
@@ -247,12 +248,12 @@
           <p>Here is the part that makes the fitness functions scale across more than one repo without rotting into
           three slightly-different copies.</p>
           <p>The rule <em>bodies</em> do not live in the test project. They live once, in a shipped NuGet package:
-          <code>MMCA.Common.Testing.Architecture</code> (package 18 of the twenty-two the framework publishes, with
+          <code>MMCA.Common.Testing.Architecture</code> (package 21 of the twenty-six the framework publishes, with
           <code>FACTS.md</code> the canonical count). That
           package defines:</p>
           <ul>
           <li><code>ArchitectureRules</code>, the reusable rule library that expresses the actual assertions.</li>
-          <li>A set of 63 abstract <code>*TestsBase</code> classes holding 159 test methods (for example
+          <li>A set of 64 abstract <code>*TestsBase</code> classes holding 160 test methods (for example
           <code>LayerDependencyTestsBase</code>, <code>DomainPurityTestsBase</code>, <code>MicroserviceExtractionTestsBase</code>,
           <code>PiiConventionTestsBase</code>, <code>FolderWidthTestsBase</code>, <code>DataResidencyTestsBase</code>,
           <code>RawSqlConventionTestsBase</code>, <code>ClockReadTestsBase</code>).</li>
@@ -499,7 +500,7 @@ phantom.Should().BeEmpty(
           disagrees with the severity count fails for the same reason (<code>:145</code>).</p>
           <p>Adoption is the shape the rest of this tier already uses. MMCA.ADC and MMCA.Store each embed their
           real <code>infra/main.bicep</code> and <code>infra/OPERATIONS.md</code> as manifest resources
-          (<code>MMCA.ADC/Tests/Architecture/MMCA.ADC.Architecture.Tests/MMCA.ADC.Architecture.Tests.csproj:17-22</code>)
+          (<code>MMCA.ADC/Tests/Architecture/MMCA.ADC.Architecture.Tests/MMCA.ADC.Architecture.Tests.csproj:25-30</code>)
           and declare a subclass whose only body is a raised floor matching the specs that repo provisions:
           MMCA.Store&#39;s <code>protected override int MinimumAlertSpecs =&gt; 5;</code>
           (<code>MMCA.Store/Tests/Architecture/MMCA.Store.Architecture.Tests/Governance/ObservabilityConventionTests.cs:13</code>),
@@ -516,9 +517,9 @@ phantom.Should().BeEmpty(
           inapplicable gate rather than an unadopted one. The honest limits are two. This is a text gate over
           infrastructure-as-code: it proves the two files agree, not that the deployment ran or that the query
           behind an alert measures what it claims. And it pairs only the SLO alerts declared between the parse
-          anchors. MMCA.ADC provisions nine further operational alerts and MMCA.Store seven (dead-lettered
+          anchors. MMCA.ADC provisions twelve further operational alerts and MMCA.Store seven (dead-lettered
           outbox messages, a failed revision activation, the gateway availability probe among them) after that
-          loop closes, and the gate neither requires nor forbids a runbook section for any of those sixteen; each
+          loop closes, and the gate neither requires nor forbids a runbook section for any of those nineteen; each
           has written triage today, kept by review rather than by the build (ADR-062). The alerting mechanism itself sits with the
           telemetry it watches, in Article 48.</p>
           <h2 id="the-third-kind-a-fitness-function-for-cost">The third kind: a fitness function for cost</h2>
@@ -626,7 +627,7 @@ phantom.Should().BeEmpty(
           severity-correct runbook section, how the same idea extends to cost through a committed benchmark baseline
           that gates allocations absolutely and latency only as a ratio, and the honest limit that you only
           enforce what you write a rule for.</p>
-          <p><strong>Next in the series:</strong> the test pyramid behind these fitness functions, more than 8,000 fast tests with
+          <p><strong>Next in the series:</strong> the test pyramid behind these fitness functions, more than 9,000 fast tests with
           no Docker and no database.</p>
           <p><em>MMCA.Common is Apache-2.0 licensed and open source. Star the repo, read the Architecture section
           of the contributor guide, or add one NetArchTest rule to your own codebase this week and watch it catch

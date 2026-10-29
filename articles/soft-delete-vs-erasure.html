@@ -95,7 +95,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 53 articles</summary>
+        <summary>All 54 articles</summary>
         <nav class="doc-nav" aria-label="The MMCA.Common series">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -151,7 +151,8 @@
         <li><a href="governed-llm-boundary.html">50 · The governed LLM boundary</a></li>
         <li><a href="durable-internal-commands.html">51 · Four ways to do work later</a></li>
         <li><a href="identity-completions.html">52 · Finishing identity</a></li>
-        <li><a href="series-index.html">53 · The series index</a></li>
+        <li><a href="cloud-neutral-vendor-adapters.html">53 · One framework, three clouds</a></li>
+        <li><a href="series-index.html">54 · The series index</a></li>
           </ol>
         </nav>
       </details>
@@ -325,7 +326,7 @@ configurationBuilder.Conventions.Add(_ =&gt; <span class="hljs-keyword">new</spa
           <code>Outbox:RetentionDays</code> (default 7, set 0 to disable) across every relational data source. A row whose
           retries are exhausted is never marked processed, so the same service sweeps those dead-lettered rows
           on their own window, <code>Outbox:DeadLetterRetentionDays</code>, which falls back to <code>RetentionDays</code> when left
-          at 0; a payload that never delivered is not retained forever either. Bounded retention without
+          at 0 and runs from the row&#39;s last failed attempt; a payload that never delivered is not retained forever either. Bounded retention without
           changing delivery semantics. It is worth flagging as a deliberate <strong>behavior change</strong>:
           consumers upgrading the framework start purging processed outbox rows older than seven days unless they
           opt out, which is the kind of thing that belongs in a CHANGELOG and an ADR rather than a surprise in
@@ -391,8 +392,9 @@ configurationBuilder.Conventions.Add(_ =&gt; <span class="hljs-keyword">new</spa
           <code>UserDataExportSubjectDTO</code>, deliberately excluding credentials (password hash and salt, refresh token,
           external-provider key), since a data export that ships a password hash has turned a privacy feature
           into a breach. The cross-service personal data arrives beside it as sections: ADC registers one
-          <code>IUserDataExportSection</code> per peer, Engagement and Notification, and over a process boundary those
-          contracts are the same gRPC adapters everything else uses.</p>
+          <code>IUserDataExportSection</code> per peer, in the order they appear in the export (Engagement, Notification,
+          then Conference, which carries the session and event feedback answers the user wrote), and over a
+          process boundary those contracts are the same gRPC adapters everything else uses.</p>
           <p>The interesting decision is what happens when a peer is down:</p>
           <pre class="doc-pre" tabindex="0" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-keyword">catch</span> (Exception ex) <span class="hljs-keyword">when</span> (ex <span class="hljs-keyword">is</span> <span class="hljs-keyword">not</span> OperationCanceledException)
 {

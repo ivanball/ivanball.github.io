@@ -39,8 +39,8 @@ sessions, speakers, rooms, categories, and the questions attendees ask. It carri
 - **Notification** (a thin SignalR module hosting the real-time notification hub).
 
 It is deployed to Azure Container Apps, one container image per deployable (the four services, the
-Gateway, and the web UI), and a merge to `main` is the deploy: the required build, integration and
-coverage checks gate the pull request against the exact tree that merges, and the merge push runs the
+Gateway, and the web UI), and a merge to `main` is the deploy: the required test checks (build,
+integration and coverage) gate the pull request against the exact tree that merges, and the merge push runs the
 chromium end-to-end tier when the diff touches the UI, refuses to deploy when a scheduled tier such as
 the cross-service or load run has no recent success, then builds the images and rolls the release out. That is a harder claim than "it builds": the framework is carrying a six-image
 production topology, not a sample project.
@@ -72,12 +72,12 @@ caller, so Sales attaches an HS256 service token on the calls that have no user 
 
 None of that topology is hand-rolled per app. It comes from the framework:
 
-- **The same packages, at the same number.** MMCA.Common publishes twenty-two packages, and each app pins
-  the subset it uses at one identical version literal: ADC pins nineteen `MMCA.Common.*` entries
+- **The same packages, at the same number.** MMCA.Common publishes twenty-six packages, and each app pins
+  the subset it uses at one identical version literal: ADC pins twenty-one `MMCA.Common.*` entries
   (`.Shared`, `.Domain`, `.Application`, `.Infrastructure`, `.AI`, `.AI.Anthropic`, `.AI.Testing`,
-  `.API`, `.Grpc`, `.Gateway`, `.UI`, `.UI.Maui`, `.UI.Web`, `.Aspire`, `.Aspire.Hosting`, `.Testing`,
-  `.Testing.Architecture`, `.Testing.E2E`, `.Testing.UI`), Store pins sixteen of those, taking none of
-  the `.AI` packages.
+  `.API`, `.Grpc`, `.Gateway`, `.UI`, `.UI.Maui`, `.UI.Web`, `.Aspire`, `.Aspire.Hosting`, `.Azure`,
+  `.Testing`, `.Testing.Architecture`, `.Testing.Azure`, `.Testing.E2E`, `.Testing.UI`), Store pins
+  eighteen of those, taking none of the `.AI` packages.
 - **The same patterns.** `Result<T>` for error flow, the CQRS command/query split with the same
   decorator order (commands run FeatureGate then Authorization then Logging then Caching then
   Validating then Timeout then Transactional then the handler; queries run FeatureGate then
@@ -107,17 +107,17 @@ code reaches them.** There is no phased rollout, no opt-in flag, no per-consumer
 
 The release is a lockstep sweep:
 
-1. Tag a new MMCA.Common version (the version comes from the git tag via MinVer). All twenty-two packages
-   publish at that same version.
+1. Tag a new MMCA.Common version (the release version is the git tag itself; MinVer versions every
+   other build). All twenty-six packages publish at that same version.
 2. In each consumer, bump every `MMCA.Common.*` entry in `Directory.Packages.props` to the new version
-   in one pass. ADC keeps its nineteen entries and Store its sixteen on the same number.
+   in one pass. ADC keeps its twenty-one entries and Store its eighteen on the same number.
 3. Build, run the fitness tests and the rest of the suite, deploy.
 
 The framework's versioning policy doc (`common-VERSIONING.md`, canonical in the published docs
 library rather than in the framework repo) states the policy
 plainly: the packages are versioned and released together as a single unit (the authoritative list and
-count live in `FACTS.md`), versions come from MinVer git
-tags, and consumers are swept in one pass with no phased rollout. That is
+count live in `FACTS.md`), a release takes its version from its git
+tag, and consumers are swept in one pass with no phased rollout. That is
 a real constraint, and it is the trade the framework makes on purpose: every consumer stays on one
 coherent version of the contract, so there is never a matrix of "ADC is on 1.74 but Store is on 1.71 of
 three of the packages." The cost is that a breaking change has to be absorbed everywhere at once, which
@@ -203,8 +203,28 @@ honest part), or `dotnet add package MMCA.Common.API` and build your own third a
 
 *Tags: .NET, Software Architecture, Microservices, DDD, Open Source*
 
-*Notes: re-verified 2026-10-22 against framework v1.250.0 (previous passes 2026-10-08 at v1.233.0 and
-2026-10-02 at v1.221.0); every anchor below was re-read on 2026-10-22 and re-anchored in place.
+*Notes: re-verified 2026-10-29 against framework v1.265.1 (`MMCA.Common/FACTS.md:14`, snapshot dated
+2026-10-27 at `:4`; newest changelog entry `## [1.265.1] - 2026-10-27` at `MMCA.Common/CHANGELOG.md:7`);
+previous passes 2026-10-22 at v1.250.0, 2026-10-08 at v1.233.0 and 2026-10-02 at v1.221.0. 2026-10-29
+entry (Common v1.265.1): the framework publishes 26 packages (`MMCA.Common/FACTS.md:19`; the four new
+since the 2026-10-22 pass are `.Aws`, `.Azure`, `.Gcp` and `.Testing.Azure`); ADC pins twenty-one
+`MMCA.Common.*` entries, all at 1.265.1 (`MMCA.ADC/Directory.Packages.props:106-144`, the new `.Azure`
+at `:128` and `.Testing.Azure` at `:129`), and Store pins eighteen, all at 1.265.1, still with no `.AI`
+entry (`MMCA.Store/Directory.Packages.props:8-27`, `.Azure` `:17`, `.Testing.Azure` `:18`, `.Grpc`
+`:77`, `.Aspire.Hosting` `:114`), exactly ADC's twenty-one minus the three `.AI` entries (counted this
+run); the release-version wording follows `Website/docs-src/guides/common-VERSIONING.md:25-28` and
+`MMCA.Common/.github/workflows/release.yml:73`, `:92` (`-p:MinVerSkip=true` with the tag as `Version` /
+`PackageVersion`), so the body says the release version is the tag and MinVer versions every other
+build; source disagreement recorded, not resolved: `MMCA.Common/FACTS.md:14` and
+`MMCA.Common/AGENTS.md:36` still say MinVer-derived; the PR-gate sentence names the required TEST checks
+(`MMCA.ADC/AGENTS.md:88`), because `MMCA.ADC/CONTRIBUTING.md:84-85` lists `supply-chain` and
+`wasm-payload-budget` as required too (and that file says four checks at `:30` against five at
+`:84-85`). Re-anchored this run: the chromium `e2e-gate` job at `MMCA.ADC/.github/workflows/deploy.yml:808`;
+Store's `Grpc:ServiceToken` comment block at
+`MMCA.Store/Source/Services/MMCA.Store.Sales.Service/Program.cs:293-299`; VERSIONING's no-phased-rollout
+line at `:71` and the MassTransit v8 pin at `:103`; all three scorecard headers (below). Anchors not
+named here carry over from the 2026-10-22 pass; the audit reports `MMCA.ADC/AGENTS.md` lines shifted
+by +2 since then (not re-read line by line this run).
 2026-10-22 entry (Common v1.250.0): the framework index moves to 97.3% (319/328) and 85.4% (700/820),
 so the body's rounded implementation figure is now roughly 85%; the auth sentence is scoped to user
 tokens, because Store's service-to-service gRPC is a deliberate exception (Identity's Customers edge
@@ -322,11 +342,11 @@ never reference MassTransit, and `IMessageBus` is served by `InProcessMessageBus
 `BrokerMessageBus.cs:43`); the MassTransit v8 pin is guarded by `DependencyVersionTests`
 (`MMCA.Common/AGENTS.md:41`). `Website/docs-src/guides/common-VERSIONING.md` states that the packages
 are versioned and released together as a single unit with the authoritative list and count in FACTS.md
-(`:5-7`), MinVer from annotated git tags (`:25`), no opt-in flags or phased rollouts (`:67`), and the
-MassTransit v8 pin (`:87`). Scorecard numbers re-read this run: the framework's two-axis index is
+(`:5-7`), the git tag as the release version with MinVer for every other build (`:25-28`), no opt-in flags or phased rollouts (`:71`), and the
+MassTransit v8 pin (`:103`). Scorecard numbers re-read this run: the framework's two-axis index is
 Maturity 97.3% (319/328) and Implementation 85.4% (700/820), Implementation the weaker axis
-(`Website/docs-src/governance/common-ArchitectureScorecard.md:9-11`), evidence as of 2026-10-22 at
-v1.250.0, git HEAD `51c321fe`, clean tree (`:5`), 34 rows with nothing excluded from the denominators
+(`Website/docs-src/governance/common-ArchitectureScorecard.md:9-11`, unchanged on 2026-10-29), evidence
+as of 2026-10-29 at v1.265.1, git HEAD `8658c6cf`, clean tree (`:5`), 34 rows with nothing excluded from the denominators
 and a weight sum of 82 (`:104`). The downstream-evidence caveat is written into the rows themselves: category 4
 DDD holds at 8 on two open criteria, strategic DDD realized downstream with one Domain aggregate family
 (Notifications) plus auth support types, and a plain-string tenant identifier (`:68`); category 5 VSA holds at
@@ -349,10 +369,10 @@ concurrent reads) run weekly on SQLite and not as a required check, held at 8 be
 no capacity-provisioning evidence (`:76`), and category 31 cites a released cost guide (`:95`, the doc
 itself is `Website/docs-src/guides/common-COST.md`). The two consumer scorecards sit on the same
 instrument: ADC scores Maturity 97.5% (316/324) and Implementation 86.0% (697/810), evidence as of
-2026-10-22 at pin v1.250.0, git HEAD `4a273123`, clean tree
+2026-10-29 at pin v1.265.1, git HEAD `360d86eab`, clean tree
 (`Website/docs-src/governance/adc-ArchitectureScorecard.md:9-10`, header `:5`), and Store scores
-Maturity 97.5% (308/316) and Implementation 83.2% (657/790), evidence as of 2026-10-22 at pin v1.250.0,
-git HEAD `d8d3ac91`, clean tree (`Website/docs-src/governance/store-ArchitectureScorecard.md:9-10`,
+Maturity 97.5% (308/316) and Implementation 83.2% (657/790), evidence as of 2026-10-29 at pin v1.265.1,
+git HEAD `e16935cd`, clean tree (`Website/docs-src/governance/store-ArchitectureScorecard.md:9-10`,
 header `:5`).
 Corrected this run: the previous Common, ADC and Store index figures are retired in favor of these.
 Apache-2.0 at `MMCA.Common/LICENSE:2`. That two-axis scorecard is canonical in the Website docs library

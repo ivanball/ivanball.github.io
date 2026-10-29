@@ -95,7 +95,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 53 articles</summary>
+        <summary>All 54 articles</summary>
         <nav class="doc-nav" aria-label="The MMCA.Common series">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -151,7 +151,8 @@
         <li><a href="governed-llm-boundary.html">50 · The governed LLM boundary</a></li>
         <li><a href="durable-internal-commands.html">51 · Four ways to do work later</a></li>
         <li><a href="identity-completions.html">52 · Finishing identity</a></li>
-        <li><a href="series-index.html">53 · The series index</a></li>
+        <li><a href="cloud-neutral-vendor-adapters.html">53 · One framework, three clouds</a></li>
+        <li><a href="series-index.html">54 · The series index</a></li>
           </ol>
         </nav>
       </details>
@@ -332,11 +333,11 @@ liveChannelPublishQueue.Enqueue(<span class="hljs-keyword">new</span> LiveChanne
           That mixed-endpoint profile is what lets one service serve both a WebSocket to browsers and an h2c gRPC
           ingress to peers.</p>
           <h2 id="the-queue-is-where-you-say-what-the-work-is-worth">The queue is where you say what the work is worth</h2>
-          <p>The publish queue in this article is one instance of a general contract (ADR-052): work that outlives
-          a request goes on a bounded <code>Channel&lt;T&gt;</code> singleton, drained by a <code>SingleReader</code> hosted worker. What
-          makes the contract interesting is that the <em>same</em> shape encodes two opposite correctness decisions,
-          and the field that carries the decision is <code>FullMode</code>.</p>
-          <p>The live-channel queue is the permissive end:</p>
+          <p>The publish queue in this article is one instance of a general contract (ADR-121): ephemeral work that
+          outlives a request goes on a bounded <code>Channel&lt;T&gt;</code> singleton, drained by a <code>SingleReader</code> hosted worker.
+          The field that says what the work is worth is <code>FullMode</code>, and it is a per-job choice rather than a
+          rule.</p>
+          <p>The live-channel queue chooses <code>DropOldest</code>:</p>
           <pre class="doc-pre" tabindex="0" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-keyword">private</span> <span class="hljs-keyword">const</span> <span class="hljs-built_in">int</span> Capacity = <span class="hljs-number">1024</span>;
 
 _channel = Channel.CreateBounded&lt;LiveChannelPublishWorkItem&gt;(
@@ -353,12 +354,12 @@ _channel = Channel.CreateBounded&lt;LiveChannelPublishWorkItem&gt;(
           channel always succeeds, because the channel evicts to make room rather than refusing. A caller checking the return
           value learns nothing, so a drop is observable only through the <code>itemDropped</code> callback and the
           discarded-broadcast counter it feeds.</p>
-          <p>The other end of the same field is <code>FullMode = BoundedChannelFullMode.Wait</code>, paired with the
-          <strong>non-blocking</strong> <code>TryWrite</code> rather than an awaited <code>WriteAsync</code>. That combination makes a full queue
-          <em>refuse</em> the request outright instead of either discarding it or blocking the request thread, which is
-          the right answer when silently dropping work someone asked for is a bug rather than backpressure. A
-          small capacity goes with it, because the bound then exists to refuse a runaway caller rather than to
-          absorb a burst.</p>
+          <p>The contract&#39;s other mode is a capacity-one channel with <code>DropWrite</code>, for a job whose requests
+          coalesce: any number of requests made while one is pending collapse into it, and the drop is the
+          intent. What the contract does not carry is <code>BoundedChannelFullMode.Wait</code>, the mode that would make a
+          full queue refuse a request instead of discarding one. Work where silently dropping a request is a bug
+          rather than backpressure is the wrong fit for an in-process queue at all, whatever its full mode, and
+          that is a question about durability rather than capacity.</p>
           <p>There is a prior question, though, and it decides whether a channel is the right home at all. An
           in-process queue is exactly as durable as the replica holding it. A graceful stop drains rather than
           drops: the drain worker completes the queue, cancels its in-flight publish (that one item is lost),

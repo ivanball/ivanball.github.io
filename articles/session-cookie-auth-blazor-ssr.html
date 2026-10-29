@@ -95,7 +95,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 53 articles</summary>
+        <summary>All 54 articles</summary>
         <nav class="doc-nav" aria-label="The MMCA.Common series">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -151,7 +151,8 @@
         <li><a href="governed-llm-boundary.html">50 · The governed LLM boundary</a></li>
         <li><a href="durable-internal-commands.html">51 · Four ways to do work later</a></li>
         <li><a href="identity-completions.html">52 · Finishing identity</a></li>
-        <li><a href="series-index.html">53 · The series index</a></li>
+        <li><a href="cloud-neutral-vendor-adapters.html">53 · One framework, three clouds</a></li>
+        <li><a href="series-index.html">54 · The series index</a></li>
           </ol>
         </nav>
       </details>
@@ -232,8 +233,10 @@
           reason: the cookie was minted by the UI host from a token the API already issued, and <strong>every API call
           still fully validates the JWT</strong> (the cross-service JWKS story from the auth article). The SSR handler only
           needs the user&#39;s claims to render the first paint; it is explicitly not the security boundary.</p>
-          <p><strong>The browser holds a claims copy, never a credential.</strong> When the interactive client starts, it calls
-          <code>POST /auth/session/token</code>, a same-origin &quot;validate-or-refresh&quot; endpoint, to learn who is signed in.
+          <p><strong>The browser holds a claims copy, never a credential.</strong> When the WebAssembly client starts, it calls
+          <code>POST /auth/session/token</code>, a same-origin &quot;validate-or-refresh&quot; endpoint, to learn who is signed in (on
+          the proxy hosts the Blazor Server circuit&#39;s refresher calls <code>POST /auth/session/handoff</code> instead, one of
+          the handoffs described below).
           <code>CookieSessionRefresher.GetOrRefreshAsync</code> reads the HttpOnly refresh cookie server-side, refreshes the
           access token if it has expired, writes fresh cookies back, and returns the access token and its expiry.
           On a host where <code>SessionCookieSettings.ClaimsOnlyBrowserTokens</code> is set (the proxy sets it, so both apps
@@ -309,7 +312,10 @@ endpoints.MapPost(<span class="hljs-string">&quot;/auth/session/token&quot;</spa
           its own keys and a payload minted by replica A cannot be decrypted by replica B. The symptom follows the
           load balancer rather than the user: random sign-outs and &quot;The antiforgery token could not be decrypted&quot;
           errors that fit no pattern.</p>
-          <p><code>AddCommonDataProtection</code> (ADR-069) is the one-call answer. Given a <code>DataProtection:BlobStorageUri</code> it
+          <p><code>builder.AddAzureDataProtection()</code> (ADR-069, in <code>MMCA.Common.Azure</code>) is the one-call answer on Azure;
+          <code>AddAwsDataProtection()</code> and <code>AddGoogleCloudDataProtection()</code> are its peers in the other
+          <a href="cloud-neutral-vendor-adapters.html">vendor adapter packages</a>, and a host keeps exactly one ring. Given a
+          <code>DataProtection:BlobStorageUri</code> it
           persists the key ring to a <strong>single Azure blob</strong> under <code>DefaultAzureCredential</code> and sets an application
           discriminator, so the cookies and antiforgery tokens minted by one replica decrypt on another. Encrypting
           that key ring at rest with a Key Vault key is a <strong>second, deliberately independent gate</strong>
@@ -320,17 +326,18 @@ endpoints.MapPost(<span class="hljs-string">&quot;/auth/session/token&quot;</spa
           parameter is not readable from the repositories, so the record states what ships rather than what is
           switched on: on default parameters the ring is protected by a private container and a narrow account grant
           instead of by a Key Vault key. ADR-069 keeps that as a named trade-off rather than hiding it.</p>
-          <p>Absent configuration is a <strong>full no-op</strong>: with no blob URI the method returns the builder untouched and
+          <p>Absent configuration is a <strong>no-op for DataProtection</strong>: the method always registers a
+          <code>HostIntegrationMarker</code> (the receipt the startup tripwire checks), and with no blob URI it returns there and
           registers no DataProtection services at all. A developer machine, a test host and the Helpdesk seed all run
           single-process, keep the in-memory default, and take no Azure dependency at startup.</p>
           <p>Adoption is per host, and the shape of it is worth saying plainly. MMCA.ADC calls it on exactly the two
           hosts that mint those payloads, its Identity service and its Web UI host. MMCA.Store&#39;s Web UI host calls it as well, on a storage
           account provisioned for this and nothing else, with one extra catch on the infrastructure side: the blob
           URI is injected only when a <code>dataProtectionStorageReady</code> parameter is true (it defaults to false), because
-          <code>AddCommonDataProtection</code> gates on the <em>presence</em> of the URI and never on its reachability, so wiring the
+          <code>AddAzureDataProtection</code> gates on the <em>presence</em> of the URI and never on its reachability, so wiring the
           URI before the blob role assignment exists would fail the first protect call rather than degrade. That flag
-          is true in production today. Store&#39;s Identity service still makes no call, and its container app also runs
-          two replicas.</p>
+          is true in production today. Store&#39;s Identity service still makes no call, and its container app scales
+          to two replicas (minimum one, maximum two).</p>
           <h2 id="trade-offs-honestly">Trade-offs, honestly</h2>
           <p>The pattern fixes a real gap, and the §26 review names what it costs.</p>
           <ul>
@@ -356,8 +363,10 @@ endpoints.MapPost(<span class="hljs-string">&quot;/auth/session/token&quot;</spa
           <li><strong>Scaling out adds a shared-state dependency.</strong> A cookie session is only as portable as the key ring
           behind it, so a multi-replica host has to persist that ring where every replica can read it (ADR-069):
           one more piece of infrastructure and one more credential that has to resolve at startup. It is also
-          opt-in per host, so adoption has to be audited. A scaled-out host that never makes the call keeps the
-          broken per-replica default and fails intermittently rather than loudly.</li>
+          opt-in per host, so adoption has to be audited. A host that sets <code>DataProtection:BlobStorageUri</code> but
+          never makes the call fails at startup, because <code>HostIntegrationTripwire</code> names the missing call; a
+          scaled-out host with neither the key nor the call keeps the broken per-replica default and fails
+          intermittently rather than loudly.</li>
           </ul>
           <p>None of these are reasons to redirect every F5 to a login round-trip. They are the reasons to keep the SSR
           reader honest about what it is for.</p>

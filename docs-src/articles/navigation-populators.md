@@ -2,10 +2,10 @@
 
 > Series: MMCA.Common · Article #12 · Pillar P2/P3 · Group G11 · Rubric §8 · ADR-002 ·
 > Status: grounded in `Website/docs-src/adr/002-navigation-populators.md` (revised 2026-10-06), `Website/docs-src/onboarding/group-11-navigation-populators.md`,
-> and `MMCA.Common/CLAUDE.md` (cross-source degrade convention). No em dashes.
+> and `MMCA.Common/AGENTS.md` (cross-source degrade convention). No em dashes.
 
 **Subtitle:** `Include(x).Include(y).ThenInclude(z)` couples your read model to one physical database.
-Here is the eager-loading boundary that batch-loads related data and survives service extraction.
+Here is the eager-loading boundary that batch-loads related data and survives a database split.
 
 ---
 
@@ -103,32 +103,44 @@ this navigation requested, is it unsupported, which loader applies. The declarat
 `FKNavigationDescriptor` for references), and `DeclarativeNavigationPopulator<TEntity>` drives a list of
 them. A real consumer in ADC's Conference module, `EventNavigationPopulator`, is just a subclass
 constructed with three `ChildNavigationDescriptor`s for `Rooms`, `EventSpeakers`, and
-`EventQuestionAnswers`. No imperative loading code at all. Adding a new cross-source navigation is "add
-one descriptor," not "write a new class."
+`EventQuestionAnswers`. No imperative loading code at all. Once an entity has a declarative populator,
+adding a new cross-source navigation to it is "add one descriptor," not "write a new loader." The
+descriptor list is a constructor argument that DI cannot supply on its own, so an entity still on
+`NullNavigationPopulator` first gets its own small subclass plus the registration that replaces the
+Null Object (ADC's Engagement module registers `LivePollNavigationPopulator` for `LivePoll` this way).
 
 ## The boundary that survives extraction
 
-Here is why this is not over-engineering. When you split a module out and a relationship's two ends move
-to different physical sources, the EF model's `CrossDataSourceDegradeConvention` drops the FK constraint
+Here is why this is not over-engineering. When you split a module's data out and a relationship's two
+ends move to different physical sources, the EF model's `CrossDataSourceDegradeConvention` drops the FK constraint
 and the navigations from the model (the scalar FK columns and a compensating index survive; the foreign
 entity type is removed). Independently, `NavigationMetadataProvider` reads the same entity-to-source
 registry and starts reporting that navigation as `Unsupported`, so the query pipeline routes it to the
 populator path. The populator loads it once it carries a descriptor for that navigation: a declarative
 populator only loads the unsupported navigations it declares, and an entity still on
-`NullNavigationPopulator` returns the navigation unloaded, so extraction means adding that one
-descriptor, not rewriting the query.
+`NullNavigationPopulator` returns the navigation unloaded, so the split means adding that one
+descriptor (and, for a Null Object entity, the declarative subclass that carries it), not rewriting the
+query.
 
 The application code that issued the query never changes. The read handler still asks for events with
-their rooms and speakers. Before extraction, EF JOINs them. After extraction, the populator batch-loads
-them across the source boundary. Cross-source consistency is the outbox's job; cross-source eager
+their rooms and speakers. With both ends in one database, EF JOINs them. With the ends split, the
+populator batch-loads them across the source boundary. Cross-source consistency is the outbox's job; cross-source eager
 loading is the populator's job. Neither is a JOIN, and neither requires you to rewrite the query.
+
+The boundary has a precise reach. The populator reads the child rows through
+`IUnitOfWork.GetReadRepository`, which opens a context for the child entity's own data source, so it
+covers any host that can reach both databases. Once a module moves into its own process (each ADC
+service host declares exactly one database), a cross-module read crosses the process boundary through a
+gRPC adapter instead, not through a populator.
 
 This is the same line that runs through the whole framework: the transport choice (one database or two)
 lives at the edge, and your business logic does not know which it got.
 
 ## Trade-offs, honestly
 
-ADR-002 names the rough edges rather than hiding them.
+ADR-002 names the first two rough edges; the reflection cost is documented in
+`Website/docs-src/onboarding/group-11-navigation-populators.md`, and the last is the deliberate scope of
+the design.
 
 - **Extra abstraction for the single-database case.** For a pure single-SQL-Server host where `Include`
   always works, the populator is a layer you do not strictly need. It is mitigated by being free at
@@ -168,7 +180,8 @@ break that promise, do not encode it in your query code.
 **What we covered:** why `Include` chains couple your read model to one physical database and break
 across data sources, how MMCA.Common classifies navigations as supported or unsupported and routes the
 unsupported ones through `INavigationPopulator` batch loading, and why that same boundary lets a
-cross-source relationship degrade automatically when a module is extracted, with no query rewrite.
+cross-source relationship degrade automatically when a module's data moves to its own source, with no
+query rewrite.
 
 **Next in the series:** optimistic concurrency, where a database-managed RowVersion round-trips from the
 row into the DTO and back through the client so two concurrent edits surface as a 409 instead of a silent
@@ -189,8 +202,22 @@ pattern, or `dotnet add package MMCA.Common.API` and try it.*
 `ChildNavigationDescriptor`/`FKNavigationDescriptor`, `CrossDataSourceDegradeConvention`,
 `EventNavigationPopulator` (ADC Conference). Trade-offs drawn from ADR-002 and
 `group-11-navigation-populators.md`, stated as trade-offs, not hidden.
-Re-verified 2026-10-22 against MMCA.Common v1.250.0 (`MMCA.Common/FACTS.md:14`); paths under
+Re-verified 2026-10-29 against MMCA.Common v1.265.1 (`MMCA.Common/FACTS.md:14`); paths under
 `Source/` are relative to `MMCA.Common/`.
+**2026-10-29 run (v1.265.1):** four corrections. (1) The trade-offs lead no longer credits all four
+bullets to ADR-002: its Trade-offs section names only the extra abstraction and the no-op populator
+(`Website/docs-src/adr/002-navigation-populators.md:25-27`); the cached reflection is from
+`group-11-navigation-populators.md:54-56,358-361`. (2) "Add one descriptor" is scoped to an entity that
+already has a declarative populator: the descriptor list is a constructor parameter
+(`DeclarativeNavigationPopulator.cs:14-16`), so a Null Object entity needs a subclass
+(`EventNavigationPopulator.cs:11-13`) and a replacing registration (example
+`MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Application/DependencyInjection.cs:61`). (3) The
+extraction story is scoped to a data-source split the host can still reach: children load through
+`GetReadRepository`, which opens a context for the child's `DataSourceKey`
+(`Source/Core/MMCA.Common.Infrastructure/Persistence/UnitOfWork.cs:75-77`), while an ADC service host
+declares exactly one database (`MMCA.ADC/AGENTS.md:64`); subtitle, extraction section and recap
+reworded to match. (4) Header source moved from `MMCA.Common/CLAUDE.md`, which now only imports
+`AGENTS.md`, to `MMCA.Common/AGENTS.md:118`; `EventNavigationPopulator` anchor widened to `11-36`.
 **2026-10-22 run (v1.250.0):** four body corrections. (1) The "30 to 40 lines per entity" figure is
 gone, matching ADR-002's 2026-10-06 revision that drops it as overstated
 (`Website/docs-src/adr/002-navigation-populators.md:32`). (2) `HaveIncludeSupport` takes entity full
@@ -212,7 +239,7 @@ Anchors confirmed this run: `NavigationAttribute.cs:10` (`IsCollection` `:16`),
 `Contains` predicate `:71-75,144-148`, `GroupBy` `:89,162`, compiled-selector cache `:27,178-180`),
 `INavigationPopulator.cs:9`, `NullNavigationPopulator.cs:11`, `DeclarativeNavigationPopulator.cs:14`,
 `ChildNavigationDescriptor.cs:15`, `FKNavigationDescriptor.cs:14`,
-`CrossDataSourceDegradeConvention.cs:10-34`, ADC `EventNavigationPopulator.cs:11-31`
+`CrossDataSourceDegradeConvention.cs:10-34`, ADC `EventNavigationPopulator.cs:11-36`
 (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Events/`).*
 
 - Full series index: https://ivanball.github.io/writing.html

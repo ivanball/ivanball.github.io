@@ -65,11 +65,13 @@ set, the GitHub scheme only if `OAuth:GitHub:ClientId` is set, and the Apple sch
 `OAuth:Apple:ClientId` is set. With all three absent it returns the service collection untouched, so a
 host with no OAuth secrets keeps exactly the JWT-only pipeline `AddCommonAuthentication` gave it. It
 calls `AddAuthentication()` with no argument on purpose, so the new schemes append rather than
-displacing the JWT bearer default. Fail-fast is per provider: Google and GitHub throw at startup when a
+displacing the JWT bearer default. Fail-fast is per provider: Google and GitHub throw when a
 `ClientId` is set without its matching `ClientSecret`, while Apple has no static client secret at all
 (the handler mints a short-lived ES256 assertion instead, `GenerateClientSecret = true`) and throws on
-a missing `OAuth:Apple:TeamId`, `OAuth:Apple:KeyId` or `OAuth:Apple:PrivateKeyPem`. Either way a
-half-wired provider fails at startup rather than at the first sign-in.
+a missing `OAuth:Apple:TeamId`, `OAuth:Apple:KeyId` or `OAuth:Apple:PrivateKeyPem`. Those throws live
+in each scheme's options callback, so they fire when the options are first built (the first request
+through the authentication middleware), not at host build. Either way a half-wired provider fails with
+a named configuration error before any sign-in reaches the provider.
 
 **A ten-minute cookie carries the external principal, and nothing else.** The provider callback signs
 into a dedicated `ExternalLogin` cookie scheme (cookie name `mmca_external_login`, HttpOnly,
@@ -168,8 +170,11 @@ provider in the system browser via `WebAuthenticator` with that value on the cha
 `code` and the returned `state` off the custom-scheme callback, and hands both to the shared
 `/auth/oauth-complete` page, which already owns the same out-of-band `ExchangeAsync` the browser uses.
 The completion page refuses a code that does not belong to an attempt started on this device, so a
-deep link carrying someone else's code cannot sign the app in as them. Web heads keep the plain anchor
-flow; the broker reports itself unavailable when no mobile redirect scheme is configured. The code
+deep link carrying someone else's code cannot sign the app in as them. Web heads, where the broker
+reports itself unavailable, get a button whose click mints the same per-attempt state in device
+storage and then navigates to the challenge URL with that state attached, so the web flow is
+state-bound too; if storage will not keep the attempt, the page says so and disables the redirect
+buttons instead of leaving for a provider round trip the completion page would refuse. The code
 still rides the redirect and a token never does, so the invariant holds identically across web and
 native: the only thing that differs is where the code lands.
 
@@ -184,10 +189,13 @@ rather than turning the next query into "find the users whose email is null"), t
 up by that validated value.
 
 When an account already owns that email, nothing is linked until three guards pass, and they are
-strict on purpose. **One provider link per user:** an account already linked to a *different* provider
-is refused with `Auth.ExternalProviderAlreadyLinked`, because the aggregate holds a single
+strict on purpose. **One provider link per user:** any account that already carries an external
+login is refused with `Auth.ExternalProviderAlreadyLinked`, because the aggregate holds a single
 `(LoginProvider, ProviderKey)` pair and a second link would overwrite the first and strand the
-original login, which on a pure-OAuth account has no password to fall back on. That check runs ahead
+original login, which on a pure-OAuth account has no password to fall back on. That includes the
+*same* provider under a different key: this branch is reached only after the provider-plus-key lookup
+missed, and a different key is a different account at the provider, so re-keying would hand this
+account to it. That check runs ahead
 of the verifier, so saying no costs no external round trip. **A provider-asserted verified email:** an
 injected `IExternalLoginEmailVerifier` is asked whether the provider asserted this address as
 verified, and an unverified assertion is refused with `Auth.ExternalEmailNotVerified`. **No local
@@ -205,8 +213,9 @@ When no account owns the email at all, the flow *creates* one through `User.Crea
 `Attendee` with empty password hash and salt. The verifier runs on this branch too, but it does not
 gate the create (GitHub's OAuth flow asserts nothing, and refusing would close GitHub sign-up): the
 assertion rides along as a sixth `emailVerified` argument, which starts the account confirmed when the
-provider vouched for the address and unconfirmed otherwise, in which case it receives a confirmation
-link exactly like a local registration.
+provider vouched for the address and unconfirmed otherwise. Nothing on the external path schedules a
+confirmation email (only local registration does), so an unconfirmed external account gets a link
+when its owner requests one from the confirmation page.
 
 An external user is a `User` with an empty password hash and salt, carrying `LoginProvider` and
 `ProviderKey`; `IsExternalLogin` is simply `LoginProvider is not null`, and `HasLocalPassword` is the
@@ -323,8 +332,23 @@ revoke-on-reuse forced re-login.
 
 *Tags: .NET, C Sharp, OAuth, Security, Software Architecture*
 
-*Notes: re-verified against source on 2026-10-22 (MMCA.Common v1.250.0, `MMCA.Common/FACTS.md:14`).
-Body changes in this pass: the `CompleteAsync` paragraph states where each extracted field comes from
+*Notes: re-verified against source on 2026-10-29 (MMCA.Common v1.265.1, `MMCA.Common/FACTS.md:14`).
+Body changes in this pass (2026-10-29): the one-provider guard is stated as source has it, refusing any
+externally linked account including the same provider under a different key (`if (existingUser.IsExternalLogin)`
+`AuthenticationService.cs:360`, reasoning `:353-359`; ADR-036 Revision 2026-10-26 `:327`); the web heads
+paragraph states the click-minted, state-bound redirect (`Login.razor.cs` `SignInWithRedirectAsync` `:109-130`,
+`OAuthFlowState.BeginAsync` `:114`, storage refusal `:121-125`, `NavigateTo(BuildOAuthUrl(provider, oauthState), forceLoad: true)`
+`:129`; `Login.razor` web buttons `:112-118` with `state=` appended by `BuildOAuthUrl` `:198-201`) instead of
+"the plain anchor flow" (the markup comment at `Login.razor:94-95` still says "anchor redirect flow");
+the create branch no longer claims an unconfirmed external account receives a confirmation link: the
+only `SendEmailConfirmationCommand` construction in `MMCA.ADC/Source` is the local register path
+(`MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.API/Controllers/AuthController.cs:92-96`, `:94`), so
+the account gets a link on request (`IEmailConfirmationUIService.ResendEmailConfirmationAsync`,
+`MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/Auth/IEmailConfirmationUIService.cs:38`), while
+the code comment at `AuthenticationService.cs:287-290` still says it receives one like a local
+registration; the fail-fast sentence places the provider throws in the options callbacks
+(`ExternalAuthExtensions.cs:95-100`, `:107-112`, `:122-139`), which run when the scheme options are first
+built rather than at host build. Prior pass: 2026-10-22 at v1.250.0. Changes in that pass: the `CompleteAsync` paragraph states where each extracted field comes from
 (the name falls back to GitHub's display-name claim, then a `User` placeholder, and Apple's name comes
 from its callback form) instead of "the standard claims"; the third link guard states the
 `Auth.ExternalLinkRequiresLocalSignIn` message as source has it (sign in with email and password; no
@@ -370,12 +394,13 @@ ADR-043 native callback: `GetAllowedMobileReturnUrl` (`:372-386`) returns null f
 empty section means no allowlist (`:384`, reasoning `:381-383`) and matches the scheme (`:385`);
 `AppendQuery` uses `OriginalString` (`:388-395`, `:394`). ADR-043 record
 (`Website/docs-src/adr/043-mobile-deep-links-and-native-oauth-callback.md`): `## Status` `:3`,
-`## Decision` `:88`, `## Trade-offs` `:142`, dated revisions from 2026-07-28 (`:179`) through 2026-10-21
-(`:496`): 2026-08-01 (`:225`), 2026-08-07 (`:248`), 2026-08-31 (`:272`), 2026-09-07 (`:319`), 2026-09-11
-(`:340`), 2026-09-25 (`:385`), 2026-10-01 (`:411`), 2026-10-06 (`:424`, corrects the native redirect
+`## Decision` `:92`, `## Trade-offs` `:146`, dated revisions from 2026-07-28 (`:183`) through 2026-10-28
+(`:545`): 2026-08-01 (`:229`), 2026-08-07 (`:252`), 2026-08-31 (`:276`), 2026-09-07 (`:323`), 2026-09-11
+(`:344`), 2026-09-25 (`:389`), 2026-10-01 (`:415`), 2026-10-06 (`:428`, corrects the native redirect
 description to include the per-attempt `state` round trip this article already states, decision
-unchanged), 2026-10-07 (`:451`, re-verification), 2026-10-15 (`:479`, Engagement QR codes join the
-native link sets) and 2026-10-21 (`:496`, re-verification).
+unchanged), 2026-10-07 (`:455`, re-verification), 2026-10-15 (`:483`, Engagement QR codes join the
+native link sets), 2026-10-21 (`:500`, re-verification), 2026-10-26 (`:526`) and 2026-10-28 (`:545`), the
+last two anchor-only.
 Native client broker (ADR-043): `IExternalAuthBroker`
 (`Source/Presentation/MMCA.Common.UI/Services/Capabilities/Auth/IExternalAuthBroker.cs:10`) and
 `MauiExternalAuthBroker` (`Source/Presentation/MMCA.Common.UI.Maui/Capabilities/Auth/MauiExternalAuthBroker.cs:20`;
@@ -386,9 +411,10 @@ itself). `Login.razor` (`Source/Presentation/MMCA.Common.UI/Pages/Auth/Login.raz
 `_hasExternalProviders` (`:88`, field `:178`, assigned from the three provider flags `:183`), branches per
 provider (`AppleEnabled` `:99`, `GoogleEnabled` `:121`, `GitHubEnabled` `:143`), checks
 `ExternalAuthBroker.IsAvailable` (`:101`, `:123`, `:145`) and calls `SignInWithBrokerAsync` (`:105`,
-`:127`, `:149`; method `:206`). `Login.razor.cs` maps an error code to words (`ExternalSignInErrorMessage`
-`:35-41`, doc `:26-34`): `RefusalMessage` (`:43-47`) looks up `Auth.Login.ExternalError.{code}` and falls back
-to `Auth.Login.ExternalError.Refused` (`:46`). `SharedResource.resx`
+`:127`, `:149`; method `:206`), otherwise `SignInWithRedirectAsync` (`:114` for Apple, with
+`Disabled="@_externalSignInUnavailable"` `:115`). `Login.razor.cs` maps an error code to words (`ExternalSignInErrorMessage`
+`:62-68`, doc `:53-61`): `RefusalMessage` (`:70-74`) looks up `Auth.Login.ExternalError.{code}` and falls back
+to `Auth.Login.ExternalError.Refused` (`:73`). `SharedResource.resx`
 (`Source/Presentation/MMCA.Common.UI/Resources/SharedResource.resx`) holds the generic refusal (`:508-509`,
 "We could not complete sign-in with that account. Please try again or use another sign-in method.") and
 specific entries only for `Auth.AccountLocked` (`:511`), `Auth.ExternalProviderAlreadyLinked` (`:514`) and
@@ -410,55 +436,57 @@ cookie block (`:83-92`).
 `ConfigurationOAuthUISettings` (`Source/Presentation/MMCA.Common.UI/Services/Auth/OAuth/ConfigurationOAuthUISettings.cs`;
 `GoogleEnabled` `:16`, `GitHubEnabled` `:19`, `AppleEnabled` `:22`, read from `OAuth:<Provider>` `:29-31`).
 ADC adoption (`MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Application/Users/AuthenticationService.cs`):
-the ctor takes `IExternalLoginEmailVerifier` (`:54`); `ExternalLoginAsync` (`:214`) opens the transaction
-(`ExecuteInTransactionAsync` `:221-222`) around `ExternalLoginCoreAsync` (`:226`), which looks up by
-`LoginProvider` + `ProviderKey` (`:235-238`), validates the claim with `Email.Create(email)` (`:254`),
-returns `Auth.ExternalEmailInvalid` on failure (`:255-261`, code `:258`), looks up by the validated email
-(`:264-267`) and sends a match to `TryLinkProviderToExistingAccountAsync` (`:271-272`; method `:350-400`):
-the one-provider guard `Auth.ExternalProviderAlreadyLinked` ahead of the verifier (`:359-365`, reasoning
-`:355-358`, code `:362`), the verifier call (`:372-373`) with `Auth.ExternalEmailNotVerified` (`:375-381`,
-code `:378`), and the SEC-ADC-01 guard `if (existingUser.HasLocalPassword)` returning
-`Auth.ExternalLinkRequiresLocalSignIn` (`:390-396`, code `:393`, message "This account signs in with email
-and password. Sign in with your email and password; {loginProvider} sign-in is not available for this
-account." `:394`, reasoning `:383-389`) before `existingUser.LinkExternalProvider(...)` (`:398`). The create
-branch asks the same verifier (`:286-287`) without gating on it, passes the answer to
-`User.CreateExternal(..., emailVerified)` (`:293-294`) and adds the user (`:301`). An existing account
-(matched or linked) is refused when locked (`CheckNotLocked` call `:310-317`, `:312`, reasoning `:306-309`,
-definition `:118-124`; a new account cannot be locked). New users raise `UserRegistered(..., emailVerified)`
-(`:328-329`, speaker auto-link reasoning `:321-325`) while local registration hard-codes
-`EmailVerified: false` (`:190-191`, reasoning `:182`). Token issuance is
-`IssueTokensAsync(user, cancellationToken: cancellationToken)` (`:338`, refresh-session reasoning
-`:333-337`). `IExternalLoginEmailVerifier`
+the ctor takes `IExternalLoginEmailVerifier` (`:54`); `ExternalLoginAsync` (`:213`) opens the transaction
+(`ExecuteInTransactionAsync` `:220-222`) around `ExternalLoginCoreAsync` (`:225`), which looks up by
+`LoginProvider` + `ProviderKey` (`:234-237`), validates the claim with `Email.Create(email)` (`:253`),
+returns `Auth.ExternalEmailInvalid` on failure (`:254-260`, code `:257`), looks up by the validated email
+(`:262-265`) and sends a match to `TryLinkProviderToExistingAccountAsync` (`:269-270`; method `:348-401`):
+the one-provider guard `if (existingUser.IsExternalLogin)` returning `Auth.ExternalProviderAlreadyLinked`
+ahead of the verifier (`:360-366`, reasoning including the same-provider-different-key case `:353-359`,
+code `:363`, message naming the linked provider "under a different account" `:364`), the verifier call
+(`:373-374`) with `Auth.ExternalEmailNotVerified` (`:376-382`, code `:379`), and the SEC-ADC-01 guard
+`if (existingUser.HasLocalPassword)` returning `Auth.ExternalLinkRequiresLocalSignIn` (`:391-397`, code
+`:394`, message "This account signs in with email and password. Sign in with your email and password;
+{loginProvider} sign-in is not available for this account." `:395`, reasoning `:384-390`) before
+`existingUser.LinkExternalProvider(...)` (`:399`). The create branch asks the same verifier (`:284-285`)
+without gating on it, passes the answer to `User.CreateExternal(..., emailVerified)` (`:291-292`) and adds
+the user (`:299`). An existing account (matched or linked) is refused when locked (`CheckNotLocked` call
+`:308-315`, `:310`, reasoning `:304-307`, definition `:118-124`; a new account cannot be locked). New users
+raise `UserRegistered(..., emailVerified)` (`:326-327`, speaker auto-link reasoning `:319-323`) while local
+registration hard-codes `EmailVerified: false` (`:189-190`, reasoning `:181`). Token issuance is
+`IssueTokensAsync(user, cancellationToken: cancellationToken)` (`:336`, refresh-session reasoning
+`:331-335`). `IExternalLoginEmailVerifier`
 (`MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Application/Users/IExternalLoginEmailVerifier.cs:11`,
 `IsCurrentExternalLoginEmailVerifiedAsync` `:19`).
 `User` (`MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Domain/Users/User.cs`): `CreateExternal`
-(`:276`, `bool emailVerified = false` `:282`, `UserRole.Attendee` `:295`, `IsEmailConfirmed = emailVerified`
-`:300`), `LinkExternalProvider` (`:354`, sets `IsEmailConfirmed = true` `:358`, reasoning `:349-353`),
-`IsExternalLogin => LoginProvider is not null` (`:156`), `HasLocalPassword => PasswordHash.Length > 0`
-(`:177`), `LoginProvider` (`:110`) / `ProviderKey` (`:114`), `Anonymize` clears both (`:548-549`).
+(`:277`, `bool emailVerified = false` `:283`, `UserRole.Attendee` `:296`, `IsEmailConfirmed = emailVerified`
+`:301`), `LinkExternalProvider` (`:355`, sets `IsEmailConfirmed = true` `:359`, reasoning `:350-354`),
+`IsExternalLogin => LoginProvider is not null` (`:157`), `HasLocalPassword => PasswordHash.Length > 0`
+(`:178`), `LoginProvider` (`:111`) / `ProviderKey` (`:115`), `Anonymize` clears both (`:574-575`).
 ADC `OAuthController` sealed subclass with `[ApiController][Route("auth/oauth")][ApiVersion("1.0")]`
 (`MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.API/Controllers/OAuthController.cs:18-20`), taking
 `IDistributedLock` and passing it to the four-argument base ctor (`:21-25`, XML doc `:16`).
 Service host `services.AddExternalAuthProviders(builder.Configuration)`
-(`MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:202`, behind the "External OAuth providers
-(Google / GitHub / Apple)" banner at `:194`); ADC allow-lists `atldevcon`
+(`MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:209`, behind the "External OAuth providers
+(Google / GitHub / Apple)" banner at `:201`); ADC allow-lists `atldevcon`
 (`MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/appsettings.json:90`, also recorded by ADR-043's
-2026-09-25 revision). AppHost `OAuth__UIBaseUrl` (`MMCA.ADC/Source/Hosting/MMCA.ADC.AppHost/Program.cs:498`);
-prod `OAuth__UIBaseUrl` at `MMCA.ADC/infra/main.bicep:2009`, inside the `hasAnyOAuth ? [` branch at
-`:2008`, with the `hasAnyOAuth` variable at `:172` ORing `hasAppleOAuth`.
+2026-09-25 revision). AppHost `OAuth__UIBaseUrl` (`MMCA.ADC/Source/Hosting/MMCA.ADC.AppHost/Program.cs:499`);
+prod `OAuth__UIBaseUrl` at `MMCA.ADC/infra/main.bicep:2040`, inside the `hasAnyOAuth ? [` branch at
+`:2039`, with the `hasAnyOAuth` variable at `:172` ORing `hasAppleOAuth`.
 Store non-adoption: a Grep over `MMCA.Store/Source` `*.cs` on 2026-10-22 finds no `OAuthControllerBase`,
 `AddExternalAuthProviders`, `ExternalLoginAsync`, `class OAuthController` or `LoginProvider`. Store's
-Identity host signs and validates user tokens with RS256 (`MMCA.Store/Source/Services/MMCA.Store.Identity.Service/Program.cs:159-166`)
-and also registers the HS256 `ServiceToken` bearer scheme for its internal gRPC callers (`:168-173`).
+Identity host signs and validates user tokens with RS256 (`MMCA.Store/Source/Services/MMCA.Store.Identity.Service/Program.cs:164-172`)
+and also registers the HS256 `ServiceToken` bearer scheme for its internal gRPC callers (`:174-179`).
 The single code block is illustrative, trimmed (comments, `ConfigureAwait` calls and branches condensed)
 from `OAuthControllerBase.CompleteAsync`/`ExchangeAsync`/`RedeemExchangeCodeAsync` (`:145-283`), with named
 calls, argument lists and cache-key constants matching current source.
 ADR-036 (`Website/docs-src/adr/036-external-oauth-login.md`): title "External OAuth
-Login (Federated Google/GitHub/Apple) with Local-JWT Exchange" (`:1`); `## Status` spans `:3-15`, with the
-2026-09-07 revision at `:5`, the 2026-09-19 revision at `:10` and the 2026-10-21 anchor note at `:14`;
-`## Decision` `:34`, the three-ways-plus-three-guards bullet `:75-120`, the ADC-only adoption paragraph
-`:145-154` (Store at `:151`); `## Rationale` `:155`; `## Trade-offs` `:174`, the "verified-email guard is
-ADC-level, not framework-provided" bullet `:180-195`; `## Revision (2026-09-07)` `:207`;
-`## Revision (2026-10-01)` `:257` (an anchor refresh only); `## Revision (2026-10-06)` `:268` (anchor
-refresh only); `## Revision (2026-10-21)` `:292` (re-verification, anchors only). The body states no package
-count; FACTS records 22 published packages (`MMCA.Common/FACTS.md:19`).*
+Login (Federated Google/GitHub/Apple) with Local-JWT Exchange" (`:1`); `## Status` spans `:3-19`, with the
+2026-09-07 revision at `:5`, the 2026-09-19 revision at `:10`, the 2026-10-21 anchor note at `:14` and the
+2026-10-26 line at `:16-19`; `## Decision` `:38`, the three-ways-plus-three-guards bullet `:79-132`, the
+ADC-only adoption paragraph `:157-165` (Store at `:163`); `## Rationale` `:167`; `## Trade-offs` `:186`, the
+"verified-email guard is ADC-level, not framework-provided" bullet `:192-207`; `## Revision (2026-09-07)` `:221`;
+`## Revision (2026-10-01)` `:271` (an anchor refresh only); `## Revision (2026-10-06)` `:282` (anchor
+refresh only); `## Revision (2026-10-21)` `:306` (re-verification, anchors only); `## Revision (2026-10-26)`
+`:327` (the one-provider guard widened to any externally linked account, `:344-352`). The body states no
+package count; FACTS records 26 published packages (`MMCA.Common/FACTS.md:19`).*

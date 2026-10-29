@@ -95,7 +95,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 53 articles</summary>
+        <summary>All 54 articles</summary>
         <nav class="doc-nav" aria-label="The MMCA.Common series">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -151,7 +151,8 @@
         <li><a href="governed-llm-boundary.html">50 · The governed LLM boundary</a></li>
         <li><a href="durable-internal-commands.html">51 · Four ways to do work later</a></li>
         <li><a href="identity-completions.html">52 · Finishing identity</a></li>
-        <li><a href="series-index.html">53 · The series index</a></li>
+        <li><a href="cloud-neutral-vendor-adapters.html">53 · One framework, three clouds</a></li>
+        <li><a href="series-index.html">54 · The series index</a></li>
           </ol>
         </nav>
       </details>
@@ -178,7 +179,7 @@
           <h2 id="two-roles-two-interfaces">Two roles, two interfaces</h2>
           <p>The first design move is to notice that &quot;mapping&quot; is actually two different jobs that deserve two different contracts. Reading data out and accepting data in are not symmetric, and the framework refuses to pretend they are.</p>
           <p><strong>Outbound: <code>IEntityDTOMapper&lt;TEntity, TEntityDTO, TIdentifierType&gt;</code></strong> is the read side. It maps a domain entity to the DTO that crosses the wire. It lives in <code>MMCA.Common.Application</code> (<code>Interfaces/Mapping/IEntityDTOMapper.cs</code>) and is triple-generic, constrained so the entity is an <code>AuditableBaseEntity&lt;TIdentifierType&gt;</code>, the DTO implements <code>IBaseDTO&lt;TIdentifierType&gt;</code>, and the identifier type is <code>notnull</code>. Those constraints force the entity and its DTO to agree on the identifier type at compile time, so you cannot accidentally pair a <code>Guid</code>-keyed entity with an <code>int</code>-keyed DTO.</p>
-          <p>It has exactly one required member, <code>MapToDTO(entity)</code>. The batch version, <code>MapToDTOs(collection)</code>, is a C# <strong>default interface method</strong> that just projects each item through <code>MapToDTO</code> with a collection expression. The default exists so that no mapper has to write the loop, and the honest reality is that none of them lean on it: all 36 concrete DTO mappers in MMCA.ADC and MMCA.Store (23 and 13) re-declare that identical one-line projection instead of inheriting it, which ADR-001 records outright in its own trade-offs (the same trade-offs entry names the one mapper of the 36 that is not a Mapperly partial: ADC&#39;s hand-written <code>UserListDTOMapper</code>), and the two DTO mappers in the MMCA.Helpdesk reference app do the same. The contract still guarantees the batch shape is there for free; the part you actually have to think about is the single-item map.</p>
+          <p>It has exactly one required member, <code>MapToDTO(entity)</code>. The batch version, <code>MapToDTOs(collection)</code>, is a C# <strong>default interface method</strong> that just projects each item through <code>MapToDTO</code> with a collection expression. The default exists so that no mapper has to write the loop, and the honest reality is that none of them lean on it: all 36 concrete DTO mappers in MMCA.ADC and MMCA.Store (23 and 13) re-declare that identical one-line projection instead of inheriting it, which ADR-001 records outright in its own trade-offs (its Decision names the one mapper of the 36 that is not a Mapperly partial: ADC&#39;s hand-written <code>UserListDTOMapper</code>), and the two DTO mappers in the MMCA.Helpdesk reference app do the same. The contract still guarantees the batch shape is there for free; the part you actually have to think about is the single-item map.</p>
           <p><strong>Inbound: <code>IEntityRequestMapper&lt;TEntity, TCreateRequest, TIdentifierType&gt;</code></strong> is the write side, and this is where the design earns its keep. It maps an incoming create request to a domain entity, but its signature is the interesting part:</p>
           <pre class="doc-pre" tabindex="0" data-lang="C#"><code class="language-csharp hljs">Task&lt;Result&lt;TEntity&gt;&gt; CreateEntityAsync(
     TCreateRequest request,

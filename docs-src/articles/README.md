@@ -4,7 +4,7 @@ A long-form series that turns the MMCA.Common framework's architecture decisions
 patterns: the Result railway, the transactional outbox, database-per-service, JWKS auth, fitness
 functions, and more. Every technical claim traces to real source, an ADR, or a scorecard entry.
 
-## The series (53 articles)
+## The series (54 articles)
 
 | # | Article | Pillar | Group(s) | Rubric § | ADR | Format |
 |---|------|--------|----------|----------|-----|--------|
@@ -24,12 +24,12 @@ functions, and more. Every technical claim traces to real source, an ADR, or a s
 | 14 | [Self-ordering modules](self-ordering-modules.md) | P2 | G14 | §7 | 059 | deep-dive |
 | 15 | [Event-schema versioning](event-schema-versioning.md) | P3 | G04 | §6 | 010/083/090 | deep-dive |
 | 16 | [JWKS cross-service auth](jwks-cross-service-auth.md) | P3 | G08 | §11 | 004/007/122 | deep-dive ★ |
-| 17 | [Password hashing done right](password-hashing.md) | P2/P4 | G08 | §11 | 102 | deep-dive |
+| 17 | [Password hashing done right](password-hashing.md) | P2/P4 | G08 | §11 | 133 | deep-dive |
 | 18 | [Idempotency in one attribute](idempotency-attribute.md) | P2 | G12 | §6,§9,§10,§29 | 017/021 | deep-dive |
-| 19 | [The self-invalidating cache](self-invalidating-cache.md) | P2 | G09 | §10,§12 | 026/040/073/077 | deep-dive |
+| 19 | [The self-invalidating cache](self-invalidating-cache.md) | P2 | G09 | §10,§12 | 026/040/073/077/135 | deep-dive |
 | 20 | [Problem Details across HTTP and gRPC](problem-details-http-grpc.md) | P2 | G12,G13 | §9 | - | deep-dive |
 | 21 | [Notifications as a vertical slice](notifications-vertical-slice.md) | P2 | G10 | §5 | 024 | deep-dive |
-| 22 | [Ephemeral by design: sub-second live channels over one SignalR hub](live-channel-push.md) | P2/P3 | G10,G26 | §5,§7 | 039/052/074 | deep-dive |
+| 22 | [Ephemeral by design: sub-second live channels over one SignalR hub](live-channel-push.md) | P2/P3 | G10,G26 | §5,§7 | 039/074/121 | deep-dive |
 | 23 | [Delete AutoMapper: manual DTO mapping](manual-dto-mapping.md) | P2 | G12 | §9,§15 | 001 | deep-dive |
 | 24 | [Permission-based authorization over roles](permission-based-authorization.md) | P2/P4 | G08 | §11 | 020 | deep-dive |
 | 25 | [Browser session-cookie auth for Blazor SSR](session-cookie-auth-blazor-ssr.md) | P2/P4 | G08,G15 | §11,§26 | 022/069/131 | deep-dive |
@@ -44,7 +44,7 @@ functions, and more. Every technical claim traces to real source, an ADR, or a s
 | 34 | [Architecture fitness functions](architecture-fitness-functions.md) | P4 | G25 | §3,§12,§25,§34 | 015/060/062/105/109/125/128/132 | deep-dive |
 | 35 | [The test pyramid](test-pyramid.md) | P4 | G25 | §14,§21,§28 | 058/063/117 | deep-dive |
 | 36 | [Soft-delete vs the right to erasure](soft-delete-vs-erasure.md) | P3/P4 | G07,G23 | §30 | 005/047/076/095/119 | deep-dive ★ |
-| 37 | [A reusable Blazor UI framework](reusable-blazor-ui-framework.md) | P2/P5 | G15 | §18,§19,§20,§22,§23 | 056/067 | deep-dive |
+| 37 | [A reusable Blazor UI framework](reusable-blazor-ui-framework.md) | P2/P5 | G15 | §18,§19,§20,§22,§23 | 056/067/136 | deep-dive |
 | 38 | [i18n and theming on one preference pipeline](i18n-and-theming.md) | P2/P5 | G15 | §27 | 027/028 | deep-dive |
 | 39 | [Build your first module](build-your-first-module.md) | P5 | G02,G05,G14 | §33 | 065 | tutorial |
 | 40 | [Write your first fitness test](write-your-first-fitness-test.md) | P5 | G25 | §34 | 015 | tutorial |
@@ -60,18 +60,19 @@ functions, and more. Every technical claim traces to real source, an ADR, or a s
 | 50 | [The LLM is a dependency: a bounded, guarded, metered boundary for chat completions](governed-llm-boundary.md) | P2/P4 | G28 | §16 | 120/111 | deep-dive |
 | 51 | [Four ways to do work later: channels, cron, the outbox and durable internal commands](durable-internal-commands.md) | P2/P3 | G04 | §6,§10 | 114/121 | deep-dive |
 | 52 | [Finishing identity: second factor, email confirmation and stored permission grants](identity-completions.md) | P2/P4 | G08 | §11 | 091/116 | deep-dive |
-| 53 | [Series index (hub)](series-index.md) | P6 | all | all | - | index |
+| 53 | [One framework, three clouds: a cloud-neutral core with vendor adapter packages](cloud-neutral-vendor-adapters.md) | P3 | G29 | §7,§10,§32 | 134 | deep-dive |
+| 54 | [Series index (hub)](series-index.md) | P6 | all | all | - | index |
 
 ★ = cornerstone pillar (publish first; everything links up to these).
 
 Group(s) = the onboarding taxonomy ID in `Website/docs-src/onboarding/00-group-taxonomy.md`; from G23 up it differs from the chapter number in the guide.
 
-**The numbering is the reading order.** Each article builds on the ones before it, so reading 1 through 53
+**The numbering is the reading order.** Each article builds on the ones before it, so reading 1 through 54
 in sequence is the intended curriculum (1-3 orient, 4-9 are the core patterns, 10-15 data and persistence,
 16-30 auth, the API edge, and notifications, 31-33 run/extract/harden, 34-44 proof, front end, getting
 started, the device-capability layer, managed file storage, and API versioning, 45-48 the appended
 2026-07-23 additions: pipeline feature flags, field-level encryption, security headers + CSP, and
 observability, 49 the appended 2026-07-25 addition: saga compensation and the reconciliation backstop,
 50-52 the appended 2026-09-19 additions: the governed LLM boundary (ADR-120/111), durable
-internal commands (ADR-114/121), and the identity completions (ADR-116), 53 is the index hub; the
-hub's reading-order groups slot 45-52 back into their logical clusters). Every article's "Next in the series" footer points to the next number.
+internal commands (ADR-114/121), and the identity completions (ADR-116), 53 the appended 2026-10-29 addition: the cloud-neutral core with vendor adapter
+packages (ADR-134), 54 is the index hub; the hub's reading-order groups slot 45-53 back into their logical clusters). Every article's "Next in the series" footer points to the next number.

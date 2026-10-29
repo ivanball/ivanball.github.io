@@ -25,7 +25,7 @@ that declares its own dependencies so the host can assemble everything in the ri
 
 The framework ships a `dotnet new` pack, so you type none of that plumbing (ADR-065). Hand-rolling it
 costs a day before you write a line of business logic, and ADR-065 measures that starting cost against
-the framework's reference app: 12 projects, 139 files, and 12,157 lines of plumbing, an 827-line
+the framework's reference app: 12 projects, 148 files, and 12,597 lines of plumbing, an 827-line
 `.editorconfig` and the 99-line `Directory.Packages.props` that carries every package pin (57 of them
 in the seed today) among them, several of those lines load-bearing in ways nothing tells you about
 until much later.
@@ -47,7 +47,10 @@ onto the real Conference, Sales, and Catalog modules in the consumer apps.
 No credentials and no private feed: the packages are on nuget.org.
 
 The example types below are **representative** of the module shape, not copied verbatim from a specific
-file. They follow the documented base classes and conventions exactly.
+file. They use the documented base classes and markers, with two simplifications kept for
+readability: Step 1 checks its invariants inline, where the framework's modules compose static
+invariant classes with `Result.Combine`, and Step 2 names its event after the action, where the
+framework convention is one `{Aggregate}Changed` event per aggregate carrying the entity state.
 
 ## Step 0: scaffold the solution
 
@@ -83,10 +86,12 @@ for `Contoso.Support` and below it for `Zeta.App`, so no checked-in order surviv
 the same story one level down, on the identifier-alias file whose two aliases re-sort when `--child`
 renames them. `IDE0021` is the shape flags rather than the renames: the aggregate's private constructor
 assigns one property per optional axis, so `--no-status --no-description --no-owner` together leave it
-with a single statement, which the baseline then wants as an expression body. It is one-time, and the
-generated README carries the exact commands (one `dotnet format analyzers` run restores the two
-ordering rules; `IDE0021` is not fixable that way, so you fold the constructor by hand and delete the
-line).
+with a single statement, which the baseline then wants as an expression body. The generated README
+carries the exact commands (one `dotnet format analyzers` run restores the two ordering rules;
+`IDE0021` is not fixable that way, so you fold the constructor by hand and delete the line). Every
+`mmca-command` and `mmca-query` slice you scaffold later arrives with the same ordering skew, so either
+re-run that format command after each scaffold or keep the delta until you stop scaffolding, then
+delete it.
 
 Your integration-event wire contract is not on that list: it arrives already frozen. The generated
 `IntegrationEventContractTests` holds your own event, under the names you scaffolded with, and passes
@@ -197,8 +202,9 @@ A write is a *use case*: a small command object handed to a handler that does ex
 handler implements `ICommandHandler<TCommand, TResult>`, which is a single method,
 `Task<TResult> HandleAsync(TCommand, CancellationToken)`, returning `Result` or `Result<T>`.
 
-Keep the handler thin. It loads the aggregate, calls a business method, and saves. Everything
-cross-cutting (logging, caching, transactions) is added by the pipeline, not by the handler.
+Keep the handler thin. It creates or loads the aggregate, calls a business method, stages the change
+in a repository it gets from the unit of work, and saves. Everything cross-cutting (logging, caching,
+transactions) is added by the pipeline, not by the handler.
 
 ```csharp
 // Application layer (representative)
@@ -206,27 +212,38 @@ cross-cutting (logging, caching, transactions) is added by the pipeline, not by 
 public sealed record CreateCouponCommand(string Code, decimal PercentOff)
     : ITransactional;   // ITransactional opts into a DB transaction
 
-public sealed class CreateCouponHandler(ICouponRepository repository)
+public sealed class CreateCouponHandler(IUnitOfWork unitOfWork)
     : ICommandHandler<CreateCouponCommand, Result<CouponIdentifierType>>
 {
     public async Task<Result<CouponIdentifierType>> HandleAsync(
         CreateCouponCommand command, CancellationToken cancellationToken)
     {
         var couponResult = Coupon.Create(command.Code, command.PercentOff);
-        if (couponResult.IsFailure)
+        if (!couponResult.TryGetValue(out var coupon))
         {
             return Result.Failure<CouponIdentifierType>(couponResult.Errors);
         }
 
-        await repository.AddAsync(couponResult.Value, cancellationToken);
-        return Result.Success(couponResult.Value.Id);
+        var repository = unitOfWork.GetRepository<Coupon, CouponIdentifierType>();
+        await repository.AddAsync(coupon, cancellationToken);      // stages; never flushes
+        await unitOfWork.SaveChangesAsync(cancellationToken);      // writes, and fills the DB-generated Id
+        return Result.Success(coupon.Id);
     }
 }
 ```
 
+`TryGetValue` is the framework's preferred read of a `Result<T>`: the compiler tracks the check, so
+`coupon` needs no `!`, where reading `Value` (a `T?`) would raise a nullable warning, which
+`TreatWarningsAsErrors` turns into a build break. The repository only stages changes; persisting is the
+unit of work's job, which is why the framework's own create path is the same `AddAsync` then
+`SaveChangesAsync` pair.
+
 The marker interface `ITransactional` is the whole transaction opt-in. It is an empty interface; the
 type *is* the message. When the command implements it, the `TransactionalCommandDecorator` wraps the
-handler in `IUnitOfWork.ExecuteInTransactionAsync` and rolls back on an exception. A handler that does
+handler in `IUnitOfWork.ExecuteInTransactionAsync` and rolls back on an exception. The commit does not
+save the handler's work, so the handler still calls `SaveChangesAsync` before it returns: a change
+still tracked at commit throws an `InvalidOperationException` and rolls the unit back rather than being
+silently discarded. A handler that does
 not need a transaction (a single `SaveChanges` whose atomicity the outbox already guarantees) simply
 does not implement the marker. There is a sibling marker, `ICacheInvalidating`, that exposes a
 `CachePrefix` to evict on success the same way.
@@ -363,8 +380,9 @@ You wrote a thin handler. The pipeline added the rest, driven by the marker inte
   implement `IRequiresPermission` are checked against the permission registry for the current user's
   roles (and those that implement `IRequiresMfa` against the `mfa` claim), and a denial short-circuits
   with a `Forbidden` error, so a denied query never reads from or populates the cache.
-- **Logging** records the full pipeline duration via `ICorrelationContext`, for every handler, with no
-  per-handler code.
+- **Logging** logs every command and query with its duration and the correlation id it reads from
+  `ICorrelationContext`, with no per-handler code. It times only what runs inside it (Caching down to
+  the handler), so FeatureGate and Authorization fall outside the recorded duration.
 - **Caching** runs for queries that implement `IQueryCacheable` (supplying `CacheKey` + `CacheDuration`),
   and invalidates for commands that implement `ICacheInvalidating` (on success, outside the transaction
   boundary).
@@ -400,25 +418,40 @@ dotnet new mmca-query -n GetOrderByNumber --app Contoso.Support --module Orders 
   --aggregate Order
 ```
 
-Handlers are convention-scanned, so there is nothing to register. Two things still need you: add the
-`--domain-method` guarded method to your aggregate before the command slice compiles, and keep the
-query's `CacheKey` inside your module's `*CacheKeys.Prefix`. The caching decorator matches cacheable
-reads to invalidating commands **by string prefix**, so a key that drifts out of it goes stale silently.
+Handlers are convention-scanned, so there is nothing to register. Three things still need you: add the
+`--domain-method` guarded method to your aggregate before the command slice compiles, map each slice
+in your module's controller (a write injects its handler directly; reads usually come from
+`EntityControllerBase`, so a new query needs its own action), and keep the query's `CacheKey` inside
+your module's `*CacheKeys.Prefix`. The caching decorator matches cacheable reads to invalidating
+commands **by string prefix**, so a key that drifts out of it goes stale silently.
 
-A whole second module, across all five layers plus its test and migrations projects:
+A whole second module, across all five layers plus its test and migrations projects, is one command
+from the root of a solution `mmca-app` generated:
+
+```powershell
+pwsh build/add-module.ps1 -Name Billing -Aggregate Invoice
+```
+
+Here is the boundary where generated code stops and you start. `dotnet new` cannot patch files that
+already exist, so the `mmca-module` template on its own **prints seven numbered wire-ups it cannot
+perform**, and until they are done the module is invisible to the host and to the fitness rules. The
+script is why an `mmca-app` solution types none of them: it invokes the template, then performs all
+seven itself, plus the first migration and one edit the list does not name: it appends the new
+module's event to the frozen `ExpectedContract`, so your next test run stays green. Run the template
+first by mistake and its printed text opens by telling you to undo that run (delete
+`Source/Modules/<Module>`, `Tests/Modules/<Module>` and the module's migrations project) and use the
+script instead, because the script refuses a name that already exists under `Source/Modules`. Two
+things the script leaves to you: the Blazor UI pages (the UI host still shows only the first module)
+and the new module's page-level localization resources.
+
+On a hand-built solution the template is the path:
 
 ```powershell
 dotnet new mmca-module -n Billing --app Contoso.Support --aggregate Invoice
 ```
 
-Here is the boundary where generated code stops and you start. `dotnet new` cannot patch files that
-already exist, so `mmca-module` **prints seven numbered wire-ups it cannot perform**, and until they
-are done the module is invisible to the host and to the fitness rules. If your solution came from
-`mmca-app`, you do not type any of them: that solution ships its own `build/add-module.ps1`, and the
-printed text opens by telling you to run it instead, because it invokes the template and then performs
-all seven itself, plus one edit the list does not name: it appends the new module's event to the
-frozen `ExpectedContract`, so your next test run stays green. The list is the fallback for a hand-built
-solution, and the best description of what the script is doing on your behalf:
+Its printed list is the fallback for that solution, and the best description of what the script is
+doing on your behalf:
 
 1. **Solution.** Add the eight new projects (five layer projects, both test projects, and the
    migrations project) to the `.slnx`.
@@ -505,8 +538,34 @@ what breaks.*
 
 *Tags: .NET, C Sharp, Domain Driven Design, CQRS, Software Architecture*
 
-*Notes: 2026-10-22 pass against MMCA.Common v1.250.0, re-verified: every anchor below was re-read this
-pass unless marked otherwise. The decorator registration inside `AddApplicationDecorators()` at
+*Notes: 2026-10-29 pass against MMCA.Common v1.265.1, re-verified: the anchors touched by this pass's
+corrections were re-read on 2026-10-29; the rest carry over from the 2026-10-22 pass (v1.250.0) unless
+re-anchored below. 2026-10-29 corrections: seed tally 139 files / 12,157 lines -> 148 / 12,597
+(ADR-065 :51-57, re-run 2026-10-28 at Helpdesk `c41fc93`: 141 files and 11,523 lines under `Source/`
+and `Tests/`, plus 1,074 lines across seven root build files; 827-line `.editorconfig` and 99-line
+`Directory.Packages.props` with 57 pins at :56-57); the Step 3 handler takes `IUnitOfWork`, gets its
+repository through `IUnitOfWork.GetRepository` (`IUnitOfWork.cs:19`; "how a handler is meant to obtain
+one" at `IRepository.cs:360`), and calls `SaveChangesAsync` after `AddAsync`, because the repository
+stages and never flushes (`IRepository.cs:362`) and the transactional commit does not save the work, a
+change still tracked at commit throwing `InvalidOperationException` (`IUnitOfWork.cs:54-57`), matching
+the framework's own `AddAsync` then `SaveChangesAsync` at `UseCases/Crud/CreateEntityHandlerBase.cs:135-136`;
+the handler reads the factory result through `TryGetValue` (`Result.cs:209-216`) instead of `Value`,
+which is `T?` (`Result.cs:207`); the intro no longer says the example follows the conventions
+"exactly" (inline invariants vs `Result.Combine` at `Result.cs:124`; the `{Aggregate}Changed` shape in
+the doc example at `AuditableAggregateRootEntity.cs:140-143`); the fixup paragraph drops "one-time"
+because every later slice arrives with the same skew (generated README `:118-119`); the slice paragraph
+adds controller mapping (`templates/mmca-command/.template.config/template.json:112` step 2,
+`templates/mmca-query/.template.config/template.json:84` step 1); the second-module command is the
+script (README `:152`), with the template's undo instruction (`mmca-module` `template.json:268`, :271),
+the script's name refusal at step 0 (`build/templates/overlay/mmca-app/build/add-module.ps1:48-50`) and
+the two things it leaves to you (README `:172-173`); Logging times only what runs inside it, so
+FeatureGate and Authorization are outside the duration (`DependencyInjection.cs:138-140`;
+`LoggingCommandDecorator.cs:36-38` "the recorded duration stays the handler's", correlation id from
+`ICorrelationContext` at :19, :26). Left as recorded: "steps 1 and 2 are what make it compile" is the
+template's own wording (`template.json:268`, :271), so wire-up 3 stays on the silent list although a
+missing identifier-alias link would plausibly surface as an unknown-type compile error (the alias file
+is linked solution-wide only through `MMCA.Helpdesk/Directory.Build.props:57-59`); not proven by a
+build. The decorator registration inside `AddApplicationDecorators()` at
 `MMCA.Common/Source/Core/MMCA.Common.Application/DependencyInjection.cs:114-153` (seven command
 decorators at :134-140, six query decorators at :143-148, query `Validating` registered inside
 `Caching` at :144-145; registered last = outermost, so execution order is the reverse of registration
@@ -518,17 +577,15 @@ at :310-318. `ScanModuleApplicationServices` calls `ThrowIfPipelineSealed` at
 `DependencyInjection.ModuleScanning.cs:49` and scans domain-event handlers (:54), integration-event
 handlers (:61), DTO mappers (:67), DTO projectors (:76), request mappers (:82), update appliers (:92),
 command-aware appliers (:101), command handlers (:107), query handlers (:113); the validator scan
-(:117, `AddValidatorsFromAssembly`) was re-read in a 2026-10-22 catch-up pass. `MMCA.Common/AGENTS.md`: DI Registration
-Sequence at :73-75 (:75 carries "That ordering is the only load-bearing part." and lists
-`AddApplication()`, the configure callback and `AddApplicationDecorators()`, with `AddInfrastructure`
-and `AddAPI` outside the call, matching `DependencyInjection.cs:207-216`), execution order at :82-83,
-per-decorator bullets at :86-92 (Authorization with `IRequiresMfa` :87, Caching :89, Validating :90,
-Timeout :91, Transactional :92), and the SaveChanges flow at :118 (local domain events dispatched
-in-process and their rows marked processed; integration events left for `OutboxProcessor` to publish
-via `IMessageBus`), matching `DeliverAsync` at
-`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/Processing/OutboxProcessor.cs:767-794`
-(`IIntegrationEvent` to `IMessageBus` at :774-787, pure domain events to `IDomainEventDispatcher` at
-:789-793). Generated host sequence in `MMCA.Helpdesk/Source/Hosts/MMCA.Helpdesk.Web/Program.cs`, read
+(:117, `AddValidatorsFromAssembly`) was re-read in a 2026-10-22 catch-up pass. `MMCA.Common/AGENTS.md` (re-anchored 2026-10-29): DI Registration
+Sequence at :75-77 (:77 carries "That ordering is the only load-bearing part."), execution order at
+:84-85, per-decorator bullets at :90-95 (FeatureGate :90, Authorization :91, Logging :92, Caching :93,
+Validating :94, Transactional :95; the bullets no longer mention `IRequiresMfa` and carry no Timeout
+bullet, so the article's Timeout and MFA wording rests on the decorators themselves), and the
+SaveChanges flow at :121 (local domain events dispatched in-process; integration events left for
+`OutboxProcessor` to publish via `IMessageBus`), matching `DeliverAsync` at
+`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/Processing/OutboxProcessor.cs:772`
+(doc at :768, `IMessageBus` resolved at :776). Generated host sequence in `MMCA.Helpdesk/Source/Hosts/MMCA.Helpdesk.Web/Program.cs`, read
 on disk: `AddCommonExceptionHandlers` :75, `AddInfrastructure` :77, `AddAPI` :99, `AddErrorResources`
 :104, `AddMmcaApplicationPipeline` :121 with `ModuleLoader.DiscoverAndRegister` and the host-named
 assembly list as a `Register` step from :125 and `AddBrokerMessaging` as a second step at :139,
@@ -543,7 +600,7 @@ at :71-84 calls `services.VerifyDecoratorPipeline()` at :83). Transactional roll
 failure at
 `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/Factory/DbContextFactory.cs:632`
 (`RunTransactionalAttemptAsync`), `if (result is Result { IsFailure: true })` at :641, the "Business
-failure: atomicity over partial persistence" comment at :643, `RollbackTransaction();` at :646.
+failure: atomicity over partial persistence" comment at :643 (re-read 2026-10-29).
 `IModule` defaults at `Modules/IModule.cs:17` (`Dependencies => []`), :23 (`RequiresDependencies =>
 false`), :34 (`RegisterDisabledStubs`); Kahn at `Modules/ModuleLoader.cs:275`; `ModulesSettings.SectionName
 = "Modules"` at `Settings/ModulesSettings.cs:10`. Entity chain: `BaseEntity.cs:37` (`required` `init`
@@ -555,18 +612,14 @@ identifier), `MMCA.Common/Source/Core/MMCA.Common.Domain/Entities/AuditableBaseE
 `MMCA.Common/Source/Presentation/MMCA.Common.API/DependencyInjection.cs:45-113` registers controllers
 (:47), the idempotency and owner filters (:84-85), feature management (:105-106) and error localization
 (:110); exception handlers come from `AddCommonExceptionHandlers()` at :154 (handlers :159-163).
-Scaffolding figures from `Website/docs-src/adr/065-scaffolding-templates.md`: seed tally 12 projects,
-139 files, 12,157 lines at :45-46, method re-run 2026-10-21 at Helpdesk `f10bc45` at :47-49 (132 files
-and 11,068 lines under `Source/` and `Tests/`, plus 1,089 lines across seven root build files), the
-827-line `.editorconfig` and 99-line `Directory.Packages.props` with 57 pins at :50 (re-counted on disk
-this pass: 99 lines, 57 `PackageVersion` entries). "One thing the scaffold deliberately does not hand
-over" and the three relaxed rules at ADR-065 :87-106 (`SA1211` aliases renamed by `--child` at :92-93,
-matching `MMCA.Helpdesk/build/templates/stage.ps1:1204-1205`; the staged delta at
-`stage.ps1:1261-1263`); the wire-contract freeze shipping under the adopter's names at :108-128; the
-seven printed wire-ups at :130-140; the smoke job (`MMCA.Helpdesk/.github/workflows/ci.yml:120`)
-generating three solutions at :167-182, cases at `MMCA.Helpdesk/build/templates/smoke.ps1:117`, :123,
-:129 (Contoso.Support, Zeta.Warehouse, Nordic.Books); `add-module.ps1` performing all seven plus the
-frozen-contract append at :179-180 (and `MMCA.Helpdesk/AGENTS.md`, template section); `template-smoke`
+Scaffolding figures from `Website/docs-src/adr/065-scaffolding-templates.md` (re-anchored
+2026-10-29): seed tally at :51-57 (see the 2026-10-29 corrections above). "One thing the scaffold
+deliberately does not hand over" and the three relaxed rules at ADR-065 :93-113 (the staged delta at
+`stage.ps1:1261-1263`); the wire-contract freeze shipping under the adopter's names at :115-135; the
+seven printed wire-ups at :137-147; the smoke job (`MMCA.Helpdesk/.github/workflows/ci.yml:120`)
+generating three solutions at :174-189 (cases at `MMCA.Helpdesk/build/templates/smoke.ps1:115-134`);
+`add-module.ps1` performing all seven plus the frozen-contract append and the first migration at :186
+(and `MMCA.Helpdesk/AGENTS.md`, template section); `template-smoke`
 is advisory, the one required check being `build-and-test` (`MMCA.Helpdesk/AGENTS.md`, Contribution
 Flow). Generated README `MMCA.Helpdesk/build/templates/overlay/mmca-app/README.md`: "The one-time
 fixup" at :107, `dotnet format analyzers ... --diagnostics SA1210 SA1211 --severity info` at :115,
@@ -581,7 +634,7 @@ README says "seven wire-ups" at :177 and "six wire-ups" at :231; the article fol
 ALL code blocks are labeled representative (the `Coupon`/`Promotions` example is invented; the Step 6
 block is an abridged shape of the generated `Program.cs` with module names substituted). "Green
 solution in about a minute" (Step 0) is not a figure any source on disk records; left as the author's
-own observation. Corrections this pass: seed tally 137 files / 11,571 lines -> 139 / 12,157, and the
+own observation. Corrections in the 2026-10-22 pass: seed tally 137 files / 11,571 lines -> 139 / 12,157, and the
 root-file sentence places the `.editorconfig` and the 99-line `Directory.Packages.props` (57 pins; was
 100 / 58) among the counted lines; Step 2 no longer promises broker delivery for a domain event (only an
 `IIntegrationEvent` row is published through `IMessageBus`); the `add-module.ps1` paragraph names the

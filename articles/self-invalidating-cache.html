@@ -95,7 +95,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 53 articles</summary>
+        <summary>All 54 articles</summary>
         <nav class="doc-nav" aria-label="The MMCA.Common series">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -151,7 +151,8 @@
         <li><a href="governed-llm-boundary.html">50 · The governed LLM boundary</a></li>
         <li><a href="durable-internal-commands.html">51 · Four ways to do work later</a></li>
         <li><a href="identity-completions.html">52 · Finishing identity</a></li>
-        <li><a href="series-index.html">53 · The series index</a></li>
+        <li><a href="cloud-neutral-vendor-adapters.html">53 · One framework, three clouds</a></li>
+        <li><a href="series-index.html">54 · The series index</a></li>
           </ol>
         </nav>
       </details>
@@ -282,13 +283,17 @@
           effective Tier-1 substrate in production is the hybrid one, not the distributed adapter, and the
           memory-or-Redis swap is what a host gets when it does <em>not</em> state a preference. The contract that makes that
           substitution a one-line change is the point. Nothing in any handler, decorator, or query changes.</p>
-          <p>A short, conservative default TTL keeps the cache erring toward correctness over hit-rate: 30 seconds.
-          The constant sits in one place (<code>CacheOptions.DefaultDuration</code>, a bare <code>TimeSpan</code>) precisely so the
-          hybrid backend, whose entry options are a different type entirely, defaults to the same policy instead of
-          hard-coding the figure a second time, and one binding layer sits above it: <code>CacheSettings.DefaultDuration</code>
-          is bound from the <code>Cache</code> configuration section, defaults to that same constant, and is what all three
-          backends (memory, distributed and hybrid) actually read, so a host can retune the figure without any
-          two of them disagreeing. A query only earns a longer life when it explicitly declares one.</p>
+          <p>A short, conservative default TTL keeps a write that names no lifetime erring toward correctness over
+          hit-rate: 30 seconds. The constant sits in one place (<code>CacheOptions.DefaultDuration</code>, a bare <code>TimeSpan</code>)
+          precisely so the hybrid backend, whose entry options are a different type entirely, defaults to the same
+          policy instead of hard-coding the figure a second time, and one binding layer sits above it:
+          <code>CacheSettings.DefaultDuration</code> is bound from the <code>Cache</code> configuration section, defaults to that same
+          constant, and is what all three backends (memory, distributed and hybrid) actually read, so a host can
+          retune the figure without any two of them disagreeing. Its reach is narrower than its name suggests. The
+          backends apply it only when a caller passes no expiration, and a cached query always passes one:
+          <code>IQueryCacheable.CacheDuration</code> is a mandatory member and the query decorator hands it to every write. So
+          the default governs direct <code>ICacheService</code> writes, never a decorator-cached query, which lives exactly as
+          long as it declares.</p>
           <h2 id="the-read-path-opt-in-by-marker-interface">The read path: opt in by marker interface</h2>
           <p>A query caches by implementing <code>IQueryCacheable</code> (it supplies the cache key and the retention duration).
           The <code>CachingQueryDecorator</code> does the read-through:</p>
@@ -309,6 +314,14 @@
           waiter that exhausts it logs at Debug, counts a miss, and runs the query uncached instead of failing,
           while a genuine cancellation still propagates. Stampede protection is an optimization, so it degrades
           like one. A query that does not implement the interface is passed straight through, paying nothing.</p>
+          <p>Be honest about adoption, too. No query in the deployed ADC or Store services implements
+          <code>IQueryCacheable</code>, and ADC pins that for its now/next feed with a test, because the 60-second output cache
+          is the single cache there and a decorator cache underneath would double the staleness. The Helpdesk
+          reference app&#39;s ticket-by-id read is the one adopter. So in the deployed services the read-heavy public
+          traffic is cached at the edge tier below, the Tier-1 substrate is carried by its direct consumers, and the
+          many ADC and Store commands that implement <code>ICacheInvalidating</code> run the write path against keys no query
+          decorator wrote. The pipeline is ready the moment a query opts in; today it is mostly a contract waiting
+          for one.</p>
           <h2 id="the-write-path-invalidate-on-success-outside-the-transaction">The write path: invalidate on success, outside the transaction</h2>
           <p>A command invalidates by implementing <code>ICacheInvalidating</code>, which exposes a <code>CachePrefix</code>. The
           <code>CachingCommandDecorator</code> runs the inner handler first, then evicts:</p>
@@ -394,7 +407,8 @@
           honest limit: this lives in the decorators, so code that resolves <code>ICacheService</code> directly gets no tenant
           prefix at all. Today&#39;s direct consumers (login and registration counters, OAuth exchange state,
           idempotency records, password-reset and email-confirmation tokens, the last accepted second-factor time
-          step, the soft-deleted marker) are keyed by subject already, so they are safe by the shape of their keys rather than by a rule that would catch the
+          step, the soft-deleted marker) are keyed by subject already, and Store&#39;s cache of Stripe webhook signing
+          secrets is keyed by endpoint, so they are safe by the shape of their keys rather than by a rule that would catch the
           next one. The rest of the tenancy model (resolution middleware, the named query filter, the write
           interceptor, database-per-tenant routing) is ADR-073&#39;s, and belongs to the multi-tenancy deep-dive.</p>
           <p>The second transformation answers the parameter that is never on the request: who is asking. A query
@@ -418,11 +432,55 @@
           transformation changes what your key <em>means</em>: they are keyspace hygiene applied uniformly under the
           contract, which is why tenant and caller scoping stay the only places the framework decides part of your
           key for you.</p>
+          <h2 id="one-application-namespace-for-every-shared-keyspace">One application namespace for every shared keyspace</h2>
+          <p>The <code>{application namespace}</code> in that backend prefix is not a cache setting. It comes from
+          <code>ApplicationNamespace.Resolve</code>, the one resolver that names the shared-infrastructure keyspaces of five
+          subsystems (ADR-135): distributed cache and lock keys, distributed rate-limit counters, the Redis
+          output-cache store, the SignalR Redis backplane channel, and the message broker&#39;s endpoint names. Each of
+          those fails the same way. Two applications pointed at one Redis or one broker share any keyspace that
+          carries no prefix, and neither Redis nor the broker warns. The backplane makes the cost concrete: the
+          framework ships <code>NotificationHub</code>, so its channel name is identical in every consumer, and with no prefix a
+          user-targeted push published by one application reaches the other application&#39;s clients holding the same
+          numeric user id.</p>
+          <p>The resolver has one precedence: an explicit <code>Application:Namespace</code> when set, otherwise the host&#39;s
+          application name (<code>IHostEnvironment.ApplicationName</code>, or the <code>applicationName</code> configuration key when no
+          environment is passed or its name is blank), otherwise the constant <code>app</code>. It sanitizes the result once for every consumer,
+          replacing each run of characters outside <code>[a-zA-Z0-9_-]</code> with <code>-</code> and trimming the ends, because a Redis
+          key tolerates almost anything while a MassTransit queue name and a SignalR channel prefix do not. It never
+          returns an empty string, so isolation is the default rather than an opt-in. Each subsystem derives its
+          keyspace from that one value:</p>
+          <pre class="doc-pre" tabindex="0" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-keyword">var</span> ns = ApplicationNamespace.Resolve(configuration, environment); <span class="hljs-comment">// Application:Namespace, app name, &quot;app&quot;</span>
+
+<span class="hljs-comment">// cache, lock and Redis output-cache keys  &quot;{ns}:&quot;                unless Cache:KeyPrefix is set</span>
+<span class="hljs-comment">// distributed rate-limit counters          &quot;{ns}:{scope}:{key}&quot;   Cache:KeyPrefix, trimmed, when set</span>
+<span class="hljs-comment">// SignalR Redis backplane                  ChannelPrefix = ns     no narrower knob</span>
+<span class="hljs-comment">// broker endpoint names                    new KebabCaseEndpointNameFormatter(ns, includeNamespace: false)</span>
+<span class="hljs-comment">//                                          unless MessageBus:EndpointPrefix or PreserveDefaultEndpointNames</span></code></pre>
+          <p>The output cache shows why one name beats one default per subsystem. <code>AddCaching</code> post-configures
+          <code>RedisOutputCacheOptions.InstanceName</code> to the same prefix the cache keys use whenever the host left it
+          empty, and keeps one a host set explicitly. The store prefixes both its value keys and its tag keys with
+          that name, so the cross-service tag eviction later in this article still matches what was written. The
+          in-process memory backend takes no prefix, its keyspace being private to the process.</p>
+          <p>The override exists for the opposite case: two hosts of the same application that must share a keyspace,
+          such as a web head and a worker draining one backplane. Both deployed apps pin their keyspaces rather
+          than derive them. ADC sets <code>Application:Namespace</code> to <code>adc</code> and <code>Cache:KeyPrefix</code> to <code>adc:</code> in all four of
+          its services, so they share one keyspace on purpose. Store sets a distinct pair per service
+          (<code>store-catalog</code>, <code>store-identity</code>, <code>store-sales</code>, each with the matching <code>Cache:KeyPrefix</code>), so a project
+          rename cannot move a keyspace and cost a cold cache. Because an explicit <code>Cache:KeyPrefix</code> wins, the cache,
+          lock, output-cache and rate-limit keyspaces of those services come from that setting, and the resolved
+          namespace drives only the SignalR backplane. It does not drive their broker names either: both apps set
+          <code>MessageBus:PreserveDefaultEndpointNames</code> in every service, so no deployed host prefixes its broker
+          endpoints, and their live queues and subscriptions keep MassTransit&#39;s default names, which no prefix value
+          reproduces. The resolver&#39;s default is what a host that configures none of these keys gets. Two limits stay
+          honest. The fallback <code>app</code> is shared, and the backplane and
+          broker call sites pass no host environment, so they depend on the <code>applicationName</code> configuration key
+          being populated. And sanitizing can merge two raw names that differ only in characters it replaces.</p>
           <h2 id="what-the-cache-is-and-is-not">What the cache is, and is not</h2>
           <p>This is a request-result read-through cache for query handlers. It is not a session store and not a
           write-behind buffer. The cross-source consistency mechanism in this framework is the outbox (ADR-003,
-          ADR-006), not the cache. The short default TTL and the failure-skipping rules are the right defaults for
-          an opt-in cache layered onto a database-per-service system: it errs toward correctness over hit-rate.</p>
+          ADR-006), not the cache. Lifetimes declared per query, a short fallback TTL for writes that name none, and
+          the failure-skipping rules are the right defaults for an opt-in cache layered onto a database-per-service
+          system: it errs toward correctness over hit-rate.</p>
           <p>ADR-026 decides two tiers, and this <code>ICacheService</code> substrate is the first. The second is an HTTP
           output-cache edge (<code>app.UseOutputCache()</code>, with per-host opt-in policies) that lets a public read
           endpoint skip the handler entirely. A third sits in the framework as a capability rather than a
@@ -441,16 +499,19 @@
           moves on the clock when a discount window opens or closes with no mutation to evict on; ADC&#39;s
           Conference service runs twelve, ten at 5 minutes and two at 60 seconds where the payload turns over
           faster. This is also the lever ADR-019 leans on: the global rate limiter partitions by authenticated user
-          and routes anonymous traffic to a <code>NoLimiter</code> partition, so output caching, not a throttle, is what
-          absorbs that load.</p>
+          and routes anonymous traffic to a <code>NoLimiter</code> partition (anonymous SignalR hub requests are the one
+          exception, metered per IP), so output caching, not a throttle, is what absorbs that load.</p>
           <p>The sharp mismatch sits in ASP.NET Core&#39;s built-in default output-cache policy, which
           refuses <em>both</em> cache lookup and cache storage for any request carrying an <code>Authorization</code> header or an
           authenticated identity. The framework UI attaches a Bearer token to <em>every</em> outgoing API request,
           including reads of these <code>[AllowAnonymous]</code>, user-independent endpoints. So the default caches the traffic
           that does not matter (anonymous) and skips the traffic that does (logged-in): on a conference day, when
           every attendee is signed in, 100% of the agenda, session, and speaker reads bypass the cache and hit a
-          Basic-tier SQL database. The gap is one load evidence cannot see, because the k6 scripts and the startup
-          warmup requests are anonymous, exactly the slice the default policy still caches.</p>
+          Basic-tier SQL database. Anonymous load evidence cannot see that gap: ADC&#39;s read-load k6 script and the
+          startup warmup requests are anonymous, exactly the slice the default policy still caches. The signed-in
+          case is what ADC&#39;s conference-day attendee script measures: each virtual user signs in once and sends a
+          Bearer token on its schedule and bookmark reads, the traffic shape that decides whether the edge tier
+          holds.</p>
           <p>You can register a raw <code>IOutputCachePolicy</code> for those endpoints, and here is the sharp edge: a raw policy
           registration replaces the <em>whole</em> default chain, so you inherit none of the built-in policy&#39;s safeguards
           and must restate every one by hand. Drop the query-string variance rule, for example, and every variant
@@ -488,9 +549,10 @@
           stales a cached read routinely happens somewhere else, so on its own the only invalidation that crosses
           a process boundary is the expiry clock. The framework closes that distance with its first concrete
           integration event, <code>OutputCacheEvictionRequested</code>, whose entire payload is a list of output-cache tags
-          (defaulting to empty, so a malformed or older message degrades to a no-op instead of a cache-wide
-          purge), and the consumer that answers it, <code>OutputCacheEvictionHandler</code>, which drops each tag from <em>this</em>
-          host&#39;s store through <code>EvictByTagAsync</code>. Delivery adds no channel: the owning service raises the event,
+          (defaulting to empty rather than required, so a message that arrives without the field deserializes into
+          a harmless no-op instead of faulting the consumer and dead-lettering), and the consumer that answers it,
+          <code>OutputCacheEvictionHandler</code>, which drops each named tag from <em>this</em> host&#39;s store through
+          <code>EvictByTagAsync</code> and skips a blank one, so no message can empty the store. Delivery adds no channel: the owning service raises the event,
           the outbox persists and publishes it, the broker carries it, the inbox dedups the redelivery. Nothing
           here is transactional or exactly-once and it does not need to be, because evicting twice is free and
           evicting late is what a TTL is for.</p>
@@ -530,14 +592,16 @@
           one.</strong> <code>RemoveByPrefixAsync</code> can scan-and-delete by prefix only when a multiplexer is in the container.
           All seven ADC and Store services reach Redis through one framework wrapper, <code>builder.AddRedisCaching()</code>,
           which registers the distributed cache and the multiplexer together and no-ops when the named connection
-          string is blank, so whenever Redis is configured, prefix-based invalidation runs and cached reads are
-          evicted on write. The hosts call that wrapper rather than Aspire&#39;s integrations directly, because the raw
-          integrations register an untagged Redis health check that gates readiness (ADR-025). The 30-second TTL is
-          the backstop only for the no-Redis case
-          (in-memory mode), where prefix removal self-heals within the window instead. And when a multiplexer is
-          absent, <code>DistributedCacheService</code> does not fail silently: it logs the dead invalidation once
-          (<code>Interlocked</code>-guarded, so a mutating command does not flood the log) so an unwired backplane is
-          observable instead of invisible. Single-key <code>RemoveAsync</code> is unaffected in either mode.</li>
+          string is blank, so whenever Redis is configured, prefix-based invalidation runs (against whatever a
+          query decorator wrote, which in the deployed services is nothing, per the read-path section). The hosts
+          call that wrapper rather than Aspire&#39;s integrations directly, because the raw integrations register an
+          untagged Redis health check that gates readiness (ADR-025). In-memory mode needs no multiplexer at all:
+          <code>MemoryCacheService</code> removes by prefix in-process through its tracked key set. Prefix eviction is a
+          no-op only on a distributed or hybrid backend with no multiplexer, where cached entries expire on their
+          TTL alone (for a decorator-cached query, its declared <code>CacheDuration</code>). Neither backend fails silently
+          there: each logs the dead invalidation once (<code>Interlocked</code>-guarded, so a mutating command does not flood
+          the log) so an unwired backplane is observable instead of invisible. Single-key <code>RemoveAsync</code> is
+          unaffected in either mode.</li>
           <li><strong>A cache outage degrades reads instead of failing them, and the one fail-open on the auth path has a
           bounded cost.</strong> Every cache call in <code>CachingQueryDecorator</code> is fail-open: a failed read is logged at
           warning level and treated as a miss, so the query falls through to the inner handler and still answers
@@ -552,7 +616,8 @@
           one shared-store read plus one query per authenticated request; a host with no validator passes a miss
           or a cache failure straight through. When the query fails too, the middleware proceeds open rather than
           locking out every authenticated caller on one blip. The exposure that buys is bounded by access-token lifetime: tokens live
-          15 minutes, and the deletion already revoked the refresh token, so the residual risk is one
+          15 minutes, and on a host that registered a refresh-session store the deletion has already revoked the
+          account&#39;s refresh sessions, so the residual risk is one
           already-issued token running out its remainder while the cache or database is unhealthy. That bound is
           what makes the fail-open a deliberate choice rather than an accident of the code path.</li>
           <li><strong>Per-instance memory caches diverge, and the hybrid backend buys its L1 hit rate with a smaller
@@ -661,6 +726,7 @@
             <li><a href="#the-write-path-invalidate-on-success-outside-the-transaction">The write path: invalidate on success, outside the transaction</a></li>
             <li><a href="#swallowing-a-failure-is-a-discipline-not-a-catch">Swallowing a failure is a discipline, not a catch</a></li>
             <li><a href="#the-two-key-transformations-the-pipeline-applies">The two key transformations the pipeline applies</a></li>
+            <li><a href="#one-application-namespace-for-every-shared-keyspace">One application namespace for every shared keyspace</a></li>
             <li><a href="#what-the-cache-is-and-is-not">What the cache is, and is not</a></li>
             <li><a href="#the-edge-tier-caching-authenticated-reads-without-leaking-identity">The edge tier: caching authenticated reads without leaking identity</a></li>
             <li><a href="#trade-offs-honestly">Trade-offs, honestly</a></li>

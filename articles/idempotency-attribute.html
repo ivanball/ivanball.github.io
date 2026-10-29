@@ -95,7 +95,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 53 articles</summary>
+        <summary>All 54 articles</summary>
         <nav class="doc-nav" aria-label="The MMCA.Common series">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -151,7 +151,8 @@
         <li><a href="governed-llm-boundary.html">50 · The governed LLM boundary</a></li>
         <li><a href="durable-internal-commands.html">51 · Four ways to do work later</a></li>
         <li><a href="identity-completions.html">52 · Finishing identity</a></li>
-        <li><a href="series-index.html">53 · The series index</a></li>
+        <li><a href="cloud-neutral-vendor-adapters.html">53 · One framework, three clouds</a></li>
+        <li><a href="series-index.html">54 · The series index</a></li>
           </ol>
         </nav>
       </details>
@@ -180,8 +181,8 @@
           produces a second perfectly valid-looking row. You find out when finance reconciles, or when a customer
           complains about a duplicate charge, and by then the originating request is long gone from the logs.</p>
           <p>And the pressure toward retries only increases as systems get hardened. A stock resilience handler retries
-          every verb unless it is told otherwise, which is exactly why MMCA&#39;s own outbound handlers switch the retry
-          off for <code>POST</code> and <code>PATCH</code> (ADR-009), and why the framework&#39;s UI client retries a <code>POST</code> that may have
+          every verb unless it is told otherwise, which is exactly why the default handler MMCA puts on every
+          outbound <code>HttpClient</code> switches the retry off for <code>POST</code> and <code>PATCH</code> (ADR-009), and why the framework&#39;s UI client retries a <code>POST</code> that may have
           reached the server only when it carries an <code>Idempotency-Key</code> held constant across the attempts (a
           connection that failed before the request was ever sent is the one case it resends without a key). A
           server cannot assume every caller is that
@@ -316,7 +317,7 @@
           genuinely idempotent inbox consumer (dedup by <code>MessageId</code> via <code>IInboxStore</code>):</p>
           <ul>
           <li><code>IInboxStore</code> (<code>EfInboxStore</code> for the real EF implementation, <code>NoOpInboxStore</code> when it is turned off)
-          records each handled message by its <code>MessageId</code> in an <code>InboxMessage</code> table with a unique index.</li>
+          records each handled message by its <code>MessageId</code> in an <code>InboxMessages</code> table with a unique index.</li>
           <li><code>IntegrationEventConsumer</code> calls <code>TryBeginAsync(MessageId, eventType)</code> before invoking handlers: a
           message the inbox already holds is skipped and acked, never reapplied. <code>TryBegin</code> also <em>stages</em> the
           inbox row, unsaved, in the consume scope&#39;s unit of work, so a handler that calls <code>SaveChangesAsync</code>
@@ -332,8 +333,10 @@
           persist whatever is still unsaved.</li>
           <li>The posture is resolved from the transport. <code>MessageBusSettings.EnableInbox</code> is a nullable bool left
           unset by default, and <code>IsInboxEnabled</code> reads that as on for a broker and off for the in-process
-          provider, which has no redelivery to dedup. An explicit value wins in both directions: a host that sets
-          <code>MessageBus:EnableInbox=false</code> gets the no-op store plus one startup warning recording the opt-out.</li>
+          provider, which has no redelivery to dedup. The setting only acts on a broker host, because the
+          in-process provider wires no consumer-side messaging at all: a broker host that sets
+          <code>MessageBus:EnableInbox=false</code> gets the no-op store plus one startup warning recording the opt-out,
+          while <code>true</code> on an in-process host registers nothing.</li>
           </ul>
           <p>The retry half is wired too: every receive endpoint gets an exponential-backoff <code>UseMessageRetry</code> policy
           (<code>MessageBusSettings.RetryLimit</code>), and the consumer rethrows on handler failure so MassTransit applies it
@@ -376,8 +379,8 @@
           deliberately, and the price is that duplicates can execute twice while the backend is down. Treat that
           metric as an alert, not a dashboard decoration.</li>
           <li><strong>The inbox narrows the consumer-side duplicate problem; it does not remove it.</strong> The inbox above
-          resolves on for a broker and off for the in-process provider, and a host can override either way with
-          <code>MessageBus:EnableInbox</code>. Wherever it resolves off, every duplicate reaches your handlers; wherever it
+          resolves on for a broker and off for the in-process provider, and a broker host can turn it off with
+          <code>MessageBus:EnableInbox=false</code>. Wherever it resolves off, every duplicate reaches your handlers; wherever it
           resolves on, a crash between a handler&#39;s commit and the inbox write still redelivers the event once
           more. Either way, every consumer&#39;s idempotency is code you own and test.</li>
           <li><strong>Partial failure across the handlers of one event cuts both ways.</strong> A handler that saves through the

@@ -142,7 +142,7 @@ Place a decorator at the wrong depth and you silently change semantics: validate
 and you open a database transaction for a request you were going to reject anyway. Cache *outside* the
 permission check and you hand one caller's rows to another. That is exactly why the order is hard-coded
 and documented inline at the registration site, not config-driven, and why the registration method
-carries an ASCII nesting diagram of both chains in its own doc comment.
+carries a text nesting diagram of both chains in its own doc comment.
 
 ## Transactional behavior, in detail
 
@@ -157,8 +157,12 @@ command implements `ITransactional`**. Three outcomes, three behaviors:
   over partial persistence, so any writes the handler made before returning the failure are discarded, and
   the deferred domain events roll back with them. Cache invalidation is skipped as well, because nothing
   committed and there is nothing stale to evict.
-- **A success commits and then invalidates the cache.** Only a success reaches `CommitTransaction()`.
-  In-process domain events are flushed *after* the commit, so a handler never acts on state that could
+- **A success commits and then invalidates the cache.** Only a success reaches `CommitTransaction()`,
+  and only after one pre-commit check: internal-command rows the handler enrolled are saved inside the
+  transaction, but any other tracked change it left unsaved throws an `InvalidOperationException`
+  and the whole unit rolls back, because committing would silently discard that change while
+  reporting success. A nested transactional call joins the outer transaction and leaves the commit to
+  the outermost call. In-process domain events are flushed *after* the commit, so a handler never acts on state that could
   still roll back, and cache eviction runs *outside* the transaction boundary against committed state.
   The one failure this cannot classify is the commit itself: the database may have applied the
   transaction and lost only the acknowledgement, so a failed commit is never retried or treated as a
@@ -408,10 +412,22 @@ pattern, or `dotnet add package MMCA.Common.API` and try it.*
 
 *Tags: .NET, C Sharp, Software Architecture, CQRS, Design Patterns*
 
-*Notes: 2026-10-22 refresh, re-verified against MMCA.Common v1.250.0 (`MMCA.Common/FACTS.md:14`).
-Every anchor below was re-read on `main` this run and corrected in place, except where marked as
+*Notes: 2026-10-29 refresh, re-verified against MMCA.Common v1.265.1 (`MMCA.Common/FACTS.md:14`).
+Every anchor below was re-read on `main` and corrected in place, except where marked as
 carried; the 2026-10-02 refresh (MMCA.Common v1.221.0) replaced the 2026-09-19 ledger, because most of
-its line numbers had moved and `DependencyInjection.cs` is split into three partial files.
+its line numbers had moved. `DependencyInjection.cs` is split into four partial files (main, `Crud`,
+`ModuleScanning`, `Extensibility`).
+**2026-10-29 entry (MMCA.Common v1.265.1).** Two body changes. (1) The registration doc comment's
+diagrams (`DependencyInjection.cs:61-71` commands, `:74-83` queries) use Unicode arrows and the
+reverse-order sentence at `:58` an em dash, so "ASCII nesting diagram" is now "text nesting diagram".
+(2) The success bullet said a success commits unconditionally. `RunTransactionalAttemptAsync` calls
+`FlushEnrolledCommandsBeforeCommitAsync` (`DbContextFactory.cs:651`, declared `:713`) before
+`TryCommit()`; it saves enrolled `InternalCommandMessage` rows (`:725`, `:738`) and throws
+`InvalidOperationException` on any other unsaved tracked change (`:730-736`), which the `catch`
+(`:673-681`, "A throw from here is caught below and rolls the whole unit back" `:650`) rolls back.
+A re-entrant call joins the outer transaction and returns without committing (`:581-589`). The bullet
+now states both. Re-anchored this run: ADR-014, ADR-079, `MMCA.Common/AGENTS.md`, the throw message
+(`:316-318`) and the adopter lines below.
 **2026-10-22 entry (MMCA.Common v1.250.0).** Four body changes. (1) Edge capture: the body said the
 pre-forwarded capture keeps the OIDC discovery `jwks_uri` reachable. Nothing reads the captured Items:
 `MapOidcDiscoveryEndpoint` reads `Jwt:Issuer` (`MMCA.Common.API/Startup/Endpoints/OidcDiscoveryEndpointExtensions.cs:62`,
@@ -419,7 +435,7 @@ derivation comment from `:68`), the step's comment says so (`MiddlewarePipelineB
 key docs say so (`WebApplicationExtensions.cs:21-23`, `:33-34`), the fitness base summary says the
 adjacency is "pinned without a runtime consequence" (`MiddlewarePipelineOrderTestsBase.cs:17-19`), and
 ADR-079 calls the step dead weight, not load-bearing today
-(`Website/docs-src/adr/079-shared-http-middleware-pipeline.md:223-235`). The bullet now says that, and
+(`Website/docs-src/adr/079-shared-http-middleware-pipeline.md:229-241`, re-read 2026-10-29). The bullet now says that, and
 "four load-bearing orderings" is now four enforced orderings of which three are load-bearing.
 (2) Seal scope: `AddNotificationApplicationServices()`
 (`MMCA.Common.Application/Notifications/DependencyInjection.cs:36`) registers three command and three
@@ -432,18 +448,19 @@ decorators (`FeatureGateCommandDecorator.cs:50` `is not IFeatureGated`, `Transac
 `TimeoutCommandDecorator.cs:65`, `CachingCommandDecorator.cs:61`, `AuthorizationGate.cs:46,60`), and
 "the pass-through cost of an `is`-check" is now "of a dormant decorator". (4) The closing takeaway was
 presented as a line of ADR-014; no such line exists, so it is framed as the argument of ADR-014's Context
-(`Website/docs-src/adr/014-cqrs-decorator-pipeline.md:37-42`, Rationale `:101-102`). The header ADR cell and the section 10 mapping were settled by the owner on 2026-10-22 (see Mapping).
+(`Website/docs-src/adr/014-cqrs-decorator-pipeline.md:40-46`, Rationale `:102-108`, inline at the
+registration site `:106`; re-read 2026-10-29). The header ADR cell and the section 10 mapping were settled by the owner on 2026-10-22 (see Mapping).
 **2026-10-19 entry.** No body change. The Helpdesk host composes with `AddMmcaApplicationPipeline`
 (`MMCA.Helpdesk/Source/Hosts/MMCA.Helpdesk.Web/Program.cs:121`, now on `main`), so the DI-sequence anchors
 below are corrected in place. The `MMCA.Common/AGENTS.md` drift noted in the 2026-10-08 entry is fixed on
-`main`: `:75` says the method runs `AddApplication()`, the configure callback and
+`main`: `:77` (re-read 2026-10-29) says the method runs `AddApplication()`, the configure callback and
 `AddApplicationDecorators()`, with `AddInfrastructure` and `AddAPI` outside the call, which is what the
 body already says.
 **2026-10-08 entry (MMCA.Common v1.233.0).** Three body changes. (1) Profiling: `AddApplicationProfiling()`
 (`MMCA.Common/Source/Core/MMCA.Common.Application/DependencyInjection.cs:160`, doc "Registers
 MiniProfiler decorators" `:156`) registers the pair at `:162-163` with no toggle; it wraps from the
 outside only when called after `AddApplicationDecorators()`, and a Grep of `MMCA.ADC/Source`,
-`MMCA.Store/Source` and `MMCA.Helpdesk/Source` finds no call (ADR-014 `:59-61`: "No consumer host wires
+`MMCA.Store/Source` and `MMCA.Helpdesk/Source` finds no call (ADR-014 `:65`, re-read 2026-10-29: "No consumer host wires
 it today"). The parenthetical is narrowed to that. (2) Commit ambiguity: a handler exception rolls back
 (`DbContextFactory.cs:673-681`), but a failed commit is never retried or rolled back and surfaces as
 `TransactionCommitAmbiguousException` (rationale `:558-563`, thrown past the execution strategy at
@@ -451,16 +468,17 @@ it today"). The parenthetical is narrowed to that. (2) Commit ambiguity: a handl
 (3) Edge invariants: `Build()` (`MiddlewarePipelineBuilder.cs:251`) carries two `RequireImmediatelyBefore`
 (`:253-256`, `:258-261`) and two `RequirePrecedes` (`:263-266`, `:268-271`), so "four adjacencies" is
 now "four orderings, two of them strict adjacencies", and the startup re-validation sentence says
-"orderings". Re-anchored in place (2026-10-22 lines): `FeatureGateCommandDecorator.cs:60`, ADR-014
-(`:84-85`, `:230`, `:376`, `:385`), `DbContextFactory.cs`, `WebApplicationExtensions.cs`
-(`ApplyPipeline` `:171`, `IsLocalRedirectTarget` `:160`). Header left citing `MMCA.Common/AGENTS.md`:
-at the time its "DI Registration Sequence" (`:73`, sentence `:75`) said `AddMmcaApplicationPipeline` runs
+"orderings". Re-anchored in place (ADR-014 at 2026-10-29 lines, the rest at 2026-10-22 lines):
+`FeatureGateCommandDecorator.cs:60`, ADR-014 (`:88-89`, `:234`, `:380`, `:389`), `DbContextFactory.cs`,
+`WebApplicationExtensions.cs` (`ApplyPipeline` `:171`, `IsLocalRedirectTarget` `:160`). Header left
+citing `MMCA.Common/AGENTS.md`: at the time its "DI Registration Sequence" (today `:75`, sentence
+`:77`) said `AddMmcaApplicationPipeline` runs
 `AddInfrastructure(config)` and `AddAPI(modulesSettings)`, but the method (`DependencyInjection.cs:207-216`)
 runs only `AddApplication()`, the configure delegate and `AddApplicationDecorators()`; the body follows
 the code, and the AGENTS.md drift is reported for its owner.
 **2026-10-02 body corrections.** (1) Header: `MMCA.Common/CLAUDE.md` is a five-line `@AGENTS.md`
-import, so the header cites `MMCA.Common/AGENTS.md`, where "DI Registration Sequence" is at `:73`,
-"CQRS Decorator Pipeline" at `:77` and the two chain lines at `:82-83`. (2) Validation: the body said
+import, so the header cites `MMCA.Common/AGENTS.md`, where "DI Registration Sequence" is at `:75`,
+"CQRS Decorator Pipeline" at `:79` and the two chain lines at `:84-85` (re-read 2026-10-29). (2) Validation: the body said
 the decorator "resolves the registered `IValidator<TCommand>`" (singular).
 `ValidatingCommandDecorator` takes `IEnumerable<IValidator<TCommand>> validators`
 (`MMCA.Common/Source/Core/MMCA.Common.Application/UseCases/Decorators/ValidatingCommandDecorator.cs:34`),
@@ -488,9 +506,9 @@ outermost at `:148`), `SealPipeline(services)` at `:150`. The XML doc carries th
 query-side validation placement at `:96-100` ("On the query side it sits INSIDE caching", `:98`) and
 the business-failure sentence at `:107-108`. Optional profiling: `AddApplicationProfiling()` registers
 `ProfilingCommandDecorator` and `ProfilingQueryDecorator` at `:162-163`. ADR-014 states both current
-chains in its Revision (2026-08-26) from `:230`, records the shared authorization gate in its
-Revision (2026-09-19) from `:376` (`Evaluate` at `:385`), and states the decorators-last scope at
-`:84-85`. Order pinned by `DecoratorPipelineOrderTestsBase`
+chains in its Revision (2026-08-26) from `:234`, records the shared authorization gate in its
+Revision (2026-09-19) from `:380` (`Evaluate` at `:389`), and states the decorators-last scope at
+`:88-89` (re-read 2026-10-29). Order pinned by `DecoratorPipelineOrderTestsBase`
 (`MMCA.Common/Source/Hosting/MMCA.Common.Testing/Conformance/DecoratorPipelineOrderTestsBase.cs:38`),
 `protected virtual` lists at `:49` (commands) and `:61` (queries, `ValidatingQueryDecorator` at
 `:67`); the framework subclass
@@ -518,13 +536,13 @@ attempt through `RunTransactionalAttemptAsync` (`:632`): the quoted business-fai
 `FlushEnrolledCommandsBeforeCommitAsync` (`:651`, declared `:713`) saves enrolled internal-command rows
 and throws on any other unsaved tracked change, then `TryCommit()` (called `:653`, declared `:751`,
 `context.Database.CommitTransaction()` at `:770`), and deferred domain events flush post-commit through
-`FlushDeferredAsync` (`:667`). The pre-commit flush
-is not described in the body: it does not change the three outcomes the article lists.
+`FlushDeferredAsync` (`:667`). The pre-commit flush and the re-entrant join (`:588-589`) are
+described in the success bullet (2026-10-29 entry).
 **DI sequence.** The pipeline-sealed guard: `ThrowIfPipelineSealed` in
 `DependencyInjection.ModuleScanning.cs:49` (module scan) and `DependencyInjection.Crud.cs:80,142,193`
 (CRUD helpers), plus `AddApplicationDecorators` itself (`DependencyInjection.cs:116`) and
 `AddMmcaApplicationPipeline` (`:209`); the quoted `InvalidOperationException` message is at
-`DependencyInjection.cs:316-317` (guard declared `:310`, seal set by `SealPipeline` `:307`).
+`DependencyInjection.cs:316-318` (guard declared `:310`, seal set by `SealPipeline` `:307`).
 `AddMmcaApplicationPipeline(Action<MmcaApplicationPipelineBuilder>?)` opens its XML doc example (the
 article's `ScanModule` / `Register` snippet) at `:198`. The seal guards only those framework methods;
 `AddNotificationApplicationServices()` does not check it (2026-10-22 entry), and
@@ -532,8 +550,8 @@ article's `ScanModule` / `Register` snippet) at `:198`. The seal guards only tho
 Helpdesk composes the sequence with `AddMmcaApplicationPipeline`:
 `MMCA.Helpdesk/Source/Hosts/MMCA.Helpdesk.Web/Program.cs:121`, with `AddInfrastructure` `:77` and `AddAPI` `:99`
 outside the call and `DiscoverAndRegister` (`:125`) and `AddBrokerMessaging` (`:139`) as `Register` steps inside it;
-so do the seven production service hosts (ADR-014 `:75-85`), for example
-`MMCA.ADC.Conference.Service/Program.cs:418` and `MMCA.Store.Catalog.Service/Program.cs:256`.
+so do the seven production service hosts (ADR-014 `:79-89`), for example
+`MMCA.ADC.Conference.Service/Program.cs:429` and `MMCA.Store.Catalog.Service/Program.cs:267` (re-read 2026-10-29).
 Markers: `Markers/` holds eight interfaces (`ICacheInvalidating`, `IFeatureGated`, `IHasTimeout`,
 `IQueryCacheable`, `IRequiresMfa`, `IRequiresPermission`, `ISharedQueryCache`, `ITransactional`); the
 ones the body names are `ITransactional.cs:6`, `ICacheInvalidating.cs:8,14`, `IQueryCacheable.cs:23,28`,
@@ -559,17 +577,17 @@ through (`:171`), alongside `UseCommonRequestLocalization` (`:74`), two `MapCult
 `ExpectedStepNames` at `:40` with `PreForwardedCapture` at `:45`. ADR-079's header records the
 protocol-keyed exemption and the `CommonForwardedHeaders.Create()` factory
 (`Website/docs-src/adr/079-shared-http-middleware-pipeline.md:9-16`, re-read in a 2026-10-22 catch-up pass).
-Adopters' `UseCommonMiddlewarePipeline()` calls re-read 2026-10-22:
-`MMCA.ADC.Conference.Service/Program.cs:450`, `MMCA.ADC.Identity.Service/Program.cs:361`,
-`MMCA.ADC.Engagement.Service/Program.cs:326`, `MMCA.ADC.Notification.Service/Program.cs:270`,
-`MMCA.Store.Sales.Service/Program.cs:309`, `MMCA.Store.Identity.Service/Program.cs:307`,
-`MMCA.Store.Catalog.Service/Program.cs:320`, `MMCA.Helpdesk/Source/Hosts/MMCA.Helpdesk.Web/Program.cs:149`.
+Adopters' `UseCommonMiddlewarePipeline()` calls re-read 2026-10-29:
+`MMCA.ADC.Conference.Service/Program.cs:461`, `MMCA.ADC.Identity.Service/Program.cs:373`,
+`MMCA.ADC.Engagement.Service/Program.cs:338`, `MMCA.ADC.Notification.Service/Program.cs:281`,
+`MMCA.Store.Sales.Service/Program.cs:320`, `MMCA.Store.Identity.Service/Program.cs:318`,
+`MMCA.Store.Catalog.Service/Program.cs:331`, `MMCA.Helpdesk/Source/Hosts/MMCA.Helpdesk.Web/Program.cs:149`.
 **Mapping.** Rubric sections re-anchored in `Website/docs-src/governance/ArchitectureEvaluationCriteria.md`:
 section 1 (SOLID) `:122`, section 6 (CQRS and event-driven) `:229`, section 10 (Messaging and
 integration) `:329`. Section 10 matches the README mapping row but the body carries no messaging
 content; the ADR cell lists 014 and 079 while the README row (`Website/docs-src/articles/README.md:17`)
 listed 014/031/079. Owner decision 2026-10-22: the README row drops 031 to match the header (Article 45 owns ADR-031 and this body never names a feature flag), and section 10 stays because the scorecard's section 10 row (`Website/docs-src/governance/common-ArchitectureScorecard.md:74`) credits the decorator pipeline. Dropped
-from the previous ledger: the About-the-author package note (`FACTS.md:19` reads 22 packages, and the
+from the previous ledger: the About-the-author package note (`FACTS.md:19` reads 26 packages at v1.265.1, and the
 body has no About-the-author section) and the "five markers" count (eight today).*
 
 - Full series index: https://ivanball.github.io/writing.html

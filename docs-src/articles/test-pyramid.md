@@ -6,8 +6,8 @@
 > `Website/docs-src/adr/058-runtime-conformance-suites-as-a-package.md`,
 > `Website/docs-src/adr/063-accessibility-conformance-gate.md`,
 > `Website/docs-src/adr/117-apphost-integration-test-base.md`,
-> `MMCA.Common/.github/workflows/ci.yml` and its CI run 39625216950, `MMCA.Common/FACTS.md`, the `MMCA.Common.Testing*` sources, and
-> `Website/docs-src/onboarding/group-28-testing-infrastructure.md`. No em dashes.
+> `MMCA.Common/.github/workflows/ci.yml` and its CI run 40870473851, `MMCA.Common/FACTS.md`, the `MMCA.Common.Testing*` sources, and
+> `Website/docs-src/onboarding/group-29-testing-infrastructure.md`. No em dashes.
 
 **Subtitle:** A suite you run constantly is worth more than a suite you run nervously. Here is how
 MMCA.Common keeps more than 8,000 tests fast enough to live in the inner loop, with real-database
@@ -22,10 +22,10 @@ takes twenty minutes, fails intermittently for reasons nobody can reproduce, and
 it locally because the inner loop is too painful. The tests that were supposed to give you confidence
 instead give you a reason to avoid them.
 
-MMCA.Common deliberately builds the right shape. **About 7,100 `[Fact]`/`[Theory]` attributes, more than
+MMCA.Common deliberately builds the right shape. **About 7,600 `[Fact]`/`[Theory]` attributes, more than
 half of them in the Core tests,** form a correct, non-inverted pyramid, with a wide base that runs in
 milliseconds and needs no database and no Docker. Expanded into theory data rows, the CI unit run
-executes 8,386 tests (the `build-and-test` job of CI run 39625216950). That suite, and the architecture
+executes 9,122 tests (the `build-and-test` job of CI run 40870473851). That suite, and the architecture
 behind it, is the single most-cited evidence in the framework's testability score: category 14 stands
 at **maturity 4 / implementation 9**, carried by the enforced coverage floor and the size of the suite
 behind it.
@@ -92,7 +92,7 @@ would.
 
 ## Shipped test packages: consumers do not re-invent the harness
 
-Six of the framework's twenty-two published NuGet packages are test *infrastructure*, not test code, and this is
+Seven of the framework's twenty-six published NuGet packages are test *infrastructure*, not test code, and this is
 how the pyramid stays consistent across three codebases instead of being rebuilt three times:
 
 - `MMCA.Common.Testing`, the integration base: `IntegrationTestBase<TFixture>` supplies a configured
@@ -116,6 +116,9 @@ how the pyramid stays consistent across three codebases instead of being rebuilt
   data-source assertions.
 - `MMCA.Common.Testing.Architecture`, the fitness-rule library: the architecture rules defined once and
   consumed by each repo's thin test suite.
+- `MMCA.Common.Testing.Azure`, the Service Bus broker-parity base: `ServiceBusEmulatorFixtureBase` starts
+  one warm, image-pinned Azure Service Bus emulator per test collection and owns the one MassTransit bus
+  every test publishes through, with both startup phases wall-clock bounded so a hang names its phase.
 - `MMCA.Common.AI.Testing`, the AI test harness: `ReplayChatClient`, `GoldenReplayTestsBase` and
   `PromptContractPinTestsBase`, keyed on a `PromptContract`'s normalized SHA-256 hash.
 
@@ -325,21 +328,21 @@ Moq. To run one class or method you target the project and pass an MTP filter af
 (`-- --filter-class "*FooTests*"` or `-- --filter-method "*Pattern*"`). One sharp edge worth knowing: every test
 project must contain at least one test or MTP exits with code 8. The unit run also floors at
 `--minimum-expected-tests 2000`, so a discovery or filter regression that leaves only a handful of
-tests discovered fails the job instead of passing green. Against the 8,386 tests that run executes
-(CI run 39625216950), the floor is coarse: a regression that drops a few thousand tests still clears it.
+tests discovered fails the job instead of passing green. Against the 9,122 tests that run executes
+(CI run 40870473851), the floor is coarse: a regression that drops a few thousand tests still clears it.
 
 And the suite is a real gate, not a suggestion. CI collects coverage via `dotnet-coverage` (which wraps
 the MTP run and returns its exit code, so a test failure still fails the build) and **enforces a
 coverage floor**: the unit tier must stay at or above **68.3%** line coverage as a regression backstop,
 gated on the unit tier alone rather than a gallery-diluted merged report. The unit tier measures
-**88.1%** (the `coverage` job of CI run 39625216950), so the floor sits about 20 points below the
+**87.0%** (the `coverage` job of CI run 40870473851), so the floor sits about 19 points below the
 suite it guards.
 
 ## Trade-offs, honestly
 
 The shape is right, but the scorecard names real gaps and one is squarely in the testing story.
 
-- **The UI tier's visual check is markup-deep, not pixel-deep.** The framework ships 31 reusable
+- **The UI tier's visual check is markup-deep, not pixel-deep.** The framework ships 32 reusable
   Blazor components in `MMCA.Common.UI`, some with real branching logic (`MobileCardList`,
   `MobileInfiniteScrollList`), and the pyramid carries a fast base layer *for the UI* under them: the
   `MMCA.Common.Testing.UI` bUnit base backs their component tests, a real-browser render-smoke gate
@@ -355,12 +358,15 @@ The shape is right, but the scorecard names real gaps and one is squarely in the
   deliberately latent, with no production entity on them. The trade buys a fast, Docker-free inner loop
   at the cost of needing the consumer apps and CI to cover the SQL-Server-specific paths.
 - **The honest limits are mutation testing and the container tiers, not coverage.** The unit tier holds a **68.3%** line-coverage
-  floor, enforced in CI, against a measured 88.1%. What holds category 14 below the top band starts with mutation testing: there is none
+  floor, enforced in CI, against a measured 87.0%. What holds category 14 below the top band starts with mutation testing: there is none
   on the Core tier, so a green suite proves the lines run, not that every assertion would catch a
-  mutant. Three structural gaps sit beside it: the integration tier (Redis, PostgreSQL, package
-  consumption, Bicep) runs on pull requests but is not a merge gate, the AppHost tier blocks the run
-  (a red fails it) without being a required merge check, and messaging never meets a real broker in the framework's own CI. Those are real limits,
-  stated plainly.
+  mutant. Three structural gaps sit beside it: the integration tier (Redis, PostgreSQL, SQL Server, the
+  AWS LocalStack and Google Cloud emulator jobs, package consumption, Bicep) runs on pull requests but is
+  not a merge gate, the AppHost tier blocks the run (a red fails it) without being a required merge
+  check, and real-broker coverage is partial: only the built-in PostgreSql transport (against a real
+  PostgreSQL) and the SQS/SNS transport (against LocalStack) meet a live endpoint, both inside those
+  non-required jobs, while RabbitMQ and Azure Service Bus never meet one in the framework's own CI. Those
+  are real limits, stated plainly.
 
 None of these argue against the pyramid. They are the cost of keeping the base fast and honest about
 what each tier actually proves.
@@ -390,7 +396,7 @@ slow and flaky.
 **What we covered:** why the pyramid's shape matters more than its count, the fast no-Docker base
 (pure unit tests plus `FakeTimeProvider`), the real-SQLite middle tier with two databases in
 `MultiSourceSqliteIntegrationTests`, the thin bUnit/Playwright cap and the orthogonal fitness-test tier,
-the six shipped test packages that let consumers reuse the harness, the seven runtime conformance bases
+the seven shipped test packages that let consumers reuse the harness, the seven runtime conformance bases
 that prove a really-booted host wired the framework's contracts (ADR-058) and their partial adoption, the
 AppHost tier that compiles a claim about the composition itself (ADR-117), WCAG 2.1 AA shipped as a named
 axe target with one recorded exception (ADR-063), the xUnit v3 / MTP runner and the CI coverage floor, and
@@ -408,26 +414,37 @@ own app.*
 
 *Tags: .NET, Testing, C Sharp, Software Architecture, Test Automation*
 
-*Notes (this run, 2026-10-22, re-verified at framework v1.250.0 (`MMCA.Common/FACTS.md:4`, `:14`) against source, CI run 39625216950,
-the Common scorecard, the rubric and ADR-015/058/063/117; carries forward the 2026-10-08 v1.233.0 ledger, which superseded the 2026-10-02 v1.221.0 and 2026-09-17 v1.205.0 ones).
-Header group cell G25, Testing & Quality Infrastructure (`Website/docs-src/onboarding/00-group-taxonomy.md:83`; G28 is Common AI Integration at `:82`, G26 the ADC
-engagement layer at `:78`); the group's page keeps the file name `group-28-testing-infrastructure.md`.
-Suite size, corrected this run from "about 2,254" (the figure the CI comment `MMCA.Common/.github/workflows/ci.yml:160` and scorecard row 14 still carry):
-7,087 `[Fact]`/`[Theory]` attributes under `MMCA.Common/Tests/` in 836 files, 3,882 of them under `Tests/Core` (`git grep` at Common `51c321fe`, tag v1.250.0),
-and 8,386 tests executed, 0 skipped, by the `build-and-test` job of CI run 39625216950 (2026-10-21, head `ade966b`, the v1.250.0 release PR).
-The unit run floors at `--minimum-expected-tests 2000` (`ci.yml:163`), so the "drops thousands of tests fails the job" sentence was scoped to a
-handful-discovered regression; `dotnet-coverage` returns the test exit code (`:156`); unit-tier coverage floor 68.3% (comment `:395-397`,
-`awk -v m="68.3"` at `:409`), measured 88.1% by the `coverage` job of the same run ("Unit line coverage 88.1% meets the 68.3% floor"), replacing the
-2026-07 figure of 70.3% in that comment. The "only ever moves upward" and "ratcheted up as the suite grows" claims were removed: the floor has not moved
-while measured coverage rose, and the comment's "ratchet up as it grows" (`:397`) is intent, not history. Gallery a11y matrix `chromium, firefox, webkit` (`:232`).
-Scorecard evidence 2026-10-22 at v1.250.0 (`Website/docs-src/governance/common-ArchitectureScorecard.md:5`), Maturity 97.3% (319/328) (`:9`),
+*Notes (this run, 2026-10-29, re-verified at framework v1.265.1 (`MMCA.Common/FACTS.md:4`, `:14`) against source at Common `dac823ec`, CI run 40870473851,
+the Common scorecard, the rubric and ADR-015/058/063/117; carries forward the 2026-10-22 v1.250.0 ledger (CI run 39625216950), which superseded the 2026-10-08 v1.233.0,
+2026-10-02 v1.221.0 and 2026-09-17 v1.205.0 ones).
+This run (2026-10-29): suite size, executed count and measured coverage refreshed from CI run 40870473851; the shipped-test-package count went from six of
+twenty-two to seven of twenty-six with a `Testing.Azure` bullet added; the component count went from 31 to 32; the integration-tier list gained the
+SQL Server, AWS LocalStack and Google Cloud jobs; the "messaging never meets a real broker" sentence was replaced, because the PostgreSql broker transport and
+the SQS/SNS transport now meet live endpoints in CI; the onboarding group page moved to `group-29-testing-infrastructure.md`. The anchors in the next lines through the package list were re-read this run; the conformance, AppHost and E2E anchors further down carry forward from 2026-10-22 except where marked.
+Header group cell G25, Testing & Quality Infrastructure (`Website/docs-src/onboarding/00-group-taxonomy.md:84`, page `group-29-testing-infrastructure.md`;
+G28 is Common AI Integration at `:82`, G26 the ADC engagement layer at `:78`).
+Suite size (the CI comment `MMCA.Common/.github/workflows/ci.yml:160` and scorecard row 14 still carry "about 2,254"):
+7,617 `[Fact]`/`[Theory]` attributes under `MMCA.Common/Tests/` in 915 files, 3,970 of them under `Tests/Core` (`git grep -E '\[(Fact|Theory)(\]|\()'` at Common `dac823ec`, after v1.265.1),
+and 9,122 tests executed, 9,122 succeeded, 0 skipped, by the `build-and-test` job of CI run 40870473851 (2026-10-29, head `a00058a8`).
+The unit run floors at `--minimum-expected-tests 2000` (`ci.yml:163`), so the "drops thousands of tests fails the job" sentence is scoped to a
+handful-discovered regression; `dotnet-coverage` returns the test exit code (`:156`); unit-tier coverage floor 68.3% (comment `:477-482`,
+`awk -v m="68.3"` at `:494`), measured 87.0% by the `coverage` job of the same run ("Unit line coverage 87.0% meets the 68.3% floor"; 88.1% on 2026-10-21), replacing the
+2026-07 figure of 70.3% in that comment. The "only ever moves upward" and "ratcheted up as the suite grows" claims stay removed: the floor has not moved,
+and the comment's "ratchet up as it grows" (`:482`) is intent, not history. Gallery a11y matrix `chromium, firefox, webkit` (`:232`).
+Scorecard evidence 2026-10-29 at v1.265.1 (`Website/docs-src/governance/common-ArchitectureScorecard.md:5`), Maturity 97.3% (319/328) (`:9`),
 Implementation 85.4% (700/820) (`:10`). Category 8 Data Architecture is maturity 4 / implementation 9 with ADR-018's non-SQL engines latent (`:72`).
-Category 14 is 4/9 (`:78`), held at 9 by no mutation testing plus three structural gaps (integration tier not a merge gate, Redis `ci.yml:725`,
-PostgreSQL `:769`, SQL Server `:806`; AppHost tier `:846`, blocking but not a required merge check per `:851-852`, which row 14 now cites the same way;
-no real broker in Common CI). Category 28 is 4/9, markup not pixels (`:92`). Rubric quotes
-(`Website/docs-src/governance/ArchitectureEvaluationCriteria.md:430,433,440`). Packages: 22 published (`FACTS.md:19`, list `:22-43`), six of them test
-infrastructure: `MMCA.Common.AI.Testing` (`:34`, harness types and the hash it keys on per `MMCA.Common/AGENTS.md:142`), `Testing`, `Testing.Architecture`,
-`Testing.Aspire`, `Testing.E2E`, `Testing.UI` (`:38-42`). ADR-058 status `:4`, latest-revision summary `:10`; revisions 2026-09-10 (`:289`),
+Category 14 is 4/9 (`:78`), held at 9 by no mutation testing plus three structural gaps (integration tier not a merge gate: Redis `ci.yml:810`,
+PostgreSQL `:854`, SQL Server `:894`, AWS LocalStack `:934` ("Not a required check" `:940-944`), Google Cloud emulators `:974`, package consumption `:725`,
+Bicep `:792`; AppHost tier `:1021`, blocking but not a required merge check per `:1026-1027`; partial real-broker coverage). Real brokers in Common CI:
+the PostgreSql transport in `postgresql-integration` (comment `:863-864`; `MMCA.Common/Tests/Core/MMCA.Common.Infrastructure.PostgreSQL.Tests/PostgreSqlBrokerTransportTests.cs:68,106,131`)
+and SQS/SNS in `aws-integration` (`MMCA.Common/Tests/Hosting/MMCA.Common.Aws.LocalStack.Tests/AmazonSqsTransportLocalStackTests.cs:49,100`); ci.yml carries no
+RabbitMQ or Service Bus job (no match for either). Row 14 still repeats "no real broker", not edited here. Required checks on Common `main` are the eight contexts
+`build-and-test`, the MAUI build, the three UI a11y legs, `coverage`, the Helpdesk consumer source build and the performance gate (`gh api .../branches/main/protection/required_status_checks`),
+none of them an integration job. Category 28 is 4/9, markup not pixels (`:92`). Rubric quotes
+(`Website/docs-src/governance/ArchitectureEvaluationCriteria.md:430,433,440`, carried forward). Packages: 26 published (`FACTS.md:19`, list `:22-47`), seven of them test
+infrastructure: `MMCA.Common.AI.Testing` (`:34`, harness types and the hash it keys on per `MMCA.Common/AGENTS.md:142`, carried forward), `Testing`, `Testing.Architecture`,
+`Testing.Aspire`, `Testing.Azure`, `Testing.E2E`, `Testing.UI` (`:41-46`); `Testing.Azure` ships
+`MMCA.Common/Source/Hosting/MMCA.Common.Testing.Azure/Fixtures/ServiceBusEmulatorFixtureBase.cs:54` (one warm emulator, fixture-owned bus, bounded phases, per its class docstring). ADR-058 status `:4`, latest-revision summary `:10`; revisions 2026-09-10 (`:289`),
 2026-09-22 (`:307`), 2026-09-25 (`:329-340`, Testing.UI's `MarkupSnapshot` and the identity page-test bases, the consumers' committed OpenAPI documents),
 2026-10-01 (`:358`), 2026-10-06 (`:383`), 2026-10-07 (`:401`), 2026-10-21 (`:423`, seven contract bases `:425`).
 OpenAPI, corrected this run: the base's default assertions read no committed file
@@ -444,7 +461,7 @@ snapshot either" paragraph were rewritten. E2E bullet, corrected this run: adds
 false by `MMCA.ADC/Tests/Hosts/MMCA.ADC.Gateway.Tests/GatewayHardeningTests.cs:89` and `MMCA.Store/Tests/Hosts/MMCA.Store.Gateway.Tests/GatewayHardeningTests.cs:93`.
 UI web heads boot over Production-pinned factories (ADR-058 `:168-169`; `MMCA.ADC/Tests/Hosts/MMCA.ADC.UI.Web.Tests/ConferenceUiHostApplicationFactory.cs:17`
 derives `ProductionHostApplicationFactory` (`MMCA.Common/Source/Hosting/MMCA.Common.Testing/Fixtures/ProductionHostApplicationFactory.cs:23`), which pins
-Production at `:37`). Helpdesk pins four `MMCA.Common.Testing*` packages at 1.250.0 (`MMCA.Helpdesk/Directory.Packages.props:92-95`) and subclasses
+Production at `:37`). Helpdesk pins four `MMCA.Common.Testing*` packages at 1.265.1 (`MMCA.Helpdesk/Directory.Packages.props:92-95`) and subclasses
 `DecoratorPipelineOrderTests.cs:38` and `MiddlewarePipelineOrderTests.cs:15` (`MMCA.Helpdesk/Tests/Architecture/MMCA.Helpdesk.Architecture.Tests/`).
 AppHost tier, read in `MMCA.Common/Source/Hosting/MMCA.Common.Testing.Aspire/`: `Fixtures/AppHostFixtureBase.cs:41` (collection fixture),
 readiness-not-liveness docstring `:23`, the branch-not-`SkipWhen` rule `:36`, `SkipReason` `:56`, `IsAvailable` `:59`, default requirement `:79`,
@@ -457,16 +474,16 @@ wording (`Website/docs-src/adr/117-apphost-integration-test-base.md:43`, not edi
 (ADR-117 `:21`, `:299`; `MMCA.ADC/AGENTS.md:77`, `MMCA.Store/AGENTS.md:76`); the eight-day red nightly is ADR-117 `:57`. Deploy gates: chromium-only,
 UI-scoped `e2e-gate` (`MMCA.ADC/.github/workflows/deploy.yml:807`, `browsers` `:821`, UI filter comment `:57`; `MMCA.Store/.github/workflows/deploy.yml:753`,
 `:766`, `:72`) plus the cross-browser-freshness step of each freshness job (ADC `:803`, 10-day window `:916`; Store `:746-748`, `:870`).
-Trade-offs: 31 `.razor` components under `MMCA.Common/Source/Presentation/MMCA.Common.UI/Components` (Glob `Components/*/*.razor`, re-counted 2026-10-22;
-29 on 2026-10-08); the SQL Server Testcontainers job (`ci.yml:806`) runs
+Trade-offs: 32 tracked `.razor` components under `MMCA.Common/Source/Presentation/MMCA.Common.UI/Components` (`git ls-files`, re-counted 2026-10-29; 31 on 2026-10-22,
+29 on 2026-10-08); the SQL Server Testcontainers job (`ci.yml:894`) runs
 `MMCA.Common/Tests/Core/MMCA.Common.Infrastructure.SQLServer.Tests/SQLServerPersistenceTests.cs:129,161,192` (identity insert, stale row-version save,
 outbox in the same save) plus a legacy-collation empty-string filter test at `:219`. The subtitle's "no Docker" is scoped to the inner loop, because the
-Redis, PostgreSQL and SQL Server Testcontainers jobs and the AppHost tier's default requirement all need a container runtime. Re-read this run:
+Redis, PostgreSQL and SQL Server Testcontainers jobs and the AppHost tier's default requirement all need a container runtime. Re-read 2026-10-22 (the four Identity axe calls, the Helpdesk pins and the ADR-015 quote re-anchored 2026-10-29):
 `IntegrationTestBase.cs:13,31,42,51,59,63,75`, `JwtTokenGenerator.cs:30,131`, `SqlServerIntegrationTestFixtureBase.cs:71,95,184`,
 `MultiSourceSqliteIntegrationTests.cs:44-45,97,120,138,171`, `AxeOptions.cs:9,17,22,35,40`, the four Identity workflow bases (`UserLoginTestsBase.cs:82`,
-`UserRegistrationTestsBase.cs:99`, `ProfileManagementTestsBase.cs:191`, `PasswordResetTestsBase.cs:88,99`), `E2ETestBase.cs:529,539`,
+`UserRegistrationTestsBase.cs:99`, `ProfileManagementTestsBase.cs:204`, `PasswordResetTestsBase.cs:88,99`), `E2ETestBase.cs:529,539`,
 `PageExtensions.cs:316,355`, `MMCA.Common/global.json:3`, ADR-015's structure/registration trade-off
-(`Website/docs-src/adr/015-architecture-fitness-functions.md:98`), and `MMCA.Common/AGENTS.md` `## Build & Test` (`:9`) and `## Testing` (`:146`).
+(`Website/docs-src/adr/015-architecture-fitness-functions.md:121`), and `MMCA.Common/AGENTS.md` `## Build & Test` (`:9`) and `## Testing` (`:146`).
 The illustrative `CatalogTests` snippet is composed for shape; the base type and helpers are real, and it null-forgives because `GetAsync<T>` returns
 `Task<T?>` (`MMCA.Common/Source/Hosting/MMCA.Common.Testing/Fixtures/IntegrationTestBase.cs:51`).*
 

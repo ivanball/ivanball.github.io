@@ -95,7 +95,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 53 articles</summary>
+        <summary>All 54 articles</summary>
         <nav class="doc-nav" aria-label="The MMCA.Common series">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -151,7 +151,8 @@
         <li><a href="governed-llm-boundary.html">50 · The governed LLM boundary</a></li>
         <li><a href="durable-internal-commands.html">51 · Four ways to do work later</a></li>
         <li><a href="identity-completions.html">52 · Finishing identity</a></li>
-        <li><a href="series-index.html">53 · The series index</a></li>
+        <li><a href="cloud-neutral-vendor-adapters.html">53 · One framework, three clouds</a></li>
+        <li><a href="series-index.html">54 · The series index</a></li>
           </ol>
         </nav>
       </details>
@@ -269,7 +270,7 @@ Validating -&gt; Timeout -&gt; Concrete Handler</code></pre>
           and you open a database transaction for a request you were going to reject anyway. Cache <em>outside</em> the
           permission check and you hand one caller&#39;s rows to another. That is exactly why the order is hard-coded
           and documented inline at the registration site, not config-driven, and why the registration method
-          carries an ASCII nesting diagram of both chains in its own doc comment.</p>
+          carries a text nesting diagram of both chains in its own doc comment.</p>
           <h2 id="transactional-behavior-in-detail">Transactional behavior, in detail</h2>
           <p>The transactional decorator wraps the handler in <code>IUnitOfWork.ExecuteInTransactionAsync</code> <strong>only when the
           command implements <code>ITransactional</code></strong>. Three outcomes, three behaviors:</p>
@@ -282,8 +283,12 @@ Validating -&gt; Timeout -&gt; Concrete Handler</code></pre>
           over partial persistence, so any writes the handler made before returning the failure are discarded, and
           the deferred domain events roll back with them. Cache invalidation is skipped as well, because nothing
           committed and there is nothing stale to evict.</li>
-          <li><strong>A success commits and then invalidates the cache.</strong> Only a success reaches <code>CommitTransaction()</code>.
-          In-process domain events are flushed <em>after</em> the commit, so a handler never acts on state that could
+          <li><strong>A success commits and then invalidates the cache.</strong> Only a success reaches <code>CommitTransaction()</code>,
+          and only after one pre-commit check: internal-command rows the handler enrolled are saved inside the
+          transaction, but any other tracked change it left unsaved throws an <code>InvalidOperationException</code>
+          and the whole unit rolls back, because committing would silently discard that change while
+          reporting success. A nested transactional call joins the outer transaction and leaves the commit to
+          the outermost call. In-process domain events are flushed <em>after</em> the commit, so a handler never acts on state that could
           still roll back, and cache eviction runs <em>outside</em> the transaction boundary against committed state.
           The one failure this cannot classify is the commit itself: the database may have applied the
           transaction and lost only the acknowledgement, so a failed commit is never retried or treated as a

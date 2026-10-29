@@ -95,7 +95,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 53 articles</summary>
+        <summary>All 54 articles</summary>
         <nav class="doc-nav" aria-label="The MMCA.Common series">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -151,7 +151,8 @@
         <li><a href="governed-llm-boundary.html">50 · The governed LLM boundary</a></li>
         <li><a href="durable-internal-commands.html">51 · Four ways to do work later</a></li>
         <li><a href="identity-completions.html">52 · Finishing identity</a></li>
-        <li><a href="series-index.html">53 · The series index</a></li>
+        <li><a href="cloud-neutral-vendor-adapters.html">53 · One framework, three clouds</a></li>
+        <li><a href="series-index.html">54 · The series index</a></li>
           </ol>
         </nav>
       </details>
@@ -233,7 +234,7 @@ app.MapDefaultEndpoints();      <span class="hljs-comment">// health + liveness 
           metrics cover ASP.NET Core, <code>HttpClient</code>, and the .NET runtime unless a host turns those cost knobs
           off (Step 6); tracing instruments ASP.NET Core and <code>HttpClient</code> and subscribes
           four activity sources: the application&#39;s own, <code>MMCA.Common.Outbox</code>,
-          <code>MMCA.Common.InternalCommands</code>, and <code>MMCA.Common.AI</code>. It also registers nine MMCA-specific meters
+          <code>MMCA.Common.InternalCommands</code>, and <code>MMCA.Common.AI</code>. It also registers ten MMCA-specific meters
           by literal name: <code>MMCA.Common.Outbox</code> (a dead-letter counter, a processed counter, a dispatch-lag
           histogram, a pending-depth gauge, and an oldest-pending-age gauge), <code>MMCA.Common.Cqrs</code> (RED
           histograms for command and query handlers, query cache hit and miss counters, and the
@@ -244,6 +245,7 @@ app.MapDefaultEndpoints();      <span class="hljs-comment">// health + liveness 
           inert in a host that stays on the in-process bus), <code>MMCA.Common.OutputCache</code> (the output-cache
           eviction consumer&#39;s failed tag evictions), <code>MMCA.Common.BestEffort</code> (the swallowed failures of
           best-effort side effects), <code>MMCA.Common.InternalCommands</code> (the durable internal-command runner),
+          <code>MMCA.Common.Persistence</code> (the optimistic-concurrency conflict counter, tagged by entity type),
           and <code>MMCA.Common.AI</code> (the optional AI package&#39;s token spend and call duration, inert until a host
           adds that package and enables <code>Ai:Enabled</code>). Polly&#39;s own <code>Polly</code> meter is subscribed alongside
           them, so retries, timeouts, and circuit transitions leave the process instead of looking like
@@ -383,18 +385,22 @@ conferenceService.WithJwksDiscovery(identityService, gateway);</code></pre>
           <code>Telemetry:DisableAspNetCoreMetrics</code>, <code>Telemetry:DisableHttpClientMetrics</code> and
           <code>Telemetry:DisableRuntimeMetrics</code> each drop a whole meter family through a View (the ASP.NET Core one
           matches every meter under the <code>Microsoft.AspNetCore.</code> prefix; a View, rather than simply skipping the
-          instrumentation, because the Azure Monitor distro adds those meters itself, which makes the toggle
+          instrumentation, because a vendor distro such as Azure Monitor adds those meters itself, which makes the toggle
           authoritative instead of advisory), and <code>Telemetry:EnablePollyDurationMetrics</code> runs the other way:
           Polly&#39;s two duration histograms stay dropped unless a host opts in, while its retry and circuit-breaker
           event counter always ships.</p>
           <p>That filtering only matters because of where the telemetry actually flows, and the framework decides
           that by environment, not by code. <code>AddServiceDefaults()</code> enables the OTLP exporter when
           <code>OTEL_EXPORTER_OTLP_ENDPOINT</code> is set, which is exactly the variable the Aspire dashboard injects into
-          every process, so the dashboard on your laptop lights up with no configuration. It enables Azure Monitor
-          (through <code>UseAzureMonitor</code>) when <code>APPLICATIONINSIGHTS_CONNECTION_STRING</code> is set, which the cloud
-          deployment supplies, so production ships to workspace-based Application Insights instead. Both can run at
-          once, each shipping its own copy, so the same pipeline feeds the local dashboard and the cloud with no
-          code change between them.</p>
+          every process, so the dashboard on your laptop lights up with no configuration. OTLP is the one built-in,
+          vendor-neutral exporter (<code>Extensions.Telemetry.cs:152-172</code>). A vendor exporter is an adapter package&#39;s
+          single call made after <code>AddServiceDefaults()</code>: <code>AddAzureMonitorExporter()</code> from <code>MMCA.Common.Azure</code>
+          enables Azure Monitor (through <code>UseAzureMonitor</code>) when <code>APPLICATIONINSIGHTS_CONNECTION_STRING</code> is set,
+          which the cloud deployment supplies, so production ships to workspace-based Application Insights
+          (<code>AzureMonitorExporterExtensions.cs:42</code>, <code>:63</code>), and it refuses to run ahead of the service defaults,
+          whose filter processors must sit before its batch processor (<code>:51</code>). Both exporters can run at once, each
+          shipping its own copy, so the same pipeline feeds the local dashboard and the cloud with no code change
+          between them (<a href="cloud-neutral-vendor-adapters.html">how the adapters work</a>).</p>
           <p>A dashboard is only as readable as the trail through it, and one id ties that trail together.
           <code>CorrelationIdMiddleware</code> reads an <code>X-Correlation-ID</code> header off each request, cut to 64 characters (the
           width of the persisted correlation columns). When the client sends none, sends a blank value, or sends
@@ -499,7 +505,8 @@ conferenceService.WithJwksDiscovery(identityService, gateway);</code></pre>
           <li><strong>Telemetry meters are registered by literal name.</strong> Because the Aspire package has no project
           reference to the assemblies that define <code>MMCA.Common.Outbox</code>, <code>MMCA.Common.Cqrs</code>,
           <code>MMCA.Common.Idempotency</code>, <code>MMCA.Common.Scheduler</code>, <code>MMCA.Common.Broker</code>, <code>MMCA.Common.OutputCache</code>,
-          <code>MMCA.Common.BestEffort</code>, <code>MMCA.Common.InternalCommands</code>, and <code>MMCA.Common.AI</code> (nor to Polly&#39;s own
+          <code>MMCA.Common.BestEffort</code>, <code>MMCA.Common.InternalCommands</code>, <code>MMCA.Common.Persistence</code>, and
+          <code>MMCA.Common.AI</code> (nor to Polly&#39;s own
           assemblies for the <code>Polly</code> meter), those source and meter names are duplicated string literals.
           Rename a source in one place and you must rename it in the other; the code comments flag this.</li>
           <li><strong>Nothing gates the fail-fast chain.</strong> No fitness test asserts that a new <code>AddOptions&lt;T&gt;</code> call carries
@@ -532,8 +539,9 @@ conferenceService.WithJwksDiscovery(identityService, gateway);</code></pre>
           discovery through the <code>MMCA.Common.Aspire.Hosting</code> helpers; how <code>OutboxPollFilterProcessor</code> and the
           probe-telemetry filter keep idle poll spans and health-probe traffic out of telemetry while
           <code>Telemetry:TracesSampleRatio</code> and the four metric knobs cap ingestion cost with fail-safe defaults;
-          how <code>CorrelationIdMiddleware</code> ties a request&#39;s logs to its trace and the dual OTLP
-          plus Azure Monitor exporters feed the local dashboard and workspace-based Application Insights; how
+          how <code>CorrelationIdMiddleware</code> ties a request&#39;s logs to its trace and the built-in OTLP exporter plus
+          the adapter-registered Azure Monitor exporter feed the local dashboard and workspace-based Application
+          Insights; how
           <code>AddCommonSecurityHeaders</code> plus <code>UseCommonSecurityHeaders</code> and a tuned <code>SocketsHttpHandler</code> harden
           responses and reuse connections from the same shared baseline; and how the fail-fast configuration
           contract binds the framework&#39;s settings sections with <code>ValidateOnStart()</code> so a misconfigured host
