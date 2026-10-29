@@ -1692,7 +1692,7 @@ lives.
   - `Dispose` (lines 33-37) unsubscribes both handlers.
 - **Why it's built this way**: tracking first-seen time from the snackbar's own update event, rather than wrapping the toast service, means the sweeper sees every toast regardless of which service raised it ([`MudToastService`](#mudtoastservice) or a direct `ISnackbar` call). Shipping it as an opt-in component, not a behavior of the toast service, keeps the default unchanged: [`LayoutSettings`](#layoutsettings)`.ClearToastsOnNavigation` defaults to `false`, which leaves toasts to expire or be dismissed as before (`Common/Settings/LayoutSettings.cs:52-58`).
 - **Where it's used**: rendered by `MainLayout` only when `LayoutSettingsOptions.Value.ClearToastsOnNavigation` is true (`MMCA.Common/Source/Presentation/MMCA.Common.UI/Layout/MainLayout.razor:131-135`). Covered by [`StaleToastSweeperTests`](group-29-testing-infrastructure.md#per-project-test-rollup).
-- **Caveats / not-in-source**: which consumer hosts turn `Layout:ClearToastsOnNavigation` on was not verified for this section (no match in `MMCA.ADC/Source` configuration); the brief lists four further usage sites that were not opened.
+- **Caveats / not-in-source**: the setting is off by default (`MMCA.Common/Source/Presentation/MMCA.Common.UI/Common/Settings/LayoutSettings.cs:51-58`). Among the first-party hosts only MMCA.Store turns it on, in both of its UI hosts (`MMCA.Store/Source/Hosts/UI/MMCA.Store.UI.Web/appsettings.json:25`, `MMCA.Store/Source/Hosts/UI/MMCA.Store.UI.Web.Client/wwwroot/appsettings.json:24`); ADC sets nothing, so its hosts never render the sweeper.
 
 ### InvariantMudLocalizationInterceptor
 

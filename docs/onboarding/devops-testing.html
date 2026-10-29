@@ -181,7 +181,7 @@
           </thead>
           <tbody><tr>
           <td><code>MMCA.Common.slnx</code></td>
-          <td>Full human solution, 16 source projects + 16 test projects (no <code>.slnf</code>)</td>
+          <td>Full human solution, 25 source projects + 21 test projects (no <code>.slnf</code>)</td>
           </tr>
           <tr>
           <td><code>MMCA.Helpdesk.slnx</code></td>
@@ -471,6 +471,31 @@ dotnet <span class="hljs-built_in">test</span> --project Tests/Modules/Identity/
           <td><code>MMCA.Common.Testing.Aspire.Tests</code></td>
           <td>8</td>
           <td>The unit tier over the shipped <code>MMCA.Common.Testing.Aspire</code> package: <code>AppHostReadinessBudgetTests</code>, the three precondition gates (<code>AppHostEnvironmentGateTests</code>, <code>DockerAvailabilityTests</code>, <code>DeveloperCertificateAvailabilityTests</code>), <code>EphemeralRsaKeyPairTests</code>, and <code>AppHostProbePathsTests</code> plus the two h2c probe suites (<code>MMCA.Common/MMCA.Common.slnx:52</code>)</td>
+          </tr>
+          <tr>
+          <td><code>MMCA.Common.Testing.Azure.Tests</code></td>
+          <td>4</td>
+          <td>The container-free contract of the shipped <code>ServiceBusEmulatorFixtureBase</code>: the emulator image pin, the bounded-phase budgets, the admin-plane connection string and the MassTransit entity defaults the emulator&#39;s quota forces (<code>MMCA.Common/Tests/Hosting/MMCA.Common.Testing.Azure.Tests/Fixtures/ServiceBusEmulatorFixtureBaseTests.cs:15</code>)</td>
+          </tr>
+          <tr>
+          <td><code>MMCA.Common.Testing.E2E.Tests</code></td>
+          <td>2</td>
+          <td>The E2E settings parse: millisecond timeouts read with the invariant culture, and zero, negative or non-finite values fall back to the default (<code>MMCA.Common/Tests/Hosting/MMCA.Common.Testing.E2E.Tests/Infrastructure/E2ETestConfigurationTests.cs:21</code>)</td>
+          </tr>
+          <tr>
+          <td><code>MMCA.Common.Azure.Tests</code></td>
+          <td>17</td>
+          <td>The Azure adapter package with no Azure resource: the Service Bus transport and emulator detection, Notification Hubs push and device registration, Blob storage, Key Vault configuration, the DataProtection key ring, the Monitor exporter, and the vendor-boundary rules (<code>MMCA.Common/Tests/Hosting/MMCA.Common.Azure.Tests/Messaging/AzureServiceBusTransportTests.cs:20</code>)</td>
+          </tr>
+          <tr>
+          <td><code>MMCA.Common.Aws.Tests</code></td>
+          <td>19</td>
+          <td>The AWS adapter package with no AWS account: the SQS transport, S3 storage, SNS push and device registration, RDS IAM authentication, Secrets Manager configuration and the DataProtection key ring; the same surface runs against LocalStack in <code>MMCA.Common.Aws.LocalStack.Tests</code> (<code>MMCA.Common/Tests/Hosting/MMCA.Common.Aws.Tests/Messaging/AmazonSqsTransportTests.cs:21</code>)</td>
+          </tr>
+          <tr>
+          <td><code>MMCA.Common.Gcp.Tests</code></td>
+          <td>34</td>
+          <td>The Google Cloud adapter package with no project: Cloud Storage, the KMS-encrypted GCS key ring, FCM push and device registration, Secret Manager configuration, Cloud SQL IAM authentication and the telemetry token source; the emulator tier is <code>MMCA.Common.Gcp.Emulator.Tests</code> (<code>MMCA.Common/Tests/Hosting/MMCA.Common.Gcp.Tests/Storage/GcsFileStorageServiceTests.cs:21</code>)</td>
           </tr>
           </tbody></table></div>
           <p><strong>Architecture</strong></p>
