@@ -249,7 +249,8 @@
           the consumer-adoption statement now names every host that calls <code>AddScheduledJobs</code> and the combined
           audit-trail migrations that create the table. Revised 2026-10-21: anchors refreshed after the outbox
           claim path and the <code>ConfigureScheduler</code> mapping moved in source. Revised 2026-10-26: anchors refreshed
-          after the outbox claim path and the consumer <code>AddScheduledJobs</code> calls moved in source. The implementation lands in the MMCA.Common &quot;enterprise capability wave&quot; release
+          after the outbox claim path and the consumer <code>AddScheduledJobs</code> calls moved in source. Revised
+          2026-10-28: anchors refreshed after the ADC Identity host&#39;s <code>AddScheduledJobs</code> call moved in source. The implementation lands in the MMCA.Common &quot;enterprise capability wave&quot; release
           and is opt-in: a host calls <code>AddScheduledJobs(configuration)</code> and sets <code>Scheduler:Enabled</code>. Until it does,
           the framework creates no table and starts no runner.</p>
           <h2 id="context">Context</h2>
@@ -512,6 +513,20 @@
           above are left as written; their <code>OutboxProcessor.cs</code> anchors and the 2026-10-07 ADC and Store
           <code>Program.cs</code> anchors are stale.</li>
           </ol>
+          <h2 id="revision-2026-10-28">Revision (2026-10-28)</h2>
+          <p>Re-verified against current source. No decision, rationale, trade-off or adoption statement changed; the
+          consumer-adoption host set (ADC three of four hosts without Notification, Store three, Helpdesk one)
+          stands as described. Only the ADC Identity <code>AddScheduledJobs</code> anchor moved, by one line.</p>
+          <ol>
+          <li>Anchors re-verified against current source: the <code>AddScheduledJobs</code> calls are at
+          <code>MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:253</code>,
+          <code>MMCA.ADC.Conference.Service/Program.cs:358</code>, <code>MMCA.ADC.Engagement.Service/Program.cs:204</code>,
+          <code>MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:240</code>,
+          <code>MMCA.Store.Sales.Service/Program.cs:216</code>, <code>MMCA.Store.Identity.Service/Program.cs:210</code> and
+          <code>MMCA.Helpdesk/Source/Hosts/MMCA.Helpdesk.Web/Program.cs:89</code>; <code>MMCA.ADC.Notification.Service/Program.cs</code>
+          still has no call. The 2026-10-26 entry above is left as written; its ADC Identity anchor (<code>:252</code>) is
+          stale and its other <code>Program.cs</code> anchors are current.</li>
+          </ol>
           <h2 id="related">Related</h2>
           <p><a href="003-outbox-dual-dispatch.html">ADR-003</a> (the outbox whose claim-lease idiom and smart wait this reuses
           verbatim, and whose at-least-once posture it inherits along with the idempotency obligation on job bodies),
@@ -547,6 +562,7 @@
             <li><a href="#revision-2026-10-07">Revision (2026-10-07)</a></li>
             <li><a href="#revision-2026-10-21">Revision (2026-10-21)</a></li>
             <li><a href="#revision-2026-10-26">Revision (2026-10-26)</a></li>
+            <li><a href="#revision-2026-10-28">Revision (2026-10-28)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

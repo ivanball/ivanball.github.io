@@ -281,7 +281,8 @@
           deploy workflows grew; no change in what they show.
           Revised 2026-10-24: <code>MessageBus:Provider</code> is a string resolved against registered <code>IBrokerTransport</code>s, Azure Service Bus and Amazon SQS are adapter transports, and a configured redelivery list now replaces the default (<a href="134-cloud-neutral-core-vendor-adapters.html">ADR-134</a>); the Decision&#39;s provider, emulator and retry bullets are corrected in place. See Revision (2026-10-24) at the end.
           Revised 2026-10-25: <code>PostgreSql</code> is a third built-in provider, MassTransit v8&#39;s SQL transport on PostgreSQL and the broker option for Google Cloud, recorded as a new Decision bullet with a hand-written Pub/Sub transport as a rejected alternative; the Decision&#39;s <code>AddBrokerMessaging</code> anchors are re-verified. See Revision (2026-10-25) at the end.
-          Revised 2026-10-26: anchors refreshed after later Common, AppHost, Bicep and deploy workflow edits moved them; the <code>CHANGELOG.md</code> citations now name their release heading. See Revision (2026-10-26) at the end.</p>
+          Revised 2026-10-26: anchors refreshed after later Common, AppHost, Bicep and deploy workflow edits moved them; the <code>CHANGELOG.md</code> citations now name their release heading. See Revision (2026-10-26) at the end.
+          Revised 2026-10-28: anchors refreshed after later edits to both Bicep templates and <code>CHANGELOG.md</code> moved them; the Store per-app secret names are spelled out. See Revision (2026-10-28) at the end.</p>
           <h2 id="context">Context</h2>
           <p>ADR-003 decides that integration events leave an aggregate through the outbox and are published by
           <code>OutboxProcessor</code> via <code>IMessageBus</code>, and it settles the <em>dispatch</em> question (&quot;in-process for the
@@ -351,13 +352,14 @@
           nor its warm-up.</li>
           <li><strong>Production is Azure Service Bus, injected by Bicep.</strong> Each service container app receives
           <code>MessageBus__Provider=AzureServiceBus</code> plus a <code>MessageBus__ConnectionString</code> secret reference:
-          ADC at <code>MMCA.ADC/infra/main.bicep:1983-1984</code> (identity, <code>:1861</code>), <code>:2208-2209</code> (conference,
-          <code>:2114</code>), <code>:2352-2353</code> (engagement, <code>:2267</code>), <code>:2505-2506</code> (notification, <code>:2402</code>); Store at
-          <code>MMCA.Store/infra/main.bicep:1607-1608</code> (identity, <code>:1514</code>), <code>:1775-1776</code> (catalog, <code>:1696</code>),
-          <code>:1911-1912</code> (sales, <code>:1820</code>). Every service in both repos reads its own per-service secret: Store
-          names a distinct secret reference per app, while ADC keeps the plain name
-          <code>service-bus-connection-string</code> and resolves it to the Key Vault secret belonging to that one
-          service (<code>MMCA.ADC/infra/main.bicep:1772-1794</code>). The images are the same ones the AppHost runs locally; only the two environment variables
+          ADC at <code>MMCA.ADC/infra/main.bicep:1980-1981</code> (identity, <code>:1858</code>), <code>:2205-2206</code> (conference,
+          <code>:2111</code>), <code>:2349-2350</code> (engagement, <code>:2264</code>), <code>:2502-2503</code> (notification, <code>:2399</code>); Store at
+          <code>MMCA.Store/infra/main.bicep:1608-1609</code> (identity, <code>:1515</code>), <code>:1776-1777</code> (catalog, <code>:1697</code>),
+          <code>:1912-1913</code> (sales, <code>:1821</code>). Every service in both repos reads its own per-service secret: Store
+          names a distinct secret reference per app (<code>service-bus-connection-string-identity</code>, <code>-catalog</code>,
+          <code>-sales</code>), while ADC keeps the plain name <code>service-bus-connection-string</code> and resolves it to the
+          Key Vault secret belonging to that one service (<code>MMCA.ADC/infra/main.bicep:1772-1791</code>, rationale at
+          <code>:1769-1771</code>; each app&#39;s secret entry at <code>:1885</code>, <code>:2138</code>, <code>:2290</code>, <code>:2436</code>). The images are the same ones the AppHost runs locally; only the two environment variables
           differ.</li>
           <li><strong>PostgreSQL is a built-in broker for any host whose database can carry one.</strong>
           <code>MessageBus:Provider=PostgreSql</code> selects <code>PostgreSqlBrokerTransport</code>
@@ -367,7 +369,7 @@
           queues, topics, subscriptions and scheduled messages in tables and functions of one PostgreSQL
           database, so any PostgreSQL is the broker (<code>PostgreSqlBrokerTransport.cs:10-14</code>), and it is the
           broker option for Google Cloud, which has no MassTransit v8 Pub/Sub transport
-          (<code>MMCA.Common/CHANGELOG.md:86</code>, under <code>[1.257.0]</code>). It reads the shared broker connection string and fails at
+          (<code>MMCA.Common/CHANGELOG.md:129</code>, under <code>[1.257.0]</code>). It reads the shared broker connection string and fails at
           registration without one (<code>PostgreSqlBrokerTransport.cs:113-119</code>). When an
           <code>INpgsqlDataSourceConfigurator</code> is registered the bus runs on the shared <code>NpgsqlDataSource</code> for that
           connection string, otherwise on the string itself (<code>:94-102</code>), so an IAM token provider reaches the
@@ -403,18 +405,18 @@
           Aspire container does not ship.</li>
           <li><strong>Service Bus Standard tier and <code>Manage</code> rights are forced by the topology MassTransit builds.</strong>
           Both namespaces are <code>Standard</code>/<code>Standard</code> (<code>MMCA.ADC/infra/main.bicep:1273-1276</code>,
-          <code>MMCA.Store/infra/main.bicep:1082-1085</code>) because <code>UsingAzureServiceBus</code> configures a topic per
+          <code>MMCA.Store/infra/main.bicep:1083-1086</code>) because <code>UsingAzureServiceBus</code> configures a topic per
           message type plus a subscription per consumer, and Basic supports queues only
-          (<code>MMCA.ADC/infra/main.bicep:1264-1265</code>, <code>MMCA.Store/infra/main.bicep:1074-1076</code>). There is no shared
+          (<code>MMCA.ADC/infra/main.bicep:1264-1265</code>, <code>MMCA.Store/infra/main.bicep:1075-1077</code>). There is no shared
           client rule: each container app owns a namespace authorization rule of its own, and every one of
           them carries <code>Send</code> + <code>Listen</code> + <strong><code>Manage</code></strong>. ADC declares four (<code>identity-service</code>,
           <code>conference-service</code>, <code>engagement-service</code>, <code>notification-service</code> at
           <code>MMCA.ADC/infra/main.bicep:1313</code>, <code>:1325</code>, <code>:1337</code>, <code>:1349</code>, rights at <code>:1317-1321</code> and repeated
           identically on the other three); Store declares three (<code>catalog-app</code>, <code>sales-app</code>, <code>identity-app</code>
-          at <code>MMCA.Store/infra/main.bicep:1118</code>, <code>:1130</code>, <code>:1142</code>, rights at <code>:1122-1126</code>). <code>Manage</code> is on
+          at <code>MMCA.Store/infra/main.bicep:1119</code>, <code>:1131</code>, <code>:1143</code>, rights at <code>:1123-1127</code>). <code>Manage</code> is on
           all seven so <code>ConfigureEndpoints</code> can provision that topology at startup; without it the first
           publish fails with an Unauthorized topology error, which is why neither template drops it
-          (<code>MMCA.ADC/infra/main.bicep:1286-1298</code>, <code>MMCA.Store/infra/main.bicep:1108-1117</code>). Neither repo
+          (<code>MMCA.ADC/infra/main.bicep:1286-1298</code>, <code>MMCA.Store/infra/main.bicep:1109-1118</code>). Neither repo
           sources a connection string from <code>RootManageSharedAccessKey</code>, so a later move to managed identity
           can revoke these without touching the namespace root: each service reads its own
           <code>listKeys().primaryConnectionString</code> variable, four of them under a four-line rationale comment in
@@ -525,10 +527,10 @@
           <li><strong><code>Manage</code> rights are broad, and splitting the credential did not narrow them.</strong> Every per-service
           rule can create and delete entities anywhere in the namespace, which is the price of letting
           <code>ConfigureEndpoints</code> build the topology instead of declaring every topic in Bicep
-          (<code>MMCA.ADC/infra/main.bicep:1313-1359</code>, <code>MMCA.Store/infra/main.bicep:1118-1152</code>). Both templates
+          (<code>MMCA.ADC/infra/main.bicep:1313-1359</code>, <code>MMCA.Store/infra/main.bicep:1119-1153</code>). Both templates
           record the residual next to the rules: a compromised container still holds namespace-wide
           <code>Send</code> + <code>Listen</code> + <code>Manage</code>, so per-service rules buy credential separation and revocability, not
-          privilege reduction (<code>MMCA.ADC/infra/main.bicep:1300-1312</code>, <code>MMCA.Store/infra/main.bicep:1108-1117</code>).</li>
+          privilege reduction (<code>MMCA.ADC/infra/main.bicep:1300-1312</code>, <code>MMCA.Store/infra/main.bicep:1109-1118</code>).</li>
           <li><strong>Provider selection is per host and silent when missing.</strong> A service that never receives
           <code>MessageBus__Provider</code> keeps the in-process bus and publishes nothing to the broker, without an
           error (<code>DependencyInjection.Messaging.cs:57-59</code>); correctness depends on auditing the AppHost and the Bicep
@@ -547,7 +549,7 @@
           <ul>
           <li><strong>A hand-written Google Cloud Pub/Sub transport</strong> (weighed 2026-10-25). An <code>IBrokerTransport</code> in
           MMCA.Common.Gcp written directly against the Pub/Sub SDK, because MassTransit v8 ships no Pub/Sub
-          transport (<code>MMCA.Common/CHANGELOG.md:86</code>, under <code>[1.257.0]</code>). Rejected because it would hand-write consumer dispatch,
+          transport (<code>MMCA.Common/CHANGELOG.md:129</code>, under <code>[1.257.0]</code>). Rejected because it would hand-write consumer dispatch,
           retry, delayed redelivery and topology provisioning outside MassTransit for one cloud, the cost
           <a href="118-message-transport-library-policy.html">ADR-118</a> assigns its raw-SDK floor option, while the
           built-in PostgreSQL transport already gives a Google Cloud host a broker on a PostgreSQL database
@@ -789,6 +791,37 @@
           <code>deploy.needs</code> <code>:1099</code>, assert <code>:1129</code> (break-glass input still <code>:26</code>). The anchors inside earlier
           revisions are left as recorded.</li>
           </ol>
+          <h2 id="revision-2026-10-28">Revision (2026-10-28)</h2>
+          <p>Re-verified against current source. Which broker runs where, the <code>MessageBus__Provider</code> plus
+          <code>MessageBus__ConnectionString</code> pair on every service container app, the per-service broker secrets
+          in both repos, the Standard-tier namespaces and the seven per-service rules with <code>Send</code> + <code>Listen</code> +
+          <code>Manage</code> are unchanged. Only line anchors moved, and the production bullet now names Store&#39;s three
+          per-app secret references.</p>
+          <ol>
+          <li><strong>Store per-app secret names spelled out.</strong> Store&#39;s three apps reference
+          <code>service-bus-connection-string-identity</code>, <code>-catalog</code> and <code>-sales</code>
+          (<code>MMCA.Store/infra/main.bicep:1609</code>, <code>:1777</code>, <code>:1913</code>); ADC&#39;s four apps keep the plain
+          <code>service-bus-connection-string</code> and resolve it to <code>kvIdentityServiceBusConn</code>,
+          <code>kvConferenceServiceBusConn</code>, <code>kvEngagementServiceBusConn</code> and <code>kvNotificationServiceBusConn</code>
+          (<code>MMCA.ADC/infra/main.bicep:1885</code>, <code>:2138</code>, <code>:2290</code>, <code>:2436</code>). The ADC Key Vault secret range is
+          narrowed to the four broker secrets (<code>:1772-1791</code>, rationale <code>:1769-1771</code>); the former
+          <code>:1772-1794</code> ran into the unrelated notification hub secret at <code>:1792</code>.</li>
+          <li>Anchors re-verified against current source: ADC Bicep container apps
+          <code>MMCA.ADC/infra/main.bicep:1858</code>, <code>:2111</code>, <code>:2264</code>, <code>:2399</code>, broker env pairs <code>:1980-1981</code>,
+          <code>:2205-2206</code>, <code>:2349-2350</code>, <code>:2502-2503</code> (Standard sku <code>:1273-1276</code>, Basic rationale
+          <code>:1264-1265</code>, rules <code>:1313</code>, <code>:1325</code>, <code>:1337</code>, <code>:1349</code>, rights <code>:1317-1321</code>, <code>Manage</code> rationale
+          <code>:1286-1298</code> and residual risk <code>:1300-1312</code> did not move); Store Bicep container apps
+          <code>MMCA.Store/infra/main.bicep:1515</code>, <code>:1697</code>, <code>:1821</code>, broker env pairs <code>:1608-1609</code>,
+          <code>:1776-1777</code>, <code>:1912-1913</code>, Standard sku <code>:1083-1086</code>, Basic rationale <code>:1075-1077</code>, rules
+          <code>:1119</code>, <code>:1131</code>, <code>:1143</code> (declarations <code>:1119-1153</code>, rights <code>:1123-1127</code>), <code>Manage</code> rationale and
+          residual <code>:1109-1118</code> (the <code>listKeys</code> comment <code>:158-162</code> and variables <code>:163-165</code> did not move);
+          the PostgreSQL broker and Pub/Sub absence bullet <code>MMCA.Common/CHANGELOG.md:129</code> under <code>[1.257.0]</code>
+          (heading <code>:112</code>). The 2026-10-24 revision&#39;s <code>AddBrokerTransport</code>, <code>ResolveBrokerTransport</code> and
+          <code>AddAmazonSqsTransport</code> anchors now read
+          <code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.Messaging.cs:159</code>, <code>:188</code>
+          and <code>MMCA.Common/Source/Hosting/MMCA.Common.Aws/AwsServiceCollectionExtensions.cs:85</code>; they and the
+          other anchors inside earlier revisions are left as recorded.</li>
+          </ol>
           <h2 id="related">Related</h2>
           <p>ADR-003 (the outbox that feeds <code>IMessageBus</code>; this ADR picks the transport underneath it), ADR-016
           (the MassTransit v8 pin the emulator tier must work within, which is why the custom-clients <code>Host</code>
@@ -820,6 +853,7 @@
             <li><a href="#revision-2026-10-24">Revision (2026-10-24)</a></li>
             <li><a href="#revision-2026-10-25">Revision (2026-10-25)</a></li>
             <li><a href="#revision-2026-10-26">Revision (2026-10-26)</a></li>
+            <li><a href="#revision-2026-10-28">Revision (2026-10-28)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

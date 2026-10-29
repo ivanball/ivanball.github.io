@@ -17,6 +17,8 @@ were refreshed.
 Revised 2026-10-26: live anchors refreshed (the `ICurrentUserService` decoration and the deployed
 polling settings), and Related now links ADR-135, noting that the queue sits outside the
 shared keyspaces that record namespaces.
+Revised 2026-10-28: anchors refreshed after the infra/main.bicep edits that moved the deployed
+polling settings in ADC and Store.
 
 ## Context
 The framework has had two ways to move work off the request thread and neither of them is a job
@@ -244,8 +246,8 @@ poll. `InternalCommands:PollingIntervalSeconds` ships at 2
 which is the same default `OutboxSettings` ships
 (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/Administration/OutboxSettings.cs:31`),
 so the divergence is a deployment decision rather than a framework one: ADC and Store both run the
-queue at 60 seconds (`MMCA.ADC/infra/main.bicep:1936`, `MMCA.Store/infra/main.bicep:1595`) while
-pushing the outbox to 300 (`MMCA.ADC/infra/main.bicep:1930`, `MMCA.Store/infra/main.bicep:1588`).
+queue at 60 seconds (`MMCA.ADC/infra/main.bicep:1933`, `MMCA.Store/infra/main.bicep:1596`) while
+pushing the outbox to 300 (`MMCA.ADC/infra/main.bicep:1927`, `MMCA.Store/infra/main.bicep:1589`).
 A host that raises the interval to cut idle polling accepts that much latency on any
 transaction-scheduled work the post-commit wake does not reach.
 
@@ -352,6 +354,16 @@ unchanged; only line anchors moved, and Related gained one record.
    deployed polling settings (`MMCA.ADC/infra/main.bicep:1936` for the queue and `:1930` for the
    outbox, `MMCA.Store/infra/main.bicep:1595` and `:1588`). The 2026-10-01, 2026-10-06, 2026-10-07
    and 2026-10-21 revisions keep their dated anchors as written.
+
+## Revision (2026-10-28)
+Re-verified against current source. The decision, the five parts, the failure policy, the settings
+defaults and the deployed 60-second queue and 300-second outbox intervals in ADC and Store are
+unchanged; only the deployed polling anchors moved.
+
+1. Anchors re-verified against current source: the deployed polling settings in the transaction
+   trade-off (`MMCA.ADC/infra/main.bicep:1933` for the queue and `:1927` for the outbox,
+   `MMCA.Store/infra/main.bicep:1596` and `:1589`). The 2026-10-01, 2026-10-06, 2026-10-07,
+   2026-10-21 and 2026-10-26 revisions keep their dated anchors as written.
 
 ## Related
 [ADR-003](003-outbox-dual-dispatch.md) (the claim-lease, backoff and dead-letter machinery this

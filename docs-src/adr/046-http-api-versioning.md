@@ -23,6 +23,7 @@ Revised 2026-10-06: the registration also adds `ApiVersionReportingResultFilter`
 Revised 2026-10-07: anchors re-verified against current source after the v1.233.0 release, no decision change.
 Revised 2026-10-21: anchors refreshed after host `Program.cs` edits moved four `AddCommonApiVersioning` call sites and the OpenAPI contract-test anchor, no decision change.
 Revised 2026-10-26: anchors refreshed after host `Program.cs` edits moved all seven extracted-host `AddCommonApiVersioning` call sites, no decision change.
+Revised 2026-10-28: anchors refreshed after ADC #298 moved the ADC Identity host `AddCommonApiVersioning` call site, no decision change.
 
 ## Context
 The framework's REST surface is served by controllers hosted in extracted service processes behind a
@@ -126,7 +127,7 @@ proves two live versions coexist.
 - **Every REST host adopts it the same way.** The extracted services call `AddCommonApiVersioning`
   in their startup: ADC's Conference
   (`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:226`) and Identity
-  (`MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:161`) hosts, Store's Catalog host
+  (`MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:162`) hosts, Store's Catalog host
   (`MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:146`), and the same call is made
   by the other extracted hosts (ADC Engagement `Program.cs:156`, ADC Notification `Program.cs:145`,
   Store Sales `Program.cs:154`, Store Identity `Program.cs:141`) and by the monolith reference host
@@ -343,6 +344,23 @@ sites, host OpenAPI registrations, the design-time skip helper, both `deploy.yml
 1. Anchors re-verified against current source: the `AddCommonApiVersioning` host call sites (ADC
    Conference `Program.cs:226`, Identity `:161`, Engagement `:156`, Notification `:145`; Store Catalog
    `:146`, Sales `:154`, Identity `:141`; Helpdesk Web `Program.cs:35`, unchanged).
+
+## Revision (2026-10-28)
+
+Re-verified against current source. No decision, rationale or trade-off changed: all seven extracted
+service hosts and the Helpdesk monolith host still call `AddCommonApiVersioning`. One host edit (ADC
+#298) moved the ADC Identity call site by one line, so the 2026-10-26 statement that every
+extracted-host call site moved by six lines no longer holds for Identity; that Decision anchor is
+re-pointed in place below. Line numbers cited inside the earlier dated revisions (the earlier call
+sites, host OpenAPI registrations, the design-time skip helper, both `deploy.yml` gates and both
+`Directory.Build.props` blocks) are left as recorded.
+
+1. Anchors re-verified against current source: the `AddCommonApiVersioning` host call sites (ADC
+   Conference `Program.cs:226`, Identity `:162`, Engagement `:156`, Notification `:145`; Store Catalog
+   `:146`, Sales `:154`, Identity `:141`; Helpdesk Web `Program.cs:35`), the registration options
+   (`WebApplicationBuilderExtensions.cs:46`-`:48`), explorer (`:50`-`:53`), result filter (`:60`),
+   `AddCommonOpenApi` (`WebApplicationBuilderExtensions.cs:101`) and `MapCommonOpenApi`
+   (`OpenApiEndpointExtensions.cs:60`, guard `:62`, throw `:67`, `.AllowAnonymous()` `:74`).
 
 ## Related
 ADR-010 (integration-event schema versioning: the asynchronous, `SchemaVersion`-carried,

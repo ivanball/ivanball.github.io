@@ -254,7 +254,8 @@
           registration service and the registrar.
           Revised 2026-10-24: the Notification Hubs sender and registrar moved to MMCA.Common.Azure, registered by <code>AddAzureNotificationHubsPush</code> (<a href="134-cloud-neutral-core-vendor-adapters.html">ADR-134</a>); see Revision (2026-10-24).
           Revised 2026-10-25: two more delivery adapters ship, SNS mobile push over a DynamoDB registry (MMCA.Common.Aws) and FCM HTTP v1 over a Firestore registry (MMCA.Common.Gcp), and the payload builders moved into the core; see Revision (2026-10-25).
-          Revised 2026-10-26: anchors refreshed after the releases that moved the SNS sender and registrar and the core payload builders.</p>
+          Revised 2026-10-26: anchors refreshed after the releases that moved the SNS sender and registrar and the core payload builders.
+          Revised 2026-10-28: the hub-call cost consequence is scoped to the Notification Hubs adapter, with the SNS per-endpoint cost beside it, and the native-leg anchor is corrected.</p>
           <h2 id="context">Context</h2>
           <p>ADR-024 established two notification channels: a durable per-user <code>UserNotification</code> inbox (the
           source of truth) and a transient SignalR push behind <code>IPushNotificationSender</code>. Both stop at the
@@ -361,15 +362,24 @@
           </ul>
           <h2 id="consequences">Consequences</h2>
           <ul>
-          <li>Sends fan out per 20-user chunk and per platform: an audience of N users costs
-          <code>ceil(N/20) * 2</code> hub calls. Acceptable at conference scale; a template-based send can
-          consolidate later without touching callers.</li>
+          <li>On Notification Hubs, sends fan out per 20-user chunk and per platform: an audience of N users
+          costs <code>ceil(N/20) * 2</code> hub calls. Acceptable at conference scale; a template-based send can
+          consolidate later without touching callers. The SNS adapter instead costs at least one DynamoDB
+          query per distinct user (the registry pages until <code>LastEvaluatedKey</code> is empty,
+          <code>SnsInstallationRegistry.cs:117-151</code>) plus one publish per distinct endpoint
+          (<code>SnsNativePushSender.cs:45-64</code>), and a disabled or missing endpoint adds its removal calls
+          (<code>SnsNativePushSender.cs:120-123</code>). The FCM adapter costs one Firestore query per 30 distinct
+          users (<code>FcmNativePushSender.cs:39,43</code>, <code>FirestoreInstallationRegistry.cs:23,76</code>) plus one
+          <code>SendEachAsync</code> per 500 distinct tokens (<code>FcmNativePushSender.cs:57,63</code>,
+          <code>IFcmMessagingClient.cs:17</code>).</li>
           <li>The handler&#39;s third leg is best-effort: it is awaited inside a non-fatal catch
-          (<code>SendPushNotificationHandler.cs:141-154</code>), with no per-device delivery tracking. Because
+          (<code>SendPushNotificationHandler.cs:140-153</code>), with no per-device delivery tracking. Because
           <code>SendPushNotificationCommand</code> is <code>ITransactional</code>, a transient fault on the final status save
           re-runs the live legs under the execution strategy, so native delivery is at-least-once and a
-          device can receive the same OS push twice (<code>SendPushNotificationHandler.cs:21-30</code>). The hub&#39;s
-          telemetry is the observability surface; the inbox remains the recovery path.</li>
+          device can receive the same OS push twice (<code>SendPushNotificationHandler.cs:21-30</code>). The
+          observability surface is the vendor&#39;s delivery telemetry plus each adapter&#39;s own log messages
+          (for SNS, <code>SnsNativePushSender.cs:67,132-148</code>; for FCM, <code>FcmNativePushSender.cs:116-134</code>); the
+          inbox remains the recovery path.</li>
           <li>A delete verifies ownership before it acts: the registrar reads the installation and checks
           the <code>user:{id}</code> tag <code>UpsertAsync</code> stamped on it
           (<code>AzureNotificationHubDeviceRegistrar.cs:84-92</code>), so an id belonging to someone else deletes
@@ -514,6 +524,31 @@
           The <code>AddMauiPushDeviceTokenProvider()</code> anchor inside the 2026-10-01 revision is left as recorded;
           the live Decision already cites <code>MMCA.Common.UI.Maui/DependencyInjection.cs:124-132</code>.</li>
           </ol>
+          <h2 id="revision-2026-10-28">Revision (2026-10-28)</h2>
+          <p>Re-verified against current source. The decision is unchanged: three delivery adapters, the
+          Null-by-default sender and registrar, the <code>NativePush:Enabled</code> gate, and the best-effort native leg
+          with at-least-once delivery. One Consequences entry is scoped and one anchor moved.</p>
+          <ol>
+          <li><strong>Send cost scoped per adapter.</strong> The Consequences entry on <code>ceil(N/20) * 2</code> calls now names
+          Notification Hubs, since the Decision describes three adapters, and gives the other two beside
+          it. The SNS sender costs at least one DynamoDB query per distinct user, because
+          <code>QueryByUserAsync</code> pages until <code>LastEvaluatedKey</code> is empty
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Aws/Notifications/SnsInstallationRegistry.cs:117-151</code>),
+          plus one publish per distinct endpoint (<code>Notifications/SnsNativePushSender.cs:45-64</code>), with
+          stale-endpoint removal calls on top (<code>:120-123</code>). The FCM sender costs one Firestore query per 30
+          distinct users and one <code>SendEachAsync</code> per 500 distinct tokens
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Gcp/Notifications/FcmNativePushSender.cs:39,43,57,63</code>,
+          <code>FirestoreInstallationRegistry.cs:23,76</code>, <code>IFcmMessagingClient.cs:17</code>).</li>
+          <li><strong>Observability no longer credited to the hub alone.</strong> The same Consequences entry now names
+          each adapter&#39;s log messages beside the vendor telemetry (<code>SnsNativePushSender.cs:67,132-148</code>,
+          <code>FcmNativePushSender.cs:116-134</code>).</li>
+          <li>Anchors re-verified against current source: the handler&#39;s native leg is
+          <code>MMCA.Common/Source/Core/MMCA.Common.Application/Notifications/PushNotifications/UseCases/Send/SendPushNotificationHandler.cs:140-153</code>
+          (<code>try</code> at <code>:140</code>, <code>SendToUsersAsync</code> at <code>:142</code>, catch at <code>:149</code>), and the at-least-once remark
+          stays at <code>:21-30</code>. Anchors inside earlier revisions are left as recorded: the CHANGELOG lines, the
+          2026-10-01 anchors, and the native-leg range <code>SendPushNotificationHandler.cs:141-154</code> in the
+          2026-10-06 and 2026-10-21 revisions.</li>
+          </ol>
           
         <div class="doc-foot btn-row">
           <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
@@ -535,6 +570,7 @@
             <li><a href="#revision-2026-10-24">Revision (2026-10-24)</a></li>
             <li><a href="#revision-2026-10-25">Revision (2026-10-25)</a></li>
             <li><a href="#revision-2026-10-26">Revision (2026-10-26)</a></li>
+            <li><a href="#revision-2026-10-28">Revision (2026-10-28)</a></li>
             </ul>
           </nav>
         </aside>

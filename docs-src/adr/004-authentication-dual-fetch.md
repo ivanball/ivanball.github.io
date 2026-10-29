@@ -10,7 +10,9 @@ but not the JwtBearer middleware's own discovery fetch. Revised 2026-10-21: anch
 the ADC and Store service, AppHost and Bicep edits and the Common warmup-task change moved them; no
 decision or behavior changed. Revised 2026-10-26: anchors refreshed after the ADC and Store
 service, AppHost and Bicep edits and the Common hosting and warmup-task edits moved them; no decision
-or behavior changed.
+or behavior changed. Revised 2026-10-28: the validator bullet now records that the JWT authority is
+resolved fail-closed through `GetRequiredJwtAuthority()`, alongside the audience, and the ADC and
+Store Bicep anchors are refreshed.
 
 ## Context
 When the modular monolith is extracted into per-module service hosts behind a gateway (ADR-008),
@@ -57,11 +59,17 @@ opts into HS256 explicitly, alongside the `Jwt:SecretForKey` that choice require
   (`.../MMCA.ADC.Conference.Service/Program.cs:339`, `.../MMCA.ADC.Engagement.Service/Program.cs:185`,
   `.../MMCA.ADC.Notification.Service/Program.cs:175`; `.../MMCA.Store.Catalog.Service/Program.cs:211`,
   `.../MMCA.Store.Sales.Service/Program.cs:186`), passing the host's `IConfiguration` and
-  `IHostEnvironment` and leaving `requireHttpsMetadata` at its default. All five resolve the audience
-  fail-closed through the Common `JwtAudience.RequireConfigured(builder.Configuration[JwtAudience.ConfigKey])`
+  `IHostEnvironment` and leaving `requireHttpsMetadata` at its default. All five resolve the
+  authority fail-closed through the Common `builder.Configuration.GetRequiredJwtAuthority()`
+  (`MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/Auth/JwtAuthorityExtensions.cs:35`, key
+  `Authentication:JwtBearer:Authority` at `:21`, throw at `:39-42`), and the audience fail-closed
+  through the Common `JwtAudience.RequireConfigured(builder.Configuration[JwtAudience.ConfigKey])`
   (`MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/Auth/JwtAudience.cs:17`, key `Jwt:Audience`
-  at `:20`, guard at `:28`), so a host with no configured audience fails at startup instead of
-  validating against a hard-coded default.
+  at `:20`, guard at `:28`), so a host with no configured authority or audience fails at startup
+  instead of booting against a hard-coded default. `GetRequiredJwtAuthority()` throws only on a
+  missing value; a blank authority is rejected by `AddForwardedJwtBearer` itself
+  (`ArgumentException.ThrowIfNullOrWhiteSpace(authority)` at
+  `.../WebApplicationBuilderExtensions.Authentication.cs:59`).
 - The metadata fetch is HTTPS-only by default, and the caller supplies configuration and environment
   so the framework can resolve that: the explicit `requireHttpsMetadata` argument when it is not
   null, then the `Authentication:JwtBearer:RequireHttpsMetadata` configuration key, then `true`
@@ -74,8 +82,8 @@ opts into HS256 explicitly, alongside the `Jwt:SecretForKey` that choice require
   document, because the `authority` need not be the token's `iss` origin. Locally the authority is
   the gateway's HTTPS endpoint (`MMCA.Common/Source/Hosting/MMCA.Common.Aspire.Hosting/Extensions.cs:345-348`);
   in ADC's production deployment it is Identity's internal-ingress URL `http://${identityApp.name}`
-  (`MMCA.ADC/infra/main.bicep:2195`) while Identity issues tokens with `iss` set to the public
-  gateway origin (`MMCA.ADC/infra/main.bicep:1955`).
+  (`MMCA.ADC/infra/main.bicep:2192`) while Identity issues tokens with `iss` set to the public
+  gateway origin (`MMCA.ADC/infra/main.bicep:1952`).
 - Both validators pin `TokenValidationParameters.ValidAlgorithms` so an attacker cannot force an
   algorithm swap (for example, signing an HS256 token using the RSA public key as the HMAC secret):
   the **forwarded JWKS** validator (`AddForwardedJwtBearer`) pins `[RS256]` (the JWKS path only ever
@@ -100,10 +108,10 @@ opts into HS256 explicitly, alongside the `Jwt:SecretForKey` that choice require
   for Catalog and Sales (`MMCA.Store/Source/Hosting/MMCA.Store.AppHost/Program.cs:379-380`). In
   the Azure Container Apps deployments the validators set `Authentication__JwtBearer__Authority`
   to Identity's internal-ingress URL `http://${identityApp.name}` directly (ADC:
-  `MMCA.ADC/infra/main.bicep:2195`, `:2331`, `:2485`; Store: `MMCA.Store/infra/main.bicep:1781`,
-  `:1917`), where TLS terminates at the platform edge, and pair it with
-  `Authentication__JwtBearer__RequireHttpsMetadata=false` (ADC: `:2199`, `:2335`, `:2489`; Store:
-  `:1786`, `:1922`), which is the shape the startup warning above exists for.
+  `MMCA.ADC/infra/main.bicep:2192`, `:2328`, `:2482`; Store: `MMCA.Store/infra/main.bicep:1782`,
+  `:1918`), where TLS terminates at the platform edge, and pair it with
+  `Authentication__JwtBearer__RequireHttpsMetadata=false` (ADC: `:2196`, `:2332`, `:2486`; Store:
+  `:1787`, `:1923`), which is the shape the startup warning above exists for.
 - `OpenIdConnectMetadataWarmupTask` (MMCA.Common.Aspire) pre-fetches the discovery document at
   startup through an `IHttpClientFactory` client
   (`MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Warmup/OpenIdConnectMetadataWarmupTask.cs:49`),
@@ -268,6 +276,40 @@ on that date.
      `MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Warmup/OpenIdConnectMetadataWarmupTask.cs:26`,
      creates the client at `:49`, and its remarks on the middleware's separate `ConfigurationManager`
      fetch run `:18-23`.
+
+## Revision (2026-10-28)
+Re-verified against current source. The signing model, the validator registration, the
+`RequireHttpsMetadata` resolution, the local gateway-routed discovery, the production
+internal-ingress authority, the public `Jwt__Issuer` and the warmup task's scope are unchanged; the
+Decision section now records that the authority, like the audience, is resolved fail-closed, and the
+Bicep anchors moved. The 2026-10-26 revision above keeps the anchors that were true on that date.
+1. The validator bullet now names the authority guard. All five services resolve the
+   authority through `builder.Configuration.GetRequiredJwtAuthority()` (the ADC services pass it
+   inline as the `authority:` argument; the Store services first assign it to a local
+   `jwtAuthority`)
+   (`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:340`,
+   `MMCA.ADC/Source/Services/MMCA.ADC.Engagement.Service/Program.cs:186`,
+   `MMCA.ADC/Source/Services/MMCA.ADC.Notification.Service/Program.cs:176`,
+   `MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:210`,
+   `MMCA.Store/Source/Services/MMCA.Store.Sales.Service/Program.cs:185`), and that method throws
+   `InvalidOperationException` when `Authentication:JwtBearer:Authority` is absent
+   (`MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/Auth/JwtAuthorityExtensions.cs:35`,
+   key at `:21`, throw at `:39-42`); a blank value passes that method and is rejected by
+   `AddForwardedJwtBearer` at
+   `MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/WebApplicationBuilderExtensions.Authentication.cs:59`.
+2. Anchors re-verified against current source:
+   - ADC Bicep: Identity's `Jwt__Issuer` at `MMCA.ADC/infra/main.bicep:1952`; the validators'
+     `Authentication__JwtBearer__Authority` at `:2192`, `:2328`, `:2482` and
+     `RequireHttpsMetadata=false` at `:2196`, `:2332`, `:2486`. Store Bicep: Authority at
+     `MMCA.Store/infra/main.bicep:1782`, `:1918` and `RequireHttpsMetadata=false` at `:1787`,
+     `:1923`.
+   - `services.AddForwardedJwtBearer(` still starts at the five `Program.cs` lines the Decision
+     section cites; `WithJwksDiscovery` is still declared at
+     `MMCA.Common/Source/Hosting/MMCA.Common.Aspire.Hosting/Extensions.cs:322` and sets the authority
+     at `:348`; the AppHost calls stay at `MMCA.ADC/Source/Hosting/MMCA.ADC.AppHost/Program.cs:374-376`
+     and `MMCA.Store/Source/Hosting/MMCA.Store.AppHost/Program.cs:379-380`; the `AddForwardedJwtBearer`
+     signature (`:52-57`), `RequireHttpsMetadata` resolution (`:64-66`) and warning-filter
+     registration (`:68-72`) in `WebApplicationBuilderExtensions.Authentication.cs` are unchanged.
 
 ## Related
 ADR-007 (gRPC calls forward the validated JWT downstream via `JwtForwardingClientInterceptor`),

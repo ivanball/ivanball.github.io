@@ -14,7 +14,8 @@ default success mode; the omitted 2026-10-01 entry is added here; anchors re-ver
 `deploy.needs` lists, and the shared action, which the consumers pin at `@main`, filters runs
 client-side; anchors re-verified against current source. Revised 2026-10-21: anchors refreshed
 after the consumer deploy workflows, `CONTRIBUTING.md` and `release.yml` shifted. Revised
-2026-10-26: anchors refreshed after the Common `ci.yml` and the consumer deploy workflows shifted.
+2026-10-26: anchors refreshed after the Common `ci.yml` and the consumer deploy workflows shifted. Revised
+2026-10-28: anchors refreshed after the Common `ci.yml` and ADR-015 shifted.
 
 ## Context
 Rubric section 12 asks for hot-path efficiency that is **measured, not assumed**
@@ -32,7 +33,7 @@ problem this record answers.
 
 No existing ADR covers it. ADR-015's fitness functions assert **structure and registration**, and
 say so explicitly: they are "not runtime behavior"
-(`Website/docs-src/adr/015-architecture-fitness-functions.md:114`). ADR-038 gates the supply chain
+(`Website/docs-src/adr/015-architecture-fitness-functions.md:121`). ADR-038 gates the supply chain
 (SBOM, lock files, vulnerability audit), which is provenance, not cost. ADR-041 instruments
 production, so it observes a regression **after** it deploys rather than failing the PR that
 introduced it. Nothing owned the statement "a performance regression must fail the merge."
@@ -44,12 +45,12 @@ benchmark-to-benchmark ratio floors where it is not.
 
 - **A dedicated CI job measures, then verifies.** The `performance-smoke` job, named
   `Performance gate (BenchmarkDotNet Short + baseline verify)`
-  (`MMCA.Common/.github/workflows/ci.yml:363-364`), runs the suite with `--filter "*" --job Short
-  --exporters json` (`ci.yml:396`) and then runs the verifier over the exported artifacts
-  (`ci.yml:405`). `--job Short` (3 warmup plus 3 iterations) is chosen to produce real
-  measurements inside the job's 15-minute budget (`ci.yml:367,394`); `--filter "*"` is required
+  (`MMCA.Common/.github/workflows/ci.yml:395-396`), runs the suite with `--filter "*" --job Short
+  --exporters json` (`ci.yml:428`) and then runs the verifier over the exported artifacts
+  (`ci.yml:437`). `--job Short` (3 warmup plus 3 iterations) is chosen to produce real
+  measurements inside the job's 15-minute budget (`ci.yml:399,426`); `--filter "*"` is required
   because BenchmarkDotNet otherwise prompts for a selection and would hang the runner
-  (`ci.yml:393-395`).
+  (`ci.yml:425-427`).
 
 - **The baseline is a committed JSON file, not a stored previous run.**
   `MMCA.Common/Tests/Performance/perf-baseline.json:1-20` holds an `allocationCeilingsBytes` object
@@ -85,7 +86,7 @@ benchmark-to-benchmark ratio floors where it is not.
   (`MMCA.Common/build/perfgate/perfgate.csproj:2-21`), so the gate itself cannot become a restore or
   supply-chain problem. It reads BenchmarkDotNet's `*-report-full-compressed.json` exports from the
   results directory it is handed (`Program.cs:26-33`), which CI points at
-  `BenchmarkDotNet.Artifacts/results` (`ci.yml:405`).
+  `BenchmarkDotNet.Artifacts/results` (`ci.yml:437`).
 
 - **The job is a required merge gate, not advisory.** It is listed among the eight required contexts
   in `MMCA.Common/CONTRIBUTING.md:68-71` and in the reproducible ruleset payload there
@@ -170,9 +171,9 @@ counterpart, a Core Web Vitals budget asserted per deploy inside the chromium e2
 
 ## Trade-offs
 - **The Short job cannot see small latency regressions.** Three warmup and three iterations
-  (`ci.yml:394`) give wide confidence intervals: enough for a 1000x floor and for counting bytes,
+  (`ci.yml:426`) give wide confidence intervals: enough for a 1000x floor and for counting bytes,
   useless for detecting a 5% slowdown. Detecting that would need a longer job and a dedicated runner,
-  which the 15-minute budget (`ci.yml:367`) deliberately does not buy.
+  which the 15-minute budget (`ci.yml:399`) deliberately does not buy.
 - **Only one ratio floor exists today** (`perf-baseline.json:13-19`), so the machine-independent
   latency half of the gate protects exactly one invariant. That floor names two of the eight
   benchmarks (`perf-baseline.json:14-18`), so the remaining six are gated on allocations alone,
@@ -194,7 +195,7 @@ counterpart, a Core Web Vitals budget asserted per deploy inside the chromium e2
   the baseline.
 - **A green context does not always mean the benchmarks ran.** On a documentation-only PR the heavy
   steps are skipped by the `changes` classifier while all required contexts still post green, which
-  is what keeps branch protection satisfiable (`ci.yml:41-44,385,391,399`).
+  is what keeps branch protection satisfiable (`ci.yml:41-44,417,423,431`).
 - **Consumers inherit the numbers, not the gate.** MMCA.ADC, MMCA.Store and MMCA.Helpdesk get the
   framework's bounded hot paths through the released packages, but none of them gates their own
   application code this way.
@@ -275,6 +276,19 @@ recorded. Only line anchors moved.
    `:809-810`, `:811`, `:814`, `:818`, `:820-821`, `:1099`; and ADR-015's "not runtime behavior"
    sentence at `015-architecture-fitness-functions.md:114`. The anchors in the earlier revisions are
    kept as recorded.
+
+## Revision (2026-10-28)
+Re-verified against current source. No decision or rationale changed: the `performance-smoke` job
+name and 15-minute budget, the benchmark command (`--filter "*" --job Short --exporters json`), the
+perfgate arguments and the three code-flag guards in the job (the setup-dotnet cache and the two
+heavy steps) are as recorded. Only line anchors moved.
+
+1. Anchors re-verified against current source: `MMCA.Common/.github/workflows/ci.yml:395-396` (job
+   and name), `:399` (15-minute budget), `:425-427` (`--filter "*"` and Short-job rationale; `:426`
+   for the Short job alone), `:428` (run), `:437` (perfgate), `:417,423,431` (code-flag guards; the
+   classifier comment at `:41-44` is unchanged); and ADR-015's "not runtime behavior" sentence at
+   `015-architecture-fitness-functions.md:121`. The anchors in the earlier revisions are kept as
+   recorded.
 
 ## Related
 ADR-015 (structural fitness functions, which explicitly stop at structure and registration; this is

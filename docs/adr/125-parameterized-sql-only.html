@@ -244,7 +244,7 @@
           <p class="eyebrow doc-kicker">Architecture Decision Record</p>
           <h1 id="adr-125-parameterized-sql-only-enforced-by-a-fitness-gate">ADR-125: Parameterized SQL Only, Enforced by a Fitness Gate</h1>
           <h2 id="status">Status</h2>
-          <p>Accepted (2026-09-19). Revised 2026-10-01: citations refreshed and MMCA.Helpdesk counted as the fourth subclassing repo. Revised 2026-10-06: the relational limit is now a conditional registration that fails at container validation, not a <code>NotSupportedException</code> on the first statement. Revised 2026-10-07: the Cosmos-default failure is an unresolved-service error raised at startup only where the container is validated on build (Development under the default builder) and otherwise on first resolution, and the CHANGELOG anchors are refreshed after the v1.233.0 release. Revised 2026-10-21: the source comments now state the same Development-build versus first-resolution timing the ADR does, the <code>SET IDENTITY_INSERT</code> exemption is described as the SQL Server explicit-key insert dialect with a best-effort toggle-off on the failure path, and anchors are refreshed after v1.250.0. Revised 2026-10-26: anchors refreshed after v1.261.0.</p>
+          <p>Accepted (2026-09-19). Revised 2026-10-01: citations refreshed and MMCA.Helpdesk counted as the fourth subclassing repo. Revised 2026-10-06: the relational limit is now a conditional registration that fails at container validation, not a <code>NotSupportedException</code> on the first statement. Revised 2026-10-07: the Cosmos-default failure is an unresolved-service error raised at startup only where the container is validated on build (Development under the default builder) and otherwise on first resolution, and the CHANGELOG anchors are refreshed after the v1.233.0 release. Revised 2026-10-21: the source comments now state the same Development-build versus first-resolution timing the ADR does, the <code>SET IDENTITY_INSERT</code> exemption is described as the SQL Server explicit-key insert dialect with a best-effort toggle-off on the failure path, and anchors are refreshed after v1.250.0. Revised 2026-10-26: anchors refreshed after v1.261.0. Revised 2026-10-28: anchors refreshed after v1.265.1.</p>
           <h2 id="context">Context</h2>
           <p>The supported way to read data is the repository plus specification contract
           (<a href="055-repository-and-specification-contract.html">ADR-055</a>), and LINQ answers almost everything. It does
@@ -265,9 +265,9 @@
           <p>The framework also runs on four engines (<a href="018-polyglot-persistence.html">ADR-018</a>), and one of them has
           no SQL command surface at all, so &quot;raw SQL&quot; cannot be offered as a capability every host has. Before
           v1.192.0 the landing shape for a raw scalar read was four keyless <code>ValReturn&lt;T&gt;</code> entities mapped to no
-          table and queried by nobody (<code>MMCA.Common/CHANGELOG.md:2053-2059</code>); the pair of additions this record
-          covers shipped in v1.192.0 (<code>MMCA.Common/CHANGELOG.md:1938</code>, the interface at <code>:2008-2017</code> and the
-          fitness base at <code>:2018-2021</code>).</p>
+          table and queried by nobody (<code>MMCA.Common/CHANGELOG.md:2096-2102</code>); the pair of additions this record
+          covers shipped in v1.192.0 (<code>MMCA.Common/CHANGELOG.md:1981</code>, the interface at <code>:2051-2060</code> and the
+          fitness base at <code>:2061-2064</code>).</p>
           <h2 id="decision">Decision</h2>
           <p>Give raw SQL exactly one door whose signature makes the unsafe call uncompilable, and ban the four raw
           EF members in module code with a fitness test rather than a guideline.</p>
@@ -515,6 +515,23 @@
           <code>:439</code>, <code>:445</code>) still hold as cited. The earlier revisions and Status sentences keep their anchors
           as recorded on their dates.</li>
           </ol>
+          <h2 id="revision-2026-10-28">Revision (2026-10-28)</h2>
+          <p>Re-verified against current source. The decision, the <code>FormattableString</code>-only contract, the
+          conditional relational registration and its timing, the fitness base, the one-entry <code>AllowedFiles</code>
+          ratchet and every consumer subclass are unchanged. Only CHANGELOG anchors moved, by 43 lines, as the
+          releases through v1.265.1 (<code>MMCA.Common/CHANGELOG.md:7</code>) landed above v1.192.0; the entry text still
+          matches what this record describes.</p>
+          <ol>
+          <li>Anchors re-verified against current source: <code>MMCA.Common/CHANGELOG.md</code> v1.192.0 header <code>:1981</code>,
+          <code>IRawSqlQueryExecutor</code> entry <code>:2051-2060</code> (still ending on the original <code>NotSupportedException</code>
+          sentence at <code>:2060</code>), <code>RawSqlConventionTestsBase</code> entry <code>:2061-2064</code>, <code>ValReturn&lt;T&gt;</code> removal
+          <code>:2096-2102</code> (its <code>IRawSqlQueryExecutor</code> mention at <code>:2099</code>); the v1.218.0 conditional registration
+          bullet is now <code>:888</code> (header <code>:881</code>); the v1.247.0 failure-path toggle-off entry is <code>:356</code> (header
+          <code>:303</code>, item M229). <code>DependencyInjection.cs</code> (<code>:111</code>, <code>:116</code>, <code>:426</code>, <code>:435</code>, <code>:437</code>),
+          <code>EFRawSqlQueryExecutor.cs</code> (<code>:29</code>, <code>:52</code>) and <code>DbContextFactory.cs</code> (<code>:296</code>, <code>:389</code>, <code>:423</code>,
+          <code>:439</code>, <code>:445</code>, <code>:463</code>) still hold as cited. The earlier revisions and Status sentences keep their
+          anchors as recorded on their dates.</li>
+          </ol>
           <h2 id="related">Related</h2>
           <p><a href="055-repository-and-specification-contract.html">ADR-055</a> (the repository plus specification path this
           escape hatch sits beside, and the reason the hatch stays narrow),
@@ -546,6 +563,7 @@
             <li><a href="#revision-2026-10-07">Revision (2026-10-07)</a></li>
             <li><a href="#revision-2026-10-21">Revision (2026-10-21)</a></li>
             <li><a href="#revision-2026-10-26">Revision (2026-10-26)</a></li>
+            <li><a href="#revision-2026-10-28">Revision (2026-10-28)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

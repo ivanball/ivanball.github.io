@@ -259,7 +259,8 @@
           the <code>IMessageBus</code> publish, which is the broker hop only in broker mode), and anchors are refreshed.
           Revised 2026-10-24: <code>MassTransit.AmazonSQS</code> 8.5.11 joins the pinned set for the SQS adapter transport, the pin and its gate unchanged (<a href="134-cloud-neutral-core-vendor-adapters.html">ADR-134</a>); the trial point and the surface inventory are corrected in place. See Revision (2026-10-24) at the end.
           Revised 2026-10-25: <code>MassTransit.SqlTransport.PostgreSQL</code> 8.5.11 (Apache-2.0) joins the pinned set for the built-in PostgreSQL transport and reaches every consumer of MMCA.Common.Infrastructure with Dapper; Decision 1 now records that the build gate covers three of MMCA.Common&#39;s five MassTransit entries. See Revision (2026-10-25) at the end.
-          Revised 2026-10-26: every MassTransit entry is at the 8.5.12 v8 patch, the build gate now covers all five MMCA.Common entries, MMCA.Common&#39;s <code>using MassTransit</code> surface is recounted as fifteen files and the swap surface is restated to include the consumer service hosts&#39; MassTransit-typed consumer registration, and the <code>Azure.Messaging.ServiceBus</code> pin is restated as also serving the Azure transport; anchors refreshed.</p>
+          Revised 2026-10-26: every MassTransit entry is at the 8.5.12 v8 patch, the build gate now covers all five MMCA.Common entries, MMCA.Common&#39;s <code>using MassTransit</code> surface is recounted as fifteen files and the swap surface is restated to include the consumer service hosts&#39; MassTransit-typed consumer registration, and the <code>Azure.Messaging.ServiceBus</code> pin is restated as also serving the Azure transport; anchors refreshed.
+          Revised 2026-10-28: anchors refreshed after later MMCA.Common releases moved the CHANGELOG entries and an ADC Engagement host edit moved its consumer registration.</p>
           <h2 id="context">Context</h2>
           <p>MassTransit is the only message-broker library in this workspace, and it is pinned to 8.5.12 across
           all five of MMCA.Common&#39;s MassTransit packages (<code>MMCA.Common/Directory.Packages.props:125-127</code>,
@@ -338,7 +339,7 @@
           (<code>.../Messaging/Consumers/IntegrationEventConsumerExtensions.cs:60-62</code>). Every consumer service host
           that runs broker consumers passes such a lambda (for example
           <code>MMCA.Store/Source/Services/MMCA.Store.Sales.Service/Program.cs:269-283</code>,
-          <code>MMCA.ADC/Source/Services/MMCA.ADC.Engagement.Service/Program.cs:303-307</code>), ADC&#39;s Conference host
+          <code>MMCA.ADC/Source/Services/MMCA.ADC.Engagement.Service/Program.cs:304-310</code>), ADC&#39;s Conference host
           names MassTransit directly
           (<code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/ConferenceBrokerConsumers.cs:1</code>, <code>:32-37</code>),
           and each consumer&#39;s Service Bus emulator fixture does too
@@ -472,7 +473,7 @@
           <code>PostgreSqlBrokerTransport</code> ships in MMCA.Common.Infrastructure because any PostgreSQL is the broker
           (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Messaging/Transports/PostgreSqlBrokerTransport.cs:10-14</code>,
           <code>:40</code>), so every consumer of that package restores <code>MassTransit.SqlTransport.PostgreSQL</code> and the
-          Dapper it brings (<code>MMCA.Common/CHANGELOG.md:86</code>, <code>MMCA.Common/Directory.Packages.props:134-135</code>)
+          Dapper it brings (<code>MMCA.Common/CHANGELOG.md:129</code>, <code>MMCA.Common/Directory.Packages.props:134-135</code>)
           whether or not it selects the transport.</li>
           <li><strong>The emulator test tier is coupled to the choice.</strong> <code>ServiceBusEmulatorFixtureBase</code> uses the
           MassTransit v8 custom-clients <code>Host()</code> overload, so a transport swap re-writes that fixture and
@@ -644,6 +645,23 @@
           now sits in target <code>EnforceCloudVendorBoundary</code> (<code>:130</code>, conditions at <code>:144-145</code>, error at
           <code>:151</code>).</li>
           </ol>
+          <h2 id="revision-2026-10-28">Revision (2026-10-28)</h2>
+          <p>Re-verified against current source. The library choice, the v8 pin, the major-9 ceiling, the exit
+          triggers, the replacement order and every fact are unchanged: all five MMCA.Common MassTransit
+          entries are still at 8.5.12 (<code>MMCA.Common/Directory.Packages.props:125-127</code>, <code>:130</code>, <code>:136</code>) under
+          the pin comment at <code>:120-124</code>, and the ADC Engagement host still passes a MassTransit-typed
+          consumer-registration lambda. Only anchors moved. The anchors inside the 2026-10-26 and earlier
+          revisions are left as written.</p>
+          <ol>
+          <li>Anchors re-verified against current source: the ADC Engagement host&#39;s <code>AddBrokerMessaging</code>
+          lambda at <code>MMCA.ADC/Source/Services/MMCA.ADC.Engagement.Service/Program.cs:304-310</code> (its four
+          <code>RegisterIntegrationEventConsumer</code> calls at <code>:306-309</code>), re-pointed in Context; the PostgreSQL
+          transport entry (&quot;every consumer of MMCA.Common.Infrastructure now restores this package and
+          Dapper&quot;) at <code>MMCA.Common/CHANGELOG.md:129</code>, release 1.257.0, re-pointed in the Trade-offs bullet
+          (the companion <code>MMCA.Common/Directory.Packages.props:134-135</code> still holds); and the
+          <code>MassTransitPackageIds</code> widening the 2026-10-26 revision cites at <code>CHANGELOG.md:65</code> now at
+          <code>MMCA.Common/CHANGELOG.md:108</code>, still under release 1.258.0.</li>
+          </ol>
           <h2 id="related">Related</h2>
           <p><a href="016-lockstep-versioning-masstransit-pin.html">ADR-016</a> (the lockstep release policy this pin is
           enforced under; its 2026-08-28 amendment first sketched exit options, and this record owns the
@@ -683,6 +701,7 @@
             <li><a href="#revision-2026-10-24">Revision (2026-10-24)</a></li>
             <li><a href="#revision-2026-10-25">Revision (2026-10-25)</a></li>
             <li><a href="#revision-2026-10-26">Revision (2026-10-26)</a></li>
+            <li><a href="#revision-2026-10-28">Revision (2026-10-28)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

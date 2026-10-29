@@ -3,17 +3,15 @@
 ## Status
 **Superseded by [ADR-102](102-pbkdf2-only-password-hashing.md) (2026-08-31).** Originally Accepted
 (2026-06-29, adoption note revised 2026-07-06, registration note revised 2026-08-01, call-site hoist
-recorded 2026-08-23). The legacy HMAC-SHA512 verification branch this record calls load-bearing has
-since been deleted: hashing and verification are PBKDF2-only, and ADR-102 carries the current
-decision. The body below is retained unchanged as the historical record of the migration-era design.
-Revised 2026-10-26: ADR-102 is itself superseded by
+recorded 2026-08-23). Revised 2026-10-26: ADR-102 is itself superseded by
 [ADR-133](133-versioned-password-hash-work-factor.md), which now carries the current decision
 (032 -> 102 -> 133), and the live sections below are rewritten to describe current source rather than
-the migration-era design, so the earlier note that the body is retained unchanged no longer holds (the
-migration-era text survives only in the dated revisions): the HMAC branch is gone, the load-bearing
-legacy branch is now the header-less 64-byte PBKDF2 hash read at 600,000 iterations, new hashes are
-versioned at 210,000 iterations, and a successful sign-in rehashes a stale record through `NeedsRehash`
-for users that opt in.
+the migration-era design (the migration-era text survives only in the dated revisions): the HMAC branch
+is gone, the load-bearing legacy branch is now the header-less 64-byte PBKDF2 hash read at 600,000
+iterations, new hashes are versioned at 210,000 iterations, and a successful sign-in rehashes a stale
+record through `NeedsRehash` for users that opt in. Revised 2026-10-28: the stale opening sentences saying
+ADR-102 carries the current decision and the body is retained unchanged are removed, the 2026-10-26
+sentence drops its clause about that earlier note, and the rehash anchors are refreshed.
 
 ## Context
 Identity stores a credential as a (salt, hash) pair, never plaintext. The framework needs one
@@ -72,10 +70,10 @@ parameters), so the singleton lifetime is safe.
   (`PasswordHasher.cs:109-115`) returns true for a legacy 64-byte hash and for a versioned hash whose
   stored count differs from `Iterations`, and false for the current shape and for unrecognized
   material. After tokens are issued, `AuthenticationServiceBase` calls `RehashPasswordIfNeededAsync`
-  (`AuthenticationServiceBase.cs:237`, declared at `:675`), which runs only when issuance succeeded and
-  the user implements `IPasswordRehashableUser` (`:677`), checks `NeedsRehash` (`:687`), hashes the
-  verified plaintext (`:692`) and saves through the unit of work, all inside `BestEffort.ExecuteAsync`
-  (`:682`): a failure is logged and the record is upgraded on a later sign-in, never failing a sign-in
+  (`AuthenticationServiceBase.cs:237`, declared at `:676`), which runs only when issuance succeeded and
+  the user implements `IPasswordRehashableUser` (`:678`), checks `NeedsRehash` (`:688`), hashes the
+  verified plaintext (`:693`) and saves through the unit of work, all inside `BestEffort.ExecuteAsync`
+  (`:683`): a failure is logged and the record is upgraded on a later sign-in, never failing a sign-in
   that already succeeded. Both apps opt in (ADC `User.cs:36`, Store `User.cs:30`).
 - **Comparison is constant time.** The single PBKDF2 path compares the recomputed digest to the trailing
   `HashSize` bytes of the stored hash (`PasswordHasher.cs:95`) with
@@ -232,3 +230,19 @@ ADR-102 and carries the current decision.
    `ChangePasswordHandler.cs` ADC `:26`, Store `:31`; `IdentityModuleDbSeeder.cs` ADC `:30`, Store
    `:32`; tests moved to `Tests/Core/MMCA.Common.Infrastructure.Tests/Auth/` (`PasswordHasherTests.cs:21`,
    `:39`, `:77`, `:84`; `PasswordHasherSecurityTests.cs:34`, `:147`, `:164`, `:195`).
+
+## Revision (2026-10-28)
+Re-verified against current source. The decision is unchanged, and the live sections still describe
+current source; what moved is the Status block and the rehash anchors.
+
+1. **The Status no longer contradicts itself.** Its opening sentences reported the HMAC-SHA512 branch
+   deleted, said ADR-102 carries the current decision and said the body is retained unchanged. ADR-102
+   is itself superseded (`102-pbkdf2-only-password-hashing.md:4`, `133-versioned-password-hash-work-factor.md:4`)
+   and the 2026-10-26 sentence after them rewrote the body, so they are removed. That 2026-10-26 sentence
+   also drops its clause "so the earlier note that the body is retained unchanged no longer holds",
+   whose referent went with them; the rest of it is unchanged and still names
+   [ADR-133](133-versioned-password-hash-work-factor.md) as carrying the current decision.
+2. **Anchors re-verified against current source:** `AuthenticationServiceBase.RehashPasswordIfNeededAsync`
+   is declared at `AuthenticationServiceBase.cs:676` (call site `:237` unchanged), with the
+   `IPasswordRehashableUser` check at `:678`, `BestEffort.ExecuteAsync` at `:683`, `NeedsRehash` at
+   `:688` and `HashPassword` at `:693`; `:67`, `:69`, `:178`, `:277` and `:655` are unchanged.

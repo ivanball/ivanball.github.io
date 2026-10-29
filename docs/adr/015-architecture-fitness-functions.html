@@ -275,7 +275,7 @@
           per repo. Six citations that moved are re-anchored. See Revision (2026-09-11) at the end.
           Revised 2026-09-19: the public API gate covers two more projects than this record said, so the baseline
           file count, the header-only list and the unshipped declaration figure are corrected in the live text
-          (eighteen baseline pairs then, twenty-one today, still one per published package except
+          (eighteen baseline pairs then, twenty-one by 2026-10-01, still one per published package except
           <code>MMCA.Common.UI.Maui</code>). See Revision (2026-09-19) at the end.
           Revised 2026-10-01 (RS0026 / RS0027 move from off to error, with each already-shipped overload pair
           suppressed at its own declaration; see Revision below).
@@ -296,7 +296,10 @@
           plus <code>AiDependencyIsolationTestsBase</code>, subclassed in all four repos) as an enforced invariant, the
           public API gate covers 25 projects with 8,561 shipped declarations, the unshipped files hold 64 new
           declarations and 9 removals because no promotion has run at the v1.257.0 to v1.261.0 tags, and the
-          cloud vendor target&#39;s match list and anchors are refreshed. See Revision (2026-10-26) at the end.</p>
+          cloud vendor target&#39;s match list and anchors are refreshed. See Revision (2026-10-26) at the end.
+          Revised 2026-10-28: the release roll-over ran at v1.264.0, so every unshipped file is header-only
+          again and the 25 shipped baselines hold 8,662 declarations (the <code>MMCA.Common.Gcp</code> surface now
+          shipped); the <code>ui-e2e</code>, <code>CHANGELOG.md</code> and <code>AGENTS.md</code> anchors are refreshed. See Revision (2026-10-28) at the end.</p>
           <h2 id="context">Context</h2>
           <p>The codebase rests on invariants that are easy to state and easy to erode by accident: clean-
           architecture layer flow (Domain depends on nothing above it), module isolation (no module reaches into
@@ -1086,6 +1089,42 @@
           (summary <code>:20-23</code>). The Azure, Aws and Gcp <code>CloudVendorRulesTests</code> anchors (<code>:22</code>, <code>:21</code>, <code>:28</code>)
           still resolve.</li>
           </ol>
+          <h2 id="revision-2026-10-28-the-roll-over-ran-re-counted-baselines-moved-anchors">Revision (2026-10-28): the roll-over ran, re-counted baselines, moved anchors</h2>
+          <p>Re-verified against current source at v1.265.1 (<code>MMCA.Common/FACTS.md:14</code>) plus the two docs
+          commits after the tag (<code>28fad5b2</code>, #629), which is where the <code>AGENTS.md</code> anchor below is read. The
+          enforcement layers, the 25 baseline pairs, the <code>MMCA.Common.UI.Maui</code> exclusion and the
+          <code>--minimum-expected-tests 2000</code> floor (<code>.github/workflows/ci.yml:163</code>) are as the 2026-10-26 entry
+          describes. What moved is the public API baseline content (the release roll-over the 2026-10-26 entry
+          found missing has since run, so its items 3 and 4 are dated readings) and the anchors listed in item 3.</p>
+          <ol>
+          <li><strong>Every unshipped file is header-only again.</strong> The roll-over that <code>MMCA.Common/AGENTS.md:36</code>
+          prescribes (<code>build/publicapi/Promote-PublicApi.ps1</code> in the last commit before each tag) ran in the
+          <code>release: v1.264.0</code> commit (#620; <code>MMCA.Common/CHANGELOG.md:19</code>). All 25
+          <code>PublicAPI.Unshipped.txt</code> files now hold only the <code>#nullable enable</code> header, with no new
+          declarations and no <code>*REMOVED*</code> markers, so the item 4 citations of the 2026-10-26 entry
+          (<code>MMCA.Common.Infrastructure</code> <code>:2-9</code> and <code>:10-14</code>, <code>MMCA.Common.Testing.Architecture</code> <code>:2-3</code>,
+          <code>MMCA.Common.Application</code> <code>:2-3</code>) no longer point at content. The two releases since then stay
+          that way by a different route: the <code>v1.265.0</code> (#625) and <code>v1.265.1</code> (#627) squash commits each
+          add their one new declaration straight to a <code>PublicAPI.Shipped.txt</code> (<code>MMCA.Common.UI</code> and
+          <code>MMCA.Common.Testing.E2E</code>), with no unshipped stage in between.</li>
+          <li><strong>The shipped baselines hold 8,662 declarations across 8,687 non-empty lines</strong> in the 25
+          <code>PublicAPI.Shipped.txt</code> files, each carrying exactly one <code>#nullable enable</code> header (the 2026-10-26
+          entry read 8,561 across 8,586). <code>MMCA.Common.Gcp</code> now ships its surface
+          (<code>Source/Hosting/MMCA.Common.Gcp/PublicAPI.Shipped.txt</code>, 37 declarations after the header), so the
+          one header-only shipped file left is the <code>MMCA.Common</code> metapackage&#39;s
+          (<code>Source/MMCA.Common/PublicAPI.Shipped.txt:1</code>), which has no surface.</li>
+          <li><strong>Anchors re-verified against current source:</strong> the <code>ui-e2e</code> run with <code>--minimum-expected-tests 1</code>
+          is <code>ci.yml:377</code> (step name <code>:372</code>). Three <code>CHANGELOG.md</code> sections ([1.265.1] <code>:7</code>, [1.265.0]
+          <code>:13</code>, [1.264.0] <code>:19</code>) now sit at the top, so every <code>MMCA.Common/CHANGELOG.md</code> anchor in the
+          2026-10-26 entry reads 43 lines lower: <code>:26</code> is <code>:69</code>, <code>:67</code> is <code>:110</code>, <code>:78</code> is <code>:121</code>, <code>:86-88</code>
+          is <code>:129-131</code>, <code>:94</code> is <code>:137</code> (under [1.257.0] at <code>:112</code>), <code>:119</code> is <code>:162</code> (under [1.255.0] at
+          <code>:154</code>), and the v1.153.0 heading <code>:3878</code> is <code>:3921</code> with its &quot;Three new build gates&quot; bullet
+          <code>:3976-3982</code>. The <code>Promote-PublicApi.ps1</code> sentence is <code>MMCA.Common/AGENTS.md:36</code> after #629
+          (<code>:37</code> at the v1.264.0 through v1.265.1 tags). The Status block&#39;s 2026-09-19 sentence said
+          &quot;twenty-one today&quot;; it now reads &quot;twenty-one by 2026-10-01&quot;, the audit that sentence was written
+          in and the first entry that counts 21, and the current pair count is the 25 in the 2026-10-26
+          entry.</li>
+          </ol>
           <h2 id="related">Related</h2>
           <p>ADR-009 (resilience gate), ADR-010 (event-version gate), ADR-016 (MassTransit pin gate, and the
           lockstep release cadence the public API baseline is pinned to), ADR-006/007/008 (the transport and
@@ -1125,6 +1164,7 @@
             <li><a href="#revision-2026-10-24-the-cloud-vendor-boundary-gate-pair">Revision (2026-10-24): the cloud vendor boundary gate pair</a></li>
             <li><a href="#revision-2026-10-25-the-type-level-vendor-rule-matches-again">Revision (2026-10-25): the type-level vendor rule matches again</a></li>
             <li><a href="#revision-2026-10-26-the-ai-isolation-pair-in-the-decision-re-counted-baselines-moved-anchors">Revision (2026-10-26): the AI isolation pair in the Decision, re-counted baselines, moved anchors</a></li>
+            <li><a href="#revision-2026-10-28-the-roll-over-ran-re-counted-baselines-moved-anchors">Revision (2026-10-28): the roll-over ran, re-counted baselines, moved anchors</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

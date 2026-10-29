@@ -288,7 +288,8 @@
           atomic or uses Redis <code>INCR</code>, so the interface caveat is retired; all seven services declare a <code>NoCache</code>
           output-cache base, the two adopters included; the role-claim types are matched case-sensitively and
           only role values case-insensitively; anchors refreshed.
-          Revised 2026-10-26: anchors refreshed after the v1.261.0 release and consumer sweep.</p>
+          Revised 2026-10-26: anchors refreshed after the v1.261.0 release and consumer sweep.
+          Revised 2026-10-28: anchors refreshed after the v1.265.1 release and consumer sweep.</p>
           <h2 id="context">Context</h2>
           <p>The framework needs caching in two distinct places. Inside the application pipeline, query results
           are memoized and invalidated on mutation (the Caching decorators of ADR-014, keyed by
@@ -312,7 +313,7 @@
           Caching decorators, <code>LoginProtectionService</code>) depends only on this interface, never on a concrete
           cache or on Redis.</li>
           <li><strong>The backing store is chosen at startup, not in code (amended by ADR-077).</strong> <code>AddCaching(configuration)</code>
-          (<code>MMCA.Common.Infrastructure/DependencyInjection.Caching.cs:26</code>, where the configuration parameter is
+          (<code>MMCA.Common.Infrastructure/DependencyInjection.Caching.cs:27</code>, where the configuration parameter is
           optional, called from <code>AddInfrastructure</code> at
           <code>MMCA.Common.Infrastructure/DependencyInjection.cs:140</code>)
           registers <code>DistributedCacheService</code> when a real <code>IDistributedCache</code> is present (one that is not the
@@ -323,17 +324,17 @@
           later&quot; extension point as <code>InProcessMessageBus</code> vs <code>BrokerMessageBus</code> (ADR-003/006/008). Since
           ADR-077 a third implementation exists, <code>HybridCacheService</code> (L1 in-process plus L2 distributed), and
           it is the one substrate that is <strong>not</strong> auto-selected: a host opts into it explicitly with
-          <code>AddCommonHybridCache(...)</code> (<code>MMCA.Common.Infrastructure/DependencyInjection.Caching.cs:141</code>), which
+          <code>AddCommonHybridCache(...)</code> (<code>MMCA.Common.Infrastructure/DependencyInjection.Caching.cs:157</code>), which
           replaces the registration this call made. That call, unlike the Redis wrappers in Trade-offs below,
           has no guard of its own, so the framework pairs it with a guarded helper,
           <code>AddCommonHybridCacheWhenRedisConfigured(configuration, connectionName = &quot;redis&quot;)</code>
-          (<code>MMCA.Common.Infrastructure/DependencyInjection.Caching.cs:202</code>), which calls it only when the named
-          connection string is non-empty (<code>:208-211</code>) and otherwise leaves the registration untouched. Every
+          (<code>MMCA.Common.Infrastructure/DependencyInjection.Caching.cs:218</code>), which calls it only when the named
+          connection string is non-empty (<code>:224-227</code>) and otherwise leaves the registration untouched. Every
           one of the seven ADC and Store services opts in through that helper: ADC Conference
           (<code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:210</code>), Notification
           (<code>.../MMCA.ADC.Notification.Service/Program.cs:125</code>), Engagement
           (<code>.../MMCA.ADC.Engagement.Service/Program.cs:122</code>), Identity
-          (<code>.../MMCA.ADC.Identity.Service/Program.cs:145</code>), Store Catalog
+          (<code>.../MMCA.ADC.Identity.Service/Program.cs:146</code>), Store Catalog
           (<code>MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:114</code>), Sales
           (<code>.../MMCA.Store.Sales.Service/Program.cs:120</code>) and Identity
           (<code>.../MMCA.Store.Identity.Service/Program.cs:109</code>). So <code>HybridCacheService</code> is the live
@@ -356,7 +357,7 @@
           may also move the default without code: <code>CacheSettings.DefaultDuration</code>
           (<code>MMCA.Common.Infrastructure/Caching/CacheSettings.cs:32</code>, the <code>Cache:DefaultDuration</code> key) defaults
           to <code>CacheOptions.DefaultDuration</code>, is bound by <code>AddCaching</code> when it receives configuration
-          (<code>MMCA.Common.Infrastructure/DependencyInjection.Caching.cs:43-46</code>), and is what the cache services
+          (<code>MMCA.Common.Infrastructure/DependencyInjection.Caching.cs:44-47</code>), and is what the cache services
           apply to an entry whose caller supplies no expiration (for example
           <code>MMCA.Common.Infrastructure/Caching/DistributedCacheService.cs:72</code>). The same section carries an
           optional L1 ceiling for <code>HybridCacheService</code> (<code>CacheSettings.cs:42</code>) and the populate-lock timeout
@@ -521,7 +522,7 @@
           <code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:191</code>, Notification
           <code>MMCA.ADC/Source/Services/MMCA.ADC.Notification.Service/Program.cs:117</code>, Engagement
           <code>MMCA.ADC/Source/Services/MMCA.ADC.Engagement.Service/Program.cs:114</code>, Identity
-          <code>MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:137</code>; Store Catalog
+          <code>MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:138</code>; Store Catalog
           <code>MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:95</code>, Sales
           <code>MMCA.Store/Source/Services/MMCA.Store.Sales.Service/Program.cs:111</code>, Identity
           <code>MMCA.Store/Source/Services/MMCA.Store.Identity.Service/Program.cs:100</code>. Only
@@ -1297,6 +1298,34 @@
           2026-08-23, 2026-08-31) and the tenant vary-by stamp (2026-09-07) sit in historical revisions and
           are left as written there.</li>
           </ol>
+          <h2 id="revision-2026-10-28">Revision (2026-10-28)</h2>
+          <p>Re-verified against current source. The two tiers, the substrate selection, the seven-service Redis
+          and hybrid wiring (seven <code>AddRedisCaching</code> calls, seven <code>AddCommonHybridCacheWhenRedisConfigured</code>
+          calls, two <code>AddRedisOutputCaching</code> calls), the guarded helper&#39;s behavior (it registers the hybrid
+          substrate only when the named connection string is non-empty) and the client tier are unchanged.
+          Only anchors moved, in <code>DependencyInjection.Caching.cs</code> and the ADC Identity <code>Program.cs</code>.</p>
+          <ol>
+          <li><strong>Anchors re-verified against current source:</strong> <code>AddCaching</code> at
+          <code>MMCA.Common.Infrastructure/DependencyInjection.Caching.cs:27</code> (still called from <code>AddInfrastructure</code>
+          at <code>DependencyInjection.cs:140</code>), its <code>CacheSettings</code> options chain at <code>:44-47</code>,
+          <code>AddCommonHybridCache</code> at <code>:157</code> (the <code>RemoveAll&lt;ICacheService&gt;</code> replacement from <code>:183</code>), and
+          <code>AddCommonHybridCacheWhenRedisConfigured</code> at <code>:218</code> with its guard block at <code>:224-227</code>; ADC Identity&#39;s
+          hybrid opt-in at <code>MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:146</code> and its
+          <code>AddRedisCaching</code> call at <code>:138</code>. Re-checked and unchanged: the other six hybrid opt-ins (ADC
+          Conference <code>Program.cs:210</code>, Notification <code>:125</code>, Engagement <code>:122</code>, Store Catalog <code>:114</code>, Sales
+          <code>:120</code>, Store Identity <code>:109</code>), the other six <code>AddRedisCaching</code> calls (ADC Conference <code>:191</code>,
+          Notification <code>:117</code>, Engagement <code>:114</code>, Store Catalog <code>:95</code>, Sales <code>:111</code>, Store Identity <code>:100</code>)
+          and <code>AddRedisOutputCaching</code> at ADC Conference <code>:202</code> and Store Catalog <code>:105</code>. In historical
+          revisions, left as written there: the <code>MMCA.Common.OutputCache</code> meter subscription is now at
+          <code>MMCA.Common.Aspire/Extensions.Telemetry.cs:310</code>, still the sixth of what are now ten chained
+          <code>AddMeter</code> calls (<code>:305-314</code>); <code>RegisterOutputCacheEvictionConsumer</code> is at
+          <code>MMCA.Common.Infrastructure/Messaging/Consumers/IntegrationEventConsumerExtensions.cs:158</code> and
+          <code>RegisterUpcastedIntegrationEventConsumer&lt;TEvent&gt;</code> at <code>:123</code>; the tenant vary-by stamp reads
+          <code>ITenantContext.TenantId</code> at <code>MMCA.Common.API/Caching/PublicEndpointOutputCachePolicy.cs:107</code> and
+          writes the <code>t</code> key at <code>:110</code>; and <code>GetRoleValues</code> is at
+          <code>MMCA.Common.Shared/Auth/ClaimsPrincipalExtensions.cs:60</code> (Ordinal claim-type matches at <code>:65-67</code>),
+          <code>HasRole</code> at <code>:76</code> (<code>OrdinalIgnoreCase</code> at <code>:78</code>).</li>
+          </ol>
           
         <div class="doc-foot btn-row">
           <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
@@ -1332,6 +1361,7 @@
             <li><a href="#revision-2026-10-07">Revision (2026-10-07)</a></li>
             <li><a href="#revision-2026-10-21">Revision (2026-10-21)</a></li>
             <li><a href="#revision-2026-10-26">Revision (2026-10-26)</a></li>
+            <li><a href="#revision-2026-10-28">Revision (2026-10-28)</a></li>
             </ul>
           </nav>
         </aside>

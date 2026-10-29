@@ -8,6 +8,8 @@ quoting). Revised 2026-10-06: the per-engine predicate now comes from each engin
 Revised 2026-10-07: anchors refreshed after the v1.233.0 release.
 Revised 2026-10-21: the opt-in path's test citation names SQL Server, SQLite and Cosmos and points
 to where the PostgreSQL predicate is pinned; anchors refreshed.
+Revised 2026-10-28: anchors refreshed after ADR-057 grew its own revisions (its live-marker
+citation moved).
 
 ## Context
 ADR-005 makes deletion **soft**: an `IAuditableEntity` sets `IsDeleted = true`
@@ -237,10 +239,19 @@ citation for the opt-in path said "both engines and for Cosmos", which predates 
    and ADR-057's live-marker citation of it, now `057-expand-contract-schema-evolution-gate.md:97`
    (the 2026-10-01 revision's `:90` stays as recorded).
 
+## Revision (2026-10-28)
+Re-verified against current source. No decision, behavior or predicate changed; only an ADR-057
+anchor moved.
+1. Anchors re-verified against current source: the ADC Identity override marker
+   (`MMCA.ADC/Source/Hosting/MMCA.ADC.Migrations.SqlServer.Identity/Migrations/20260720031638_CommonV1120OutboxLeaseAndSoftDeleteIndexFilters.cs:14-17`)
+   is unchanged, and ADR-057's live-marker citation of it is now
+   `057-expand-contract-schema-evolution-gate.md:115` (the Related section is re-pointed; the
+   2026-10-01 revision's `:90` and the 2026-10-21 revision's `:97` stay as recorded).
+
 ## Related
 ADR-005 (decides soft-delete over erasure and owns the query filter that hides the row, but says
 nothing about uniqueness: this ADR closes that gap), ADR-057 (the expand/contract CI gate, which
 classifies the drop-and-recreate this convention produces as a legitimate override and cites the ADC
-Identity migration as its live marker at `057-expand-contract-schema-evolution-gate.md:97`),
+Identity migration as its live marker at `057-expand-contract-schema-evolution-gate.md:115`),
 ADR-006 (one context class per engine over the shared `ApplicationDbContext`, which is why a single
 convention registration reaches every module and every database).

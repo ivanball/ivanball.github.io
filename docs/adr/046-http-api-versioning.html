@@ -265,7 +265,8 @@
           Revised 2026-10-06: the registration also adds <code>ApiVersionReportingResultFilter</code> as a global MVC filter so output-cached responses keep the version headers; re-anchored the citations.
           Revised 2026-10-07: anchors re-verified against current source after the v1.233.0 release, no decision change.
           Revised 2026-10-21: anchors refreshed after host <code>Program.cs</code> edits moved four <code>AddCommonApiVersioning</code> call sites and the OpenAPI contract-test anchor, no decision change.
-          Revised 2026-10-26: anchors refreshed after host <code>Program.cs</code> edits moved all seven extracted-host <code>AddCommonApiVersioning</code> call sites, no decision change.</p>
+          Revised 2026-10-26: anchors refreshed after host <code>Program.cs</code> edits moved all seven extracted-host <code>AddCommonApiVersioning</code> call sites, no decision change.
+          Revised 2026-10-28: anchors refreshed after ADC #298 moved the ADC Identity host <code>AddCommonApiVersioning</code> call site, no decision change.</p>
           <h2 id="context">Context</h2>
           <p>The framework&#39;s REST surface is served by controllers hosted in extracted service processes behind a
           YARP gateway. As those services evolve, a response shape has to be able to change without breaking a
@@ -366,7 +367,7 @@
           <li><strong>Every REST host adopts it the same way.</strong> The extracted services call <code>AddCommonApiVersioning</code>
           in their startup: ADC&#39;s Conference
           (<code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:226</code>) and Identity
-          (<code>MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:161</code>) hosts, Store&#39;s Catalog host
+          (<code>MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:162</code>) hosts, Store&#39;s Catalog host
           (<code>MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:146</code>), and the same call is made
           by the other extracted hosts (ADC Engagement <code>Program.cs:156</code>, ADC Notification <code>Program.cs:145</code>,
           Store Sales <code>Program.cs:154</code>, Store Identity <code>Program.cs:141</code>) and by the monolith reference host
@@ -569,6 +570,22 @@
           Conference <code>Program.cs:226</code>, Identity <code>:161</code>, Engagement <code>:156</code>, Notification <code>:145</code>; Store Catalog
           <code>:146</code>, Sales <code>:154</code>, Identity <code>:141</code>; Helpdesk Web <code>Program.cs:35</code>, unchanged).</li>
           </ol>
+          <h2 id="revision-2026-10-28">Revision (2026-10-28)</h2>
+          <p>Re-verified against current source. No decision, rationale or trade-off changed: all seven extracted
+          service hosts and the Helpdesk monolith host still call <code>AddCommonApiVersioning</code>. One host edit (ADC
+          #298) moved the ADC Identity call site by one line, so the 2026-10-26 statement that every
+          extracted-host call site moved by six lines no longer holds for Identity; that Decision anchor is
+          re-pointed in place below. Line numbers cited inside the earlier dated revisions (the earlier call
+          sites, host OpenAPI registrations, the design-time skip helper, both <code>deploy.yml</code> gates and both
+          <code>Directory.Build.props</code> blocks) are left as recorded.</p>
+          <ol>
+          <li>Anchors re-verified against current source: the <code>AddCommonApiVersioning</code> host call sites (ADC
+          Conference <code>Program.cs:226</code>, Identity <code>:162</code>, Engagement <code>:156</code>, Notification <code>:145</code>; Store Catalog
+          <code>:146</code>, Sales <code>:154</code>, Identity <code>:141</code>; Helpdesk Web <code>Program.cs:35</code>), the registration options
+          (<code>WebApplicationBuilderExtensions.cs:46</code>-<code>:48</code>), explorer (<code>:50</code>-<code>:53</code>), result filter (<code>:60</code>),
+          <code>AddCommonOpenApi</code> (<code>WebApplicationBuilderExtensions.cs:101</code>) and <code>MapCommonOpenApi</code>
+          (<code>OpenApiEndpointExtensions.cs:60</code>, guard <code>:62</code>, throw <code>:67</code>, <code>.AllowAnonymous()</code> <code>:74</code>).</li>
+          </ol>
           <h2 id="related">Related</h2>
           <p>ADR-010 (integration-event schema versioning: the asynchronous, <code>SchemaVersion</code>-carried,
           consumer-resolved axis this deliberately contrasts with; HTTP versioning here is request-time and
@@ -602,6 +619,7 @@
             <li><a href="#revision-2026-10-07">Revision (2026-10-07)</a></li>
             <li><a href="#revision-2026-10-21">Revision (2026-10-21)</a></li>
             <li><a href="#revision-2026-10-26">Revision (2026-10-26)</a></li>
+            <li><a href="#revision-2026-10-28">Revision (2026-10-28)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

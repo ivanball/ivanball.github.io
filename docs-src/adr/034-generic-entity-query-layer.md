@@ -21,6 +21,8 @@ rather than `CreatedAtRoute`, the filter registry also covers the `Email` value 
 fail-closed CSV export is recorded among the virtual reads; anchors refreshed.
 Revised 2026-10-26: anchors refreshed after the create's `Location` and `Created` lines and the
 delete action in `AggregateRootEntityControllerBase.cs` moved up one line.
+Revised 2026-10-28: eight filter strategies (seven built-in primitive strategies plus the strongly
+typed identifier) implement `CanParseValue`, not six; `EmailFilterStrategy` takes the default.
 ## Context
 Every module exposes many entities, and most of them need the same read and write
 surface: list, page, look up for a dropdown, fetch by id, create, delete. Hand
@@ -358,3 +360,26 @@ the line anchors in `AggregateRootEntityControllerBase.cs` moved.
    (rebased in Decision item 2 and Trade-offs). Anchors inside the earlier Revision sections are
    left as recorded; the revision 2026-09-07 item 3 `LookupNameContract` check stays at the `:394`
    revision 2026-10-21 item 4 gives.
+
+## Revision (2026-10-28)
+Re-verified against current source. No decision, rationale or behavior changed. The fail-closed
+value check of revision 2026-07-24 item 1 holds, but its count of implementing strategies is stale;
+that section is left as recorded and the current set is stated here.
+
+1. **Eight strategies implement `CanParseValue`, not six.** The default interface member returns
+   `true` (`Source/Core/MMCA.Common.Application/Services/Filtering/IFilterStrategy.cs:44`). The
+   private helper `ValidateValueParseable` checks it
+   (`Source/Core/MMCA.Common.Application/Services/Filtering/QueryFilterService.cs:318`), called
+   from `ValidateSingleFilter` at `QueryFilterService.cs:297` under `ValidateFilters`
+   (`QueryFilterService.cs:182`), and the error it adds still names `ValidateFilters` as its source
+   (`QueryFilterService.cs:323`). Seven built-in primitive strategies implement it: `StringFilterStrategy.cs:26`, `BoolFilterStrategy.cs:20`,
+   `IntFilterStrategy.cs:25`, `LongFilterStrategy.cs:24`, `DateTimeFilterStrategy.cs:25`,
+   `DecimalFilterStrategy.cs:24` and `GuidFilterStrategy.cs:21` (all under
+   `Source/Core/MMCA.Common.Application/Services/Filtering/`), plus
+   `StronglyTypedIdFilterStrategy.cs:34`. `EmailFilterStrategy`
+   (`Source/Core/MMCA.Common.Application/Services/Filtering/ValueObjects/EmailFilterStrategy.cs:27`)
+   does not implement it and so takes the default.
+2. Anchors re-verified against current source: `IFilterStrategy.CanParseValue` default `:44`,
+   `QueryFilterService.cs` value check `:318` and `Email` registry entry `:50`. The by-id fast path
+   anchors recorded in revisions 2026-07-25 and 2026-09-07 stay as recorded; revision 2026-10-06
+   item 1 already gives their current locations.

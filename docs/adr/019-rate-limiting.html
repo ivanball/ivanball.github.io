@@ -279,7 +279,9 @@
           no fault between them can leave a counter key without a TTL, and the forwarded-header trade-off
           records that both Bicep templates declare service ingress internal-only.
           Revised 2026-10-26: anchors refreshed after the source moves since 2026-10-21, and Related names
-          ADR-135 as the record that owns the application-namespace decision the Redis partition key follows.</p>
+          ADR-135 as the record that owns the application-namespace decision the Redis partition key follows.
+          Revised 2026-10-28: anchors refreshed after the Bicep, UI host and Identity service source moves
+          since 2026-10-26.</p>
           <h2 id="context">Context</h2>
           <p>Every service exposes read and write endpoints to the public internet through the gateway (ADR-008).
           Abusive or runaway clients (scrapers, credential stuffing, retry storms, a buggy SPA stuck in a loop)
@@ -407,9 +409,9 @@
           <code>KnownProxies</code> (the shared options only clear them,
           <code>MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/CommonForwardedHeaders.cs:49</code>). The first
           is declared in infrastructure instead: both Bicep templates give every service container app
-          internal-only ingress (<code>external: false</code>, <code>MMCA.ADC/infra/main.bicep:1876</code>, <code>:2129</code>, <code>:2282</code>,
-          <code>:2417</code>; <code>MMCA.Store/infra/main.bicep:1529</code>, <code>:1711</code>, <code>:1835</code>) and expose only the gateway and the
-          UI host (ADC <code>:2607</code>, <code>:2770</code>; Store <code>:1987</code>, <code>:2116</code>), so traffic from outside the environment
+          internal-only ingress (<code>external: false</code>, <code>MMCA.ADC/infra/main.bicep:1873</code>, <code>:2126</code>, <code>:2279</code>,
+          <code>:2414</code>; <code>MMCA.Store/infra/main.bicep:1530</code>, <code>:1712</code>, <code>:1836</code>) and expose only the gateway and the
+          UI host (ADC <code>:2604</code>, <code>:2767</code>; Store <code>:1988</code>, <code>:2117</code>), so traffic from outside the environment
           reaches a service only through the gateway. A caller already inside the container-apps
           environment can still reach a service directly.</li>
           <li><strong>Per-user partitioning depends on the authenticated principal being populated</strong> when the limiter
@@ -423,11 +425,11 @@
           This holds for <code>auth-ip</code> and <code>FixedPolicy</code> (always in-memory), for the gateway limiters, and for
           the global, per-user and hub windows in any host that leaves <code>Distributed</code> unset (see the Revision
           (2026-08-18)). ADC production sets <code>RateLimiting__Distributed=true</code> on all four services
-          (<code>MMCA.ADC/infra/main.bicep:1952</code>, <code>:2193</code>, <code>:2330</code>, <code>:2484</code>; the AppHost does the same only in its
+          (<code>MMCA.ADC/infra/main.bicep:1949</code>, <code>:2190</code>, <code>:2327</code>, <code>:2481</code>; the AppHost does the same only in its
           opt-in multi-replica run, when <code>ADC_REPLICAS</code> is greater than 1,
           <code>MMCA.ADC/Source/Hosting/MMCA.ADC.AppHost/Program.cs:459-464</code>, <code>:477</code>), so there those three windows share one
           Redis budget across replicas and only <code>auth-ip</code> and the gateway limiters scale with replica count
-          (<code>MMCA.ADC/infra/main.bicep:1946-1951</code>). Store sets no <code>Distributed</code> value, so every Store limiter
+          (<code>MMCA.ADC/infra/main.bicep:1943-1948</code>). Store sets no <code>Distributed</code> value, so every Store limiter
           stays per-instance.</li>
           </ul>
           <h2 id="revision-2026-08-18">Revision (2026-08-18)</h2>
@@ -765,6 +767,32 @@
           <code>:2059</code> and <code>:2184</code>, and no service-side <code>RateLimiting__</code> key is set. The Trade-offs anchors now
           cite these lines.</li>
           </ol>
+          <h2 id="revision-2026-10-28">Revision (2026-10-28)</h2>
+          <p>Re-verified against current source. The layering, every default, the <code>auth-ip</code> surface, the
+          declared internal-only service ingress (only the gateway and the UI host are external in both
+          templates), ADC&#39;s <code>Distributed=true</code> on all four services, Store&#39;s absence of any service-side
+          <code>RateLimiting__</code> key, and the two-host scope of <code>AddTrustedCallerHeader</code> are unchanged. No behavior
+          moved; only anchors drifted since the 2026-10-26 revision, and the Trade-offs section now cites the
+          lines below.</p>
+          <ol>
+          <li>Anchors re-verified against current source. In <code>MMCA.ADC/infra/main.bicep</code> service ingress is
+          internal at <code>:1873</code>, <code>:2126</code>, <code>:2279</code> and <code>:2414</code> (the <code>external: false</code> at <code>:2425</code> is
+          Notification&#39;s internal gRPC port mapping), the gateway and UI host are external at <code>:2604</code> and
+          <code>:2767</code>, <code>RateLimiting__Distributed</code> is set at <code>:1949</code>, <code>:2190</code>, <code>:2327</code> and <code>:2481</code> (rationale
+          <code>:1943-1948</code>), <code>RateLimiting__AuthIpPermitLimit</code> <code>&#39;300&#39;</code> at <code>:2057</code> (rationale <code>:2049-2054</code>), and
+          the trusted-caller secret is injected at <code>:2680</code> and <code>:2839</code>. In <code>MMCA.Store/infra/main.bicep</code>
+          service ingress is internal at <code>:1530</code>, <code>:1712</code> and <code>:1836</code> (the <code>external: false</code> at <code>:1849</code> is
+          Sales&#39; internal gRPC port mapping), the gateway and UI host are external at <code>:1988</code> and <code>:2117</code>,
+          and the trusted-caller secret is injected at <code>:2060</code> and <code>:2185</code>; the only rate-limiting keys are
+          <code>GatewayRateLimiting__*</code>. <code>AddTrustedCallerHeader</code>
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI.Web/DependencyInjection.cs:121</code>) is called from
+          <code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs:144</code> and
+          <code>MMCA.Store/Source/Hosts/UI/MMCA.Store.UI.Web/Program.cs:136</code>. ADC Identity calls
+          <code>AddCommonRateLimiting(builder.Configuration)</code> at
+          <code>MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:173</code>. Store&#39;s UI
+          <code>GatewayRateLimiting</code> section is at <code>MMCA.Store/Source/Hosts/UI/MMCA.Store.UI.Web/appsettings.json:47</code>,
+          with <code>TrustedCallerHeaderName</code> at <code>:48</code>.</li>
+          </ol>
           <h2 id="related">Related</h2>
           <p>ADR-004 (the JWKS/discovery traffic the limiter exempts, and the authenticated principal it keys on),
           ADR-008 (the gateway edge this protects), ADR-017 (request idempotency, the other inbound-edge
@@ -802,6 +830,7 @@
             <li><a href="#revision-2026-10-19">Revision (2026-10-19)</a></li>
             <li><a href="#revision-2026-10-21">Revision (2026-10-21)</a></li>
             <li><a href="#revision-2026-10-26">Revision (2026-10-26)</a></li>
+            <li><a href="#revision-2026-10-28">Revision (2026-10-28)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

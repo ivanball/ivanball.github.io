@@ -265,7 +265,8 @@
           <code>main.bicep</code>, and anchors are refreshed after the v1.233.0 release. Revised 2026-10-21: anchors
           refreshed after the v1.250.0 consumer sweep. Revised 2026-10-24: anchors refreshed against current source.
           Revised 2026-10-26: anchors refreshed against current source, including the live-section host,
-          Gateway and <code>Extensions.cs</code> anchors the 2026-10-24 pass left stale.</p>
+          Gateway and <code>Extensions.cs</code> anchors the 2026-10-24 pass left stale. Revised 2026-10-28: anchors
+          refreshed against current source.</p>
           <h2 id="context">Context</h2>
           <p>ADC began as a modular monolith: one <code>MMCA.ADC.WebAPI</code> host loaded every module (Identity, Conference,
           Engagement, Notification) in-process via the <code>ModuleLoader</code>, sharing one database and dispatching
@@ -319,7 +320,7 @@
           configuration before anything binds settings (ADC <code>:68</code>, ahead of <code>AddServiceDefaults</code> at <code>:70</code>, the
           order every ADC service and UI host now follows too, for example
           <code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:115</code> before <code>:117</code>; Store
-          <code>MMCA.Store/Source/Hosts/MMCA.Store.Gateway/Program.cs:64</code>). Store&#39;s Gateway is the same shape
+          <code>MMCA.Store/Source/Hosts/MMCA.Store.Gateway/Program.cs:67</code>). Store&#39;s Gateway is the same shape
           without the static files, the <code>/privacy</code>, <code>/terms</code> and <code>/delete-account</code> endpoints, the upload cap and the authorization pair: its
           routes declare <code>anonymous</code> too, but it registers no authorization middleware, by design
           (<code>MMCA.Store/Source/Hosts/MMCA.Store.Gateway/appsettings.json:45-49</code>).</li>
@@ -327,8 +328,8 @@
           asynchronous flows over the outbox to MassTransit broker (ADR-003, ADR-006). Token validation is
           federated via JWKS (ADR-004): locally the AppHost points each service at Identity through the Gateway
           (<code>MMCA.ADC/Source/Hosting/MMCA.ADC.AppHost/Program.cs:374-376</code>), while in production each service
-          sets its JWT authority to Identity&#39;s internal URL directly (<code>MMCA.ADC/infra/main.bicep:2195</code>, <code>:2331</code>,
-          <code>:2485</code>). Each service owns its own database (ADR-006).</li>
+          sets its JWT authority to Identity&#39;s internal URL directly (<code>MMCA.ADC/infra/main.bicep:2192</code>, <code>:2328</code>,
+          <code>:2482</code>). Each service owns its own database (ADR-006).</li>
           <li><strong>Transport stays at the edge, enforced.</strong> <code>MicroserviceExtractionTests</code> in the architecture suite
           forbid gRPC / MassTransit / Protobuf dependencies in any Domain, Application, or Shared assembly, so the
           core stays host-agnostic and the split stays reversible.</li>
@@ -382,8 +383,8 @@
           nothing runs is a claim. They are not the output of a scale, team or deploy-cadence trigger. The
           conference peaked at roughly 67 concurrent users (Context above), one team owns every module, and all
           six deployables still ship in a single pipeline run from one template
-          (<code>MMCA.ADC/infra/main.bicep:1861</code>, <code>:2114</code>, <code>:2267</code>, <code>:2402</code>, <code>:2592</code>, <code>:2755</code>, deployed together by a
-          single <code>azure/arm-deploy</code> step for <code>main.bicep</code> at <code>MMCA.ADC/.github/workflows/deploy.yml:1448-1454</code>), so the
+          (<code>MMCA.ADC/infra/main.bicep:1858</code>, <code>:2111</code>, <code>:2264</code>, <code>:2399</code>, <code>:2589</code>, <code>:2752</code>, deployed together by a
+          single <code>azure/arm-deploy</code> step for <code>main.bicep</code> at <code>MMCA.ADC/.github/workflows/deploy.yml:1449-1455</code>), so the
           independent-deploy benefit this record lists is available rather than taken. What ADC does buy with the split is proof under load that the path
           works: transport stays out of Domain, Application and Shared under a build gate
           (<code>MMCA.ADC/Tests/Architecture/MMCA.ADC.Architecture.Tests/Layering/MicroserviceExtractionTests.cs:3</code>), and the
@@ -507,6 +508,23 @@
           <code>:988</code>; <code>AddServiceDefaults</code> declared at
           <code>MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Extensions.cs:33</code>.</li>
           </ol>
+          <h2 id="revision-2026-10-28">Revision (2026-10-28)</h2>
+          <p>Re-verified against current source. No content changed: Store&#39;s Gateway still layers Key Vault
+          configuration ahead of <code>AddServiceDefaults</code> and registers no authorization middleware while every
+          route declares <code>anonymous</code>, production still points the JWT authority at Identity&#39;s internal URL,
+          and exactly six container apps (and no container app jobs) still deploy from one <code>main.bicep</code>
+          arm-deploy step beside the separate <code>foundation.bicep</code> step. Only line numbers moved; the dated
+          revisions above keep their anchors as written.</p>
+          <ol>
+          <li>Anchors re-verified against current source: Store Gateway Key Vault at
+          <code>MMCA.Store/Source/Hosts/MMCA.Store.Gateway/Program.cs:67</code> before <code>AddServiceDefaults</code> at <code>:69</code>
+          (by-design comment at <code>MMCA.Store/Source/Hosts/MMCA.Store.Gateway/appsettings.json:45-49</code>, the
+          <code>anonymous</code> policy at <code>:54</code>); production JWT authority at <code>MMCA.ADC/infra/main.bicep:2192</code>,
+          <code>:2328</code> and <code>:2482</code>; the six container apps at <code>:1858</code> (Identity), <code>:2111</code> (Conference), <code>:2264</code>
+          (Engagement), <code>:2399</code> (Notification), <code>:2589</code> (Gateway) and <code>:2752</code> (UI); the <code>main.bicep</code>
+          arm-deploy step at <code>MMCA.ADC/.github/workflows/deploy.yml:1449-1455</code> (<code>uses</code> at <code>:1451</code>,
+          template at <code>:1454</code>) and the <code>foundation.bicep</code> arm-deploy step at <code>:988</code>.</li>
+          </ol>
           <h2 id="related">Related</h2>
           <p>ADR-003 (outbox dual dispatch), ADR-004 (cross-service token validation via JWKS), ADR-006 (database
           per service), and ADR-007 (gRPC cross-service calls) are the facet decisions that sit under this extraction.</p>
@@ -532,6 +550,7 @@
             <li><a href="#revision-2026-10-21">Revision (2026-10-21)</a></li>
             <li><a href="#revision-2026-10-24">Revision (2026-10-24)</a></li>
             <li><a href="#revision-2026-10-26">Revision (2026-10-26)</a></li>
+            <li><a href="#revision-2026-10-28">Revision (2026-10-28)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

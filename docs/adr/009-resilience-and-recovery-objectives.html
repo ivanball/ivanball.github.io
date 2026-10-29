@@ -272,6 +272,7 @@
           <p>Revised 2026-10-26: <code>AddTypedServiceClient</code> and its registration test are gone (removed in
           v1.254.0), so the HTTP half of Decision point 1 now rests on the global Aspire
           <code>ConfigureHttpClientDefaults</code> handler alone; other anchors refreshed.</p>
+          <p>Revised 2026-10-28: anchors refreshed after the v1.265.1 release.</p>
           <h2 id="context">Context</h2>
           <p>The framework already supplies the <em>mechanisms</em> for surviving partial failure: a standard Polly
           resilience handler (timeout / retry / circuit breaker), the outbox for at-least-once delivery
@@ -297,7 +298,7 @@
           <code>HttpResilienceDefaults</code> (<code>:62-65</code>) and switches the retry off for POST and PATCH (<code>:74</code>). The
           framework no longer ships a typed HTTP service-client helper: <code>AddTypedServiceClient</code> was removed
           in v1.254.0, gRPC through <code>AddTypedGrpcClient</code> is the supported cross-service client, and a host
-          that wants a typed <code>HttpClient</code> registers it itself (<code>MMCA.Common/CHANGELOG.md:150</code>).
+          that wants a typed <code>HttpClient</code> registers it itself (<code>MMCA.Common/CHANGELOG.md:193</code>).
           <code>AddTypedGrpcClient</code> reads the <code>Grpc</code>-prefixed members of the same <code>HttpResilienceDefaults</code>
           (<code>MMCA.Common/Source/Presentation/MMCA.Common.Grpc/DependencyInjection.cs:141-167</code>). Its timeouts
           are the east-west path&#39;s own, not the outbound-HTTP 30s/90s: an 8-second attempt and a 20-second
@@ -663,6 +664,21 @@
           <code>MMCA.Store/.github/workflows/deploy.yml:791-802</code> (the 8-day window at <code>:855</code> and <code>:799</code>).
           Citations inside the earlier Revision sections are left as recorded.</li>
           </ol>
+          <h2 id="revision-2026-10-28">Revision (2026-10-28)</h2>
+          <p>Re-verified against current source. The Decision, the reference objectives, the outbox breaker, the
+          database posture, the Stripe single-retry-owner pipeline and the removal of <code>AddTypedServiceClient</code>
+          (no match remains under <code>MMCA.Common/Source</code>) stand as recorded. Only line positions moved, as
+          later releases pushed the CHANGELOG entry down.</p>
+          <ol>
+          <li>Anchors re-verified against current source: the <code>AddTypedServiceClient</code> removal at
+          <code>MMCA.Common/CHANGELOG.md:193</code>, under the <code>### Breaking</code> heading at <code>:191</code> of the
+          <code>## [1.254.0] - 2026-10-24</code> section at <code>:178</code> (Decision point 1 re-pointed from <code>:150</code>). The
+          Stripe <code>IsTransientFailure</code> sits at
+          <code>MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Infrastructure/Payments/Stripe/StripePaymentService.cs:607-614</code>
+          (the timeout arm at <code>:612</code>), with the pipeline at <code>:76-113</code>, retry <code>:77</code>, breaker <code>:94</code> and both
+          <code>ShouldHandle</code> predicates through <code>IsTransientFailure</code> at <code>:87</code> and <code>:101</code> unchanged. Citations
+          inside the earlier Revision sections are left as recorded.</li>
+          </ol>
           
         <div class="doc-foot btn-row">
           <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
@@ -686,6 +702,7 @@
             <li><a href="#revision-2026-10-07">Revision (2026-10-07)</a></li>
             <li><a href="#revision-2026-10-21">Revision (2026-10-21)</a></li>
             <li><a href="#revision-2026-10-26">Revision (2026-10-26)</a></li>
+            <li><a href="#revision-2026-10-28">Revision (2026-10-28)</a></li>
             </ul>
           </nav>
         </aside>

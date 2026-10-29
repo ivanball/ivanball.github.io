@@ -10,6 +10,7 @@ Terms of Service acceptance as a fifth opt-in completion of the same shape (see 
 Revised 2026-10-07: anchors refreshed after the v1.233.0 release.
 Revised 2026-10-21: anchors refreshed after the v1.250.0 release.
 Revised 2026-10-26: anchors refreshed after the v1.261.0 release.
+Revised 2026-10-28: anchors refreshed after the v1.265.1 release.
 Layers stored permission grants over
 [ADR-020](020-permission-based-authorization.md)'s compiled registry and extends the shared sign-in
 workflow of [ADR-050](050-jwt-refresh-token-rotation.md) with optional collaborators.
@@ -91,7 +92,7 @@ same one.**
    (`.../UseCases/Markers/IRequiresMfa.cs:28`) is checked by the decorators through the shared
    `AuthorizationGate` (`.../UseCases/Decorators/AuthorizationGate.cs:60`), which reads the claim via
    `ClaimsPrincipalExtensions.HasMultiFactor`
-   (`MMCA.Common/Source/Core/MMCA.Common.Shared/Auth/ClaimsPrincipalExtensions.cs:127`) rather than
+   (`MMCA.Common/Source/Core/MMCA.Common.Shared/Auth/ClaimsPrincipalExtensions.cs:128`) rather than
    widening `ICurrentUserService`. Absence denies; there is no "this account has no second factor so
    let it through" branch.
 
@@ -174,7 +175,7 @@ same one.**
 9. **One new package, in Infrastructure only.** `Otp.NET` (MIT, netstandard2.0, no transitive graph)
    supplies the RFC 6238 grammar and the Base32 alphabet, which the BCL has no primitive for. It is
    referenced by `MMCA.Common.Infrastructure` alone
-   (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/MMCA.Common.Infrastructure.csproj:74`, used by
+   (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/MMCA.Common.Infrastructure.csproj:78`, used by
    `.../Auth/TwoFactor/TotpTwoFactorService.cs:35`); Application, Domain and Shared stay
    dependency-free, matching the `Cronos` precedent.
 
@@ -240,10 +241,10 @@ same one.**
     that the principal carries as a claim
     (`MMCA.Common/Source/Core/MMCA.Common.Application/UseCases/Decorators/AuthorizationGate.cs:46-48`,
     over `ClaimsPrincipalExtensions.HasPermissionClaim`,
-    `.../Shared/Auth/ClaimsPrincipalExtensions.cs:94`), and the UI gates a navigation entry on
+    `.../Shared/Auth/ClaimsPrincipalExtensions.cs:95`), and the UI gates a navigation entry on
     `NavItem.RequiredPermission`
     (`MMCA.Common/Source/Presentation/MMCA.Common.UI/Common/NavItem.cs:20`,
-    `.../UI/Layout/NavMenu.razor:259`). The deployment consequence is a design rule, not framework
+    `.../UI/Layout/NavMenu.razor:265`). The deployment consequence is a design rule, not framework
     code: where modules run as separate services, the host that mints tokens (the Identity service)
     registers every module's compiled grants so a token carries the full permission set, and the
     stored grants live only in that host, reaching the other services through the claims alone.
@@ -262,7 +263,7 @@ same one.**
     service, and it routes a subclass of `LegalAcceptanceControllerBase`
     (`MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/Legal/LegalAcceptanceControllerBase.cs:45`).
     The version is the server's: at registration the client sends only an `AcceptedTerms` flag and the
-    server stamps its own configured version (`MMCA.Common/CHANGELOG.md:764`), a `POST` naming any
+    server stamps its own configured version (`MMCA.Common/CHANGELOG.md:807`), a `POST` naming any
     other version is refused with `Legal.VersionNotCurrent`
     (`MMCA.Common/Source/Core/MMCA.Common.Application/Auth/Legal/LegalAcceptancePolicy.cs:33`), and
     both controller answers pass through `LegalAcceptancePolicy.Normalize` (`:47`), which re-derives
@@ -271,9 +272,9 @@ same one.**
     (`MMCA.Common/Source/Presentation/MMCA.Common.UI/Components/Legal/TermsAcceptanceGate.razor.cs:29`)
     is a layout component the host adds itself; its dialog cannot be dismissed (no backdrop click,
     Escape, close on navigation or close button, `:39-42`), so a user whose accepted version is no
-    longer current re-accepts or signs out. It shipped in 1.223.0 (`MMCA.Common/CHANGELOG.md:758`).
+    longer current re-accepts or signs out. It shipped in 1.223.0 (`MMCA.Common/CHANGELOG.md:801`).
     MMCA.ADC adopts it
-    (`MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:248`,
+    (`MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:249`,
     `MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Domain/Users/User.cs:36`,
     `.../Identity.API/Controllers/LegalAcceptanceController.cs:28`,
     `.../Identity.UI/IdentityUIModule.cs:33`); MMCA.Store and MMCA.Helpdesk do not.
@@ -433,6 +434,30 @@ anchors moved.
    `ILegalAcceptingUser` at
    `MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Domain/Users/User.cs:36`. The Context and items
    2, 3, 4, 9, 11 and 13 now cite these.
+
+## Revision (2026-10-28)
+Re-verified against current source. The decision, the five opt-in completions and their behaviour
+are unchanged: `Otp.NET` is still referenced by `MMCA.Common.Infrastructure` alone, the navigation
+filter still admits an entry whose `RequiredPermission` is null or carried as a claim,
+`LegalAcceptancePolicy.EnsureAcceptsCurrentVersion` (`:33`) still refuses a non-current version with
+`Legal.VersionNotCurrent` (`:36`), and MMCA.ADC still adopts Terms of Service acceptance. Only line
+anchors moved.
+
+1. The Status line records a 2026-09-19 revision that has no `## Revision (2026-09-19)` section
+   below. The file history shows none was ever written, not that one was dropped: the 2026-09-19
+   change (Website #197) edited item 10 in place and recorded the change only in the Status
+   parenthetical. The Status sentence is accurate as a record of that change; its "13 of them" figure
+   was later corrected to 14 across 13 components (see the 2026-10-01 and 2026-10-06 Revisions).
+2. Anchors re-verified against current source: `ClaimsPrincipalExtensions.HasMultiFactor` is
+   `MMCA.Common/Source/Core/MMCA.Common.Shared/Auth/ClaimsPrincipalExtensions.cs:128` and
+   `HasPermissionClaim` `:95`; `Otp.NET` is referenced at
+   `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/MMCA.Common.Infrastructure.csproj:78`; the
+   `RequiredPermission` filter is
+   `MMCA.Common/Source/Presentation/MMCA.Common.UI/Layout/NavMenu.razor:265`; in item 13 the
+   server-stamped version is `MMCA.Common/CHANGELOG.md:807` and the 1.223.0 release `:801`, and
+   MMCA.ADC registers `AddLegalAcceptance` at
+   `MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:249`. Items 3, 9, 12 and 13 now
+   cite these.
 
 ## Related
 [ADR-020](020-permission-based-authorization.md) (the compiled role-to-permission registry stored

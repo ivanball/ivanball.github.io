@@ -25,6 +25,8 @@ repos held to it.
 Revised 2026-10-26: the Decision paragraph names Store's `RolesManage` alias (outside `All`) and
 records that both Identity grant maps name the framework administration capabilities by value,
 partly through aliases; the ADC Notification registration anchor refreshed.
+Revised 2026-10-28: anchors refreshed after edits to `NavMenu.razor` and
+`ClaimsPrincipalExtensions.cs` moved the navigation-filter and `HasPermissionClaim` lines.
 ## Context
 The default answer in ASP.NET Core is pure role-based access control (RBAC): an endpoint declares
 `[Authorize(Policy = "RequireOrganizer")]` against a named policy that calls `RequireRole(...)`, and a
@@ -120,12 +122,12 @@ role string reaches framework code only when a host supplies it, as the key it h
 `AddPermissions(...)` or as a role-valued setting on a framework gate. The framework's own
 navigation entries gate on `NavItem.RequiredPermission`
 (`MMCA.Common/Source/Presentation/MMCA.Common.UI/Common/NavItem.cs:20`, matched against the
-`permission` claim at `.../UI/Layout/NavMenu.razor:259`), the notification entry on
+`permission` claim at `.../UI/Layout/NavMenu.razor:265`), the notification entry on
 `NotificationPermissions.Manage`
 (`.../UI/Notifications/NotificationUIModule.cs:20`). The role-valued settings are all host-supplied
 and empty by default: the signed-in-devices entry narrows to `LayoutSettings.SessionsNavRequiredRole`
 when one is configured (`.../UI/Common/Settings/LayoutSettings.cs:39`, checked with `IsInRole` at
-`.../UI/Layout/NavMenu.razor:252-253`), a host's own `NavItem.RequiredRole` is honoured (`:257`), the
+`.../UI/Layout/NavMenu.razor:258-259`), a host's own `NavItem.RequiredRole` is honoured (`:263`), the
 owner-or-admin bypass role is required configuration a host supplies
 (`OwnerOrAdminFilterOptions.BypassRole`, `.../API/Authorization/OwnerOrAdminFilterOptions.cs:24`;
 [ADR-033](033-resource-ownership-authorization.md)), the public output-cache policy takes its bypass
@@ -146,7 +148,7 @@ because the registry it resolves is the layered one. The HTTP policy handler eva
 capability through the registry, and the CQRS `AuthorizationGate` passes a request whose permission
 the registry grants to the caller's roles OR that the principal carries as a claim
 (`MMCA.Common/Source/Core/MMCA.Common.Application/UseCases/Decorators/AuthorizationGate.cs:46-48`,
-over `ClaimsPrincipalExtensions.HasPermissionClaim`, `.../Shared/Auth/ClaimsPrincipalExtensions.cs:94`).
+over `ClaimsPrincipalExtensions.HasPermissionClaim`, `.../Shared/Auth/ClaimsPrincipalExtensions.cs:95`).
 
 That claim is what makes the model work when the modules run as separate services. The host that mints
 tokens (the Identity service) has to register every module's compiled grants, so a token carries the
@@ -278,6 +280,18 @@ already records the current locations for both.
    The effective grants are the same framework values; the Decision paragraph now says so literally.
 2. Anchors re-verified against current source: the ADC Notification grant is applied from
    `MMCA.ADC/Source/Modules/Notification/MMCA.ADC.Notification.API/DependencyInjection.cs:46`.
+
+## Revision (2026-10-28)
+Re-verified against current source. The decision, the grant model, every permission count and the
+navigation filtering behaviour are unchanged; only live anchors moved. The earlier dated revisions
+keep their anchors as written.
+
+1. Anchors re-verified against current source: in
+   `MMCA.Common/Source/Presentation/MMCA.Common.UI/Layout/NavMenu.razor` the
+   `SessionsNavRequiredRole` read and `IsInRole` check sit at `:258-259`, the `NavItem.RequiredRole`
+   filter at `:263` and the `RequiredPermission` filter (over `HasPermissionClaim`) at `:265`;
+   `HasPermissionClaim` is declared at
+   `MMCA.Common/Source/Core/MMCA.Common.Shared/Auth/ClaimsPrincipalExtensions.cs:95`.
 
 ## Related
 ADR-004 (the authenticated principal and claims this keys on, including the optional `permission`

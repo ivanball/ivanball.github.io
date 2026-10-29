@@ -24,6 +24,7 @@ Revised 2026-10-07: a login or change-password lockout answers 429 `Auth.TooMany
 still answers 401; see Revision below.
 Revised 2026-10-21: the timing burn for an address with no usable credential is a discarded hash rather than a decoy verify, a wrong second-factor code also increments the login counter, change-password rejects a credential-less account before its lockout check, and the hybrid-cache checks read past L1; anchors refreshed.
 Revised 2026-10-26: the password verifier accepts a legacy 64-byte hash or a versioned header-plus-hash (not a 64-byte hash only); the login branches no longer all pay the same key-derivation cost, since a legacy record verifies at 600,000 iterations while the burn hashes at the current 210,000 (the gap ADR-133 accepts); a successful sign-in now ends with a best-effort password rehash; and the live anchors were refreshed.
+Revised 2026-10-28: anchors refreshed after Common #615 and ADC #298 moved them.
 ## Context
 ADR-019's global rate limiter is **principal-keyed**: it caps requests per authenticated principal,
 and anonymous traffic is exempt with one metered exception, the configured real-time hub path
@@ -91,7 +92,7 @@ table.
   the same default. `HybridCacheService`, the opt-in two-level implementation a host selects by calling
   `AddCommonHybridCache` (which replaces whatever `ICacheService` was registered) or its guarded form
   `AddCommonHybridCacheWhenRedisConfigured`, which registers it only when the Redis connection string
-  is set (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.Caching.cs:202-214`),
+  is set (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.Caching.cs:218-230`),
   overrides it (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Caching/HybridCacheService.cs:327`) with the
   same read-modify-write shape and additionally forces both legs past the in-process L1: an L1 hit would
   let a replica read a stale counter and write it back near its starting value, which is a security
@@ -156,7 +157,7 @@ table.
   cache does not aggregate an attacker hitting different replicas. The answer is the same as ADR-026:
   register a distributed cache once scaled out. Both apps do: every ADC and Store service host calls
   `AddCommonHybridCacheWhenRedisConfigured` (for example
-  `MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:145`,
+  `MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:146`,
   `MMCA.Store/Source/Services/MMCA.Store.Identity.Service/Program.cs:109`), so with Redis configured
   the counters run through `HybridCacheService.IncrementAsync`.
 - **Normalization widens the DoS lever slightly.** Collapsing every spelling onto one counter is what
@@ -384,6 +385,25 @@ key-derivation cost" wording of the 2026-09-07 and 2026-10-21 passes) record tho
    `MMCA.Common/CHANGELOG.md:820` (heading `:808`). `ChangePasswordHandlerBase.cs` (`:61`, `:96-100`,
    `:103`, `:111`, `:116`, `:145-146`), `DependencyInjection.Caching.cs:202-214`,
    `ApiControllerBase.cs:48` and `ErrorHttpMapping.cs:26`, `:31` are unchanged.
+
+## Revision (2026-10-28)
+Re-verified against current source. No behavior changed: the lockout model, the backoff formula,
+the registration throttle, the non-atomic counters, the fail-open posture, the `429` / `401` answers
+and the login step order are as the 2026-10-26 Revision records them. Two live anchors moved after
+Common #615 and ADC #298; the anchors inside the dated revisions above (including the "unchanged"
+note on `DependencyInjection.Caching.cs:202-214`, `Program.cs:145` and the `MMCA.Common/CHANGELOG.md`
+lines of the 2026-10-26 pass) record those passes as written.
+
+1. Anchors re-verified against current source: the guarded
+   `AddCommonHybridCacheWhenRedisConfigured` now runs
+   `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.Caching.cs:218-230`
+   (declaration `:218`, connection-string guard `:224`, the `AddCommonHybridCache` call `:226`;
+   `:202-214` is now its XML doc comment, and `AddCommonHybridCache` itself is declared at `:157`),
+   and the ADC Identity host calls it at
+   `MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:146`. The Decision and Trade-offs
+   anchors were re-pointed. For the record, the CHANGELOG entries cited by the 2026-10-26 pass now sit
+   at `MMCA.Common/CHANGELOG.md:863` (Common 1.219.0 lockout to `TooManyRequests`, heading `:851`)
+   and `:226` (Common 1.252.0 best-effort rehash, heading `:214`).
 
 ## Alternatives rejected
 - **Making the failed-attempt and registration counters atomic.** The increment in

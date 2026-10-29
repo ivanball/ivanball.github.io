@@ -18,6 +18,7 @@ Revised 2026-10-06: the question award runs through `BestEffort.ExecuteAsync`, t
 Revised 2026-10-07: anchors refreshed after the v1.233.0 release.
 Revised 2026-10-21: session check-in points are awarded once per time slot rather than once per session (a handler-side rule over a Conference schedule read, layered on the ledger index), the room self check-in response reports `EarnsPoints` and `PointsPaused` and refuses the check-in when the Conference lookup fails, an absent points entry keeps its default rather than disabling the rule, and a lost check-in insert race answers as a repeat.
 Revised 2026-10-26: the two self-service check-ins now record that they refuse an erased account and an unpublished event, a lost concurrent opt-out answers as success, the `UserDeleted` consumer also erases the attendee badge (so the display name is not the only data it reaches), the five pre-redelivery retries are exponential (1 to 30 seconds) rather than immediate, and anchors are refreshed.
+Revised 2026-10-28: the points awarder awards nothing to an erased account and the leaderboard join refuses an erased account up front, and anchors are refreshed.
 
 ## Context
 ADC wanted two conference-day capabilities that turn out to be one mechanism. Organizers want to know
@@ -169,13 +170,20 @@ built so it can MOVE to MMCA.Common the day a second consumer (Store loyalty) ex
   configuration restates the same seven values rather than relying on the defaults
   (`.../MMCA.ADC.Engagement.Service/appsettings.json:26-34`).
 - **Zero disables a rule.** `PointsAwarder` short-circuits on `value <= 0` and writes nothing
-  (`.../Points/Services/PointsAwarder.cs:43-51`). An absent config entry does not take that path:
+  (`.../Points/Services/PointsAwarder.cs:47-52`). An absent config entry does not take that path:
   the section binds without validation (`.../MMCA.ADC.Engagement.Service/Program.cs:134-135`), so a
   missing key keeps the property default above.
+- **An erased account earns nothing.** After the rule check, `PointsAwarder` runs
+  `ErasedUserGuard.EnsureNotErasedAsync` and returns a success no-op for an erased account
+  (`PointsAwarder.cs:54-61`). Every points adapter, the Conference feedback events included, comes
+  through the awarder, so that one check covers every award trigger below. Because it is a success,
+  the integration-event adapters do not log their award-failed warning for it (they log on a failed
+  award and never throw, `.../Points/IntegrationEventHandlers/SessionFeedbackSubmittedPointsHandler.cs:51-52`,
+  `AttendeeCheckedInPointsHandler.cs:78-79`).
 - The awarded `Points` value is snapshotted onto the entry at award time (`PointsEntry.cs:40`), so the
   ledger records what a rule was worth then.
-- A duplicate is success, not failure: the pre-check returns `Result.Success()` (`PointsAwarder.cs:55-64`)
-  and a lost race is caught and also returns success (`:75-82`).
+- A duplicate is success, not failure: the pre-check returns `Result.Success()` (`PointsAwarder.cs:65-74`)
+  and a lost race is caught and also returns success (`:85-92`).
 
 Award triggers come from three different mechanisms, chosen per event source:
 
@@ -214,8 +222,8 @@ as the row (ADR-003), and it carries `Scope` as a **string** (`:26`) so a new sc
 `SponsorId` proved that: it was added as an optional last parameter (`:31`), so consumers keep
 deserializing payloads that predate it. It is ADC's first broker self-consumption: the Engagement
 service both publishes and consumes it
-(`.../Services/MMCA.ADC.Engagement.Service/Program.cs:283-292` for the reasoning, `:305-308` for the
-four `RegisterIntegrationEventConsumer<T>` calls inside `AddBrokerMessaging` at `:303`).
+(`.../Services/MMCA.ADC.Engagement.Service/Program.cs:284-293` for the reasoning, `:306-309` for the
+four `RegisterIntegrationEventConsumer<T>` calls inside `AddBrokerMessaging` at `:304`).
 
 The two feedback events are new to the Conference module
 (`.../Conference.Shared/Sessions/IntegrationEvents/SessionFeedbackSubmitted.cs:20-26`,
@@ -237,23 +245,30 @@ keyed by session rather than by question (`:95`).
 ### The leaderboard is opt-in, and opting in is a row
 `LeaderboardOptIn` (`.../Engagement.Domain/Points/LeaderboardOptIn.cs:32`, `:35`) holds `UserId` and a
 `DisplayName` snapshot, resolved server-side from the caller's token claims rather than accepted from the
-request body (`SetLeaderboardParticipationHandler.cs:190-221`, the three claim lookups at `:192-194`;
+request body (`SetLeaderboardParticipationHandler.cs:199-230`, the three claim lookups at `:201-203`;
 the request carries only `Participate`, `.../Engagement.Shared/Points/SetLeaderboardParticipationRequest.cs:11`,
-dispatched at `SetLeaderboardParticipationHandler.cs:53-55`).
-Opting out soft-deletes the row (`LeaveAsync`, `:143-172`, `active.Delete()` at `:155`) and rejoining
-reactivates it (`JoinAsync`, `:62-127`, the reactivation at `:99`, the BR-135 pattern), so nobody's name is on the board without a
+dispatched at `SetLeaderboardParticipationHandler.cs:54-56`).
+Opting out soft-deletes the row (`LeaveAsync`, `:152-181`, `active.Delete()` at `:164`) and rejoining
+reactivates it (`JoinAsync`, `:63-136`, the reactivation at `:108`, the BR-135 pattern), so nobody's name is on the board without a
 live opt-in. A concurrent opt-out that loses the rowversion check to an identical one is a success,
-since being off the board is what was asked (`:163-169`). A row whose name was erased is terminal: rejoining it returns `Forbidden`
-`Points.AccountErased` instead of reactivating (`:88-97`). A join that loses a race to a concurrent
+since being off the board is what was asked (`:172-178`). A join from an erased account's
+still-valid token is refused before anything else, by the same `ErasedUserGuard` the self-service
+check-ins use (`:71-74`), which returns `Forbidden` `Engagement.AccountErased`
+(`.../Engagement.Application/ErasedUsers/ErasedUserGuard.cs:18`, `:37-41`). The `ErasedUser` record
+it checks is written during the same `UserDeleted` delivery that erases the name
+(`.../SessionQuestions/IntegrationEventHandlers/UserDeletedSessionQuestionsHandler.cs:101-115`), so
+once erasure has finished that is the code an erased account's rejoin gets. A row whose name was
+erased is also terminal on its own: when no `ErasedUser` record exists, rejoining it returns
+`Forbidden` `Points.AccountErased` instead of reactivating (`:100-106`), a backstop behind the guard. A join that loses a race to a concurrent
 identical join (a unique-index violation on the insert path, or a concurrency conflict on the
-reactivate path) is treated as the already-on-board success (`IsLostJoinRace`, `:135-137`, catch filter
-at `:116`). Erasure is a separate, irreversible promise: `EraseDisplayName()` (`LeaderboardOptIn.cs:119-130`)
+reactivate path) is treated as the already-on-board success (`IsLostJoinRace`, `:144-146`, catch filter
+at `:125`). Erasure is a separate, irreversible promise: `EraseDisplayName()` (`LeaderboardOptIn.cs:119-130`)
 overwrites the published name in place when the account behind it is erased, and it is driven by a fourth
-broker consumer, `UserDeleted` -> `UserDeletedPointsHandler` (`Program.cs:308`, the mapping documented at
-`:268-277`, the `UserDeleted` line at `:275`), because the published name lives in the Engagement
+broker consumer, `UserDeleted` -> `UserDeletedPointsHandler` (`Program.cs:309`, the mapping documented at
+`:268-278`, the `UserDeleted` line at `:276`), because the published name lives in the Engagement
 database, beyond the reach of the Identity-side erasure. It is not the only such data: the same
 consumer also runs the bookmark, session-question, poll-vote and badge erasure handlers
-(`Program.cs:276-277`), and `UserDeletedBadgeHandler` deletes the attendee badge for the same reason,
+(`Program.cs:277-278`, the erasure rationale at `:280-282`), and `UserDeletedBadgeHandler` deletes the attendee badge for the same reason,
 its per-user credential being out of Identity's reach
 (`.../CheckIns/IntegrationEventHandlers/UserDeletedBadgeHandler.cs:10-13`). The opt-in row itself survives (anonymize-in-place,
 ADR-005). `GetLeaderboard`
@@ -357,8 +372,8 @@ which belong to the live-poll and question-upvote features rather than to this r
   someone who can: `IUniqueConstraintViolationDetector`
   (`MMCA.Common.Application/Interfaces/Infrastructure/Persistence/IUniqueConstraintViolationDetector.cs:31`) is
   constructor-injected into the handlers on this surface that can lose an insert race, so `PointsAwarder`
-  (`:32`, catch filter at `:75`), `SetLeaderboardParticipationHandler` (`:35`, catch filter at `:116`,
-  the detector call at `:136`, alongside `IConcurrencyConflictDetector` at `:36`) and
+  (`:33`, catch filter at `:85`), `SetLeaderboardParticipationHandler` (`:36`, catch filter at `:125`,
+  the detector call at `:145`, alongside `IConcurrencyConflictDetector` at `:37`) and
   `GetOrCreateMyBadgeHandler` (`:22`, catch filter at `:62`) classify one way rather than three; other Engagement
   handlers outside this record inject it the same way (`CreateBookmarkHandler.cs:22`,
   `CastVoteHandler.cs:26`, `ToggleUpvoteHandler.cs:23`). The check-in write path reaches the same
@@ -528,6 +543,31 @@ Identity's reach), and item 4 restates the Trade-offs retry and redelivery sched
    `:13-41`, `SessionCheckIn` `:22`, `SponsorVisit` `:38` (doc `:33-38`), `LeaderboardSize` `:41`;
    `GetOrCreateMyBadgeHandler.cs` `:22`, `:62`; `CreateBookmarkHandler.cs:22`;
    `MessageBusSettings.cs:99`.
+
+## Revision (2026-10-28)
+Re-verified against current source. The opaque credential, the scoped `CheckIn` aggregate, the
+ledger index, the once-per-time-slot rule, broker self-consumption with the same four consumers
+(`AttendeeCheckedIn`, `SessionFeedbackSubmitted`, `EventFeedbackSubmitted`, `UserDeleted`), and the
+opt-in leaderboard are unchanged. Items 1 and 2 add erased-account guards the Decision omitted;
+item 3 re-points the anchors that the inserted guards and the `Program.cs` edits moved.
+
+1. `PointsAwarder` awards nothing to an erased account: after the rule check it runs
+   `ErasedUserGuard.EnsureNotErasedAsync` and returns a success no-op
+   (`Source/Modules/Engagement/MMCA.ADC.Engagement.Application/Points/Services/PointsAwarder.cs:54-61`),
+   so one check covers every points adapter, the Conference feedback events included. The Decision
+   gains an "An erased account earns nothing" bullet.
+2. `SetLeaderboardParticipationHandler.JoinAsync` refuses a join from an erased account before
+   anything else (`SetLeaderboardParticipationHandler.cs:71-74`) with `Engagement.AccountErased`
+   (`ErasedUserGuard.cs:18`), so the terminal `Points.AccountErased` row check (`:100-106`) is now a
+   backstop for an erased row with no `ErasedUser` record. The leaderboard paragraph now says so.
+3. Anchors re-verified against current source: Engagement service `Program.cs` reasoning `:284-293`,
+   `AddBrokerMessaging` `:304`, consumers `:306-309` (`UserDeleted` `:309`), mapping `:268-278`
+   (`UserDeleted` `:276`, the other erasure handlers `:277-278`), erasure rationale `:280-282`;
+   `PointsAwarder.cs` detector `:33`, zero short-circuit `:47-52`, pre-check `:65-74`, lost race
+   `:85-92` (catch filter `:85`); `SetLeaderboardParticipationHandler.cs` detectors `:36` and `:37`,
+   dispatch `:54-56`, `JoinAsync` `:63-136`, reactivation `:108`, catch filter `:125`,
+   `IsLostJoinRace` `:144-146` (detector call `:145`), `LeaveAsync` `:152-181`, `Delete` `:164`,
+   opt-out race `:172-178`, `ResolveDisplayName` `:199-230`, claim lookups `:201-203`.
 
 ## Related
 [ADR-071](071-barcode-scanning-and-qr-display.md) (the framework halves this consumes: the QR component on

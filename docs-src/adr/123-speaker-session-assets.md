@@ -4,7 +4,7 @@
 Accepted (2026-09-12). Extends [ADR-045](045-managed-file-storage-and-avatars.md) from images to
 documents: the framework gains a document content sniffer, a blob-name sanitizer and stored response
 headers, and ADC gains a `SessionAsset` aggregate that uses them. ADR-045's avatar-only scope
-statement ("no other managed uploads exist") is superseded by this record. Revised 2026-10-01 (the upload-options overload is abstract and the template enables on-upload malware scanning by default; see Revision below). Revised 2026-10-06: all three delete paths schedule blob removal inside the delete's transaction, so there is no post-commit tail. Revised 2026-10-07: anchors refreshed after the v1.233.0 release. Revised 2026-10-21: the file upload action now runs a claim-level pre-check that refuses a caller with neither a speaker_id claim nor the manage capability before the handler (the per-session decision stays in the handler), and anchors were refreshed. Revised 2026-10-26: the Azure storage implementation now lives in the MMCA.Common.Azure adapter and the S3 and GCS adapters implement the same abstract options overload, and anchors were refreshed.
+statement ("no other managed uploads exist") is superseded by this record. Revised 2026-10-01 (the upload-options overload is abstract and the template then enabled on-upload malware scanning by default, reversed 2026-10-28; see Revision below). Revised 2026-10-06: all three delete paths schedule blob removal inside the delete's transaction, so there is no post-commit tail. Revised 2026-10-07: anchors refreshed after the v1.233.0 release. Revised 2026-10-21: the file upload action now runs a claim-level pre-check that refuses a caller with neither a speaker_id claim nor the manage capability before the handler (the per-session decision stays in the handler), and anchors were refreshed. Revised 2026-10-26: the Azure storage implementation now lives in the MMCA.Common.Azure adapter and the S3 and GCS adapters implement the same abstract options overload, and anchors were refreshed. Revised 2026-10-28: the template now writes Defender for Storage, on-upload malware scanning included, off by default as a 2026-10-26 cost decision, the parameter switches the whole plan, and scanning also needs a subscription-level plan only the subscription owner can enable, so Part 5 and the scanning trade-off were rewritten and anchors refreshed.
 
 ## Context
 A speaker finishes a talk and forty people want the deck. Until now ADC's only answer was
@@ -134,7 +134,7 @@ safe precisely because a blob name carries a fresh asset id and therefore never 
 Conference service registers the same `AddAzureBlobFileStorage`
 (`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:367`) against a new **public-read
 `session-assets` container** on the existing storage account (`MMCA.ADC/infra/main.bicep:1512-1518`,
-container name injected at `:2221`); the account-scoped data-plane grant already covers it, so no
+container name injected at `:2218`); the account-scoped data-plane grant already covers it, so no
 second role assignment (`:1548-1556`, comment at `:1539-1541`). The blob name is
 `{eventId}/{sessionId}/{assetId}/{sanitized-file-name}`
 (`UploadSessionAssetHandler.cs:90-94`), which is what makes a public container acceptable: the GUID
@@ -142,14 +142,17 @@ segment is unguessable, so holding one asset URL reveals nothing about any other
 from blob storage directly, as they already do for avatars, with no API proxy and no CDN in front.
 Where storage is not configured, the null default stands and an upload fails with
 `SessionAsset.StorageNotConfigured` while links keep working (`:56-62`), which is the local-dev
-posture. Optional on-upload malware scanning (Microsoft Defender for Storage) is available behind the
-bicep parameter `enableSessionAssetMalwareScanning`, **defaulting to true**
-(`MMCA.ADC/infra/main.bicep:136`, resource at `:1568-1584`): the deploy identity's Contributor role covers
-the settings write (comment at `:1558-1567`), and the per-GB scanning cost is bounded by a
-50 GB monthly cap (`:1576`). Production diverges from the template: an `az rest` read of the
-account's `defenderForStorageSettings/current` on 2026-10-01 returned Defender for Storage enabled
-but `malwareScanning.onUpload.isEnabled=false` (`capGBPerMonth=-1`). It is defence in depth behind the content gate, not the primary
-control.
+posture. Microsoft Defender for Storage, on-upload malware scanning included, is switched as a whole
+by the bicep parameter `enableSessionAssetMalwareScanning`, **defaulting to false** since 2026-10-26
+as a cost decision (`MMCA.ADC/infra/main.bicep:135-136`). The settings resource is declared
+unconditionally (`:1565-1581`) and writes both the plan's `isEnabled` (`:1569`) and
+`malwareScanning.onUpload.isEnabled` (`:1572`) from that parameter, so the default actively writes
+the plan off instead of leaving an earlier plan running under an incremental deploy (`:1558-1561`);
+when it is on, the per-GB scanning cost is bounded by a 50 GB monthly cap (`:1573`). The parameter
+alone does not give scanning: its description records that on-upload scanning never activated on
+this subscription because it needs the subscription-level DefenderForStorageV2 plan, which only the
+subscription owner can enable, and says to set it true only together with that plan (`:135`). The
+content gate is the control; malware scanning, where enabled, is defence in depth behind it.
 
 **6. Blob removal is an internal command scheduled in the delete's transaction.** Deleting the row and deleting the bytes are
 two different systems, so the second is scheduled as the durable internal command
@@ -256,9 +259,10 @@ an attendee "materials posted" notification on a bookmarked session.
 - **Bytes are stored as uploaded, so the gate is the only defence.** Unlike an avatar, nothing about
   a stored deck has been transformed, so a payload the sniffer's format rules admit is a payload the
   container serves. The sniffer bounds the format, not the content; Defender for Storage exists for
-  exactly that residue and the template turns on-upload scanning on by default, capped at 50 GB a
-  month; production read scanning off on 2026-10-01, so the deployed posture is format-checked but
-  not malware-scanned until the deployed setting matches the template.
+  exactly that residue, but the template writes it off by default as a cost decision
+  (`MMCA.ADC/infra/main.bicep:136`, `:1569`, `:1572`), and on-upload scanning also needs a
+  subscription-level plan only the subscription owner can enable (`:135`), so the posture the
+  template deploys is format-checked but not malware-scanned.
 - **Blob cleanup is eventually consistent.** Every delete path commits the blob-removal row with the
   delete, but the processor runs it later, so between the commit and the queue's next tick the file
   is still fetchable by anyone holding its URL. A delete whose row cannot be scheduled fails and rolls
@@ -393,6 +397,37 @@ below moved, so the 2026-10-21 list no longer holds for them.
    gateway body-size raise `MMCA.ADC/Source/Hosts/MMCA.ADC.Gateway/Program.cs:213-232` (path match
    `:222`); and the v1.210.0 breaking change at `MMCA.Common/CHANGELOG.md:1231-1232` (release
    heading `:1169`).
+
+## Revision (2026-10-28)
+Re-verified against current source. The decision, parts 1 to 4 and 6, the limits and every trade-off
+but one are unchanged. The template's Defender for Storage default moved, so Part 5 and the "Bytes
+are stored as uploaded" trade-off are rewritten. The 2026-10-01 statements that on-upload scanning
+defaults to on and that the Contributor role covers the write, the 2026-10-07 statement that the
+template still enables on-upload scanning, and the 2026-10-21 and 2026-10-26 statements that the
+on-upload scanning default is unchanged no longer hold.
+
+1. The template no longer enables on-upload malware scanning by default:
+   `enableSessionAssetMalwareScanning` defaults to false (`MMCA.ADC/infra/main.bicep:136`), recorded
+   in its description as a 2026-10-26 cost decision (`:135`). The parameter now switches the whole
+   Defender for Storage plan as well as on-upload scanning: the settings resource is declared
+   unconditionally (`:1565-1581`), and `isEnabled` (`:1569`) and `malwareScanning.onUpload.isEnabled`
+   (`:1572`) both follow it, so false actively writes the plan off on an incremental deploy
+   (`:1558-1561`). The 50 GB cap stays at `:1573`. Part 5 no longer says the deploy identity's
+   Contributor role covers the settings write: the current resource comment (`:1558-1564`) and the
+   parameter description carry no such justification.
+2. Part 5 now states that the parameter alone does not give scanning: its description records that
+   on-upload scanning needs the subscription-level DefenderForStorageV2 plan, which only the
+   subscription owner can enable, and says to set it true only together with that plan (`:135`).
+   The "Production diverges from the template" sentence is removed from Part 5 and the trade-off,
+   because the template itself now writes scanning off; the 2026-10-01 production read stays in
+   that revision and is not re-checked here.
+3. Anchors re-verified against current source: the container name injected at
+   `MMCA.ADC/infra/main.bicep:2218`; the public-read container `:1512-1518` (name `:1514`,
+   `publicAccess: 'Blob'` `:1516`), the account-scoped grant `:1548-1556` and its coverage comment
+   `:1539-1541`, all unmoved; the panel on `SpeakerDashboard.razor:230` and on
+   `SessionDetail.razor:178`; the public download list at `PublicSessionDetail.razor:121`, after the
+   `ResourceLinks` row at `:111-113`; and the v1.210.0 breaking change at
+   `MMCA.Common/CHANGELOG.md:1274-1275` (release heading `:1212`).
 
 ## Related
 [ADR-045](045-managed-file-storage-and-avatars.md) (the storage abstraction, the image path this

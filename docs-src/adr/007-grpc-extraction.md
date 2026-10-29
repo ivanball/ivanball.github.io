@@ -11,6 +11,7 @@ Revised 2026-10-07: anchors refreshed after the v1.233.0 release.
 Revised 2026-10-21: ADC now marks seven `[ServiceContract]` interfaces, and the auth bullets record
 Store's one shared-secret exception (an HS256 service token on the Sales -> Identity Customers edge).
 Revised 2026-10-26: anchors refreshed after the v1.261.0 release.
+Revised 2026-10-28: anchors refreshed after the v1.265.1 release.
 
 ## Context
 Once modules became separate service processes, the in-process interface calls between them (e.g.
@@ -64,8 +65,8 @@ Use **gRPC**, exposed through `MMCA.Common.Grpc`, with a contract-package conven
   `:109`). Under the AppHost the authority is wired by `WithJwksDiscovery(identity, gateway)`, whose
   gateway argument is optional (`MMCA.Common/Source/Hosting/MMCA.Common.Aspire.Hosting/Extensions.cs:322-324`);
   in production the bicep points the authority straight at Identity's internal cleartext URL with
-  `RequireHttpsMetadata=false`, not through the gateway (`MMCA.ADC/infra/main.bicep:2195`, `:2199`;
-  `MMCA.Store/infra/main.bicep:1781`, `:1786`). This holds for every user token. The one
+  `RequireHttpsMetadata=false`, not through the gateway (`MMCA.ADC/infra/main.bicep:2192`, `:2196`;
+  `MMCA.Store/infra/main.bicep:1782`, `:1787`). This holds for every user token. The one
   shared-secret exception is Store's Sales -> Identity Customers edge: Identity registers
   `AddServiceTokenAuthentication`
   (`MMCA.Store/Source/Services/MMCA.Store.Identity.Service/Program.cs:179`), a second JwtBearer
@@ -208,3 +209,15 @@ no `Disabled*` stub is registered. Only anchors moved.
    profile to `MMCA.ADC/Source/Services/MMCA.ADC.Notification.Service/Program.cs:58-73`; Store Sales
    mixed profile to `MMCA.Store/Source/Services/MMCA.Store.Sales.Service/Program.cs:66-80`
    (`appsettings.json:13`, `:17` still hold for both).
+
+## Revision (2026-10-28)
+Re-verified against current source. The decision and the production JWKS wiring are unchanged: both
+bicep files still set the authority to `http://${identityApp.name}` with
+`RequireHttpsMetadata=false`, and `AddTypedGrpcClient` still adds only
+`JwtForwardingClientInterceptor`, so a service token goes out only through `WithServiceToken()`.
+Only anchors moved.
+
+1. Anchors re-verified against current source: ADC JWKS authority and `RequireHttpsMetadata`
+   re-pointed to `MMCA.ADC/infra/main.bicep:2192`, `:2196` (repeating at `:2328`, `:2332` and
+   `:2482`, `:2486`); Store's to `MMCA.Store/infra/main.bicep:1782`, `:1787` (repeating at `:1918`,
+   `:1923`).

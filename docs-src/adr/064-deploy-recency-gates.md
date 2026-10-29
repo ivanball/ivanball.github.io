@@ -41,6 +41,7 @@ the broker-step comments are restated (neither mentions an advisory job; they di
 and every `deploy.yml` anchor is re-pointed.
 Revised 2026-10-26: anchors refreshed after a one-line `deploy.yml` insertion in both apps and a
 five-line `e2e.yml` insertion in ADC moved them.
+Revised 2026-10-28: anchors refreshed after both CONTRIBUTING files moved their push-only sentence.
 
 ## Context
 A production rollout in both deployed apps waits on a list of jobs in `deploy.needs`
@@ -205,12 +206,12 @@ real run on each non-chromium browser engine happened recently enough to still m
 - **Deploy-time only, and deliberately not a required merge check.** Both repos document the
   `freshness` job (the four gates) as push-only, run after merge and never added to branch protection,
   since a job that never runs on a pull request would block every merge
-  (`MMCA.ADC/CONTRIBUTING.md:42-45,112-113`, `MMCA.Store/CONTRIBUTING.md:42-45,120-121`). In both
+  (`MMCA.ADC/CONTRIBUTING.md:42-45,115-116`, `MMCA.Store/CONTRIBUTING.md:42-45,122-123`). In both
   files the push-only half is the earlier passage and the "do not require these jobs" sentence is the
   later one. Both match the workflow: the earlier passage names the single `freshness` job and all
   four of its steps (`dr-freshness`, `load-freshness`, `cross-service-freshness` and
   `cross-browser-freshness`), and the later sentence lists `freshness` among the push-only jobs
-  (`MMCA.ADC/CONTRIBUTING.md:112`, `MMCA.Store/CONTRIBUTING.md:120`), which is the one job that runs
+  (`MMCA.ADC/CONTRIBUTING.md:115`, `MMCA.Store/CONTRIBUTING.md:122`), which is the one job that runs
   (`MMCA.ADC/.github/workflows/deploy.yml:833`, `MMCA.Store/.github/workflows/deploy.yml:777`).
 
 **Adoption is the two deployed apps, and all four gates are the same shape in both.** The
@@ -484,6 +485,20 @@ moved: every `deploy.yml` line from `ai-eval-gate` down sits one line later in b
    "roughly 40 minutes" `911-912` (all in the respective `.github/workflows/deploy.yml`). The ADC
    non-chromium crons are `MMCA.ADC/.github/workflows/e2e.yml:54-55` and their `continue-on-error`
    is `MMCA.ADC/.github/workflows/e2e.yml:152` (Store `:46-47` and `:149` unchanged).
+
+## Revision (2026-10-28)
+Re-verified against current source. The four gates, their windows (`8`, `35`, `5`, `10`), scan
+bounds (25 for the broker gate; 40 in ADC and 50 in Store for the cross-browser gate), job timeouts
+(5 minutes in ADC, 10 in Store), the `deploy.needs` counts (8 in ADC, 7 in Store), the deploy
+condition, every `deploy.yml`, `e2e.yml`, `cross-service-tests.yml` and freshness-gate action
+anchor, and the break-glass contract are unchanged. Only the `CONTRIBUTING.md` anchors for the
+"do not require the push-only jobs" sentence moved; its wording, which still lists `freshness`, is
+unchanged.
+
+1. Anchors re-verified against current source: the push-only sentence is
+   `MMCA.ADC/CONTRIBUTING.md:115-116` (was `112-113`) and `MMCA.Store/CONTRIBUTING.md:122-123` (was
+   `120-121`); the earlier passage naming the `freshness` job and its four steps stays at
+   `MMCA.ADC/CONTRIBUTING.md:42-45` and `MMCA.Store/CONTRIBUTING.md:42-45`.
 
 ## Related
 ADR-009 (states the recovery objectives and requires that a restore be drilled and recorded; this

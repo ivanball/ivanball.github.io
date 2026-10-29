@@ -277,15 +277,19 @@
           <code>cost-guard.yml</code> and ADR-064 moved; no statement changed.
           Revised 2026-10-26: the &quot;no drift message offers a re-run&quot; sentence is scoped to the surge-drift
           messages, since ADC&#39;s expired-window message does say to run the deploy (which the gate lets
-          through), and anchors are refreshed after both Bicep templates and both <code>deploy.yml</code> files moved.</p>
+          through), and anchors are refreshed after both Bicep templates and both <code>deploy.yml</code> files moved.
+          Revised 2026-10-28: the per-service <code>service</code> cost-attribution tag, enforced by the shared
+          <code>CostTagConventionTestsBase</code> fitness test in ADC and Store, is recorded as the gate&#39;s attribution
+          companion, and anchors are refreshed after both Bicep templates, both CONTRIBUTING files and ADR-064
+          moved.</p>
           <h2 id="context">Context</h2>
           <p>Both deployed apps run a deliberately small production footprint: every Container App is declared with
           <code>maxReplicas: 2</code> (ADC&#39;s five scaled apps read <code>conferenceScaledMaxReplicas</code>, which <code>conferenceMode</code> raises
-          to 4, <code>MMCA.ADC/infra/main.bicep:192</code>, while Notification keeps a literal <code>maxReplicas: 2</code>, <code>:2580</code>; the
+          to 4, <code>MMCA.ADC/infra/main.bicep:192</code>, while Notification keeps a literal <code>maxReplicas: 2</code>, <code>:2577</code>; the
           same mode lifts ADC&#39;s hot-path databases to S2, <code>:1149-1153</code>; see Revision (2026-10-06)) and every SQL
           database with the <code>Basic</code> tier
-          (<code>MMCA.Store/infra/main.bicep:1688,1812,1960,2079,2197</code> and <code>:1040-1044</code>;
-          <code>MMCA.ADC/infra/main.bicep:2106,2259,2394,2580,2733,2884</code> and <code>:1151-1153</code>). That
+          (<code>MMCA.Store/infra/main.bicep:1689,1813,1961,2080,2198</code> and <code>:1041-1045</code>;
+          <code>MMCA.ADC/infra/main.bicep:2103,2256,2391,2577,2730,2881</code> and <code>:1151-1153</code>). That
           footprint is the cost baseline, and it is what the monthly bill is planned against.</p>
           <p>The footprint is also expected to move temporarily. A conference day, a load test, a slow query under
           real traffic: an operator scales the replica ceiling or the SQL tier up by hand and is supposed to
@@ -302,9 +306,10 @@
           someone would have to look at it.</p>
           <p>This is the FinOps sibling of the deploy gates the framework already records: ADR-038 (supply-chain
           provenance), ADR-060 (the performance-regression gate against a committed baseline) and ADR-062 (SLO
-          alerting as code). ADR-064 decides the four proof-of-recency gates and enumerates <code>cost-guard</code>
-          in passing among the jobs that &quot;have the change itself as their subject&quot;
-          (<code>Website/docs-src/adr/064-deploy-recency-gates.md:46-47,78-80</code>), but it does not decide it. This record
+          alerting as code). ADR-064 decides the four proof-of-recency gates and mentions this gate only in
+          passing: as &quot;a FinOps cost check&quot; among the jobs that &quot;have the change itself as their subject&quot;
+          (<code>Website/docs-src/adr/064-deploy-recency-gates.md:49-50</code>), and as <code>cost-guard</code> in its list of
+          <code>deploy.needs</code> jobs (<code>:86</code>, four-gate decision <code>:82</code>, <code>:85</code>), but it does not decide it. This record
           does.</p>
           <h2 id="decision">Decision</h2>
           <p>The cost baseline is asserted by a <strong>read-only reusable workflow</strong> that both runs on a schedule and sits in
@@ -340,10 +345,10 @@
           <strong>or</strong> <code>Standard</code> at objective <code>S0</code> only, through the <code>sql_sku_ok</code> function
           (<code>MMCA.Store/.github/workflows/cost-guard.yml:62-68</code>, applied at <code>:102</code>), so a scaled-up Standard
           (S1 to S12) reports drift even though its tier reads <code>Standard</code>. Every Store database is Basic today: the live
-          per-service databases are declared Basic (<code>MMCA.Store/infra/main.bicep:1040-1044</code>) and the legacy
+          per-service databases are declared Basic (<code>MMCA.Store/infra/main.bicep:1041-1045</code>) and the legacy
           <code>MMCAStore</code> archive that used to sit beside them at S0 is gone, exported on 2026-09-02 to the
           bacpac blob <code>sql-archive/MMCAStore-20260902.bacpac</code> and then dropped
-          (<code>MMCA.Store/infra/main.bicep:1010-1017</code>). The wider window is kept anyway, and the workflow header
+          (<code>MMCA.Store/infra/main.bicep:1011-1018</code>). The wider window is kept anyway, and the workflow header
           states why: so that a <strong>deliberate</strong> bump to S0 (the tier a Store database would be raised to under
           real load, or the tier a bacpac restore would land on) does not fail the gate as if it were an
           un-reverted surge, while anything above Standard S0 still does
@@ -389,8 +394,8 @@
           permissions deliberately omit <code>id-token</code> (<code>:28-37</code>); Store&#39;s calling job does the same
           (<code>MMCA.Store/.github/workflows/deploy.yml:737-739</code>), because its workflow-level permissions omit
           <code>id-token</code> too (<code>:44-53</code>). Both repos&#39; CONTRIBUTING files list <code>cost-guard</code> among the push-only
-          jobs that must <strong>not</strong> be added to branch protection (<code>MMCA.Store/CONTRIBUTING.md:42,120</code>,
-          <code>MMCA.ADC/CONTRIBUTING.md:42,112</code>).</p>
+          jobs that must <strong>not</strong> be added to branch protection (<code>MMCA.Store/CONTRIBUTING.md:42,122</code>,
+          <code>MMCA.ADC/CONTRIBUTING.md:42,115</code>).</p>
           </li>
           <li><p><strong>Raising the baseline is a reviewed repo change, not a click.</strong> The ceiling lives in the workflow&#39;s
           <code>env</code> (<code>MMCA.Store/.github/workflows/cost-guard.yml:34</code>,
@@ -406,6 +411,27 @@
           is ADC&#39;s expired-window message (<code>MMCA.ADC/.github/workflows/cost-guard.yml:117</code>), and there the
           re-run succeeds, because on the deploy path an expired window passes the gate (<code>:112-114</code>) and that
           deploy reverts <code>conferenceMode</code>.</p>
+          </li>
+          <li><p><strong>Spend is attributable per service, by a tag the build enforces.</strong> The gate caps the footprint;
+          a companion fitness test keeps the bill splittable. <code>CostTagConventionTestsBase</code>
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Bases/Governance/CostTagConventionTestsBase.cs:29</code>)
+          reads the consumer&#39;s embedded <code>infra/main.bicep</code> and fails when any <code>Microsoft.App/containerApps</code>
+          resource has no <code>service:</code> key in the <code>tags:</code> line within the first lines of its body (<code>:58-75</code>,
+          pattern <code>:106</code>), or when the file does not contain the database tag line that unions into
+          <code>commonTags</code> a <code>service</code> value derived from the database name prefix (<code>:82-93</code>, expected line
+          <code>:88</code>). The check is textual: it does not itself require the union with <code>commonTags</code> on an app,
+          and the single database-line match covers every database only because each repo declares its
+          per-service databases in one loop resource (<code>MMCA.ADC/infra/main.bicep:1141-1147</code>,
+          <code>MMCA.Store/infra/main.bicep:1033-1039</code>). Today every app tag in both templates is that union
+          (anchors below). A minimum
+          container-app count keeps it non-vacuous (<code>:36</code>, <code>:63-65</code>). ADC derives it with six apps and the
+          <code>ADC_</code> prefix
+          (<code>MMCA.ADC/Tests/Architecture/MMCA.ADC.Architecture.Tests/Governance/CostTagConventionTests.cs:10-14</code>;
+          tags at <code>MMCA.ADC/infra/main.bicep:1147,1860,2113,2266,2401,2591,2754</code>), and Store with five apps
+          and the <code>Store_</code> prefix
+          (<code>MMCA.Store/Tests/Architecture/MMCA.Store.Architecture.Tests/Governance/CostTagConventionTests.cs:10-14</code>;
+          tags at <code>MMCA.Store/infra/main.bicep:1039,1517,1699,1823,1975,2104</code>). MMCA.Helpdesk has no
+          derivation, consistent with it having no Azure deploy.</p>
           </li>
           </ul>
           <p><strong>Adoption is the two deployed apps, in near-identical form apart from ADC&#39;s conference window (Revision (2026-10-06)).</strong> The files differ in the resource name
@@ -485,7 +511,7 @@
           <li><strong>Only two cost dimensions and one name prefix are covered.</strong> Service Bus, Redis, Log Analytics
           retention and everything else in the resource group are invisible to the gate, as is any resource
           whose name does not start with the app prefix or that lives in another resource group. Store&#39;s
-          Service Bus is Standard tier (<code>MMCA.Store/infra/main.bicep:1078-1085</code>, tier at <code>:1084</code>) and would go unchecked if it
+          Service Bus is Standard tier (<code>MMCA.Store/infra/main.bicep:1079-1086</code>, tier at <code>:1085</code>) and would go unchecked if it
           were scaled up.</li>
           <li><strong>The ceiling is an upper bound, not an equality.</strong> Scaling a resource <strong>below</strong> the baseline is not
           drift, so an accidental <code>maxReplicas: 1</code> on a service that needs two, or a downgrade that costs
@@ -649,6 +675,41 @@
           job: Store <code>:732-741</code> (<code>if</code> at <code>:734</code>, permissions <code>:737-739</code>), ADC <code>:785-798</code> (<code>if</code> at <code>:787</code>,
           permissions <code>:790-792</code>).</li>
           </ol>
+          <h2 id="revision-2026-10-28">Revision (2026-10-28)</h2>
+          <p>Re-verified against current source. The gate mechanism, the <code>2</code> replica ceiling, the per-repo SQL
+          tier sets, the budget thresholds, ADC&#39;s conference-mode window and the deploy-path wiring are
+          unchanged; one Decision bullet is added and the Bicep, CONTRIBUTING and ADR-064 anchors moved.
+          Anchors inside the earlier dated revisions stay as written.</p>
+          <ol>
+          <li><strong>The per-service cost-attribution tag is recorded.</strong> Every container app and per-service
+          database in both deployed apps&#39; <code>infra/main.bicep</code> carries a <code>service</code> tag unioned into
+          <code>commonTags</code>, so Azure Cost Analysis splits the bill by service. The shared
+          <code>CostTagConventionTestsBase</code>
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Bases/Governance/CostTagConventionTestsBase.cs:29</code>,
+          container-app check <code>:58-75</code>, database check <code>:82-93</code>) checks it textually: each container app
+          needs a <code>service:</code> key in its <code>tags:</code> line (<code>:68</code>, <code>:106</code>), and the file must contain the one
+          looped database tag line (<code>:88-90</code>), with a minimum app count so the parse cannot pass
+          vacuously (<code>:36</code>). It does not itself require the <code>commonTags</code> union on an app. ADC derives it with <code>MinimumContainerApps =&gt; 6</code> and
+          <code>DatabaseNamePrefix =&gt; &quot;ADC_&quot;</code>
+          (<code>MMCA.ADC/Tests/Architecture/MMCA.ADC.Architecture.Tests/Governance/CostTagConventionTests.cs:10-14</code>),
+          Store with <code>5</code> and <code>&quot;Store_&quot;</code>
+          (<code>MMCA.Store/Tests/Architecture/MMCA.Store.Architecture.Tests/Governance/CostTagConventionTests.cs:10-14</code>);
+          MMCA.Helpdesk has no derivation. The Decision gains a bullet for it. This is attribution, not
+          a cap: the Trade-offs bullet on the gate&#39;s two cost dimensions still holds.</li>
+          <li>Anchors re-verified against current source: Store <code>maxReplicas: 2</code> apps
+          (<code>MMCA.Store/infra/main.bicep:1689,1813,1961,2080,2198</code>), Store per-service SQL <code>Basic</code> sku
+          (<code>:1041-1045</code>, database <code>service</code> tag <code>:1039</code>), Store <code>MMCAStore</code> archive note (<code>:1011-1018</code>,
+          bacpac blob at <code>:1015</code>), Store Service Bus <code>Standard</code> (<code>:1079-1086</code>, tier at <code>:1085</code>), Store
+          budget unchanged (<code>:845</code>, comment <code>:843</code>); ADC scaled apps reading <code>conferenceScaledMaxReplicas</code>
+          (<code>MMCA.ADC/infra/main.bicep:2103,2256,2391,2730,2881</code>), Notification&#39;s literal <code>maxReplicas: 2</code>
+          (<code>:2577</code>, comment <code>:2574-2576</code>), the S2/Basic switch unchanged (<code>:1149-1153</code>), <code>conferenceMode</code>
+          (<code>:157</code>) and <code>conferenceScaledMaxReplicas</code> (<code>:192</code>) unchanged. CONTRIBUTING push-only lists:
+          <code>MMCA.Store/CONTRIBUTING.md:42,122</code>, <code>MMCA.ADC/CONTRIBUTING.md:42,115</code>. ADR-064&#39;s &quot;change itself
+          as their subject&quot; passage (<code>Website/docs-src/adr/064-deploy-recency-gates.md:49-50</code>), its
+          <code>cost-guard</code> entry in the <code>deploy.needs</code> list (<code>:86</code>) and its four-gate decision (<code>:82</code>, <code>:85</code>). ADC <code>cost-guard.yml</code> env anchors in the live sections hold
+          (<code>AZURE_RESOURCE_GROUP</code> <code>:31</code>, <code>BASELINE_MAX_REPLICAS</code> <code>:32</code>); <code>CONFERENCE_MODE_UNTIL</code> and
+          <code>DEPLOY_GATE</code> now sit at <code>:33</code> and <code>:34</code>, cited only inside the Revision (2026-10-06) text.</li>
+          </ol>
           
         <div class="doc-foot btn-row">
           <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
@@ -671,6 +732,7 @@
             <li><a href="#revision-2026-10-19">Revision (2026-10-19)</a></li>
             <li><a href="#revision-2026-10-21">Revision (2026-10-21)</a></li>
             <li><a href="#revision-2026-10-26">Revision (2026-10-26)</a></li>
+            <li><a href="#revision-2026-10-28">Revision (2026-10-28)</a></li>
             </ul>
           </nav>
         </aside>

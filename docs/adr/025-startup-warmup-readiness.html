@@ -259,7 +259,12 @@
           refreshed after the v1.233.0 release. Revised 2026-10-21: the built-in OIDC task is recorded as waking and
           JIT-warming the authority&#39;s discovery route, not a connection the JwtBearer middleware shares, and the
           single-digit-millisecond first-fetch claim is dropped; per-host warm-up anchors refreshed. Revised
-          2026-10-26: anchors refreshed after the v1.261.0 release.</p>
+          2026-10-26: anchors refreshed after the v1.261.0 release. Revised 2026-10-28: the Polly pipeline is
+          recorded as absorbing a lazy retry on the warming host&#39;s own hop only for a dependency called through a
+          factory-built client (not the JwtBearer backchannel or a missed self-request warm-up, which a caller&#39;s
+          factory-built client sees and retries once for idempotent verbs), and the <code>redis</code> PING check is cited at its
+          real registration in <code>AddInfrastructureHealthChecks</code>, which adds it only for a connection string named
+          <code>redis</code>.</p>
           <h2 id="context">Context</h2>
           <p>On the Azure Container Apps Consumption plan a replica that has been idle is CPU-throttled, and a
           scale-from-zero or scaled-out replica starts cold. The first authenticated request on such a replica
@@ -318,10 +323,20 @@
           apart. So MMCA.Common owns the Redis registration for hosts rather than leaving it to each host:
           <code>AddRedisCaching</code> in <code>MMCA.Common.Aspire</code> registers the client and the distributed cache with the
           health checks that the Aspire client integrations add automatically switched off, because those
-          arrive untagged and therefore gate readiness, and the framework registers its own <code>redis</code> check in
-          their place, tagged <code>optional</code> and performing a <code>PING</code> only
-          (<code>Source/Hosting/MMCA.Common.Aspire/Caching/RedisCachingExtensions.cs:57</code> and <code>Source/Hosting/MMCA.Common.Aspire/Health/RedisPingHealthCheck.cs:26</code>). A host that reaches for an Aspire client
-          integration directly puts the untagged check back and defeats both rules at once.</li>
+          arrive untagged and therefore gate readiness
+          (<code>Source/Hosting/MMCA.Common.Aspire/Caching/RedisCachingExtensions.cs:57</code>, switched off at
+          <code>:64-65</code>). The framework&#39;s own <code>redis</code> check takes their place, tagged <code>optional</code> and performing a
+          <code>PING</code> only, but it is registered separately, by <code>AddInfrastructureHealthChecks</code>
+          (<code>Source/Hosting/MMCA.Common.Aspire/Extensions.Health.cs:84-91</code>;
+          <code>Source/Hosting/MMCA.Common.Aspire/Health/RedisPingHealthCheck.cs:26</code>, the <code>PING</code> at <code>:52</code>), and only
+          when a connection string named exactly <code>redis</code> is configured (<code>Extensions.Health.cs:75</code>).
+          <code>AddRedisCaching</code> accepts any connection name, so a host that passes a non-default one and configures
+          no <code>redis</code> connection string gets the cache with no Redis health check at all. When a <code>redis</code> string
+          is also configured the check exists, but <code>RedisPingHealthCheck</code> pings the <code>IConnectionMultiplexer</code>
+          from DI first (<code>RedisPingHealthCheck.cs:47</code>), which is the client <code>AddRedisCaching</code> registered under
+          the other name (<code>RedisCachingExtensions.cs:65</code>), so the check is keyed off a different connection
+          string than the one it probes. A host that reaches for an Aspire client integration directly puts
+          the untagged check back and defeats both rules at once.</li>
           <li><strong>A background runner that opens the gate once warm-up has had its chance.</strong> <code>WarmupHostedService</code>
           runs every registered <code>IWarmupTask</code> exactly once, in parallel, then opens the gate. Critically the gate
           is opened in a <code>finally</code>, so it <strong>opens even if tasks fail</strong>: a stuck dependency must not keep a replica
@@ -330,8 +345,21 @@
           <code>.WaitAsync(_taskTimeout, _timeProvider, cancellationToken)</code> at <code>:69</code>), so a task that neither completes
           nor throws cannot hold the gate closed either.</li>
           <li><strong>Per-task failure is logged, not fatal, and falls back to lazy retry.</strong> Each task runs in isolation; a
-          thrown task is caught and logged at warning level (&quot;will retry lazily on first use&quot;), so the missed
-          warm-up simply happens on the first real request (absorbed by the Polly pipeline, ADR-009). A task that
+          thrown task is caught and logged at warning level (&quot;will retry lazily on first use&quot;,
+          <code>WarmupHostedService.cs:84-88</code>, <code>:95-97</code>), so the missed warm-up simply happens on the first real
+          request. The Polly pipeline (ADR-009) wraps only <code>IHttpClientFactory</code> clients, since the standard
+          resilience handler is attached through <code>ConfigureHttpClientDefaults</code>
+          (<code>Source/Hosting/MMCA.Common.Aspire/Extensions.cs:50-60</code>), so on the warming host&#39;s own hop it covers a
+          lazy retry only for a dependency called through such a client. Neither lazy path on that hop goes
+          through one: the JwtBearer middleware&#39;s discovery re-fetch runs over its own default backchannel
+          <code>HttpClient</code> (see the OIDC task below), and a missed self-request warm-up is paid by the first inbound
+          request (a <code>SelfHttpWarmupTaskBase</code> task builds a plain <code>HttpClient</code> over its own
+          <code>SocketsHttpHandler</code>, <code>Source/Hosting/MMCA.Common.Aspire/Warmup/SelfHttpWarmupTaskBase.cs:111-112</code>).
+          That inbound request normally arrives from an MMCA caller&#39;s factory-built client, such as the UI&#39;s
+          <code>APIClient</code> (<code>Source/Presentation/MMCA.Common.UI/DependencyInjection.cs:132</code>) or a gRPC typed client
+          with its own resilience handler (<code>Source/Presentation/MMCA.Common.Grpc/DependencyInjection.cs:141</code>),
+          so the caller&#39;s pipeline does see a slow first request, whatever its cause, and the standard handler
+          retries it once for idempotent verbs (POST and PATCH are excluded, <code>Extensions.cs:74</code>). A task that
           trips the 120-second ceiling takes the same route: the <code>TimeoutException</code> is caught and logged at
           warning level (<code>WarmupHostedService.cs:77-82</code>, <code>:103-105</code>), the abandoned task keeps running detached,
           and the dependency is retried lazily on first use. The one exception that is rethrown is an
@@ -373,7 +401,7 @@
           (<code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/SelfHttpOutputCacheWarmupTask.cs:22</code>, registered
           at <code>Program.cs:320</code>), Engagement (<code>MMCA.ADC/Source/Services/MMCA.ADC.Engagement.Service/SelfHttpWarmupTask.cs:23</code>,
           <code>Program.cs:166</code>) and Identity (<code>MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/SelfHttpWarmupTask.cs:25</code>,
-          <code>Program.cs:181</code>); Store in Catalog
+          <code>Program.cs:182</code>); Store in Catalog
           (<code>MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/SelfHttpOutputCacheWarmupTask.cs:23</code>,
           <code>Program.cs:190</code>), Identity (<code>MMCA.Store/Source/Services/MMCA.Store.Identity.Service/SelfHttpOutputCacheWarmupTask.cs:25</code>,
           <code>Program.cs:152</code>) and Sales (<code>MMCA.Store/Source/Services/MMCA.Store.Sales.Service/SelfHttpOutputCacheWarmupTask.cs:26</code>,
@@ -391,8 +419,11 @@
           gate opens (see the OIDC task above).</li>
           <li><strong>Availability over strict warmth.</strong> Opening the gate even when a task fails or hangs is the
           load-bearing choice: a warm-up that depends on a temporarily unreachable dependency would otherwise pin
-          the replica out of service indefinitely. Falling back to lazy retry (covered by the resilience
-          pipeline) trades a possibly-slow first request for guaranteed eventual availability.</li>
+          the replica out of service indefinitely. Falling back to lazy retry trades a possibly-slow first
+          request for guaranteed eventual availability; on the warming host&#39;s own hop the resilience pipeline
+          covers that retry only for a dependency called through a factory-built client (not the JwtBearer
+          re-fetch or a missed self-request warm-up), while the caller&#39;s factory-built client retries a slow
+          first request once for idempotent verbs.</li>
           <li><strong>Warm the path, not just the cache.</strong> The OIDC fetch is the specific cold-start failure we saw; even
           though the middleware re-fetches over its own connection, waking the authority first means that
           fetch does not also pay the authority&#39;s own cold start. This is
@@ -413,8 +444,11 @@
           <code>Task.WhenAll</code> over every registered task returns, that is, once each task has completed, thrown, or
           timed out (<code>Source/Hosting/MMCA.Common.Aspire/Warmup/WarmupHostedService.cs:53</code>, <code>:58</code>); a thrown or
           timed-out task is caught and logged rather than retried, so a failed warm-up still admits the replica
-          and its first request pays the lazy cost. The resilience pipeline mitigates this but does not eliminate
-          it. This is deliberate (availability over warmth) but means the gate is a best-effort warm-up signal,
+          and its first request pays the lazy cost. Every host-registered task in ADC and Store is a
+          <code>SelfHttpWarmupTaskBase</code> subclass, whose missed warm-up the warming host&#39;s own pipeline does not
+          cover; the mitigation is at the caller hop, where an MMCA caller&#39;s factory-built client retries the
+          slow first request once for idempotent verbs (<code>Extensions.cs:74</code>), and it never eliminates the cost.
+          This is deliberate (availability over warmth) but means the gate is a best-effort warm-up signal,
           not a guarantee.</li>
           <li><strong>The per-task ceiling is a backstop, not a latency budget.</strong> The gap recorded on 2026-07-28 (an
           unbounded <code>Task.WhenAll</code> with no per-task deadline anywhere in the subsystem, so a task that HANGS held
@@ -515,10 +549,49 @@
           <code>:184</code>), Identity <code>:152</code> (was <code>:146</code>), Sales <code>:165</code> (was <code>:159</code>); unchanged and re-checked:
           <code>Extensions.Health.cs:154-156</code> and <code>:138-141</code>.</li>
           </ol>
+          <h2 id="revision-2026-10-28">Revision (2026-10-28)</h2>
+          <p>Re-verified against current source. The readiness gate, the cached <code>/health/ready</code> predicate, the
+          120-second per-task ceiling, the PING-class rule, the OIDC task&#39;s behavior and the six production
+          <code>SelfHttpWarmupTaskBase</code> subclasses are unchanged. What moved is the account of what the Polly
+          pipeline absorbs and where the framework&#39;s Redis check is registered.</p>
+          <ol>
+          <li>The record no longer says every missed warm-up is absorbed by the Polly pipeline. The standard
+          resilience handler is attached through <code>ConfigureHttpClientDefaults</code>
+          (<code>Source/Hosting/MMCA.Common.Aspire/Extensions.cs:50-60</code>), so it wraps only factory-built clients.
+          The JwtBearer middleware&#39;s lazy discovery re-fetch runs over its own default backchannel (no
+          <code>Backchannel</code> or <code>BackchannelHttpHandler</code> is configured in Common, ADC or Store source), and a
+          missed self-request warm-up is paid by the first inbound request; the task&#39;s own client is a plain
+          <code>HttpClient</code> (<code>Source/Hosting/MMCA.Common.Aspire/Warmup/SelfHttpWarmupTaskBase.cs:111-112</code>). That
+          holds for the warming host&#39;s own hop only: the first inbound request normally comes from an MMCA
+          caller&#39;s factory-built client (the UI <code>APIClient</code>,
+          <code>Source/Presentation/MMCA.Common.UI/DependencyInjection.cs:132</code>, or a gRPC typed client,
+          <code>Source/Presentation/MMCA.Common.Grpc/DependencyInjection.cs:141</code>), whose pipeline sees the slow
+          request and retries it once for idempotent verbs (POST and PATCH excluded, <code>Extensions.cs:74</code>). The
+          Decision bullet, the Rationale &quot;Availability over strict warmth&quot; item, the first Trade-offs item and
+          the ADR-009 entry in Related now scope the claim to the hop it holds on.</li>
+          <li>The <code>redis</code> check citation pointed at <code>AddRedisCaching</code>
+          (<code>Source/Hosting/MMCA.Common.Aspire/Caching/RedisCachingExtensions.cs:57</code>), which only switches the
+          Aspire checks off (<code>:64-65</code>). The <code>optional</code> PING check is registered by
+          <code>AddInfrastructureHealthChecks</code> (<code>Source/Hosting/MMCA.Common.Aspire/Extensions.Health.cs:84-91</code>), as
+          the class remarks say (<code>RedisCachingExtensions.cs:22-26</code>), and only for a connection string named
+          exactly <code>redis</code> (<code>Extensions.Health.cs:75</code>), while <code>AddRedisCaching</code> accepts any connection name. The
+          Decision bullet now records both: a non-default name with no <code>redis</code> string leaves the cache with
+          no Redis health check, and a non-default name alongside a <code>redis</code> string gets a check that pings the
+          DI multiplexer first (<code>Source/Hosting/MMCA.Common.Aspire/Health/RedisPingHealthCheck.cs:47</code>), which
+          is the client registered under the other name (<code>RedisCachingExtensions.cs:65</code>).</li>
+          <li>Anchors re-verified against current source: ADC Identity
+          <code>MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:182</code> (was <code>:181</code>), new
+          <code>WarmupHostedService.cs:84-88</code> and <code>:95-97</code> (failure catch and its log message),
+          <code>RedisPingHealthCheck.cs:52</code> (the <code>PING</code>) and <code>:47</code> (DI multiplexer first),
+          <code>RedisCachingExtensions.cs:65</code>, <code>Extensions.cs:74</code> (POST and PATCH retry exclusion), UI
+          <code>DependencyInjection.cs:132</code> and Grpc <code>DependencyInjection.cs:141</code>; unchanged and re-checked: <code>RedisPingHealthCheck.cs:26</code>,
+          <code>WarmupHostedService.cs:42</code>, <code>:53</code>, <code>:58</code>, <code>:69</code>, <code>:77-82</code>, <code>:103-105</code>.</li>
+          </ol>
           <h2 id="related">Related</h2>
           <p>ADR-004 (the OIDC discovery document the built-in task pre-fetches, and the auth-side view of the same
           cold-start), ADR-009 (the Polly resilience pipeline that absorbs the lazy retry when the gate opens
-          before a task succeeds), ADR-019 (the rate limiter that exempts <code>/health</code> and <code>/alive</code>, the endpoints
+          before a task succeeds: on the warming host&#39;s hop for a dependency called through a factory-built
+          client, and at the caller hop for a slow first inbound request), ADR-019 (the rate limiter that exempts <code>/health</code> and <code>/alive</code>, the endpoints
           this gate drives), ADR-026 (the two-tier caching strategy whose Redis substrate the framework-owned
           registration and the <code>optional</code>-tagged <code>PING</code> check belong to).</p>
           
@@ -541,6 +614,7 @@
             <li><a href="#revision-2026-10-07">Revision (2026-10-07)</a></li>
             <li><a href="#revision-2026-10-21">Revision (2026-10-21)</a></li>
             <li><a href="#revision-2026-10-26">Revision (2026-10-26)</a></li>
+            <li><a href="#revision-2026-10-28">Revision (2026-10-28)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

@@ -264,7 +264,9 @@
           Revised 2026-10-26: ADC&#39;s rollback loop now counts every app into the same four-outcome rollback
           summary as Store and no longer has a clean-revert message, so the indistinguishable-listing
           trade-off applies equally to both repos; anchors refreshed after the Store and ADC deploy workflow
-          and <code>main.bicep</code> changes.</p>
+          and <code>main.bicep</code> changes.
+          Revised 2026-10-28: anchors refreshed after the Store Defender for SQL and ADC #297 <code>main.bicep</code>
+          changes, and the ADR-057 and CONTRIBUTING citations now span their full quoted statements.</p>
           <h2 id="context">Context</h2>
           <p>Both production apps deploy to Azure Container Apps from a single <code>deploy.yml</code> job on push to <code>main</code>,
           and every gate runs <strong>before</strong> anything rolls out. The <code>deploy</code> job waits on seven needs in Store
@@ -283,12 +285,12 @@
           <p>Two existing records already reason from an answer that was never itself written down. ADR-057 states
           the premise outright: &quot;production rollback is <strong>revision-only</strong>&quot;, the deploy reverts the image &quot;and
           nothing else&quot;, and the previous release therefore keeps serving against the <strong>new</strong> schema
-          (<code>Website/docs-src/adr/057-expand-contract-schema-evolution-gate.md:25-30</code>), which is the entire
+          (<code>Website/docs-src/adr/057-expand-contract-schema-evolution-gate.md:28-37</code>), which is the entire
           justification for its expand/contract guard. ADR-030 depends on the same model from the other side:
           startup migration is the sole migrator, so a failed startup migration fails the new revision and
           &quot;there is no automated down-migration&quot;
           (<code>Website/docs-src/adr/030-startup-sole-migrator.md:115-117</code>). Both CONTRIBUTING files say the same
-          thing to contributors (<code>MMCA.Store/CONTRIBUTING.md:58-61</code>, <code>MMCA.ADC/CONTRIBUTING.md:58-61</code>). This
+          thing to contributors (<code>MMCA.Store/CONTRIBUTING.md:58-62</code>, <code>MMCA.ADC/CONTRIBUTING.md:58-62</code>). This
           ADR records the rollout and rollback model those documents assume.</p>
           <h2 id="decision">Decision</h2>
           <p>Roll out one revision at a time, verify it from outside, and auto-revert the <strong>image only</strong> when the
@@ -296,21 +298,21 @@
           <ul>
           <li><strong>Single-revision rollout.</strong> Every container app runs <code>activeRevisionsMode: &#39;Single&#39;</code>, so a deploy
           replaces the serving revision rather than splitting traffic across two: Store&#39;s identity, catalog,
-          sales, gateway and ui apps (<code>MMCA.Store/infra/main.bicep:1527,1709,1833,1985,2114</code>) and ADC&#39;s
+          sales, gateway and ui apps (<code>MMCA.Store/infra/main.bicep:1528,1710,1834,1986,2115</code>) and ADC&#39;s
           identity, conference, engagement, notification, gateway and ui apps
-          (<code>MMCA.ADC/infra/main.bicep:1874,2127,2280,2415,2605,2768</code>). There is no canary or blue/green stage
+          (<code>MMCA.ADC/infra/main.bicep:1871,2124,2277,2412,2602,2765</code>). There is no canary or blue/green stage
           and no traffic-splitting step.</li>
           <li><strong>Readiness gating is the first line of defence.</strong> Every app carries startup, liveness and
           readiness probes, so ACA holds user traffic on the old revision until the new one is ready
-          (<code>MMCA.Store/infra/main.bicep:1681-1684</code>, five apps at <code>:1681,1805,1953,2063,2188</code>;
-          <code>MMCA.ADC/infra/main.bicep:2078-2096</code>, six apps at <code>:2078,2231,2366,2533,2696,2850</code>). Every
+          (<code>MMCA.Store/infra/main.bicep:1682-1685</code>, five apps at <code>:1682,1806,1954,2064,2189</code>;
+          <code>MMCA.ADC/infra/main.bicep:2075-2093</code>, six apps at <code>:2075,2228,2363,2530,2693,2847</code>). Every
           backend and the UI take readiness on <code>/health/ready</code>, which is the ADR-025 warm-up gate doing
           rollout duty. The Gateway is the exception in both repos: its readiness probe is <code>/alive</code>, because
           its <code>/health/ready</code> fans out to every downstream and would let one failed downstream mark the only
           Gateway replica unready, a 30-second probe there would also send an HTTP request to every
           downstream service every 30 seconds and keep their idle replicas off the Container Apps idle rate,
           and the Gateway has no JwtBearer warm-up task to wait for
-          (<code>MMCA.Store/infra/main.bicep:2066-2073</code>, <code>MMCA.ADC/infra/main.bicep:2712-2721</code>).</li>
+          (<code>MMCA.Store/infra/main.bicep:2067-2074</code>, <code>MMCA.ADC/infra/main.bicep:2709-2718</code>).</li>
           <li><strong>A two-tier post-deploy smoke gate is the last gating step of the deploy job.</strong> <code>Smoke test (rollback on failure)</code> verifies the freshly deployed fleet from outside Azure
           (<code>MMCA.Store/.github/workflows/deploy.yml:1370</code>, <code>MMCA.ADC/.github/workflows/deploy.yml:1494</code>):
           tier 1 proves the new revisions activated, tier 2 probes them over HTTP, and only these two can
@@ -630,6 +632,27 @@
           ADC <code>:2078,2231,2366,2533,2696,2850</code>; Gateway <code>/alive</code> readiness Store <code>:2066-2073</code>, ADC
           <code>:2712-2721</code>.</li>
           </ol>
+          <h2 id="revision-2026-10-28">Revision (2026-10-28)</h2>
+          <p><strong>Re-verified against current source. No content correction: every container app in both repos
+          still runs <code>activeRevisionsMode: &#39;Single&#39;</code>, every backend and the UI still take readiness on
+          <code>/health/ready</code>, and the Gateway still takes readiness on <code>/alive</code> for the fan-out, idle-rate and
+          no-JwtBearer reasons the Decision bullet gives.</strong> Both <code>main.bicep</code> files moved (Store by +1 line,
+          ADC by -3 lines), so the <code>main.bicep</code> anchors in Decision are re-pointed here; the <code>deploy.yml</code>
+          anchors still resolve. The 2026-10-26 revision&#39;s anchors stay as recorded.</p>
+          <ol>
+          <li>The ADR-057 citation for &quot;revision-only&quot;, &quot;nothing else&quot; and &quot;keeps serving traffic against the
+          <strong>new</strong> schema&quot; now spans <code>057-expand-contract-schema-evolution-gate.md:28-37</code> (&quot;revision-only&quot;
+          at <code>:28</code>, &quot;nothing else&quot; at <code>:35</code>, &quot;<strong>new</strong> schema&quot; at <code>:37</code>), and both CONTRIBUTING citations
+          span <code>:58-62</code>, where the revision-only statement ends with &quot;NEW schema&quot; at <code>:62</code>
+          (<code>MMCA.Store/CONTRIBUTING.md:58-62</code>, <code>MMCA.ADC/CONTRIBUTING.md:58-62</code>).</li>
+          <li>Anchors re-verified against current source: <code>activeRevisionsMode: &#39;Single&#39;</code>
+          <code>MMCA.Store/infra/main.bicep:1528,1710,1834,1986,2115</code> and
+          <code>MMCA.ADC/infra/main.bicep:1871,2124,2277,2412,2602,2765</code>; probe blocks (the <code>probes: [</code> lines)
+          Store <code>:1682,1806,1954,2064,2189</code> (first block <code>:1682-1685</code>), ADC <code>:2075,2228,2363,2530,2693,2847</code>
+          (first block <code>:2075-2093</code>); backend and UI readiness <code>/health/ready</code> Store <code>:1685,1809,1957,2192</code>,
+          ADC <code>:2093,2246,2381,2548,2865</code>; Gateway <code>/alive</code> readiness rationale and probe Store
+          <code>:2067-2074</code>, ADC <code>:2709-2718</code>.</li>
+          </ol>
           <h2 id="related">Related</h2>
           <p><a href="057-expand-contract-schema-evolution-gate.html">ADR-057</a> (built on this model: revision-only rollback
           is why every migration must be backward compatible one release back),
@@ -662,6 +685,7 @@
             <li><a href="#revision-2026-10-07">Revision (2026-10-07)</a></li>
             <li><a href="#revision-2026-10-21">Revision (2026-10-21)</a></li>
             <li><a href="#revision-2026-10-26">Revision (2026-10-26)</a></li>
+            <li><a href="#revision-2026-10-28">Revision (2026-10-28)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

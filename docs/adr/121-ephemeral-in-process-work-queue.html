@@ -249,7 +249,8 @@
           Revised 2026-10-06: the scoring trigger&#39;s event-existence 404 and the handler&#39;s current retry remarks.
           Revised 2026-10-07: the live drain&#39;s bounded shutdown flush (complete the queue, then publish what remains within a 5-second budget) and its <code>WaitToReadAsync</code> loop.
           Revised 2026-10-21: anchors refreshed after the live drain, upvote handler and question submit handler moved.
-          Revised 2026-10-26: anchors refreshed after the live poll open handler and question submit handler moved.</p>
+          Revised 2026-10-26: anchors refreshed after the live poll open handler and question submit handler moved.
+          Revised 2026-10-28: the moderation handler&#39;s queue writes (one unconditional event write plus a Pending-count write only for an approved or dismissed Pending question, not one write per branch), with the live poll close and moderation handler anchors refreshed.</p>
           <h2 id="context">Context</h2>
           <p>ADR-052 ran two different kinds of work through one mechanism: ephemeral broadcasts that must not
           put a gRPC round trip on the hot path of a vote, and an AI scoring pass that takes minutes and issues
@@ -360,12 +361,14 @@
           over the shared <code>MutateEntityHandlerCore</code> at <code>:52</code>) holds no save of its own: the base saves at
           <code>:322</code>, logs at <code>:324</code> and then awaits the <code>OnMutatedAsync</code> post-save hook at <code>:325</code>, and the
           enqueue is the body of that hook. <code>CloseLivePollHandler</code> declares the base at
-          <code>.../LivePolls/UseCases/Close/CloseLivePollHandler.cs:24</code> and enqueues from the hook at <code>:73</code>
-          (queue write at <code>:94-95</code>); <code>OpenLivePollHandler</code> at
+          <code>.../LivePolls/UseCases/Close/CloseLivePollHandler.cs:24</code> and enqueues from the hook at <code>:71</code>
+          (queue write at <code>:92-93</code>); <code>OpenLivePollHandler</code> at
           <code>.../LivePolls/UseCases/Open/OpenLivePollHandler.cs:26</code> and <code>:87</code> (write at <code>:108-109</code>);
           <code>ModerateQuestionHandler</code> at <code>.../SessionQuestions/UseCases/Moderate/ModerateQuestionHandler.cs:28</code>
-          and <code>:89</code>, whose helper wraps its work in <code>BestEffort.ExecuteAsync</code> (<code>:138</code>) with one write per
-          branch (<code>:140</code>, <code>:154</code>).</li>
+          and <code>:97</code>, whose helper (<code>:114</code>) builds the event name and payload outside the guard (<code>:126-144</code>)
+          and then wraps its work in <code>BestEffort.ExecuteAsync</code> (<code>:146</code>): the moderation event write is
+          unconditional (<code>:148</code>), and the Pending-count write (<code>:162</code>) follows only when a Pending question
+          was approved or dismissed (<code>:150</code>).</li>
           <li><em>One site keeps the ordering by hand, and the rule is stated in its own terms.</em>
           <code>SubmitQuestionHandler</code> implements <code>ICommandHandler&lt;SubmitQuestionCommand, Result&lt;SessionQuestionDTO&gt;&gt;</code>
           directly (<code>.../SessionQuestions/UseCases/Submit/SubmitQuestionHandler.cs:39</code>), so it owns its
@@ -543,6 +546,28 @@
           <code>:94-95</code>), <code>ModerateQuestionHandler.cs</code> (<code>:28</code>, <code>:89</code>, <code>:138</code>, <code>:140</code>, <code>:154</code>), and the
           <code>MutateEntityHandlerBase</code> lines (<code>:339</code>, <code>:52</code>, <code>:322</code>, <code>:325</code>).</li>
           </ol>
+          <h2 id="revision-2026-10-28">Revision (2026-10-28)</h2>
+          <p>Re-verified against current source. The decision, rationale and trade-offs are unchanged, and so
+          is the post-commit enqueue in both shapes; what moved is <code>CloseLivePollHandler</code> and
+          <code>ModerateQuestionHandler</code>, whose lines the 2026-10-26 revision listed as unchanged but which had
+          already moved, and the Decision&#39;s description of the moderation helper&#39;s writes.</p>
+          <ol>
+          <li>The moderation helper does not write once per branch. It builds the <code>(eventName, payload)</code> pair
+          outside the best-effort guard
+          (<code>MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Application/SessionQuestions/UseCases/Moderate/ModerateQuestionHandler.cs:126-144</code>),
+          then inside <code>BestEffort.ExecuteAsync</code> (<code>:146</code>) writes the moderation event unconditionally
+          (<code>:148</code>) and the Pending-count follow-up only when a Pending question was approved or dismissed
+          (<code>:150</code>, write at <code>:162</code>). The Decision now says so.</li>
+          <li>Anchors re-verified against current source: in
+          <code>MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Application/LivePolls/UseCases/Close/CloseLivePollHandler.cs</code>,
+          the hook&#39;s enqueue call (<code>:71</code>, inside the <code>OnMutatedAsync</code> override at <code>:66</code>, helper defined at
+          <code>:82</code>) and the queue write (<code>:92-93</code>); in <code>.../SessionQuestions/UseCases/Moderate/ModerateQuestionHandler.cs</code>,
+          the hook&#39;s enqueue call (<code>:97</code>, inside the override at <code>:93</code>), the helper (<code>:114</code>) and the lines
+          in item 1. Unchanged and confirmed: both base declarations (<code>CloseLivePollHandler.cs:24</code>,
+          <code>ModerateQuestionHandler.cs:28</code>) and the <code>MutateEntityHandlerBase</code> lines
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/UseCases/Crud/MutateEntityHandlerBase.cs:339</code>,
+          <code>:52</code>, <code>:322</code>, <code>:324</code>, <code>:325</code>).</li>
+          </ol>
           <h2 id="related">Related</h2>
           <p><a href="114-internal-commands-durable-job-queue.html">ADR-114</a> (the durable, leased, retrying queue that owns
           expensive and must-run work),
@@ -574,6 +599,7 @@
             <li><a href="#revision-2026-10-07">Revision (2026-10-07)</a></li>
             <li><a href="#revision-2026-10-21">Revision (2026-10-21)</a></li>
             <li><a href="#revision-2026-10-26">Revision (2026-10-26)</a></li>
+            <li><a href="#revision-2026-10-28">Revision (2026-10-28)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

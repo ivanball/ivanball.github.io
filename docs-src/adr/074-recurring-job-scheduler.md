@@ -6,7 +6,8 @@ smart-wait and cron-validation statements now match the runner's actual behavior
 the consumer-adoption statement now names every host that calls `AddScheduledJobs` and the combined
 audit-trail migrations that create the table. Revised 2026-10-21: anchors refreshed after the outbox
 claim path and the `ConfigureScheduler` mapping moved in source. Revised 2026-10-26: anchors refreshed
-after the outbox claim path and the consumer `AddScheduledJobs` calls moved in source. The implementation lands in the MMCA.Common "enterprise capability wave" release
+after the outbox claim path and the consumer `AddScheduledJobs` calls moved in source. Revised
+2026-10-28: anchors refreshed after the ADC Identity host's `AddScheduledJobs` call moved in source. The implementation lands in the MMCA.Common "enterprise capability wave" release
 and is opt-in: a host calls `AddScheduledJobs(configuration)` and sets `Scheduler:Enabled`. Until it does,
 the framework creates no table and starts no runner.
 
@@ -284,6 +285,20 @@ moved, two to three lines in `OutboxProcessor.cs` and in the consumer `Program.c
    `MMCA.Helpdesk/Source/Hosts/MMCA.Helpdesk.Web/Program.cs:89`. The 2026-10-07 and 2026-10-21 entries
    above are left as written; their `OutboxProcessor.cs` anchors and the 2026-10-07 ADC and Store
    `Program.cs` anchors are stale.
+
+## Revision (2026-10-28)
+Re-verified against current source. No decision, rationale, trade-off or adoption statement changed; the
+consumer-adoption host set (ADC three of four hosts without Notification, Store three, Helpdesk one)
+stands as described. Only the ADC Identity `AddScheduledJobs` anchor moved, by one line.
+
+1. Anchors re-verified against current source: the `AddScheduledJobs` calls are at
+   `MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:253`,
+   `MMCA.ADC.Conference.Service/Program.cs:358`, `MMCA.ADC.Engagement.Service/Program.cs:204`,
+   `MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:240`,
+   `MMCA.Store.Sales.Service/Program.cs:216`, `MMCA.Store.Identity.Service/Program.cs:210` and
+   `MMCA.Helpdesk/Source/Hosts/MMCA.Helpdesk.Web/Program.cs:89`; `MMCA.ADC.Notification.Service/Program.cs`
+   still has no call. The 2026-10-26 entry above is left as written; its ADC Identity anchor (`:252`) is
+   stale and its other `Program.cs` anchors are current.
 
 ## Related
 [ADR-003](003-outbox-dual-dispatch.md) (the outbox whose claim-lease idiom and smart wait this reuses

@@ -244,7 +244,7 @@
           <p class="eyebrow doc-kicker">Architecture Decision Record</p>
           <h1 id="adr-027-multi-locale-internationalization-supersedes-adr-011">ADR-027: Multi-Locale Internationalization (Supersedes ADR-011)</h1>
           <h2 id="status">Status</h2>
-          <p>Accepted (2026-06-27, amended 2026-07-02, 2026-07-03, 2026-07-09, 2026-07-29, and 2026-09-15: the MudBlazor localization interceptor is replaced so no dependency assigns the current culture on a hybrid head; corrected 2026-08-01: the pseudo-locale CI gate is required on all three browser engines, and the hybrid applier sets only the thread defaults; revised 2026-10-01: four statements corrected to match the code; revised 2026-10-06: displayed times follow the viewer&#39;s clock except a conference schedule, which follows the event&#39;s own time zone (Decision 11), and client-synthesized HTTP failures localize by error code; revised 2026-10-07: when the caller supplies a localizer, a code-keyed client failure resolves from the framework&#39;s own <code>SharedResource</code> pair before the English fallback, and the stale &quot;only coverage collection is chromium-only&quot; note on the pseudo-locale gate is removed). Revised 2026-10-21: Decision 10 names the server-side account-email caller of <code>SupportedCultures.ResolveClosest</code>, the <code>Http.{status}</code> key count is corrected to eleven, and anchors are refreshed. Revised 2026-10-26: the pseudo-locale sentinel check is no longer retried (the test sets the culture cookie and waits for network idle), Decision 11 states that formatted times render empty rather than in UTC until the viewer&#39;s zone resolves, and anchors are refreshed. <strong>Supersedes <a href="011-single-locale-i18n.html">ADR-011</a></strong> (single-locale by design).</p>
+          <p>Accepted (2026-06-27, amended 2026-07-02, 2026-07-03, 2026-07-09, 2026-07-29, and 2026-09-15: the MudBlazor localization interceptor is replaced so no dependency assigns the current culture on a hybrid head; corrected 2026-08-01: the pseudo-locale CI gate is required on all three browser engines, and the hybrid applier sets only the thread defaults; revised 2026-10-01: four statements corrected to match the code; revised 2026-10-06: displayed times follow the viewer&#39;s clock except a conference schedule, which follows the event&#39;s own time zone (Decision 11), and client-synthesized HTTP failures localize by error code; revised 2026-10-07: when the caller supplies a localizer, a code-keyed client failure resolves from the framework&#39;s own <code>SharedResource</code> pair before the English fallback, and the stale &quot;only coverage collection is chromium-only&quot; note on the pseudo-locale gate is removed). Revised 2026-10-21: Decision 10 names the server-side account-email caller of <code>SupportedCultures.ResolveClosest</code>, the <code>Http.{status}</code> key count is corrected to eleven, and anchors are refreshed. Revised 2026-10-26: the pseudo-locale sentinel check is no longer retried (the test sets the culture cookie and waits for network idle), Decision 11 states that formatted times render empty rather than in UTC until the viewer&#39;s zone resolves, and anchors are refreshed. Revised 2026-10-28: anchors refreshed after the <code>ci.yml</code> and <code>Directory.Packages.props</code> line shifts. <strong>Supersedes <a href="011-single-locale-i18n.html">ADR-011</a></strong> (single-locale by design).</p>
           <h2 id="context">Context</h2>
           <p>ADR-011 recorded single-locale (en-US) as a deliberate, <em>revisitable</em> non-goal and sketched what
           re-introducing i18n would entail. That revisit has now happened: the framework adds first-class
@@ -353,7 +353,7 @@
           all three browser engines</strong>, not just one: <code>ui-e2e</code> is a <code>chromium, firefox, webkit</code> matrix whose
           legs are each a required merge check (<code>MMCA.Common/.github/workflows/ci.yml:232</code>), and the run
           step executes the whole E2E project on every leg with no per-class or per-browser filter
-          (<code>:344-345</code>). A leak-guard
+          (<code>:372-377</code>, the <code>dotnet test</code> command at <code>:377</code>). A leak-guard
           test asserts the sentinel is absent under <code>en-US</code> (<code>PseudoLocalizationE2ETests.cs:71-72</code>).
           Production hosts are unchanged: they keep
           <code>qps-Ploc</code> Development-only.</p>
@@ -640,6 +640,17 @@
           <code>:128-131</code> (<code>ResolveZone</code>), <code>:36</code> (UTC default), <code>:15-16</code> (server-zone remark) and <code>:118-119</code>
           (<code>Format</code>), replacing <code>:18</code>, <code>:49-87</code>, <code>:122-125</code>, <code>:32</code>, <code>:13-16</code> and <code>:112-113</code>.</li>
           </ol>
+          <h2 id="revision-2026-10-28">Revision (2026-10-28)</h2>
+          <p>Re-verified against current source. No decision or rationale changed; the Decision 8 statement that
+          the <code>ui-e2e</code> run step executes the whole E2E project on every leg with no per-class or per-browser
+          filter still holds, and only its anchors moved.</p>
+          <ol>
+          <li>Anchors re-verified against current source: the <code>ui-e2e</code> matrix still at
+          <code>MMCA.Common/.github/workflows/ci.yml:232</code>; its run step at <code>:372-377</code>, with <code>E2E_BROWSER</code> taken
+          from the matrix at <code>:376</code> and the <code>dotnet test</code> command at <code>:377</code> passing only
+          <code>--minimum-expected-tests 1</code> (the 2026-10-26 <code>:344-345</code> is stale); the MudBlazor 9.11.0 pin at
+          <code>MMCA.Common/Directory.Packages.props:239</code> (the 2026-10-21 <code>:183</code> is stale).</li>
+          </ol>
           <h2 id="related">Related</h2>
           <p><a href="011-single-locale-i18n.html">ADR-011</a> (superseded), <a href="013-result-pattern.html">ADR-013</a> (the <code>Error.Code</code>
           this localizes on), <a href="015-architecture-fitness-functions.html">ADR-015</a> (the i18n gates now live here: the <code>MA0076</code> culture-less
@@ -670,6 +681,7 @@
             <li><a href="#revision-2026-10-07">Revision (2026-10-07)</a></li>
             <li><a href="#revision-2026-10-21">Revision (2026-10-21)</a></li>
             <li><a href="#revision-2026-10-26">Revision (2026-10-26)</a></li>
+            <li><a href="#revision-2026-10-28">Revision (2026-10-28)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

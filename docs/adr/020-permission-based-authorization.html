@@ -267,7 +267,9 @@
           repos held to it.
           Revised 2026-10-26: the Decision paragraph names Store&#39;s <code>RolesManage</code> alias (outside <code>All</code>) and
           records that both Identity grant maps name the framework administration capabilities by value,
-          partly through aliases; the ADC Notification registration anchor refreshed.</p>
+          partly through aliases; the ADC Notification registration anchor refreshed.
+          Revised 2026-10-28: anchors refreshed after edits to <code>NavMenu.razor</code> and
+          <code>ClaimsPrincipalExtensions.cs</code> moved the navigation-filter and <code>HasPermissionClaim</code> lines.</p>
           <h2 id="context">Context</h2>
           <p>The default answer in ASP.NET Core is pure role-based access control (RBAC): an endpoint declares
           <code>[Authorize(Policy = &quot;RequireOrganizer&quot;)]</code> against a named policy that calls <code>RequireRole(...)</code>, and a
@@ -361,12 +363,12 @@
           <code>AddPermissions(...)</code> or as a role-valued setting on a framework gate. The framework&#39;s own
           navigation entries gate on <code>NavItem.RequiredPermission</code>
           (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI/Common/NavItem.cs:20</code>, matched against the
-          <code>permission</code> claim at <code>.../UI/Layout/NavMenu.razor:259</code>), the notification entry on
+          <code>permission</code> claim at <code>.../UI/Layout/NavMenu.razor:265</code>), the notification entry on
           <code>NotificationPermissions.Manage</code>
           (<code>.../UI/Notifications/NotificationUIModule.cs:20</code>). The role-valued settings are all host-supplied
           and empty by default: the signed-in-devices entry narrows to <code>LayoutSettings.SessionsNavRequiredRole</code>
           when one is configured (<code>.../UI/Common/Settings/LayoutSettings.cs:39</code>, checked with <code>IsInRole</code> at
-          <code>.../UI/Layout/NavMenu.razor:252-253</code>), a host&#39;s own <code>NavItem.RequiredRole</code> is honoured (<code>:257</code>), the
+          <code>.../UI/Layout/NavMenu.razor:258-259</code>), a host&#39;s own <code>NavItem.RequiredRole</code> is honoured (<code>:263</code>), the
           owner-or-admin bypass role is required configuration a host supplies
           (<code>OwnerOrAdminFilterOptions.BypassRole</code>, <code>.../API/Authorization/OwnerOrAdminFilterOptions.cs:24</code>;
           <a href="033-resource-ownership-authorization.html">ADR-033</a>), the public output-cache policy takes its bypass
@@ -386,7 +388,7 @@
           capability through the registry, and the CQRS <code>AuthorizationGate</code> passes a request whose permission
           the registry grants to the caller&#39;s roles OR that the principal carries as a claim
           (<code>MMCA.Common/Source/Core/MMCA.Common.Application/UseCases/Decorators/AuthorizationGate.cs:46-48</code>,
-          over <code>ClaimsPrincipalExtensions.HasPermissionClaim</code>, <code>.../Shared/Auth/ClaimsPrincipalExtensions.cs:94</code>).</p>
+          over <code>ClaimsPrincipalExtensions.HasPermissionClaim</code>, <code>.../Shared/Auth/ClaimsPrincipalExtensions.cs:95</code>).</p>
           <p>That claim is what makes the model work when the modules run as separate services. The host that mints
           tokens (the Identity service) has to register every module&#39;s compiled grants, so a token carries the
           full permission set rather than only the Identity module&#39;s; stored grants live in that one host and
@@ -519,6 +521,18 @@
           <li>Anchors re-verified against current source: the ADC Notification grant is applied from
           <code>MMCA.ADC/Source/Modules/Notification/MMCA.ADC.Notification.API/DependencyInjection.cs:46</code>.</li>
           </ol>
+          <h2 id="revision-2026-10-28">Revision (2026-10-28)</h2>
+          <p>Re-verified against current source. The decision, the grant model, every permission count and the
+          navigation filtering behaviour are unchanged; only live anchors moved. The earlier dated revisions
+          keep their anchors as written.</p>
+          <ol>
+          <li>Anchors re-verified against current source: in
+          <code>MMCA.Common/Source/Presentation/MMCA.Common.UI/Layout/NavMenu.razor</code> the
+          <code>SessionsNavRequiredRole</code> read and <code>IsInRole</code> check sit at <code>:258-259</code>, the <code>NavItem.RequiredRole</code>
+          filter at <code>:263</code> and the <code>RequiredPermission</code> filter (over <code>HasPermissionClaim</code>) at <code>:265</code>;
+          <code>HasPermissionClaim</code> is declared at
+          <code>MMCA.Common/Source/Core/MMCA.Common.Shared/Auth/ClaimsPrincipalExtensions.cs:95</code>.</li>
+          </ol>
           <h2 id="related">Related</h2>
           <p>ADR-004 (the authenticated principal and claims this keys on, including the optional <code>permission</code>
           claim), ADR-008 (each extracted service authorizes independently, so the registry is wired per
@@ -542,6 +556,7 @@
             <li><a href="#revision-2026-10-01">Revision (2026-10-01)</a></li>
             <li><a href="#revision-2026-10-06">Revision (2026-10-06)</a></li>
             <li><a href="#revision-2026-10-26">Revision (2026-10-26)</a></li>
+            <li><a href="#revision-2026-10-28">Revision (2026-10-28)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

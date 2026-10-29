@@ -64,6 +64,9 @@ Revised 2026-10-26: the transport surface in **Transport exit options** is recou
 files across four packages and the trial point is restated as an `IBrokerTransport` registered
 through `AddBrokerTransport` beside four broker transports, replacing the retired
 `MessageBusProvider` switch; anchors are rebased after v1.261.0.
+Revised 2026-10-28: Decision 3 now says `MassTransit*` is the only license-motivated dependabot
+ignore among five semver-major ignores, and ADC's emulator-tier comment names 8.5.12 in agreement
+with its entry; anchors refreshed after v1.265.1.
 
 ## Context
 MMCA.Common publishes its `MMCA.Common.*` NuGet package set (see `FACTS.md` for the authoritative
@@ -112,17 +115,20 @@ Two related governance questions had no recorded answer:
    `:130` and `:136`), and dependabot ignores every `MassTransit*` semver-major update
    (`MMCA.Common/.github/dependabot.yml:57-60`). SixLabors.ImageSharp was a second instance (gated
    below major 4) until v1.258.0, which removed the package, its fitness test and its package-id list
-   (`MMCA.Common/CHANGELOG.md:55`); its dependabot ignore is gone too, leaving `MassTransit*` as the
-   only package ignore under `ignore:` (`MMCA.Common/.github/dependabot.yml:56-60`); see the
-   2026-10-25 revision.
+   (`MMCA.Common/CHANGELOG.md:98`, under the 1.258.0 heading at `:94`); its dependabot ignore is
+   gone too, leaving `MassTransit*` as the only license-motivated package ignore under `ignore:`
+   (`MMCA.Common/.github/dependabot.yml:56-60`). The four other semver-major ignores there,
+   `Microsoft.VisualStudio.Threading.Analyzers`, `Microsoft.OpenApi`, `StackExchange.Redis` and
+   `MessagePack` (`:64-65`, `:72-73`, `:76-77`, `:78-79`), hold back breaking or build-constrained
+   majors and have no fitness test; see the 2026-10-25 revision.
 
    The assertions run in MMCA.Common only, the one repo that subclasses the base
    (`MMCA.Common/Tests/Architecture/MMCA.Common.Architecture.Tests/Governance/DependencyVersionTests.cs:9`).
    Helpdesk declares no MassTransit package. Store and ADC take `MassTransit`,
    `MassTransit.RabbitMQ` and `MassTransit.SqlTransport.PostgreSQL` transitively through
    `MMCA.Common.Infrastructure`
-   (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/MMCA.Common.Infrastructure.csproj:48-49`,
-   `:53`), and `MassTransit.Azure.ServiceBus.Core` through `MMCA.Common.Azure` and
+   (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/MMCA.Common.Infrastructure.csproj:52-53`,
+   `:57`), and `MassTransit.Azure.ServiceBus.Core` through `MMCA.Common.Azure` and
    `MMCA.Common.Testing.Azure` (`MMCA.Common/Source/Hosting/MMCA.Common.Azure/MMCA.Common.Azure.csproj:28`,
    `MMCA.Common/Source/Hosting/MMCA.Common.Testing.Azure/MMCA.Common.Testing.Azure.csproj:21`),
    which both declare (`MMCA.ADC/Directory.Packages.props:128-129`,
@@ -133,8 +139,9 @@ Two related governance questions had no recorded answer:
    8.5.12 (`MMCA.Common/Directory.Packages.props:125-127`), so all three repos sit on one patch
    version. Alignment there is a convention the app-side comments carry, not something the gate
    enforces: Store's comment names the lockstep pin without a patch number
-   (`MMCA.Store/Directory.Packages.props:93-94`), so it holds across patch bumps, while ADC's still
-   names 8.5.11 above an 8.5.12 entry (`MMCA.ADC/Directory.Packages.props:69`, `:73`).
+   (`MMCA.Store/Directory.Packages.props:93-94`), so it holds across patch bumps, while ADC's names
+   the patch, 8.5.12, matching its 8.5.12 entry today but due for a hand edit on every patch bump
+   (`MMCA.ADC/Directory.Packages.props:69`, `:73`).
    What the pin governs, and what the fitness function reads, is the major, so an app-side entry on
    a different v8 patch would still be inside the decision.
    They still do not subclass the test: its default list also names the four package ids they do
@@ -472,6 +479,36 @@ Amazon SQS shipped as adapter packages, so **Transport exit options** is restate
    `UpcastingIntegrationEventConsumer.cs:36`, `IntegrationEventConsumerExtensions.cs:189`,
    `ConsumerOriginRestore.cs:35`, `BrokerMessageBus.cs:43`, `IMessageBus.cs:28`,
    `ServiceBusEmulatorSupport.cs:87`, `:115-117` and `ServiceBusEmulatorFixtureBase.cs:68`, `:74-76`.
+
+## Revision (2026-10-28)
+Re-verified against current source (MMCA.Common, MMCA.ADC and MMCA.Store `main`, consumers on
+1.265.1). The pin, the gate and the dependency set are unchanged: the one gated test is
+`MassTransit_MustNotExceed_MajorVersion8` over five package ids with an exclusive ceiling of 9
+(`DependencyVersionTestsBase.cs:18-25`, `:27-40`, `:34`), and all three repos sit on MassTransit
+8.5.12 (`MMCA.Common/Directory.Packages.props:125-127`, `:130`, `:136`,
+`MMCA.ADC/Directory.Packages.props:73`, `MMCA.Store/Directory.Packages.props:97`). What moved is two
+statements of fact in **Decision** and a set of anchors.
+
+1. Decision 3 no longer says `MassTransit*` is the only package ignore under `ignore:`.
+   `MMCA.Common/.github/dependabot.yml:56` lists five semver-major ignores: `MassTransit*` (`:59-60`),
+   `Microsoft.VisualStudio.Threading.Analyzers` (`:64-65`), `Microsoft.OpenApi` (`:72-73`),
+   `StackExchange.Redis` (`:76-77`) and `MessagePack` (`:78-79`). `MassTransit*` is the only
+   license-motivated one and the only one paired with a fitness test, which is how the 2026-10-25
+   revision already worded it; Decision 3 now uses that wording.
+2. Decision 3 no longer says ADC's emulator-tier comment names 8.5.11 above an 8.5.12 entry. The
+   comment now reads "matches MMCA.Common's lockstep MassTransit 8.5.12 pin"
+   (`MMCA.ADC/Directory.Packages.props:69`) above the 8.5.12 entry (`:73`), so the two agree. It
+   still carries a patch number, unlike Store's (`MMCA.Store/Directory.Packages.props:93-94`), and
+   the gate still reads only Common's props, so alignment remains a convention.
+3. Anchors re-verified against current source: the `MMCA.Common.Infrastructure.csproj` references
+   `MassTransit` and `MassTransit.RabbitMQ` at `:52-53` and `MassTransit.SqlTransport.PostgreSQL` at
+   `:57` (previously `:48-49` and `:53`); the ImageSharp removal at `MMCA.Common/CHANGELOG.md:98`,
+   under the 1.258.0 heading at `:94` (previously `:55`). Unchanged: `MMCA.Common.Azure.csproj:28`,
+   `MMCA.Common.Testing.Azure.csproj:21`, `MMCA.Common/Directory.Packages.props:119-124`,
+   `MMCA.ADC/Directory.Packages.props:68-73`, `:128-129`, `MMCA.Store/Directory.Packages.props:17-18`,
+   `:92-97`, `DependencyVersionTests.cs:9` and `ArchitectureRules.Governance.cs:42-45`. The
+   CHANGELOG and UPGRADING anchors inside the 2026-10-25 and 2026-10-26 revisions are left as
+   recorded.
 
 ## Related
 ADR-015 (the fitness function that enforces the pins), ADR-003 / ADR-006 (MassTransit is the broker

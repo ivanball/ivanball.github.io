@@ -15,6 +15,7 @@ Revised 2026-10-06: the dedup race is recorded as propagate-and-roll-back under 
 Revised 2026-10-07: the hub client connects WebSockets-only with negotiation skipped, in both connection modes, so a multi-replica hub needs no session affinity and there is no SSE or long-polling fallback.
 Revised 2026-10-21: the ADC Notification scale block is read correctly (its two preconditions make more than one replica safe, and `maxReplicas: 2` is right-sizing for measured load, not a backplane limit); anchors refreshed.
 Revised 2026-10-26: the per-user hub connection cap is recorded as per replica, `AddPushNotifications` is recorded as also replacing the SignalR `IUserIdProvider`, the Store payment-failed saga handler is recorded as also re-arming the payment deadline when unpaid-order expiry is enabled (the default), ADR-135 is linked, and anchors refreshed.
+Revised 2026-10-28: the Store guest order-received email is recorded as an inline best-effort send outside ADR-114 (so not every order email retries and dead-letters), the three further durable Store order-email call sites are named, and anchors refreshed.
 ## Context
 The framework needs to deliver user-facing notifications (an organizer broadcasting a schedule change,
 a per-user alert). Two delivery models each fail on their own. A pure real-time push over a WebSocket
@@ -186,7 +187,8 @@ browser-edge auth context the UI client runs in), ADR-044 (the optional OS-level
 `SendPushNotificationHandler` fires after the inbox and SignalR legs, defaulting to `NullNativePushSender`),
 ADR-069 (the record of the Identity service running with no session affinity; the WebSockets-only,
 negotiate-free hub client gives the hub the same posture), ADR-114 (the durable internal-command
-processor the Store order emails are scheduled through, which is where their retry and dead-letter posture comes from),
+processor the Store order emails other than the inline guest order-received mail are scheduled
+through, which is where their retry and dead-letter posture comes from),
 ADR-135 (One Application Namespace Isolates Shared
 Infrastructure Keyspaces: the record that owns the application-namespace decision behind the
 per-application backplane channel prefix).
@@ -414,3 +416,46 @@ scope of the connection cap, two facts the record did not carry, and most live a
    `:2580`, and the `signalr-backplane-errors` entry key at `:644`. The 2026-10-21 statement that the
    `SendPushNotificationHandler.cs` and `NotificationHubService.cs` anchors were as recorded is
    superseded by this one.
+
+## Revision (2026-10-28)
+Re-verified against current source. The two-channel model, the dedup and transactional posture, the
+WebSockets-only hub client, the backplane, the ADC scale block and the email primitive are
+unchanged; what moved is the set of Store order-email call sites, one of which does not go through
+ADR-114, and several anchors.
+
+1. **Not every Store order email is an ADR-114 internal command.** The guest order-received email
+   is sent inline by `GuestOrderPlacedNotifier`
+   (`MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Application/Orders/UseCases/GuestCheckout/GuestOrderPlacedNotifier.cs:28`,
+   `IEmailSender` at `:29`, the send at `:55`), called by `GuestCheckOutHandler` after the order
+   commits (`GuestCheckOutHandler.cs:73`). The remarks state why (`:15-27`): the mail carries the
+   guest's plaintext access token, of which only the hash is stored, so a command row would put the
+   token back at rest. Its failure policy is the password-reset one, not the durable one: a send
+   failure is caught, logged and swallowed (`:57-61`), with no retry, because the order is already
+   committed and the checkout response hands the guest the same token. The 2026-08-07 statement (and
+   the 2026-09-11 Status sentence) that the order emails get durability, retry and dead-lettering
+   from ADR-114 is read as covering every order email except this one, and the password-reset path is
+   not the only swallow-on-failure call site. The Related entry for ADR-114 is narrowed to match.
+2. **The durable call sites are six, not three.** Besides the three internal-command handlers the
+   2026-08-07 record names, the Sales module sends from
+   `MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Application/Orders/InternalCommands/LifecycleEmails/SendOrderCancelledEmailInternalCommandHandler.cs`
+   (`IEmailSender` at `:25`, send at `:58`, scheduled from `OrderCancelledHandler.cs:38`),
+   `LifecycleEmails/SendOrderDeliveredEmailInternalCommandHandler.cs` (`:23`, `:58`, scheduled from
+   `OrderDeliveredHandler.cs:33`) and `InternalCommands/SendGuestOrderLinkInternalCommandHandler.cs`
+   (`:36`, `:82`, scheduled from `RequestGuestOrderLinkHandler.cs:45`). All three keep the durable
+   shape: the SMTP call is not wrapped, so a transport fault fails the row and ADR-114 retries it.
+   The guest-link handler mints a fresh token per attempt and saves its hash only after a successful
+   send (`SendGuestOrderLinkInternalCommandHandler.cs:18-33`). With item 1 that is seven
+   `IEmailSender` call sites in Sales.
+3. Anchors re-verified against current source. Current locations for facts in earlier Revisions
+   (those sections are left as recorded): `SendOrderPaidEmailInternalCommandHandler.cs` takes
+   `IEmailSender` at `:34`, sends at `:82` and builds the body at `:89`;
+   `SendOrderShippedEmailInternalCommandHandler.cs` takes it at `:28`, sends at `:66` and builds the
+   body at `:73`; `SendOrderPaymentFailedEmailInternalCommandHandler.cs` takes it at `:30` and sends
+   at `:72`; `SendEmailConfirmationHandlerBase.cs` takes it at `:44`; the scheduling sites
+   `OrderPaidHandler.cs:38`, `OrderShippedHandler.cs:34` and `OrderPaymentFailedSagaHandler.cs:35`
+   and `SmtpEmailSender.cs` (`:15`, client `:67`, send `:74`, factory `:97`) are as recorded. The ADC
+   Notification scale comment is at `MMCA.ADC/infra/main.bicep:2558-2576` ("more than one replica
+   safe" `:2561`, preconditions `:2562-2569`, cap back to 1 `:2570-2571`, the backplane-errors alert
+   `:2572-2573`, "not a backplane limit" `:2574`), with the scale rule (`maxReplicas: 2`) at `:2577`,
+   which is also the anchor for the 2026-10-26 item 1 replica count. The 2026-10-26 statement that
+   its list gave current locations is superseded by this one for the anchors above.

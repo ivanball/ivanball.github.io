@@ -250,7 +250,9 @@
           <code>IDataSourceEngine.BuildSoftDeleteFilter</code>, and the Cosmos no-op is a relational-capability check.
           Revised 2026-10-07: anchors refreshed after the v1.233.0 release.
           Revised 2026-10-21: the opt-in path&#39;s test citation names SQL Server, SQLite and Cosmos and points
-          to where the PostgreSQL predicate is pinned; anchors refreshed.</p>
+          to where the PostgreSQL predicate is pinned; anchors refreshed.
+          Revised 2026-10-28: anchors refreshed after ADR-057 grew its own revisions (its live-marker
+          citation moved).</p>
           <h2 id="context">Context</h2>
           <p>ADR-005 makes deletion <strong>soft</strong>: an <code>IAuditableEntity</code> sets <code>IsDeleted = true</code>
           (<code>MMCA.Common/Source/Core/MMCA.Common.Domain/Interfaces/IAuditableEntity.cs:11</code>) and a named global
@@ -479,11 +481,21 @@
           and ADR-057&#39;s live-marker citation of it, now <code>057-expand-contract-schema-evolution-gate.md:97</code>
           (the 2026-10-01 revision&#39;s <code>:90</code> stays as recorded).</li>
           </ol>
+          <h2 id="revision-2026-10-28">Revision (2026-10-28)</h2>
+          <p>Re-verified against current source. No decision, behavior or predicate changed; only an ADR-057
+          anchor moved.</p>
+          <ol>
+          <li>Anchors re-verified against current source: the ADC Identity override marker
+          (<code>MMCA.ADC/Source/Hosting/MMCA.ADC.Migrations.SqlServer.Identity/Migrations/20260720031638_CommonV1120OutboxLeaseAndSoftDeleteIndexFilters.cs:14-17</code>)
+          is unchanged, and ADR-057&#39;s live-marker citation of it is now
+          <code>057-expand-contract-schema-evolution-gate.md:115</code> (the Related section is re-pointed; the
+          2026-10-01 revision&#39;s <code>:90</code> and the 2026-10-21 revision&#39;s <code>:97</code> stay as recorded).</li>
+          </ol>
           <h2 id="related">Related</h2>
           <p>ADR-005 (decides soft-delete over erasure and owns the query filter that hides the row, but says
           nothing about uniqueness: this ADR closes that gap), ADR-057 (the expand/contract CI gate, which
           classifies the drop-and-recreate this convention produces as a legitimate override and cites the ADC
-          Identity migration as its live marker at <code>057-expand-contract-schema-evolution-gate.md:97</code>),
+          Identity migration as its live marker at <code>057-expand-contract-schema-evolution-gate.md:115</code>),
           ADR-006 (one context class per engine over the shared <code>ApplicationDbContext</code>, which is why a single
           convention registration reaches every module and every database).</p>
           
@@ -505,6 +517,7 @@
             <li><a href="#revision-2026-10-06">Revision (2026-10-06)</a></li>
             <li><a href="#revision-2026-10-07">Revision (2026-10-07)</a></li>
             <li><a href="#revision-2026-10-21">Revision (2026-10-21)</a></li>
+            <li><a href="#revision-2026-10-28">Revision (2026-10-28)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

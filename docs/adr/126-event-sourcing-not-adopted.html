@@ -252,7 +252,7 @@
           mechanism. Revised 2026-10-01: citations re-anchored. Revised 2026-10-06: the ADR-075 history claim
           is scoped to opted-in entities, with retention purging only where the host runs the scheduler. Revised 2026-10-07: the rationale acknowledges ADC&#39;s append-only points ledger and why it
           is not event sourcing, and the Marten rejection separates framework PostgreSQL support (ADR-113)
-          from production, where no deployment runs a PostgreSQL server. Revised 2026-10-21: anchors refreshed after Common and ADC source commits moved the outbox, inbox, provider and snapshot lines. Revised 2026-10-26: anchors refreshed after Common source commits on 2026-10-25 moved the PostgreSQL provider pin and reference lines.</p>
+          from production, where no deployment runs a PostgreSQL server. Revised 2026-10-21: anchors refreshed after Common and ADC source commits moved the outbox, inbox, provider and snapshot lines. Revised 2026-10-26: anchors refreshed after Common source commits on 2026-10-25 moved the PostgreSQL provider pin and reference lines. Revised 2026-10-28: anchors refreshed after the Common output-cache Redis reference (#615) moved the PostgreSQL provider reference line.</p>
           <h2 id="context">Context</h2>
           <p>Event sourcing keeps an append-only log of the facts that happened to an aggregate and treats that log
           as the system of record. Current state becomes a fold over the log, a &quot;state as of&quot; question is that
@@ -345,7 +345,7 @@
           (<a href="113-postgresql-as-a-first-class-engine.html">ADR-113</a>,
           <code>MMCA.Common/Directory.Packages.props:64</code>), and the provider ships in every consumer as a direct
           dependency of <code>MMCA.Common.Infrastructure</code>
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/MMCA.Common.Infrastructure.csproj:43</code>), but no
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/MMCA.Common.Infrastructure.csproj:47</code>), but no
           production deployment runs a PostgreSQL server and no production entity routes to a
           non-SQL-Server engine (<a href="018-polyglot-persistence.html">ADR-018</a>). So Marten would add no engine to the
           framework, but it would add a deployed PostgreSQL server for the adopting module&#39;s database
@@ -441,6 +441,19 @@
           previously <code>:50</code>, which now holds the comment for the <code>MassTransit.SqlTransport.PostgreSQL</code> broker
           reference).</li>
           </ol>
+          <h2 id="revision-2026-10-28">Revision (2026-10-28)</h2>
+          <p>Re-verified against current source. The decision (event sourcing not adopted), the rationale and the
+          revisit trigger are unchanged, and the PostgreSQL provider is still pinned centrally and referenced
+          unconditionally by <code>MMCA.Common.Infrastructure</code>; one body anchor in the Marten rejection moved after a
+          Common source commit on 2026-10-26 added the output-cache Redis reference above it.</p>
+          <ol>
+          <li>Anchors re-verified against current source: the unconditional provider reference
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/MMCA.Common.Infrastructure.csproj:47</code>, its
+          ADR-113 comment at <code>:44-46</code>; previously <code>:43</code>, which now holds the
+          <code>Microsoft.EntityFrameworkCore.SqlServer</code> reference). The <code>MassTransit.SqlTransport.PostgreSQL</code>
+          broker comment the 2026-10-26 revision placed at <code>:50</code> now sits at <code>:54-56</code>, with the reference at
+          <code>:57</code>. The version pin (<code>MMCA.Common/Directory.Packages.props:64</code>) holds.</li>
+          </ol>
           <h2 id="related">Related</h2>
           <p><a href="003-outbox-dual-dispatch.html">ADR-003</a> (at-least-once delivery of domain events, the mechanism a
           per-aggregate event log would duplicate rather than replace),
@@ -474,6 +487,7 @@
             <li><a href="#revision-2026-10-07">Revision (2026-10-07)</a></li>
             <li><a href="#revision-2026-10-21">Revision (2026-10-21)</a></li>
             <li><a href="#revision-2026-10-26">Revision (2026-10-26)</a></li>
+            <li><a href="#revision-2026-10-28">Revision (2026-10-28)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

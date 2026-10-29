@@ -258,7 +258,8 @@
           Revised 2026-10-06: inserts and deletes write one summary row, a store-generated key is fixed up by an <code>UPDATE</code> after the save, and ADC&#39;s trail-DML auditing therefore fires on routine inserts too.
           Revised 2026-10-07: the key fix-up issues one filtered <code>UPDATE</code> per pending row rather than one statement covering all of them, <code>AuditTrailSettings</code> also carries <code>DataSource</code> (the engine the reader queries), and anchors are refreshed after the v1.233.0 release.
           Revised 2026-10-21: redaction also covers <code>[Sensitive]</code> properties, <code>IAuthUser</code> credentials and encrypted columns, the reverse <code>[Pii]</code> rule lives in the shared <code>PiiConventionTestsBase</code> that Store, ADC and Helpdesk subclass, a fixed-up key equal to the captured one skips its <code>UPDATE</code>, and anchors are refreshed.
-          Revised 2026-10-26: the key fix-up writes the resolved key to the tracked trail row after each <code>UPDATE</code> and syncs its snapshot so that write is not saved again, and the reader and interceptor anchors are refreshed.</p>
+          Revised 2026-10-26: the key fix-up writes the resolved key to the tracked trail row after each <code>UPDATE</code> and syncs its snapshot so that write is not saved again, and the reader and interceptor anchors are refreshed.
+          Revised 2026-10-28: anchors refreshed after later ADC and Store <code>infra/main.bicep</code> changes moved the SQL-auditing anchors, and ADC&#39;s <code>User</code> <code>[IdValueGenerated]</code> anchor moved one line.</p>
           <h2 id="context">Context</h2>
           <p>The framework already answers &quot;who touched this row last&quot;. Every <code>AuditableBaseEntity</code> carries
           <code>CreatedOn/By</code> and <code>LastModifiedOn/By</code>, stamped by <code>AuditSaveChangesInterceptor</code> on the way into
@@ -655,6 +656,30 @@
           <code>:45</code>, <code>DataSource</code> consumed <code>:67</code> (the earlier <code>:53</code> is a method parameter). The anchors in the
           dated revisions above, including the bicep ones, are left as recorded.</li>
           </ol>
+          <h2 id="revision-2026-10-28-current-sql-auditing-and-store-generated-key-anchors">Revision (2026-10-28): current SQL-auditing and store-generated-key anchors</h2>
+          <p>Re-verified against current source. The capture mechanics, the row shape, the per-row key fix-up, the
+          redaction rule, the opt-in gates, the Cosmos skip and both apps&#39; SQL-auditing content are unchanged:
+          Store still audits statements at the server through the batch group, and ADC still pairs an
+          authentication-and-privilege server policy with object-scoped <code>UPDATE</code> and <code>DELETE</code> actions on the trail
+          table in its three trail-carrying databases. Only anchors moved, and no earlier revision records the
+          current bicep ones.</p>
+          <ol>
+          <li>Anchors re-verified against current source: ADC <code>MMCA.ADC/infra/main.bicep</code>: <code>sqlServerAuditing</code>
+          <code>:1070</code>, groups <code>:1076-1084</code> (entries <code>:1077-1083</code>, no statement group), server volume rationale
+          <code>:1061-1069</code>, trail-DML rationale <code>:1180-1207</code> (the &quot;one UPDATE per row&quot; note and when each action
+          fires at <code>:1199-1200</code>), <code>auditTrailDatabaseNames</code> <code>:1208</code> (<code>ADC_Identity</code>, <code>ADC_Conference</code>,
+          <code>ADC_Engagement</code> at <code>:1209-1211</code>), <code>auditTrailDiagnostics</code> <code>:1214</code> (category <code>:1222</code>),
+          <code>auditTrailDmlAuditing</code> <code>:1230</code>, <code>UPDATE</code> and <code>DELETE ON dbo.AuditTrailEntries BY public</code>
+          <code>:1238-1239</code>. Store <code>MMCA.Store/infra/main.bicep</code>: <code>sqlAuditingSettings</code> <code>:968</code>, groups <code>:977-981</code>
+          (<code>BATCH_COMPLETED_GROUP</code> <code>:978</code>, the two authentication groups <code>:979-980</code>, inline comment
+          <code>:974-976</code>), <code>sqlAuditDiagnostics</code> <code>:954</code> (category <code>SQLSecurityAuditEvents</code> <code>:961</code>), rationale
+          <code>:917-948</code> with the batch-group and no-per-table-filter cost note at <code>:942-948</code>;
+          <code>MMCA.Store/infra/foundation.bicep:57</code> (<code>dailyQuotaGb: 3</code>) is unchanged. ADC <code>[IdValueGenerated]</code>:
+          <code>MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Domain/Users/User.cs:34</code> (the 2026-10-06
+          revision&#39;s <code>:33</code> moved down one line); <code>Event.cs:23</code>, <code>CheckIn.cs:27</code> and <code>PointsEntry.cs:30</code> are
+          unchanged. The anchors in the dated revisions above, including the 2026-09-07 Store
+          <code>Governance/PiiConventionTests.cs</code> ones superseded by the 2026-10-21 revision, are left as recorded.</li>
+          </ol>
           <h2 id="related">Related</h2>
           <p><a href="003-outbox-dual-dispatch.html">ADR-003</a> (the same-transaction write this copies wholesale, including the
           retry-discard and the <code>Add</code>-only mutation rule),
@@ -690,6 +715,7 @@
             <li><a href="#revision-2026-10-07-per-row-key-fix-up-the-readers-data-source-and-current-anchors">Revision (2026-10-07): per-row key fix-up, the reader&#39;s data source, and current anchors</a></li>
             <li><a href="#revision-2026-10-21-wider-redaction-the-shared-reverse-pii-rule-and-current-anchors">Revision (2026-10-21): wider redaction, the shared reverse [Pii] rule, and current anchors</a></li>
             <li><a href="#revision-2026-10-26-the-tracked-key-sync-and-current-anchors">Revision (2026-10-26): the tracked key sync, and current anchors</a></li>
+            <li><a href="#revision-2026-10-28-current-sql-auditing-and-store-generated-key-anchors">Revision (2026-10-28): current SQL-auditing and store-generated-key anchors</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

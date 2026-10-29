@@ -264,7 +264,10 @@
           a consumer, and the call-site and cross-ADR anchors are refreshed. Revised 2026-10-26: the
           pre-forwarded-capture trade-off now names the one text that still claims a consumer (the fitness
           function&#39;s <code>because</code> text), since the keys&#39; XML doc, the step comment and the class summary now say
-          the captured Items have no reader; anchors refreshed after the call sites and pipeline files moved.</p>
+          the captured Items have no reader; anchors refreshed after the call sites and pipeline files moved.
+          Revised 2026-10-28: the pre-forwarded-capture trade-off no longer names any text that claims a
+          consumer, since the fitness function&#39;s <code>because</code> text now pins the capture only for fidelity;
+          anchors refreshed after the ADC service, UI host and Store gateway lines moved.</p>
           <h2 id="context">Context</h2>
           <p>In ASP.NET Core, middleware order is behavior, not style: a rate limiter placed before authentication
           partitions every request as anonymous, an HTTPS redirect placed in front of a gRPC call breaks the
@@ -378,9 +381,9 @@
           (<code>:114-122</code>). Either way the pipeline is literally one shape on every host rather than a per-host
           permutation.</li>
           <li><strong>Every REST/gRPC host calls it.</strong> All seven extracted services in the two production apps: ADC
-          Identity (<code>MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:372</code>), ADC Conference
+          Identity (<code>MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:373</code>), ADC Conference
           (<code>MMCA.ADC.Conference.Service/Program.cs:461</code>), ADC Engagement
-          (<code>MMCA.ADC.Engagement.Service/Program.cs:337</code>), ADC Notification
+          (<code>MMCA.ADC.Engagement.Service/Program.cs:338</code>), ADC Notification
           (<code>MMCA.ADC.Notification.Service/Program.cs:281</code>), Store Catalog
           (<code>MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:331</code>), Store Identity
           (<code>MMCA.Store.Identity.Service/Program.cs:318</code>) and Store Sales
@@ -399,14 +402,14 @@
           </ul>
           <p>Scope is REST and gRPC service hosts. The Blazor UI hosts and the YARP gateways deliberately do not
           call it: the gateways compose a much thinner chain (<code>MMCA.ADC/Source/Hosts/MMCA.ADC.Gateway/Program.cs:161-240</code>,
-          <code>MMCA.Store/Source/Hosts/MMCA.Store.Gateway/Program.cs:151-179</code>), and the UI hosts hand-compose their own,
+          <code>MMCA.Store/Source/Hosts/MMCA.Store.Gateway/Program.cs:155-183</code>), and the UI hosts hand-compose their own,
           reusing two pieces of this pipeline through public methods. The first is the forwarded-headers posture,
           opened first in each UI pipeline via <code>UseCommonUiForwardedHeaders()</code>
-          (<code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs:216</code>,
-          <code>MMCA.Store/Source/Hosts/UI/MMCA.Store.UI.Web/Program.cs:206</code>), which applies the same
+          (<code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs:217</code>,
+          <code>MMCA.Store/Source/Hosts/UI/MMCA.Store.UI.Web/Program.cs:207</code>), which applies the same
           <code>CommonForwardedHeaders.Create()</code> options the <code>ForwardedHeaders</code> step uses
           (<code>Startup/CommonForwardedHeadersExtensions.cs:24-25</code>). The second is the localization half via
-          <code>UseCommonRequestLocalization()</code> (<code>MMCA.ADC.UI.Web/Program.cs:244</code>, <code>MMCA.Store.UI.Web/Program.cs:239</code>),
+          <code>UseCommonRequestLocalization()</code> (<code>MMCA.ADC.UI.Web/Program.cs:245</code>, <code>MMCA.Store.UI.Web/Program.cs:240</code>),
           which is the public method the pipeline&#39;s <code>RequestLocalization</code> step calls
           (<code>MiddlewarePipelineBuilder.cs:47</code>, <code>WebApplicationExtensions.cs:74</code>).</p>
           <h2 id="rationale">Rationale</h2>
@@ -435,8 +438,8 @@
           that was the weakest point of the decision) and there was no extension point (the method took no
           parameters, so the escape hatch was all-or-nothing: stop calling it and re-implement the chain,
           which is what the Blazor UI hosts still deliberately do,
-          <code>MMCA.Store/Source/Hosts/UI/MMCA.Store.UI.Web/Program.cs:206,210,239</code>,
-          <code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs:216,222,244</code>). Both are addressed by the revision
+          <code>MMCA.Store/Source/Hosts/UI/MMCA.Store.UI.Web/Program.cs:207,211,240</code>,
+          <code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs:217,223,245</code>). Both are addressed by the revision
           above: <code>MiddlewarePipelineOrderTestsBase</code> turns a reorder into a red test, <code>Build()</code> turns a
           misordered customization into a startup failure, and the configure overload makes the escape hatch
           scoped instead of all-or-nothing. What remains true: the fitness function is opt-in per repo. All
@@ -460,17 +463,18 @@
           assumption stated in the code: the ingress is the only thing that can reach the container
           (<code>CommonForwardedHeaders.cs:19-20</code>).</li>
           <li><strong>Security-response headers are not in this pipeline.</strong> ADR-023&#39;s <code>UseCommonSecurityHeaders</code> is applied
-          by the gateways and UI hosts only (<code>MMCA.ADC.Gateway/Program.cs:176</code>, <code>MMCA.Store.Gateway/Program.cs:165</code>,
-          <code>MMCA.ADC.UI.Web/Program.cs:222</code>, <code>MMCA.Store.UI.Web/Program.cs:210</code>). A service host exposed directly,
+          by the gateways and UI hosts only (<code>MMCA.ADC.Gateway/Program.cs:176</code>, <code>MMCA.Store.Gateway/Program.cs:169</code>,
+          <code>MMCA.ADC.UI.Web/Program.cs:223</code>, <code>MMCA.Store.UI.Web/Program.cs:211</code>). A service host exposed directly,
           without a gateway in front, would serve responses without them.</li>
           <li><strong>One step in the fixed order is currently dead weight.</strong> The pre-forwarded scheme/host capture
           (the <code>PreForwardedCapture</code> step, <code>MiddlewarePipelineBuilder.cs:49-61</code>) writes
           <code>HttpContext.Items[&quot;PreForwardedScheme&quot;]</code> and <code>[&quot;PreForwardedHost&quot;]</code> (<code>:58-59</code>). The keys&#39; XML
           doc (<code>WebApplicationExtensions.cs:18-24</code>, <code>:27-35</code>), the step&#39;s own comment
           (<code>MiddlewarePipelineBuilder.cs:51-55</code>) and the fitness function&#39;s class summary
-          (<code>MiddlewarePipelineOrderTestsBase.cs:17-19</code>) all say the captured Items have no reader; one text
-          still says the OIDC discovery endpoint needs them, the fitness function&#39;s <code>because</code> text, which
-          pins the capture &quot;for jwks_uri to stay reachable&quot; (<code>:68</code>). It no longer does: <code>MapOidcDiscoveryEndpoint</code> derives <code>jwks_uri</code> from <code>Jwt:Issuer</code>
+          (<code>MiddlewarePipelineOrderTestsBase.cs:17-19</code>) all say the captured Items have no reader, and the
+          fitness function&#39;s <code>because</code> text (<code>:68</code>) pins the capture only so the captured pre-forwarded
+          scheme and host &quot;stay faithful&quot;, naming no consumer; no text in the framework source now claims
+          one. The OIDC discovery endpoint does not need them: <code>MapOidcDiscoveryEndpoint</code> derives <code>jwks_uri</code> from <code>Jwt:Issuer</code>
           (<code>OidcDiscoveryEndpointExtensions.cs:76</code>, with the rationale at <code>:68-75</code>), and a workspace-wide search
           for <code>PreForwarded</code> finds no reader anywhere outside this file and the onboarding chapters that
           describe it. The step costs one delegate per request and stays because removing it is a separate
@@ -584,6 +588,32 @@
           <code>047-soft-deleted-user-session-revocation.md:52-64</code>, and the ADR-073 placement statement at
           <code>073-multi-tenancy-model.md:132-134</code>.</li>
           </ol>
+          <h2 id="revision-2026-10-28">Revision (2026-10-28)</h2>
+          <p>Re-verified against current source. The eighteen-step order, the <code>Build()</code> invariants, the eight
+          zero-argument <code>UseCommonMiddlewarePipeline()</code> call sites and the UI-host reuse hold as written; one
+          trade-off statement changed and a few anchors moved.</p>
+          <ol>
+          <li>The pre-forwarded-capture trade-off no longer names a text that claims a consumer. The fitness
+          function&#39;s <code>because</code> text
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Testing/Conformance/MiddlewarePipelineOrderTestsBase.cs:68</code>)
+          now pins the capture immediately before <code>UseForwardedHeaders</code> &quot;so the captured pre-forwarded
+          scheme and host stay faithful&quot; and no longer mentions <code>jwks_uri</code>. With the keys&#39; XML doc
+          (<code>WebApplicationExtensions.cs:18-24</code>, <code>:27-35</code>), the step comment
+          (<code>MiddlewarePipelineBuilder.cs:51-55</code>) and the class summary
+          (<code>MiddlewarePipelineOrderTestsBase.cs:17-19</code>), no framework text ties the captured Items to a
+          reader; <code>jwks_uri</code> is still derived from <code>Jwt:Issuer</code>
+          (<code>OidcDiscoveryEndpointExtensions.cs:76</code>).</li>
+          <li>Anchors re-verified against current source: the ADC Identity
+          (<code>MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:373</code>) and Engagement
+          (<code>MMCA.ADC.Engagement.Service/Program.cs:338</code>) call sites, Conference (<code>:461</code>) and Notification
+          (<code>:281</code>) confirmed; the Store gateway chain
+          (<code>MMCA.Store/Source/Hosts/MMCA.Store.Gateway/Program.cs:155-183</code>, from the forwarded-headers
+          comment to <code>MapReverseProxy</code>, with <code>UseCommonSecurityHeaders</code> at <code>:169</code>), the ADC gateway
+          confirmed at <code>:161-240</code> and <code>:176</code>; and the UI hosts&#39; <code>UseCommonUiForwardedHeaders()</code>,
+          <code>UseCommonSecurityHeaders()</code> and <code>UseCommonRequestLocalization()</code> (ADC
+          <code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs:217</code>, <code>:223</code>, <code>:245</code>; Store
+          <code>MMCA.Store/Source/Hosts/UI/MMCA.Store.UI.Web/Program.cs:207</code>, <code>:211</code>, <code>:240</code>).</li>
+          </ol>
           <h2 id="related">Related</h2>
           <p><a href="014-cqrs-decorator-pipeline.html">ADR-014</a> (the in-process sibling: one fixed decorator order for commands
           and queries), <a href="019-rate-limiting.html">ADR-019</a> (depends on forwarded headers before the limiter and on the
@@ -614,6 +644,7 @@
             <li><a href="#revision-2026-10-07">Revision (2026-10-07)</a></li>
             <li><a href="#revision-2026-10-21">Revision (2026-10-21)</a></li>
             <li><a href="#revision-2026-10-26">Revision (2026-10-26)</a></li>
+            <li><a href="#revision-2026-10-28">Revision (2026-10-28)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

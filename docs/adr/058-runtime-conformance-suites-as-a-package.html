@@ -251,7 +251,8 @@
           Revised 2026-10-06: the consumers&#39; lockstep <code>MMCA.Common.Shared</code> pin is now 1.232.0 and this Status block lists every Revision section; see the Revision (2026-10-06) below.
           Revised 2026-10-07: the consumers&#39; lockstep <code>MMCA.Common.Shared</code> pin is now 1.233.0 and the ADC pin anchor moved to <code>Directory.Packages.props:101</code>; see the Revision (2026-10-07) below.
           Revised 2026-10-21: the OpenAPI base gains an opt-in committed-baseline breaking-change diff that all seven OpenAPI subclasses adopt, the decorator pipeline is now sealed against late registration through the framework helpers, the lockstep pin is 1.250.0, and anchors are refreshed; see the Revision (2026-10-21) below.
-          Revised 2026-10-26: anchors refreshed after the v1.261.0 consumer sweep (the lockstep <code>MMCA.Common.Shared</code> pin is now 1.261.0 and the ADC pin anchor moved to <code>Directory.Packages.props:108</code>), with the <code>MiddlewarePipelineOrderTestsBase</code> and ADR-015 / ADR-046 cross-reference anchors re-pointed; see the Revision (2026-10-26) below.</p>
+          Revised 2026-10-26: anchors refreshed after the v1.261.0 consumer sweep (the lockstep <code>MMCA.Common.Shared</code> pin is now 1.261.0 and the ADC pin anchor moved to <code>Directory.Packages.props:108</code>), with the <code>MiddlewarePipelineOrderTestsBase</code> and ADR-015 / ADR-046 cross-reference anchors re-pointed; see the Revision (2026-10-26) below.
+          Revised 2026-10-28: the lockstep <code>MMCA.Common.Shared</code> pin is now 1.265.1, and the inventory of MMCA.Common&#39;s own conformance self-tests names the tenancy-base and breaking-change-detector tests; see the Revision (2026-10-28) below.</p>
           <h2 id="context">Context</h2>
           <p>ADR-015 turned the architecture invariants into build-gating tests, and drew its own boundary
           explicitly: the fitness suite asserts &quot;<strong>structure / registration</strong>, not runtime behavior&quot;
@@ -437,7 +438,12 @@
           through a private stub-fixture subclass
           (<code>Tests/Hosting/MMCA.Common.Testing.Tests/Conformance/OpenApiContractTestsBaseBaselineTests.cs:155-156</code>),
           and the gateway-hardening base is checked for shape over an abstract sample
-          (<code>Tests/Hosting/MMCA.Common.Testing.Tests/Conformance/MmcaGatewayHardeningTestsBaseTests.cs:21</code>, <code>:75</code>).</p>
+          (<code>Tests/Hosting/MMCA.Common.Testing.Tests/Conformance/MmcaGatewayHardeningTestsBaseTests.cs:21</code>, <code>:75</code>).
+          The folder&#39;s remaining files are self-tests of the pieces outside the seven: the tenancy fitness base
+          is exercised through its one private <code>Probe</code> subclass, instantiated with different settings
+          (<code>Tests/Hosting/MMCA.Common.Testing.Tests/Conformance/TenantResolutionTestsBaseTests.cs:15</code>, <code>:163</code>),
+          and the breaking-change detector behind the OpenAPI baseline gate has its own unit tests
+          (<code>OpenApiBreakingChangeDetectorTests.cs:14</code>, <code>OpenApiBreakingChangeDetectorParameterTests.cs:15</code>).</p>
           <p><strong>MMCA.Helpdesk adopts exactly one of them, the decorator suite</strong>, having adopted none of them when
           this record was written. Its architecture-test project now references <code>MMCA.Common.Testing</code> alongside the
           structural package
@@ -733,6 +739,29 @@
           <code>015-architecture-fitness-functions.md:118</code> (was <code>:95</code>) and <code>046-http-api-versioning.md:100</code>
           (was <code>:99</code>).</li>
           </ol>
+          <h2 id="revision-2026-10-28">Revision (2026-10-28)</h2>
+          <p>Re-verified against current source. No decision, rationale or adoption changed; the seven bases and
+          the subclass inventory above stand. The lockstep pin moved, and the inventory of MMCA.Common&#39;s own
+          conformance tests now names every file in that folder.</p>
+          <ol>
+          <li><strong>The lockstep pin is now 1.265.1.</strong> MMCA.ADC, MMCA.Store and MMCA.Helpdesk all pin
+          <code>MMCA.Common.Shared</code> 1.265.1 (<code>MMCA.ADC/Directory.Packages.props:108</code>,
+          <code>MMCA.Store/Directory.Packages.props:8</code>, <code>MMCA.Helpdesk/Directory.Packages.props:83</code>), not the
+          1.261.0 the 2026-10-26 Revision recorded, so every consumer still carries the compile-time layer
+          targets in a package-mode build.</li>
+          <li><strong>MMCA.Common&#39;s conformance self-tests are listed in full.</strong> Beyond the OpenAPI baseline stub and
+          the gateway-hardening sample, the <code>Tests/Hosting/MMCA.Common.Testing.Tests/Conformance</code> folder holds
+          <code>TenantResolutionTestsBaseTests</code> (<code>TenantResolutionTestsBaseTests.cs:15</code>, with its private <code>Probe</code>
+          subclass at <code>:163</code>), a self-test of the no-host tenancy base, and two unit-test classes for the
+          breaking-change detector (<code>OpenApiBreakingChangeDetectorTests.cs:14</code>,
+          <code>OpenApiBreakingChangeDetectorParameterTests.cs:15</code>). None of them is adoption, and none tests one
+          of the seven bases directly; the adoption inventory in the Decision section now names them.</li>
+          <li>Anchors re-verified against current source: the three pin lines (<code>:108</code>, <code>:8</code>, <code>:83</code>) are
+          unchanged from the 2026-10-26 Revision; the Decision&#39;s <code>MinimumPathCount</code> (<code>:58</code>) and
+          <code>CorePublicResources</code> (<code>:71</code>) anchors in <code>OpenApiContractTestsBase.cs</code> are current, which
+          supersedes the <code>:38</code> and <code>:51</code> the 2026-09-25 Revision cites (<code>:51</code> now declares
+          <code>OpenApiDocumentPath</code>).</li>
+          </ol>
           <h2 id="related">Related</h2>
           <p>ADR-015 (the structural / registration fitness layer this complements; its stated non-goal, &quot;not
           runtime behavior&quot;, is exactly this ADR&#39;s scope, and the two tiers ship as two separate packages),
@@ -770,6 +799,7 @@
             <li><a href="#revision-2026-10-07">Revision (2026-10-07)</a></li>
             <li><a href="#revision-2026-10-21">Revision (2026-10-21)</a></li>
             <li><a href="#revision-2026-10-26">Revision (2026-10-26)</a></li>
+            <li><a href="#revision-2026-10-28">Revision (2026-10-28)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

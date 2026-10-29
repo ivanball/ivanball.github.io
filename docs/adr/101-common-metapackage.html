@@ -258,7 +258,8 @@
           <code>build/consumer-check/Invoke-ConsumerCheck.ps1</code>. Revised 2026-10-26: the Rationale now says the
           gateway hosts take <code>MMCA.Common.Aspire</code>, <code>MMCA.Common.Azure</code> and <code>MMCA.Common.Gateway</code> directly
           (and, through Azure, every core layer except API) and that the Blazor web hosts also reference
-          <code>MMCA.Common.Azure</code>; package-consumption CI anchors refreshed.</p>
+          <code>MMCA.Common.Azure</code>; package-consumption CI anchors refreshed. Revised 2026-10-28: anchors refreshed
+          after the package-consumption CI job and the Store gateway&#39;s package references moved.</p>
           <h2 id="context">Context</h2>
           <p>ADR-053 made the install path credential-free: <code>dotnet add package MMCA.Common.API</code> works for anyone,
           from nuget.org, with no token and no hand-written <code>nuget.config</code>. What it did not shorten is the
@@ -357,7 +358,7 @@
           justified in place, but it is a warning switched off, and a future genuine packaging problem in
           this project would have to be caught by the pack output rather than by the build.</li>
           <li><strong>No consumer exercises it.</strong> The package-consumption CI job
-          (<code>MMCA.Common/.github/workflows/ci.yml:693</code>, stage steps <code>:727-752</code>) runs its stages through
+          (<code>MMCA.Common/.github/workflows/ci.yml:725</code>, stage steps <code>:759-784</code>) runs its stages through
           <code>MMCA.Common/build/consumer-check/Invoke-ConsumerCheck.ps1</code>, whose pack stage packs every package
           in <code>MMCA.Common.slnx</code> (<code>:143-147</code>), the metapackage included, so a pack break is caught, but it
           never restores the metapackage: its throwaway consumer references only <code>MMCA.Common.API</code>,
@@ -460,6 +461,22 @@
           Application and Infrastructure floors are
           <code>MMCA.Common/Source/Presentation/MMCA.Common.API/MMCA.Common.API.csproj:32-33</code>.</li>
           </ol>
+          <h2 id="revision-2026-10-28">Revision (2026-10-28)</h2>
+          <p>Re-verified against current source. The decision, the Rationale, the Trade-offs and the &quot;No
+          consumer exercises it&quot; statement are unchanged: the package-consumption check still packs every
+          <code>MMCA.Common.slnx</code> package and its throwaway consumer still never references the bare <code>MMCA.Common</code>
+          id. Only anchors moved, in the CI workflow and the Store gateway project.</p>
+          <ol>
+          <li>Anchors re-verified against current source: the package-consumption job header is
+          <code>MMCA.Common/.github/workflows/ci.yml:725</code> and its four stage steps, each calling
+          <code>Invoke-ConsumerCheck.ps1</code> with one <code>-Stage</code>, run <code>:759-784</code> (Pack <code>:762</code>, Scaffold <code>:769</code>, Build
+          <code>:774</code>, Probes <code>:784</code>); the Trade-offs bullet is re-anchored in place. The script stages are
+          unchanged at <code>MMCA.Common/build/consumer-check/Invoke-ConsumerCheck.ps1:143-147</code>, <code>:168</code>, <code>:171</code>
+          and <code>:184-186</code>. The Store gateway&#39;s three <code>PackageReference</code> items (<code>MMCA.Common.Aspire</code>,
+          <code>MMCA.Common.Azure</code>, <code>MMCA.Common.Gateway</code>) are now
+          <code>MMCA.Store/Source/Hosts/MMCA.Store.Gateway/MMCA.Store.Gateway.csproj:27-29</code>; what it references is
+          unchanged.</li>
+          </ol>
           <h2 id="related">Related</h2>
           <p><a href="053-dual-registry-package-publishing.html">ADR-053</a> (dual-registry publishing, which the metapackage
           joins with no workflow change),
@@ -489,6 +506,7 @@
             <li><a href="#revision-2026-10-07">Revision (2026-10-07)</a></li>
             <li><a href="#revision-2026-10-21">Revision (2026-10-21)</a></li>
             <li><a href="#revision-2026-10-26">Revision (2026-10-26)</a></li>
+            <li><a href="#revision-2026-10-28">Revision (2026-10-28)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

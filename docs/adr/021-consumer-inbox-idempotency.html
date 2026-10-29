@@ -279,7 +279,9 @@
           Revised 2026-10-26: the unset inbox resolves ON for every non-<code>InProcess</code> transport (now keyed on a
           provider name, so it covers the built-in PostgreSQL transport and any registered adapter, not only
           RabbitMQ and Azure Service Bus), ADR-135 is linked as the owner of the application-namespace
-          decision, and anchors are refreshed.</p>
+          decision, and anchors are refreshed.
+          Revised 2026-10-28: anchors refreshed after the ADC Identity and ADC Engagement consumer
+          registrations moved one line; no decision or inventory change.</p>
           <h2 id="context">Context</h2>
           <p>ADR-003 makes integration-event delivery <strong>at-least-once</strong>: the outbox guarantees a published event
           is not lost, and the MassTransit broker redelivers on consumer failure. At-least-once means a
@@ -353,12 +355,12 @@
           migration. Adoption inventory as of 2026-10-01: <strong>five of the seven service hosts consume from the
           broker</strong> and so use their inbox for real, three in ADC and two in Store. ADC Identity consumes
           <code>SpeakerLinkedToUser</code> and
-          <code>SpeakerUnlinkedFromUser</code> (<code>MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:346-347</code>),
+          <code>SpeakerUnlinkedFromUser</code> (<code>MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:347-348</code>),
           ADC Conference consumes <code>UserRegistered</code> and <code>UserDeleted</code>
           (<code>MMCA.ADC.Conference.Service/ConferenceBrokerConsumers.cs:34-35</code>) and chains a third broker consumer
           beside them, <code>RegisterOutputCacheEvictionConsumer()</code> (<code>MMCA.ADC.Conference.Service/ConferenceBrokerConsumers.cs:37</code>), and ADC
           Engagement consumes four events, <code>AttendeeCheckedIn</code>, <code>SessionFeedbackSubmitted</code>,
-          <code>EventFeedbackSubmitted</code> and <code>UserDeleted</code> (<code>MMCA.ADC.Engagement.Service/Program.cs:305-308</code>), the
+          <code>EventFeedbackSubmitted</code> and <code>UserDeleted</code> (<code>MMCA.ADC.Engagement.Service/Program.cs:306-309</code>), the
           first of which is ADC&#39;s first <strong>self-consumption</strong> over the broker: Engagement publishes
           <code>AttendeeCheckedIn</code> and consumes it back, which is precisely the shape a redelivery would double-count,
           so the inbox is load-bearing there rather than decorative. Store Sales consumes three events,
@@ -747,6 +749,18 @@
           <code>MessageBusSettings.cs</code> anchors inside the Revisions (2026-08-18), (2026-08-26) and (2026-09-07)
           are historical: the messaging registration lives in <code>DependencyInjection.Messaging.cs</code>.</li>
           </ol>
+          <h2 id="revision-2026-10-28">Revision (2026-10-28)</h2>
+          <p>Re-verified against current source. No decision changed: the inbox posture, the store selection and
+          the consumer inventory are as the Revision (2026-10-26) records them (the same consumers on the same
+          five of the seven service hosts). What moved is two live-section anchors in the Decision&#39;s adoption
+          inventory; older Revision sections keep their original anchors.</p>
+          <ol>
+          <li>Anchors re-verified against current source: ADC Identity registers <code>SpeakerLinkedToUser</code> and
+          <code>SpeakerUnlinkedFromUser</code> at
+          <code>MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:347-348</code>; ADC Engagement registers
+          <code>AttendeeCheckedIn</code>, <code>SessionFeedbackSubmitted</code>, <code>EventFeedbackSubmitted</code> and <code>UserDeleted</code> (same
+          four events, same order) at <code>MMCA.ADC/Source/Services/MMCA.ADC.Engagement.Service/Program.cs:306-309</code>.</li>
+          </ol>
           
         <div class="doc-foot btn-row">
           <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
@@ -772,6 +786,7 @@
             <li><a href="#revision-2026-10-07">Revision (2026-10-07)</a></li>
             <li><a href="#revision-2026-10-21">Revision (2026-10-21)</a></li>
             <li><a href="#revision-2026-10-26">Revision (2026-10-26)</a></li>
+            <li><a href="#revision-2026-10-28">Revision (2026-10-28)</a></li>
             </ul>
           </nav>
         </aside>

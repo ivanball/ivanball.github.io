@@ -253,6 +253,7 @@
           Revised 2026-10-07: anchors refreshed after the v1.233.0 release.
           Revised 2026-10-21: anchors refreshed after the v1.250.0 release.
           Revised 2026-10-26: anchors refreshed after the v1.261.0 release.
+          Revised 2026-10-28: anchors refreshed after the v1.265.1 release.
           Layers stored permission grants over
           <a href="020-permission-based-authorization.html">ADR-020</a>&#39;s compiled registry and extends the shared sign-in
           workflow of <a href="050-jwt-refresh-token-rotation.html">ADR-050</a> with optional collaborators.</p>
@@ -327,7 +328,7 @@
           (<code>.../UseCases/Markers/IRequiresMfa.cs:28</code>) is checked by the decorators through the shared
           <code>AuthorizationGate</code> (<code>.../UseCases/Decorators/AuthorizationGate.cs:60</code>), which reads the claim via
           <code>ClaimsPrincipalExtensions.HasMultiFactor</code>
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Shared/Auth/ClaimsPrincipalExtensions.cs:127</code>) rather than
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Shared/Auth/ClaimsPrincipalExtensions.cs:128</code>) rather than
           widening <code>ICurrentUserService</code>. Absence denies; there is no &quot;this account has no second factor so
           let it through&quot; branch.</p>
           </li>
@@ -410,7 +411,7 @@
           <li><p><strong>One new package, in Infrastructure only.</strong> <code>Otp.NET</code> (MIT, netstandard2.0, no transitive graph)
           supplies the RFC 6238 grammar and the Base32 alphabet, which the BCL has no primitive for. It is
           referenced by <code>MMCA.Common.Infrastructure</code> alone
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/MMCA.Common.Infrastructure.csproj:74</code>, used by
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/MMCA.Common.Infrastructure.csproj:78</code>, used by
           <code>.../Auth/TwoFactor/TotpTwoFactorService.cs:35</code>); Application, Domain and Shared stay
           dependency-free, matching the <code>Cronos</code> precedent.</p>
           </li>
@@ -476,10 +477,10 @@
           that the principal carries as a claim
           (<code>MMCA.Common/Source/Core/MMCA.Common.Application/UseCases/Decorators/AuthorizationGate.cs:46-48</code>,
           over <code>ClaimsPrincipalExtensions.HasPermissionClaim</code>,
-          <code>.../Shared/Auth/ClaimsPrincipalExtensions.cs:94</code>), and the UI gates a navigation entry on
+          <code>.../Shared/Auth/ClaimsPrincipalExtensions.cs:95</code>), and the UI gates a navigation entry on
           <code>NavItem.RequiredPermission</code>
           (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI/Common/NavItem.cs:20</code>,
-          <code>.../UI/Layout/NavMenu.razor:259</code>). The deployment consequence is a design rule, not framework
+          <code>.../UI/Layout/NavMenu.razor:265</code>). The deployment consequence is a design rule, not framework
           code: where modules run as separate services, the host that mints tokens (the Identity service)
           registers every module&#39;s compiled grants so a token carries the full permission set, and the
           stored grants live only in that host, reaching the other services through the claims alone.
@@ -498,7 +499,7 @@
           service, and it routes a subclass of <code>LegalAcceptanceControllerBase</code>
           (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/Legal/LegalAcceptanceControllerBase.cs:45</code>).
           The version is the server&#39;s: at registration the client sends only an <code>AcceptedTerms</code> flag and the
-          server stamps its own configured version (<code>MMCA.Common/CHANGELOG.md:764</code>), a <code>POST</code> naming any
+          server stamps its own configured version (<code>MMCA.Common/CHANGELOG.md:807</code>), a <code>POST</code> naming any
           other version is refused with <code>Legal.VersionNotCurrent</code>
           (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Auth/Legal/LegalAcceptancePolicy.cs:33</code>), and
           both controller answers pass through <code>LegalAcceptancePolicy.Normalize</code> (<code>:47</code>), which re-derives
@@ -507,9 +508,9 @@
           (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI/Components/Legal/TermsAcceptanceGate.razor.cs:29</code>)
           is a layout component the host adds itself; its dialog cannot be dismissed (no backdrop click,
           Escape, close on navigation or close button, <code>:39-42</code>), so a user whose accepted version is no
-          longer current re-accepts or signs out. It shipped in 1.223.0 (<code>MMCA.Common/CHANGELOG.md:758</code>).
+          longer current re-accepts or signs out. It shipped in 1.223.0 (<code>MMCA.Common/CHANGELOG.md:801</code>).
           MMCA.ADC adopts it
-          (<code>MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:248</code>,
+          (<code>MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:249</code>,
           <code>MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Domain/Users/User.cs:36</code>,
           <code>.../Identity.API/Controllers/LegalAcceptanceController.cs:28</code>,
           <code>.../Identity.UI/IdentityUIModule.cs:33</code>); MMCA.Store and MMCA.Helpdesk do not.</p>
@@ -672,6 +673,30 @@
           <code>MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Domain/Users/User.cs:36</code>. The Context and items
           2, 3, 4, 9, 11 and 13 now cite these.</li>
           </ol>
+          <h2 id="revision-2026-10-28">Revision (2026-10-28)</h2>
+          <p>Re-verified against current source. The decision, the five opt-in completions and their behaviour
+          are unchanged: <code>Otp.NET</code> is still referenced by <code>MMCA.Common.Infrastructure</code> alone, the navigation
+          filter still admits an entry whose <code>RequiredPermission</code> is null or carried as a claim,
+          <code>LegalAcceptancePolicy.EnsureAcceptsCurrentVersion</code> (<code>:33</code>) still refuses a non-current version with
+          <code>Legal.VersionNotCurrent</code> (<code>:36</code>), and MMCA.ADC still adopts Terms of Service acceptance. Only line
+          anchors moved.</p>
+          <ol>
+          <li>The Status line records a 2026-09-19 revision that has no <code>## Revision (2026-09-19)</code> section
+          below. The file history shows none was ever written, not that one was dropped: the 2026-09-19
+          change (Website #197) edited item 10 in place and recorded the change only in the Status
+          parenthetical. The Status sentence is accurate as a record of that change; its &quot;13 of them&quot; figure
+          was later corrected to 14 across 13 components (see the 2026-10-01 and 2026-10-06 Revisions).</li>
+          <li>Anchors re-verified against current source: <code>ClaimsPrincipalExtensions.HasMultiFactor</code> is
+          <code>MMCA.Common/Source/Core/MMCA.Common.Shared/Auth/ClaimsPrincipalExtensions.cs:128</code> and
+          <code>HasPermissionClaim</code> <code>:95</code>; <code>Otp.NET</code> is referenced at
+          <code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/MMCA.Common.Infrastructure.csproj:78</code>; the
+          <code>RequiredPermission</code> filter is
+          <code>MMCA.Common/Source/Presentation/MMCA.Common.UI/Layout/NavMenu.razor:265</code>; in item 13 the
+          server-stamped version is <code>MMCA.Common/CHANGELOG.md:807</code> and the 1.223.0 release <code>:801</code>, and
+          MMCA.ADC registers <code>AddLegalAcceptance</code> at
+          <code>MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:249</code>. Items 3, 9, 12 and 13 now
+          cite these.</li>
+          </ol>
           <h2 id="related">Related</h2>
           <p><a href="020-permission-based-authorization.html">ADR-020</a> (the compiled role-to-permission registry stored
           grants layer over),
@@ -701,6 +726,7 @@
             <li><a href="#revision-2026-10-07">Revision (2026-10-07)</a></li>
             <li><a href="#revision-2026-10-21">Revision (2026-10-21)</a></li>
             <li><a href="#revision-2026-10-26">Revision (2026-10-26)</a></li>
+            <li><a href="#revision-2026-10-28">Revision (2026-10-28)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

@@ -19,13 +19,15 @@ Revised 2026-10-21: anchors refreshed after the AddCaching, SubmitQuestionHandle
 Revised 2026-10-26: adoption is seven call sites, the seventh being the framework's two-factor
 time-step acceptance in `TwoFactorAuthenticator`; anchors refreshed for the question submit handler,
 the outbox claim and the ADC Bicep declarations.
+Revised 2026-10-28: anchors refreshed after the `AddCaching` output-cache `InstanceName` block
+(#615) and the ADC Bicep line shifts.
 
 ## Context
 Both deployed apps run more than one replica of every service. ADC's Conference container app
-(`MMCA.ADC/infra/main.bicep:2114`) scales with `minReplicas: 1` and
-`maxReplicas: conferenceScaledMaxReplicas` (scale at `:2259`), which is 2 by default and 4 in
-conference mode (`:192`); Identity and Engagement scale the same way (`:2106`, `:2394`) and
-Notification at a fixed `maxReplicas: 2` (`:2580`). Anything in the framework that
+(`MMCA.ADC/infra/main.bicep:2111`) scales with `minReplicas: 1` and
+`maxReplicas: conferenceScaledMaxReplicas` (scale at `:2256`), which is 2 by default and 4 in
+conference mode (`:192`); Identity and Engagement scale the same way (`:2103`, `:2391`) and
+Notification at a fixed `maxReplicas: 2` (`:2577`). Anything in the framework that
 relies on "only one of these runs at a time" therefore runs once per replica unless the exclusion
 lives somewhere all the replicas can see.
 
@@ -114,10 +116,10 @@ persistence can enforce.**
    holds (`:18-25`).
 
 8. **Registration rides with the cache, and is unconditional.** `AddCaching`
-   (`Infrastructure/DependencyInjection.Caching.cs:26`, reached from `AddInfrastructure` at
-   `Infrastructure/DependencyInjection.cs:140`) `TryAddSingleton`s an `IDistributedLock` (`DependencyInjection.Caching.cs:88`):
-   `RedisDistributedLock` when an `IConnectionMultiplexer` resolves (`DependencyInjection.Caching.cs:91-96`),
-   `InProcessDistributedLock` otherwise (`DependencyInjection.Caching.cs:99-101`).
+   (`Infrastructure/DependencyInjection.Caching.cs:27`, reached from `AddInfrastructure` at
+   `Infrastructure/DependencyInjection.cs:140`) `TryAddSingleton`s an `IDistributedLock` (`DependencyInjection.Caching.cs:104`):
+   `RedisDistributedLock` when an `IConnectionMultiplexer` resolves (`DependencyInjection.Caching.cs:107-112`),
+   `InProcessDistributedLock` otherwise (`DependencyInjection.Caching.cs:115-117`).
    `TryAdd` means a host that registered its own implementation first keeps it. Both branches are
    asserted (`Infrastructure.Tests/DependencyInjectionTests.cs:81-83`, `:94-96`). In production the
    multiplexer comes from `AddRedisCaching`
@@ -255,8 +257,8 @@ persistence can enforce.**
   `adc` and the same `Cache:KeyPrefix` of `adc:`
   (`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/appsettings.json:38`, `:45`, and the same in the
   Identity, Engagement and Notification service hosts) and share one Redis instance
-  (`MMCA.ADC/infra/main.bicep:1620`, injected per app as `ConnectionStrings__redis` at `:1945`,
-  `:2191`, `:2328`, `:2482`). Two ADC
+  (`MMCA.ADC/infra/main.bicep:1617`, injected per app as `ConnectionStrings__redis` at `:1942`,
+  `:2188`, `:2325`, `:2479`). Two ADC
   services choosing the same logical key would collide, and today only the callers' key shapes
   prevent it.
 - **409 is a real cost to a caller.** The idempotency filter answers a duplicate whose original is
@@ -384,6 +386,21 @@ and several anchors moved.
      the Identity and Engagement scale lines at `:2106` and `:2394`, Notification's fixed
      `maxReplicas: 2` at `:2580`, the Redis resource at `:1620`, and the per-app
      `ConnectionStrings__redis` injections at `:1945`, `:2191`, `:2328` and `:2482`;
+     `conferenceScaledMaxReplicas` stays at `:192`.
+
+## Revision (2026-10-28)
+Re-verified against current source. The primitive, its contract, both implementations, the
+registration, the seven call sites and the choose-between rule are unchanged; only anchors moved.
+1. Anchors re-verified against current source:
+   - Registration (point 8): `AddCaching` at `DependencyInjection.Caching.cs:27`, its
+     `TryAddSingleton<IDistributedLock>` at `:104`, the Redis branch at `:107-112` and the
+     in-process fallback at `:115-117`. They moved with the `RedisOutputCacheOptions` `InstanceName`
+     `PostConfigure` block now at `:66-73`. `AddInfrastructure` still reaches it at
+     `DependencyInjection.cs:140`.
+   - ADC Bicep (Context, Trade-offs): the Conference app at `MMCA.ADC/infra/main.bicep:2111` with
+     its scale at `:2256`, the Identity and Engagement scale lines at `:2103` and `:2391`,
+     Notification's fixed `maxReplicas: 2` at `:2577`, the Redis resource at `:1617`, and the
+     per-app `ConnectionStrings__redis` injections at `:1942`, `:2188`, `:2325` and `:2479`;
      `conferenceScaledMaxReplicas` stays at `:192`.
 
 ## Related

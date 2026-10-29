@@ -304,7 +304,8 @@
           Revised 2026-10-21: <code>StartOutboxActivity</code> runs once per dispatched message (a message a lease renewal found re-claimed (lost) is skipped before it), and the <code>Extensions.Telemetry.cs</code>, outbox, Store bicep and host <code>Program.cs</code> anchors are refreshed.
           Revised 2026-10-24: OTLP is the only built-in exporter; Azure Monitor moved to the <code>AddAzureMonitorExporter()</code> call in MMCA.Common.Azure (<a href="134-cloud-neutral-core-vendor-adapters.html">ADR-134</a>), and the Decision&#39;s exporter bullet is corrected in place. See Revision (2026-10-24) at the end.
           Revised 2026-10-25: a second vendor exporter, <code>AddGoogleCloudTelemetryExporter()</code> in MMCA.Common.Gcp, sends traces and logs to the Google Cloud Telemetry API; metrics go through the Google-built Collector, and the collector-free metrics path is recorded as a rejected alternative. See Revision (2026-10-25) at the end.
-          Revised 2026-10-26: the meter chain carries eleven subscriptions (ten <code>MMCA.Common.*</code> plus <code>Polly</code>) now that <code>MMCA.Common.Persistence</code> and its <code>persistence.concurrency.conflict</code> counter are subscribed, superseding the ten-meter count of the 2026-09-19 entry, and the <code>Extensions.Telemetry.cs</code>, <code>OutboxProcessor.cs</code> and bicep anchors in the live sections are refreshed. See Revision (2026-10-26) at the end.</p>
+          Revised 2026-10-26: the meter chain carries eleven subscriptions (ten <code>MMCA.Common.*</code> plus <code>Polly</code>) now that <code>MMCA.Common.Persistence</code> and its <code>persistence.concurrency.conflict</code> counter are subscribed, superseding the ten-meter count of the 2026-09-19 entry, and the <code>Extensions.Telemetry.cs</code>, <code>OutboxProcessor.cs</code> and bicep anchors in the live sections are refreshed. See Revision (2026-10-26) at the end.
+          Revised 2026-10-28: records alerting the earlier re-verifications omitted (ADC has carried the same 401/429 auth-failure alert as Store since 2026-10-19, and both apps carry a 403 forbidden-burst alert at severity 3, Store since 2026-09-07 and ADC since 2026-10-19), and the bicep, host <code>Program.cs</code> and <code>DbUpdateExceptionHandler</code> anchors the dated sections keep are given their current locations. See Revision (2026-10-28) at the end.</p>
           <h2 id="context">Context</h2>
           <p>The framework is a modular monolith whose modules extract into standalone services (ADR-008), so
           the same telemetry has to make sense whether a request stays in one process or crosses a gateway and
@@ -1101,6 +1102,50 @@
           check <code>MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Integrations/HostIntegrationTripwire.cs:63</code>-<code>:67</code>
           (its key constant <code>:20</code> holds).</li>
           </ol>
+          <h2 id="revision-2026-10-28">Revision (2026-10-28)</h2>
+          <p>Re-verified against current source. The telemetry baseline, the CQRS and outbox instruments, the
+          three metrics knobs, sampling, poll-span filtering, the exporters and the eleven meter subscriptions
+          behave as the Decision and the Revision (2026-10-26) describe, and the bicep anchors in the Context
+          and Decision hold. Nothing in the security alerting changed since those re-verifications: this
+          revision records rules they omitted (Store&#39;s 403 rule, shipped 2026-09-07 with Store #133, and ADC&#39;s
+          auth-failure and 403 rules, shipped 2026-10-19 with ADC #281), and gives current locations for the
+          anchors the dated sections keep as written.</p>
+          <ol>
+          <li><strong>Both apps alert on authentication and authorization signals.</strong> ADC carries the same
+          auth-failure rule as Store: <code>authFailureSpikeAlert</code>
+          (<code>MMCA.ADC/infra/main.bicep:797</code>, query <code>:813</code>, threshold 50 per 15 minutes <code>:807</code>-<code>:816</code>,
+          severity 2 <code>:804</code>) counts 401 or 429 on the <code>/Auth</code> route, matching Store&#39;s rule
+          (<code>MMCA.Store/infra/main.bicep:616</code>, query <code>:632</code>). Both apps also carry a <code>forbiddenBurstAlert</code>
+          (<code>MMCA.ADC/infra/main.bicep:836</code>, query <code>:852</code>; <code>MMCA.Store/infra/main.bicep:656</code>, query <code>:672</code>)
+          that counts 403 responses with no route predicate, threshold 20 per 15 minutes (ADC <code>:855</code>, Store
+          <code>:675</code>) at severity 3 (ADC <code>:843</code>, Store <code>:663</code>): an investigate signal for a replayed token or a
+          permission regression, not a page. The Revision (2026-09-07) statement that Store alerts on a
+          security signal stays as written; this item adds the ADC rules and the 403 rule it did not record.</li>
+          <li>Anchors re-verified against current source. Current locations for anchors the dated sections
+          keep as written: in <code>MMCA.ADC/infra/main.bicep</code>, <code>logIngestionCapAlert</code> <code>:729</code> (query <code>:745</code>),
+          <code>sqlServerAuditing</code> <code>:1070</code>, <code>sqlAuditDiagnostics</code> <code>:1095</code>, <code>serviceBusDiagnostics</code> <code>:1370</code>,
+          <code>avatarBlobDiagnostics</code> <code>:1474</code>, <code>keyVaultDiagnostics</code> <code>:1712</code>, and the <code>DisableAspNetCoreMetrics</code>
+          setting <code>:326</code>-<code>:327</code> (the Revision (2026-10-01) <code>:298</code>-<code>:299</code> is now another comment); in
+          <code>MMCA.Store/infra/main.bicep</code>, <code>logIngestionQuotaAlert</code> <code>:702</code> (query <code>:718</code>),
+          <code>authFailureSpikeAlert</code> <code>:616</code> (query <code>:632</code>), the SLO 401/499 exclusions <code>:335</code> (failed requests)
+          and <code>:362</code> (failed dependencies), <code>sqlAuditDiagnostics</code> <code>:954</code>, <code>sqlAuditingSettings</code> <code>:968</code>,
+          <code>sqlThreatProtection</code> <code>:999</code>, <code>dataProtectionBlobDiagnostics</code> <code>:1287</code>, <code>keyVaultDiagnostics</code>
+          <code>:1469</code>, the 73% ASP.NET Core comment <code>:253</code>-<code>:256</code> (the Revision (2026-10-07) <code>:249</code> is now the
+          <code>Telemetry__DisableRuntimeMetrics</code> setting), the <code>DisableAspNetCoreMetrics</code> setting <code>:257</code>-<code>:258</code>
+          (the Revision (2026-10-01) <code>:253</code>-<code>:254</code> is now that comment), the security-signal rationale
+          block <code>:583</code>-<code>:615</code> (the Revision (2026-09-07) <code>:460</code>-<code>:475</code>), within it the 401-or-429
+          reasoning <code>:604</code>-<code>:608</code> (the Revision (2026-10-06) <code>:525</code>-<code>:529</code>), and the SQL auditing
+          rationale block from <code>:918</code> (the Revision (2026-09-07) <code>:798</code>-<code>:802</code>);
+          <code>AddCommonSerilog</code> in ADC Conference <code>Program.cs:103</code>, Engagement <code>:85</code>, Identity <code>:101</code>,
+          Notification <code>:88</code>, <code>MMCA.ADC.UI.Web</code> <code>:52</code>, Store Catalog <code>:73</code>, Identity <code>:78</code>, Sales <code>:89</code>,
+          <code>MMCA.Store.UI.Web</code> <code>:63</code>, each still before its <code>AddServiceDefaults()</code>; bootstrap factories at ADC
+          <code>:378</code>, <code>:219</code>, <code>:272</code>, <code>:201</code> and Store <code>:130</code>, <code>:125</code>, <code>:138</code>; <code>RunAsync</code> in ADC Conference
+          <code>Program.cs:489</code> and Store Catalog <code>:376</code>; the Gateways&#39; <code>AddServiceDefaults</code> at ADC <code>:70</code> and
+          Store <code>:69</code>, still with no Serilog call; <code>DbUpdateExceptionHandler</code> <code>LogError</code> <code>:32</code>,
+          <code>RecordConflict</code> <code>:38</code>, 409 <code>:41</code>; the framework sampling comment
+          <code>Extensions.Telemetry.cs:133</code>-<code>:138</code> (the &quot;when unsampled&quot; text <code>:136</code>-<code>:137</code>), the
+          <code>ParentBasedSampler</code> <code>:140</code>, <code>ConfigureAspNetCoreMetrics</code> <code>:351</code> (called at <code>:241</code>).</li>
+          </ol>
           
         <div class="doc-foot btn-row">
           <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
@@ -1132,6 +1177,7 @@
             <li><a href="#revision-2026-10-24">Revision (2026-10-24)</a></li>
             <li><a href="#revision-2026-10-25">Revision (2026-10-25)</a></li>
             <li><a href="#revision-2026-10-26">Revision (2026-10-26)</a></li>
+            <li><a href="#revision-2026-10-28">Revision (2026-10-28)</a></li>
             </ul>
           </nav>
         </aside>

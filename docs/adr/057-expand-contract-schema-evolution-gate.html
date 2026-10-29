@@ -257,7 +257,9 @@
           CONTRIBUTING (which documents INCLUDE columns only), and anchors refreshed. Revised 2026-10-26: the
           guard in both repos now also flags <code>RenameColumn</code> and <code>RenameTable</code> (five operations, not three),
           which both CONTRIBUTING files do not yet document; the rollback is described as skipping any app
-          whose newest revision is live; and anchors refreshed.</p>
+          whose newest revision is live; and anchors refreshed. Revised 2026-10-28: both CONTRIBUTING files
+          now document all five guarded operations (the renames included), so the written rule no longer lags
+          the guard; and the CONTRIBUTING anchors refreshed.</p>
           <h2 id="context">Context</h2>
           <p>ADR-030 decides <strong>who</strong> applies a migration: every service host runs <code>DatabaseInitStrategy = Migrate</code>
           and self-applies its pending EF Core migrations at startup as the sole migrator, with no deploy-step
@@ -274,7 +276,7 @@
           rolled back, the copy reverts the <strong>image</strong> and nothing else:
           the new revision already migrated the database on boot, and no down-migration runs. The previous
           release therefore keeps serving traffic against the <strong>new</strong> schema, which is exactly the statement
-          both repos&#39; CONTRIBUTING makes (<code>MMCA.Store/CONTRIBUTING.md:58-61</code>, <code>MMCA.ADC/CONTRIBUTING.md:58-61</code>).
+          both repos&#39; CONTRIBUTING makes (<code>MMCA.Store/CONTRIBUTING.md:58-62</code>, <code>MMCA.ADC/CONTRIBUTING.md:58-63</code>).
           A <code>DropColumn</code> shipped alongside the code that stopped reading it makes the rollback path a broken
           release rather than a recovery.</p>
           <p>The existing build-time gate does not cover this. <code>dotnet ef migrations has-pending-model-changes</code>
@@ -289,10 +291,11 @@
           <li><strong>Expand now, contract later, as a written rule.</strong> Adding nullable columns, new tables and new
           indexes is safe in any release; destructive operations belong to a LATER release, once no revision
           that reads the old shape can still be rolled back to. Both CONTRIBUTING files name the contract step
-          as <code>DropColumn</code> / <code>DropTable</code> / <code>DropIndex</code> only (<code>MMCA.Store/CONTRIBUTING.md:63-66</code>,
-          <code>MMCA.ADC/CONTRIBUTING.md:63-66</code>) and describe the guard with the same three operations
-          (<code>MMCA.Store/CONTRIBUTING.md:68-70</code>, <code>MMCA.ADC/CONTRIBUTING.md:68-70</code>), so the written rule lags
-          the five operations the guard below enforces.</li>
+          as <code>DropColumn</code> / <code>DropTable</code> / <code>DropIndex</code> / <code>RenameColumn</code> / <code>RenameTable</code>
+          (<code>MMCA.Store/CONTRIBUTING.md:64-68</code>, <code>MMCA.ADC/CONTRIBUTING.md:65-68</code>) and describe the guard with
+          the same five operations (<code>MMCA.Store/CONTRIBUTING.md:70-74</code>, op list <code>:72</code>;
+          <code>MMCA.ADC/CONTRIBUTING.md:70-75</code>, op list <code>:72</code>), so the written rule matches what the guard below
+          enforces.</li>
           <li><strong>A migration ADDED by a PR may not drop or rename without a marker.</strong> The
           <code>Expand/contract migration guard (schema rollback safety)</code> step fails the build when a newly
           added migration&#39;s <code>Up()</code> matches
@@ -305,7 +308,7 @@
           <code>MMCA.ADC/.github/workflows/deploy.yml:239-240</code> and <code>:277</code>).</li>
           <li><strong>The marker&#39;s documented format is one comment line:</strong>
           <code>// EXPAND-CONTRACT-OVERRIDE: &lt;why this drop is safe one release back&gt;</code>
-          (<code>MMCA.Store/CONTRIBUTING.md:74-76</code>, <code>MMCA.ADC/CONTRIBUTING.md:74-76</code>). What the step actually
+          (<code>MMCA.Store/CONTRIBUTING.md:76-78</code>, <code>MMCA.ADC/CONTRIBUTING.md:77-79</code>). What the step actually
           enforces is looser: <code>grep -q &#39;EXPAND-CONTRACT-OVERRIDE&#39;</code> over the <code>Up()</code> body
           (<code>MMCA.Store/.github/workflows/deploy.yml:476</code>, <code>MMCA.ADC/.github/workflows/deploy.yml:276</code>), so the
           token must appear inside <code>Up()</code>, but the <code>//</code> prefix, the colon and the reason text are convention,
@@ -340,7 +343,7 @@
           sets it true.</li>
           <li><strong>The common legitimate override is an index rebuilt in place.</strong> Adding INCLUDE columns emits a
           <code>DropIndex</code> immediately followed by a <code>CreateIndex</code> under the same name, which a one-release-back
-          revision reads as a superset of what it expects (<code>MMCA.Store/CONTRIBUTING.md:78-80</code>; MMCA.ADC&#39;s
+          revision reads as a superset of what it expects (<code>MMCA.Store/CONTRIBUTING.md:80-82</code>; MMCA.ADC&#39;s
           CONTRIBUTING has no such paragraph). Adding a filter also drops and recreates the index under the
           same name within one migration, though not necessarily as adjacent operations. No CONTRIBUTING
           documents that case; ADR-095 does, for the soft-delete unique-index filter
@@ -543,6 +546,25 @@
           scope rather than shifting: it now runs from <code>set -euo pipefail</code> through the <code>exit 1</code> block
           (<code>:252-263</code>, previously recorded as <code>:253-266</code>).</li>
           </ol>
+          <h2 id="revision-2026-10-28">Revision (2026-10-28)</h2>
+          <p>Re-verified against current source. The decision, the five-operation regex
+          (<code>MMCA.Store/.github/workflows/deploy.yml:475</code>, <code>MMCA.ADC/.github/workflows/deploy.yml:275</code>), the
+          <code>Up()</code>-only scan, the marker check, the fail-closed diff, the merge-check placement and the
+          revision-only rollback are unchanged. What moved is the documentation in both CONTRIBUTING files.</p>
+          <ol>
+          <li>Both CONTRIBUTING files now name <code>RenameColumn</code> and <code>RenameTable</code> alongside the three drops, both
+          as the contract step (<code>MMCA.Store/CONTRIBUTING.md:67</code>, <code>MMCA.ADC/CONTRIBUTING.md:68</code>) and in the
+          guard description (<code>MMCA.Store/CONTRIBUTING.md:72</code>, <code>MMCA.ADC/CONTRIBUTING.md:72</code>), added on
+          2026-10-26 (MMCA.Store commit <code>013358fa</code>, PR #230; MMCA.ADC commit <code>73922be24</code>, PR #298). The
+          Decision&#39;s first bullet no longer records a gap between the written rule and the guard. The
+          2026-10-26 revision&#39;s item 2 and Status sentence stay as recorded on that date.</li>
+          <li>Anchors re-verified against current source: the rollback statement <code>MMCA.Store/CONTRIBUTING.md:58-62</code>
+          and <code>MMCA.ADC/CONTRIBUTING.md:58-63</code> (&quot;NEW schema&quot; sits at <code>:62</code> in both; the sentence ends at Store <code>:62</code> and ADC <code>:63</code>),
+          the expand/contract bullets Store <code>:64-68</code>, ADC <code>:65-68</code>, the guard paragraph Store <code>:70-74</code>, ADC
+          <code>:70-75</code>, the marker block Store <code>:76-78</code>, ADC <code>:77-79</code>, and the in-place rebuild paragraph
+          <code>MMCA.Store/CONTRIBUTING.md:80-82</code> (MMCA.ADC&#39;s CONTRIBUTING still has no such paragraph; its schema
+          section ends at <code>:79</code>). The merge check <code>:37-38</code> in both still holds.</li>
+          </ol>
           <h2 id="related">Related</h2>
           <p>ADR-030 (decides that each service self-applies its migrations at startup, which is precisely why a
           rolled-back revision meets the new schema; this ADR constrains what those migrations may contain),
@@ -570,6 +592,7 @@
             <li><a href="#revision-2026-10-07">Revision (2026-10-07)</a></li>
             <li><a href="#revision-2026-10-21">Revision (2026-10-21)</a></li>
             <li><a href="#revision-2026-10-26">Revision (2026-10-26)</a></li>
+            <li><a href="#revision-2026-10-28">Revision (2026-10-28)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

@@ -37,6 +37,8 @@ no fault between them can leave a counter key without a TTL, and the forwarded-h
 records that both Bicep templates declare service ingress internal-only.
 Revised 2026-10-26: anchors refreshed after the source moves since 2026-10-21, and Related names
 ADR-135 as the record that owns the application-namespace decision the Redis partition key follows.
+Revised 2026-10-28: anchors refreshed after the Bicep, UI host and Identity service source moves
+since 2026-10-26.
 ## Context
 Every service exposes read and write endpoints to the public internet through the gateway (ADR-008).
 Abusive or runaway clients (scrapers, credential stuffing, retry storms, a buggy SPA stuck in a loop)
@@ -160,9 +162,9 @@ Rate limiting is **layered**, and the always-on global limiter is **authenticate
   `KnownProxies` (the shared options only clear them,
   `MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/CommonForwardedHeaders.cs:49`). The first
   is declared in infrastructure instead: both Bicep templates give every service container app
-  internal-only ingress (`external: false`, `MMCA.ADC/infra/main.bicep:1876`, `:2129`, `:2282`,
-  `:2417`; `MMCA.Store/infra/main.bicep:1529`, `:1711`, `:1835`) and expose only the gateway and the
-  UI host (ADC `:2607`, `:2770`; Store `:1987`, `:2116`), so traffic from outside the environment
+  internal-only ingress (`external: false`, `MMCA.ADC/infra/main.bicep:1873`, `:2126`, `:2279`,
+  `:2414`; `MMCA.Store/infra/main.bicep:1530`, `:1712`, `:1836`) and expose only the gateway and the
+  UI host (ADC `:2604`, `:2767`; Store `:1988`, `:2117`), so traffic from outside the environment
   reaches a service only through the gateway. A caller already inside the container-apps
   environment can still reach a service directly.
 - **Per-user partitioning depends on the authenticated principal being populated** when the limiter
@@ -176,11 +178,11 @@ Rate limiting is **layered**, and the always-on global limiter is **authenticate
   This holds for `auth-ip` and `FixedPolicy` (always in-memory), for the gateway limiters, and for
   the global, per-user and hub windows in any host that leaves `Distributed` unset (see the Revision
   (2026-08-18)). ADC production sets `RateLimiting__Distributed=true` on all four services
-  (`MMCA.ADC/infra/main.bicep:1952`, `:2193`, `:2330`, `:2484`; the AppHost does the same only in its
+  (`MMCA.ADC/infra/main.bicep:1949`, `:2190`, `:2327`, `:2481`; the AppHost does the same only in its
   opt-in multi-replica run, when `ADC_REPLICAS` is greater than 1,
   `MMCA.ADC/Source/Hosting/MMCA.ADC.AppHost/Program.cs:459-464`, `:477`), so there those three windows share one
   Redis budget across replicas and only `auth-ip` and the gateway limiters scale with replica count
-  (`MMCA.ADC/infra/main.bicep:1946-1951`). Store sets no `Distributed` value, so every Store limiter
+  (`MMCA.ADC/infra/main.bicep:1943-1948`). Store sets no `Distributed` value, so every Store limiter
   stays per-instance.
 
 ## Revision (2026-08-18)
@@ -528,6 +530,33 @@ and the Related section gains the record that owns the application namespace.
    gateway and UI host are external at `:1987` and `:2116`, the trusted-caller secret is injected at
    `:2059` and `:2184`, and no service-side `RateLimiting__` key is set. The Trade-offs anchors now
    cite these lines.
+
+## Revision (2026-10-28)
+
+Re-verified against current source. The layering, every default, the `auth-ip` surface, the
+declared internal-only service ingress (only the gateway and the UI host are external in both
+templates), ADC's `Distributed=true` on all four services, Store's absence of any service-side
+`RateLimiting__` key, and the two-host scope of `AddTrustedCallerHeader` are unchanged. No behavior
+moved; only anchors drifted since the 2026-10-26 revision, and the Trade-offs section now cites the
+lines below.
+
+1. Anchors re-verified against current source. In `MMCA.ADC/infra/main.bicep` service ingress is
+   internal at `:1873`, `:2126`, `:2279` and `:2414` (the `external: false` at `:2425` is
+   Notification's internal gRPC port mapping), the gateway and UI host are external at `:2604` and
+   `:2767`, `RateLimiting__Distributed` is set at `:1949`, `:2190`, `:2327` and `:2481` (rationale
+   `:1943-1948`), `RateLimiting__AuthIpPermitLimit` `'300'` at `:2057` (rationale `:2049-2054`), and
+   the trusted-caller secret is injected at `:2680` and `:2839`. In `MMCA.Store/infra/main.bicep`
+   service ingress is internal at `:1530`, `:1712` and `:1836` (the `external: false` at `:1849` is
+   Sales' internal gRPC port mapping), the gateway and UI host are external at `:1988` and `:2117`,
+   and the trusted-caller secret is injected at `:2060` and `:2185`; the only rate-limiting keys are
+   `GatewayRateLimiting__*`. `AddTrustedCallerHeader`
+   (`MMCA.Common/Source/Presentation/MMCA.Common.UI.Web/DependencyInjection.cs:121`) is called from
+   `MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs:144` and
+   `MMCA.Store/Source/Hosts/UI/MMCA.Store.UI.Web/Program.cs:136`. ADC Identity calls
+   `AddCommonRateLimiting(builder.Configuration)` at
+   `MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:173`. Store's UI
+   `GatewayRateLimiting` section is at `MMCA.Store/Source/Hosts/UI/MMCA.Store.UI.Web/appsettings.json:47`,
+   with `TrustedCallerHeaderName` at `:48`.
 
 ## Related
 ADR-004 (the JWKS/discovery traffic the limiter exempts, and the authenticated principal it keys on),

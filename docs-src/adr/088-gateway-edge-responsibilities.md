@@ -54,6 +54,7 @@ Revised 2026-10-06: the edge correlation middleware now sanitizes a caller-suppl
 Revised 2026-10-07: anchors refreshed after the v1.233.0 release; see the Revision (2026-10-07) below.
 Revised 2026-10-21: `AddMmcaGateway` now fail-fast validates the nested gateway settings on both overloads, ADC's route-table comment now agrees with its no-fallback host, and anchors are refreshed after the v1.250.0 release; see the Revision (2026-10-21) below.
 Revised 2026-10-26: edge 429s now carry a `Retry-After` header when the rejecting limiter has a hint, a gateway host takes a third framework package (`MMCA.Common.Azure`), and anchors are refreshed after the v1.261.0 release; see the Revision (2026-10-26) below.
+Revised 2026-10-28: the Store gateway's source comments now match its five package references, its Azure calls and its disabled active probe, and anchors are refreshed after the v1.265.1 release; see the Revision (2026-10-28) below.
 
 ## Context
 [ADR-008](008-service-extraction-topology.md) made the Gateway the only client entry point and gave it
@@ -105,9 +106,9 @@ owned had to be reachable from the Aspire package alone.
 composition below (the pair since 2026-08-27), and `MMCA.Common.Azure`, added on 2026-10-24 with
 the v1.255.0 cloud-neutral adapters, for the host's Key Vault configuration source and Azure
 Monitor exporter (`MMCA.ADC/Source/Hosts/MMCA.ADC.Gateway/MMCA.ADC.Gateway.csproj:3-5`,
-`MMCA.Store/Source/Hosts/MMCA.Store.Gateway/MMCA.Store.Gateway.csproj:25-27`; called at
+`MMCA.Store/Source/Hosts/MMCA.Store.Gateway/MMCA.Store.Gateway.csproj:27-29`; called at
 `MMCA.ADC/Source/Hosts/MMCA.ADC.Gateway/Program.cs:68`, `:75` and
-`MMCA.Store/Source/Hosts/MMCA.Store.Gateway/Program.cs:64`, `:71`). The Aspire and Gateway split is along a
+`MMCA.Store/Source/Hosts/MMCA.Store.Gateway/Program.cs:67`, `:74`). The Aspire and Gateway split is along a
 real boundary rather than a packaging convenience: the Aspire kit registers **host** middleware and
 health checks that any ASP.NET Core process could use, while the Gateway package registers YARP's own
 extension points (config filters, transforms, per-route limiter policies) and therefore has to
@@ -116,7 +117,7 @@ piece of host middleware, `UseCommonForwardedHeaders()`
 (`MMCA.Common/Source/Hosting/MMCA.Common.Gateway/ForwardedHeadersExtensions.cs:36`), which both
 gateway hosts call first so the per-client-IP window sees the real caller behind the ingress
 (`MMCA.ADC/Source/Hosts/MMCA.ADC.Gateway/Program.cs:166`,
-`MMCA.Store/Source/Hosts/MMCA.Store.Gateway/Program.cs:156`).
+`MMCA.Store/Source/Hosts/MMCA.Store.Gateway/Program.cs:160`).
 
 ## Decision
 Ship a **gateway edge kit** in a `Gateway` namespace inside `MMCA.Common.Aspire`, owning exactly three
@@ -255,8 +256,8 @@ every request on the concurrency partition, go through the shared `IsExemptFromL
 A configured secret shorter than 32 characters fails at registration
 (`GatewayRateLimitingSettings.cs:153`). The secret is deployment data on both sides of the boundary:
 each consumer injects `GatewayRateLimiting__TrustedCallerSecret` into gateway and UI container alike
-from Key Vault (`MMCA.ADC/infra/main.bicep:2683` and `:2842`, `MMCA.Store/infra/main.bicep:2058-2059` and
-`:2184`), and the client half is framework code, `AddTrustedCallerHeader`
+from Key Vault (`MMCA.ADC/infra/main.bicep:2680` and `:2839`, `MMCA.Store/infra/main.bicep:2059-2060` and
+`:2185`), and the client half is framework code, `AddTrustedCallerHeader`
 (`MMCA.Common/Source/Presentation/MMCA.Common.UI.Web/DependencyInjection.cs:121`, attaching
 `TrustedCallerHandler`, `Security/TrustedCallerHandler.cs:35`, at `:156`). It exempts a component you
 deployed, never a browser, so it must never reach client-side code.
@@ -399,8 +400,8 @@ balances across the replicas behind it. ADC declares five clusters with one dest
 (`MMCA.ADC/Source/Hosts/MMCA.ADC.Gateway/appsettings.json:263-271`, `:272-280`, `:281-289`,
 `:290-294`, `:295-299`) and Store three (`MMCA.Store/Source/Hosts/MMCA.Store.Gateway/appsettings.json:146-154`,
 `:155-163`, `:164-168`), resolved through `AddServiceDiscoveryDestinationResolver`
-(ADC `Program.cs:157`, Store `Program.cs:147`) against the bicep address book
-(`MMCA.ADC/infra/main.bicep:2660-2663`). The shape is not incidental: both repositories **pin it as
+(ADC `Program.cs:157`, Store `Program.cs:151`) against the bicep address book
+(`MMCA.ADC/infra/main.bicep:2657-2660`). The shape is not incidental: both repositories **pin it as
 an invariant**, asserting that each cluster contains a single destination
 (`MMCA.ADC/Tests/Hosts/MMCA.ADC.Gateway.Tests/RouteMapTests.cs:251-253`,
 `MMCA.Store/Tests/Hosts/MMCA.Store.Gateway.Tests/RouteMapTests.cs:315-317`). A second destination in
@@ -521,7 +522,7 @@ same path under a 5 second default and feeds
   recorded decision without failing a build.
 - **Nothing gates adoption.** A gateway that never calls the three registrations behaves exactly as
   before, and no fitness function names a gateway host. Both consumer gateways do call all three
-  today (ADC `Program.cs:82`, `:96`, `:171`; Store `Program.cs:93`, `:118`, `:161`), but that is a
+  today (ADC `Program.cs:82`, `:96`, `:171`; Store `Program.cs:96`, `:121`, `:165`), but that is a
   wiring habit rather than an enforced invariant, which is the audit-the-inventory caveat ADR-005 and
   ADR-017 both record, now applied to the edge.
 
@@ -961,6 +962,60 @@ release.
      `ConfigureHttpClientDefaults` at `:50` and `AddStandardResilienceHandler` at `:60`, with the
      comment naming the YARP forwarder at `:48-49`, superseding `:39`, `:49` and `:37-38` in the
      2026-10-01 revision; the question that revision left for review is unchanged.
+
+## Revision (2026-10-28)
+
+Re-verified against current source. Nothing in the decision changes: the edge responsibilities, the
+three declines, the delegations, the four bypass tiers and ADC's no-fallback authorization all hold
+as recorded. The stale comments the 2026-10-26 revision recorded no longer hold, and the pin and
+anchors moved with the v1.265.1 release.
+
+1. **Store's gateway comments now agree with what runs.** The 2026-10-26 revision (item 2 and the
+   Store host anchor list) recorded three stale comments; all three are corrected in source. The
+   `MMCA.Store.Gateway.csproj` comment block now reads "Five package references" (`:12`) and names
+   `MMCA.Common.Azure` (`:16`), matching the five references in the `ItemGroup` (`:26-36`); "no JWT
+   middleware" (`:6-7`) still holds. The "What it does have" header in Store's gateway `Program.cs`
+   (from `:22`) now lists `MMCA.Common.Azure` with `AddAzureKeyVaultConfiguration` and
+   `AddAzureMonitorExporter` (`:25-27`). No gateway host comment describes an active `/alive` probe
+   every 30 seconds any more: the header says active probing is switched off (`:43`), the
+   reverse-proxy comment says the active probe is switched off in `appsettings.json` (`:143-144`),
+   and `appsettings.json` sets `HealthCheckDefaults:Active:Enabled` to false (`:31-35`) with no
+   `Interval` key. The gateway test asserts the same (`ActiveHealthChecksExpected => false` at
+   `MMCA.Store/Tests/Hosts/MMCA.Store.Gateway.Tests/GatewayHardeningTests.cs:93`), but several of
+   the test project's own comments still describe probing as on: `GatewayHardeningTests.cs` names
+   "the active destination health probe on every cluster" (`:20`), says Store's configuration
+   states the 30 second `Active:Interval` (`:25-31`), and says active probing is "deliberately left
+   ON" for that fixture (`:101-104`), and `RouteMapTests.cs` calls its `Active:Enabled` false
+   override "for this fixture only" (`:456`). Those test comments are stale; the assertions are not.
+2. Anchors re-verified against current source:
+   - The `MMCA.Common.Gateway` pin is 1.265.1 in both consumers
+     (`MMCA.ADC/Directory.Packages.props:134`, `MMCA.Store/Directory.Packages.props:19`), still in
+     lockstep with every other `MMCA.Common.*` entry (`MMCA.Common.Azure` at ADC `:128` and Store
+     `:17`), superseding the 1.261.0 figure in the 2026-10-26 revision.
+   - Store's gateway project references `MMCA.Common.Aspire`, `MMCA.Common.Azure` and
+     `MMCA.Common.Gateway` at `MMCA.Store/Source/Hosts/MMCA.Store.Gateway/MMCA.Store.Gateway.csproj:27-29`;
+     ADC's `MMCA.ADC/Source/Hosts/MMCA.ADC.Gateway/MMCA.ADC.Gateway.csproj:3-5` holds (Context
+     refreshed).
+   - Store's gateway host (`MMCA.Store/Source/Hosts/MMCA.Store.Gateway/Program.cs`):
+     `AddAzureKeyVaultConfiguration` `:67`, `AddAzureMonitorExporter` `:74`, `AddGatewayRateLimiting`
+     `:96`, `AddGatewayDownstreamHealthChecks` `:121`, `AddMmcaGateway` `:150`, the resolver `:151`,
+     `UseCommonForwardedHeaders` `:160`, `UseGatewayCorrelation` `:165`, superseding the 2026-10-26
+     anchors (Context, Decision and Trade-offs refreshed). ADC's gateway host anchors in the
+     2026-10-26 revision hold.
+   - `GatewayRateLimiting__TrustedCallerSecret` is injected at `MMCA.ADC/infra/main.bicep:2680`
+     (gateway, `gatewayApp` at `:2589`) and `:2839` (UI, `uiApp` at `:2752`), and at
+     `MMCA.Store/infra/main.bicep:2059-2060` (gateway, `gatewayApp` at `:1973`) and `:2185` (UI,
+     `uiApp` at `:2102`); ADC's service-discovery address book is `MMCA.ADC/infra/main.bicep:2657-2660`.
+     Both supersede the 2026-10-26 anchors (Decision refreshed).
+   - The kit's release entry is `MMCA.Common/CHANGELOG.md:1400` (`[1.206.0]`), superseding `:1357`
+     in the 2026-10-26 revision.
+   - The consumer UI hosts call the framework kit at ADC
+     `MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs:32` (`using`), `:79` (`RetentionFrom`),
+     `:89` (`AddBoundedBlazorCircuits`), `:144` (`AddTrustedCallerHeader`), `:155`
+     (`AddUiRateLimiting`) and `:228` (`UseUiRateLimiting`), and at Store
+     `MMCA.Store/Source/Hosts/UI/MMCA.Store.UI.Web/Program.cs:24` (`using`), `:85`
+     (`RetentionFrom`), `:93` (`AddBoundedBlazorCircuits`), `:102` (`AddUiRateLimiting`), `:136`
+     (`AddTrustedCallerHeader`) and `:236` (`UseUiRateLimiting`), superseding the 2026-10-26 anchors.
 
 ## Related
 [ADR-008](008-service-extraction-topology.md) (the record that made the Gateway the only entry point

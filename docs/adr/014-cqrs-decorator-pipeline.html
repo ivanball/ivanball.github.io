@@ -277,7 +277,8 @@
           the ADC and Store service hosts moved their <code>AddMmcaApplicationPipeline</code> call sites. Revised 2026-10-26:
           the Store UI adoption of <code>ModelValidation.For</code> is now 7 page call sites, and the Helpdesk
           decorator-order test composes through <code>AddMmcaApplicationPipeline</code>; all seven service-host call sites
-          re-pointed.</p>
+          re-pointed. Revised 2026-10-28: anchors refreshed after the ADC Identity and Engagement hosts
+          gained an <code>AddAzureServiceBusTransport()</code> registration ahead of their pipeline call.</p>
           <h2 id="context">Context</h2>
           <p>Commands and queries share cross-cutting concerns: validation, transactions, cache invalidation,
           logging / timing, and feature gating. Putting that logic inside each handler scatters it, makes the
@@ -324,8 +325,8 @@
           Revision (2026-08-26) below): the Helpdesk reference host
           (<code>MMCA.Helpdesk/Source/Hosts/MMCA.Helpdesk.Web/Program.cs:121</code>) and the seven production service
           hosts, ADC Identity / Conference / Engagement /
-          Notification (<code>MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:339</code>, <code>...Conference.Service/Program.cs:429</code>,
-          <code>...Engagement.Service/Program.cs:298</code>, <code>...Notification.Service/Program.cs:239</code>) and Store Identity /
+          Notification (<code>MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:340</code>, <code>...Conference.Service/Program.cs:429</code>,
+          <code>...Engagement.Service/Program.cs:299</code>, <code>...Notification.Service/Program.cs:239</code>) and Store Identity /
           Catalog / Sales (<code>MMCA.Store/Source/Services/MMCA.Store.Identity.Service/Program.cs:255</code>,
           <code>...Catalog.Service/Program.cs:267</code>, <code>...Sales.Service/Program.cs:248</code>). Only that decorators-last
           ordering is load-bearing; the relative position of <code>AddInfrastructure</code>/<code>AddAPI</code> is not.</li>
@@ -795,6 +796,24 @@
           <code>DependencyInjection.cs:134-140</code> / <code>:143-148</code>, <code>ModelValidation.cs:26,43</code>, <code>IModelValidator.cs:13</code>,
           <code>ValidatingCommandDecorator.cs:32</code> and <code>CommandValidatorCoverageTestsBase.cs:22</code> still match.</li>
           </ol>
+          <h2 id="revision-2026-10-28">Revision (2026-10-28)</h2>
+          <p>Re-verified against current source. The decision, both decorator chains
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/DependencyInjection.cs:134-140</code>, <code>:143-148</code>), the
+          eight composing hosts and the validation homes are unchanged. Two ADC service-host call sites in the
+          Decision moved by one line, because each host now registers <code>services.AddAzureServiceBusTransport()</code>
+          directly above its <code>AddMmcaApplicationPipeline</code> call. Stale anchors inside the earlier Revision
+          sections are left as historical records.</p>
+          <ol>
+          <li>Anchors re-verified against current source: in the Decision, ADC Identity
+          (<code>MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:340</code>) and Engagement
+          (<code>MMCA.ADC/Source/Services/MMCA.ADC.Engagement.Service/Program.cs:299</code>) are re-pointed. ADC
+          Conference (<code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:429</code>) and
+          Notification (<code>MMCA.ADC/Source/Services/MMCA.ADC.Notification.Service/Program.cs:239</code>), Store
+          Identity (<code>MMCA.Store/Source/Services/MMCA.Store.Identity.Service/Program.cs:255</code>), Catalog
+          (<code>MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:267</code>) and Sales
+          (<code>MMCA.Store/Source/Services/MMCA.Store.Sales.Service/Program.cs:248</code>), and
+          <code>MMCA.Helpdesk/Source/Hosts/MMCA.Helpdesk.Web/Program.cs:121</code> still match.</li>
+          </ol>
           
         <div class="doc-foot btn-row">
           <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
@@ -824,6 +843,7 @@
             <li><a href="#revision-2026-10-19">Revision (2026-10-19)</a></li>
             <li><a href="#revision-2026-10-21">Revision (2026-10-21)</a></li>
             <li><a href="#revision-2026-10-26">Revision (2026-10-26)</a></li>
+            <li><a href="#revision-2026-10-28">Revision (2026-10-28)</a></li>
             </ul>
           </nav>
         </aside>

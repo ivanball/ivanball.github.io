@@ -15,7 +15,8 @@ anchors refreshed after the package-consumption CI stages moved into
 `build/consumer-check/Invoke-ConsumerCheck.ps1`. Revised 2026-10-26: the Rationale now says the
 gateway hosts take `MMCA.Common.Aspire`, `MMCA.Common.Azure` and `MMCA.Common.Gateway` directly
 (and, through Azure, every core layer except API) and that the Blazor web hosts also reference
-`MMCA.Common.Azure`; package-consumption CI anchors refreshed.
+`MMCA.Common.Azure`; package-consumption CI anchors refreshed. Revised 2026-10-28: anchors refreshed
+after the package-consumption CI job and the Store gateway's package references moved.
 
 ## Context
 ADR-053 made the install path credential-free: `dotnet add package MMCA.Common.API` works for anyone,
@@ -115,7 +116,7 @@ Publish a metapackage named `MMCA.Common` that carries dependencies and no code.
   justified in place, but it is a warning switched off, and a future genuine packaging problem in
   this project would have to be caught by the pack output rather than by the build.
 - **No consumer exercises it.** The package-consumption CI job
-  (`MMCA.Common/.github/workflows/ci.yml:693`, stage steps `:727-752`) runs its stages through
+  (`MMCA.Common/.github/workflows/ci.yml:725`, stage steps `:759-784`) runs its stages through
   `MMCA.Common/build/consumer-check/Invoke-ConsumerCheck.ps1`, whose pack stage packs every package
   in `MMCA.Common.slnx` (`:143-147`), the metapackage included, so a pack break is caught, but it
   never restores the metapackage: its throwaway consumer references only `MMCA.Common.API`,
@@ -217,6 +218,22 @@ Two Rationale statements about which hosts take `MMCA.Common.Azure` are correcte
    `PackageVersion` pins remain `MMCA.Helpdesk/Directory.Packages.props:83-88`, and the API package's
    Application and Infrastructure floors are
    `MMCA.Common/Source/Presentation/MMCA.Common.API/MMCA.Common.API.csproj:32-33`.
+
+## Revision (2026-10-28)
+Re-verified against current source. The decision, the Rationale, the Trade-offs and the "No
+consumer exercises it" statement are unchanged: the package-consumption check still packs every
+`MMCA.Common.slnx` package and its throwaway consumer still never references the bare `MMCA.Common`
+id. Only anchors moved, in the CI workflow and the Store gateway project.
+
+1. Anchors re-verified against current source: the package-consumption job header is
+   `MMCA.Common/.github/workflows/ci.yml:725` and its four stage steps, each calling
+   `Invoke-ConsumerCheck.ps1` with one `-Stage`, run `:759-784` (Pack `:762`, Scaffold `:769`, Build
+   `:774`, Probes `:784`); the Trade-offs bullet is re-anchored in place. The script stages are
+   unchanged at `MMCA.Common/build/consumer-check/Invoke-ConsumerCheck.ps1:143-147`, `:168`, `:171`
+   and `:184-186`. The Store gateway's three `PackageReference` items (`MMCA.Common.Aspire`,
+   `MMCA.Common.Azure`, `MMCA.Common.Gateway`) are now
+   `MMCA.Store/Source/Hosts/MMCA.Store.Gateway/MMCA.Store.Gateway.csproj:27-29`; what it references is
+   unchanged.
 
 ## Related
 [ADR-053](053-dual-registry-package-publishing.md) (dual-registry publishing, which the metapackage

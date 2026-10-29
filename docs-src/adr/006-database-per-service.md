@@ -19,6 +19,8 @@ contexts, attributes once-per-key caching to the scoped `DbContextFactory` (not
 `infra/main.bicep` anchors refreshed.
 Revised 2026-10-26: per-module `ModuleApplicationDbContext` declarations are scoped to modules that
 own their own aggregates (ADC Notification declares none); `infra/main.bicep` anchors refreshed.
+Revised 2026-10-28: anchors refreshed after Helpdesk #199 moved the no-per-module-context rule to
+`MMCA.Helpdesk/AGENTS.md:62`.
 
 ## Context
 When the modules were first extracted into independently-deployable services, all services in an
@@ -40,7 +42,7 @@ Adopt **database-per-service**: each service owns its own physical database with
   introduce a per-module concrete (runtime) DbContext class. Each module may declare an abstract
   `ModuleApplicationDbContext` that only lists its `DbSet`s (for example
   `MMCA.Helpdesk/Source/Modules/Tickets/MMCA.Helpdesk.Tickets.Infrastructure/Persistence/DbContexts/ModuleApplicationDbContext.cs:14`),
-  but nothing subclasses it at runtime (rule stated at `MMCA.Helpdesk/AGENTS.md:74`). Only modules
+  but nothing subclasses it at runtime (rule stated at `MMCA.Helpdesk/AGENTS.md:62`). Only modules
   that own their own aggregates declare one. ADC Notification still owns the `ADC_Notification`
   database, but its `PushNotification` and `UserNotification` entities live in MMCA.Common
   (`MMCA.ADC/Source/Services/MMCA.ADC.Notification.Service/Program.cs:269-270`), so its module
@@ -167,3 +169,20 @@ the wording and anchors it recorded (its "every consumer module" statement and i
    `:1171-1173` (values unchanged); `MMCA.Helpdesk/AGENTS.md:74`,
    `MMCA.ADC/infra/POST-CUTOVER-atldevcon-downgrade.md:103` and
    `MMCA.ADC/infra/DISASTER-RECOVERY.md:27` are unchanged.
+
+## Revision (2026-10-28)
+Re-verified against current source. The decision is unchanged: one sealed context class per engine,
+one instance per database, abstract per-module `ModuleApplicationDbContext` DbSet holders only in
+modules that own their own aggregates, and four per-service `ADC_*` databases with PITR plus LTR as
+the only restore path. Only the Helpdesk `AGENTS.md` anchor moved: Helpdesk #199 moved
+template-engine traps out of that file, which shifted the rule up. The 2026-10-21 and 2026-10-26
+revisions above keep the anchors they recorded (their `MMCA.Helpdesk/AGENTS.md:74` was correct when
+written and is superseded by this revision).
+
+1. Anchors re-verified against current source: the no-per-module-context rule ("one instance per
+   database, never a per-module context class (ADR-006)") at `MMCA.Helpdesk/AGENTS.md:62` (was
+   `:74`, which now holds the unrelated tenancy override-key bullet);
+   `MMCA.Helpdesk/Source/Modules/Tickets/MMCA.Helpdesk.Tickets.Infrastructure/Persistence/DbContexts/ModuleApplicationDbContext.cs:14`,
+   `MMCA.ADC/Source/Services/MMCA.ADC.Notification.Service/Program.cs:269-270`, the `AtlDevCon`
+   note at `MMCA.ADC/infra/main.bicep:1114` and the `serviceDatabaseLtr` policy at
+   `MMCA.ADC/infra/main.bicep:1166` are unchanged.

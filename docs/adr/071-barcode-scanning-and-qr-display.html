@@ -253,7 +253,8 @@
           citations re-anchored and the ZXing pin updated. Revised 2026-10-21: the QRCoder pin is 1.8.1
           (bumped in v1.249.0), and the package and check-in page anchors are refreshed. Revised 2026-10-26:
           anchors refreshed after <code>Directory.Packages.props</code> and <code>CheckInScan.razor</code> moved; versions and
-          behavior unchanged.</p>
+          behavior unchanged. Revised 2026-10-28: anchors refreshed for <code>QrErrorCorrectionLevel</code>,
+          <code>IBarcodeScannerService</code> and <code>NullBarcodeScannerService</code>; behavior unchanged.</p>
           <h2 id="context">Context</h2>
           <p>ADC&#39;s badge check-in feature (<a href="072-qr-badge-check-in-and-points.html">ADR-072</a>) needs two things that
           look like one thing: an attendee&#39;s device has to <strong>show</strong> a QR code, and an organizer&#39;s device has to
@@ -288,15 +289,15 @@
           broken image (<code>:69-72</code>), and the bitmap is memoized against the three inputs that affect it
           (<code>:45-59</code>), so a parent re-render does not re-encode.</li>
           <li><strong>The error-correction level is a framework enum, not the generator&#39;s.</strong>
-          <code>QrErrorCorrectionLevel</code> (<code>Components/Sharing/QrErrorCorrectionLevel.cs:9-21</code>: <code>Low</code>, <code>Medium</code> (default),
+          <code>QrErrorCorrectionLevel</code> (<code>Components/Sharing/QrErrorCorrectionLevel.cs:9-22</code>: <code>Low</code>, <code>Medium</code> (default),
           <code>Quartile</code>, <code>High</code>) is mapped onto QRCoder&#39;s <code>ECCLevel</code> inside the component (<code>QrCodeImage.razor:80-86</code>),
           so the package&#39;s public surface does not pin consumers to the generator that happens to back it today.</li>
           <li><strong>Scanning is one contract on the ADR-042 pattern.</strong> <code>IBarcodeScannerService</code>
-          (<code>Services/Capabilities/Media/IBarcodeScannerService.cs:11-20</code>) is two members: <code>bool IsSupported</code> and
+          (<code>Services/Capabilities/Media/IBarcodeScannerService.cs:12-22</code>) is two members: <code>bool IsSupported</code> and
           <code>Task&lt;string?&gt; ScanAsync(CancellationToken cancellationToken = default)</code>. The contract is that an
           implementation <strong>never throws</strong>: an unsupported head, a denied permission, a user-cancelled scan and a
-          cancelled token all return <code>null</code> (<code>:3-10</code>), and the decoded payload is documented as untrusted input.
-          <code>NullBarcodeScannerService</code> (<code>Services/Capabilities/Media/NullBarcodeScannerService.cs:9-16</code>) reports <code>IsSupported == false</code>
+          cancelled token all return <code>null</code> (<code>:3-11</code>), and the decoded payload is documented as untrusted input.
+          <code>NullBarcodeScannerService</code> (<code>Services/Capabilities/Media/NullBarcodeScannerService.cs:9-17</code>) reports <code>IsSupported == false</code>
           and returns <code>null</code>, TryAdd-registered by <code>AddDeviceCapabilityDefaults</code>
           (<code>Services/Capabilities/DependencyInjection.cs:70</code>).</li>
           <li><strong>The native implementation is opt-in and deliberately NOT folded into <code>UseMauiDeviceCapabilities</code>.</strong>
@@ -431,6 +432,17 @@
           fallback, outside any <code>@if</code>, ending in <code>AttendeeSearchPanel</code> at <code>:127</code>);
           <code>CheckInScan.razor.cs:46</code> (<code>ScannerAvailable =&gt; Scanner.IsSupported</code>, unmoved).</li>
           </ol>
+          <h2 id="revision-2026-10-28">Revision (2026-10-28)</h2>
+          <p>Re-verified against current source. No decision, rationale or behavior changed; the enum values, the
+          two-member scanner contract and the null fallback are as recorded, and only their citations drifted.</p>
+          <ol>
+          <li>Anchors re-verified against current source: <code>Components/Sharing/QrErrorCorrectionLevel.cs:9-22</code>
+          (<code>Low</code> <code>:12</code>, <code>Medium</code> <code>:15</code>, <code>Quartile</code> <code>:18</code>, <code>High</code> <code>:21</code>; <code>Medium</code> is the default set at
+          <code>QrCodeImage.razor:39</code>); <code>Services/Capabilities/Media/IBarcodeScannerService.cs:12-22</code>
+          (<code>IsSupported</code> <code>:15</code>, <code>ScanAsync</code> <code>:21</code>, never-throws contract in the doc comment at <code>:3-11</code>, the
+          untrusted-payload note at <code>:10</code>); <code>Services/Capabilities/Media/NullBarcodeScannerService.cs:9-17</code>
+          (<code>IsSupported =&gt; false</code> at <code>:12</code>, the <code>null</code> result at <code>:15-16</code>).</li>
+          </ol>
           <h2 id="related">Related</h2>
           <p><a href="042-device-capability-abstraction.html">ADR-042</a> (the capability pattern this extends: contract in
           <code>MMCA.Common.UI</code>, native implementation in <code>MMCA.Common.UI.Maui</code>, override after <code>AddUIShared</code>),
@@ -459,6 +471,7 @@
             <li><a href="#revision-2026-10-06">Revision (2026-10-06)</a></li>
             <li><a href="#revision-2026-10-21">Revision (2026-10-21)</a></li>
             <li><a href="#revision-2026-10-26">Revision (2026-10-26)</a></li>
+            <li><a href="#revision-2026-10-28">Revision (2026-10-28)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

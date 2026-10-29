@@ -272,7 +272,8 @@
           <code>deploy.yml</code> and <code>main.bicep</code> anchor is refreshed after both workflow prunes.
           Revised 2026-10-19: Store&#39;s unchanged-leg re-tag also refreshes <code>latest</code> against the ACR purge, so the open gap recorded on 2026-10-07 is closed and both consumers re-tag the same way.
           Revised 2026-10-21: anchors refreshed after the <code>deploy.yml</code> and <code>main.bicep</code> growth in both consumers; no decision or posture changed. See Revision (2026-10-21).
-          Revised 2026-10-26: anchors refreshed after further <code>deploy.yml</code> growth in both consumers (+1), <code>main.bicep</code> growth (+36) and a one-line shift in the ADC Gateway Dockerfile; no decision or posture changed. See Revision (2026-10-26).</p>
+          Revised 2026-10-26: anchors refreshed after further <code>deploy.yml</code> growth in both consumers (+1), <code>main.bicep</code> growth (+36) and a one-line shift in the ADC Gateway Dockerfile; no decision or posture changed. See Revision (2026-10-26).
+          Revised 2026-10-28: anchors refreshed after a three-line shift in the ADC <code>main.bicep</code> per-app sizing and port blocks; no decision or posture changed. See Revision (2026-10-28).</p>
           <h2 id="context">Context</h2>
           <p>Eleven Dockerfiles produce every deployable container in the two Azure-hosted applications: six in
           MMCA.ADC (four services, the Gateway, the Blazor web host) and five in MMCA.Store (three services,
@@ -360,10 +361,10 @@
           scale-out replicas skip first-request JIT (<code>.../MMCA.ADC.Conference.Service/Dockerfile:43-44</code>), and
           the containers those replicas land on are fractional-vCPU Container Apps. Outside conference mode
           all six ADC apps (identity, conference, engagement, notification, gateway, ui) run on 0.25 vCPU /
-          0.5 GiB: notification declares it literally (<code>MMCA.ADC/infra/main.bicep:2450</code>), and the other five
-          take it as the baseline branch of <code>conferenceScaledResources</code> (<code>:182</code>; conference <code>:2158</code>,
-          engagement <code>:2301</code>, gateway <code>:2640</code>, ui <code>:2791</code>) or <code>conferenceIdentityResources</code> (<code>:186</code>;
-          identity <code>:1903</code>). The <code>conferenceMode</code> parameter (<code>:157</code>) lifts those four to 0.5 vCPU / 1 GiB and
+          0.5 GiB: notification declares it literally (<code>MMCA.ADC/infra/main.bicep:2447</code>), and the other five
+          take it as the baseline branch of <code>conferenceScaledResources</code> (<code>:182</code>; conference <code>:2155</code>,
+          engagement <code>:2298</code>, gateway <code>:2637</code>, ui <code>:2788</code>) or <code>conferenceIdentityResources</code> (<code>:186</code>;
+          identity <code>:1900</code>). The <code>conferenceMode</code> parameter (<code>:157</code>) lifts those four to 0.5 vCPU / 1 GiB and
           Identity to 1.0 vCPU / 2 GiB for conference day (rationale <code>:174-186</code>). On that much CPU, JIT time
           is not noise.</p>
           <p><strong>4. Every image is published with <code>UseAppHost=false</code> and started through the shared runtime.</strong> The
@@ -371,10 +372,10 @@
           <code>USER $APP_UID</code> (added 2026-09-07, see the revision below) and <code>ENTRYPOINT [&quot;dotnet&quot;, &quot;&lt;Host&gt;.dll&quot;]</code>
           (<code>.../MMCA.ADC.Conference.Service/Dockerfile:55-68</code>); the base stage exposes 8080 and 8081
           (<code>:6-7</code>). For Identity, Conference and Engagement, 8080 is the h2c ingress endpoint and 8081 the
-          HTTP/1.1 health-probe listener (Identity <code>MMCA.ADC/infra/main.bicep:1877,1880,1919</code>, Conference
-          <code>:2130,2133,2172</code>, Engagement <code>:2283,2286,2314</code>); only Notification serves h2c gRPC on 8081, the
+          HTTP/1.1 health-probe listener (Identity <code>MMCA.ADC/infra/main.bicep:1874,1877,1916</code>, Conference
+          <code>:2127,2130,2169</code>, Engagement <code>:2280,2283,2311</code>); only Notification serves h2c gRPC on 8081, the
           ADR-012 mixed profile, behind an <code>http</code> main ingress on 8080, with its probe listener on 8082
-          (<code>MMCA.ADC/infra/main.bicep:2418,2420,2426-2432,2468</code>). No image installs a package, adds
+          (<code>MMCA.ADC/infra/main.bicep:2415,2417,2423-2429,2465</code>). No image installs a package, adds
           a shell script, or runs a health-check command of its own: liveness is the Container Apps probe
           configured in Bicep.</p>
           <h2 id="runtime-postures-closed-2026-09-07">Runtime postures (closed 2026-09-07)</h2>
@@ -789,6 +790,22 @@
           <code>Source/Hosts/MMCA.ADC.Gateway/Dockerfile:73</code> (<code>USER $APP_UID</code>; the other ten <code>USER</code> lines are
           unchanged).</li>
           </ol>
+          <h2 id="revision-2026-10-28">Revision (2026-10-28)</h2>
+          <p>Re-verified against current source. No decision, runtime posture or rationale changed: the
+          <code>conferenceMode</code> sizing (0.25 vCPU / 0.5 GiB baseline, notification literal, the two conditional
+          resource variables) and the port topology (h2c ingress on 8080 with the HTTP/1.1 probe listener on
+          8081 for Identity, Conference and Engagement; Notification&#39;s <code>http</code> main ingress on 8080, h2c gRPC
+          on an additional 8081 port mapping and probe on 8082) all read as recorded. What moved is anchors
+          only: every per-app and port anchor in <code>MMCA.ADC/infra/main.bicep</code> shifted up by three lines, while
+          the <code>conferenceMode</code> block did not move. Decisions 3 and 4 are re-pointed in place. The earlier
+          Revision sections keep the anchors they recorded on their dates.</p>
+          <ol>
+          <li>Anchors re-verified against current source: ADC <code>main.bicep</code> notification literal <code>:2447</code>,
+          conference <code>:2155</code>, engagement <code>:2298</code>, gateway <code>:2637</code>, ui <code>:2788</code>, identity <code>:1900</code>
+          (<code>conferenceMode</code> <code>:157</code>, <code>conferenceScaledResources</code> <code>:182</code>, <code>conferenceIdentityResources</code>
+          <code>:186</code> unchanged), Identity ports <code>:1874,1877,1916</code>, Conference <code>:2127,2130,2169</code>, Engagement
+          <code>:2280,2283,2311</code>, Notification <code>:2415,2417,2423-2429,2465</code>.</li>
+          </ol>
           
         <div class="doc-foot btn-row">
           <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
@@ -815,6 +832,7 @@
             <li><a href="#revision-2026-10-19">Revision (2026-10-19)</a></li>
             <li><a href="#revision-2026-10-21">Revision (2026-10-21)</a></li>
             <li><a href="#revision-2026-10-26">Revision (2026-10-26)</a></li>
+            <li><a href="#revision-2026-10-28">Revision (2026-10-28)</a></li>
             </ul>
           </nav>
         </aside>

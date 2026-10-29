@@ -27,6 +27,10 @@ codes built through it are held to the uniqueness and prefix gates; the 499 hand
 Revised 2026-10-26: `TryGetValue` is an instance member of `Result<T>` (v1.252.0) and the page-side
 extension keeps only the overload that hands the errors back, which decides on a non-null success
 value; the 409 handler's concurrency metric is recorded; anchors refreshed.
+Revised 2026-10-28: the code-based localization lookup is scoped to the three code kinds it covers
+(`Http.EmptyResponse` and `Http.MalformedResponse` render in English), the reader's own handling of
+an unreadable body ahead of the executor is recorded, and the Result channel is no longer said to
+carry `requestId`.
 
 ## Context
 Operations at every layer fail in *expected* ways: input is invalid, a domain invariant is broken, a
@@ -213,7 +217,15 @@ Two halves make a service method honestly typed, and they are deliberately separ
   `Error.Unexpected` (`:133`, `:136`). Anything else is a genuine programming fault and keeps
   travelling as an exception (`:124-125`). The exception's own text goes on `Error.Source`, never on
   `Message`, because it is diagnostic detail that is neither localizable nor safe to render
-  (`:130-133`).
+  (`:130-133`). The executor only sees the faults the wrapped operation lets escape: when that
+  operation reads through `ProblemDetailsResultReader`, the reader catches a body-read
+  `HttpRequestException` itself and falls back to the status-only result
+  (`ProblemDetailsResultReader.cs:338-347`), which for the typed `ReadAsync<T>` on a 2xx is a failure
+  coded `Http.EmptyResponse` (`:296`, `:303-310`; the valueless `ReadAsync` returns success on a 2xx
+  without reading the body, `:259-262`), and it catches a `JsonException` on a 2xx body as `Http.MalformedResponse`
+  (`:323-326`). That last failure carries the `JsonException` text on `Message`, not on `Source`
+  (`:325`), so the reader does not follow the executor's rule, and the page-side lookup below
+  renders that text as the message.
 
 **`OperationCanceledException` is the one exception that still crosses the boundary, and that is the
 decision, not an omission.** When the caller's own token is why the operation stopped, the
@@ -236,11 +248,17 @@ error (`:255`, `:276`); and `HasErrorType` with `IsNotFound` / `IsUnauthorized` 
 404 into an empty state and a 401 into a redirect instead of an alert (`:294-298`, `:306`, `:314`).
 Messages are localized as resource keys **with pass-through**, so one call site handles both an API
 error the server already translated and a client-side error whose `Message` is a key (`:23-27`,
-`Localize` at `:373-382`, ADR-027). The failures the client synthesized itself have no
+`Localize` at `:373-382`, ADR-027). Three kinds of client-synthesized failure have no
 server-phrased message to pass through, so they are looked up by their error code instead: a
 bodiless `Http.{status}` (recognized through `ProblemDetailsResultReader.TryGetSynthesizedStatus`,
 `:326`), then the generic `Http.Status` format, plus `Http.TransportFailure` and `Http.Timeout`
-(`:27-33`, `LocalizeError` at `:316-339`). Each code resolves through the localizer the page passed
+(`:27-33`, `LocalizeError` at `:316-339`, the transport check at `:333`). The reader's other two
+synthesized codes, `Http.EmptyResponse` and `Http.MalformedResponse`
+(`ProblemDetailsResultReader.cs:71`, `:77`), are not in that lookup: they fall through to the
+message pass-through (`ResultUiExtensions.cs:338`), and `SharedResource.resx` holds no key for
+either (it carries `Http.Status`, the `Http.{status}` sentences, `Http.TransportFailure` and
+`Http.Timeout`, `.../MMCA.Common.UI/Resources/SharedResource.resx:796`, `:832`, `:835`), so they
+render their English message. Each code resolves through the localizer the page passed
 and then, when that localizer has no such key, through the framework's own `SharedResource` pair
 for the current UI culture, so a page passing its own `IStringLocalizer<PageType>` still shows the
 translated sentence; the English message is the last resort (`:30-33`, the two-step lookup at
@@ -307,9 +325,14 @@ do; MMCA.Common ships no module catalog and self-tests the rules against fixture
   itself at `ErrorType.cs:5-8`).
 - **Cheap and predictable.** No throw/catch on the common "won't do it" path.
 - **One wire contract for both channels.** Whether a request ends in a `Result.Failure` mapped by
-  `HandleFailure()` or an escaped exception caught by the handler chain, the client receives the same
-  RFC 9457 ProblemDetails body (carrying the shared `requestId` extension), so consumers parse one error
-  shape regardless of which channel produced it.
+  `HandleFailure()` or an escaped exception caught by the handler chain, the client receives an
+  RFC 9457 ProblemDetails body, so consumers parse one error shape regardless of which channel
+  produced it. The shared `requestId` extension is stamped by the `AddProblemDetails`
+  customization (`DependencyInjection.cs:156-158`); on a non-empty error list `HandleFailure` builds
+  its body directly and returns it through `StatusCode(...)` (`ApiControllerBase.cs:50-60`), and the shared conformance
+  base accepts either an `errors` list or a correlation id on that body
+  (`MMCA.Common/Source/Hosting/MMCA.Common.Testing/Conformance/ProblemDetailsContractTestsBase.cs:77-81`),
+  so no test pins `requestId` on the Result channel.
 - **The layer with the most expected failures had the least Result.** A UI service call fails for
   every reason this record was written about: the input was rejected, the record is gone, the caller
   signed out. Converting the response back into an exception at the last hop meant the one layer
@@ -479,6 +502,34 @@ idiom onto `Result<T>` itself, which shifted every generic `Result.cs` anchor, a
    `:373-382` (`:23-27`, `:27-33`, `:30-33` and `:74` did not move). The 2026-10-21 entry above keeps
    its `CHANGELOG.md:93` and `:230` as written; the v1.247.0 and v1.241.0 entries now sit at
    `CHANGELOG.md:308` and `:445`.
+
+## Revision (2026-10-28)
+Re-verified against current source. The decision, the ten categories, the severity ranking, the
+exception-handler order, the executor's fault set and the code-based localization lookup are
+unchanged; three live descriptions were broader than the code, and are narrowed.
+1. Corrected: the code-based lookup covers only a bodiless `Http.{status}` and the executor's
+   `Http.TransportFailure` / `Http.Timeout` (`ResultUiExtensions.cs:326`, `:333`, `:366-371`). The
+   reader's `Http.EmptyResponse` and `Http.MalformedResponse` (`ProblemDetailsResultReader.cs:71`,
+   `:77`) fall through to the message pass-through (`ResultUiExtensions.cs:338`) and have no
+   `SharedResource.resx` key (`SharedResource.resx:796`, `:832`, `:835`), so they render in English.
+2. Added: when the wrapped operation reads through `ProblemDetailsResultReader`, the reader handles
+   a body-read `HttpRequestException` (`ProblemDetailsResultReader.cs:338-347`, an
+   `Http.EmptyResponse` on a 2xx for the typed `ReadAsync<T>` at `:303-310`; the valueless
+   `ReadAsync` does not read a 2xx body, `:259-262`) and a 2xx `JsonException` (`Http.MalformedResponse`,
+   `:323-326`) before the executor sees them, and that malformed-response failure carries the
+   exception text on `Message` (`:325`), unlike the executor, which puts it on `Source`
+   (`HttpResultExecutor.cs:130-133`).
+3. Corrected: the Rationale no longer states that the Result channel carries `requestId`. The
+   extension is stamped by the `AddProblemDetails` customization (`DependencyInjection.cs:156-158`),
+   `HandleFailure` builds and returns its body directly on a non-empty error list
+   (`ApiControllerBase.cs:50-60`; the empty-list branch returns `Problem(...)`, `:39-45`), and the
+   conformance base accepts `errors` or a correlation id (`ProblemDetailsContractTestsBase.cs:77-81`).
+4. Anchors re-verified against current source: `ResultUiExtensions.cs:27-33`, `:316-339`, `:326`,
+   `:333`, `:338`, `:366-371`; `ProblemDetailsResultReader.cs:71`, `:77`, `:303-310`, `:323-326`,
+   `:338-347`; `HttpResultExecutor.cs:127-128`, `:130-133`; `ApiControllerBase.cs:50-60`. The
+   2026-10-26 entry above keeps its `CHANGELOG.md` anchors as written; the one-argument
+   `ResultUiExtensions.TryGetValue` removal now sits at `MMCA.Common/CHANGELOG.md:244`, and the
+   v1.247.0 and v1.241.0 headings at `:303` and `:474`.
 
 ## Related
 [ADR-007](007-grpc-extraction.md) (Result over the wire via gRPC, the second edge the shared severity

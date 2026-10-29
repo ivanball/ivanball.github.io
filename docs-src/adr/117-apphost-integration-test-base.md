@@ -30,6 +30,10 @@ are refreshed.
 
 Revised 2026-10-26: the Aspire pin reads 13.6.4 on every Aspire entry, and anchors are refreshed.
 
+Revised 2026-10-28: decision 8 records that the runtime boundary test covers a subset of the
+compile-time rule and that its trailing-dot `MMCA.Common.Aspire.` entry matches nothing, so the
+Aspire ban rests on the compile-time gate; anchors are refreshed.
+
 ## Context
 The AppHost is the only file that states how a whole stack fits together: which project resources
 exist, which database each one owns, which broker they share, where JWKS discovery points, and the
@@ -122,7 +126,8 @@ skip rather than a timeout, and wait for readiness per resource rather than for 
    machine-level act a test fixture has no business performing silently; a CI job that needs one runs
    `dotnet dev-certs https --trust` as an explicit step. The framework's own `apphost-testing` job
    needs none, because its sample AppHost serves cleartext only, and its header says a consumer stack
-   with an https launch profile adds that step (`MMCA.Common/.github/workflows/ci.yml:989`, `:1002-1005`).
+   with an https launch profile adds that step (`MMCA.Common/.github/workflows/ci.yml:1021`,
+   `:1034-1037`).
 
 5. **The RS256 keypair is minted when the environment has none.** `EphemeralRsaKeyPair.Create()`
    (`.../Preconditions/EphemeralRsaKeyPair.cs:42`) generates an RSA-2048 pair and the fixture pushes
@@ -150,7 +155,7 @@ skip rather than a timeout, and wait for readiness per resource rather than for 
    and what this does assert, is that the routing key the multi-database resolver reads is the one
    the AppHost wrote. A typo in a logical name is invisible to a build and to every in-process tier.
 
-8. **The package's layer ceiling is `MMCA.Common.Testing`, enforced twice.** It reuses
+8. **The package's layer ceiling is `MMCA.Common.Testing`, enforced at compile time, with a runtime gate for part of it.** It reuses
    `JwtTokenGenerator` and reaches Application and API only through that one edge. The compile-time
    gate is `EnforceTestingAspireLayerBoundary`
    (`MMCA.Common/Source/Build/MMCA.Common.LayerEnforcement.targets:219`), which judges the references
@@ -158,8 +163,18 @@ skip rather than a timeout, and wait for readiness per resource rather than for 
    into `@(ProjectReference)` before `ResolveProjectReferences`. The runtime gate is
    `TestingAspireBoundaryTests`
    (`MMCA.Common/Tests/Architecture/MMCA.Common.Architecture.Tests/Layering/TestingAspireBoundaryTests.cs:20`),
-   which asserts the same rule against the compiled assembly so a type arriving by a path no
-   `ProjectReference` declares is caught too. `MMCA.Common.Aspire` is on the forbidden list as well:
+   which asserts a subset of that rule against the compiled assembly: it forbids Domain,
+   Infrastructure, API and UI (`:25`, `:31`, `:37`, `:43`), so for those four a type arriving by a
+   path no `ProjectReference` declares is caught too. It does not forbid Application or Grpc, which
+   the compile-time gate forbids only as declared references
+   (`MMCA.Common.LayerEnforcement.targets:229`, `:231`, `:234`), so a transitive arrival of either is
+   caught by neither gate. `MMCA.Common.Aspire` is forbidden at compile
+   time (`:236`); the runtime entry for it is written `"MMCA.Common.Aspire."` with a trailing dot
+   (`TestingAspireBoundaryTests.cs:51`), and the framework's own note on NetArchTest matching says
+   such an entry matches nothing
+   (`MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Rules/Layering/ArchitectureRules.CloudVendors.cs:14-16`),
+   so the Aspire ban is in effect enforced by the compile-time gate alone, which leaves a transitive
+   arrival of the service-defaults graph unguarded. The reason for the ban:
    the probe paths are MIRRORED constants (`.../Probes/AppHostProbePaths.cs:15-41`) precisely so an
    AppHost-tier package never drags the service-defaults graph into a consumer's test project, and a
    unit test cross-asserts each pair against the framework constant it mirrors.
@@ -181,7 +196,7 @@ skip rather than a timeout, and wait for readiness per resource rather than for 
 
 10. **The tier runs in CI, blocking, against an in-repo sample.** The `apphost-testing` job carries
     no `continue-on-error`, so a red fails the run, but it is not a required merge check
-    (`MMCA.Common/.github/workflows/ci.yml:989`, `:994-995`).
+    (`MMCA.Common/.github/workflows/ci.yml:1021`, `:1026-1027`).
     `Tests/Hosting/MMCA.Common.Testing.Aspire.AppHostTests` boots a sample AppHost with a SQLite file
     and ONE sample service project declared as TWO resources, so it needs no container runtime, and
     asserts every helper against it. The two resources are the two cleartext protocol profiles,
@@ -244,11 +259,11 @@ Six shapes were weighed, and each rejection is a property the package keeps:
   instead by its `e2e.yml`, which boots the AppHost for every E2E run, including the deploy's chromium
   `e2e-gate` (`MMCA.ADC/.github/workflows/e2e.yml:34-36`, `:242`;
   `MMCA.Store/.github/workflows/e2e.yml:252`), and the base itself by MMCA.Common's own tier
-  (`MMCA.ADC/AGENTS.md:77`, `MMCA.Store/AGENTS.md:76`). The package is unchanged, so a consumer that
+  (`MMCA.ADC/AGENTS.md:79`, `MMCA.Store/AGENTS.md:78`). The package is unchanged, so a consumer that
   wants the wiring assertions back writes the subclass again rather than a harness.
 - **Cost: this is the slowest tier per assertion, and it blocks the CI run without being a required
   merge check.** The `apphost-testing` job has no `continue-on-error`, so a red fails the MMCA.Common
-  CI run, but it is not a required merge check (`MMCA.Common/.github/workflows/ci.yml:994-995`).
+  CI run, but it is not a required merge check (`MMCA.Common/.github/workflows/ci.yml:1026-1027`).
 - **A consumer's real stack still needs Docker on the runner.** The in-repo sample avoids containers
   on purpose, so the framework's own CI does not pay for image pulls, but ADC's AppHost starts SQL
   Server, Redis, RabbitMQ and MailDev. That is why `AppHostEnvironmentRequirement.Docker` is part of
@@ -360,6 +375,31 @@ same-version coupling still holds. What moved is the pin version and the anchors
    `workflow_call` entry point the deploy's `e2e-gate` uses at
    `MMCA.ADC/.github/workflows/e2e.yml:34-36` and the AppHost launch at `:242`. The anchors inside
    earlier revisions stay as written.
+
+## Revision (2026-10-28)
+Re-verified against current source. No decision or rationale changed: the `apphost-testing` job is
+still blocking with no `continue-on-error` and no dev-certs step, and both consumers still state
+there is no AppHost smoke project. What moved is the description of the runtime layer gate and the
+anchors.
+
+1. Decision 8 said `TestingAspireBoundaryTests` asserts "the same rule" as the compile-time gate,
+   `MMCA.Common.Aspire` included. The runtime test forbids Domain, Infrastructure, API and UI
+   (`MMCA.Common/Tests/Architecture/MMCA.Common.Architecture.Tests/Layering/TestingAspireBoundaryTests.cs:25`,
+   `:31`, `:37`, `:43`) and not Application or Grpc, which
+   `MMCA.Common/Source/Build/MMCA.Common.LayerEnforcement.targets:231` and `:234` forbid. Its
+   service-defaults entry is `"MMCA.Common.Aspire."` with a trailing dot (`TestingAspireBoundaryTests.cs:51`), and the framework's
+   own note says NetArchTest matches whole namespace segments, so an entry ending in a dot matches
+   nothing
+   (`MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Rules/Layering/ArchitectureRules.CloudVendors.cs:14-16`,
+   `:27-28`). Decision 8 now says the runtime gate is a subset and that the Aspire ban is enforced
+   by the compile-time gate (`MMCA.Common.LayerEnforcement.targets:236`). The test was not run for
+   this revision.
+2. Anchors re-verified against current source: `apphost-testing` job at
+   `MMCA.Common/.github/workflows/ci.yml:1021`, the BLOCKING, not-a-required-merge-check comment at
+   `:1026-1027`, the no-container, no-dev-certificate header and the consumer
+   `dotnet dev-certs https --trust` note at `:1034-1037` (decisions 4 and 10, Trade-offs); the
+   "No AppHost smoke project" rule at `MMCA.ADC/AGENTS.md:79` and `MMCA.Store/AGENTS.md:78`
+   (Trade-offs). The anchors inside earlier revisions stay as written.
 
 ## Related
 [ADR-098](098-aspire-orchestration-not-testing-or-dashboards.md) (the orchestration posture this tier

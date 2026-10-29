@@ -1,7 +1,7 @@
 # ADR-082: Two-Tier Cross-Origin Posture: Allow-Listed Service Policies, an Any-Header Gateway Policy
 
 ## Status
-Accepted (2026-08-14). Revised 2026-10-07: anchors refreshed after the v1.233.0 release. Revised 2026-10-21: the ADC and Store browser clients now send API traffic through the UI host's same-origin proxy (ADR-131), whose own deny-all cross-origin gate replaces the "no UI API surface" statement; anchors refreshed. Revised 2026-10-26: anchors refreshed after the host, Bicep and pipeline-extension lines shifted.
+Accepted (2026-08-14). Revised 2026-10-07: anchors refreshed after the v1.233.0 release. Revised 2026-10-21: the ADC and Store browser clients now send API traffic through the UI host's same-origin proxy (ADR-131), whose own deny-all cross-origin gate replaces the "no UI API surface" statement; anchors refreshed. Revised 2026-10-26: anchors refreshed after the host, Bicep and pipeline-extension lines shifted. Revised 2026-10-28: anchors refreshed after the host and Bicep lines shifted again.
 
 ## Context
 Both deployed applications put a YARP gateway in front of per-module service hosts (ADR-008), and
@@ -78,34 +78,34 @@ deliberately broader one for gateways.
   `MMCA.Store/Source/Services/MMCA.Store.Sales.Service/appsettings.json:21-22`), and Bicep injects the
   real value into the gateway container of both applications as
   `Cors__AllowedOrigins__0`, pointing at the UI container app's FQDN
-  (`MMCA.ADC/infra/main.bicep:2654`, `MMCA.Store/infra/main.bicep:2037`). With the ADC and Store
+  (`MMCA.ADC/infra/main.bicep:2651`, `MMCA.Store/infra/main.bicep:2038`). With the ADC and Store
   WebAssembly clients routed through the same-origin proxy (Context), no first-party browser fetch
   to the gateway remains, so that allow-listed UI origin now governs no cross-origin browser call
   from the UI; the grant stays in place for any client that still calls the gateway from that
   origin. On Store the same key can
   also arrive from Key Vault as `Cors--AllowedOrigins--0`, which is why the vault provider is
   registered before anything reads configuration: the allow-list binds eagerly
-  (`MMCA.Store/Source/Hosts/MMCA.Store.Gateway/Program.cs:55-63`, `:64`).
+  (`MMCA.Store/Source/Hosts/MMCA.Store.Gateway/Program.cs:58-66`, `:67`).
 - **Adoption is complete on both tiers.** All seven ADC and Store service hosts call `AddCommonCors`
-  (`MMCA.ADC.Identity.Service/Program.cs:160`, `MMCA.ADC.Conference.Service/Program.cs:225`,
+  (`MMCA.ADC.Identity.Service/Program.cs:161`, `MMCA.ADC.Conference.Service/Program.cs:225`,
   `MMCA.ADC.Engagement.Service/Program.cs:155`, `MMCA.ADC.Notification.Service/Program.cs:144`,
   `MMCA.Store.Catalog.Service/Program.cs:145`, `MMCA.Store.Identity.Service/Program.cs:140`,
   `MMCA.Store.Sales.Service/Program.cs:153`), as does the Helpdesk reference host
   (`MMCA.Helpdesk/Source/Hosts/MMCA.Helpdesk.Web/Program.cs:34`), and every one of the eight then
   runs `UseCommonMiddlewarePipeline()` so the selection above applies
-  (`MMCA.ADC.Identity.Service/Program.cs:372`, `MMCA.ADC.Conference.Service/Program.cs:461`,
-  `MMCA.ADC.Engagement.Service/Program.cs:337`, `MMCA.ADC.Notification.Service/Program.cs:281`,
+  (`MMCA.ADC.Identity.Service/Program.cs:373`, `MMCA.ADC.Conference.Service/Program.cs:461`,
+  `MMCA.ADC.Engagement.Service/Program.cs:338`, `MMCA.ADC.Notification.Service/Program.cs:281`,
   `MMCA.Store.Catalog.Service/Program.cs:331`, `MMCA.Store.Identity.Service/Program.cs:318`,
   `MMCA.Store.Sales.Service/Program.cs:320`, `MMCA.Helpdesk.Web/Program.cs:149`). Both gateways call
   `AddCommonGatewayCors` and the bare `app.UseCors()`
   (`MMCA.ADC/Source/Hosts/MMCA.ADC.Gateway/Program.cs:131`, `:179`;
-  `MMCA.Store/Source/Hosts/MMCA.Store.Gateway/Program.cs:83`, `:168`).
+  `MMCA.Store/Source/Hosts/MMCA.Store.Gateway/Program.cs:86`, `:172`).
 
 The Blazor UI hosts register neither call, and no UI host runs the CORS middleware. The ADC and
 Store UI.Web hosts do expose an API surface, the same-origin proxy of ADR-131
-(`AddCommonSameOriginApiProxy` at `MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs:167` and
-`MMCA.Store/Source/Hosts/UI/MMCA.Store.UI.Web/Program.cs:159`, mapped by
-`MapCommonSameOriginApiProxy` at `:290` and `:268`), but it carries its own deny-all cross-origin
+(`AddCommonSameOriginApiProxy` at `MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs:168` and
+`MMCA.Store/Source/Hosts/UI/MMCA.Store.UI.Web/Program.cs:160`, mapped by
+`MapCommonSameOriginApiProxy` at `:291` and `:269`), but it carries its own deny-all cross-origin
 posture outside the CORS middleware: a foreign `Origin` or `Sec-Fetch-Site` gets 403, and `OPTIONS`
 is answered locally with 204, no CORS grant and no forwarding, so no preflight ever reaches the
 gateway and the gateway policy never decides whether a proxied request may proceed
@@ -253,6 +253,22 @@ in either UI.Web host) are unchanged; only anchors moved.
    registration and mapping (`MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs:167`, `:290`;
    `MMCA.Store/Source/Hosts/UI/MMCA.Store.UI.Web/Program.cs:159`, `:268`); and the ADR-008
    (`:71`, `:101`) and ADR-058 (`:82-84`) cross-references.
+
+## Revision (2026-10-28)
+Re-verified against current source. The two tiers, both policies, the environment selection step,
+the deploy-time origin injection, the Store Key Vault ordering, adoption on all eight service-tier
+hosts and both gateways, and the UI hosts' proxy-only API surface are unchanged; only anchors moved.
+
+1. Anchors re-verified against current source: the gateway Bicep entries for
+   `Cors__AllowedOrigins__0` (`MMCA.ADC/infra/main.bicep:2651`, `MMCA.Store/infra/main.bicep:2038`);
+   the Store gateway Key Vault comment and call
+   (`MMCA.Store/Source/Hosts/MMCA.Store.Gateway/Program.cs:58-66`, `:67`) and its CORS calls
+   (`AddCommonGatewayCors` at `:86`, `app.UseCors()` at `:172`); `AddCommonCors` in
+   `MMCA.ADC.Identity.Service/Program.cs:161`; `UseCommonMiddlewarePipeline()` in
+   `MMCA.ADC.Identity.Service/Program.cs:373` and `MMCA.ADC.Engagement.Service/Program.cs:338`
+   (the other six call sites unchanged); and the same-origin proxy registration and mapping
+   (`MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs:168`, `:291`;
+   `MMCA.Store/Source/Hosts/UI/MMCA.Store.UI.Web/Program.cs:160`, `:269`).
 
 ## Related
 [ADR-079](079-shared-http-middleware-pipeline.md) (the shared middleware pipeline whose fixed order

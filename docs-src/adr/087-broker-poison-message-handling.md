@@ -13,6 +13,7 @@ Revised 2026-10-07: the breaker scope now notes that monolith integration events
 Revised 2026-10-21: the source comments now document that monolith integration events run inside the breaker (the Decision no longer calls the inline comment distributed-only), the circuit-open Warning text is corrected to "Message bus circuit is open", the per-batch log latch is re-anchored in `DispatchRowsAsync`, and anchors are refreshed.
 Revised 2026-10-23: the east-west gRPC breaker values moved into `HttpResilienceDefaults` (`Grpc`-prefixed), so the database-breaker search re-anchors the gRPC defaults and handler citations there; the broker breaker is unchanged.
 Revised 2026-10-26: redelivery now runs through four pluggable transports (RabbitMQ alone gates it on the flag; Azure Service Bus, Amazon SQS and PostgreSQL apply it unconditionally, SQS with its own 900-second-capped default), `RedeliveryIntervalsSeconds` defaults to `null` with the framework default held separately and `[0]` as the off switch, the fault consumer only Debug-logs faults produced by other assemblies (no Error log, no count), the fault Trade-off records the alerts and runbooks both applications now carry, and anchors are refreshed.
+Revised 2026-10-28: anchors refreshed after the MMCA.ADC `infra/OPERATIONS.md` runbook headings moved down one line.
 
 ## Context
 Delivery in this workspace has always been at-least-once with retries on both legs: the outbox
@@ -263,7 +264,7 @@ provider default.
   is in the error queue and will stay there until someone acts. Both applications alert on the
   Error log line rather than on the counter (MMCA.ADC `infra/main.bicep:650`, MMCA.Store
   `infra/main.bicep:498`) and document the manual inspect, replay or discard procedure (MMCA.ADC
-  `infra/OPERATIONS.md:231`, MMCA.Store `infra/OPERATIONS.md:178`; see
+  `infra/OPERATIONS.md:232`, MMCA.Store `infra/OPERATIONS.md:178`; see
   [ADR-062](062-slo-alerting-as-code.md)), but `broker.fault.count` itself drives no alert and no
   automated replay path is provided. The gap moved from invisible to visible-and-hand-actioned.
 - **There is no host-wide way to turn fault consumers off.** The opt-out is per event type at the
@@ -472,6 +473,18 @@ is still no breaker in any persistence path. What moved is the transport wiring 
    setting `:63`), with the typed-client handler formerly in `DependencyInjection.Messaging.cs` gone
    from the breaker search; and PostgreSQL `CommandTimeout` at `PostgreSQLDbContext.cs:94` with
    `EnableRetryOnFailure` at `:102-105`.
+
+## Revision (2026-10-28)
+Re-verified against current source. No decision changed: the fault consumer still observes and stops
+there, both applications still alert on the fault log line and document a manual error-queue
+procedure, and MMCA.ADC still alerts on the outbox broker breaker. What moved is one MMCA.ADC
+runbook anchor cited in the live Trade-offs.
+
+1. Anchors re-verified against current source: the MMCA.ADC error-queue runbook heading is at
+   `infra/OPERATIONS.md:232` (the fault Trade-off is re-pointed from `:231`; the MMCA.Store heading
+   stays at `infra/OPERATIONS.md:178`), and the MMCA.ADC `adc-prod-alert-outbox-broker-circuit-open`
+   runbook heading is at `infra/OPERATIONS.md:385`, superseding the `:384` recorded in the
+   2026-10-26 Revision.
 
 ## Related
 [ADR-003](003-outbox-dual-dispatch.md) (the outbox publish leg this breaker wraps, and the retry,

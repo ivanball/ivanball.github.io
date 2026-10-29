@@ -247,7 +247,7 @@
           <p>Accepted (2026-08-13). <strong>Amends <a href="026-caching-strategy.html">ADR-026</a></strong>: Tier 1&#39;s substrate gains a third
           implementation beside <code>MemoryCacheService</code> and <code>DistributedCacheService</code>. It is opt-in through
           <code>AddCommonHybridCache(...)</code>; with no call the default path is byte-identical to today, so the release is
-          non-breaking. Revised 2026-10-01 (single-use records read through an L1-bypassing <code>GetFromSharedStoreAsync</code>, and consumers opt in through a Redis-guarded wrapper; see Revision below). Revised 2026-10-06: the ADR-029 registration counter also reads through <code>GetFromSharedStoreAsync</code>, so the member is no longer single-use-only. Revised 2026-10-07: the login-lockout flag and the soft-deleted-user marker also read through <code>GetFromSharedStoreAsync</code> (seven callers), and the source anchors are refreshed after the v1.233.0 release. Revised 2026-10-21: the <code>HybridCacheService</code> <code>TryGetAsync</code> override (presence probe flags and thrown miss sentinel) is now recorded, and the source anchors are refreshed against current source. Revised 2026-10-26: anchors refreshed after the Common releases since 2026-10-21 shifted <code>ICacheService</code>, <code>HybridCacheService</code>, three caller files and two consumer <code>Program.cs</code> files.</p>
+          non-breaking. Revised 2026-10-01 (single-use records read through an L1-bypassing <code>GetFromSharedStoreAsync</code>, and consumers opt in through a Redis-guarded wrapper; see Revision below). Revised 2026-10-06: the ADR-029 registration counter also reads through <code>GetFromSharedStoreAsync</code>, so the member is no longer single-use-only. Revised 2026-10-07: the login-lockout flag and the soft-deleted-user marker also read through <code>GetFromSharedStoreAsync</code> (seven callers), and the source anchors are refreshed after the v1.233.0 release. Revised 2026-10-21: the <code>HybridCacheService</code> <code>TryGetAsync</code> override (presence probe flags and thrown miss sentinel) is now recorded, and the source anchors are refreshed against current source. Revised 2026-10-26: anchors refreshed after the Common releases since 2026-10-21 shifted <code>ICacheService</code>, <code>HybridCacheService</code>, three caller files and two consumer <code>Program.cs</code> files. Revised 2026-10-28: anchors refreshed after v1.262.0 shifted <code>DependencyInjection.Caching.cs</code>.</p>
           <p><strong>Scope note (2026-08-18).</strong> This record is Tier 1 only: the Status and Context sections above scope it to
           ADR-026&#39;s Tier 1 substrate, and the Related entry for ADR-040 leaves the Tier 2 output-cache edge untouched.
           The cross-service output-cache eviction shipped on 2026-08-18
@@ -322,7 +322,7 @@
           (<code>:48-53</code>), the last three optional because a host without Redis still resolves the service, prefix eviction
           is the only operation that needs the multiplexer, and a directly constructed instance falls back to
           <code>new CacheSettings()</code> (<code>:120</code>) for its TTL policy. The registration passes all three explicitly rather than
-          leaving them to the container, the settings included (<code>DependencyInjection.Caching.cs:180</code>), so a registered service
+          leaving them to the container, the settings included (<code>DependencyInjection.Caching.cs:196</code>), so a registered service
           reads its durations from the bound <code>Cache</code> section rather than from the defaults. It is <code>partial</code> for the
           <code>LoggerMessage</code> source generator (<code>:435-448</code>), not because the type is split across hand-written files.</p>
           <ul>
@@ -386,17 +386,17 @@
           the L1 benefit for free, because their reads go through <code>GetAsync</code>.</p>
           <h3 id="registration-is-one-opt-in-call">Registration is one opt-in call</h3>
           <p><code>AddCommonHybridCache(Action&lt;HybridCacheOptions&gt;? configure = null)</code>
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.Caching.cs:141</code>) calls a bare
-          <code>AddHybridCache()</code> (<code>:143</code>) and sets the defaults through
-          <code>AddOptions&lt;HybridCacheOptions&gt;().Configure&lt;IOptions&lt;CacheSettings&gt;&gt;</code> (<code>:149-163</code>) from the bound <code>Cache</code>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.Caching.cs:157</code>) calls a bare
+          <code>AddHybridCache()</code> (<code>:159</code>) and sets the defaults through
+          <code>AddOptions&lt;HybridCacheOptions&gt;().Configure&lt;IOptions&lt;CacheSettings&gt;&gt;</code> (<code>:165-179</code>) from the bound <code>Cache</code>
           section (<code>Expiration</code> from <code>DefaultDuration</code>, <code>LocalCacheExpiration</code> from <code>LocalCacheDuration</code> or the
-          30-second <code>LocalCacheDefault</code>), running the host&#39;s <code>configure</code> hook last (<code>:162</code>), then <code>RemoveAll&lt;ICacheService&gt;()</code>
-          (<code>:167</code>) and an <code>AddSingleton&lt;ICacheService&gt;</code> <strong>factory</strong> (<code>:168-181</code>), not the two-generic-argument
+          30-second <code>LocalCacheDefault</code>), running the host&#39;s <code>configure</code> hook last (<code>:178</code>), then <code>RemoveAll&lt;ICacheService&gt;()</code>
+          (<code>:183</code>) and an <code>AddSingleton&lt;ICacheService&gt;</code> <strong>factory</strong> (<code>:184-197</code>), not the two-generic-argument
           <code>AddSingleton&lt;ICacheService, HybridCacheService&gt;</code> form: the lambda resolves the logger (falling back to
           <code>NullLogger</code> when none is registered), the optional <code>IConnectionMultiplexer</code>, the <code>CacheKeyNamespace</code> and the
           <code>IOptions&lt;CacheSettings&gt;</code> itself and hands them to the constructor, rather than leaving the optional
           parameters to the container. Remove-then-add makes the call order-independent against <code>AddInfrastructure</code>,
-          whose <code>AddCaching</code> registers its substrate with <code>TryAddSingleton</code> (<code>:59</code>): the opt-in wins either way.</p>
+          whose <code>AddCaching</code> registers its substrate with <code>TryAddSingleton</code> (<code>:75</code>): the opt-in wins either way.</p>
           <h3 id="tags-are-deferred">Tags are deferred</h3>
           <p><code>HybridCache.RemoveByTagAsync</code> would eventually retire prefix invalidation and its SCAN cost, and it is not
           in this release: adopting tags means every cache-writing call site declares its tags, a public-contract
@@ -406,8 +406,8 @@
           <p><code>Microsoft.Extensions.Caching.Hybrid</code> is pinned in <code>Directory.Packages.props</code> and referenced by
           <code>MMCA.Common.Infrastructure</code>, with lock files regenerated across the solution <strong>and</strong> the out-of-slnx Redis
           tests project (<a href="038-supply-chain-provenance.html">ADR-038</a>). Consumers opt in through the guarded wrapper
-          <code>AddCommonHybridCacheWhenRedisConfigured(configuration)</code> (<code>DependencyInjection.Caching.cs:202-214</code>), which
-          calls <code>AddCommonHybridCache</code> only when the <code>redis</code> connection string is set (<code>:208</code>): ADC calls it in its four service
+          <code>AddCommonHybridCacheWhenRedisConfigured(configuration)</code> (<code>DependencyInjection.Caching.cs:218-230</code>), which
+          calls <code>AddCommonHybridCache</code> only when the <code>redis</code> connection string is set (<code>:224</code>): ADC calls it in its four service
           hosts (for example <code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:210</code>) and Store in its
           three (for example <code>MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:114</code>); MMCA.Helpdesk
           does not (no Redis, so it stays on the memory substrate).</p>
@@ -561,6 +561,21 @@
           <code>DependencyInjection.Caching.cs</code> anchors, <code>DistributedCacheService.cs:153</code> and <code>CacheSettings.cs:42</code>
           are unchanged.</li>
           </ol>
+          <h2 id="revision-2026-10-28">Revision (2026-10-28)</h2>
+          <p>Re-verified against current source. The disjoint <code>hc:</code> keyspace, opt-in registration through the
+          Redis-guarded wrapper, the remove-then-add registration and its order-independence (doc comment
+          <code>DependencyInjection.Caching.cs:138-143</code>), the counter-path L1 bypass, the constructor shape and the
+          consumer adoption are unchanged. Only the <code>DependencyInjection.Caching.cs</code> anchors moved.</p>
+          <ol>
+          <li>Every anchor in <code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.Caching.cs</code>
+          moved by 16 lines in v1.262.0: one <code>using</code> at <code>:1</code> and a <code>RedisOutputCacheOptions</code> <code>PostConfigure</code>
+          block inside <code>AddCaching</code> (<code>:60-73</code>, the ADR-135 output-cache namespacing). That block is a Tier 2
+          change outside this record&#39;s scope (see the Scope note); it does not touch the hybrid substrate.</li>
+          <li>Anchors re-verified against current source: <code>DependencyInjection.Caching.cs</code> <code>TryAddSingleton</code>
+          <code>:75</code>, <code>AddCommonHybridCache</code> <code>:157</code>, <code>AddHybridCache</code> <code>:159</code>, options pipeline <code>:165-179</code> (host hook
+          at <code>:178</code>), <code>RemoveAll</code> <code>:183</code>, factory <code>:184-197</code> (settings passed at <code>:196</code>), wrapper <code>:218-230</code>
+          (Redis guard at <code>:224</code>, <code>connectionName</code> defaulting to <code>redis</code> at <code>:220</code>).</li>
+          </ol>
           <h2 id="related">Related</h2>
           <p><a href="026-caching-strategy.html">ADR-026</a> (amended by this record: its Tier 1 substrate gains a third
           implementation, its 30-second default TTL becomes the local-cache bound as well, its prefix-invalidation
@@ -595,6 +610,7 @@
             <li><a href="#revision-2026-10-07">Revision (2026-10-07)</a></li>
             <li><a href="#revision-2026-10-21">Revision (2026-10-21)</a></li>
             <li><a href="#revision-2026-10-26">Revision (2026-10-26)</a></li>
+            <li><a href="#revision-2026-10-28">Revision (2026-10-28)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

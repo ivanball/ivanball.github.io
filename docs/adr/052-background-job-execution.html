@@ -256,7 +256,12 @@
           within a 5-second budget, logging what it abandons; the producer API is a void <code>Enqueue</code> rather
           than <code>TryEnqueue</code>; the session-scoring queue no longer exists in source; and the bookmark
           cache-eviction signal is a second, coalescing (<code>DropWrite</code>) instance. Revised 2026-10-26: anchors
-          refreshed after the <code>SubmitQuestionHandler</code> and <code>OpenLivePollHandler</code> bodies shifted.</p>
+          refreshed after the <code>SubmitQuestionHandler</code> and <code>OpenLivePollHandler</code> bodies shifted. Revised
+          2026-10-28: the revision at the end of the file records that the in-process-only, per-replica
+          dedup, <code>Wait</code>-versus-<code>DropOldest</code> and scoring-serialization trade-offs describe the pre-supersede
+          design (the Trade-offs text itself is left unmarked, as history), with session scoring recorded as
+          a durable internal command under a per-event distributed claim and ADR-121 as the home of the live
+          ephemeral-queue decision.</p>
           <h2 id="context">Context</h2>
           <p>Some requests trigger work that cannot run inside the request: an AI scoring pass over an event&#39;s
           sessions takes minutes and issues one paid API call per session, and a live-channel broadcast must
@@ -582,6 +587,49 @@
           </ul>
           </li>
           </ol>
+          <h2 id="revision-2026-10-28">Revision (2026-10-28)</h2>
+          <p>Re-verified against current source. <strong>The Decision, the Rationale and the post-commit rule are
+          unchanged</strong>, and so is the ephemeral half, which ADR-121 now owns. What this revision records is
+          that four Trade-offs bullets above still read as live policy although they describe the design
+          this ADR had before it was superseded; they are left in place, unmarked, as history rather than
+          rewritten.</p>
+          <ol>
+          <li><strong>The scoring-related Trade-offs describe the pre-supersede design.</strong> &quot;In-process only&quot; (which
+          names scoring as an in-process job an organizer re-triggers by clicking again, and sends
+          crash-surviving work to the outbox), &quot;Dedup is per replica&quot;,
+          the <code>DropOldest</code>-on-expensive versus <code>Wait</code>-on-ephemeral comparison in &quot;Backpressure is felt
+          differently by the two modes&quot;, and &quot;That is wanted for scoring&quot; in &quot;A drain is a serialization
+          point&quot; all assume the session-scoring queue and its <code>Wait</code> channel. Neither
+          <code>SessionScoringQueue</code>, <code>SessionScoringProcessor</code> nor any <code>BoundedChannelFullMode.Wait</code> channel
+          exists under <code>MMCA.ADC/Source</code>. Session scoring is a durable internal command (ADR-114),
+          <code>Conference.ScoreEventSessions.v1</code>
+          (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Sessions/UseCases/DecisionSupport/ScoreEventSessions/ScoreEventSessionsInternalCommand.cs:37-39</code>),
+          so it survives a restart without the outbox. Its handler takes a distributed claim per event with
+          <code>TryAcquireAsync</code>
+          (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Sessions/UseCases/DecisionSupport/ScoreEventSessions/ScoreEventSessionsInternalCommandHandler.cs:84</code>)
+          and skips a run whose claim is already held (<code>:89</code>, message at <code>:131-132</code>). The claim is
+          cross-replica only when an <code>IConnectionMultiplexer</code> is registered; without Redis
+          <code>IDistributedLock</code> falls back to the process-local <code>InProcessDistributedLock</code>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.Caching.cs:104-117</code>),
+          the same limit item 3 of the Revision (2026-09-19) records. The claim also excludes only passes
+          running at the same time: a duplicate queued behind a running pass still executes, and is cheap
+          only because it skips every session scored since the command&#39;s <code>RequestedAtUtc</code>
+          (<code>ScoreEventSessionsInternalCommandHandler.cs:37-40</code>, <code>:93</code>). No channel drain of this ADR
+          serializes scoring any more, but on each replica Common&#39;s <code>InternalCommandProcessor</code> runs a
+          claimed batch one row at a time
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/InternalCommands/Processing/InternalCommandProcessor.cs:198-212</code>),
+          so a minutes-long pass still delays the internal commands behind it. The full modes in use for
+          this pattern are <code>DropOldest</code> (live channel) and <code>DropWrite</code> (bookmark eviction signal), and the
+          live ephemeral-queue decision is <a href="121-ephemeral-in-process-work-queue.html">ADR-121</a>. The
+          cross-reference to the &quot;dedup is per replica&quot; trade-off in item 3 of the Revision (2026-09-19)
+          stays as written, as the record of what was true then.</li>
+          <li>Anchors re-verified against current source:<ul>
+          <li><code>ScoreEventSessionsInternalCommandHandler.cs</code>: class at <code>:47</code>, <code>TryAcquireAsync</code> at <code>:84</code>,
+          <code>LogRunSkippedNotClaimed</code> call at <code>:89</code> and declaration at <code>:131-132</code>; the two anchors the
+          Revision (2026-10-21) recorded (<code>:84</code>, log message at <code>:132</code>) are unchanged.</li>
+          </ul>
+          </li>
+          </ol>
           
         <div class="doc-foot btn-row">
           <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
@@ -603,6 +651,7 @@
             <li><a href="#revision-2026-09-19">Revision (2026-09-19)</a></li>
             <li><a href="#revision-2026-10-21">Revision (2026-10-21)</a></li>
             <li><a href="#revision-2026-10-26">Revision (2026-10-26)</a></li>
+            <li><a href="#revision-2026-10-28">Revision (2026-10-28)</a></li>
             </ul>
           </nav>
         </aside>

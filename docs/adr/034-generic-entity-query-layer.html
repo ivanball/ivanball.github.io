@@ -263,7 +263,9 @@
           rather than <code>CreatedAtRoute</code>, the filter registry also covers the <code>Email</code> value object, and the
           fail-closed CSV export is recorded among the virtual reads; anchors refreshed.
           Revised 2026-10-26: anchors refreshed after the create&#39;s <code>Location</code> and <code>Created</code> lines and the
-          delete action in <code>AggregateRootEntityControllerBase.cs</code> moved up one line.</p>
+          delete action in <code>AggregateRootEntityControllerBase.cs</code> moved up one line.
+          Revised 2026-10-28: eight filter strategies (seven built-in primitive strategies plus the strongly
+          typed identifier) implement <code>CanParseValue</code>, not six; <code>EmailFilterStrategy</code> takes the default.</p>
           <h2 id="context">Context</h2>
           <p>Every module exposes many entities, and most of them need the same read and write
           surface: list, page, look up for a dropdown, fetch by id, create, delete. Hand
@@ -597,6 +599,29 @@
           left as recorded; the revision 2026-09-07 item 3 <code>LookupNameContract</code> check stays at the <code>:394</code>
           revision 2026-10-21 item 4 gives.</li>
           </ol>
+          <h2 id="revision-2026-10-28">Revision (2026-10-28)</h2>
+          <p>Re-verified against current source. No decision, rationale or behavior changed. The fail-closed
+          value check of revision 2026-07-24 item 1 holds, but its count of implementing strategies is stale;
+          that section is left as recorded and the current set is stated here.</p>
+          <ol>
+          <li><strong>Eight strategies implement <code>CanParseValue</code>, not six.</strong> The default interface member returns
+          <code>true</code> (<code>Source/Core/MMCA.Common.Application/Services/Filtering/IFilterStrategy.cs:44</code>). The
+          private helper <code>ValidateValueParseable</code> checks it
+          (<code>Source/Core/MMCA.Common.Application/Services/Filtering/QueryFilterService.cs:318</code>), called
+          from <code>ValidateSingleFilter</code> at <code>QueryFilterService.cs:297</code> under <code>ValidateFilters</code>
+          (<code>QueryFilterService.cs:182</code>), and the error it adds still names <code>ValidateFilters</code> as its source
+          (<code>QueryFilterService.cs:323</code>). Seven built-in primitive strategies implement it: <code>StringFilterStrategy.cs:26</code>, <code>BoolFilterStrategy.cs:20</code>,
+          <code>IntFilterStrategy.cs:25</code>, <code>LongFilterStrategy.cs:24</code>, <code>DateTimeFilterStrategy.cs:25</code>,
+          <code>DecimalFilterStrategy.cs:24</code> and <code>GuidFilterStrategy.cs:21</code> (all under
+          <code>Source/Core/MMCA.Common.Application/Services/Filtering/</code>), plus
+          <code>StronglyTypedIdFilterStrategy.cs:34</code>. <code>EmailFilterStrategy</code>
+          (<code>Source/Core/MMCA.Common.Application/Services/Filtering/ValueObjects/EmailFilterStrategy.cs:27</code>)
+          does not implement it and so takes the default.</li>
+          <li>Anchors re-verified against current source: <code>IFilterStrategy.CanParseValue</code> default <code>:44</code>,
+          <code>QueryFilterService.cs</code> value check <code>:318</code> and <code>Email</code> registry entry <code>:50</code>. The by-id fast path
+          anchors recorded in revisions 2026-07-25 and 2026-09-07 stay as recorded; revision 2026-10-06
+          item 1 already gives their current locations.</li>
+          </ol>
           
         <div class="doc-foot btn-row">
           <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
@@ -620,6 +645,7 @@
             <li><a href="#revision-2026-10-06">Revision (2026-10-06)</a></li>
             <li><a href="#revision-2026-10-21">Revision (2026-10-21)</a></li>
             <li><a href="#revision-2026-10-26">Revision (2026-10-26)</a></li>
+            <li><a href="#revision-2026-10-28">Revision (2026-10-28)</a></li>
             </ul>
           </nav>
         </aside>

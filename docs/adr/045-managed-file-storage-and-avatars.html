@@ -261,7 +261,8 @@
           Revised 2026-10-24: the Azure Blob implementation moved to MMCA.Common.Azure and an S3-compatible implementation ships in MMCA.Common.Aws (<a href="134-cloud-neutral-core-vendor-adapters.html">ADR-134</a>); see Revision (2026-10-24).
           Revised 2026-10-25: a Google Cloud Storage implementation ships in MMCA.Common.Gcp, so three adapters read the shared <code>FileStorage</code> section, each keyed on its own field; see Revision (2026-10-25).
           Revised 2026-10-25 (image processing): <code>IImageProcessor</code> and its SkiaSharp implementation are ADC&#39;s Identity module&#39;s, not framework types; MMCA.Common keeps <code>IFileStorageService</code> and the dependency-free upload guards, <code>ImageContentSniffer</code> among them; see Revision (2026-10-25, image processing moves to ADC).
-          Revised 2026-10-26: anchors refreshed after MMCA.Common v1.261.0 (the GCS delete posture, the Consequences CHANGELOG cite and the revision-section anchors moved; no behavior changed); see Revision (2026-10-26).</p>
+          Revised 2026-10-26: anchors refreshed after MMCA.Common v1.261.0 (the GCS delete posture, the Consequences CHANGELOG cite and the revision-section anchors moved; no behavior changed); see Revision (2026-10-26).
+          Revised 2026-10-28: the three adapters answer a transport failure with no service response as a <code>FileStorage.UploadFailed</code> / <code>FileStorage.DeleteFailed</code> Result rather than an exception (MMCA.Common v1.261.0), and the anchors are refreshed after v1.265.1; see Revision (2026-10-28).</p>
           <h2 id="context">Context</h2>
           <p>The MAUI capability program (ADR-042) brought MediaPicker/camera within reach, and ADC amended
           BR-116 to include user avatar photos. That needs binary blob storage (the databases store
@@ -295,6 +296,13 @@
           for any HTTP 404 (<code>.../Storage/GcsFileStorageService.cs:94-99</code>); the filter does not tell a
           missing object from a missing bucket, so a delete against a missing bucket also reads as success.</li>
           </ul>
+          <p>All three adapters answer a service failure, and a transport failure that never produced a service
+          response (<code>HttpRequestException</code>, <code>IOException</code>, or a timeout the caller did not request), with a
+          <code>FileStorage.UploadFailed</code> / <code>FileStorage.DeleteFailed</code> Result rather than an exception; the
+          caller&#39;s own cancellation still propagates (<code>IsTransportFailure</code> at
+          <code>.../MMCA.Common.Gcp/Storage/GcsFileStorageService.cs:124-126</code>,
+          <code>.../MMCA.Common.Azure/Storage/AzureBlobFileStorageService.cs:107-109</code> and
+          <code>.../MMCA.Common.Aws/Storage/S3FileStorageService.cs:147-149</code>).</p>
           <p>The container or bucket is provisioned by infrastructure, never created by the app (the GCS
           identity needs only object create and delete, <code>GcpServiceCollectionExtensions.cs:42-44</code>).</p>
           </li>
@@ -355,7 +363,7 @@
           (Storage Blob Data Contributor) for the app identity - a bicep-level grant, not a secret.</li>
           <li>Image decoding is an application dependency, not a framework one: <code>AddInfrastructure</code> registers
           no image processor and MMCA.Common.Infrastructure takes no image library
-          (<code>MMCA.Common/CHANGELOG.md:49</code>), and the framework&#39;s accepted-advisory list is empty
+          (<code>MMCA.Common/CHANGELOG.md:92</code>), and the framework&#39;s accepted-advisory list is empty
           (<code>MMCA.Common/Directory.Build.props:33</code>). ADC confines SkiaSharp&#39;s native libraries to the
           projects that run it: <code>MMCA.ADC.Identity.Infrastructure</code> takes the managed assembly only
           (<code>MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Infrastructure/MMCA.ADC.Identity.Infrastructure.csproj:10</code>),
@@ -649,6 +657,43 @@
           </ul>
           </li>
           </ol>
+          <h2 id="revision-2026-10-28">Revision (2026-10-28)</h2>
+          <p>Re-verified against current source. The storage abstraction, the three adapters and the keys they
+          read, the avatar contract, the GCS delete posture and the durable blob deletion are unchanged; one
+          adapter behavior the 2026-10-26 revision missed is added to the Decision, and the 1.262.0 to
+          1.265.1 sections at the top of CHANGELOG shifted every release cite below them.</p>
+          <ol>
+          <li><strong>Transport failures are Results.</strong> MMCA.Common v1.261.0 (M261, <code>MMCA.Common/CHANGELOG.md:68</code>)
+          made the S3, Cloud Storage and Blob file stores answer a transport failure that never produced a
+          service response (<code>HttpRequestException</code>, <code>IOException</code>, or a timeout the caller did not request)
+          with the <code>FileStorage.UploadFailed</code> / <code>FileStorage.DeleteFailed</code> Result instead of letting the
+          exception escape as a 500, while the caller&#39;s own cancellation still propagates. Each service
+          carries the same <code>IsTransportFailure</code> predicate
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Gcp/Storage/GcsFileStorageService.cs:124-126</code>, upload
+          and delete filters at <code>:76</code> and <code>:108</code>, codes at <code>:72</code>, <code>:80</code>, <code>:104</code>, <code>:112</code>;
+          <code>MMCA.Common/Source/Hosting/MMCA.Common.Azure/Storage/AzureBlobFileStorageService.cs:107-109</code>;
+          <code>MMCA.Common/Source/Hosting/MMCA.Common.Aws/Storage/S3FileStorageService.cs:147-149</code>). The
+          2026-10-26 Status sentence and revision lead, which say no behavior changed after v1.261.0, are
+          left as recorded and are corrected by this item.</li>
+          <li>Anchors re-verified against current source:<ul>
+          <li>The GCS delete still answers success for a 404 in the <code>GoogleApiException</code> filter at
+          <code>GcsFileStorageService.cs:94-99</code> (<code>DeleteAsync</code> at <code>:87</code>, class at <code>:25</code>), where the Decision
+          cites it.</li>
+          <li>The erasure path schedules the blob delete inside the transaction at
+          <code>MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Application/Users/UseCases/DeleteUser/DeleteUserHandler.cs:66-76</code>
+          (call at <code>:75</code>), through <code>ScheduleAvatarBlobDeletionAsync</code> (<code>:81-91</code>, <code>ScheduleAsync</code> at
+          <code>:83-85</code>), and a failed schedule fails the erasure (<code>:90</code>).</li>
+          <li>The <code>aws-integration</code> job is at <code>MMCA.Common/.github/workflows/ci.yml:934</code> and the
+          <code>gcp-integration</code> job at <code>:974</code>; each says it is not a required check (<code>:945-946</code>, <code>:993</code>).</li>
+          <li>Release cites in <code>MMCA.Common/CHANGELOG.md</code>: the v1.259.0 removal at <code>:92</code> (heading <code>:88</code>;
+          the Consequences cite is re-pointed in place), the v1.258.0 SkiaSharp swap at <code>:98</code> (heading
+          <code>:94</code>), the Gcp adapter and its <code>GcsBucket</code> gate at <code>:121-122</code>, <code>gcp-integration</code> not required
+          at <code>:128</code>, the v1.256.0 removal of the <code>FileStorage</code> startup check at <code>:144-150</code>, the S3
+          adapter entry at <code>:159</code> and <code>aws-integration</code> at <code>:164</code>. The <code>MMCA.Common/UPGRADING.md</code> cites of
+          2026-10-26 (<code>:46</code>, <code>:67</code>, <code>:78</code>, <code>:85</code>) still hold.</li>
+          </ul>
+          </li>
+          </ol>
           
         <div class="doc-foot btn-row">
           <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
@@ -672,6 +717,7 @@
             <li><a href="#revision-2026-10-25">Revision (2026-10-25)</a></li>
             <li><a href="#revision-2026-10-25-image-processing-moves-to-adc">Revision (2026-10-25, image processing moves to ADC)</a></li>
             <li><a href="#revision-2026-10-26">Revision (2026-10-26)</a></li>
+            <li><a href="#revision-2026-10-28">Revision (2026-10-28)</a></li>
             </ul>
           </nav>
         </aside>

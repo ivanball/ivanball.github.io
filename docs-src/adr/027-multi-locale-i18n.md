@@ -1,7 +1,7 @@
 # ADR-027: Multi-Locale Internationalization (Supersedes ADR-011)
 
 ## Status
-Accepted (2026-06-27, amended 2026-07-02, 2026-07-03, 2026-07-09, 2026-07-29, and 2026-09-15: the MudBlazor localization interceptor is replaced so no dependency assigns the current culture on a hybrid head; corrected 2026-08-01: the pseudo-locale CI gate is required on all three browser engines, and the hybrid applier sets only the thread defaults; revised 2026-10-01: four statements corrected to match the code; revised 2026-10-06: displayed times follow the viewer's clock except a conference schedule, which follows the event's own time zone (Decision 11), and client-synthesized HTTP failures localize by error code; revised 2026-10-07: when the caller supplies a localizer, a code-keyed client failure resolves from the framework's own `SharedResource` pair before the English fallback, and the stale "only coverage collection is chromium-only" note on the pseudo-locale gate is removed). Revised 2026-10-21: Decision 10 names the server-side account-email caller of `SupportedCultures.ResolveClosest`, the `Http.{status}` key count is corrected to eleven, and anchors are refreshed. Revised 2026-10-26: the pseudo-locale sentinel check is no longer retried (the test sets the culture cookie and waits for network idle), Decision 11 states that formatted times render empty rather than in UTC until the viewer's zone resolves, and anchors are refreshed. **Supersedes [ADR-011](011-single-locale-i18n.md)** (single-locale by design).
+Accepted (2026-06-27, amended 2026-07-02, 2026-07-03, 2026-07-09, 2026-07-29, and 2026-09-15: the MudBlazor localization interceptor is replaced so no dependency assigns the current culture on a hybrid head; corrected 2026-08-01: the pseudo-locale CI gate is required on all three browser engines, and the hybrid applier sets only the thread defaults; revised 2026-10-01: four statements corrected to match the code; revised 2026-10-06: displayed times follow the viewer's clock except a conference schedule, which follows the event's own time zone (Decision 11), and client-synthesized HTTP failures localize by error code; revised 2026-10-07: when the caller supplies a localizer, a code-keyed client failure resolves from the framework's own `SharedResource` pair before the English fallback, and the stale "only coverage collection is chromium-only" note on the pseudo-locale gate is removed). Revised 2026-10-21: Decision 10 names the server-side account-email caller of `SupportedCultures.ResolveClosest`, the `Http.{status}` key count is corrected to eleven, and anchors are refreshed. Revised 2026-10-26: the pseudo-locale sentinel check is no longer retried (the test sets the culture cookie and waits for network idle), Decision 11 states that formatted times render empty rather than in UTC until the viewer's zone resolves, and anchors are refreshed. Revised 2026-10-28: anchors refreshed after the `ci.yml` and `Directory.Packages.props` line shifts. **Supersedes [ADR-011](011-single-locale-i18n.md)** (single-locale by design).
 
 ## Context
 ADR-011 recorded single-locale (en-US) as a deliberate, *revisitable* non-goal and sketched what
@@ -116,7 +116,7 @@ machine `Code`, which makes server-side error localization a keyed lookup rather
    all three browser engines**, not just one: `ui-e2e` is a `chromium, firefox, webkit` matrix whose
    legs are each a required merge check (`MMCA.Common/.github/workflows/ci.yml:232`), and the run
    step executes the whole E2E project on every leg with no per-class or per-browser filter
-   (`:344-345`). A leak-guard
+   (`:372-377`, the `dotnet test` command at `:377`). A leak-guard
    test asserts the sentinel is absent under `en-US` (`PseudoLocalizationE2ETests.cs:71-72`).
    Production hosts are unchanged: they keep
    `qps-Ploc` Development-only.
@@ -406,6 +406,17 @@ describes a sentinel retry, and Decision 11 now states what a viewer sees before
    `IsDevelopment()` at `:81-84`); `ViewerTimeZone.cs:22` (class), `:54-90` (`EnsureResolvedAsync`),
    `:128-131` (`ResolveZone`), `:36` (UTC default), `:15-16` (server-zone remark) and `:118-119`
    (`Format`), replacing `:18`, `:49-87`, `:122-125`, `:32`, `:13-16` and `:112-113`.
+
+## Revision (2026-10-28)
+Re-verified against current source. No decision or rationale changed; the Decision 8 statement that
+the `ui-e2e` run step executes the whole E2E project on every leg with no per-class or per-browser
+filter still holds, and only its anchors moved.
+
+1. Anchors re-verified against current source: the `ui-e2e` matrix still at
+   `MMCA.Common/.github/workflows/ci.yml:232`; its run step at `:372-377`, with `E2E_BROWSER` taken
+   from the matrix at `:376` and the `dotnet test` command at `:377` passing only
+   `--minimum-expected-tests 1` (the 2026-10-26 `:344-345` is stale); the MudBlazor 9.11.0 pin at
+   `MMCA.Common/Directory.Packages.props:239` (the 2026-10-21 `:183` is stale).
 
 ## Related
 [ADR-011](011-single-locale-i18n.md) (superseded), [ADR-013](013-result-pattern.md) (the `Error.Code`

@@ -15,6 +15,8 @@ shipped declarations are unchanged.
 Revised 2026-10-26: Context and Decision point 11 no longer list the message-bus provider as a plain
 enum, because the `MessageBusProvider` enum was replaced by a string with built-in values on
 `MessageBusProviders`.
+Revised 2026-10-28: anchors refreshed after the Shared and Infrastructure public-API baselines
+moved; the eighteen shipped declarations are unchanged.
 
 ## Context
 A bounded set of named values shows up everywhere in this workspace: the state that triggered a
@@ -147,9 +149,9 @@ whose members need behavior or data, and nothing in the framework pushes a consu
 
 12. **The surface is frozen public API.** Every member of the base and the factory is in
     `MMCA.Common.Shared`'s shipped baseline
-    (`MMCA.Common/Source/Core/MMCA.Common.Shared/PublicAPI.Shipped.txt:567-572`, `:766-770`,
-    `:994-996`), and both converters are in Infrastructure's
-    (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/PublicAPI.Shipped.txt:356-357`, `:360-361`).
+    (`MMCA.Common/Source/Core/MMCA.Common.Shared/PublicAPI.Shipped.txt:578-583`, `:780-784`,
+    `:1016-1018`), and both converters are in Infrastructure's
+    (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/PublicAPI.Shipped.txt:347-348`, `:351-352`).
     Under
     ADR-015's RS0016/RS0017 gate, removing or reshaping any of it is a reviewable text diff and a
     breaking change to the package surface, which is precisely why leaving an unadopted capability
@@ -201,8 +203,8 @@ whose members need behavior or data, and nothing in the framework pushes a consu
   fails a build when a set that would benefit from behavior stays a `switch`, and nothing fails when
   a trivial set is declared as a smart enumeration.
 - **Public API surface with no consumer.** Eighteen shipped declarations across two packages
-  (`Shared/PublicAPI.Shipped.txt:567-572`, `:766-770`, `:994-996`;
-  `Infrastructure/PublicAPI.Shipped.txt:356-357`, `:360-361`) are frozen under ADR-015 and can only
+  (`Shared/PublicAPI.Shipped.txt:578-583`, `:780-784`, `:1016-1018`;
+  `Infrastructure/PublicAPI.Shipped.txt:347-348`, `:351-352`) are frozen under ADR-015 and can only
   be removed as a breaking change.
 - **The JSON attribute does not inherit.** A concrete enumeration serialized outside `AddAPI`'s
   options (a hand-built `JsonSerializerOptions`, a `System.Text.Json` call in a test or a tool)
@@ -301,6 +303,21 @@ One example, in the Context and in Decision point 11, is corrected.
    `JwtSigningAlgorithm`
    (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Auth/JwtSigningAlgorithm.cs:21`) are still
    plain enums.
+
+## Revision (2026-10-28)
+Re-verified against current source. No decision, rationale or content changed, adoption is still
+zero, and the shipped surface still holds eighteen declarations (fourteen in Shared, four in
+Infrastructure); only the public-API anchors moved. The anchors recorded in the 2026-10-21
+revision above are superseded by the ones below and in the live sections.
+
+1. Anchors re-verified against current source, in Decision point 12 and the Trade-offs: the Shared
+   type block (base type, constructor, `Name`, `Value`, factory type, factory constructor) now sits
+   at `MMCA.Common/Source/Core/MMCA.Common.Shared/PublicAPI.Shipped.txt:578-583`, the override block
+   (`Equals`, `GetHashCode`, `ToString`, `CanConvert`, `CreateConverter`) at `:780-784` and the
+   static block (`All`, `FromName`, `FromValue`) at `:1016-1018`; Infrastructure's
+   `EnumerationValueConverter` at
+   `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/PublicAPI.Shipped.txt:347-348` and
+   `NullableEnumerationValueConverter` at `:351-352`.
 
 ## Related
 [ADR-037](037-field-level-encryption-at-rest.md) (the precedent for recording a shipped, tested and

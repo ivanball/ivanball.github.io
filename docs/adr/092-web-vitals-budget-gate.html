@@ -261,7 +261,9 @@
           Revised 2026-10-21: anchors refreshed after later edits to both apps&#39; <code>deploy.yml</code> files and the
           Helpdesk package pins.
           Revised 2026-10-26: anchors refreshed after later edits to both apps&#39; <code>deploy.yml</code> files, ADC&#39;s
-          <code>e2e.yml</code>, MMCA.Common&#39;s <code>ci.yml</code> and <code>FACTS.md</code>.</p>
+          <code>e2e.yml</code>, MMCA.Common&#39;s <code>ci.yml</code> and <code>FACTS.md</code>.
+          Revised 2026-10-28: anchors refreshed after an apt-mirror step moved MMCA.Common&#39;s <code>ui-e2e</code> test
+          step in <code>ci.yml</code>.</p>
           <h2 id="context">Context</h2>
           <p>Rubric section 23 asks for client-side performance that is measured rather than assumed, naming Core
           Web Vitals (LCP, INP, CLS) or an equivalent as the evidence
@@ -459,8 +461,8 @@
           <li><strong>The green-run artifact is written but not kept.</strong> Both workflows upload the diagnostics bundle
           only on failure (ADC <code>e2e.yml:390-396</code>, Store <code>:458-463</code>), and MMCA.Common&#39;s <code>ui-e2e</code> job sets no
           <code>WEB_VITALS_OUTPUT_DIR</code> at all (its test step sets only <code>E2E_HEADLESS</code> and <code>E2E_BROWSER</code>,
-          <code>ci.yml:342-344</code>) and uploads no Web Vitals artifact of its own (its one upload is Playwright
-          traces, on failure only, <code>ci.yml:347-353</code>), so the JSON
+          <code>ci.yml:374-376</code>) and uploads no Web Vitals artifact of its own (its one upload is Playwright
+          traces, on failure only, <code>ci.yml:379-385</code>), so the JSON
           lands beside the test binaries and is discarded with the runner. There is no time series: the
           sample line in the run log is the only surviving record of a green run.</li>
           <li><strong>Nothing stops a ceiling being raised to silence a red gate.</strong> As with ADR-060&#39;s baseline, the
@@ -560,6 +562,18 @@
           MMCA.Common <code>ci.yml</code> <code>ui-e2e</code> <code>:223</code>, matrix <code>:232</code>, test-step env <code>:342-344</code>, failure-only trace
           upload <code>:347-353</code>.</li>
           </ol>
+          <h2 id="revision-2026-10-28">Revision (2026-10-28)</h2>
+          <p>Re-verified against current source. The decision, the budget, the measurement flow, the
+          chromium-only ui-scoped <code>e2e-gate</code>, the failure-only diagnostics upload and MMCA.Common&#39;s lack of
+          any <code>WEB_VITALS_OUTPUT_DIR</code> in its <code>ui-e2e</code> job are unchanged, as are both apps&#39; recorded
+          calibration maxima (ADC <code>WebVitalsTests.cs:22-24</code>, Store <code>:17-19</code>). Only line anchors in
+          MMCA.Common&#39;s <code>ci.yml</code> moved, after an apt-mirror step was inserted ahead of the <code>ui-e2e</code> test step;
+          the dated revisions above keep the anchors they were written with.</p>
+          <ol>
+          <li>Anchors re-verified against current source: MMCA.Common <code>ci.yml</code> <code>ui-e2e</code> <code>:223</code>, matrix <code>:232</code>,
+          test step <code>:372</code>, test-step env <code>:374-376</code> (<code>E2E_HEADLESS</code> <code>:375</code>, <code>E2E_BROWSER</code> <code>:376</code>),
+          failure-only trace upload <code>:379-385</code> (<code>if: failure()</code> <code>:380</code>).</li>
+          </ol>
           <h2 id="related">Related</h2>
           <p><a href="063-accessibility-conformance-gate.html">ADR-063</a> (the structural sibling: the same package, the same
           Playwright suite and the same deploy gate, applied to WCAG 2.1 AA instead of load performance),
@@ -592,6 +606,7 @@
             <li><a href="#revision-2026-10-07">Revision (2026-10-07)</a></li>
             <li><a href="#revision-2026-10-21">Revision (2026-10-21)</a></li>
             <li><a href="#revision-2026-10-26">Revision (2026-10-26)</a></li>
+            <li><a href="#revision-2026-10-28">Revision (2026-10-28)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

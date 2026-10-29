@@ -10,6 +10,7 @@ Revised 2026-10-06: the minted signing secret is never printed (an operator reve
 Revised 2026-10-07: anchors refreshed after the v1.233.0 release.
 Revised 2026-10-21: webhook verification accepts either the runtime or the configured signing secret, and the startup reconcile runs under an ADR-108 distributed lock so, with Redis present as in production, one replica mints at a time.
 Revised 2026-10-26: anchors refreshed after the Store Sales, Gateway and `main.bicep` edits and the Common edge rate-limiting kit changes since 2026-10-21.
+Revised 2026-10-28: anchors refreshed after the Store Sales, Gateway and `main.bicep` edits and the Common caching registration changes since 2026-10-26.
 ## Context
 Four ADRs already cover how a message crosses a boundary in this workspace. ADR-003 decides how an
 event leaves a service (outbox, at-least-once). ADR-021 decides how a redelivered broker message is
@@ -53,12 +54,12 @@ and **a self-registering, self-provisioning endpoint registration at startup**.
   carries no `HttpRequest` block at all, so `Version` and `VersionPolicy` stay unset
   (`appsettings.json:164-168`), unlike `catalog` (`:146-154`) and `identity` (`:155-163`) which pin
   `Version` 2 with `RequestVersionExact` (`:148-149`, `:157-158`); the reasoning is at
-  `MMCA.Store/Source/Hosts/MMCA.Store.Gateway/Program.cs:128-137`, which also notes that the shared
+  `MMCA.Store/Source/Hosts/MMCA.Store.Gateway/Program.cs:131-140`, which also notes that the shared
   cluster default deliberately carries no version pair so it can never reach the sales cluster and
   downgrade the webhook path. That is why Sales keeps the ADR-012 mixed-endpoint profile: its
   container app's ingress stays `transport: 'http'` for REST plus this webhook
-  (`MMCA.Store/infra/main.bicep:1839`), with a TCP-passthrough `additionalPortMappings` entry carrying
-  the h2c gRPC port alongside it (`:1846-1852`).
+  (`MMCA.Store/infra/main.bicep:1840`), with a TCP-passthrough `additionalPortMappings` entry carrying
+  the h2c gRPC port alongside it (`:1847-1853`).
 - **The status code encodes ACCEPTED, not PROCESSED.** Five error codes return 400, held in a
   `FrozenSet` named `RejectionCodes`: `SignatureVerificationFailed`, `ParseFailed`, `SecretMissing`,
   `PayloadMissing` and `SignatureMissing` (`PaymentsController.cs:39-46`, defined at
@@ -78,14 +79,14 @@ and **a self-registering, self-provisioning endpoint registration at startup**.
   retrying those would fail identically forever (`PaymentsController.cs:48-56,100-116,118`).
 - **Verification and parsing are separate steps, so the three provider-side reasons stay distinguishable.**
   `ParseWebhookEvent`
-  (`MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Infrastructure/Payments/Stripe/StripePaymentService.cs:318`)
-  verifies the signature first (`:343`, `EventUtility.ValidateSignature` at `:606`) and returns
-  `SignatureVerificationFailed` when it fails (`:343-353`), then runs `EventUtility.ParseEvent` with
+  (`MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Infrastructure/Payments/Stripe/StripePaymentService.cs:332`)
+  verifies the signature first (`:357`, `EventUtility.ValidateSignature` at `:644`) and returns
+  `SignatureVerificationFailed` when it fails (`:357-367`), then runs `EventUtility.ParseEvent` with
   `throwOnApiVersionMismatch: false`, so an account whose API version rolled ahead of the pinned
-  library does not reject a correctly signed event (`:357-360`). A missing secret is named as its own
-  deployment gap rather than reported as a bad signature (`:330-341`). The method's remarks record
+  library does not reject a correctly signed event (`:371-374`). A missing secret is named as its own
+  deployment gap rather than reported as a bad signature (`:344-355`). The method's remarks record
   why one combined `ConstructEvent` call is not used: it reports an API-version mismatch or an
-  unparseable body as a signature failure (`:302-307`), and the controller names the missing secret
+  unparseable body as a signature failure (`:315-321`), and the controller names the missing secret
   as the third cause that read the same way (`PaymentsController.cs:95-98`).
 - **A rejection logs at `Critical`, everything else at `Warning`.** `LogWebhookRejected` is a
   source-generated `Critical` message that names the code, the message, and the operational
@@ -112,11 +113,11 @@ and **a self-registering, self-provisioning endpoint registration at startup**.
 - **The provider-side endpoint registers itself at startup.** `StripeWebhookRegistrationService` is a
   `BackgroundService` (`StripeWebhookRegistrationService.cs:47-54`) registered by
   `AddModuleSalesInfrastructure`
-  (`MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Infrastructure/DependencyInjection.cs:39`). It
+  (`MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Infrastructure/DependencyInjection.cs:47`). It
   skips entirely when `WebhookBaseUrl` is empty, which is the local-development path where the Stripe
   CLI forwards instead (`:94-98`), and skips with a `Warning` when `SecretKey` is empty (`:100-104`).
   The expected URL is `WebhookBaseUrl` plus the constant `/Payments/webhook` (`:56,130`); production
-  injects `Stripe__WebhookBaseUrl` as the Gateway FQDN (`main.bicep:1947`), so the registered endpoint
+  injects `Stripe__WebhookBaseUrl` as the Gateway FQDN (`main.bicep:1948`), so the registered endpoint
   is the Gateway route above. It subscribes exactly three event types (`:78-83`), and warns when an
   existing endpoint is missing any of them (`:325-335`).
 - **One replica reconciles at a time.** Listing, deleting and creating endpoints is check-then-act on
@@ -130,8 +131,8 @@ and **a self-registering, self-provisioning endpoint registration at startup**.
   `LogRegistrationNotClaimed` and leaves Stripe alone (`:147-155`, declared at `:357-358`). The lock
   spans replicas only when Redis is present: Common registers `RedisDistributedLock` when an
   `IConnectionMultiplexer` is registered and a process-local `InProcessDistributedLock` otherwise
-  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.Caching.cs:88-101`).
-  Production Sales is given `ConnectionStrings__redis` (`MMCA.Store/infra/main.bicep:1909`); without
+  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.Caching.cs:98-118`).
+  Production Sales is given `ConnectionStrings__redis` (`MMCA.Store/infra/main.bicep:1910`); without
   it, two replicas booting together can still each mint.
 - **It deletes only endpoints it created itself.** Every auto-created endpoint carries the description
   prefix `Auto-registered by MMCA` (`:63,225-229`). `IsStaleAutoRegistered` returns `false` for any
@@ -147,9 +148,9 @@ and **a self-registering, self-provisioning endpoint registration at startup**.
   (`:242`) and then to the singleton `StripeWebhookSecretProvider` (`:243`), a volatile-backed holder
   (`StripeWebhookSecretProvider.cs:17-27`). On every incoming event `StripePaymentService` builds its
   candidate secrets from the runtime value and then the configured `Stripe:WebhookSecret`, keeping
-  the non-empty, distinct ones (`StripePaymentService.cs:322-328`), and accepts the signature when
-  EITHER candidate validates (`:343`, loop at `:595-617`); `SecretMissing` is returned only when both
-  are empty (`:330`). The creation is announced at `Critical` with the endpoint id only
+  the non-empty, distinct ones (`StripePaymentService.cs:336-342`), and accepts the signature when
+  EITHER candidate validates (`:357`, loop at `:633-655`); `SecretMissing` is returned only when both
+  are empty (`:344`). The creation is announced at `Critical` with the endpoint id only
   (`StripeWebhookRegistrationService.cs:245,368-369`), and that message tells the operator to reveal
   the endpoint's signing secret in the Stripe Dashboard and save it in `Stripe:WebhookSecret`; the
   secret itself is never written to a log or a console stream (`:21-25,240-241`). When a secret is
@@ -183,7 +184,7 @@ ahead of the configured one (`:183`), a replica that does not acquire the lock m
   pointed at the cases a retry can actually fix.
 - **Three named rejection reasons beat one.** A tampered payload, an unparseable body and a missing
   signing secret need three different responses from a human, and the collapsed version sent on-call
-  after the wrong thing (`StripePaymentService.cs:302-307`, `PaymentsController.cs:95-98`).
+  after the wrong thing (`StripePaymentService.cs:315-321`, `PaymentsController.cs:95-98`).
 - **`Critical` is the level this environment can see.** The production log floor is `Warning`
   (`PaymentsController.cs:109-110`), and a total payment-status outage that logs at `Warning` is
   indistinguishable from noise: that is exactly how it went unnoticed for weeks.
@@ -195,18 +196,18 @@ ahead of the configured one (`:183`), a replica that does not acquire the lock m
   re-registration, never the removal of an operator's endpoint (`:277-278,282-286`).
 - **The runtime secret provider keeps the very first boot working.** Without it, an auto-created
   endpoint would reject every delivery until a human copied the secret into configuration and
-  redeployed (`:235-243`, `StripePaymentService.cs:322-328`).
+  redeployed (`:235-243`, `StripePaymentService.cs:336-342`).
 - **Accepting either candidate secret keeps an operator's roll from breaking delivery.** The shared
   entry outranks configuration only for a secret this service minted, and it lives 365 days, so after
   an operator rolls the signing secret in Stripe or re-creates the endpoint by hand and updates the
   configuration, the adopted value is stale while the configured one is current. Trying both keeps
   deliveries verifying through that window, and widens nothing, since each candidate is a secret this
-  deployment trusts (`StripePaymentService.cs:309-315`).
+  deployment trusts (`StripePaymentService.cs:322-330`).
 - **The lock makes the shared secret hold under a simultaneous scale-out.** Sharing the minted secret
   only helps a replica that reads it after the mint; two replicas reconciling at once could both mint.
   Serializing the reconcile and re-reading the store under the lock turns the second replica into an
   adopter (`StripeWebhookRegistrationService.cs:37-45,157-160`), provided the lock is the Redis one
-  (`DependencyInjection.Caching.cs:88-101`) and the holder publishes within the 30-second wait
+  (`DependencyInjection.Caching.cs:98-118`) and the holder publishes within the 30-second wait
   (`StripeWebhookRegistrationService.cs:76`).
 
 ## Trade-offs
@@ -220,10 +221,10 @@ ahead of the configured one (`:183`), a replica that does not acquire the lock m
   again only on a later start; the 2-minute time to live bounds how long a dead holder blocks the key
   (`:65-69`). Nor does it look at the shared store again: the store is read only during
   registration (`:139,152,160`), and verification reads only the in-process provider and the
-  configured value (`StripePaymentService.cs:322-328`). A replica that gives up before the holder
+  configured value (`StripePaymentService.cs:336-342`). A replica that gives up before the holder
   publishes (the holder outlasts the 30-second wait at `:76`, or crashes) therefore runs on the
   configured value alone until it restarts, answering `SecretMissing` when that value is empty
-  (`StripePaymentService.cs:330`) or rejecting signatures when it is stale.
+  (`StripePaymentService.cs:344`) or rejecting signatures when it is stale.
 - **Persisting a minted secret takes an operator trip to the Stripe Dashboard.** The secret is never
   written to a log or a console stream, because container stdout and stderr land in Log Analytics
   (`:21-25`); the `Critical` creation log names only the endpoint id and tells the operator to reveal
@@ -237,7 +238,7 @@ ahead of the configured one (`:183`), a replica that does not acquire the lock m
 - **A stale shared entry is tolerated, not evicted.** After an operator rolls the secret or
   re-creates the endpoint by hand, the shared entry can hold a superseded secret for up to its 365-day
   lifetime; verification still succeeds against the configured value because either candidate is
-  accepted (`StripePaymentService.cs:309-315,343`). Nothing removes the stale entry automatically: the
+  accepted (`StripePaymentService.cs:322-330,357`). Nothing removes the stale entry automatically: the
   `Critical` rejection log tells the operator that both candidates were tried and to evict the shared
   entry and restart when the configured value is right
   (`MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.API/Controllers/PaymentsController.cs:125`). The
@@ -247,7 +248,7 @@ ahead of the configured one (`:183`), a replica that does not acquire the lock m
   the Stripe dashboard's delivery view, so it has to surface through our own telemetry: the `Warning`
   log (`PaymentsController.cs:115`) and, for an order left stuck because no webhook ever completed the
   work, the ADR-054 reconciliation sweep (`PaymentReconciliationService`,
-  `DependencyInjection.cs:40-42`). The 200 for a post-acceptance failure is itself pinned by test
+  `DependencyInjection.cs:48-50`). The 200 for a post-acceptance failure is itself pinned by test
   (`PaymentsControllerTests.cs:67-74`).
 - **A configured secret is trusted, never validated.** A stale `Stripe:WebhookSecret` cannot be
   detected at startup and is discovered only on the first rejected delivery
@@ -262,7 +263,7 @@ ahead of the configured one (`:183`), a replica that does not acquire the lock m
   in-memory fallback degrades to per-process behavior (`:30-32`), so a restart there mints a new
   secret that supersedes the previous one until a human saves a value into configuration.
 - **The endpoint is anonymous, internet-reachable and exempt from the edge rate limiter.** Signature
-  verification is the only authentication (`StripePaymentService.cs:318-353`); an unsigned or wrongly
+  verification is the only authentication (`StripePaymentService.cs:332-367`); an unsigned or wrongly
   signed request reaches the handler pipeline before it is rejected, and each rejection emits a
   `Critical` log, so a hostile caller can generate `Critical` volume. Nothing meters that at the
   Gateway: `GatewayRateLimiting.BypassPathPrefixes` lists `/Payments`
@@ -271,7 +272,7 @@ ahead of the configured one (`:183`), a replica that does not acquire the lock m
   ceiling
   (`MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Gateway/GatewayRateLimitingExtensions.cs:87-113,205-208,233-236,246-253,271-278,330-337`).
   The exemption is deliberate and stated where the kit is wired up
-  (`MMCA.Store/Source/Hosts/MMCA.Store.Gateway/Program.cs:85-93`): a 429 is a non-2xx, so throttling
+  (`MMCA.Store/Source/Hosts/MMCA.Store.Gateway/Program.cs:88-96`): a 429 is a non-2xx, so throttling
   Stripe buys the retry storm and the disabled endpoint this whole ADR exists to avoid. The price is
   that the rejection-log amplification path is bounded only by the caller's own sending rate.
 - **Single-module adoption.** None of this lives in MMCA.Common, so a second inbound webhook (in this
@@ -482,6 +483,37 @@ recorded here.
      `:233-236` and `:246-253`, the concurrency partition at `:271-278`, the chained global limiter
      at `:330-337`; `BypassPathPrefixes` still lists `/Payments` at
      `MMCA.Store/Source/Hosts/MMCA.Store.Gateway/appsettings.json:20`.
+
+## Revision (2026-10-28)
+Re-verified against current source. The ingress contract, the Decision, the Rationale and the
+Trade-offs are unchanged: verification still builds the runtime then the configured candidate,
+returns `SecretMissing` only when both are empty and checks the signature before `ParseEvent`; the
+reconcile lock is still Redis-backed when a multiplexer is registered; Sales keeps the mixed `http`
+ingress. Only anchors moved. They were re-pointed in Decision, Rationale and Trade-offs; the anchors
+inside the earlier dated revisions stay as written, and the current locations are recorded here.
+
+1. Anchors re-verified against current source:
+   - `StripePaymentService.cs`
+     (`MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Infrastructure/Payments/Stripe/StripePaymentService.cs`):
+     `ParseWebhookEvent` at `:332`, remarks at `:314-331` (collapsed-call note `:315-321`,
+     either-candidate paragraph `:322-330`), candidate secrets at `:336-342`, the missing-secret
+     branch at `:344-355`, the `TryValidateSignature` call and signature-failure return at
+     `:357-367`, `ParseEvent` with `throwOnApiVersionMismatch: false` at `:371-374` (call `:374`),
+     `TryValidateSignature` at `:633-655` with `EventUtility.ValidateSignature` at `:644`; the
+     authentication range is `:332-367`.
+   - `MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Infrastructure/DependencyInjection.cs`:
+     `StripeWebhookRegistrationService` registered at `:47`, `PaymentReconciliationService` comment
+     and registration at `:48-50`.
+   - `MMCA.Store/infra/main.bicep` (inside `salesApp`, `:1821`): ingress `transport: 'http'` at
+     `:1840`, `additionalPortMappings` at `:1847-1853`, `ConnectionStrings__redis` at `:1910`,
+     `Stripe__WebhookBaseUrl` at `:1948`.
+   - `MMCA.Store/Source/Hosts/MMCA.Store.Gateway/Program.cs`: edge-kit comment at `:88-95` (the
+     `/Payments` bypass sentence `:92-94`) and the `AddGatewayRateLimiting` call at `:96`; the
+     `AddMmcaGateway` version-pair reasoning at `:131-140` (shared default carries no version pair
+     `:139-140`).
+   - `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.Caching.cs`: the
+     `IDistributedLock` registration at `:98-118` (comment `:98-103`, Redis branch `:106-113`,
+     in-process fallback `:115-117`).
 
 ## Related
 ADR-003 (outbound at-least-once delivery, the other end of the same family), ADR-021 (broker-side

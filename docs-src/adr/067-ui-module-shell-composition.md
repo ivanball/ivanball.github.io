@@ -22,7 +22,8 @@ wiring, and after `ResultUiExtensions.NotifyOnFailure` moved. Revised 2026-10-27
 `PublicAppBarComponentTypes` member added in MMCA.Common v1.265.0, an app bar slot rendered for every
 visitor while `AppBarComponentTypes` stay signed-in only, lists the two contract members the Decision
 had not named (`FooterComponentTypes`, `NotFoundContentType`), and re-anchors the `IUIModule`,
-`MainLayout` and `NavMenu` citations.
+`MainLayout` and `NavMenu` citations. Revised 2026-10-28: anchors refreshed after both Blazor Web
+hosts gained a `MapCommonServiceWorker()` call ahead of their assembly wiring.
 
 ## Context
 ADR-059 decided how a module plugs into the **server**: an `IModule` implementation is discovered by
@@ -57,7 +58,7 @@ Ship the application shell in the framework package and let each module plug int
   (`MMCA.Common.UI/Common/NavItem.cs:20`, ADR-027). The resource type
   is positional rather than optional so a nav entry cannot be declared with a literal title.
   `RequiredPermission` is matched against the principal's permission claims
-  (`AuthClaimTypes.Permission`, compared ordinally, `MMCA.Common.Shared/Auth/ClaimsPrincipalExtensions.cs:94`),
+  (`AuthClaimTypes.Permission`, compared ordinally, `MMCA.Common.Shared/Auth/ClaimsPrincipalExtensions.cs:95-98`),
   so an entry states the capability it needs rather than the role a given host grants it through.
 - **The router discovers module pages at runtime from the registrations.** `Routes.razor` injects
   `IEnumerable<IUIModule>` (`MMCA.Common.UI/Routes.razor:7`) and hands
@@ -124,7 +125,7 @@ Ship the application shell in the framework package and let each module plug int
   (`MainLayout.razor:19`) shows it through `IToastService`
   (`MMCA.Common.UI/Components/Notifications/PendingToastHost.razor:3`). `AddUIShared` calls it
   (`DependencyInjection.cs:167`), the Helpdesk Web head calls it directly
-  (`MMCA.Helpdesk/Source/Hosts/UI/MMCA.Helpdesk.UI.Web/Program.cs:23`), and so does the shipped bUnit base
+  (`MMCA.Helpdesk/Source/Hosts/UI/MMCA.Helpdesk.UI.Web/Program.cs:24`), and so does the shipped bUnit base
   (`MMCA.Common/Source/Hosting/MMCA.Common.Testing.UI/Infrastructure/BunitComponentTestBase.cs:54`),
   so a component test resolves the contracts without pulling in the rest of the shared-UI surface.
   The framework helpers that raise a toast take the toast facade
@@ -140,8 +141,8 @@ Ship the application shell in the framework package and let each module plug int
 
 - **Blazor Web heads feed the same enumeration to the endpoint side.** `MapRazorComponents<App>()`
   takes the module assemblies from `GetServices<IUIModule>()` in addition to the shell assemblies
-  (`MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs:322-336`, which also de-duplicates at `:330`, and
-  `MMCA.Store/Source/Hosts/UI/MMCA.Store.UI.Web/Program.cs:280-290`), so the router's view and the
+  (`MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs:326-340`, which also de-duplicates at `:334`, and
+  `MMCA.Store/Source/Hosts/UI/MMCA.Store.UI.Web/Program.cs:284-294`), so the router's view and the
   endpoint's view of the routable assemblies come from one source.
 
 Adoption today is every module UI in both apps plus the framework's own and its test host: ADC
@@ -157,15 +158,15 @@ the framework's own notification module
 (`MMCA.Common/Source/Presentation/MMCA.Common.UI/Notifications/NotificationUIModule.cs:15`); and the
 backend-less component gallery, whose stub descriptor is the only reason its `/components` page is
 routable (`MMCA.Common/Tests/Presentation/MMCA.Common.UI.Gallery/Stubs/GalleryUIModule.cs:14`,
-registered at `GalleryHost.cs:96`). Two adopters are **host-only**: ADC's `DeviceUIModule` adds the
+registered at `GalleryHost.cs:97`). Two adopters are **host-only**: ADC's `DeviceUIModule` adds the
 MAUI-only device settings page plus the deep-link listener
 (`MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI/DeviceUIModule.cs:18`, registered at `MauiProgram.cs:167`), and
 Store's `MauiUIModule` contributes no nav and no pages at all, existing purely to hang the native
 theme sync on the layout extension point (`MMCA.Store/Source/Hosts/UI/MMCA.Store.UI/MauiUIModule.cs:14`,
-registered at `MauiProgram.cs:87`). MMCA.Helpdesk deliberately does **not** adopt this: the seed's
+registered at `MauiProgram.cs:89`). MMCA.Helpdesk deliberately does **not** adopt this: the seed's
 Blazor head owns its own `Routes.razor` and `MainLayout` and never calls `AddUIShared`, because it has
-no `ApiSettings`-backed client pipeline (`MMCA.Helpdesk/Source/Hosts/UI/MMCA.Helpdesk.UI.Web/Program.cs:32-34`);
-it registers the facades on their own with `AddCommonUiFacades()` instead (`:20-23`).
+no `ApiSettings`-backed client pipeline (`MMCA.Helpdesk/Source/Hosts/UI/MMCA.Helpdesk.UI.Web/Program.cs:33-35`);
+it registers the facades on their own with `AddCommonUiFacades()` instead (`:21-24`).
 
 ## Rationale
 - **One composition model across both tiers.** A module already declares its server-side surface
@@ -220,11 +221,11 @@ it registers the facades on their own with `AddCommonUiFacades()` instead (`:20-
   protection still comes from `AuthorizeRouteView` and the pages' own attributes (`Routes.razor:29-52`).
 - **Blazor Web heads wire the assemblies twice.** The router's `AdditionalAssemblies` and the
   endpoint's `AddAdditionalAssemblies` are separate calls, so both hosts repeat the enumeration in
-  `Program.cs` (`MMCA.ADC.UI.Web/Program.cs:322-336`, `MMCA.Store.UI.Web/Program.cs:280-290`); they
+  `Program.cs` (`MMCA.ADC.UI.Web/Program.cs:326-340`, `MMCA.Store.UI.Web/Program.cs:284-294`); they
   derive it from the same `IUIModule` registrations, but the duplication is real. The two hosts also
-  build the list differently: ADC concatenates and applies `.Distinct()` (`:329-330`), because the shell
+  build the list differently: ADC concatenates and applies `.Distinct()` (`:333-334`), because the shell
   assemblies it lists can overlap a module's, while Store spreads the module assemblies into a
-  collection expression with no de-duplication (`MMCA.Store.UI.Web/Program.cs:285-290`).
+  collection expression with no de-duplication (`MMCA.Store.UI.Web/Program.cs:290-294`).
 - **The reference seed does not demonstrate the pattern.** Helpdesk's hand-rolled shell means an
   adopter following it gets the framework's components but not this composition model.
 - **One vendor is also one upstream ceiling, and the facades cover two surfaces only.** A MudBlazor
@@ -337,6 +338,26 @@ vendor choice and the facades are unchanged; the app bar gained a second contrib
    `MainLayout.razor` (list reads `:173-177`, content header `:84-87`, layout root `:136-139`);
    `NavMenu.razor` (filters `:263-265`, section split `:268-270`); Store `CatalogUIModule.cs:16`. The
    2026-10-21 revision's `MainLayout.razor` anchors are left as written there.
+
+## Revision (2026-10-28)
+Re-verified against current source. The contract, the shell, router and nav composition, the vendor
+choice, the facades, the Helpdesk non-adoption and the double-wiring trade-off (ADC de-duplicates,
+Store does not) are unchanged; only anchors moved, mostly because both Blazor Web hosts now map
+`/service-worker.js` with `MapCommonServiceWorker()` ahead of the assembly wiring
+(`MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs:321`,
+`MMCA.Store/Source/Hosts/UI/MMCA.Store.UI.Web/Program.cs:281`).
+
+1. Anchors re-verified against current source: ADC `MMCA.ADC.UI.Web/Program.cs` assembly wiring
+   `:326-340` (`GetServices<IUIModule>()` `:326`, `.Concat` `:333`, `.Distinct()` `:334`,
+   `MapRazorComponents<App>()` `:337`, `AddAdditionalAssemblies` `:340`, the overlap comment
+   `:323-325`); Store `MMCA.Store.UI.Web/Program.cs` wiring `:284-294` (`GetServices<IUIModule>()`
+   `:284`, `MapRazorComponents<App>()` `:286`, the collection expression `:290-294` with the module
+   spread at `:294`, still no de-duplication); `HasPermissionClaim`
+   (`MMCA.Common/Source/Core/MMCA.Common.Shared/Auth/ClaimsPrincipalExtensions.cs:95-98`, the
+   `AuthClaimTypes.Permission` check at `:98`); the Helpdesk Web head
+   (`MMCA.Helpdesk/Source/Hosts/UI/MMCA.Helpdesk.UI.Web/Program.cs`: `AddCommonUiFacades()` `:24`
+   with its reason at `:21-23`, the no-`AddUIShared` note `:33-35`); `GalleryHost.cs:97`; Store
+   `MauiProgram.cs:89`. The 2026-10-26 revision's anchors are left as written there.
 
 ## Related
 ADR-059 (the server-side `IModule` contract this mirrors in the presentation layer), ADR-056 (the

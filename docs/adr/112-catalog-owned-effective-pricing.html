@@ -259,6 +259,10 @@
           longer blocked by that discount; anchors refreshed after the Catalog and Sales export moves.</p>
           <p>Revised 2026-10-26: anchors refreshed after the Catalog domain, checkout and Catalog service host
           edits moved them.</p>
+          <p>Revised 2026-10-28: the payment total is the frozen merchandise subtotal plus the shipping and tax
+          quoted at checkout, the promotion label shows whenever a line carries one, the guest checkout and the
+          order quote share the same price fetch, and the chargeable-total refusal also runs on the guest and
+          checkout-session paths.</p>
           <h2 id="context">Context</h2>
           <p>MMCA.Store sells product variants, and a variant&#39;s price is one <code>Money</code> on the variant row
           (<code>MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.Domain/Products/ProductVariant.cs:30</code>).
@@ -272,9 +276,13 @@
           extraction harder to reverse. Second, checkout already freezes a price: <code>CheckOutHandler</code> fetches
           unit prices from Catalog through its <code>CheckOutPreflight</code> collaborator and <code>CheckOutDomainService</code>
           copies them onto order lines
-          (<code>MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Application/ShoppingCarts/UseCases/CheckOut/CheckOutHandler.cs:74-76</code>,
-          <code>MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Application/ShoppingCarts/UseCases/CheckOut/CheckOutPreflight.cs:50-52</code>,
-          <code>MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Domain/Orders/CheckOutDomainService.cs:59,116-136</code>).
+          (<code>MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Application/ShoppingCarts/UseCases/CheckOut/CheckOutHandler.cs:88-89</code>,
+          <code>MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Application/ShoppingCarts/UseCases/CheckOut/CheckOutPreflight.cs:85-91</code>,
+          <code>MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Domain/Orders/CheckOutDomainService.cs:56,161-181</code>).
+          The guest checkout and the order quote use the same price fetch
+          (<code>MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Application/Orders/UseCases/GuestCheckout/GuestCheckOutHandler.cs:51</code>,
+          <code>MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Application/Orders/UseCases/Quote/GetOrderQuoteHandler.cs:46</code>),
+          and a guest order is built through the same pricing step (<code>CheckOutDomainService.cs:92,96</code>).
           The cart stores quantities, not money.</p>
           <p>The tempting shape is a Promotion aggregate with its own lifecycle, targets and precedence rules.
           That is a pricing engine, and it puts the question &quot;what does this cost&quot; in a third place that both
@@ -312,15 +320,18 @@
           <code>IProductVariantService.cs:104</code>). The label is resolved only while its discount is in force at the
           instant asked, so an expired or not-yet-open window names nothing (<code>ProductVariantService.cs:103</code>).
           <code>CheckOutPreflight</code> translates the triple into Sales&#39; own <code>OrderLinePricing</code> record at the module
-          boundary (<code>CheckOutPreflight.cs:58-60</code>, <code>OrderLinePricing.cs:22</code>), which is what keeps <code>Sales.Domain</code> free
+          boundary (<code>CheckOutPreflight.cs:97-99</code>, <code>OrderLinePricing.cs:22</code>), which is what keeps <code>Sales.Domain</code> free
           of any reference to <code>Catalog.Shared</code>. The three values land on <code>OrderLine.UnitPrice</code>,
           <code>OrderLine.ListPrice</code> and <code>OrderLine.PromotionLabel</code> (<code>OrderLine.cs:30,42,49</code>), guarded by
           <code>OrderInvariants.EnsureListPriceIsValid</code> (non-negative, same currency, never below the unit price)
-          and <code>EnsurePromotionLabelIsValid</code> (50 characters) (<code>OrderInvariants.cs:38,60,87</code>). Only <code>UnitPrice</code>
-          is money owed: the line total and the Stripe total still follow from it alone.</p>
+          and <code>EnsurePromotionLabelIsValid</code> (50 characters) (<code>OrderInvariants.cs:63,85-103,112-116</code>). Only
+          <code>UnitPrice</code> is money owed for the merchandise: the line total and the order <code>Subtotal</code> follow from it
+          alone. The payment total is <code>Order.Total</code>, which adds the shipping and tax quoted at checkout to the
+          subtotal (<code>Order.cs:107-120</code>, <code>ApplyCharges</code> at <code>:485-519</code>; quoted at <code>CheckOutHandler.cs:98-99</code> and
+          applied at <code>:181</code>), so the amount charged follows from the frozen unit prices plus that quote.</p>
           <p><strong>What the order saved is derived, not stored.</strong> <code>OrderLine.Savings</code> and <code>Order.TotalSavings</code> are
           computed on read from the frozen pair and excluded from the EF mapping (<code>OrderLine.cs:65</code>,
-          <code>Order.cs:72</code>): a stored total could only ever disagree with the two numbers it restates. Both places
+          <code>Order.cs:140</code>): a stored total could only ever disagree with the two numbers it restates. Both places
           that show a saving read the frozen columns back off the order rather than off an event payload. The
           receipt email is scheduled by the <code>OrderPaid</code> handler, not written by it: <code>OrderPaidHandler</code> writes a
           <code>SendOrderPaidEmailInternalCommand</code> carrying the order id alone (ADR-114,
@@ -330,8 +341,12 @@
           struck &quot;Was&quot; amount, the HTML-encoded label and the &quot;You saved&quot; total
           (<code>SendOrderPaidEmailInternalCommandHandler.cs:121-123,128-131,143-146</code>). The order detail page renders the same
           three from the order&#39;s own read model, plus an accessible &quot;Was X, now Y&quot; sentence
-          (<code>Sales.UI/Pages/Orders/OrderLinesPanel.razor:56,58,72,96</code>). Every one appears only when there is a
-          saving. <code>OrderPaid</code> still carries the order&#39;s <code>TotalSavings</code> and each line&#39;s <code>ListPrice</code> and
+          (<code>Sales.UI/Pages/Orders/OrderLinesPanel.razor:57,59,66-73,113-117</code>). The struck price and the
+          &quot;You saved&quot; total appear only when there is a saving (<code>OrderLinesPanel.razor:47,113</code>; the email&#39;s
+          &quot;Was&quot; line at <code>SendOrderPaidEmailInternalCommandHandler.cs:120</code>). The label appears whenever the line
+          carries one (<code>OrderLinesPanel.razor:66</code>, <code>SendOrderPaidEmailInternalCommandHandler.cs:127</code>), and
+          Catalog names a label only while its discount is in force (<code>ProductVariantService.cs:103-105</code>).
+          <code>OrderPaid</code> still carries the order&#39;s <code>TotalSavings</code> and each line&#39;s <code>ListPrice</code> and
           <code>PromotionLabel</code> (<code>Orders/DomainEvents/OrderPaid.cs:21,42</code>), but its one subscriber now reads only
           the order id and the customer id from it.</p>
           <p><strong>The wire contracts grow additive fields; the event contracts do not.</strong> <code>UnitPriceEntry</code> gains
@@ -347,9 +362,11 @@
           plus a guarded backfill from the unit price (<code>:60-63</code>), and <code>PromotionLabel</code> lands nullable
           (<code>:46-52</code>), add-only under ADR-057.</p>
           <p><strong>The effective price must stay above zero.</strong> Sales allows a zero line price
-          (<code>MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Domain/Orders/OrderInvariants.cs:24-30</code>) but refuses
+          (<code>MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Domain/Orders/OrderInvariants.cs:25-31</code>) but refuses
           an order whose total the payment provider cannot charge, a zero total included, before anything is
-          written (<code>CheckOutHandler.cs:156-158</code>), so a discount that resolves to zero would produce a variant
+          written (<code>CheckOutHandler.cs:188-190</code>, before <code>AddAsync</code> at <code>:193</code>; the guest checkout and the
+          checkout-session creation run the same check at <code>GuestCheckOutHandler.cs:107</code> and
+          <code>MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Application/Orders/UseCases/CreateCheckoutSession/CreateCheckoutSessionHandler.cs:95</code>), so a discount that resolves to zero would produce a variant
           that can be added to a cart and fails checkout whenever it leaves the order unchargeable. Catalog refuses that pairing at the write instead: <code>VariantDiscount.ApplyTo</code> fails with
           <code>EffectivePriceNotPositive</code> (<code>VariantDiscount.cs:61-62,216-218,237-239</code>), which in practice means a
           zero-priced variant cannot carry an active or scheduled discount. A discount whose window has ended
@@ -358,9 +375,9 @@
           <p>The three write endpoints are gated on <code>catalog:pricing:manage</code>
           (<code>MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.Shared/Authorization/CatalogPermissions.cs:29</code>,
           <code>MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.API/Controllers/ProductVariantsController.cs:157-158,184-185</code>,
-          <code>MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.API/Controllers/ProductsController.cs:164-165</code>), a narrower
+          <code>MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.API/Controllers/ProductsController.cs:204-205</code>), a narrower
           permission than variant management. All three take the product ETag in <code>If-Match</code> (ADR-035,
-          <code>ProductsController.cs:165,177</code>); the two variant endpoints also carry the variant row version in the
+          <code>ProductVariantsController.cs:158,185</code>, <code>ProductsController.cs:205</code>); the two variant endpoints also carry the variant row version in the
           body for ADR-035&#39;s <code>IRowVersioned</code> child overload (<code>ProductVariantSetDiscountRequest.cs:20</code>,
           <code>ProductVariantClearDiscountRequest.cs:18</code>), while the product-wide request carries none
           (<code>ProductSetDiscountRequest.cs:15-34</code>).</p>
@@ -478,6 +495,44 @@
           <code>MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:165</code> (<code>ProductsCache</code>,
           <code>TimeSpan.FromSeconds(60)</code>, tags <code>catalog</code> and <code>catalog:products</code>, comment <code>:160-164</code>).</li>
           </ol>
+          <h2 id="revision-2026-10-28">Revision (2026-10-28)</h2>
+          <p>Re-verified against current source. The decision, the variant-level value object, the effective-price
+          computation, the frozen pricing columns, the invariants and the wire and event contracts are unchanged.
+          Two Decision statements no longer described the code and are corrected in place, the checkout
+          coverage now names the guest and quote paths, and anchors in the live sections moved. Anchors inside
+          the earlier dated revisions stay as written.</p>
+          <ol>
+          <li>The payment total no longer follows from <code>UnitPrice</code> alone. <code>Order.Total</code> is <code>Subtotal</code> plus
+          <code>ShippingCost</code> plus <code>TaxAmount</code> and is the amount the payment session asks for
+          (<code>MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Domain/Orders/Order.cs:107-120</code>, <code>ApplyCharges</code>
+          at <code>:485-519</code>); checkout quotes shipping and tax through <code>CheckOutPreflight.QuoteChargesAsync</code>
+          (<code>CheckOutHandler.cs:98-99</code>) and applies the quote with <code>OrderQuoteApplier</code> (<code>:181</code>). The Decision
+          now says <code>UnitPrice</code> is money owed for the merchandise and the line total and <code>Subtotal</code> follow
+          from it.</li>
+          <li>The display rule is stated per element. The struck price and the &quot;You saved&quot; total on the order
+          page are gated on a saving (<code>OrderLinesPanel.razor:47,113</code>), as is the email&#39;s &quot;Was&quot; line
+          (<code>SendOrderPaidEmailInternalCommandHandler.cs:120</code>), but the promotion label is shown whenever the
+          line carries one (<code>OrderLinesPanel.razor:66</code>, <code>SendOrderPaidEmailInternalCommandHandler.cs:127</code>).
+          Catalog names a label only while its discount is in force (<code>ProductVariantService.cs:103-105</code>).</li>
+          <li>The price fetch is shared beyond the signed-in checkout: <code>CheckOutPreflight.ResolvePricesAsync</code>
+          (<code>CheckOutPreflight.cs:85</code>) is also called by <code>GuestCheckOutHandler.cs:51</code> and
+          <code>GetOrderQuoteHandler.cs:46</code>, and a guest order goes through the same <code>ValidateAndPrice</code> step
+          (<code>CheckOutDomainService.cs:92,106-124</code>) into <code>Order.CreateForGuest</code> (<code>:96</code>). The chargeable-total
+          refusal also runs in <code>GuestCheckOutHandler.cs:107</code> and <code>CreateCheckoutSessionHandler.cs:95</code>
+          (contract <code>IPaymentService.cs:144</code>, implementation <code>StripePaymentService.cs:287</code>).</li>
+          <li>Anchors re-verified against current source: <code>CheckOutHandler.cs:88-89</code> (<code>ResolveAsync</code>) and
+          <code>:188-190</code> (<code>EnsureChargeable</code>, comment <code>:185-187</code>, before <code>AddAsync</code> at <code>:193</code>);
+          <code>CheckOutPreflight.cs:85-91</code> (<code>ResolvePricesAsync</code>, <code>GetUnitPricesAsync</code>) and <code>:97-99</code>
+          (<code>OrderLinePricing</code> translation, boundary comment <code>:93-96</code>); <code>CheckOutDomainService.cs:56</code>
+          (<code>Order.Create</code>) and <code>:161-181</code> (<code>BuildOrderItems</code>, pricing added at <code>:177</code>); <code>Order.cs:140</code>
+          (<code>TotalSavings</code>); <code>OrderInvariants.cs:25-31</code> (<code>EnsurePriceIsValid</code>, zero allowed), <code>:63</code>
+          (<code>PromotionLabelMaxLength</code>), <code>:85-103</code> (<code>EnsureListPriceIsValid</code>) and <code>:112-116</code>
+          (<code>EnsurePromotionLabelIsValid</code>); <code>OrderLinesPanel.razor:57,59,66-73,113-117</code>;
+          <code>ProductsController.cs:204-205</code> (<code>PricingManage</code>, <code>SupportsIfMatch</code>, token read at <code>:217</code>) and
+          <code>ProductVariantsController.cs:157-158,184-185</code> (tokens read at <code>:172,199</code>), with
+          <code>CatalogPermissions.cs:29</code> and <code>ProductVariantSetDiscountRequest.cs:20</code>,
+          <code>ProductVariantClearDiscountRequest.cs:18</code> unchanged.</li>
+          </ol>
           <h2 id="related">Related</h2>
           <ul>
           <li><a href="006-database-per-service.html">ADR-006</a>, <a href="008-service-extraction-topology.html">ADR-008</a>: each service
@@ -513,6 +568,7 @@
             <li><a href="#revision-2026-10-06">Revision (2026-10-06)</a></li>
             <li><a href="#revision-2026-10-21">Revision (2026-10-21)</a></li>
             <li><a href="#revision-2026-10-26">Revision (2026-10-26)</a></li>
+            <li><a href="#revision-2026-10-28">Revision (2026-10-28)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

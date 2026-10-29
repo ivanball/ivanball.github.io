@@ -267,7 +267,8 @@
           2026-10-21: anchors refreshed after the MAUI job&#39;s timeout comment grew by two lines, shifting
           every later <code>publish-maui</code> anchor in <code>release.yml</code> by +2. Revised 2026-10-26: anchors refreshed
           after the <code>ci.yml</code> canaries moved back to <code>:475-476</code> and <code>:693-694</code> and newly added packages
-          extended the FACTS list and the solution file.</p>
+          extended the FACTS list and the solution file. Revised 2026-10-28: anchors refreshed after the
+          <code>ci.yml</code> canaries moved to <code>:507-508</code> and <code>:725-726</code> in the 2026-10-26 <code>ci.yml</code> change.</p>
           <h2 id="context">Context</h2>
           <p>The <code>MMCA.Common.*</code> packages have shipped to GitHub Packages since the first release (the package
           list and its count are generated and CI-gated in <code>MMCA.Common/FACTS.md:19-47</code>, so this record links
@@ -383,7 +384,7 @@
           (<code>release.yml:207-208</code>). Both jobs also attest build provenance (<code>release.yml:97-100</code>, <code>:216-219</code>).
           The rest run on the merged pull request rather than on the tag, and the ancestry assertion is what
           makes them cover the tagged tree: its comment names the FACTS drift gate, the vulnerability audit,
-          the Helpdesk consumer canary (<code>ci.yml:475-476</code>), the package-consumption canary (<code>ci.yml:693-694</code>),
+          the Helpdesk consumer canary (<code>ci.yml:507-508</code>), the package-consumption canary (<code>ci.yml:725-726</code>),
           ui-e2e and the perf gate (<code>release.yml:31-35</code>).</li>
           <li><strong>The two publishing jobs are independent, so a release can land half-published.</strong> <code>publish</code>
           (<code>release.yml:11</code>) and <code>publish-maui</code> (<code>release.yml:146</code>) declare no <code>needs:</code> on each other, so
@@ -491,6 +492,22 @@
           <code>:241</code>), the SHA-pinned <code>NuGet/login</code> lines (<code>:133</code>, <code>:249</code>), the nuget.org pushes (<code>:140</code>,
           <code>:257</code>) and the ancestry comment (<code>:31-35</code>).</li>
           </ol>
+          <h2 id="revision-2026-10-28">Revision (2026-10-28)</h2>
+          <p>Re-verified against current source. The decision is unchanged: both jobs still push to GitHub
+          Packages and then, behind the owner guard, log in through the SHA-pinned <code>NuGet/login</code> and push to
+          nuget.org with <code>--skip-duplicate</code>, and the ancestry comment (<code>release.yml:31-35</code>) still names the
+          Helpdesk consumer canary and the package-consumption canary. What moved is the two CI canaries in
+          <code>ci.yml</code>, both 32 lines further down than the 2026-10-26 revision records; the anchors in that
+          revision are left as written.</p>
+          <ol>
+          <li>Anchors re-verified against current source: the Helpdesk consumer canary
+          (<code>.github/workflows/ci.yml:507-508</code>, <code>consumer-source-build</code>) and the package-consumption canary
+          (<code>ci.yml:725-726</code>, <code>package-consumption</code>). The lines the 2026-10-26 revision cites are other
+          steps now: <code>ci.yml:475-476</code> is the tail of the coverage summary step, <code>ci.yml:693-694</code> is the
+          <code>sqlcmd</code> body of the migration-verify <code>query()</code> helper, and <code>ci.yml:422-423</code> is the hot-path
+          benchmark step of the <code>performance-smoke</code> job (<code>ci.yml:395</code>), not a coverage-job step (the
+          <code>coverage</code> job starts at <code>ci.yml:442</code>).</li>
+          </ol>
           <h2 id="related">Related</h2>
           <p>ADR-016 (lockstep versioning: every package ships at one version, so both registries receive the
           same set of ids per release, enumerated in <code>MMCA.Common/FACTS.md:19-47</code>),
@@ -517,6 +534,7 @@
             <li><a href="#revision-2026-10-07">Revision (2026-10-07)</a></li>
             <li><a href="#revision-2026-10-21">Revision (2026-10-21)</a></li>
             <li><a href="#revision-2026-10-26">Revision (2026-10-26)</a></li>
+            <li><a href="#revision-2026-10-28">Revision (2026-10-28)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

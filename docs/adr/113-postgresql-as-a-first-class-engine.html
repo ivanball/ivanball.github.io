@@ -258,7 +258,7 @@
           (2026-10-25) at the end. Revised 2026-10-26: decision 4 corrected (SQLite quotes outbox filter
           columns with double quotes like PostgreSQL, and only SQL Server and Cosmos answer brackets), decision
           9 gains the periodic-password-provider test, and anchors refreshed after the v1.257.0 and v1.261.0
-          releases.</p>
+          releases. Revised 2026-10-28: anchors refreshed after the v1.265.1 release.</p>
           <h2 id="context">Context</h2>
           <p>The framework has shipped three database engines since its first release: SQL Server, Azure Cosmos DB
           and SQLite. Every one of them is reached the same way, because <a href="006-database-per-service.html">ADR-006</a>
@@ -408,7 +408,7 @@
           <code>Tests/Core/MMCA.Common.Infrastructure.PostgreSQL.Tests</code> is a Testcontainers project outside
           <code>MMCA.Common.slnx</code> (the posture <code>Tests/Core/MMCA.Common.Infrastructure.Redis.Tests</code> established:
           Docker-gated, own CI job, kept out of the fast solution-wide unit loop), run by the
-          <code>postgresql-integration</code> CI job (<code>MMCA.Common/.github/workflows/ci.yml:822</code>). It creates the whole
+          <code>postgresql-integration</code> CI job (<code>MMCA.Common/.github/workflows/ci.yml:854</code>). It creates the whole
           schema, round-trips an auditable entity&#39;s UTC audit stamps (<code>PostgreSQLPersistenceTests.cs:119-120</code>),
           proves a soft-deleted row is hidden (<code>:145-146</code>) AND frees its unique slot (<code>:179-180</code>), writes and
           drains the outbox row of a local domain event, and writes the outbox row of an integration event
@@ -450,12 +450,12 @@
           60, while Npgsql reuses whatever it was handed for the whole interval (<code>:16-21</code>). Both send the token
           as the password, so both reject a connection string below <code>SSL Mode=Require</code>
           (<code>RdsIamAuthenticationConfigurator.cs:110-117</code>, <code>CloudSqlIamAuthenticationConfigurator.cs:100-107</code>)
-          and expect no password in it (<code>MMCA.Common/CHANGELOG.md:77</code>, <code>:83</code>). Neither reaches SQL Server:
+          and expect no password in it (<code>MMCA.Common/CHANGELOG.md:120</code>, <code>:126</code>). Neither reaches SQL Server:
           RDS and Cloud SQL offer no IAM database authentication for it
           (<code>AwsServiceCollectionExtensions.cs:98</code>, <code>GcpServiceCollectionExtensions.cs:80</code>), so an RDS SQL
-          Server password connection string stays in Secrets Manager (<code>MMCA.Common/CHANGELOG.md:77</code>). The
+          Server password connection string stays in Secrets Manager (<code>MMCA.Common/CHANGELOG.md:120</code>). The
           PostgreSQL tier covers a periodic password provider and the PostgreSql broker transport
-          (<code>MMCA.Common/CHANGELOG.md:90</code>).</p>
+          (<code>MMCA.Common/CHANGELOG.md:133</code>).</p>
           </li>
           </ol>
           <h3 id="rollout-the-helpdesk-canary-and-the-template-axis">Rollout: the Helpdesk canary and the template axis</h3>
@@ -638,6 +638,18 @@
           (<code>AddAwsRdsIamAuthentication</code>), <code>:83</code> (<code>AddCloudSqlIamAuthentication</code>), <code>:87</code>
           (<code>AddNpgsqlDataSourceConfigurator</code>) and <code>:90</code> (PostgreSQL tier).</li>
           </ol>
+          <h2 id="revision-2026-10-28">Revision (2026-10-28)</h2>
+          <p>Re-verified against current source. The engine decision, its mapping, its timestamp handling and its
+          rationale are unchanged; only line anchors moved after the v1.262.0 to v1.265.1 releases.</p>
+          <ol>
+          <li>Anchors re-verified against current source: the <code>postgresql-integration</code> job at
+          <code>MMCA.Common/.github/workflows/ci.yml:854</code> (Decision 9; its run step at <code>:892</code>), and the v1.257.0
+          entries (section at <code>MMCA.Common/CHANGELOG.md:112</code>) at <code>MMCA.Common/CHANGELOG.md:120</code>
+          (<code>AddAwsRdsIamAuthentication</code>, no password, Secrets Manager for RDS SQL Server), <code>:126</code>
+          (<code>AddCloudSqlIamAuthentication</code>), <code>:130</code> (<code>AddNpgsqlDataSourceConfigurator</code>) and <code>:133</code>
+          (PostgreSQL tier), Decision 10. The CHANGELOG anchors in the 2026-10-25 and 2026-10-26 revisions
+          are left as recorded.</li>
+          </ol>
           <h2 id="related">Related</h2>
           <p><a href="006-database-per-service.html">ADR-006</a> (one sealed context per engine, one instance per database),
           <a href="018-polyglot-persistence.html">ADR-018</a> (the engine axis this record adds a member to),
@@ -672,6 +684,7 @@
             <li><a href="#revision-2026-10-21">Revision (2026-10-21)</a></li>
             <li><a href="#revision-2026-10-25">Revision (2026-10-25)</a></li>
             <li><a href="#revision-2026-10-26">Revision (2026-10-26)</a></li>
+            <li><a href="#revision-2026-10-28">Revision (2026-10-28)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

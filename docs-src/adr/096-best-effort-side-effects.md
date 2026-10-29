@@ -10,7 +10,8 @@ contradicted by source (the API package already calls `BestEffort` on its own me
 broadcast's two mutually exclusive enqueue branches are cited, and anchors are refreshed. Revised
 2026-10-26: adoption is fifteen call sites, adding the ADC Conference speaker-cache eviction and the
 framework's post-sign-in password rehash (a second explicit `CancellationToken.None` caller), and
-anchors are refreshed.
+anchors are refreshed. Revised 2026-10-28: anchors refreshed after the ADC moderation handler, the
+Store checkout preflight and the Store products controller moved.
 
 ## Context
 A command that has already committed often has follow-up work attached to it: evict the output-cache
@@ -73,8 +74,8 @@ documented exception.
   (`MMCA.Common/Source/Core/MMCA.Common.Application/Auth/AuthenticationServiceBase.cs:705`, the
   reasoning at `:664-671`); the ADC submit and moderation broadcasts take the parameter's default for
   the same reason (`.../SubmitQuestionHandler.cs:199-202`, the call closing at `:237`, and
-  `.../ModerateQuestionHandler.cs:157`), while the three ADC domain-event handlers pass their own
-  `cancellationToken` (`.../SessionQuestionUpvoteChangedHandler.cs:91`,
+  `.../ModerateQuestionHandler.cs:146`, the call closing at `:165` with no token argument), while
+  the three ADC domain-event handlers pass their own `cancellationToken` (`.../SessionQuestionUpvoteChangedHandler.cs:91`,
   `.../LivePollVoteChangedHandler.cs:83` and `.../SessionQuestionSubmittedPointsHandler.cs:102`), as
   does the ADC Conference integration-event handler (`.../UserDeletedSpeakerErasureHandler.cs:108`),
   and the hosted bookmark eviction processor passes its `stoppingToken`
@@ -99,7 +100,7 @@ item's event name and whose own catch turns the rethrown cancellation into a qui
 onto the live-channel publish queue rather than publishing inline, exactly once per submit: the
 approved branch at `:219-220` or the pending-count branch at `:234-235`),
 `session-question-moderation-broadcast` (`.../UseCases/Moderate/ModerateQuestionHandler.cs:31`, call at
-`:138`) and `session-question-upvote-broadcast`
+`:146`) and `session-question-upvote-broadcast`
 (`.../DomainEventHandlers/SessionQuestionUpvoteChangedHandler.cs:47`, call at `:54`); the poll-results
 broadcast `livepoll-results-broadcast`
 (`.../LivePolls/DomainEventHandlers/LivePollVoteChangedHandler.cs:44`, call at `:51`); and the
@@ -116,8 +117,8 @@ erasure that has already been saved
 after `SaveChangesAsync` at `:99`). The Store five are a checkout display label, `checkout-customer-name`, resolved by the
 checkout preflight outside the transaction so an unreachable Identity leaves the name null instead of
 failing an otherwise valid checkout
-(`MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Application/ShoppingCarts/UseCases/CheckOut/CheckOutPreflight.cs:77-87`,
-the operation name at `:78`, the outside-the-transaction reasoning at `:17-24`);
+(`MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Application/ShoppingCarts/UseCases/CheckOut/CheckOutPreflight.cs:62-72`,
+the operation name at `:63`, the outside-the-transaction reasoning at `:18-27`);
 three inventory label fetches sharing the operation name `inventory-catalog-labels`, so a Catalog service
 that drops out leaves rows with whatever labels they had
 (`.../Inventory/UseCases/Create/CreateInventoryItemHandler.cs:68`,
@@ -143,7 +144,7 @@ the helper (`:664-668`). The second is its own multi-tag eviction helper,
 (`MMCA.Common/Source/Presentation/MMCA.Common.API/Caching/OutputCacheEvictionExtensions.cs:34`,
 `:78-92`). Store Catalog reaches it from seven controllers, each passing fixed low-cardinality cache
 tags, and every one of them evicts `catalog:products` and `catalog:categories` together:
-`Controllers/CategoriesController.cs:174`, `ProductsController.cs:190`, `ProductVariantsController.cs:212`,
+`Controllers/CategoriesController.cs:174`, `ProductsController.cs:230`, `ProductVariantsController.cs:212`,
 `ProductImagesController.cs:219`, `ReviewsController.cs:329`, `ReviewModerationController.cs:166` and
 `ProductAttributesController.cs:154`.
 
@@ -322,6 +323,20 @@ two call sites, the `CancellationToken.None` bullet names both framework callers
    post-commit work with no recorded reason, and the password-rehash paragraph separates the
    refused-invariant path, which is logged as `PasswordRehashRejected` without reaching the helper's
    swallow or counter (`AuthenticationServiceBase.cs:693-700`).
+
+## Revision (2026-10-28)
+Re-verified against current source. No decision, rationale or adoption count changed; the moderation
+broadcast still takes the token parameter's default, the checkout name lookup still leaves the name
+null on an unreachable Identity, and all seven Store Catalog controllers still evict both catalog
+tags. Only anchors moved.
+1. Anchors re-verified against current source: `ModerateQuestionHandler` (constant `:31`, call
+   `:146`, the call closing at `:165` with no token argument)
+   (`MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Application/SessionQuestions/UseCases/Moderate/ModerateQuestionHandler.cs`);
+   `CheckOutPreflight` (call `:62-72`, operation name `:63`, outside-the-transaction remarks
+   `:18-27`, the null-name fallback `:58-61`)
+   (`MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Application/ShoppingCarts/UseCases/CheckOut/CheckOutPreflight.cs`);
+   and `ProductsController.cs:230`
+   (`MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.API/Controllers/ProductsController.cs:230`).
 
 ## Related
 [ADR-024](024-push-notifications.md) (push delivery failure is non-fatal and recorded rather than
