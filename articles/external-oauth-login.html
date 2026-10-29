@@ -347,9 +347,9 @@
           <code>Attendee</code> with empty password hash and salt. The verifier runs on this branch too, but it does not
           gate the create (GitHub&#39;s OAuth flow asserts nothing, and refusing would close GitHub sign-up): the
           assertion rides along as a sixth <code>emailVerified</code> argument, which starts the account confirmed when the
-          provider vouched for the address and unconfirmed otherwise. Nothing on the external path schedules a
-          confirmation email (only local registration does), so an unconfirmed external account gets a link
-          when its owner requests one from the confirmation page.</p>
+          provider vouched for the address and unconfirmed otherwise. An unconfirmed account is asked to confirm
+          its address the way a local registration is: the create schedules the confirmation email on the same
+          unit of work as the account, so the two commit together or not at all.</p>
           <p>An external user is a <code>User</code> with an empty password hash and salt, carrying <code>LoginProvider</code> and
           <code>ProviderKey</code>; <code>IsExternalLogin</code> is simply <code>LoginProvider is not null</code>, and <code>HasLocalPassword</code> is the
           complementary question the third guard asks. The linkage is two nullable columns

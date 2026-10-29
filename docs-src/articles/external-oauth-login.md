@@ -213,9 +213,9 @@ When no account owns the email at all, the flow *creates* one through `User.Crea
 `Attendee` with empty password hash and salt. The verifier runs on this branch too, but it does not
 gate the create (GitHub's OAuth flow asserts nothing, and refusing would close GitHub sign-up): the
 assertion rides along as a sixth `emailVerified` argument, which starts the account confirmed when the
-provider vouched for the address and unconfirmed otherwise. Nothing on the external path schedules a
-confirmation email (only local registration does), so an unconfirmed external account gets a link
-when its owner requests one from the confirmation page.
+provider vouched for the address and unconfirmed otherwise. An unconfirmed account is asked to confirm
+its address the way a local registration is: the create schedules the confirmation email on the same
+unit of work as the account, so the two commit together or not at all.
 
 An external user is a `User` with an empty password hash and salt, carrying `LoginProvider` and
 `ProviderKey`; `IsExternalLogin` is simply `LoginProvider is not null`, and `HasLocalPassword` is the
@@ -332,7 +332,7 @@ revoke-on-reuse forced re-login.
 
 *Tags: .NET, C Sharp, OAuth, Security, Software Architecture*
 
-*Notes: re-verified against source on 2026-10-29 (MMCA.Common v1.265.1, `MMCA.Common/FACTS.md:14`).
+*Notes: 2026-10-29 follow-up (MMCA.ADC PR #304): the create branch now schedules `SendEmailConfirmationCommand` for an unverified new account inside the external-login transaction (`MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Application/Users/AuthenticationService.cs:322` calls `RecordNewAccountAsync` `:356`, schedule `:370-374`), so the body states that the account is asked to confirm, and the entry below recording that it was not is history. re-verified against source on 2026-10-29 (MMCA.Common v1.265.1, `MMCA.Common/FACTS.md:14`).
 Body changes in this pass (2026-10-29): the one-provider guard is stated as source has it, refusing any
 externally linked account including the same provider under a different key (`if (existingUser.IsExternalLogin)`
 `AuthenticationService.cs:360`, reasoning `:353-359`; ADR-036 Revision 2026-10-26 `:327`); the web heads
