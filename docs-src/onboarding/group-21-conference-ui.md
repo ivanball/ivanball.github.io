@@ -24,7 +24,7 @@ Two public lists deliberately opt out of the grid entirely. [`PublicSponsorList`
 
 ## Detail pages, form models, and one declaration of the rules
 
-The organizer detail pages have no ADC-local base: all nine inherit Common's [`DetailPageBase`](group-15-common-ui-framework.md#detailpagebase) (`MMCA.Common/Source/Presentation/MMCA.Common.UI/Pages/Common/DetailPageBase.cs:26`) from markup, and it owns what every one of them would otherwise repeat verbatim: the page-scoped `CancellationTokenSource` with its dispose pattern (`DetailPageBase.cs:28`, `:52`), a `LatestLoadGuard` for route-driven reloads (documented at `:9` to `:11`), and the inline edit-mode lifecycle, `IsEditing`/`IsDirty` plus the `BeginEdit`/`EndEdit` transitions that keep the dirty flag from being left set behind a closed editor (`:46`, `:49`, `:68`, `:75`). The nine are [`EventDetail`](#eventdetail), [`SessionDetail`](#sessiondetail), [`SpeakerDetail`](#speakerdetail), [`ConferenceCategoryDetail`](#conferencecategorydetail), [`RoomDetail`](#roomdetail), [`QuestionDetail`](#questiondetail), [`SponsorDetail`](#sponsordetail), [`PartnerDetail`](#partnerdetail), and [`ActivityDetail`](#activitydetail) (`@inherits` at `Pages/Events/EventDetail.razor:9`, `Pages/Sessions/SessionDetail.razor:9`, `Pages/Speakers/SpeakerDetail.razor:10`, `Pages/Categories/ConferenceCategoryDetail.razor:3`, `Pages/Rooms/RoomDetail.razor:7`, `Pages/Questions/QuestionDetail.razor:7`, `Pages/Sponsors/SponsorDetail.razor:8`, `Pages/Partners/PartnerDetail.razor:7`, `Pages/Activities/ActivityDetail.razor:7`), and the dirty flag feeds Common's `UnsavedChangesGuard` directly. `[Rubric §24, Forms, Validation & UX Safety]`.
+The organizer detail pages have no ADC-local base: all nine inherit Common's [`DetailPageBase`](group-15-common-ui-framework.md#detailpagebase) (`MMCA.Common/Source/Presentation/MMCA.Common.UI/Pages/Common/DetailPageBase.cs:28`) from markup, and it owns what every one of them would otherwise repeat verbatim: the page-scoped `CancellationTokenSource` with its dispose pattern (`DetailPageBase.cs:30`, `:52`), a `LatestLoadGuard` for route-driven reloads (documented at `:9` to `:11`), and the inline edit-mode lifecycle, `IsEditing`/`IsDirty` plus the `BeginEdit`/`EndEdit` transitions that keep the dirty flag from being left set behind a closed editor (`:46`, `:49`, `:68`, `:75`). The nine are [`EventDetail`](#eventdetail), [`SessionDetail`](#sessiondetail), [`SpeakerDetail`](#speakerdetail), [`ConferenceCategoryDetail`](#conferencecategorydetail), [`RoomDetail`](#roomdetail), [`QuestionDetail`](#questiondetail), [`SponsorDetail`](#sponsordetail), [`PartnerDetail`](#partnerdetail), and [`ActivityDetail`](#activitydetail) (`@inherits` at `Pages/Events/EventDetail.razor:9`, `Pages/Sessions/SessionDetail.razor:9`, `Pages/Speakers/SpeakerDetail.razor:10`, `Pages/Categories/ConferenceCategoryDetail.razor:3`, `Pages/Rooms/RoomDetail.razor:7`, `Pages/Questions/QuestionDetail.razor:7`, `Pages/Sponsors/SponsorDetail.razor:8`, `Pages/Partners/PartnerDetail.razor:7`, `Pages/Activities/ActivityDetail.razor:7`), and the dirty flag feeds Common's `UnsavedChangesGuard` directly. `[Rubric §24, Forms, Validation & UX Safety]`.
 
 Six of those pages share one more ADC-local collaborator for the moment after a write: [`CommittedWriteReload`](#committedwritereload) (`Pages/Common/CommittedWriteReload.cs:16`), held as a `_writeReload` field by [`EventDetail`](#eventdetail), [`ConferenceCategoryDetail`](#conferencecategorydetail), [`QuestionDetail`](#questiondetail), [`SponsorDetail`](#sponsordetail), [`PartnerDetail`](#partnerdetail), and [`ActivityDetail`](#activitydetail) (`Pages/Events/EventDetail.razor.cs:58`, `Pages/Categories/ConferenceCategoryDetail.razor.cs:56`, `Pages/Questions/QuestionDetail.razor.cs:65`, `Pages/Sponsors/SponsorDetail.razor.cs:67`, `Pages/Partners/PartnerDetail.razor.cs:67`, `Pages/Activities/ActivityDetail.razor.cs:75`). It covers a write the server committed whose follow-up reload then fails (a timeout, an open circuit, a transient 5xx): the write is done, so the page leaves edit mode and says it saved, but it still holds the record and row version from before the write (`Pages/Common/CommittedWriteReload.cs:9` to `:15`). `TryAdopt` takes the reload's `Result`, adopting the refreshed record on success and otherwise marking the page stale and raising the page's localized "saved, but not refreshed" warning instead of reporting the write as failed (`:31`, stale at `:39` to `:40`, called with `Snackbar.SavedRefreshFailed` at `Pages/Sponsors/SponsorDetail.razor.cs:190`). `EnsureCurrentAsync` runs before the next edit or write: a page that is not stale gets its held record back unchanged, while a stale page re-reads the record so the form shows, and the write posts, what the server holds, rather than a row version the API refuses with 409 or 412 until a manual page reload; a failed re-read is reported through the page's toast and localizer and the page stays stale (`:55`, re-read at `:67`, failure at `:74`, called at `Pages/Sponsors/SponsorDetail.razor.cs:147`). `EventDetail` adopts through it on two write paths, the second with a caller-supplied stale message (`Pages/Events/EventDetail.razor.cs:207`, `:266`). `[Rubric §29, Resilience]`.
 
@@ -44,7 +44,7 @@ Sessions, speakers, and events own *join* relationships (a speaker added to a se
 
 ## Display-enrichment lookups: the GetAll-vs-GetById populator gap, worked around in the UI
 
-Because the API's list endpoints do not always populate every cross-entity navigation, several pages need a cheap id-to-name map to render speaker names beside a session or an event name beside a room, a sponsor, a partner, or an activity. Three lookup services fill that role, [`SpeakerLookupService`](#speakerlookupservice), [`EventLookupService`](#eventlookupservice), and [`CategoryItemLookupService`](#categoryitemlookupservice) (behind [`ISpeakerLookupService`](#ispeakerlookupservice), [`IEventLookupService`](#ieventlookupservice), and [`ICategoryItemLookupService`](#icategoryitemlookupservice)). Each reads its whole entity set through Common's [`PagedReadAll`](group-15-common-ui-framework.md#pagedreadall), which pages the `/paged` endpoint in stable id order with children and foreign keys suppressed until the server's reported total is reached, because a single read truncates silently at the API's 500-row page-size clamp (`MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/Api/PagedReadAll.cs:19`, page size at `:22`, URL at `:43`, rationale at `:13` to `:17`); each page is a GET through [`IdempotentReadRetry`](group-15-common-ui-framework.md#idempotentreadretry), and the rows fold into a `Dictionary` of lightweight projection records, [`SpeakerInfo`](#speakerinfo), [`EventInfo`](#eventinfo), [`CategoryItemInfo`](#categoryiteminfo) (`Services/Speakers/SpeakerLookupService.cs:29`, read at `:91` to `:105`, fold at `:119` to `:129`; `Services/Events/EventLookupService.cs:33`; `Services/Categories/CategoryItemLookupService.cs:12`; records at `Services/Speakers/ISpeakerLookupService.cs:9`, `Services/Events/IEventLookupService.cs:14`, `Services/Categories/ICategoryItemLookupService.cs:9`). `EventLookupService` and `SpeakerLookupService` both memoize their read per scope for five minutes, matched to the server-side output-cache TTL, and cache the *task* rather than the result, so the overlapping loads `EventFilteredListPageBase` starts share one in-flight fetch and an attendee moving between the public session list and a session page pays one speaker read rather than one per navigation; no lock guards the cache because a scope's component callbacks run on one logical thread (`Services/Events/EventLookupService.cs:14` to `:24`, TTL at `:43`, `TimeProvider` injected at `:33`, reuse check at `:78`; `Services/Speakers/SpeakerLookupService.cs:14` to `:26`, TTL at `:39`). The speaker memo is per scope rather than per process because its payload is role-dependent (BR-239: a privileged caller sees speakers the public projection hides), so it must never be shared across users (`Services/Speakers/SpeakerLookupService.cs:22` to `:24`). Only a successful fetch is stamped with an expiry, so a faulted, canceled, or failed read is retried on the next call rather than cached; each interface exposes an `Invalidate` that the write services call, and a generation counter keeps a fetch superseded by an invalidation from stamping the expiry of its replacement (`Services/Events/IEventLookupService.cs:35`, `Services/Speakers/ISpeakerLookupService.cs:26`, `Services/Events/EventLookupService.cs:59`, `:117`). `EventInfo` is the one projection that grew a feature-specific field: `SponsorshipPacketUrl` is an *optional* trailing parameter defaulting to `null` precisely so the many call sites that need only identity and dates stayed unchanged, and only the public sponsor page reads it (`Services/Events/IEventLookupService.cs:10` to `:21`, read at `Pages/Public/Sponsors/PublicSponsorList.razor.cs:88`). The organizer detail pages use the same map for a plain display concern: `PartnerDetail` shows the owning event's name and falls back to the raw id when the lookup is unavailable, rather than failing the page over a label (`Pages/Partners/PartnerDetail.razor.cs:25`, `:39` to `:42`). This is a deliberate client-side join over the [navigation-populator](group-11-navigation-populators.md) ([ADR-002](https://ivanball.github.io/docs/adr/002-navigation-populators.html)) gap between the API's list and by-id read shapes.
+Because the API's list endpoints do not always populate every cross-entity navigation, several pages need a cheap id-to-name map to render speaker names beside a session or an event name beside a room, a sponsor, a partner, or an activity. Three lookup services fill that role, [`SpeakerLookupService`](#speakerlookupservice), [`EventLookupService`](#eventlookupservice), and [`CategoryItemLookupService`](#categoryitemlookupservice) (behind [`ISpeakerLookupService`](#ispeakerlookupservice), [`IEventLookupService`](#ieventlookupservice), and [`ICategoryItemLookupService`](#icategoryitemlookupservice)). Each reads its whole entity set through Common's [`PagedReadAll`](group-15-common-ui-framework.md#pagedreadall), which pages the `/paged` endpoint in stable id order with children and foreign keys suppressed until the server's reported total is reached, because a single read truncates silently at the API's 500-row page-size clamp (`MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/Api/PagedReadAll.cs:18`, page size at `:22`, URL at `:43`, rationale at `:13` to `:17`); each page is a GET through [`IdempotentReadRetry`](group-15-common-ui-framework.md#idempotentreadretry), and the rows fold into a `Dictionary` of lightweight projection records, [`SpeakerInfo`](#speakerinfo), [`EventInfo`](#eventinfo), [`CategoryItemInfo`](#categoryiteminfo) (`Services/Speakers/SpeakerLookupService.cs:29`, read at `:91` to `:105`, fold at `:119` to `:129`; `Services/Events/EventLookupService.cs:33`; `Services/Categories/CategoryItemLookupService.cs:12`; records at `Services/Speakers/ISpeakerLookupService.cs:9`, `Services/Events/IEventLookupService.cs:14`, `Services/Categories/ICategoryItemLookupService.cs:9`). `EventLookupService` and `SpeakerLookupService` both memoize their read per scope for five minutes, matched to the server-side output-cache TTL, and cache the *task* rather than the result, so the overlapping loads `EventFilteredListPageBase` starts share one in-flight fetch and an attendee moving between the public session list and a session page pays one speaker read rather than one per navigation; no lock guards the cache because a scope's component callbacks run on one logical thread (`Services/Events/EventLookupService.cs:14` to `:24`, TTL at `:43`, `TimeProvider` injected at `:33`, reuse check at `:78`; `Services/Speakers/SpeakerLookupService.cs:14` to `:26`, TTL at `:39`). The speaker memo is per scope rather than per process because its payload is role-dependent (BR-239: a privileged caller sees speakers the public projection hides), so it must never be shared across users (`Services/Speakers/SpeakerLookupService.cs:22` to `:24`). Only a successful fetch is stamped with an expiry, so a faulted, canceled, or failed read is retried on the next call rather than cached; each interface exposes an `Invalidate` that the write services call, and a generation counter keeps a fetch superseded by an invalidation from stamping the expiry of its replacement (`Services/Events/IEventLookupService.cs:35`, `Services/Speakers/ISpeakerLookupService.cs:26`, `Services/Events/EventLookupService.cs:59`, `:117`). `EventInfo` is the one projection that grew a feature-specific field: `SponsorshipPacketUrl` is an *optional* trailing parameter defaulting to `null` precisely so the many call sites that need only identity and dates stayed unchanged, and only the public sponsor page reads it (`Services/Events/IEventLookupService.cs:10` to `:21`, read at `Pages/Public/Sponsors/PublicSponsorList.razor.cs:88`). The organizer detail pages use the same map for a plain display concern: `PartnerDetail` shows the owning event's name and falls back to the raw id when the lookup is unavailable, rather than failing the page over a label (`Pages/Partners/PartnerDetail.razor.cs:25`, `:39` to `:42`). This is a deliberate client-side join over the [navigation-populator](group-11-navigation-populators.md) ([ADR-002](https://ivanball.github.io/docs/adr/002-navigation-populators.html)) gap between the API's list and by-id read shapes.
 
 One page needed three of these together, and got a composite rather than three nullable caches and three failure branches: [`SpeakerDetailLookupService`](#speakerdetaillookupservice) gathers the category items, their owning category titles, and the question texts into a single [`SpeakerDetailLookups`](#speakerdetaillookups) record answered as one `Result`, short-circuiting on the first failure (`Services/Speakers/SpeakerDetailLookupService.cs:13`, record at `Services/Speakers/ISpeakerDetailLookupService.cs:14`, interface at `:25`). The same "one call, one failure branch" instinct produced `SessionizeRefreshOutcome` above and [`SessionLookups`](#sessionlookups) beside the session detail page.
 
@@ -110,7 +110,7 @@ All paths are centralized in [`ConferenceRoutePaths`](#conferenceroutepaths), a 
 
 Two registration types wire the area in. [`ConferenceUIModule`](#conferenceuimodule) implements Common's [`IUIModule`](group-15-common-ui-framework.md#iuimodule) (the front-end counterpart of the [`IModule`](group-14-module-system-composition.md#imodule) back-end contract): it declares the module's seventeen [`NavItem`](group-15-common-ui-framework.md#navitem) entries, whose labels are resource *keys* (`Nav.Events`, `Nav.Dashboard`, and so on) resolved by the shared NavMenu at render time against the co-located `ConferenceUIModule.resx` pair (`ConferenceUIModule.cs:14`, `:16` to `:18`). Those seventeen split three ways: five public entries for everyone, Events, Sessions, Speakers, Sponsors, and Activities (`ConferenceUIModule.cs:21` to `:25`), two `speaker_id`-claim-gated entries in the user section, the dashboard and the speaker's own QR (`ConferenceUIModule.cs:28`, `:29`), and an `Organizer`-role-gated admin group of ten, Events, Sessions, Speakers, Categories, Questions, Rooms, Sponsors, Partners, Activities, and Session Selection (`ConferenceUIModule.cs:32` to `:41`); it then exposes its assembly so the host can discover the Razor routes (`ConferenceUIModule.cs:44`).
 
-The companion [`DependencyInjection`](#dependencyinjection) extension `AddConferenceUI()` (a C# `extension(IServiceCollection)` member, [primer §4](00-primer.md#c-extensiont-types-read-this-once)) is the one call a host makes (`MMCA.ADC.Conference.UI/DependencyInjection.cs:19`, extension block at `:21`, method at `:27`). It delegates the prologue to Common's `AddUIModule<ConferenceUIModule>()`, which scans the module assembly for every `IEntityService<,>` implementation as scoped and registers the descriptor as a singleton `IUIModule` (`MMCA.ADC.Conference.UI/DependencyInjection.cs:31`), then explicitly registers what a scan cannot infer: the four child-entity services (`:34` to `:37`), the speaker dashboard (`:40`), the two organizer feedback services (`:43`, `:44`), session selection (`:47`), the session-materials service, which is outside the scan for exactly the reason its interface records (`:52`, note at `:49` to `:51`), the offline-first schedule service (`:55`), the three lookup services (`:58` to `:60`), and the composite speaker-detail lookup (`:64`). Last, it `TryAdd`s `TimeProvider.System` as a singleton, because the pages' current-event selection, the home countdown, and the event lookup cache all read the clock through `TimeProvider`, yet no UI head registers one and the Engagement UI's own `TryAdd` is skipped when that module is disabled (`:70`, reasoning at `:66` to `:69`). Public share links are *not* registered here: `IPublicLinkBuilder` comes from the framework's own `AddUIShared`, and the MAUI head overrides that registration afterwards so shared links always point at the web app, a note left in place where the registration used to be (`MMCA.ADC.Conference.UI/DependencyInjection.cs:72` to `:75`). Because the scan covers the entity services, the partner area arrived with no edit to this file at all, and because the module contributes its own nav and assembly, the shell folds it in with no edit to the shell either. `[Rubric §1, SOLID]` (Open/Closed) and `[Rubric §18, UI Architecture]`. Read the per-type sections that follow for the mechanics of each page, model, and service; the bUnit and Playwright tests that exercise this library live in the testing chapter ([G28](group-28-testing-infrastructure.md)).
+The companion [`DependencyInjection`](#dependencyinjection) extension `AddConferenceUI()` (a C# `extension(IServiceCollection)` member, [primer §4](00-primer.md#c-extensiont-types-read-this-once)) is the one call a host makes (`MMCA.ADC.Conference.UI/DependencyInjection.cs:19`, extension block at `:21`, method at `:27`). It delegates the prologue to Common's `AddUIModule<ConferenceUIModule>()`, which scans the module assembly for every `IEntityService<,>` implementation as scoped and registers the descriptor as a singleton `IUIModule` (`MMCA.ADC.Conference.UI/DependencyInjection.cs:31`), then explicitly registers what a scan cannot infer: the four child-entity services (`:34` to `:37`), the speaker dashboard (`:40`), the two organizer feedback services (`:43`, `:44`), session selection (`:47`), the session-materials service, which is outside the scan for exactly the reason its interface records (`:52`, note at `:49` to `:51`), the offline-first schedule service (`:55`), the three lookup services (`:58` to `:60`), and the composite speaker-detail lookup (`:64`). Last, it `TryAdd`s `TimeProvider.System` as a singleton, because the pages' current-event selection, the home countdown, and the event lookup cache all read the clock through `TimeProvider`, yet no UI head registers one and the Engagement UI's own `TryAdd` is skipped when that module is disabled (`:70`, reasoning at `:66` to `:69`). Public share links are *not* registered here: `IPublicLinkBuilder` comes from the framework's own `AddUIShared`, and the MAUI head overrides that registration afterwards so shared links always point at the web app, a note left in place where the registration used to be (`MMCA.ADC.Conference.UI/DependencyInjection.cs:72` to `:75`). Because the scan covers the entity services, the partner area arrived with no edit to this file at all, and because the module contributes its own nav and assembly, the shell folds it in with no edit to the shell either. `[Rubric §1, SOLID]` (Open/Closed) and `[Rubric §18, UI Architecture]`. Read the per-type sections that follow for the mechanics of each page, model, and service; the bUnit and Playwright tests that exercise this library live in the testing chapter ([G28](group-29-testing-infrastructure.md)).
 
 ### ConferenceRoutePaths
 > MMCA.ADC.Conference.UI · `MMCA.ADC.Conference.UI` · `MMCA.ADC.Conference.UI/ConferenceRoutePaths.cs:8` · Level 0 · class (static)
@@ -158,7 +158,7 @@ The companion [`DependencyInjection`](#dependencyinjection) extension `AddConfer
   - **Speaker** (`:28-29`): the Dashboard and the QR page, both carrying `RequiredClaim: "speaker_id"` and `Section: NavSection.User`, so they appear only for a user whose JWT links them to a speaker record and they render in the user menu rather than the main list.
   - **Organizer** (`:32-41`): ten items, each carrying `RoleNames.Organizer`, `Section: NavSection.Admin`, and `Group: "Nav.Group.Conference"` so they fold into one labelled admin group. The new `Nav.Partners` entry (`:38`) sits between `Nav.Sponsors` and `Nav.Activities`, pointing at `ConferenceRoutePaths.Partners` with `Icons.Material.Filled.Diversity3`, matching the position of the routes themselves in [ConferenceRoutePaths](#conferenceroutepaths); the tier ends with the Session Selection entry (`:41`).
   - `Assembly` (`:44`) returns `typeof(ConferenceUIModule).Assembly` so the host's Blazor router can discover this library's routable components. Note that "Events", "Sessions", "Speakers", "Sponsors", and "Activities" each appear twice in the list, once public and once organizer, differing only in route and gating: the same label serves two audiences with two destinations. Partners has no public counterpart, so it appears once.
-- **Why it's built this way**: mirroring the backend [IModule](group-14-module-system-composition.md#imodule) pattern on the UI side keeps the app extensible. A host that boots without the Conference module simply has no conference nav and no conference routes, with no conditional code anywhere in the shell. The class also leaves `AppBarComponentTypes` and `LayoutComponentTypes` at their interface defaults (`MMCA.Common.UI/Common/Interfaces/IUIModule.cs:20-23`): Conference contributes no app-bar badge and no root overlay.
+- **Why it's built this way**: mirroring the backend [IModule](group-14-module-system-composition.md#imodule) pattern on the UI side keeps the app extensible. A host that boots without the Conference module simply has no conference nav and no conference routes, with no conditional code anywhere in the shell. The class also leaves `AppBarComponentTypes` and `LayoutComponentTypes` at their interface defaults (`MMCA.Common.UI/Common/Interfaces/IUIModule.cs:23-34`): Conference contributes no app-bar badge and no root overlay.
 - **Where it's used**: registered as a singleton `IUIModule` by this module's [DependencyInjection](#dependencyinjection) through `AddUIModule<ConferenceUIModule>()` (`DependencyInjection.cs:23`, implemented at `MMCA.Common.UI/DependencyInjection.cs:332-341`) and aggregated by the shared UI navigation builder in [group 15](group-15-common-ui-framework.md#iuimodule).
 
 ### EventFormModel
@@ -462,122 +462,129 @@ The companion [`DependencyInjection`](#dependencyinjection) extension `AddConfer
   richest detail page in the Conference UI in terms of *verbs*, and the place where the detail-page shape
   is taught.
 - **Depends on**: [`DetailPageBase`](group-15-common-ui-framework.md#detailpagebase) (`@inherits`,
-  `.../Pages/Event/EventDetail.razor:6`), [`IEventUIService`](#ieventuiservice) (line 24) for all four
+  `.../Pages/Events/EventDetail.razor:9`), [`IEventUIService`](#ieventuiservice) (line 24) for all four
   operations, [`IToastService`](group-15-common-ui-framework.md#itoastservice) (line 26),
-  [`EventEditModel`](#eventeditmodel) (line 54),
-  [`LatestLoadGuard`](group-15-common-ui-framework.md#latestloadguard) through the base's `LoadGuard`
-  (`MMCA.Common/Source/Presentation/MMCA.Common.UI/Pages/Common/DetailPageBase.cs:43`);
+  [`EventEditModel`](#eventeditmodel) (line 53),
+  [`LatestLoadGuard`](group-15-common-ui-framework.md#latestloadguard) and
+  [`DetailLoadState`](group-15-common-ui-framework.md#detailloadstate) through the base's `BeginLoad` /
+  `CompleteLoad` / `LoadState`
+  (`MMCA.Common/Source/Presentation/MMCA.Common.UI/Pages/Common/DetailPageBase.cs:45, 52, 59, 78`);
   [`EventDTO`](group-17-conference-domain.md#eventdto),
   [`RefreshFromSessionizeResultDTO`](group-17-conference-domain.md#refreshfromsessionizeresultdto), and
-  [`QuestionModerationDefault`](group-17-conference-domain.md#questionmoderationdefault);
+  [`QuestionModerationDefault`](group-17-conference-domain.md#questionmoderationdefault)
+  (`.../Pages/Events/EventDetail.razor:101`);
   [`ConferenceRoutePaths`](#conferenceroutepaths),
-  [`ErrorMessages`](group-15-common-ui-framework.md#errormessages) (line 103),
+  [`ErrorMessages`](group-15-common-ui-framework.md#errormessages) (line 155),
   [`ResultUiExtensions`](group-15-common-ui-framework.md#resultuiextensions)`.NotifyOnFailure`
-  (lines 112, 201, 382),
-  [`CommittedWriteReload`](#committedwritereload) (`_writeReload`, line 58), and
-  the `DeleteConfirmation`, `UnsavedChangesGuard`, `EventFormFields`, and `ErrorSummary` components
-  (`.../Pages/Event/EventDetail.razor:11, 37, 51, 197`).
+  (lines 179, 360),
+  [`CommittedWriteReload`](#committedwritereload) (`_writeReload`, line 57), and
+  the `UnsavedChangesGuard`, `DetailLoadStateContent`, `EventFormFields`, `ErrorSummary`, and
+  `DeleteConfirmation` components (`.../Pages/Events/EventDetail.razor:14, 21, 39, 53, 204`).
 - **Concept introduced, load-once-on-parameters over a shared detail base.** Four mechanisms combine here
   and recur in every detail page in this group:
   1. **A shared base owns the boring half.** [`DetailPageBase`](group-15-common-ui-framework.md#detailpagebase) supplies `PageToken`
      (the page-scoped cancellation token with its dispose pattern) and the edit-mode lifecycle
      (`IsEditing`, `IsDirty`, `BeginEdit`, `EndEdit`), so this file contains no
-     `CancellationTokenSource` and no `Dispose` at all. It also supplies `LoadGuard`, a
-     [`LatestLoadGuard`](group-15-common-ui-framework.md#latestloadguard) the load below uses so only the
-     newest load may write the page.
+     `CancellationTokenSource` and no `Dispose` at all. It also owns the load state: `BeginLoad`
+     supersedes the load in flight through its [`LatestLoadGuard`](group-15-common-ui-framework.md#latestloadguard)
+     and resets `LoadState` to `Loading`, and `CompleteLoad` records `Loaded`, `NotFound`, or `Failed`
+     for the current generation only (`.../DetailPageBase.cs:59-95`), so this page declares no
+     `IsLoading` flag of its own.
   2. **Route id as the typed alias**: the id arrives as `[Parameter] public EventIdentifierType Id`
-     (line 28) and is passed straight to `GetByIdAsync(Id, true, token)` (line 94), with no string
-     parsing in the page, so the route constraint and the alias agree on the primitive (ADR-048, ADR-085).
+     (line 28) and is passed straight to `GetByIdAsync(Id, true, token)` (line 92), with no string
+     parsing in the page, so the route constraint (`.../Pages/Events/EventDetail.razor:1`) and the alias
+     agree on the primitive (ADR-048, ADR-085).
   3. **Load once per id, newest load wins**: `OnParametersSetAsync` compares against `_loadedId`
-     (an `EventIdentifierType?`) and returns a completed task when the id is unchanged (lines 74-84), so
+     (an `EventIdentifierType?`) and returns a completed task when the id is unchanged (lines 73-83), so
      a re-render does not refetch. When the id does change, it returns `LoadEventAsync()` directly (line
-     83), which starts with `LoadGuard.Begin()` (line 89), which supersedes any load
-     still in flight, and a response that is no longer current is dropped (lines 95-98).
+     82), which starts with `BeginLoad()` (line 88), which supersedes any load still in flight, and
+     `CompleteLoad` drops a response that is no longer current (line 96).
   4. **Shadow editing through a model**: `StartEditingAsync` re-validates the shown event (see
      `EnsureCurrentEventAsync` below), copies it into
-     [`EventEditModel`](#eventeditmodel) and calls `BeginEdit` (lines 130-146); `CancelEditing` is just
-     `EndEdit` (line 165). The live `Event` object is never mutated until a validated save succeeds.
+     [`EventEditModel`](#eventeditmodel) and calls `BeginEdit` (lines 108-124); `CancelEditing` is just
+     `EndEdit` (line 143). The live `Event` object is never mutated until a validated save succeeds.
      `[Rubric §24, Forms, Validation & UX Safety]`.
   `[Rubric §8, Data Architecture]` assesses a deliberate concurrency strategy: every mutating call
   re-sends the loaded `RowVersion`, on save through [`EventEditModel`](#eventeditmodel)`.ToUpdated` and
-  on publish/unpublish explicitly (lines 252-254), which is the client half of the optimistic-concurrency
+  on publish/unpublish explicitly (lines 230-232), which is the client half of the optimistic-concurrency
   token described in `Website/docs-src/adr/035-optimistic-concurrency.md`. A committed write whose
   follow-up reload fails would leave that token stale, so the page owns a
-  [`CommittedWriteReload`](#committedwritereload) (`_writeReload`, line 58, tagged M246): the write still
+  [`CommittedWriteReload`](#committedwritereload) (`_writeReload`, line 57, tagged M246): the write still
   counts as done, the page warns that it could not refresh, and the next edit, publish, or Sessionize
-  refresh re-reads first through `EnsureCurrentEventAsync` (lines 153-163) instead of posting the stale
+  refresh re-reads first through `EnsureCurrentEventAsync` (lines 126-141) instead of posting the stale
   row version.
   `[Rubric §6, CQRS & Event-Driven]`: publish and unpublish are not `IsPublished` flag edits, they are
   their own named service operations (`PublishAsync` / `UnpublishAsync`,
-  `.../Services/IEventUIService.cs:13, 15`), so each state transition stays a use case the server can
-  guard on its own terms.
+  `.../Services/Events/IEventUIService.cs:13, 15`), so each state transition stays a use case the server
+  can guard on its own terms.
   `[Rubric §13, Observability & Operability]`: the Sessionize refresh returns a
   [`RefreshFromSessionizeResultDTO`](group-17-conference-domain.md#refreshfromsessionizeresultdto) held
-  in `_refreshResult` (line 68) so the organizer sees what the import actually did.
+  in `_refreshResult` (line 67) so the organizer sees what the import actually did.
 - **Walkthrough**
   - `OnInitialized` (lines 34-46) builds breadcrumbs and wires the validation delegate against `_model`
     (line 45), exactly as [`EventCreate`](#eventcreate) does.
-  - `LoadEventAsync` (lines 86-128): `LoadGuard.Begin()` yields a token and a generation (line 89), and
-    `GetByIdAsync(Id, true, token)` fetches with children (line 94); a response from a superseded
-    generation returns without touching the page (lines 95-98). A `NotFound` result clears `Event` and
-    toasts `ErrorMessages.NotFound` (lines 100-104); any other failure goes through `NotifyOnFailure`
-    (line 112) so the server's own message reaches the user; success seeds `_sessionizeCode` (line 108).
-    The `finally` clears `IsLoading` only for the current generation (lines 119-127), because an
-    unconditional clear would let a superseded response switch off the spinner the newer load just
-    turned on (comment, lines 121-122).
-  - `SaveChangesAsync` (lines 167-224): validate the form, re-check both dates present and end not before
-    start (lines 181-193, the same two guards [`EventCreate`](#eventcreate) runs), post
-    `_model.ToUpdated(Event)` (line 198), then **refetch** the record (line 206). The refetch goes through
-    `_writeReload.TryAdopt` (line 207): on success the page adopts the server truth, re-seeds
+  - `LoadEventAsync` (lines 85-106): `BeginLoad()` yields a token and a generation (line 88), and
+    `GetByIdAsync(Id, true, token)` fetches with children (line 92). The page adopts the event and seeds
+    `_sessionizeCode` only when `CompleteLoad(generation, result)` reports a current success (lines
+    96-100). A not-found or failed load raises no toast: the comment (lines 94-95) states that the page
+    body reports it, and the markup renders `DetailLoadStateContent` for every state but `Loaded`, with
+    `OnRetry="LoadEventAsync"` for a failure (`.../Pages/Events/EventDetail.razor:19-25`). A superseded
+    response changes nothing, and the spinner is the base's `Loading` state rather than a page flag.
+  - `SaveChangesAsync` (lines 145-202): validate the form, re-check both dates present and end not before
+    start (lines 159-171, the same two guards [`EventCreate`](#eventcreate) runs), post
+    `_model.ToUpdated(Event)` (line 176), then **refetch** the record (line 184). The refetch goes through
+    `_writeReload.TryAdopt` (line 185): on success the page adopts the server truth, re-seeds
     `_sessionizeCode`, and toasts; on a failed reload the helper warns with
-    `Snackbar.SavedRefreshFailed` instead, and `EndEdit` (line 214) runs either way because the update
-    already committed (comment, line 205).
-  - `PublishAsync` / `UnpublishAsync` (lines 226-228) both delegate to `SetPublishedAsync(bool)`
-    (lines 236-285), which picks the failure message up front (line 243), resolves the event through
-    `EnsureCurrentEventAsync` (line 247), calls the chosen named
-    operation with that event's `RowVersion` (lines 252-254), and refetches (line 264). A reload
-    miss no longer fails the gesture (doc comment, lines 230-235): `TryAdopt` (line 266) warns with a
-    publish- or unpublish-specific stale message (line 265), and the page shows the committed state by
-    setting `Event = current with { IsPublished = publish }` (line 274), so the button does not offer the
-    toggle again. A failed toggle shows `ActionErrorMessage(toggled, failureMessage)` (line 260): a
+    `Snackbar.SavedRefreshFailed` instead, and `EndEdit` (line 192) runs either way because the update
+    already committed (comment, line 183).
+  - `PublishAsync` / `UnpublishAsync` (lines 204-206) both delegate to `SetPublishedAsync(bool)`
+    (lines 214-263), which picks the failure message up front (line 221), resolves the event through
+    `EnsureCurrentEventAsync` (line 225), calls the chosen named
+    operation with that event's `RowVersion` (lines 230-232), and refetches (line 242). A reload
+    miss does not fail the gesture (doc comment, lines 208-213): `TryAdopt` (line 244) warns with a
+    publish- or unpublish-specific stale message (line 243), and the page shows the committed state by
+    setting `Event = current with { IsPublished = publish }` (line 252), so the button does not offer the
+    toggle again. A failed toggle shows `ActionErrorMessage(toggled, failureMessage)` (line 238): a
     refusal the API stated, such as a stale row version answering 412 with
-    `Concurrency.PreconditionFailed`, shows its own localized message (comment, lines 257-259).
-  - `ActionErrorMessage(Result, fallback)` (lines 297-305) is the shared rule for a failed user action:
+    `Concurrency.PreconditionFailed`, shows its own localized message (comment, lines 235-237).
+  - `ActionErrorMessage(Result, fallback)` (lines 275-283) is the shared rule for a failed user action:
     an `ErrorType.Unexpected` result (a 500, a transport failure, a timeout) shows the generic
     `fallback` rather than raw diagnostic text, anything else shows
     `result.LocalizedErrorMessage(L)` and falls back only when that is null (ADR-027 Decision 9
     carve-out, per its doc comment). [`ErrorType`](group-01-result-error-handling.md#errortype) is the
     classification it tests.
-  - `SessionizeCodeError` (lines 287-295) is the Sessionize panel's own format check: null while the
+  - `SessionizeCodeError` (lines 265-273) is the Sessionize panel's own format check: null while the
     code is blank or well formed, otherwise the same `Validation.SessionizeCodeFormat` message the Edit
     form shows, since [`SessionizeCodeAttribute`](#sessionizecodeattribute) applies the same
     `SessionizeCodeFormat` rule.
-  - `RefreshFromSessionizeAsync` (lines 307-363) first rejects a malformed code before any call, toasting
-    `SessionizeCodeError` (lines 316-320), because the persist step would refuse it after a round trip
+  - `RefreshFromSessionizeAsync` (lines 285-341) first rejects a malformed code before any call, toasting
+    `SessionizeCodeError` (lines 294-298), because the persist step would refuse it after a round trip
     with a less specific message. It then resolves the event through `EnsureCurrentEventAsync`
-    (line 328) and hands the whole gesture to one service call,
-    `RefreshFromSessionizeWithCodeAsync(current, _sessionizeCode, PageToken)` (line 333). The service owns
+    (line 306) and hands the whole gesture to one service call,
+    `RefreshFromSessionizeWithCodeAsync(current, _sessionizeCode, PageToken)` (line 311). The service owns
     persist-then-import-then-reload and returns a single outcome carrying both the summary and the
-    refreshed event (lines 350-351), so the page keeps one failure message for the whole gesture.
-    The failure branch toasts through `ActionErrorMessage` (line 336) and does one more thing: because
+    refreshed event (lines 328-329), so the page keeps one failure message for the whole gesture.
+    The failure branch toasts through `ActionErrorMessage` (line 314) and does one more thing: because
     the code persist and the refresh stamp can both commit before the import fails, moving the row
-    version, it refetches the stored event and adopts it when the read succeeds (lines 342-345). The
-    comment (lines 338-341) names
+    version, it refetches the stored event and adopts it when the read succeeds (lines 320-323). The
+    comment (lines 316-319) names
     the payoff: the next refresh, save, or publish carries the current `RowVersion` instead of hitting a
     409 until a reload, while the typed `_sessionizeCode` is left as entered so a retry re-persists it.
     This is the same client half of [ADR-035](https://ivanball.github.io/docs/adr/035-optimistic-concurrency.html)
     described above, applied to a partially committed gesture.
-  - `DeleteEventAsync` (lines 365-393): confirm through `_deleteConfirm.ShowAsync(Event.Name)`
-    (line 372), delete, then navigate back to the list.
+  - `DeleteEventAsync` (lines 343-371): confirm through `_deleteConfirm.ShowAsync(Event.Name)`
+    (line 350), delete, then navigate back to the list.
 - **Why it's built this way**: an event is the root aggregate of the whole conference, so publishing,
   importing, and editing carry separate audit meaning rather than collapsing into one PUT; keeping each
   as its own service call is what lets the server enforce its own rules per transition. Pushing the
   three-step Sessionize gesture into the service (rather than sequencing it in the page) is the same
   instinct applied one level down.
-- **Where it's used**: the `/events/{Id}` organizer route (`.../Pages/Event/EventDetail.razor:1-2`),
+- **Where it's used**: the `/events/{Id:int}` organizer route (`.../Pages/Events/EventDetail.razor:1`),
   reached from [`EventList`](#eventlist) rows and from [`EventCreate`](#eventcreate)'s success redirect.
   Its "view feedback" button opens [`OrganizerEventFeedback`](#organizereventfeedback)
-  (`.../Pages/Event/EventDetail.razor:135-136`).
+  (`.../Pages/Events/EventDetail.razor:141-142`). Tests: `EventDetailTests`,
+  `EventDetailSavedRefreshFailedTests`, `EventDetailActionErrorTests`, and `EventDetailStaleLoadTests`
+  under `MMCA.ADC/Tests/Modules/Conference/MMCA.ADC.Conference.UI.Tests/Pages/Events/`.
 - **Caveats / not-in-source**: what the Sessionize refresh imports, and how it reconciles existing rows,
   is server-side; this page only shows the returned summary.
 
@@ -600,7 +607,7 @@ The companion [`DependencyInjection`](#dependencyinjection) extension `AddConfer
 
   Every per-service registration is `AddScoped`; the singletons are the descriptor and the `TimeProvider`, both stateless, so one instance per container is correct. The method returns `services` for chaining (`:76`).
 - **Why it's built this way**: scanning the uniform bulk and spelling out the one-off collaborators keeps registration short without hiding the non-trivial wiring. The closing comment (`:72-75`) documents what this file deliberately does *not* register: `IPublicLinkBuilder` comes from the framework, where `AddUIShared` `TryAdd`-registers the browser-origin builder (`MMCA.Common.UI/DependencyInjection.cs:202-204`), and the MAUI head overrides it afterwards with `AddCommonMauiPublicLinkBuilder()` (`MMCA.Common.UI.Maui/DependencyInjection.cs:140`, called at `MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI/MauiProgram.cs:151`) so last-registration-wins points shared links at the configured public web URL. Recording an ordering dependency that lives in another repository, right where a reader would otherwise expect the registration, is the cheap version of [Rubric §34, Architecture Governance and Documentation].
-- **Where it's used**: called once during startup by each of the three UI heads: the Blazor Server host (`MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs:171`), the WebAssembly client (`MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web.Client/Program.cs:59`), and the MAUI host (`MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI/MauiProgram.cs:139`), alongside the other modules' `AddXxxUI()` extensions.
+- **Where it's used**: called once during startup by each of the three UI heads: the Blazor Server host (`MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs:178`), the WebAssembly client (`MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web.Client/Program.cs:59`), and the MAUI host (`MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI/MauiProgram.cs:139`), alongside the other modules' `AddXxxUI()` extensions.
 
 ### PublicSessionListFilterState
 > MMCA.ADC.Conference.UI · `MMCA.ADC.Conference.UI.Pages.Public` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/Pages/Public/PublicSessionListFilterState.cs:12` · Level 0 · class (internal static)
@@ -659,32 +666,34 @@ The companion [`DependencyInjection`](#dependencyinjection) extension `AddConfer
   3. **A faulted state degrades to the narrowest audience, a cancellation does not.** The catch filter is `ex is not OperationCanceledException` (`:31`), so an unreadable auth state returns `false` (`:34`) and the public page still renders, while a cancellation propagates to the caller's own teardown handling. The `CA1031` suppression carries its reason inline (`:30`). `[Rubric §26, Front-End Security]` (fail closed to the narrower audience) and `[Rubric §11, Security]`.
 - **Walkthrough**: `IsPrivilegedReaderAsync(Task<AuthenticationState>?)` (`:18-36`): null guard (`:20-23`), `await` the task (`:27`), then `PrivilegedRoles.Any(authState.User.IsInRole)` (`:28`); the filtered `catch` (`:31-35`) returns `false`.
 - **Why it's built this way**: the audience decision gates what a public page shows (a grid, a breadcrumb, a redirect), so its edge cases (no state, a faulted state, a cancelled state) must answer identically on every page. One `internal static` helper makes that a property of the code rather than of four copies kept in step by hand, and it is unit-testable without a renderer. `[Rubric §14, Testability]`.
-- **Where it's used**: [`PublicEventList`](#publiceventlist) (`PublicEventList.razor.cs:72`), [`PublicEventDetail`](#publiceventdetail) (`PublicEventDetail.razor.cs:67`), [`PublicSessionList`](#publicsessionlist) (`PublicSessionList.razor.cs:129`) and [`PublicSpeakerList`](#publicspeakerlist) (`PublicSpeakerList.razor.cs:121`), each assigning `_isPrivileged` from it. `PublicReadAudienceTests` pins the eight behaviors, including both cancellation paths propagating (`MMCA.ADC/Tests/Modules/Conference/MMCA.ADC.Conference.UI.Tests/Pages/Public/PublicReadAudienceTests.cs:79`, `:89`) and a faulted state reading as non-privileged (`:69`).
+- **Where it's used**: [`PublicEventList`](#publiceventlist) (`PublicEventList.razor.cs:71`), [`PublicEventDetail`](#publiceventdetail) (`PublicEventDetail.razor.cs:60`), [`PublicSessionList`](#publicsessionlist) (`PublicSessionList.razor.cs:129`) and [`PublicSpeakerList`](#publicspeakerlist) (`PublicSpeakerList.razor.cs:121`), each assigning `_isPrivileged` from it. `PublicReadAudienceTests` pins the eight behaviors, including both cancellation paths propagating (`MMCA.ADC/Tests/Modules/Conference/MMCA.ADC.Conference.UI.Tests/Pages/Public/PublicReadAudienceTests.cs:79`, `:89`) and a faulted state reading as non-privileged (`:69`).
 
 ### PublicEventDetail
 > MMCA.ADC.Conference.UI · `MMCA.ADC.Conference.UI.Pages.Public.Events` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/Pages/Public/Events/PublicEventDetail.razor.cs:18` · Level 8 · class (Blazor code-behind)
 
-- **What it is**: the read-only public view of one event: venue information, rooms, support contacts, and the conference-day conveniences (copy the Wi-Fi details, open directions, a distance-to-venue hint, a collapsible venue map, a QR code for the page itself). For a public visitor it is also the landing page of the whole conference, because [`PublicEventList`](#publiceventlist) redirects them here.
-- **Depends on**: [`IEventUIService`](#ieventuiservice) (`:20`), [`EventDTO`](group-17-conference-domain.md#eventdto), [`IToastService`](group-15-common-ui-framework.md#itoastservice) (`:22`), [`PublicReadAudience`](#publicreadaudience) (`:67`, which reads [`ConferenceReadAudience`](group-17-conference-domain.md#conferencereadaudience) on the page's behalf), [`ConferenceRoutePaths`](#conferenceroutepaths) (`:77`, `:171`, `:173`, `:175`), the `EventIdentifierType` alias for the typed route parameter (`:29`, `:83`), [`VenueMapLinks`](#venuemaplinks) (called from the markup, not the code-behind, at `PublicEventDetail.razor:73,86`) to decide the venue-map rendering, and four device-capability abstractions: [`IClipboardService`](group-26-device-capability-layer.md#iclipboardservice), [`IMapNavigationService`](group-26-device-capability-layer.md#imapnavigationservice), [`IGeolocationService`](group-26-device-capability-layer.md#igeolocationservice), [`IGeocodingService`](group-26-device-capability-layer.md#igeocodingservice) (`:23-26`), whose [`GeoPoint`](group-26-device-capability-layer.md#geopoint) results supply the `DistanceKmTo` used at `:234`. It also reads `IConfiguration` for the host-wide support contacts (`:27`, `:64-65`), and the `LifetimeToken()` extension on `CancellationTokenSource` from `MMCA.Common/Source/Presentation/MMCA.Common.UI/Common/ComponentLifetimeExtensions.cs:26`.
-- **Concept introduced, the load guard, the audience-shaped breadcrumb trail, and best-effort progressive enhancement.** Three mechanisms are worth extracting.
-  1. **Load once per id, and let the newest load win.** The route value arrives already typed as `[Parameter] EventIdentifierType Id` (`:29`, bound by the `{Id:int}` route constraint at `PublicEventDetail.razor:1`), and `OnParametersSetAsync` compares it against the nullable `_loadedId` (`:83`) so a re-render does not refetch (`:96-105`); it is a non-async method that returns `Task.CompletedTask` on the no-change path and otherwise hands back the `LoadEventAsync` task directly. On top of that, each `LoadEventAsync` call opens a fresh generation and cancellation token through `_load.Begin()` (`:110`), and both the fetch (`:119`) and the distance hint (`:147`) run under that token; every await point is re-checked against `_load.IsCurrent(generation)` (`:120`, `:222`, `:228`, `:162`), so a superseded fetch both drops its results and is actually cancelled, not merely ignored. The field doc explains why the generation and not the route id is authoritative (`:85-90`): `_loadedId` is stamped synchronously before the await, so two rapid route changes would otherwise let the later-completing fetch paint the wrong event. The `finally` is guarded by the same test (`:158-166`), because an unconditional clear would let a superseded response switch off the spinner the newer load just turned on. The load also resets `_distanceMiles` to null on entry (`:112-114`): the hint belongs to the previous event, and a venue-less or unsupported event never recomputes it, so without the reset the previous event's distance would stay on screen. `[Rubric #19, State Management & Data Flow]`.
-  2. **The breadcrumb trail depends on the audience, and the audience is awaited first.** `OnInitializedAsync` resolves privileged status through [`PublicReadAudience`](#publicreadaudience)`.IsPrivilegedReaderAsync` (`:67`) before building the trail (`:62-81`), then adds the "Events" crumb only for a privileged reader (`:75-78`). The doc comment states both halves of the reasoning (`:54-61`): a public visitor was redirected *to* this page by the event list, so an Events crumb would bounce them straight back here, and the access token hydrates asynchronously from the HttpOnly cookie, so reading roles synchronously would render the wrong trail and correct it on the next render. A faulted auth read is treated as non-privileged by the shared helper, which lets a cancellation propagate instead (`PublicReadAudience.cs:31`). `[Rubric #25, Navigation & Information Architecture]` (assesses that navigation affordances lead somewhere the reader can actually use) and `[Rubric #26, Front-End Security]` (fail closed to the narrower audience).
-  3. **Every capability is optional.** `TryComputeDistanceAsync` (`:214-236`) returns early when geolocation or geocoding is unsupported or the venue address is blank (`:216-219`), and again on any null result or superseded generation (`:222`, `:228`), so a denied permission or an offline geocoder simply leaves the hint off. The doc comment states the rule plainly: this must never block the page (`:209-213`). `[Rubric #29, Resilience & Business Continuity]` (assesses degradation when an optional dependency is absent) and `[Rubric #26, Front-End Security]` (a location read is soft and unblocking, never a gate on content). These come from the device-capability layer of [ADR-042](https://ivanball.github.io/docs/adr/042-device-capability-abstraction.html).
-  A fourth detail is a small but real configuration rule: a per-event `OrganizerContactEmail` wins over the host-wide `Support:Email`, and it is re-evaluated on every load so navigating between events never leaves the previous organizer's address on screen (`:140-145`). `[Rubric #15, Best Practices & Code Quality]`: a conference can publish its own contact without a redeploy. A fifth is how the one-shot device calls get their token: `LifetimeToken` (`:35-38`) reads the source through `LifetimeToken()` instead of `_cts.Token`, because reading `Token` off a disposed source throws `ObjectDisposedException`; disposal cancels before it disposes, so a handler that resumes after the reader navigated away receives an already-cancelled token and stops through its `OperationCanceledException` path.
+- **What it is**: the read-only public view of one event: venue information, rooms, support contacts, and the conference-day conveniences (copy the Wi-Fi details, open directions, a distance-to-venue hint, a collapsible venue map, a QR code for the page itself). For a public visitor it is also the landing page of the whole conference, because [`PublicEventList`](#publiceventlist) redirects them here. The page inherits [`DetailPageBase`](group-15-common-ui-framework.md#detailpagebase) (`PublicEventDetail.razor:5`), so the load guard, the page-lifetime token, the load state and disposal all come from the shared base rather than being declared here.
+- **Depends on**: [`DetailPageBase`](group-15-common-ui-framework.md#detailpagebase) for `BeginLoad`, `CompleteLoad`, `LoadGuard`, `LoadState` and `PageToken` (`MMCA.Common/Source/Presentation/MMCA.Common.UI/Pages/Common/DetailPageBase.cs:28`, `:38`, `:45`, `:52`, `:59`, `:78`), which wraps a [`LatestLoadGuard`](group-15-common-ui-framework.md#latestloadguard) and reads its token through [`ComponentLifetimeExtensions`](group-15-common-ui-framework.md#componentlifetimeextensions); [`IEventUIService`](#ieventuiservice) (`:20`), [`EventDTO`](group-17-conference-domain.md#eventdto) (`:88`, `:94`), [`IToastService`](group-15-common-ui-framework.md#itoastservice) (`:22`), [`PublicReadAudience`](#publicreadaudience) (`:60`, which reads [`ConferenceReadAudience`](group-17-conference-domain.md#conferencereadaudience) on the page's behalf), [`ConferenceRoutePaths`](#conferenceroutepaths) (`:70`, `:184`, `:186`, `:188`, and in the markup at `PublicEventDetail.razor:31,33`), the `EventIdentifierType` alias for the typed route parameter (`:29`, `:79`, `:92`), [`VenueMapLinks`](#venuemaplinks) (called from the markup, not the code-behind, at `PublicEventDetail.razor:73,86`) to decide the venue-map rendering, and four device-capability abstractions: [`IClipboardService`](group-26-device-capability-layer.md#iclipboardservice), [`IMapNavigationService`](group-26-device-capability-layer.md#imapnavigationservice), [`IGeolocationService`](group-26-device-capability-layer.md#igeolocationservice), [`IGeocodingService`](group-26-device-capability-layer.md#igeocodingservice) (`:23-26`), whose [`GeoPoint`](group-26-device-capability-layer.md#geopoint) results supply the `DistanceKmTo` used at `:247`. It also reads `IConfiguration` for the host-wide support contacts (`:27`, `:57-58`). The markup renders the loading, not-found and failed states through the shared `DetailLoadStateContent` component keyed on [`DetailLoadState`](group-15-common-ui-framework.md#detailloadstate) (`PublicEventDetail.razor:13-19`).
+- **Concept introduced, the load guard, the prerender hand-off, the audience-shaped breadcrumb trail, and best-effort progressive enhancement.** Four mechanisms are worth extracting.
+  1. **Load once per id, and let the newest load win.** The route value arrives already typed as `[Parameter] EventIdentifierType Id` (`:29`, bound by the `{Id:int}` route constraint at `PublicEventDetail.razor:1`), and `OnParametersSetAsync` compares it against the nullable `_loadedId` (`:79`) so a re-render does not refetch (`:96-105`); it is a non-async method that returns `Task.CompletedTask` on the no-change path and otherwise hands back the `LoadEventAsync` task directly. On top of that, each `LoadEventAsync` call opens a fresh generation and cancellation token through the base's `BeginLoad()` (`:110`), which also puts the page back into the loading state (`DetailPageBase.cs:59-62`); both the fetch (`:122`) and the distance hint (`:152`) run under that token. The outcome is recorded through `CompleteLoad(generation, result)` (`:126`), which returns false and changes nothing when a newer load has superseded this one (`DetailPageBase.cs:78-82`), and the distance hint re-checks `LoadGuard.IsCurrent(generation)` after each await (`:235`, `:241`), so a superseded fetch both drops its results and is actually cancelled, not merely ignored. The field comment explains why the generation and not the route id is authoritative (`:76-78`): `_loadedId` is stamped synchronously before the first await, so two rapid route changes would otherwise let the later-completing fetch paint the wrong event. Clearing `Event` on a failed or superseded result is itself guarded by `LoadGuard.IsCurrent` (`:129-132`, `:163-166`), so a stale failure cannot blank the event a newer load already painted. The load also resets `_distanceMiles` to null on entry (`:112-114`): the hint belongs to the previous event, and a venue-less or unsupported event never recomputes it, so without the reset the previous event's distance would stay on screen. `[Rubric #19, State Management & Data Flow]`.
+  2. **The prerender's fetch is handed to the interactive pass, once.** `PrerenderedEvent` and `PrerenderedEventId` carry `[PersistentState]` (`:81-92`), so the event the SSR prerender fetched travels to the interactive instance through persistent component state. `LoadEventAsync` first asks `TakePrerenderedEvent()` (`:118-122`), which returns the persisted DTO only when it was fetched for the current route id and clears both properties either way (`:170-180`), so the hand-off answers one load at most and never a different id. Every successful load writes both properties back (`:136-140`), which is what the prerender pass persists at its end. The doc comment notes the DTO is the public event record with no per-reader field (`:81-86`), which is why sharing it across the two passes is safe. See [ADR-056](https://ivanball.github.io/docs/adr/056-blazor-render-mode-strategy.html) for the render-mode strategy this lives inside. `[Rubric #23, Front-End Performance and Rendering]` (no duplicate fetch per page view).
+  3. **The breadcrumb trail depends on the audience, and the audience is awaited first.** `OnInitializedAsync` resolves privileged status through [`PublicReadAudience`](#publicreadaudience)`.IsPrivilegedReaderAsync` (`:60`) before building the trail (`:55-74`), then adds the "Events" crumb only for a privileged reader (`:68-71`). The doc comment states both halves of the reasoning (`:47-54`): a public visitor was redirected *to* this page by the event list, so an Events crumb would bounce them straight back here, and the access token hydrates asynchronously from the HttpOnly cookie, so reading roles synchronously would render the wrong trail and correct it on the next render. A faulted auth read is treated as non-privileged by the shared helper, which lets a cancellation propagate instead (`PublicReadAudience.cs:31`). `[Rubric #25, Navigation & Information Architecture]` (assesses that navigation affordances lead somewhere the reader can actually use) and `[Rubric #26, Front-End Security]` (fail closed to the narrower audience).
+  4. **Every capability is optional.** `TryComputeDistanceAsync` (`:227-249`) returns early when geolocation or geocoding is unsupported or the venue address is blank (`:229-232`), and again on any null result or superseded generation (`:235`, `:241`), so a denied permission or an offline geocoder simply leaves the hint off. The doc comment states the rule plainly: this must never block the page (`:222-226`). `[Rubric #29, Resilience & Business Continuity]` (assesses degradation when an optional dependency is absent) and `[Rubric #26, Front-End Security]` (a location read is soft and unblocking, never a gate on content). These come from the device-capability layer of [ADR-042](https://ivanball.github.io/docs/adr/042-device-capability-abstraction.html).
+  A fifth detail is a small but real configuration rule: a per-event `OrganizerContactEmail` wins over the host-wide `Support:Email`, and it is re-evaluated on every load so navigating between events never leaves the previous organizer's address on screen (`:145-150`). `[Rubric #15, Best Practices & Code Quality]`: a conference can publish its own contact without a redeploy. A sixth is how the one-shot device calls get their token: they pass the base's `PageToken` (`:201`, `:215`), which reads the base's source through `LifetimeToken()` (`DetailPageBase.cs:38`) because reading `Token` off a disposed source throws `ObjectDisposedException`; disposal cancels before it disposes, so a handler that resumes after the reader navigated away receives an already-cancelled token and stops through its `OperationCanceledException` path.
 - **Walkthrough**
-  - `LoadEventAsync` (`:107-167`): begin a fresh generation and token from `_load.Begin()` (`:110`), reset `_distanceMiles` (`:112-114`), fetch with children under that token, passing the typed `Id` straight through with no string parse (`GetByIdAsync(Id, true, token)`, `:119`), and on failure clear `Event` so a failed navigation never leaves the previous event on screen, toasting the not-found wording for a 404 and the page's fixed load-failure key otherwise (`:125-134`); on success reset `_showMap` to false (`:138`, so navigating to a different event never leaves the previous one's map expanded), resolve the support address (`:140-145`), and run the distance hint, passing both the generation and the same token (`:147`). `OperationCanceledException` is swallowed as expected teardown (`:150-153`) and a broad `catch` toasts the same load-failure key (`:154-157`).
-  - `_showMap` (`:51-52`) and `ToggleMap` (`:177`) back a collapse/expand toggle for the venue map: the markup only offers it when `VenueMapLinks.IsGoogleMapsEmbed` recognizes the stored `VenueMapUrl` (`PublicEventDetail.razor:73`), and only actually renders the iframe when `_showMap` is true (`PublicEventDetail.razor:90-99`), so third-party map content does not load until the reader asks for it. `VenueMapLinks.BuildSearchUrl` always renders the plain "open in Google Maps" link beside the toggle as a fallback (`PublicEventDetail.razor:86-89`).
-  - `CopyWifiAsync` (`:181-192`): copies `Event.WiFiInfo` through the clipboard abstraction under `LifetimeToken` (`:188`) and reports success or failure with one toast whose severity flips on the result (`:189-191`).
-  - `OpenDirectionsAsync` (`:194-207`): native heads launch the platform maps app, browsers open a maps site, again under `LifetimeToken` (`:202`); a false return raises a warning.
-  - `TryComputeDistanceAsync` (`:214-236`): takes the load generation and a `CancellationToken` from the caller rather than reading `_cts` itself, geocodes the venue under that token (`:221`), reads the current-or-last-known position the same way (`:227`), converts kilometres to miles with an explicit named constant (`:233-234`), and calls `StateHasChanged()` (`:235`) because the value arrives after the render that requested it; the markup renders it to one decimal in the viewer's culture (`PublicEventDetail.razor:58-61`).
-  - Navigation helpers (`:169-179`) route back to the list (privileged readers only, per the comment at `:169-170`), on to the public schedule, on to the activities page, and to the event feedback form, whose `/feedback/event/{Id}` path is built with `string.Create(CultureInfo.InvariantCulture, ...)` so the numeric id formats the same under any UI culture (`:179`). Disposal (`:239-261`) is the standard cancel-on-disposal pattern over the `CancellationTokenSource` at `:33`, plus disposing the `LatestLoadGuard` itself (`:251`).
-- **Why it's built this way**: the public event page is the one an attendee opens while standing in the building, so its extras (Wi-Fi, directions, distance, the venue map) are worth having, none of them is worth failing the page over, and the map specifically stays collapsed by default so the table stays compact and no third-party (Google) content loads until the reader chooses to see it (`PublicEventDetail.razor:75-79` in-code comment).
-- **Where it's used**: the `/conference/events/{Id:int}` route (`PublicEventDetail.razor:1`), reached from [`PublicEventList`](#publiceventlist) either as a grid row (privileged) or as a `replace: true` redirect (everyone else); its markup also renders the `QrCodeButton` for this page's own public link (`PublicEventDetail.razor:30`).
+  - `LoadEventAsync` (`:107-168`): begin a fresh generation and token from `BeginLoad()` (`:110`), reset `_distanceMiles` (`:112-114`), then take the prerendered event if one was persisted for this id, or else fetch with children under that token, passing the typed `Id` straight through with no string parse (`GetByIdAsync(Id, true, token)`, `:118-122`). A superseded, not-found or failed result goes through `CompleteLoad` and clears `Event` if this load is still current (`:126-133`); it raises no toast, because the page body states the outcome through `DetailLoadStateContent` with a Retry for a failure (comment `:124-125`; markup `PublicEventDetail.razor:13-19`, whose `OnRetry` re-runs `LoadEventAsync`). On success it persists the event for the prerender hand-off (`:136-140`), sets `Event` and resets `_showMap` to false (`:142-143`, so navigating to a different event never leaves the previous one's map expanded), resolves the support address (`:145-150`), and runs the distance hint, passing both the generation and the same token (`:152`). `OperationCanceledException` is swallowed as expected teardown (`:155-158`); a broad `catch` treats a transport fault as a failed load, recording an `Error.Unexpected` failure through `CompleteLoad` and clearing `Event` under the same currency check (`:159-167`).
+  - `TakePrerenderedEvent` (`:170-180`): returns `PrerenderedEvent` only when `PrerenderedEventId == Id`, then nulls both properties.
+  - `_showMap` (`:44-45`) and `ToggleMap` (`:190`) back a collapse/expand toggle for the venue map: the markup only offers it when `VenueMapLinks.IsGoogleMapsEmbed` recognizes the stored `VenueMapUrl` (`PublicEventDetail.razor:73`), and only actually renders the iframe when `_showMap` is true (`PublicEventDetail.razor:90-100`), so third-party map content does not load until the reader asks for it. `VenueMapLinks.BuildSearchUrl` always renders the plain "open in Google Maps" link beside the toggle as a fallback (`PublicEventDetail.razor:86-89`).
+  - `CopyWifiAsync` (`:194-205`): copies `Event.WiFiInfo` through the clipboard abstraction under `PageToken` (`:201`) and reports success or failure with one toast whose severity flips on the result (`:202-204`).
+  - `OpenDirectionsAsync` (`:207-220`): native heads launch the platform maps app, browsers open a maps site, again under `PageToken` (`:215`); a false return raises a warning.
+  - `TryComputeDistanceAsync` (`:227-249`): takes the load generation and a `CancellationToken` from the caller rather than reading a page token itself, geocodes the venue under that token (`:234`), reads the current-or-last-known position the same way (`:240`), converts kilometres to miles with an explicit named constant (`:246-247`), and calls `StateHasChanged()` (`:248`) because the value arrives after the render that requested it; the markup renders it to one decimal in the viewer's culture (`PublicEventDetail.razor:59-64`).
+  - Navigation helpers (`:182-192`) route back to the list (privileged readers only, per the comment at `:182-183`), on to the public schedule, on to the activities page, and to the event feedback form, whose `/feedback/event/{Id}` path is built with `string.Create(CultureInfo.InvariantCulture, ...)` so the numeric id formats the same under any UI culture (`:192`). The page declares no disposal of its own: cancelling and disposing the token source and the load guard is the base's `Dispose(bool)` (`DetailPageBase.cs:138-149`).
+- **Why it's built this way**: the public event page is the one an attendee opens while standing in the building, so its extras (Wi-Fi, directions, distance, the venue map) are worth having, none of them is worth failing the page over, and the map specifically stays collapsed by default so the table stays compact and no third-party (Google) content loads until the reader chooses to see it (`PublicEventDetail.razor:75-79` in-code comment). Taking the load guard, token and load state from [`DetailPageBase`](group-15-common-ui-framework.md#detailpagebase) gives this page the same not-found and failed-with-Retry body as the other detail pages built on that base, rather than a page-specific toast.
+- **Where it's used**: the `/conference/events/{Id:int}` route (`PublicEventDetail.razor:1`, `[AllowAnonymous]` at `:4`), reached from [`PublicEventList`](#publiceventlist) either as a grid row (privileged) or as a `replace: true` redirect (everyone else); its markup also renders the `QrCodeButton` for this page's own public link (`PublicEventDetail.razor:31`). A bUnit suite renders it directly (`MMCA.ADC/Tests/Modules/Conference/MMCA.ADC.Conference.UI.Tests/Pages/Public/PublicEventDetailTests.cs`).
 
 ### PublicEventList
-> MMCA.ADC.Conference.UI · `MMCA.ADC.Conference.UI.Pages.Public.Events` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/Pages/Public/Events/PublicEventList.razor.cs:30` · Level 9 · class (Blazor code-behind)
+> MMCA.ADC.Conference.UI · `MMCA.ADC.Conference.UI.Pages.Public.Events` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/Pages/Public/Events/PublicEventList.razor.cs:29` · Level 9 · class (Blazor code-behind)
 
-- **What it is**: the `/conference/events` route, where the audience decides whether a list is shown at all. A privileged reader (Organizer or ContentEditor) gets the full grid of published **and** unpublished events; every other visitor is redirected to the current or next event's detail page (class doc, `PublicEventList.razor.cs:13-29`).
+- **What it is**: the `/conference/events` route, where the audience decides whether a list is shown at all. A privileged reader (Organizer or ContentEditor) gets the full grid of published **and** unpublished events; every other visitor is redirected to the current or next event's detail page (class doc, `PublicEventList.razor.cs:12-28`).
 - **Depends on**: extends [`DataGridListPageBase<TDto>`](group-15-common-ui-framework.md#datagridlistpagebasetdto) closed over [`EventDTO`](group-17-conference-domain.md#eventdto) (`:30`); [`IEventUIService`](#ieventuiservice) and [`IEventLookupService`](#ieventlookupservice) (`:34-35`), an injected `TimeProvider` (`:37`), [`PublicReadAudience`](#publicreadaudience) (`:72`), [`CurrentEventSelector`](group-17-conference-domain.md#currenteventselector) (`:91`), [`EventInfo`](#eventinfo) (`:81`), [`ConferenceRoutePaths`](#conferenceroutepaths) (`:103`, `:147`), [`MobileInfiniteScrollList<TItem>`](group-15-common-ui-framework.md#mobileinfinitescrolllisttitem) (`:46`, rendered at `PublicEventList.razor:23`), [`ListPageActions`](group-15-common-ui-framework.md#listpageactions) (`:121`), and [`Result`](group-01-result-error-handling.md#result) in the mobile fetch signature (`:137`). Server-side the audience split is enforced by [`PublishedEventSpecification`](group-18-conference-application.md#publishedeventspecification).
 - **Concept introduced, the audience gate as a routing decision, and the three-state render.** This page is the sharpest example in the group of a UI decision that has to wait for identity.
   1. **Resolve the audience before deciding anything.** `OnInitializedAsync` awaits [`PublicReadAudience`](#publicreadaudience)`.IsPrivilegedReaderAsync` over the cascading `Task<AuthenticationState>` first (`:72`). The comment (`:69-71`) and the class doc (`:21-25`) both name the failure this prevents: on all three heads (Blazor Server, WebAssembly, MAUI) the access token hydrates asynchronously from the HttpOnly cookie, so a synchronous role read would see an anonymous principal and bounce an organizer off their own list. A faulted read is treated as non-privileged by the shared helper (`PublicReadAudience.cs:31`). `[Rubric §11, Security]` and `[Rubric §26, Front-End Security]` (assess that an authorization-shaped branch reads a settled principal, and fails to the narrower audience).
@@ -772,28 +781,29 @@ The companion [`DependencyInjection`](#dependencyinjection) extension `AddConfer
 > MMCA.ADC.Conference.UI · `MMCA.ADC.Conference.UI.Pages.Home` · `MMCA.ADC.Conference.UI/Pages/Home/ADCHome.razor.cs:22` · Level 9 · class (sealed partial component)
 
 - **What it is**: the conference landing page: hero with a live countdown and a ticketing button, pre-conference workshops, keynote, track catalogue, sponsor strip with a sponsorship call to action, a partners band, and venue block. It loads the published events through the UI service layer to find which event to feature, classifies that event as Upcoming/Live/Ended, loads that event's sponsors and partners, and renders the rest from the compiled-in editorial content in [ADCHomeContent](#adchomecontent). It is shared verbatim by the Web and MAUI heads, and its class doc records that both heads serve the static images from their own site root, so neither overrides `ImageBasePath` today (`:9-16`).
-- **Depends on**: [IEventUIService](#ieventuiservice) (`:51-52`), [ISponsorUIService](#isponsoruiservice) (`:54-55`), and [IPartnerUIService](#ipartneruiservice) (`:57-58`) for the three reads, an injected `TimeProvider` (`:60-61`) as the page's only clock, [EventDTO](group-17-conference-domain.md#eventdto) for the featured event (`:89`), [SponsorDTO](group-17-conference-domain.md#sponsordto) and [PartnerDTO](group-17-conference-domain.md#partnerdto) for the grouped strips (`:91-92`, `:94-95`), [EventPhase](#eventphase) (a private inner enum, `:99-104`), [ADCHomeContent](#adchomecontent) with its [KeynoteSpeakerInfo](#keynotespeakerinfo), [ConferenceTrackInfo](#conferencetrackinfo), and [PreConferenceWorkshopInfo](#preconferenceworkshopinfo) records, [CurrentEventSelector](group-17-conference-domain.md#currenteventselector) from `MMCA.ADC.Conference.Shared.Events`, [SponsorTier](group-17-conference-domain.md#sponsortier) and [PartnerType](group-17-conference-domain.md#partnertype), and [ConferenceRoutePaths](#conferenceroutepaths) for the "see all sponsors" link (`ADCHome.razor:308`). Externals: `IStringLocalizer<ADCHome>` injected in the markup as `L` (`ADCHome.razor:1`), `System.Threading.Timer`, `TimeZoneInfo`, MudBlazor, the Blazor `RendererInfo` API, and the `LifetimeToken()` extension on `CancellationTokenSource` (`MMCA.Common/Source/Presentation/MMCA.Common.UI/Common/ComponentLifetimeExtensions.cs:26`). It composes one first-party child component, `HomeCountdown` (`ADCHome.razor:40`), which lives in the same folder as a single `.razor` file with no code-behind.
+- **Depends on**: [IEventUIService](#ieventuiservice) (`:51-52`), [ISponsorUIService](#isponsoruiservice) (`:54-55`), and [IPartnerUIService](#ipartneruiservice) (`:57-58`) for the three reads, an injected `TimeProvider` (`:60-61`) as the page's only clock, [EventDTO](group-17-conference-domain.md#eventdto) for the featured event (`:89`), [SponsorDTO](group-17-conference-domain.md#sponsordto) and [PartnerDTO](group-17-conference-domain.md#partnerdto) for the grouped strips (`:91-92`, `:94-95`), [EventPhase](#eventphase) (a private inner enum, `:99-104`), [ADCHomeContent](#adchomecontent) with its [KeynoteSpeakerInfo](#keynotespeakerinfo), [ConferenceTrackInfo](#conferencetrackinfo), and [PreConferenceWorkshopInfo](#preconferenceworkshopinfo) records, [CurrentEventSelector](group-17-conference-domain.md#currenteventselector) from `MMCA.ADC.Conference.Shared.Events`, [SponsorTier](group-17-conference-domain.md#sponsortier) and [PartnerType](group-17-conference-domain.md#partnertype), and [ConferenceRoutePaths](#conferenceroutepaths) for the "see all sponsors" link (`ADCHome.razor:354`). Externals: `IStringLocalizer<ADCHome>` injected in the markup as `L` (`ADCHome.razor:2`), `System.Threading.Timer`, `TimeZoneInfo`, MudBlazor, the Blazor `RendererInfo` API, and the `LifetimeToken()` extension on `CancellationTokenSource` (`MMCA.Common/Source/Presentation/MMCA.Common.UI/Common/ComponentLifetimeExtensions.cs:26`). It composes one first-party child component, `HomeCountdown` (`ADCHome.razor:43`), which lives in the same folder as a single `.razor` file with no code-behind.
 - **Concept introduced: rendering correctly across the prerender and interactive passes.** [Rubric §23, Front-End Performance and Rendering] assesses whether a page avoids wasted renders and blocking work; this component is the chapter's clearest case study, and both of its decisions are recorded in the code comments. See [ADR-056](https://ivanball.github.io/docs/adr/056-blazor-render-mode-strategy.html) for the render-mode strategy these two decisions live inside.
-  - **Skip the fetch during prerender.** `OnInitializedAsync` checks `RendererInfo.IsInteractive` and, when false, sets `_isLoading = false`, computes the countdown from defaults, and returns without touching the network (`:143-148`). The comment (`:138-142`) states why: an untimed server-side call to a cold or unreachable backend would block the prerender, and therefore the page load and the post-login `NavigateTo("/")`, indefinitely. The static fallback renders immediately and the interactive pass loads the real event. Prerender is a one-shot static render, so the timer is moot there. [Rubric §29, Resilience and Business Continuity] is the same point from the availability angle.
-  - **Fence the per-second re-render.** The ticking digits live in the `HomeCountdown` child, which owns its own timer, so this page arms only a *single one-shot* `Timer` for the Live-to-Ended flip (`:167-186`). The comment records the alternative: a 1-second timer would re-render the entire landing page, the largest static page in the app, for the whole event, per circuit, just to catch one transition. The child goes further still: it ticks once a minute while more than 65 minutes remain and switches to once a second only for the final hour (`MMCA.ADC.Conference.UI/Pages/Home/HomeCountdown.razor:32`, `:52-56`, `:59`, `:70-74`), and it too refuses to start a timer unless `RendererInfo.IsInteractive` (`HomeCountdown.razor:51-52`).
+  - **Skip the fetch during prerender.** `OnInitializedAsync` checks `RendererInfo.IsInteractive` and, when false, sets `_isLoading = false`, computes the countdown from defaults, and returns without touching the network (`:150-155`). The comment (`:145-149`) states why: an untimed server-side call to a cold or unreachable backend would block the prerender, and therefore the page load and the post-login `NavigateTo("/")`, indefinitely. The static fallback renders immediately and the interactive pass loads the real event. Prerender is a one-shot static render, so the timer is moot there. [Rubric §29, Resilience and Business Continuity] is the same point from the availability angle.
+  - **Fence the per-second re-render.** The ticking digits live in the `HomeCountdown` child, which owns its own timer, so this page arms only a *single one-shot* `Timer` for the Live-to-Ended flip (`:174-193`). The comment records the alternative: a 1-second timer would re-render the entire landing page, the largest static page in the app, for the whole event, per circuit, just to catch one transition. The child goes further still: it ticks once a minute while more than 65 minutes remain and switches to once a second only for the final hour (`MMCA.ADC.Conference.UI/Pages/Home/HomeCountdown.razor:32`, `:52-56`, `:59`, `:70-74`), and it too refuses to start a timer unless `RendererInfo.IsInteractive` (`HomeCountdown.razor:51-52`).
 
-  Four more rubric threads run through it. [Rubric §22, Responsive and Cross-Browser/Device]: one component compiles into the Blazor Server, WebAssembly, and MAUI heads, with the per-head difference reduced to the `ImageBasePath` parameter (`:69`). [Rubric §27, Internationalization]: user-facing chrome resolves through `L[...]`, while the strings that must not be translated carry explicit `// i18n: allow` markers with reasons (the ticketing URL, the brand name, the postal address). [Rubric §20, Design System and Theming]: the page's scoped stylesheet is a single shared copy rendered by both heads, and an architecture fitness test embeds it and fails the build if it re-hardcodes the brand hex instead of using `var(--mmca-primary)` (`MMCA.ADC/Tests/Architecture/MMCA.ADC.Architecture.Tests/Ui/BrandColorTokenTests.cs:12-17`, embedded via `MMCA.ADC.Architecture.Tests.csproj:11-13`). [Rubric §14, Testability]: every read of "now" (featured-event selection `:215`, the end-of-event timer `:178`, the phase switch `:344`) goes through the injected `TimeProvider` rather than `DateTime.UtcNow`, so the event choice and the phase share one clock that a test host can replace.
+  Four more rubric threads run through it. [Rubric §22, Responsive and Cross-Browser/Device]: one component compiles into the Blazor Server, WebAssembly, and MAUI heads, with the per-head difference reduced to the `ImageBasePath` parameter (`:69`). [Rubric §27, Internationalization]: user-facing chrome resolves through `L[...]`, while the strings that must not be translated carry explicit `// i18n: allow` markers with reasons (the ticketing URL, the brand name, the postal address). [Rubric §20, Design System and Theming]: the page's scoped stylesheet is a single shared copy rendered by both heads, and an architecture fitness test embeds it and fails the build if it re-hardcodes the brand hex instead of using `var(--mmca-primary)` (`MMCA.ADC/Tests/Architecture/MMCA.ADC.Architecture.Tests/Ui/BrandColorTokenTests.cs:12-17`, embedded via `MMCA.ADC.Architecture.Tests.csproj:11-13`). [Rubric §14, Testability]: every read of "now" (featured-event selection `:222`, the end-of-event timer `:185`, the phase switch `:351`) goes through the injected `TimeProvider` rather than `DateTime.UtcNow`, so the event choice and the phase share one clock that a test host can replace.
 - **Walkthrough**, in lifecycle order:
   - **Constants and state** (`:24-97`): the `PreConferenceTicketingUrl` constant placed first because SA1203 requires constants before fields, with its doc block and `S1075` suppression (`:24-36`), then `MaxRoster` (`:38-42`), a fixed upper bound of `200` on one event's sponsor or partner roster passed explicitly to the paged reads because the underlying endpoints default to 10 rows per page and a conference announces dozens, not thousands. `EventStartTime` (`:44`) and `FallbackStartDate` (`:46-49`) follow. Then the three injected UI services (`:51-58`), the injected `TimeProvider` (`:60-61`), the `ImageBasePath` parameter (`:63-69`) and the derived `KeynoteImageSrc` (`:75-76`), a `CancellationTokenSource` (`:78`) with a `LifetimeToken` accessor over it (`:80-83`), the one-shot `_phaseTimer`, the computed `_startUtc`/`_endUtc`, `_phase`, the nullable `_event` (`EventDTO?`, `:89`), the grouped `_sponsorTiers` over `SponsorDTO` (`:91-92`) and `_partnerGroups` over `PartnerDTO` (`:94-95`), `_isLoading` (starting `true`), and a `_disposed` guard the timer callback checks (`:97`). `LifetimeToken` exists because reading `Token` off a disposed source throws `ObjectDisposedException`; `Dispose` cancels before it disposes, so a load that resumes after the reader navigated away gets an already-cancelled token and stops through its `OperationCanceledException` path (comment `:80-82`).
-  - **Derived display properties** (`:106-113`): `EventName`, `EventDescription`, `VenueAddress`, and `MapSearchUrl` are each `_event?.X ?? <fallback>`, so the page is fully renderable before and without a successful fetch. `MapSearchUrl` builds a Google Maps search URL with `Uri.EscapeDataString` over the address.
-  - **`HeroTitleParts()`** (`:115-132`): splits the event name so the hero can accent the keyword between "Atlanta " and " Conference" (in "2026 Atlanta Developers Conference" it accents "Developers"). It uses `IndexOf`/`LastIndexOf` with `StringComparison.Ordinal` and falls back to rendering the whole name plain when the name does not match the brand shape, which is why an arbitrary event name never renders broken markup; the markup branches on the accent being non-empty (`ADCHome.razor:19-26`).
-  - **`OnInitializedAsync`** (`:134-157`): creates the CTS, takes the prerender short-circuit described above, otherwise awaits `LoadEventAsync()`, `LoadSponsorsAsync()`, then `LoadPartnersAsync()` in sequence (both the sponsor and partner calls need the featured event id) and arms the phase timer.
-  - **`LoadEventAsync`** (`:199-227`): calls `EventService.GetAllAsync(cancellationToken: LifetimeToken)` (`:204`) and, on a successful [Result](group-01-result-error-handling.md#result), picks the event with `CurrentEventSelector.SelectCurrentOrNext(...)` passing three accessor lambdas plus `TimeProvider.GetUtcNow().UtcDateTime` (`:210-215`). The candidates are `events.Where(e => e.IsPublished)` (`:211`): the endpoint scopes only non-privileged callers to published events, while an Organizer or ContentEditor reads it unscoped, so a draft edition has to be filtered out here or the landing page would feature it (comment `:206-209`, tagged OBS-7). The comment is also the reason it is not a `FirstOrDefault`: the endpoint returns events unordered, so a naive first-item pick would pin the oldest seeded event. A failed read (API unavailable) surfaces as an unsuccessful `Result` handled by the `if`, which simply leaves the fallback defaults in place; the only exception caught is `OperationCanceledException`, meaning the component was disposed mid-load (`:218-221`). The `finally` block always clears `_isLoading` and recomputes the countdown (`:222-226`), so no failure path leaves a spinner on screen.
-  - **`LoadSponsorsAsync`** (`:229-275`): returns immediately when no event was featured (`:241-244`), then calls `SponsorService.GetPagedAsync` filtered to the featured event, `pageNumber: 1`, `pageSize: MaxRoster`, sorted by `Sort` ascending, under `LifetimeToken` (`:248-254`), and on a successful page reduces `sponsors.Items` to a tier-grouped list: tiers ascending in package order (Platinum first), each tier ordered by `Sort` then `Name` (`:256-269`, comment at `:258-259`). The event scoping happens server-side; the method's remarks record that the endpoint filters to the featured event the way `PublicSponsorList` does, so a second published edition's sponsors never bleed onto this page (`:232-238`). Its one catch arm is `OperationCanceledException` (`:271-274`) and, on any unsuccessful page, `_sponsorTiers` simply stays at its previous value, which is a supported render state rather than an error state.
-  - **`LoadPartnersAsync`** (`:277-320`): the same shape as `LoadSponsorsAsync` one method up: returns immediately with no featured event (`:287-290`), otherwise calls `PartnerService.GetPagedAsync` the same way, again under `LifetimeToken` (`:294-300`), and reduces a successful page's `partners.Items` to the type-grouped list, Community first (`:302-314`). Its one catch arm mirrors the sponsor load (`:316-319`) and an unsuccessful page leaves `_partnerGroups` empty, which hides the whole partners band rather than rendering a partial one.
-  - **`EventFilter`** (`:322-326`): a small static helper that builds the one-entry `{"EventId": ("equals", eventId)}` filter dictionary both `GetPagedAsync` calls pass, formatting the id with `CultureInfo.InvariantCulture` so the filter value is stable regardless of the host's culture.
-  - **`UpdateCountdown`** (`:328-351`): converts the event's local start and end into UTC using `TimeZoneInfo.FindSystemTimeZoneById(timeZoneId)` with `"America/New_York"` as the default (`:334`, `:340`), calling `CurrentEventSelector.ToUtc` rather than `ConvertTimeToUtc` because the midnight end boundary does not exist in zones that transition at 00:00 and a raw conversion would throw out of the render path (comment `:336-339`; `MMCA.ADC.Conference.Shared/Events/CurrentEventSelector.cs:89-94`). `now` is read from `TimeProvider` (`:344`) and `_phase` is then assigned from the switch described under [EventPhase](#eventphase) (`:345-350`).
-  - **Phase timing**: `OnCountdownElapsedAsync` (`:160-165`) is the `EventCallback` the `HomeCountdown` child raises at zero (`HomeCountdown.razor:82`), which recomputes the phase, re-arms, and returns the `InvokeAsync(StateHasChanged)` task directly (the method is no longer `async`). `ArmPhaseTimerForEventEnd` (`:171-186`) returns unless the phase is `Live` and the remaining time, measured against `TimeProvider.GetUtcNow()` (`:178`), is positive, then disposes any prior timer and schedules one callback at `untilEnd` with `Timeout.InfiniteTimeSpan` as the period, meaning fire once and never repeat (`:185`). `OnEventEnded` (`:188-197`) checks `_disposed` before re-rendering.
-  - **`FormatEventDate`** (`:353-360`): formats the date with a pattern read from a *resource* (`L["Hero.DateFormat"]`) against `CultureInfo.CurrentCulture`, so both the layout and the month names follow the selected language ([ADR-027](https://ivanball.github.io/docs/adr/027-multi-locale-i18n.html)).
-  - **`Dispose`** (`:362-369`): sets `_disposed`, cancels and disposes the CTS, and both stops (`Change(-1, -1)`) and disposes the phase timer. Stopping before disposing is what prevents a callback already in flight from touching a torn-down component.
-- **Why it's built this way**: the landing page is the app's most-hit surface and the post-login destination, so its correctness budget is dominated by two failure modes that have nothing to do with its content: a slow backend blocking the prerender, and a per-second render loop multiplied by every connected circuit. Both are solved structurally (skip the fetch, fence the tick) rather than by tuning, and every dynamic block has a defined empty state, so the page is never blank. Routing the three reads through [IEventUIService](#ieventuiservice), [ISponsorUIService](#isponsoruiservice), and [IPartnerUIService](#ipartneruiservice) keeps the event-scoping filter server-side and lets the page consume the same [Result](group-01-result-error-handling.md#result)-based service layer every other page in the group uses. The two conditional calls to action follow the same discipline: the hero ticketing button and the sponsorship packet block each render only when the featured event publishes the corresponding URL, and hide entirely otherwise rather than offering a dead link, which the markup comments state at both sites.
+  - **`TicketsOnSale()`** (`:106-111`): a method rather than a cached flag, returning true only when `_isLoading` is false and `_phase` is `EventPhase.Upcoming`. The markup reads it on every render to gate both ticketing calls to action, the hero button (`ADCHome.razor:79`, also requiring a published `TicketingUrl`) and the pre-conference workshops button (`ADCHome.razor:179`), so the Upcoming-to-Live flip from the countdown removes both without a reload and neither shows while the featured event is still loading (doc comment `:106-110`, markup comments `ADCHome.razor:72-77`, `:174-178`).
+  - **Derived display properties** (`:113-120`): `EventName`, `EventDescription`, `VenueAddress`, and `MapSearchUrl` are each `_event?.X ?? <fallback>`, so the page is fully renderable before and without a successful fetch. `MapSearchUrl` builds a Google Maps search URL with `Uri.EscapeDataString` over the address.
+  - **`HeroTitleParts()`** (`:122-139`): splits the event name so the hero can accent the keyword between "Atlanta " and " Conference" (in "2026 Atlanta Developers Conference" it accents "Developers"). It uses `IndexOf`/`LastIndexOf` with `StringComparison.Ordinal` and falls back to rendering the whole name plain when the name does not match the brand shape, which is why an arbitrary event name never renders broken markup; the markup branches on the accent being non-empty (`ADCHome.razor:17`, `:21-28`).
+  - **`OnInitializedAsync`** (`:141-164`): creates the CTS, takes the prerender short-circuit described above, otherwise awaits `LoadEventAsync()`, `LoadSponsorsAsync()`, then `LoadPartnersAsync()` in sequence (both the sponsor and partner calls need the featured event id) and arms the phase timer.
+  - **`LoadEventAsync`** (`:206-234`): calls `EventService.GetAllAsync(cancellationToken: LifetimeToken)` (`:211`) and, on a successful [Result](group-01-result-error-handling.md#result), picks the event with `CurrentEventSelector.SelectCurrentOrNext(...)` passing three accessor lambdas plus `TimeProvider.GetUtcNow().UtcDateTime` (`:217-222`). The candidates are `events.Where(e => e.IsPublished)` (`:218`): the endpoint scopes only non-privileged callers to published events, while an Organizer or ContentEditor reads it unscoped, so a draft edition has to be filtered out here or the landing page would feature it (comment `:213-216`, tagged OBS-7). The comment is also the reason it is not a `FirstOrDefault`: the endpoint returns events unordered, so a naive first-item pick would pin the oldest seeded event. A failed read (API unavailable) surfaces as an unsuccessful `Result` handled by the `if`, which simply leaves the fallback defaults in place; the only exception caught is `OperationCanceledException`, meaning the component was disposed mid-load (`:225-228`). The `finally` block always clears `_isLoading` and recomputes the countdown (`:229-233`), so no failure path leaves a spinner on screen.
+  - **`LoadSponsorsAsync`** (`:236-282`): returns immediately when no event was featured (`:248-251`), then calls `SponsorService.GetPagedAsync` filtered to the featured event, `pageNumber: 1`, `pageSize: MaxRoster`, sorted by `Sort` ascending, under `LifetimeToken` (`:255-261`), and on a successful page reduces `sponsors.Items` to a tier-grouped list: tiers ascending in package order (Platinum first), each tier ordered by `Sort` then `Name` (`:263-276`, comment at `:265-266`). The event scoping happens server-side; the method's remarks record that the endpoint filters to the featured event the way `PublicSponsorList` does, so a second published edition's sponsors never bleed onto this page (`:239-245`). Its one catch arm is `OperationCanceledException` (`:278-281`) and, on any unsuccessful page, `_sponsorTiers` simply stays at its previous value, which is a supported render state rather than an error state.
+  - **`LoadPartnersAsync`** (`:284-327`): the same shape as `LoadSponsorsAsync` one method up: returns immediately with no featured event (`:294-297`), otherwise calls `PartnerService.GetPagedAsync` the same way, again under `LifetimeToken` (`:301-307`), and reduces a successful page's `partners.Items` to the type-grouped list, Community first (`:309-321`). Its one catch arm mirrors the sponsor load (`:323-326`) and an unsuccessful page leaves `_partnerGroups` empty, which hides the whole partners band rather than rendering a partial one.
+  - **`EventFilter`** (`:329-333`): a small static helper that builds the one-entry `{"EventId": ("equals", eventId)}` filter dictionary both `GetPagedAsync` calls pass, formatting the id with `CultureInfo.InvariantCulture` so the filter value is stable regardless of the host's culture.
+  - **`UpdateCountdown`** (`:335-358`): converts the event's local start and end into UTC using `TimeZoneInfo.FindSystemTimeZoneById(timeZoneId)` with `"America/New_York"` as the default (`:341`, `:347`), calling `CurrentEventSelector.ToUtc` rather than `ConvertTimeToUtc` because the midnight end boundary does not exist in zones that transition at 00:00 and a raw conversion would throw out of the render path (comment `:343-346`; `MMCA.ADC.Conference.Shared/Events/CurrentEventSelector.cs:89-94`). `now` is read from `TimeProvider` (`:351`) and `_phase` is then assigned from the switch described under [EventPhase](#eventphase) (`:352-357`).
+  - **Phase timing**: `OnCountdownElapsedAsync` (`:167-172`) is the `EventCallback` the `HomeCountdown` child raises at zero (`HomeCountdown.razor:82`), which recomputes the phase, re-arms, and returns the `InvokeAsync(StateHasChanged)` task directly (the method is no longer `async`). `ArmPhaseTimerForEventEnd` (`:178-193`) returns unless the phase is `Live` and the remaining time, measured against `TimeProvider.GetUtcNow()` (`:185`), is positive, then disposes any prior timer and schedules one callback at `untilEnd` with `Timeout.InfiniteTimeSpan` as the period, meaning fire once and never repeat (`:192`). `OnEventEnded` (`:195-204`) checks `_disposed` before re-rendering.
+  - **`FormatEventDate`** (`:360-367`): formats the date with a pattern read from a *resource* (`L["Hero.DateFormat"]`) against `CultureInfo.CurrentCulture`, so both the layout and the month names follow the selected language ([ADR-027](https://ivanball.github.io/docs/adr/027-multi-locale-i18n.html)).
+  - **`Dispose`** (`:369-376`): sets `_disposed`, cancels and disposes the CTS, and both stops (`Change(-1, -1)`) and disposes the phase timer. Stopping before disposing is what prevents a callback already in flight from touching a torn-down component.
+- **Why it's built this way**: the landing page is the app's most-hit surface and the post-login destination, so its correctness budget is dominated by two failure modes that have nothing to do with its content: a slow backend blocking the prerender, and a per-second render loop multiplied by every connected circuit. Both are solved structurally (skip the fetch, fence the tick) rather than by tuning, and every dynamic block has a defined empty state, so the page is never blank. Routing the three reads through [IEventUIService](#ieventuiservice), [ISponsorUIService](#isponsoruiservice), and [IPartnerUIService](#ipartneruiservice) keeps the event-scoping filter server-side and lets the page consume the same [Result](group-01-result-error-handling.md#result)-based service layer every other page in the group uses. The conditional calls to action follow the same discipline: the hero ticketing button and the sponsorship packet block each render only when the featured event publishes the corresponding URL (`ADCHome.razor:79`, `:361`), and hide entirely otherwise rather than offering a dead link, which the markup comments state at both sites. The two ticketing buttons (hero and workshops) are further gated on `TicketsOnSale()`, so the page never sells tickets to an event already under way or over.
 - **Where it's used**: resolved as the home component by each head's `ADCHomePageContent`. The Web client points `ComponentType` straight at this shared component (`MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web.Client/Pages/ADCHomePageContent.cs:13`); the MAUI head points at a thin local wrapper page that renders `<ADCHome />` with no parameters (`MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI/Pages/ADCHomePageContent.cs:10`, `MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI/Pages/ADCHome.razor:6`). [Rubric §28, Front-End Testing]: a bUnit suite renders the page directly (`MMCA.ADC/Tests/Modules/Conference/MMCA.ADC.Conference.UI.Tests/Pages/Home/ADCHomeTests.cs`), covering the hero eyebrow and title class, the workshop cards and their links, the ticketing call to action with and without a URL (`:163`, `:220`), and the partners band ordering and empty state (`:256`, `:306`). Two suites hold it to account from outside as well: the brand-token fitness test above and the E2E pseudo-localization sentinel, which probes this page's `Location.OpenInMaps` resource and settles on the always-rendered `.location-section`, precisely because that button is static markup rather than event-load-gated (`MMCA.ADC/Tests/E2E/MMCA.ADC.E2E.Tests/Workflows/PseudoLocalizationTests.cs:35-48`).
-- **Caveats / not-in-source**: the page's own countdown window is not identical to the selector's. `UpdateCountdown` starts the event at `EventStartTime = 08:00` local (`:44`, applied at `:332`), while [CurrentEventSelector](group-17-conference-domain.md#currenteventselector) starts its live window at midnight local (`MMCA.ADC.Conference.Shared/Events/CurrentEventSelector.cs:71`). Both end at midnight after the last day (`CurrentEventSelector.cs:70`; `:333` here). So between midnight and 08:00 on day one, the selector already treats the event as live while the hero still shows a countdown. Whether that is intended is not determinable from source. Also note the two hard-coded fallbacks used when no event loads: the date `2026-10-17` (`:46-49`), whose comment warns it must track the published event date or the hero date and countdown visibly jump once the real event arrives, and the venue address (`:110`).
+- **Caveats / not-in-source**: the page's own countdown window is not identical to the selector's. `UpdateCountdown` starts the event at `EventStartTime = 08:00` local (`:44`, applied at `:339`), while [CurrentEventSelector](group-17-conference-domain.md#currenteventselector) starts its live window at midnight local (`MMCA.ADC.Conference.Shared/Events/CurrentEventSelector.cs:71`). Both end at midnight after the last day (`CurrentEventSelector.cs:70`; `:340` here). So between midnight and 08:00 on day one, the selector already treats the event as live while the hero still shows a countdown. Whether that is intended is not determinable from source. Also note the two hard-coded fallbacks used when no event loads: the date `2026-10-17` (`:46-49`), whose comment warns it must track the published event date or the hero date and countdown visibly jump once the real event arrives, and the venue address (`:117`).
 
 ### SessionAssetComposer
 
@@ -933,9 +943,9 @@ The companion [`DependencyInjection`](#dependencyinjection) extension `AddConfer
 - **Where it's used**: rendered once by [`PublicSessionList`](#publicsessionlist) (`PublicSessionList.razor:11-21`); its callbacks land on that page's `OnEventFilterChanged`, `OnSearchChanged`, `OnRoomFilterChanged` and `OnMyScheduleToggled` handlers (`PublicSessionList.razor.cs:182-204`).
 
 ### PublicSessionBookmarkState
-> MMCA.ADC.Conference.UI · `MMCA.ADC.Conference.UI.Pages.Public.Sessions` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/Pages/Public/Sessions/PublicSessionBookmarkState.cs:14` · Level 4 · class (internal sealed, primary constructor)
+> MMCA.ADC.Conference.UI · `MMCA.ADC.Conference.UI.Pages.Public.Sessions` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/Pages/Public/Sessions/PublicSessionBookmarkState.cs:13` · Level 4 · class (internal sealed, primary constructor)
 
-- **What it is**: the reader-and-bookmarks state for [`PublicSessionList`](#publicsessionlist): whether the reader is signed in, their user id, and the dictionary of starred sessions. The same dictionary instance is handed to [`PublicSessionListView`](#publicsessionlistview), which patches it in place as stars toggle (doc `PublicSessionBookmarkState.cs:27-30`).
+- **What it is**: the reader-and-bookmarks state for [`PublicSessionList`](#publicsessionlist): whether the reader is signed in, their user id, and the dictionary of starred sessions. The same dictionary instance is handed to [`PublicSessionListView`](#publicsessionlistview), which patches it in place as stars toggle (doc `PublicSessionBookmarkState.cs:26-29`).
 - **Depends on**: the cascaded `Task<AuthenticationState>?` and the optional [`ISessionBookmarkUIService`](group-22-engagement-module.md#isessionbookmarkuiservice) as primary-constructor parameters (`:14-16`); [`ClaimsPrincipalExtensions`](group-08-auth.md#claimsprincipalextensions)'s `GetUserId` (`:79`); [`Result`](group-01-result-error-handling.md#result) for the kept failure (`:19`).
 - **Concept introduced, a load whose failure is kept rather than thrown.** The state is built from the page's already-resolved authentication task and bookmark service, so it has no `[Inject]` surface of its own. `StartLoad` (`:38-42`) runs `LoadAsync` and stores the task, because the page must start it eagerly: the grid's first `ServerData` call can race ahead of initialization (doc `:33-36`). `[Rubric §19, State Management & Data Flow]` (assesses where mutable state lives and how loads are ordered).
 - **Walkthrough**
@@ -1086,19 +1096,19 @@ The companion [`DependencyInjection`](#dependencyinjection) extension `AddConfer
 > MMCA.ADC.Conference.UI · `MMCA.ADC.Conference.UI.Pages.Public.Sessions` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/Pages/Public/Sessions/PublicSessionListView.razor.cs:26` · Level 5 · class (Blazor code-behind)
 
 - **What it is**: the presentational session-list view for [`PublicSessionList`](#publicsessionlist): the mobile infinite-scroll card list and the desktop server-paged data grid, including the inline bookmark stars and their toggle flow (class doc, `PublicSessionListView.razor.cs:15-25`).
-- **Depends on**: [`SessionDTO`](group-17-conference-domain.md#sessiondto), the optional [`ISessionBookmarkUIService`](group-22-engagement-module.md#isessionbookmarkuiservice) (`:71`), [`SpeakerInfo`](#speakerinfo) (`:80`), [`Result`](group-01-result-error-handling.md#result) in the mobile fetch delegate's signature (`:89`), [`ConferenceRoutePaths`](#conferenceroutepaths) (`:196`), [`MobileInfiniteScrollList<TItem>`](group-15-common-ui-framework.md#mobileinfinitescrolllisttitem) (`:91`, rendered at `PublicSessionListView.razor:6`), [`ListPageActions`](group-15-common-ui-framework.md#listpageactions) (`:105`), [`IToastService`](group-15-common-ui-framework.md#itoastservice) and [`IHapticFeedbackService`](group-26-device-capability-layer.md#ihapticfeedbackservice) (`:28-29`), plus MudBlazor's `MudDataGrid<T>` / `GridState<T>` / `GridData<T>` and `NavigationManager`.
-- **Concept introduced, the presentational child that patches container-owned state in place.** Like [`PublicSessionListFilterBar`](#publicsessionlistfilterbar), the view owns no fetch or filter state: the page hands down its `ServerData` and `FetchPageResult` delegates (`:86`, `:89`), its paging parameters (`:53-59`), the speaker and room lookups (`:80`, `:83`), and the shared `BookmarkedSessions` dictionary (`:77`). The subtlety is that the view **mutates that dictionary in place** when a star is toggled (`AddBookmarkAsync` writes `BookmarkedSessions[sessionId] = bookmark.Id` at `:181`, `RemoveBookmarkAsync` removes at `:161`), so the page's My Schedule fetch, which reads the same dictionary to scope the query, sees the change without a round trip. The class doc names the sibling that uses the same pattern, [`SessionLivePollPanel`](group-23-engagement-live-layer.md#sessionlivepollpanel) (`:20-21`). It also exposes the captured `Grid` reference (`:101`) and `ReloadAsync()` (`:104-105`) so the page's [`DataGridListPageBase<TDto>`](group-15-common-ui-framework.md#datagridlistpagebasetdto) plumbing keeps restoring rows-per-page and current page unchanged. `[Rubric §18, UI Architecture & Component Design]` and `[Rubric §19, State Management & Data Flow]`: state has exactly one owner (the page) and one mutation point (this component).
+- **Depends on**: [`SessionDTO`](group-17-conference-domain.md#sessiondto), the optional [`ISessionBookmarkUIService`](group-22-engagement-module.md#isessionbookmarkuiservice) (`:73`), [`SpeakerInfo`](#speakerinfo) (`:82`), [`Result`](group-01-result-error-handling.md#result) in the mobile fetch delegate's signature (`:91`), [`ConferenceRoutePaths`](#conferenceroutepaths) (`:196`), [`MobileInfiniteScrollList<TItem>`](group-15-common-ui-framework.md#mobileinfinitescrolllisttitem) (`:93`, rendered at `PublicSessionListView.razor:6`), [`ListPageActions`](group-15-common-ui-framework.md#listpageactions) (`:107`), [`IToastService`](group-15-common-ui-framework.md#itoastservice) and [`IHapticFeedbackService`](group-26-device-capability-layer.md#ihapticfeedbackservice) (`:28-29`), plus MudBlazor's `MudDataGrid<T>` / `GridState<T>` / `GridData<T>` and `NavigationManager`.
+- **Concept introduced, the presentational child that patches container-owned state in place.** Like [`PublicSessionListFilterBar`](#publicsessionlistfilterbar), the view owns no fetch or filter state: the page hands down its `ServerData` and `FetchPageResult` delegates (`:88`, `:91`), its paging parameters (`:55-61`), the speaker and room lookups (`:82`, `:85`), its loading, failure and empty-confirmed flags (`:39-52`), and the shared `BookmarkedSessions` dictionary (`:79`). The subtlety is that the view **mutates that dictionary in place** when a star is toggled (`AddBookmarkAsync` writes `BookmarkedSessions[sessionId] = bookmark.Id` at `:181`, `RemoveBookmarkAsync` removes at `:161`), so the page's My Schedule fetch, which reads the same dictionary to scope the query, sees the change without a round trip. The class doc names the sibling that uses the same pattern, [`SessionLivePollPanel`](group-23-engagement-live-layer.md#sessionlivepollpanel) (`:20-21`). It also exposes the captured `Grid` reference (`:103`) and `ReloadAsync()` (`:106-107`) so the page's [`DataGridListPageBase<TDto>`](group-15-common-ui-framework.md#datagridlistpagebasetdto) plumbing keeps restoring rows-per-page and current page unchanged. `[Rubric §18, UI Architecture & Component Design]` and `[Rubric §19, State Management & Data Flow]`: state has exactly one owner (the page) and one mutation point (this component).
   The class doc also records a deliberate omission (`:23-24`): the list shows no track or category chips, because the detail page is where a session's categories are read and the list stays scannable on time, speakers, and room. `[Rubric §25, Navigation & Information Architecture]`.
 - **Walkthrough**
-  - `Loading`, `LoadFailed` and `EmptyConfirmed` (`:39-50`): the view gates its empty text on the page's state, not the grid's. `Loading` is the page's load in flight or the event scope still pending (`:35-38`); `EmptyConfirmed` is `!Loading && !LoadFailed` (`:50`) and marks a genuinely empty programme (U-35), because `MudDataGrid` repaints `NoRecordsContent` as soon as its own `ServerData` call returns no rows, whatever `Loading` it was last given. `[Rubric §24, Forms, Validation & UX Safety]`.
-  - `IsBookmarked` (`:107-108`) is a dictionary lookup, so star state costs nothing per row.
-  - `CanBookmark` (`:150-154`): a session is bookmarkable only when the user is authenticated, the Engagement-owned service resolved, the session is not a service session, and [`SessionStatuses`](group-17-conference-domain.md#sessionstatuses)`.IsEligible` accepts its status. The comment (`:147-149`) records this as the BR-49 allow-list (unset or `"Accepted"`), the same rule the server-side bookmark validation applies, precisely so the UI never shows a star the server would then reject. `[Rubric §11, Security]` and `[Rubric §24, Forms, Validation & UX Safety]`.
-  - `ToggleBookmarkAsync` (`:121-148`): guards re-entry with a **per-session** `HashSet` whose `Add` doubles as the guard test (`:123`, field at `:94`), fires `Haptics.Click()` (`:127`, a no-op off native heads), then removes or adds, catching `OperationCanceledException` as expected teardown or an InteractiveAuto transition (`:140-143`) and clearing the guard entry in the `finally` (`:146`). The per-session guard is a fixed defect worth reading: the comment at `:92-93` records that a single global in-flight flag made one slow toggle swallow every other star's click, so the list stopped responding until that request came back.
-  - `RemoveBookmarkAsync` (`:150-169`): a delete that comes back not-found is treated as success, because a bookmark that is already gone still leaves the user where they asked to be (`:154-159`, the tolerance expressed as `removed.IsFailure && !removed.IsNotFound()` over [`ResultUiExtensions`](group-15-common-ui-framework.md#resultuiextensions)`.IsNotFound`, `MMCA.Common/Source/Presentation/MMCA.Common.UI/Common/ResultUiExtensions.cs:340`); it then clears the entry, toasts, and reloads when the My Schedule view is active so the removed row disappears (`:161-168`).
-  - `AddBookmarkAsync` (`:171-183`): a create that did not come back with a bookmark leaves the star unset, so the page reports a warning rather than a success toast that would contradict its own UI (`:173-179`).
+  - `Loading`, `LoadFailed` and `EmptyConfirmed` (`:39-52`): three page-owned parameters, all passed down by the page (`PublicSessionList.razor:35-37`). `Loading` is the page's load in flight or the event scope still pending (doc `:35-38`); `LoadFailed` drives the inline error-with-retry empty content (`:41-42`). `EmptyConfirmed` (`:52`) is now a parameter rather than a value the view derives: the page passes its [`DataGridListPageBase<TDto>`](group-15-common-ui-framework.md#datagridlistpagebasetdto)`.EmptyConfirmed` (the newest load completed with no rows) AND its event scope resolved (`PublicSessionList.razor:37`). The doc (`:44-51`) records why it cannot be derived from `Loading`: the loading state ends, and renders, before `MudDataGrid` has received the rows, and the grid paints `NoRecordsContent` in every render where it holds none, so a gate on the flags flashed the empty text before a non-empty page (U-35). Both `ListNoRecordsContent` slots consume it (`PublicSessionListView.razor:183`, `:188`). `[Rubric §24, Forms, Validation & UX Safety]`.
+  - `IsBookmarked` (`:109-110`) is a dictionary lookup, so star state costs nothing per row.
+  - `CanBookmark` (`:115-119`): a session is bookmarkable only when the user is authenticated, the Engagement-owned service resolved, the session is not a service session, and [`SessionStatuses`](group-17-conference-domain.md#sessionstatuses)`.IsEligible` accepts its status. The comment (`:112-114`) records this as the BR-49 allow-list (unset or `"Accepted"`), the same rule the server-side bookmark validation applies, precisely so the UI never shows a star the server would then reject. `[Rubric §11, Security]` and `[Rubric §24, Forms, Validation & UX Safety]`.
+  - `ToggleBookmarkAsync` (`:121-148`): guards re-entry with a **per-session** `HashSet` whose `Add` doubles as the guard test (`:123`, field at `:96`), fires `Haptics.Click()` (`:127`, a no-op off native heads), then removes or adds, catching `OperationCanceledException` as expected teardown or an InteractiveAuto transition (`:140-143`) and clearing the guard entry in the `finally` (`:146`). The per-session guard is a fixed defect worth reading: the comment at `:94-95` records that a single global in-flight flag made one slow toggle swallow every other star's click, so the list stopped responding until that request came back.
+  - `RemoveBookmarkAsync` (`:150-169`): a delete that comes back not-found is treated as success, because a bookmark that is already gone still leaves the user where they asked to be (`:152-159`, the tolerance expressed as `removed.IsFailure && !removed.IsNotFound()` over [`ResultUiExtensions`](group-15-common-ui-framework.md#resultuiextensions)`.IsNotFound`, `MMCA.Common/Source/Presentation/MMCA.Common.UI/Common/ResultUiExtensions.cs:306`); it then clears the entry, toasts, and reloads when the My Schedule view is active so the removed row disappears (`:161-168`).
+  - `AddBookmarkAsync` (`:171-183`): a create that did not come back with a bookmark leaves the star unset, so the page reports a warning rather than a success toast that would contradict its own UI (`:173-178`).
   - `GetSpeakerList` (`:185-193`) maps a session's `SessionSpeakers` to display names through the passed-in lookup, skipping ids the lookup does not know; `OnMobileCardClick` (`:195-196`) routes to [`PublicSessionDetail`](#publicsessiondetail) through [`ConferenceRoutePaths`](#conferenceroutepaths).
 - **Why it's built this way**: separating the grid and card layouts from the page's fetch-and-filter logic lets one bookmark implementation serve both, while the page remains the owner of every piece of state either layout renders.
-- **Where it's used**: rendered by [`PublicSessionList`](#publicsessionlist), which holds it as `_view` (`PublicSessionList.razor.cs:41`, captured at `PublicSessionList.razor:31`) and reads `_view?.Grid` for its `GridRef` override (`:70`) and `_view?.ReloadAsync()` for every filter change (`:240`).
+- **Where it's used**: rendered by [`PublicSessionList`](#publicsessionlist), which holds it as `_view` (`PublicSessionList.razor.cs:41`, captured at `PublicSessionList.razor:33`) and reads `_view?.Grid` for its `GridRef` override (`PublicSessionList.razor.cs:68`) and `_view?.ReloadAsync()` through its `ReloadViewAsync` helper for every filter change (`PublicSessionList.razor.cs:214`).
 
 ### SessionBookmarkButton
 
@@ -1155,26 +1165,26 @@ The companion [`DependencyInjection`](#dependencyinjection) extension `AddConfer
   own independent per-row state.
 
 ### PublicSessionDetail
-> MMCA.ADC.Conference.UI · `MMCA.ADC.Conference.UI.Pages.Public.Sessions` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/Pages/Public/Sessions/PublicSessionDetail.razor.cs:24` · Level 9 · class (Blazor code-behind)
+> MMCA.ADC.Conference.UI · `MMCA.ADC.Conference.UI.Pages.Public.Sessions` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/Pages/Public/Sessions/PublicSessionDetail.razor.cs:25` · Level 9 · class (Blazor code-behind)
 
 - **What it is**: the public read-only view of one session (speakers, categories, room and wayfinding) plus the contextual actions an authenticated attendee gets: the bookmark toggle (rendered through [`SessionBookmarkButton`](#sessionbookmarkbutton)), the feedback link, a listen-aloud button, and the Live entry point when the Engagement module is present and the session is inside its event's live window.
-- **Depends on**: [`ISessionUIService`](#isessionuiservice), [`ISpeakerLookupService`](#ispeakerlookupservice), [`IRoomUIService`](#iroomuiservice), [`ICategoryItemLookupService`](#icategoryitemlookupservice) (`:26-29`), [`IEventLookupService`](#ieventlookupservice) and an injected BCL `TimeProvider` for the live-window check (`:34-35`); optionally [`ISessionLiveUIService`](group-23-engagement-live-layer.md#isessionliveuiservice) (field `:40`, resolved at `:51`); [`ITextToSpeechService`](group-26-device-capability-layer.md#itexttospeechservice) (`:33`); [`SessionDTO`](group-17-conference-domain.md#sessiondto), [`RoomDTO`](group-17-conference-domain.md#roomdto), [`IToastService`](group-15-common-ui-framework.md#itoastservice) (`:31`), `CurrentEventSelector.GetLiveWindowUtc` (`:271-274`), [`ConferenceRoutePaths`](#conferenceroutepaths) (`:55`, `:279`), and the typed route parameter `Id` (a `SessionIdentifierType`, `:42`) that the page now passes straight to the service instead of parsing a string. The bookmark toggle itself, including [`ISessionBookmarkUIService`](group-22-engagement-module.md#isessionbookmarkuiservice) and the `ClaimsPrincipalExtensions`-based user lookup this page used to hold, now lives entirely in [`SessionBookmarkButton`](#sessionbookmarkbutton), which the page renders and no longer injects services for.
-- **Concept introduced, optional cross-module service resolved through the container.** Blazor's `[Inject]` has no optional mode (an unregistered service throws at render), so the Engagement-owned `ISessionLiveUIService` is resolved with `ServiceProvider.GetService<T>()` in `OnInitialized` and left null when that module is disabled (field `:40`, resolved at `:51`). The markup only renders the Live button when `SessionLive` resolved. `[Rubric section 7, Microservices Readiness]` (assesses that a module can be switched off without breaking its consumers): the Conference page degrades to a plain read-only session view when Engagement is absent, rather than failing to render. `[Rubric section 3, Clean Architecture]`: the dependency is on an interface owned by the other module's UI contract, never on its internals.
-  The page repeats two mechanisms taught above. The **prerender skip** (`:93-100`) carries the same reasoning as the other public detail pages: under InteractiveAuto the interactive instance re-runs `OnParametersSetAsync` (now a non-async method that returns `Task.CompletedTask` or the load's task directly, `:91-109`), so without the guard every visit fetched the session, all speakers, all category items and the room twice, and it names the category-item read as the expensive one, a full-table read per view; now that the bookmark toggle moved to its own component, this page's own prerender skip no longer covers bookmark state. `[Rubric section 23, Front-End Performance & Rendering]`. The load-tracking field is a `LatestLoadGuard` (`:68`), which pairs the generation check with a per-load `CancellationTokenSource`: `LoadSessionAsync` calls `_load.Begin()` (`:114`) to get back both the token and the generation, so starting a new load also **cancels** the fetch already in flight rather than merely letting its result drop once `_load.IsCurrent(generation)` (re-checked at `:132`) comes back false. The field doc explains why the generation rather than the route id is authoritative (`:62-67`), and `Dispose(bool)` disposes the guard (`:324`). The page no longer owns a `CancellationTokenSource` of its own: `Begin()` also stores the load's token in `_sessionToken` (`:73`, assigned at `:115`), which the next route change and disposal both cancel, and the listen-aloud call runs on it (`:304`). Blazor keeps this routed instance when only the `Id` changes, so a read-aloud tied to a page-lifetime token would have kept reading the previous session (U-25). It also repeats the BR-49 status allow-list as `IsStatusIneligible` (`:88-89`), with the comment pointing at [`SessionStatuses`](group-17-conference-domain.md#sessionstatuses)`.IsEligible` as the same rule the server applies.
+- **Depends on**: its base class [`DetailPageBase`](group-15-common-ui-framework.md#detailpagebase) (`@inherits` at `PublicSessionDetail.razor:8`), which supplies `BeginLoad`, `CompleteLoad`, the [`LatestLoadGuard`](group-15-common-ui-framework.md#latestloadguard) `LoadGuard`, `LoadState` and `PageToken` (`MMCA.Common/Source/Presentation/MMCA.Common.UI/Pages/Common/DetailPageBase.cs:38`, `:45`, `:52`, `:59`, `:78`); [`ISessionUIService`](#isessionuiservice), [`ISpeakerLookupService`](#ispeakerlookupservice), [`IRoomUIService`](#iroomuiservice), [`ICategoryItemLookupService`](#icategoryitemlookupservice) (`:27-30`), [`IEventLookupService`](#ieventlookupservice) and an injected BCL `TimeProvider` for the live-window check (`:35-36`); optionally [`ISessionLiveUIService`](group-23-engagement-live-layer.md#isessionliveuiservice) (property `:41`, resolved at `:52`); [`ITextToSpeechService`](group-26-device-capability-layer.md#itexttospeechservice) (`:34`); [`SessionDTO`](group-17-conference-domain.md#sessiondto), [`RoomDTO`](group-17-conference-domain.md#roomdto), [`IToastService`](group-15-common-ui-framework.md#itoastservice) (`:32`), [`Result`](group-01-result-error-handling.md#result) and `Error.Unexpected` (`:174`, `:215`), `CurrentEventSelector.GetLiveWindowUtc` (`:307-310`), [`ConferenceRoutePaths`](#conferenceroutepaths) (`:56`, `:315`), and the typed route parameter `Id` (a `SessionIdentifierType`, `:43`) that the page passes straight to the service. The bookmark toggle itself, including [`ISessionBookmarkUIService`](group-22-engagement-module.md#isessionbookmarkuiservice) and the `ClaimsPrincipalExtensions`-based user lookup this page used to hold, now lives entirely in [`SessionBookmarkButton`](#sessionbookmarkbutton), which the page renders and no longer injects services for.
+- **Concept introduced, optional cross-module service resolved through the container.** Blazor's `[Inject]` has no optional mode (an unregistered service throws at render), so the Engagement-owned `ISessionLiveUIService` is resolved with `ServiceProvider.GetService<T>()` in `OnInitialized` and left null when that module is disabled (property `:41`, comment `:38-40`, resolved at `:52`). The markup only renders the Live button when `SessionLive` resolved. `[Rubric section 7, Microservices Readiness]` (assesses that a module can be switched off without breaking its consumers): the Conference page degrades to a plain read-only session view when Engagement is absent, rather than failing to render. `[Rubric section 3, Clean Architecture]`: the dependency is on an interface owned by the other module's UI contract, never on its internals.
+  The page combines three mechanisms taught elsewhere. The **prerender hand-off** (`:100-119`): under InteractiveAuto the interactive instance re-runs `OnParametersSetAsync` (a non-async method returning the chosen task directly), so the comment (`:102-106`) records that every visit used to fetch the session, all speakers, all category items, the room and the bookmark state twice, and names the category-item read as the expensive one, a full-table read per view. The SSR pass now runs `PrerenderSessionAsync` (`:107-110`, method `:125-140`), which fetches only the session (on the base's `PageToken`, `:129`) and stores it in two `[PersistentState]` properties, `PrerenderedSession` and `PrerenderedSessionId` (`:73-78`, doc `:66-72`); the lookups stay interactive-only and the prerendered markup is still the loading skeleton (doc `:121-124`). The interactive load then calls `TakePrerenderedSession` (`:146-152`), which returns the persisted DTO only when it was fetched for the current route id and clears both properties either way, so it answers one load at most and never a different id (doc `:142-145`). The per-reader bookmark state is not part of that DTO and is fetched interactively by [`SessionBookmarkButton`](#sessionbookmarkbutton) (doc `:68-70`). `[Rubric section 23, Front-End Performance & Rendering]`. The **load guard** now comes from [`DetailPageBase`](group-15-common-ui-framework.md#detailpagebase): `LoadSessionAsync` calls `BeginLoad()` (`:157`) to get back both a token and a generation, so starting a new load also **cancels** the fetch already in flight, and `CompleteLoad(generation, result)` (`:179`) records the outcome into the base's `LoadState` only when the generation is still current, with `LoadGuard.IsCurrent(generation)` re-checked after every later await. The comment on `_loadedId` (`:61-64`) explains why the generation rather than the route id is authoritative. The page owns no `CancellationTokenSource`: the load's token is kept in `_sessionToken` (`:83`, comment `:80-82`, assigned at `:158`), which the next route change and disposal both cancel, and the listen-aloud call runs on it (`:340`). Blazor keeps this routed instance when only the `Id` changes, so a read-aloud tied to a page-lifetime token would have kept reading the previous session (U-25). It also repeats the BR-49 status allow-list as `IsStatusIneligible` (`:95-98`), with the comment pointing at [`SessionStatuses`](group-17-conference-domain.md#sessionstatuses)`.IsEligible` as the same rule the server applies.
 - **Walkthrough**
-  - `LoadSessionAsync` (`:111-185`): right after `Begin()` it records the load's token as `_sessionToken` (`:115`) and resets the derived per-session state (`_room`, `_roomName`, `_speakerNames`, `_categoryNames`, `_isLiveNow`, and now `_isSpeaking`, `:121-126`) so a session with no room, or a failed enrichment lookup, never shows the previous session's room, speakers, categories or live state (comment `:117-120`, tags L156 and U-25; `Begin()` cancelled the previous session's read-aloud, so the button starts as Listen). It then fetches the session with children by the typed `Id` (`:131`), clears `Session` and toasts not-found-versus-load-failed on failure (`:137-146`), then runs three resolvers in a single short-circuiting condition (`:151-153`) so any one failing raises one load-failure toast (`:155-161`), each resolver taking the load's own cancellation token, and finally `ResolveLiveWindowAsync` (`:163`). The remaining broad `catch (Exception)` (`:169`) no longer guards a bookmark-state read (that moved into [`SessionBookmarkButton`](#sessionbookmarkbutton)); its comment records that every resolve step above answers with a `Result`, so nothing here is expected to throw, and a fault that does must still leave the reader with a message rather than a blank card.
-  - `ResolveSpeakerNamesAsync` (`:191-203`) and `ResolveCategoryNamesAsync` (`:206-222`) join the session's child collections against the two lookup services, skipping ids the lookup does not know; the category resolver prefixes the owning category title when present, so a chip reads "Level: Intermediate".
-  - `ResolveRoomAsync` (`:229-251`): returns success immediately for a session with no room, otherwise fetches the room including wayfinding info (BR-94) and treats a not-found as a tolerable miss that leaves the wayfinding block empty, which the markup renders field by field. It no longer clears `_room` / `_roomName` on a miss: `LoadSessionAsync` already reset them up front.
-  - `ResolveLiveWindowAsync` (`:260-277`): decides whether the session is inside its event's live window. It looks the event up through [`IEventLookupService`](#ieventlookupservice) (`:263`), re-checks the generation, and returns with `_isLiveNow` false when the lookup failed or the event is unknown (`:264-269`). Otherwise `CurrentEventSelector.GetLiveWindowUtc` turns the event's start date, end date and time zone into a UTC range from the first day 00:00 to the day after the last (doc `:253-259`, the same window the server enforces), compared against `TimeProvider.GetUtcNow().UtcDateTime` (`:275-276`). A missing Live button is deliberately not worth a toast. `[Rubric section 29, Resilience & Business Continuity]`.
-  - `ToggleListenAsync` (`:286-309`): text to speech over the description, where the same button stops playback; `SpeakAsync` runs on `_sessionToken` (`:304`) and completes when playback finishes, `StopAsync` cancels it, or the page moves to another session or is disposed, and the `finally` clears `_isSpeaking` either way. `[Rubric section 21, Accessibility]` (assesses alternative modalities for content) and [ADR-042](https://ivanball.github.io/docs/adr/042-device-capability-abstraction.html) Wave 3.
-  - Navigation (`:279`, `:281`) returns to the schedule or opens the session feedback form (the route is built with `string.Create(CultureInfo.InvariantCulture, ...)` over the typed `Id`); disposal (`:314-324`) disposes the `LatestLoadGuard`, whose cancellation of `_sessionToken` also stops a read-aloud in progress. The page has no `CancellationTokenSource` of its own, and has not been moved onto [`DetailPageBase`](group-15-common-ui-framework.md#detailpagebase) the way [`SponsorDetail`](#sponsordetail) has.
+  - `LoadSessionAsync` (`:154-221`): right after `BeginLoad()` it records the load's token as `_sessionToken` (`:158`) and resets the derived per-session state (`_room`, `_roomName`, `_speakerNames`, `_categoryNames`, `_isLiveNow` and `_isSpeaking`, `:164-169`) so a session with no room, or a failed enrichment lookup, never shows the previous session's room, speakers, categories or live state (comment `:160-163`, tags L156 and U-25; starting the load cancelled the previous session's read-aloud, so the button starts as Listen). It then takes the prerendered session or fetches the session with children by the typed `Id` (`:173-175`). A not-found or failed fetch raises no toast: `CompleteLoad` records it into `LoadState`, which the page body states through `DetailLoadStateContent` (`PublicSessionDetail.razor:19`, with Retry for a failure), and `Session` is cleared only when the generation is still current (`:177-187`), so a superseded response changes nothing. On success it runs three resolvers in a single short-circuiting condition (`:192-194`) so any one failing raises one load-failure toast (`:196-199`), each resolver taking the load's own cancellation token, and finally `ResolveLiveWindowAsync` (`:204`). The broad `catch (Exception)` (`:210-220`) records that every resolve step above answers with a `Result`, so nothing here is expected to throw; a fault that does completes the load as a failure with `Error.Unexpected("PublicSessionDetail.LoadFailed", ...)` (`:215`) and clears `Session`, leaving the reader the failed-load body and its Retry rather than a blank card.
+  - `ResolveSpeakerNamesAsync` (`:227-239`) and `ResolveCategoryNamesAsync` (`:242-258`) join the session's child collections against the two lookup services, skipping ids the lookup does not know; the category resolver prefixes the owning category title when present, so a chip reads "Level: Intermediate".
+  - `ResolveRoomAsync` (`:265-287`): returns success immediately for a session with no room, otherwise fetches the room including wayfinding info (BR-94) and treats a not-found as a tolerable miss that leaves the wayfinding block empty (`:286`), which the markup renders field by field. It does not clear `_room` / `_roomName` on a miss: `LoadSessionAsync` already reset them up front.
+  - `ResolveLiveWindowAsync` (`:296-313`): decides whether the session is inside its event's live window. It looks the event up through [`IEventLookupService`](#ieventlookupservice) (`:299`), re-checks the generation, and returns with `_isLiveNow` false when the lookup failed or the event is unknown (`:300-305`). Otherwise `CurrentEventSelector.GetLiveWindowUtc` turns the event's start date, end date and time zone into a UTC range from the first day 00:00 to the day after the last (doc `:289-295`, the same window the server enforces), compared against `TimeProvider.GetUtcNow().UtcDateTime` (`:311-312`). A missing Live button is deliberately not worth a toast. `[Rubric section 29, Resilience & Business Continuity]`.
+  - `ToggleListenAsync` (`:322-346`): text to speech over the description, where the same button stops playback; `SpeakAsync` runs on `_sessionToken` (`:340`) and completes when playback finishes, `StopAsync` cancels it, or the page moves to another session or is disposed, and the `finally` clears `_isSpeaking` either way. `[Rubric section 21, Accessibility]` (assesses alternative modalities for content) and [ADR-042](https://ivanball.github.io/docs/adr/042-device-capability-abstraction.html) Wave 3.
+  - Navigation (`:315`, `:317`) returns to the schedule or opens the session feedback form (the route is built with `string.Create(CultureInfo.InvariantCulture, ...)` over the typed `Id`). The page declares no disposal of its own: the comment at `:348-349` records that disposal is [`DetailPageBase`](group-15-common-ui-framework.md#detailpagebase)'s (`Dispose(bool)`, `MMCA.Common/Source/Presentation/MMCA.Common.UI/Pages/Common/DetailPageBase.cs:138`), which disposes `LoadGuard` and so cancels `_sessionToken`, stopping a read-aloud still in progress. The page sits on the same base as [`SponsorDetail`](#sponsordetail).
 - **Why it's built this way**: this is the page an attendee opens in a hallway, so the expensive lookups are done once per id, the optional Live capability fails soft, and the bookmark toggle is a self-contained component so the page's own load path no longer has to carry a user's authentication state just to draw one star.
-- **Where it's used**: the `/conference/sessions/{Id}` route, reached from [`PublicSessionListView`](#publicsessionlistview) rows and cards and from [`PublicSpeakerDetail`](#publicspeakerdetail); its markup renders [`SessionBookmarkButton`](#sessionbookmarkbutton) for the star and a `QrCodeButton` for its own public link.
+- **Where it's used**: the `/conference/sessions/{Id}` route, reached from [`PublicSessionListView`](#publicsessionlistview) rows and cards and from [`PublicSpeakerDetail`](#publicspeakerdetail); its markup renders [`SessionBookmarkButton`](#sessionbookmarkbutton) for the star (`PublicSessionDetail.razor:157`) and a `QrCodeButton` for its own public link (`PublicSessionDetail.razor:51`).
 
 ### PublicSessionEventCatalog
-> MMCA.ADC.Conference.UI · `MMCA.ADC.Conference.UI.Pages.Public.Sessions` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/Pages/Public/Sessions/PublicSessionEventCatalog.cs:17` · Level 10 · class (internal sealed)
+> MMCA.ADC.Conference.UI · `MMCA.ADC.Conference.UI.Pages.Public.Sessions` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/Pages/Public/Sessions/PublicSessionEventCatalog.cs:16` · Level 10 · class (internal sealed)
 
-- **What it is**: the page-state holder for everything [`PublicSessionList`](#publicsessionlist) knows about events, rooms and speakers: the loaded events with their rooms, the Room picker options, a room-name index, the speaker lookup, and the event and room filter selection (`PublicSessionEventCatalog.cs:25-46`). It was extracted out of the page, which now holds one instance as `_catalog` (`PublicSessionList.razor.cs:47`).
+- **What it is**: the page-state holder for everything [`PublicSessionList`](#publicsessionlist) knows about events, rooms and speakers: the loaded events with their rooms, the Room picker options, a room-name index, the speaker lookup, and the event and room filter selection (`PublicSessionEventCatalog.cs:24-45`). It was extracted out of the page, which now holds one instance as `_catalog` (`PublicSessionList.razor.cs:47`).
 - **Depends on**: [`IEventUIService`](#ieventuiservice) and [`ISpeakerLookupService`](#ispeakerlookupservice) as `LoadAsync` arguments (`:57-62`), a BCL `TimeProvider` (`:60`), the cascaded `Task<AuthenticationState>` (`:61`), [`PublicReadAudience`](#publicreadaudience) (`:63`), [`PublicScheduleRoomOptions`](#publicscheduleroomoptions) (`:78`, `:144`), [`CurrentEventDefaults`](group-17-conference-domain.md#currenteventdefaults) (`:159`), [`SpeakerInfo`](#speakerinfo) (`:37`), and [`EventDTO`](group-17-conference-domain.md#eventdto) / [`RoomDTO`](group-17-conference-domain.md#roomdto).
 - **Concept introduced, state plus its rules in a plain class.** The catalog takes its collaborators as method arguments rather than injecting them, so the page keeps ownership of the `[Inject]` surface and the catalog stays a plain object whose rules (who is privileged, which event is the default, what a failed fetch means) sit beside the data they govern. `[Rubric §18, UI Architecture & Component Design]` (assesses decomposition of a page into focused units).
 - **Walkthrough**
@@ -1219,7 +1229,7 @@ The companion [`DependencyInjection`](#dependencyinjection) extension `AddConfer
 - **Concept introduced: the decision/effect split.** `[Rubric §18, UI Architecture]` assesses whether components stay thin and free of tangled control flow; naming each outcome as an enum member is how that is achieved here. The decision (what did this poll mean?) is computed by a pure state machine, [ScorePollTracker](#scorepolltracker), and the effects (toast, re-render, stop the loop) are applied in a single `switch` inside [ScorePollSession](#scorepollsession), so neither half has to know the other's internals. `[Rubric §14, Testability]` follows for free: the signal sequence for a synthetic count series can be asserted without rendering anything.
 - **Walkthrough**: `Continue` (`ScorePollTracker.cs:11`) means nothing changed this tick, keep polling. `Progressed` (`:12`) means new scores arrived, so apply the fresh board, re-render, and keep polling. `CompletedAll` (`:15`) means every session now has a score, so apply and finish successfully. `CompletedStable` (`:19`) means the count has been unchanged long enough to call scoring done, with the success-versus-partial wording decided from coverage. `GaveUpNoScores` (`:22`) means no score was ever produced inside the zero-progress budget, so fail loudly rather than wait out the full cap.
 - **Why it's built this way**: the poll loop has four terminal outcomes that each need a different user-facing message (complete, partial, timed out, never started). An enum makes the exhaustive `switch` in [ScorePollSession](#scorepollsession) readable and keeps that failure vocabulary in one place.
-- **Where it's used**: returned by `ScorePollTracker.RegisterFetch` (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/Pages/Sessions/Selection/ScorePollTracker.cs:96`) and consumed by `ScorePollSession.HandleSignalAsync` (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/Pages/Sessions/Selection/ScorePollSession.cs:138-168`).
+- **Where it's used**: returned by `ScorePollTracker.RegisterFetch` (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/Pages/Sessions/Selection/ScorePollTracker.cs:96`) and consumed by `ScorePollSession.HandleSignalAsync` (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/Pages/Sessions/Selection/ScorePollSession.cs:137-167`).
 
 ### SessionSelectionDisplay
 > MMCA.ADC.Conference.UI · `MMCA.ADC.Conference.UI.Pages.Sessions.Selection` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/Pages/Sessions/Selection/SessionSelectionDisplay.cs:13` · Level 1 · class (static, internal)
@@ -1239,18 +1249,18 @@ The companion [`DependencyInjection`](#dependencyinjection) extension `AddConfer
 - **Concept introduced: taming a fire-and-forget loop with an explicit budget.** `[Rubric §12, Performance and Scalability]` and `[Rubric §29, Resilience and Business Continuity]` both ask whether long-running work has bounded cost and a defined give-up path, and this class is where those bounds are written down as named constants instead of being scattered through a component. The class doc names the motivation directly (`ScorePollTracker.cs:27-32`): the state machine was extracted from the page code-behind so the component keeps only the UI side effects, which is the `[Rubric §18, UI Architecture]` concern about component size. `[Rubric §14, Testability]` applies because the whole loop policy can be exercised by calling `RegisterFetch` with a synthetic count series, with no timers and no rendering.
 - **Walkthrough**: two public constants set the outer limits. `MaxPolls = 225` (`ScorePollTracker.cs:36`, documented as a 30-minute cap at 225 polls times an 8-second interval) and `MaxConsecutiveFailures = 5` (`:41`), whose doc comment explains why failures are tolerated at all: the polling task is fire-and-forget, so an escaping exception would be unobserved and would wedge the Score button until a full reload. Two private constants set the inner heuristics, both widened by a later fix: `ZeroProgressLimit = 15` (`:49`, roughly two minutes with no score written by this run, sized to outlast the 60-second internal-command poll that picks a scoring run up plus its first call, or a healthy run reads as producing nothing) and `StablePollsForCompletion = 6` (`:55`, roughly 48 seconds, sized to outlast one scoring call's 30-second framework timeout plus its save, or a single slow call mid-pass reads as the end of the run). Four fields carry the state (`:57-60`): `_previousCount`, `_stablePolls`, `_zeroProgressPolls`, `_consecutiveFailures`. `ResetFailures` (`:63`) zeroes the failure counter after any successful fetch; `RegisterFailure` (`:69-73`) increments it and returns `true` once the budget is exhausted. `CountScoredSince(scores, baseline)` (`:75`) is a `static` helper added alongside the widened limits: it counts a session as scored-this-run when it is missing from the baseline dictionary or its `ScoredOn` moved, because the scoring runner replaces each session's score in place, so the raw dashboard count cannot tell a re-run's progress from its starting point. `RegisterFetch(currentCount, totalSessions)` (`:82-108`, taking the scored-this-run count rather than the raw dashboard count) is the core: a zero count increments `_zeroProgressPolls` and returns `GaveUpNoScores` at the limit, otherwise `Continue` (`:84-90`); any nonzero count clears the zero-progress counter (`:92`); a count greater than the previous one advances `_previousCount`, resets `_stablePolls`, and returns `CompletedAll` when the count has reached `totalSessions` (guarded by `totalSessions > 0`) or `Progressed` otherwise (`:94-101`); an unchanged count increments `_stablePolls` and returns `CompletedStable` at the (now six-poll) stability window (`:103-110`); anything else returns `Continue` (`:112`).
 - **Why it's built this way**: server-side AI scoring is a batch whose duration depends on an external model, so the UI has no completion event to await and must infer completion from the score count. Treating completion as either full coverage or a run of unchanged polls yields an answer even when some sessions fail to score, and the separate zero-progress budget turns the common credential-failure case into a fast, loud error rather than a long silence. Both windows were widened, and `CountScoredSince` was added, once a re-run over an already-scored event was found to read the flat raw count as instant stability and report every session it had not yet reached as failed.
-- **Where it's used**: instantiated once per scoring run by [ScorePollSession](#scorepollsession)`.RunAsync` (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/Pages/Sessions/Selection/ScorePollSession.cs:57`), whose `for` loop bounds itself with `ScorePollTracker.MaxPolls` (`:57`); `CountScoredSince` is called from the same file (`:64`).
+- **Where it's used**: instantiated once per scoring run by [ScorePollSession](#scorepollsession)`.RunAsync` (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/Pages/Sessions/Selection/ScorePollSession.cs:56`), whose `for` loop bounds itself with `ScorePollTracker.MaxPolls` (`:57`); `CountScoredSince` is called from the same file (`:64`).
 - **Caveats / not-in-source**: the latency claim in the `MaxPolls` comment ("enough for ~200+ sessions at typical Haiku latency", `ScorePollTracker.cs:35`) is a code comment, not a measurement recorded in this repo.
 
 ### ScorePollHost
-> MMCA.ADC.Conference.UI · `MMCA.ADC.Conference.UI.Pages.Sessions.Selection` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/Pages/Sessions/Selection/ScorePollSession.cs:19` · Level 4 · record (sealed, internal)
+> MMCA.ADC.Conference.UI · `MMCA.ADC.Conference.UI.Pages.Sessions.Selection` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/Pages/Sessions/Selection/ScorePollSession.cs:18` · Level 4 · record (sealed, internal)
 
 - **What it is**: the five-callback contract a [ScorePollSession](#scorepollsession) uses to reach back into the page that started it. The polling session owns no rendering: everything it needs from the component (the current load generation, the poll cadence, applying a board, re-rendering, finishing with a message) arrives as a delegate in this record.
 - **Depends on**: [SessionSelectionDashboardDTO](group-17-conference-domain.md#sessionselectiondashboarddto) (the payload of `ApplyFreshDashboard`) and [ToastSeverity](group-15-common-ui-framework.md#toastseverity) (the severity of the finish message), plus BCL `Func<>`, `Action<>`, `Task`, and `TimeSpan`. It is a positional `record` with no body.
 - **Concept introduced: the callback record as an inverted UI port.** `[Rubric §1, SOLID]` assesses dependency inversion and interface segregation: rather than handing the loop a reference to the whole component (which would let it touch any field and would make it untestable outside a renderer), the component passes exactly the five capabilities the loop needs, each as its own delegate. `[Rubric §19, State Management]` is the reason this shape exists at all: two of the five members are *readers*, not values. `CurrentGeneration` and `PollInterval` are `Func<>` rather than captured snapshots so the loop re-reads the page's live state on every tick, which is what lets an event switch supersede a running session mid-flight and lets a bUnit test shrink the cadence after the loop has already started.
-- **Walkthrough**: `CurrentGeneration` (`ScorePollSession.cs:20`) reads the page's `_loadGeneration` counter, the value the loop compares its own generation against to decide it has been superseded. `PollInterval` (`:21`) reads the page's cadence, re-read every tick (`:15`). `ApplyFreshDashboard` (`:22`) is an `Action<SessionSelectionDashboardDTO, int>`: it hands a freshly polled [SessionSelectionDashboardDTO](group-17-conference-domain.md#sessionselectiondashboarddto) to the page together with the number of scores the current run has written so far (`:16`), and the page swaps the board in, stores that count for the progress display, and recomputes the derived state. The count travels separately because a rescore rewrites each session's score in place, so the board's own score list cannot measure the run's progress. `RenderAsync` (`:23`) is the component's `InvokeAsync(StateHasChanged)`, so the re-render is marshalled onto the renderer's synchronization context from whatever thread the loop resumed on. `FinishScoring` (`:24`) ends the scoring session and surfaces the outcome as a toast, taking the message and a [ToastSeverity](group-15-common-ui-framework.md#toastseverity).
+- **Walkthrough**: `CurrentGeneration` (`ScorePollSession.cs:19`) reads the page's `_loadGeneration` counter, the value the loop compares its own generation against to decide it has been superseded. `PollInterval` (`:21`) reads the page's cadence, re-read every tick (`:15`). `ApplyFreshDashboard` (`:22`) is an `Action<SessionSelectionDashboardDTO, int>`: it hands a freshly polled [SessionSelectionDashboardDTO](group-17-conference-domain.md#sessionselectiondashboarddto) to the page together with the number of scores the current run has written so far (`:16`), and the page swaps the board in, stores that count for the progress display, and recomputes the derived state. The count travels separately because a rescore rewrites each session's score in place, so the board's own score list cannot measure the run's progress. `RenderAsync` (`:23`) is the component's `InvokeAsync(StateHasChanged)`, so the re-render is marshalled onto the renderer's synchronization context from whatever thread the loop resumed on. `FinishScoring` (`:24`) ends the scoring session and surfaces the outcome as a toast, taking the message and a [ToastSeverity](group-15-common-ui-framework.md#toastseverity).
 - **Why it's built this way**: the doc comment states the rule (`:9-13`): the loop raises side effects, the page performs them, so `StateHasChanged`, the toasts, and the generation counter that supersedes a stale session all stay on the component. Making the port a `record` of delegates instead of an interface keeps the wiring to one expression at the call site and avoids a second implementation existing only for tests.
-- **Where it's used**: constructed inline by [SessionSelectionDashboard](#sessionselectiondashboard)`.PollForScoresAsync` (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/Pages/Sessions/Selection/SessionSelectionDashboard.razor.cs:261-266`) and consumed throughout [ScorePollSession](#scorepollsession).
+- **Where it's used**: constructed inline by [SessionSelectionDashboard](#sessionselectiondashboard)`.PollForScoresAsync` (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/Pages/Sessions/Selection/SessionSelectionDashboard.razor.cs:282-287`) and consumed throughout [ScorePollSession](#scorepollsession).
 
 ### SessionSelectionAiScores
 > MMCA.ADC.Conference.UI · `MMCA.ADC.Conference.UI.Pages.Sessions.Selection` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/Pages/Sessions/Selection/SessionSelectionAiScores.razor.cs:12` · Level 4 · class (partial component)
@@ -1276,14 +1286,14 @@ The companion [`DependencyInjection`](#dependencyinjection) extension `AddConfer
 - **Caveats / not-in-source**: the level group is identified by a title substring match, so it depends on the conference's category naming ("Level"). The category titles themselves come from the Conference data, not from this file.
 
 ### ScorePollSession
-> MMCA.ADC.Conference.UI · `MMCA.ADC.Conference.UI.Pages.Sessions.Selection` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/Pages/Sessions/Selection/ScorePollSession.cs:36` · Level 5 · class (sealed, internal)
+> MMCA.ADC.Conference.UI · `MMCA.ADC.Conference.UI.Pages.Sessions.Selection` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/Pages/Sessions/Selection/ScorePollSession.cs:35` · Level 5 · class (sealed, internal)
 
 - **What it is**: one fire-and-forget AI-score polling run for the selection dashboard. It drives [ScorePollTracker](#scorepolltracker) (the pure counters) over repeated dashboard fetches and turns each resulting [ScorePollSignal](#scorepollsignal) into the page's UI side effects through a [ScorePollHost](#scorepollhost).
-- **Depends on**: [ISessionSelectionUIService](#isessionselectionuiservice) for the fetch, `IStringLocalizer` for the outcome messages, and a [ScorePollHost](#scorepollhost) for the callbacks, all primary-constructor parameters (`ScorePollSession.cs:36-39`). Internally it uses [ScorePollTracker](#scorepolltracker), [ScorePollSignal](#scorepollsignal), [SessionSelectionDashboardDTO](group-17-conference-domain.md#sessionselectiondashboarddto)'s [SessionAiScoreDTO](group-17-conference-domain.md#sessionaiscoredto) rows, and [ToastSeverity](group-15-common-ui-framework.md#toastseverity); externally `Task.Delay`, `CancellationToken`, and the Conference `EventIdentifierType`/`SessionIdentifierType` aliases.
+- **Depends on**: [ISessionSelectionUIService](#isessionselectionuiservice) for the fetch, `IStringLocalizer` for the outcome messages, and a [ScorePollHost](#scorepollhost) for the callbacks, all primary-constructor parameters (`ScorePollSession.cs:35-38`). Internally it uses [ScorePollTracker](#scorepolltracker), [ScorePollSignal](#scorepollsignal), [SessionSelectionDashboardDTO](group-17-conference-domain.md#sessionselectiondashboarddto)'s [SessionAiScoreDTO](group-17-conference-domain.md#sessionaiscoredto) rows, and [ToastSeverity](group-15-common-ui-framework.md#toastseverity); externally `Task.Delay`, `CancellationToken`, and the Conference `EventIdentifierType`/`SessionIdentifierType` aliases.
 - **Concept introduced: the generation guard against a superseded async loop.** `[Rubric §19, State Management]` asks whether asynchronous work can corrupt state it no longer owns. A polling run belongs to the event that was selected when scoring started; if the organizer switches events, the page bumps a generation counter and this loop, which re-reads that counter through `host.CurrentGeneration()`, exits instead of painting the previous event's board (and its toasts) over the new selection. Note the counter is checked *twice per tick*, once after the delay and once after the fetch (`:70-73` and `:76-79`), because both are await points where the selection can move. `[Rubric §29, Resilience and Business Continuity]` covers the second concept here: because [ISessionSelectionUIService](#isessionselectionuiservice) answers every non-2xx response and transport fault with a failed `Result` rather than an exception (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/Services/Sessions/Selection/ISessionSelectionUIService.cs:11-23`), the consecutive-failure budget has to be fed from the *result* path, and the code comment says exactly why (`:81-85`): left on the exception path it would be dead code and a persistently failing endpoint would poll silently to `MaxPolls` without ever reporting.
 - **Walkthrough**: `RunAsync(eventId, baseline, generation, cancellationToken)` (`:51-121`) takes a `baseline` (each already-scored session's `ScoredOn` before the run started, documented at `:48`) so progress is measured as scores this run wrote, not the raw dashboard count. It creates a tracker (`:57`) and two locals, `lastFresh` and `lastScoredThisRun` (`:62-63`), remembering the last board a poll fetched: the accepted run cleared the replaced scores from view, so every exit path must put the server's board back (the code cites OBS-14), otherwise the board would read "No AI scores yet." until a reload. It then loops up to `ScorePollTracker.MaxPolls` times (`:65`). Each iteration awaits `host.PollInterval()` under the page's disposal token (`:69`), checks the generation (`:70-73`), fetches the board through `selectionService.GetDashboardAsync` (`:75`), and checks the generation again (`:76-79`). A failed `Result` feeds `tracker.RegisterFailure()`, and when the budget is exhausted the run calls `RestoreLastBoard`, reports `Snackbar.ScoringPollFailed` as an error and returns (`:86-91`); a failure inside budget falls through to `continue` because `TryGetValue` yields nothing (`:93-96`). A successful fetch resets the failure counter (`:98`), computes `scoredThisRun` via `ScorePollTracker.CountScoredSince(fresh.AiScores, baseline)` (`:99`), records it with the board in the two locals (`:100-101`), and passes it (not the raw count) to both `tracker.RegisterFetch` and `HandleSignalAsync`; a `true` return means the run is over and the finish callback has already fired (`:102-105`). `OperationCanceledException` exits quietly, which is component disposal (`:107-111`). Falling out of the loop means the cap was reached, so, unless the run has meanwhile been superseded (`:114-117`), it restores the last board and reports `Snackbar.ScoringTimedOut` as a warning (`:119-120`). `RestoreLastBoard` (`:126-132`) calls `host.ApplyFreshDashboard(lastFresh, scoredThisRun)` only when some poll succeeded. `HandleSignalAsync(fresh, scoredThisRun, signal)` (`:142-172`) is the effects half of the split introduced under [ScorePollSignal](#scorepollsignal): `GaveUpNoScores` now applies the fresh board first (the run wrote nothing new but the server still holds the earlier scores) and then finishes with an error (`:146-150`); `Progressed` calls `host.ApplyFreshDashboard(fresh, scoredThisRun)` and re-renders but keeps going (`:152-155`); `CompletedAll` applies the board with the same count, re-renders, and finishes with a success message carrying `scoredThisRun` (`:157-161`); `CompletedStable` applies the board with the count and defers to `FinishStable(fresh, scoredThisRun)` (`:163-166`); and `Continue` does nothing (`:168-170`). Every apply passes `scoredThisRun` through the [ScorePollHost](#scorepollhost) callback, which is how the page's progress display learns the run's own count rather than inferring it from a score list that still holds the previous run's rows. `FinishStable(fresh, currentCount)` (`:177-190`) compares the caller-computed count against `TotalSessions` and reports either `Snackbar.ScoringPartial` with the missed count as a warning or `Snackbar.ScoringComplete` as a success.
 - **Why it's built this way**: the class doc states the placement rule (`:26-32`): the session was extracted from the page code-behind under the rubric §18 line cap, and it stays *beside the page* rather than moving into [ISessionSelectionUIService](#isessionselectionuiservice) because every step it takes is a rendering decision, not a data-access one. Every user-visible string is a resource key resolved through the injected localizer, so the outcome messages follow a language switch like the rest of the page (ADR-027, `Website/docs-src/adr/027-multi-locale-i18n.md`).
-- **Where it's used**: constructed and run by [SessionSelectionDashboard](#sessionselectiondashboard)`.PollForScoresAsync`, which passes the caller's baseline snapshot to `RunAsync` (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/Pages/Sessions/Selection/SessionSelectionDashboard.razor.cs:270`). Its supersede behavior is asserted end to end by `WhenEventChangesMidScoring_ThePollingSessionStopsWithoutTouchingTheNewBoard` (`MMCA.ADC/Tests/Modules/Conference/MMCA.ADC.Conference.UI.Tests/Pages/Sessions/Selection/SessionSelectionStaleResponseTests.cs:217`).
+- **Where it's used**: constructed and run by [SessionSelectionDashboard](#sessionselectiondashboard)`.PollForScoresAsync`, which passes the caller's baseline snapshot to `RunAsync` (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/Pages/Sessions/Selection/SessionSelectionDashboard.razor.cs:291`). Its supersede behavior is asserted end to end by `WhenEventChangesMidScoring_ThePollingSessionStopsWithoutTouchingTheNewBoard` (`MMCA.ADC/Tests/Modules/Conference/MMCA.ADC.Conference.UI.Tests/Pages/Sessions/Selection/SessionSelectionStaleResponseTests.cs:217`).
 - **Caveats / not-in-source**: the resource keys used here (`Snackbar.ScoringPollFailed`, `Snackbar.ScoringNoScores`, `Snackbar.ScoringComplete`, `Snackbar.ScoringPartial`, `Snackbar.ScoringTimedOut`) resolve against the page's localizer, which the caller supplies; their text lives in `SessionSelectionDashboard.resx` and `SessionSelectionDashboard.es.resx`, not in this file.
 
 ### SessionSelectionFilters
@@ -1310,9 +1320,9 @@ The companion [`DependencyInjection`](#dependencyinjection) extension `AddConfer
 > MMCA.ADC.Conference.UI · `MMCA.ADC.Conference.UI.Pages.Sessions.Selection` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/Pages/Sessions/Selection/SessionSelectionDashboard.razor.cs:16` · Level 9 · class (partial component)
 
 - **What it is**: the organizer decision-support page for choosing a conference program. It picks an event (defaulting to the current or next one), loads its decision-support DTO (category distribution, speaker overlap, content similarity, locality breakdown, AI scores), owns the filter state the two child sections read, and starts the asynchronous "score all sessions with AI" flow.
-- **Depends on**: [ISessionSelectionUIService](#isessionselectionuiservice) (loads the board and starts scoring), [IEventLookupService](#ieventlookupservice) (the event picker source), [IToastService](group-15-common-ui-framework.md#itoastservice), and the BCL `TimeProvider` (the clock behind the default-event pick), all injected as properties (`SessionSelectionDashboard.razor.cs:18-21`); [SessionSelectionDashboardDTO](group-17-conference-domain.md#sessionselectiondashboarddto), [EventInfo](#eventinfo), [CurrentEventSelector](group-17-conference-domain.md#currenteventselector), [ConferenceRoutePaths](#conferenceroutepaths), [ToastSeverity](group-15-common-ui-framework.md#toastseverity), and the co-located [SessionSelectionFilters](#sessionselectionfilters), [ScorePollSession](#scorepollsession), and [ScorePollHost](#scorepollhost). It composes [SessionSelectionSpeakerOverlap](#sessionselectionspeakeroverlap) and [SessionSelectionAiScores](#sessionselectionaiscores) in its markup, and the page is routed and role-gated in the `.razor` half (`@page "/sessions/selection-dashboard"` with `[Authorize(Roles = "Organizer")]`, `.../SessionSelectionDashboard.razor:1-2`).
-- **Concept introduced: the smart (container) component that owns state and lifecycle, and the load-generation counter.** This is the counterpart to the two presentational sections above. `[Rubric §19, State Management]` is fully exercised: the component holds the loaded DTO, the selected event id, the filter object, the `_aiScoreLookup`, the scoring flag and the current run's score count, and the loading and error flags (`:23-48`), and passes what the children need down as parameters. The generation counter `_loadGeneration` (`:45`) is the concept worth learning here: any `await` in a Blazor page is a window in which the user can change the selection, so every asynchronous result must prove it is still wanted before it writes anything. The field's doc comment (`:39-44`) explains why the *generation* and not the event id is authoritative: switching away from an event and back must still discard the first response even though both carry the same id. `[Rubric §18, UI Architecture]` is served by splitting a large page into a container, two presentational children, an extracted filter object, and an extracted polling session. `[Rubric §14, Testability]` shows in `internal TimeSpan PollInterval` (`:243`, eight seconds by default), documented as internal precisely so bUnit tests can shrink the cadence and exercise the loop quickly (`MMCA.ADC/Tests/Modules/Conference/MMCA.ADC.Conference.UI.Tests/Pages/Sessions/Selection/SessionSelectionDashboardTests.cs:362`). `[Rubric §27, i18n]` applies throughout: every user-visible string resolves through the injected `IStringLocalizer<SessionSelectionDashboard>` (`.../SessionSelectionDashboard.razor:5`) against the co-located `SessionSelectionDashboard.resx` and its `.es.resx` translation (ADR-027). `[Rubric §11, Security]` applies with the usual caveat that the `Organizer` role attribute is a UX gate; the services behind it enforce authorization independently.
-- **Walkthrough**: the component implements `IDisposable` and owns a `CancellationTokenSource` (`:23`) that every service call threads through, but never reads `.Token` off it directly: the private `LifetimeToken` property (`:28`) returns `_cts.LifetimeToken()`, because reading `Token` from a disposed source throws `ObjectDisposedException`, whereas `Dispose` cancels before it disposes, so a load or handler resuming after navigation gets a cancelled token and exits through its `OperationCanceledException` path (comment at `:24-27`; the Common architecture rule `ComponentsReadTheirTokenThroughLifetimeToken` enforces the habit, `MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Rules/Ui/ArchitectureRules.LifetimeTokens.cs:28`). `Dispose` cancels and disposes it exactly once via the guarded `_disposed` pattern (`:295-317`). `OnInitializedAsync` (`:55-95`) builds the three breadcrumbs (`:57-62`), loads the events (`:66`), and defaults the picker through [CurrentEventSelector](group-17-conference-domain.md#currenteventselector)`.SelectCurrentOrNext` (`:75-80`: live now, else next upcoming, else most recently ended), passing `TimeProvider.GetUtcNow().UtcDateTime` as "now" (`:80`) from the injected clock rather than reading `DateTime.UtcNow` directly; then it loads the board. `OperationCanceledException` is swallowed as disposal and `IsLoading` is cleared in the `finally` (`:87-94`). `OnEventSelectedAsync` (`:97-113`) bumps `_loadGeneration` *before* the selection moves (`:102`), so both the load path and the clear path supersede anything in flight. `LoadDashboardAsync` (`:115-162`) is the generation pattern in full: it snapshots the generation and the requested id (`:122-123`), turns the spinner on, fetches with `LifetimeToken` (`:131`), and then returns early if superseded (`:135-136`, with the comment noting that a superseded *failure* must not paint an error banner over a board that loaded fine); on success it stores the board, calls `_filters.Reset()` and `_filters.ComputeOptions(...)`, and rebuilds the score lookup (`:138-144`); and even the `finally` is generation-guarded so a stale response cannot switch off the spinner a newer load just turned on (`:155-161`). `LocalityTierLabel` (`:164-167`) renders a locality tier for the locality tiles: tier names are data shown as stored, except the handler's `"Unknown"` sentinel, which `SessionSelectionDisplay.IsUnknownTier` detects so the page shows the localized `Chip.Unknown` label the speaker table already uses. `RebuildAiScoreLookup` (`:169-172`) projects the score rows into a `SessionId` to `OverallScore` dictionary for the speaker section. `ScoreSessionsAsync` (`:174-240`) sets `_isScoring`, captures the current `generation` and `eventId` before any await (`:184-185`, because the picker stays enabled while the start request is in flight, so the answer is judged against the event selected when scoring began), snapshots a `baseline` dictionary of each visible score's `SessionId` to its `ScoredOn`, and resets `_scoredThisRun` to zero (`:191-193`); the comment there gives both reasons: the scoring runner rewrites each session's score in place, so progress is only measurable as scores whose timestamp moved, and the scores stay on screen until the server accepts the run, so a failed start leaves the board exactly as it was. It then calls the service with `LifetimeToken` (`:197`); if the generation moved while the request was in flight, the run belongs to the old event, so it clears `_isScoring` and returns without wiping the board or polling (`:198-204`). A failed `Result` (including the 409 already-running or queue-full conflict) toasts an error and clears the flag; a `SessionsScored == -1` result means the server accepted the work asynchronously, so it toasts "started", only now clears the replaced scores from view with a `with` expression and rebuilds the lookup so the table and the overlap chips empty together, and launches the fire-and-forget `PollForScoresAsync(baseline, eventId, generation)` (`:213-223`); and a synchronous result toasts the scored and failed counts and reloads. The closing comment documents why there is no `finally` here: only the accepted asynchronous path leaves `_isScoring` set, handing ownership of the flag to the polling task (every other branch, the superseded one included, clears it, `:237-240`). `PollForScoresAsync(baseline, eventId, generation)` (`:250-278`) takes the event and generation captured at start, rather than re-reading `_selectedEventId` and `_loadGeneration` when the task begins, and builds a [ScorePollSession](#scorepollsession) with the service, the localizer, and a [ScorePollHost](#scorepollhost) wired to `_loadGeneration`, `PollInterval`, `ApplyFreshDashboard`, `InvokeAsync(StateHasChanged)`, and `FinishScoring` (`:258-266`; the host's generation callback still reads the live `_loadGeneration`), runs `session.RunAsync(eventId, baseline, generation, LifetimeToken)` (`:270`), and clears `_isScoring` in a `finally` so the Score button always comes back whatever path exits the loop. `ApplyFreshDashboard(fresh, scoredThisRun)` (`:280-286`) swaps the board in, stores the run's count in `_scoredThisRun` for the [SessionSelectionAiScores](#sessionselectionaiscores) progress display (bound at `.../SessionSelectionDashboard.razor:243`), and recomputes the options and the lookup, deliberately without resetting the filters. `FinishScoring` (`:288-293`) clears the flag, shows the toast, and requests a re-render.
+- **Depends on**: [ISessionSelectionUIService](#isessionselectionuiservice) (loads the board and starts scoring), [IEventLookupService](#ieventlookupservice) (the event picker source), [IToastService](group-15-common-ui-framework.md#itoastservice), and the BCL `TimeProvider` (the clock behind the default-event pick), all injected as properties (`SessionSelectionDashboard.razor.cs:18-21`); [SessionSelectionDashboardDTO](group-17-conference-domain.md#sessionselectiondashboarddto), [EventInfo](#eventinfo), [CurrentEventSelector](group-17-conference-domain.md#currenteventselector), [ConferenceRoutePaths](#conferenceroutepaths), [ToastSeverity](group-15-common-ui-framework.md#toastseverity), and the co-located [SessionSelectionFilters](#sessionselectionfilters), [ScorePollSession](#scorepollsession), and [ScorePollHost](#scorepollhost). It composes [SessionSelectionSpeakerOverlap](#sessionselectionspeakeroverlap) and [SessionSelectionAiScores](#sessionselectionaiscores) in its markup, and the page is routed and role-gated in the `.razor` half (`@page "/sessions/selection-dashboard"` with `[Authorize(Roles = RoleNames.Organizer)]`, `.../SessionSelectionDashboard.razor:1-2`, the constant from [RoleNames](group-24-identity-module.md#rolenames)). A failed load renders the Common `DetailLoadStateContent` in its [DetailLoadState](group-15-common-ui-framework.md#detailloadstate)`.Failed` state with `OnRetry="RetryLoadAsync"` (`.../SessionSelectionDashboard.razor:28-33`).
+- **Concept introduced: the smart (container) component that owns state and lifecycle, and the load-generation counter.** This is the counterpart to the two presentational sections above. `[Rubric §19, State Management]` is fully exercised: the component holds the loaded DTO, the selected event id, the filter object, the `_aiScoreLookup`, the scoring flag and the current run's score count, the loading and error flags, and an `_eventsLoaded` flag that decides what Retry re-runs (`:23-57`), and passes what the children need down as parameters. The generation counter `_loadGeneration` (`:49`) is the concept worth learning here: any `await` in a Blazor page is a window in which the user can change the selection, so every asynchronous result must prove it is still wanted before it writes anything. The field's doc comment (`:43-48`) explains why the *generation* and not the event id is authoritative: switching away from an event and back must still discard the first response even though both carry the same id. `[Rubric §18, UI Architecture]` is served by splitting a large page into a container, two presentational children, an extracted filter object, and an extracted polling session. `[Rubric §14, Testability]` shows in `internal TimeSpan PollInterval` (`:264`, eight seconds by default), documented as internal precisely so bUnit tests can shrink the cadence and exercise the loop quickly (`MMCA.ADC/Tests/Modules/Conference/MMCA.ADC.Conference.UI.Tests/Pages/Sessions/Selection/SessionSelectionDashboardTests.cs:362`). `[Rubric §27, i18n]` applies throughout: every user-visible string resolves through the injected `IStringLocalizer<SessionSelectionDashboard>` (`.../SessionSelectionDashboard.razor:6`) against the co-located `SessionSelectionDashboard.resx` and its `.es.resx` translation (ADR-027). `[Rubric §11, Security]` applies with the usual caveat that the `Organizer` role attribute is a UX gate; the services behind it enforce authorization independently.
+- **Walkthrough**: the component implements `IDisposable` and owns a `CancellationTokenSource` (`:23`) that every service call threads through, but never reads `.Token` off it directly: the private `LifetimeToken` property (`:28`) returns `_cts.LifetimeToken()`, because reading `Token` from a disposed source throws `ObjectDisposedException`, whereas `Dispose` cancels before it disposes, so a load or handler resuming after navigation gets a cancelled token and exits through its `OperationCanceledException` path (comment at `:25-27`; the Common architecture rule `ComponentsReadTheirTokenThroughLifetimeToken` enforces the habit, `MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Rules/Ui/ArchitectureRules.LifetimeTokens.cs:28`). `Dispose` cancels and disposes it exactly once via the guarded `_disposed` pattern (`:316-338`). `OnInitializedAsync` (`:59-69`) is a non-`async` method returning a `Task`: it builds the three breadcrumbs (`:61-66`) and returns `LoadEventsAsync()` (`:68`). `LoadEventsAsync` (`:78-116`) turns the spinner on and clears any prior error (`:80-81`), loads the events (`:85`; a failed lookup sets the `Error.LoadEventsFailed` message and returns), records `_eventsLoaded = true` (`:92`), and defaults the picker through [CurrentEventSelector](group-17-conference-domain.md#currenteventselector)`.SelectCurrentOrNext` (`:96-101`: live now, else next upcoming, else most recently ended), passing `TimeProvider.GetUtcNow().UtcDateTime` as "now" (`:101`) from the injected clock rather than reading `DateTime.UtcNow` directly; then it loads the board. `OperationCanceledException` is swallowed as disposal and `IsLoading` is cleared in the `finally` (`:108-115`). Splitting the load out of the lifecycle method is what makes Retry possible: `RetryLoadAsync` (`:75`) re-runs `LoadEventsAsync` when the event lookup is what failed, and only `LoadDashboardAsync` once `_eventsLoaded` is set (the flag and its comment at `:36-38`), so a dashboard failure does not refetch the event list. `OnEventSelectedAsync` (`:118-134`) bumps `_loadGeneration` *before* the selection moves (`:123`), so both the load path and the clear path supersede anything in flight. `LoadDashboardAsync` (`:136-183`) is the generation pattern in full: it snapshots the generation and the requested id (`:143-144`), turns the spinner on, fetches with `LifetimeToken` (`:152`), and then returns early if superseded (`:156-157`, with the comment noting that a superseded *failure* must not paint an error banner over a board that loaded fine); on success it stores the board, calls `_filters.Reset()` and `_filters.ComputeOptions(...)`, and rebuilds the score lookup (`:159-165`); and even the `finally` is generation-guarded so a stale response cannot switch off the spinner a newer load just turned on (`:176-182`). `LocalityTierLabel` (`:185-188`) renders a locality tier for the locality tiles: tier names are data shown as stored, except the handler's `"Unknown"` sentinel, which `SessionSelectionDisplay.IsUnknownTier` detects so the page shows the localized `Chip.Unknown` label the speaker table already uses. `RebuildAiScoreLookup` (`:190-193`) projects the score rows into a `SessionId` to `OverallScore` dictionary for the speaker section. `ScoreSessionsAsync` (`:195-261`) sets `_isScoring`, captures the current `generation` and `eventId` before any await (`:205-206`, because the picker stays enabled while the start request is in flight, so the answer is judged against the event selected when scoring began), snapshots a `baseline` dictionary of each visible score's `SessionId` to its `ScoredOn`, and resets `_scoredThisRun` to zero (`:212-213`); the comment there gives both reasons: the scoring runner rewrites each session's score in place, so progress is only measurable as scores whose timestamp moved, and the scores stay on screen until the server accepts the run, so a failed start leaves the board exactly as it was. It then calls the service with `LifetimeToken` (`:218`); if the generation moved while the request was in flight, the run belongs to the old event, so it clears `_isScoring` and returns without wiping the board or polling (`:219-225`). A failed `Result` (including the 409 already-running or queue-full conflict) toasts an error and clears the flag; a `SessionsScored == -1` result means the server accepted the work asynchronously, so it toasts "started", only now clears the replaced scores from view with a `with` expression and rebuilds the lookup so the table and the overlap chips empty together, and launches the fire-and-forget `PollForScoresAsync(baseline, eventId, generation)` (`:234-244`); and a synchronous result toasts the scored and failed counts and reloads. The closing comment documents why there is no `finally` here: only the accepted asynchronous path leaves `_isScoring` set, handing ownership of the flag to the polling task (every other branch, the superseded one included, clears it, `:257-260`). `PollForScoresAsync(baseline, eventId, generation)` (`:271-299`) takes the event and generation captured at start, rather than re-reading `_selectedEventId` and `_loadGeneration` when the task begins, and builds a [ScorePollSession](#scorepollsession) with the service, the localizer, and a [ScorePollHost](#scorepollhost) wired to `_loadGeneration`, `PollInterval`, `ApplyFreshDashboard`, `InvokeAsync(StateHasChanged)`, and `FinishScoring` (`:279-287`; the host's generation callback still reads the live `_loadGeneration`), runs `session.RunAsync(eventId, baseline, generation, LifetimeToken)` (`:291`), and clears `_isScoring` in a `finally` so the Score button always comes back whatever path exits the loop. `ApplyFreshDashboard(fresh, scoredThisRun)` (`:301-307`) swaps the board in, stores the run's count in `_scoredThisRun` for the [SessionSelectionAiScores](#sessionselectionaiscores) progress display (bound at `.../SessionSelectionDashboard.razor:246`), and recomputes the options and the lookup, deliberately without resetting the filters. `FinishScoring` (`:309-314`) clears the flag, shows the toast, and requests a re-render.
 - **Why it's built this way**: AI scoring is a long, failure-prone batch that depends on an external model with variable latency, so the page cannot block on it and there is no server push channel for this surface. Delegating the loop to [ScorePollSession](#scorepollsession) and the counting policy to [ScorePollTracker](#scorepolltracker) leaves this class holding only lifecycle, state, and UI effects, which is what keeps a page with this much behavior inside the rubric §18 size expectation. Cancelling the token on disposal stops the loop from outliving the page, and the generation counter stops it from outliving its *event*.
 - **Where it's used**: the organizer route `/sessions/selection-dashboard`, reachable from the admin navigation registered by [ConferenceUIModule](#conferenceuimodule); covered by `SessionSelectionDashboardTests` and `SessionSelectionStaleResponseTests` in the Conference UI bUnit tier (`MMCA.ADC/Tests/Modules/Conference/MMCA.ADC.Conference.UI.Tests/Pages/Sessions/Selection/`).
 - **Caveats / not-in-source**: the `-1` sentinel on `SessionsScored` is what distinguishes a deferred scoring start from a synchronous one; its meaning is documented on [ISessionSelectionUIService](#isessionselectionuiservice) (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/Services/Sessions/Selection/ISessionSelectionUIService.cs:15-20`) and produced by the server-side handler, not by this component. The model used for scoring, its per-session timeout, and its failure modes are not determinable from this file.
@@ -1350,15 +1360,15 @@ The companion [`DependencyInjection`](#dependencyinjection) extension `AddConfer
 - **Why it's built this way**: the denormalized `CategoryTitle` exists so a page can render the
   combined label without holding a second dictionary. [SessionLookups](#sessionlookups) does exactly
   that: `string.IsNullOrEmpty(item.CategoryTitle) ? item.Name : $"{item.CategoryTitle}: {item.Name}"`
-  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/Pages/Sessions/SessionLookups.cs:181`),
+  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/Pages/Sessions/SessionLookups.cs:180`),
   and [PublicSessionDetail](#publicsessiondetail) uses the same expression
-  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/Pages/Public/Sessions/PublicSessionDetail.razor.cs:219`).
+  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/Pages/Public/Sessions/PublicSessionDetail.razor.cs:255`).
   The empty-title fallback keeps the label sensible rather than rendering a stray colon.
 - **Where it's used**: produced by [CategoryItemLookupService](#categoryitemlookupservice) behind
   [ICategoryItemLookupService](#icategoryitemlookupservice); consumed by
-  [SessionLookups](#sessionlookups) (`SessionLookups.cs:35`), which serves
+  [SessionLookups](#sessionlookups) (`SessionLookups.cs:34`), which serves
   [SessionDetail](#sessiondetail), by [PublicSessionDetail](#publicsessiondetail)
-  (`PublicSessionDetail.razor.cs:29`), and, gathered with two sibling dictionaries, by
+  (`PublicSessionDetail.razor.cs:30`), and, gathered with two sibling dictionaries, by
   [SpeakerDetailLookups](#speakerdetaillookups).
 
 ### ChildEntityDeletePath
@@ -1431,9 +1441,9 @@ The companion [`DependencyInjection`](#dependencyinjection) extension `AddConfer
   registered scoped at
   `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/DependencyInjection.cs:60` under the
   "cross-module lookup services" comment, and injected into [SessionLookups](#sessionlookups)
-  (`SessionLookups.cs:35`), [PublicSessionDetail](#publicsessiondetail)
-  (`PublicSessionDetail.razor.cs:29`), and
-  [SpeakerDetailLookupService](#speakerdetaillookupservice) (`SpeakerDetailLookupService.cs:14`).
+  (`SessionLookups.cs:34`), [PublicSessionDetail](#publicsessiondetail)
+  (`PublicSessionDetail.razor.cs:30`), and
+  [SpeakerDetailLookupService](#speakerdetaillookupservice) (`SpeakerDetailLookupService.cs:13`).
 
 ### IEventSpeakerUIService
 
@@ -1503,7 +1513,7 @@ The companion [`DependencyInjection`](#dependencyinjection) extension `AddConfer
   `Task<Result>` (line 41).
 - **Where it's used**: implemented by [SessionCategoryItemService](#sessioncategoryitemservice)
   (`ChildEntityServices.cs:48-49`), registered at `DependencyInjection.cs:36`, injected into
-  [SessionDetail](#sessiondetail) (`SessionDetail.razor.cs:32`), which pairs it with
+  [SessionDetail](#sessiondetail) (`SessionDetail.razor.cs:33`), which pairs it with
   [ICategoryItemLookupService](#icategoryitemlookupservice), reached through
   [SessionLookups](#sessionlookups), to offer the untagged items as choices.
 
@@ -1524,7 +1534,7 @@ The companion [`DependencyInjection`](#dependencyinjection) extension `AddConfer
   (line 28) and `DeleteAsync(sessionId, id, ct)` returning `Task<Result>` (line 29).
 - **Where it's used**: implemented by [SessionSpeakerService](#sessionspeakerservice)
   (`ChildEntityServices.cs:35-36`), registered at `DependencyInjection.cs:35`, injected into
-  [SessionDetail](#sessiondetail) (`SessionDetail.razor.cs:31`).
+  [SessionDetail](#sessiondetail) (`SessionDetail.razor.cs:32`).
 
 ### ISpeakerCategoryItemUIService
 
@@ -1578,7 +1588,7 @@ The companion [`DependencyInjection`](#dependencyinjection) extension `AddConfer
   the parent per item, the client pulls both collections in full and does the join itself, producing
   the denormalized [CategoryItemInfo](#categoryiteminfo). The cost is one round trip for the categories
   plus one per 500 items (`PagedReadAll.PageSize`,
-  `MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/Api/PagedReadAll.cs:22`), independent of
+  `MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/Api/PagedReadAll.cs:21`), independent of
   how many rows the page renders. The second concept here is the **two-part railway
   conversion** that every lookup in this family uses:
   [ProblemDetailsResultReader](group-08-auth.md#problemdetailsresultreader) converts a *response* into a
@@ -1607,11 +1617,11 @@ The companion [`DependencyInjection`](#dependencyinjection) extension `AddConfer
     GETs `PagedReadAll.LookupPageUrl("categoryitems", pageNumber)` into a
     [PagedCollectionResult<CategoryItemDTO>](group-01-result-error-handling.md#pagedcollectionresultt)
     (`:38-41`). That URL is the `/paged` endpoint in `Id` ascending order, 500 rows a page, with
-    foreign keys and children excluded (`PagedReadAll.cs:43-46`). The source comment states why
+    foreign keys and children excluded (`PagedReadAll.cs:42-45`). The source comment states why
     (`:35-36`): the GET-all endpoint ignores `pageSize` and stops silently at the API's maximum page
     size, so only paging to the reported total is unbounded. `ReadAllAsync` stops on an empty page or
     once the accumulated count reaches `TotalItemCount`, and returns the first failing page's errors
-    unchanged (`PagedReadAll.cs:57-90`).
+    unchanged (`PagedReadAll.cs:56-89`).
   - `Map` projects the accumulated `List<CategoryItemDTO>` through `BuildLookup` (`:44-45`), which
     loops the items, resolves each parent title with `TryGetValue` falling back to `string.Empty`, and
     stores one [CategoryItemInfo](#categoryiteminfo) per id (`:73-85`).
@@ -1622,7 +1632,7 @@ The companion [`DependencyInjection`](#dependencyinjection) extension `AddConfer
     then one `ProblemDetailsResultReader.ReadAsync<T>` (`:55`).
 - **Why it's built this way**: `includeFKs=false&includeChildren=false` keeps both payloads flat and
   small, which is the whole point of a lookup fetch, no navigation graphs, only the display fields. The
-  stable `Id` sort means consecutive pages neither skip nor repeat a row (`PagedReadAll.cs:30-34`). The
+  stable `Id` sort means consecutive pages neither skip nor repeat a row (`PagedReadAll.cs:29-33`). The
   retry exists because this service has no base class: without `IdempotentReadRetry` an anonymous
   lookup would get a single attempt, and a GET is safe to re-send. The `TryGetValue` fallback (`:80`)
   means a missing or newly added category degrades to an unprefixed label instead of throwing
@@ -1638,9 +1648,9 @@ The companion [`DependencyInjection`](#dependencyinjection) extension `AddConfer
   paths [SelfHttpOutputCacheWarmupTask](group-20-conference-api-grpc.md#selfhttpoutputcachewarmuptask)
   replays to warm the server's output cache, which is why the URL format is treated as a byte-for-byte
   contract (`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/SelfHttpOutputCacheWarmupTask.cs:36-41`,
-  `PagedReadAll.cs:33-34`).
+  `PagedReadAll.cs:32-33`).
 - **Caveats / not-in-source**: the item read is bounded by `PagedReadAll`'s runaway guard of 40 pages
-  (`PagedReadAll.cs:28`), so beyond 20,000 category items the lookup would stop without an error. The
+  (`PagedReadAll.cs:27`), so beyond 20,000 category items the lookup would stop without an error. The
   categories call sends no page size at all (`:24`) and is not paged, so it depends on that endpoint
   returning the full set. Nothing memoizes the result inside this class: each `GetAllAsync` call
   re-issues every request, and the scoped registration only means one instance per request or circuit
@@ -1951,7 +1961,7 @@ The companion [`DependencyInjection`](#dependencyinjection) extension `AddConfer
   then reads `SponsorshipPacketUrl` off it (`PublicSponsorList.razor.cs:88`); every page that injects
   [IEventLookupService](#ieventlookupservice) indexes the dictionary of these records to render event
   names, including [`EventFilteredListPageBase<TDto>`](#eventfilteredlistpagebasetdto)
-  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/Pages/Common/EventFilteredListPageBase.cs:27`),
+  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/Pages/Common/EventFilteredListPageBase.cs:26`),
   which supplies the shared event filter to its derived list pages.
 
 ### SessionAssetLinkRequest
@@ -2038,11 +2048,11 @@ The companion [`DependencyInjection`](#dependencyinjection) extension `AddConfer
     service.
 - **Why it's built this way**: [PublicSessionScheduleService](#publicsessionscheduleservice) turns
   `MyScheduleSessionIds` into an extra `"Id"` filter with the `IN` operator before delegating to the
-  paged session query (`PublicSessionScheduleService.cs:160-165`), which is why the "never empty"
+  paged session query (`PublicSessionScheduleService.cs:159-164`), which is why the "never empty"
   invariant is documented on the record rather than defended in the service: an empty `IN` list would
   be a query that cannot match. `[Rubric §12, Performance & Scalability]`: the alternative the doc
   comment rules out, pulling a 500-row page and filtering in memory, also reported a wrong total past
-  500 rows (`PublicSessionScheduleService.cs:149-152`).
+  500 rows (`PublicSessionScheduleService.cs:148-151`).
 - **Where it's used**: constructed by [PublicSessionList](#publicsessionlist) inside its unified fetch
   delegate (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/Pages/Public/Sessions/PublicSessionList.razor.cs:329-336`)
   and consumed by [IPublicSessionScheduleService.FetchPageAsync](#ipublicsessionscheduleservice).
@@ -2075,12 +2085,12 @@ The companion [`DependencyInjection`](#dependencyinjection) extension `AddConfer
 - **Where it's used**: implemented by [EventLookupService](#eventlookupservice), registered scoped at
   `DependencyInjection.cs:59`, and injected into a wide set of Conference pages, including
   [`EventFilteredListPageBase<TDto>`](#eventfilteredlistpagebasetdto)
-  (`EventFilteredListPageBase.cs:27`), [RoomDetail](#roomdetail) (`RoomDetail.razor.cs:20`),
+  (`EventFilteredListPageBase.cs:26`), [RoomDetail](#roomdetail) (`RoomDetail.razor.cs:21`),
   [RoomCreate](#roomcreate) (`RoomCreate.razor.cs:16`), [SessionCreate](#sessioncreate)
-  (`SessionCreate.razor.cs:23`), [SessionDetail](#sessiondetail) (`SessionDetail.razor.cs:28`),
+  (`SessionCreate.razor.cs:23`), [SessionDetail](#sessiondetail) (`SessionDetail.razor.cs:29`),
   [ActivityDetail](#activitydetail) (`ActivityDetail.razor.cs:26`),
   [ActivityCreate](#activitycreate) (`ActivityCreate.razor.cs:23`),
-  [SpeakerDashboard](#speakerdashboard) (`SpeakerDashboard.razor.cs:27`),
+  [SpeakerDashboard](#speakerdashboard) (`SpeakerDashboard.razor.cs:29`),
   [SessionSelectionDashboard](#sessionselectiondashboard) (`SessionSelectionDashboard.razor.cs:19`),
   [OrganizerEventFeedback](#organizereventfeedback) (`OrganizerEventFeedback.razor.cs:21`),
   [PublicActivityList](#publicactivitylist) (`PublicActivityList.razor.cs:30`),
@@ -2116,7 +2126,7 @@ The companion [`DependencyInjection`](#dependencyinjection) extension `AddConfer
   [`OfflineFirstPageSnapshot<TItem>`](group-15-common-ui-framework.md#offlinefirstpagesnapshottitem)
   over [ILocalCacheStore](group-26-device-capability-layer.md#ilocalcachestore) and
   [IConnectivityStatusService](group-26-device-capability-layer.md#iconnectivitystatusservice)
-  (`PublicSessionScheduleService.cs:19-34`), so the same page code runs on a head that has no local
+  (`PublicSessionScheduleService.cs:18-33`), so the same page code runs on a head that has no local
   store at all.
 - **Walkthrough**: two members.
   - `TryReadOfflineSnapshotAsync(SessionSchedulePageRequest request, Action<bool> onCacheStateChanged, CancellationToken cancellationToken = default)`
@@ -2141,8 +2151,8 @@ The companion [`DependencyInjection`](#dependencyinjection) extension `AddConfer
     page": only the unfiltered programme is written or answered from, so a "My Schedule" page or a page
     narrowed by any filter other than the event scope never overwrites the snapshot and is never
     answered with it (lines 38-41). The implementation matches that on every branch
-    (`PublicSessionScheduleService.cs:64-96`) and enforces the rule through its private
-    `IsProgrammePage` check (`PublicSessionScheduleService.cs:146-147`).
+    (`PublicSessionScheduleService.cs:63-95`) and enforces the rule through its private
+    `IsProgrammePage` check (`PublicSessionScheduleService.cs:145-146`).
 - **Why it's built this way**: extracting the offline behavior behind an interface is what let the page
   keep a single fetch delegate for both the browse and "My Schedule" views. The page comment says it
   directly: only the banner stays in the page, the service decides when it is warranted
@@ -2230,13 +2240,13 @@ The companion [`DependencyInjection`](#dependencyinjection) extension `AddConfer
 - **Why it's built this way**: the import rewrites the event's child data and its refresh stamp, so the
   caller's copy of the event is stale the moment the import succeeds. The service comment says exactly
   that and concludes "hand back the reloaded event rather than a bare summary"
-  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/Services/Events/EventService.cs:116-117`).
+  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/Services/Events/EventService.cs:115-116`).
 - **Where it's used**: produced by
   [IEventUIService](#ieventuiservice)`.RefreshFromSessionizeWithCodeAsync` (`IEventUIService.cs:29`),
-  built by [EventService](#eventservice) (`EventService.cs:121`), and consumed by
+  built by [EventService](#eventservice) (`EventService.cs:120`), and consumed by
   [EventDetail](#eventdetail), which unpacks both members in one branch: `_refreshResult =
   refreshed.Summary`, `Event = refreshed.Event`
-  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/Pages/Events/EventDetail.razor.cs:292-311`).
+  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/Pages/Events/EventDetail.razor.cs:270-289`).
 
 ### EventLookupService
 
@@ -2277,7 +2287,7 @@ The companion [`DependencyInjection`](#dependencyinjection) extension `AddConfer
     read starts a fresh one. `FetchAsync` captures `_generation` on entry (`:93`) and stamps
     `_cachedUntil` only when `result.IsSuccess && generation == _generation` (`:117`), so a fetch that an
     `Invalidate` superseded cannot stamp a TTL onto the fetch that replaced it. [EventService](#eventservice) is the caller
-    here (`EventService.cs:125-134`).
+    here (`EventService.cs:124-133`).
   - **No lock** (`:22-25`). The service is registered scoped in both heads
     (`DependencyInjection.cs:59`), and Blazor's renderer dispatches every component callback for one
     scope on a single logical thread, so the read-modify-write at `:73-83` never interleaves with
@@ -2483,12 +2493,12 @@ The companion [`DependencyInjection`](#dependencyinjection) extension `AddConfer
 
 ### EventService
 
-> MMCA.ADC.Conference.UI · `MMCA.ADC.Conference.UI.Services.Events` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/Services/Events/EventService.cs:22` · Level 5 · class (sealed)
+> MMCA.ADC.Conference.UI · `MMCA.ADC.Conference.UI.Services.Events` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/Services/Events/EventService.cs:21` · Level 5 · class (sealed)
 
 - **What it is**: the concrete HTTP service for the `events` resource. Unlike its plain-CRUD siblings it
   is **not** body-less: on top of the inherited CRUD it adds the four event-specific operations that map
   to dedicated WebAPI endpoints, publish, unpublish, Sessionize refresh, and the composed
-  refresh-with-code gesture (`EventService.cs:22-135`). It also overrides the inherited
+  refresh-with-code gesture (`EventService.cs:21-134`). It also overrides the inherited
   `AddAsync`, `UpdateAsync` and `DeleteAsync` (`:31-46`) so that every successful write drops the
   scope's memoized event lookup (see the cache-invalidation concept below). It implements
   [`IEventUIService`](#ieventuiservice), which itself extends the generic
@@ -2499,14 +2509,14 @@ The companion [`DependencyInjection`](#dependencyinjection) extension `AddConfer
   for the CRUD surface, the `Endpoint` property (`EntityServiceBase.cs:51`) and the protected
   `SendRequestAsync` dispatch (`EntityServiceBase.cs:351,381`);
   [`ConcurrencyETag`](group-08-auth.md#concurrencyetag) to render the row version as a weak entity tag
-  (`EventService.cs:29,41`); [`EventDTO`](group-17-conference-domain.md#eventdto),
+  (`EventService.cs:28,40`); [`EventDTO`](group-17-conference-domain.md#eventdto),
   [`RefreshFromSessionizeResultDTO`](group-17-conference-domain.md#refreshfromsessionizeresultdto) and
   [`SessionizeRefreshOutcome`](#sessionizerefreshoutcome);
   [`Result`](group-01-result-error-handling.md#result);
   [`ITokenStorageService`](group-15-common-ui-framework.md#itokenstorageservice);
   [`IEventLookupService`](#ieventlookupservice) and
   [`ISpeakerLookupService`](#ispeakerlookupservice), the two memoized lookups it invalidates
-  (primary constructor, `EventService.cs:22-26`); BCL `CultureInfo.InvariantCulture`.
+  (primary constructor, `EventService.cs:21-25`); BCL `CultureInfo.InvariantCulture`.
 - **Concept introduced, write-through invalidation of the scope memo.** The organizers who write
   bypass the server's output cache, so the client-side memo in
   [`EventLookupService`](#eventlookupservice) would be the only staleness they could see. Every
@@ -2521,7 +2531,7 @@ The companion [`DependencyInjection`](#dependencyinjection) extension `AddConfer
   mirrors changes).
 - **Concept introduced, the conditional state-transition call.** Publish and unpublish are not CRUD:
   they are named transitions the server owns, so they POST to `{Endpoint}/{id}/publish` and
-  `{Endpoint}/{id}/unpublish` with **no body at all** (`EventService.cs:53-57,65-69`). What they do carry
+  `{Endpoint}/{id}/unpublish` with **no body at all** (`EventService.cs:52-56,64-68`). What they do carry
   is an `If-Match` header holding the event's current row version, rendered by
   [`ConcurrencyETag`](group-08-auth.md#concurrencyetag)`.Format` as a weak tag such as `W/"AAAAAAAAB9E="`
   (`MMCA.Common/Source/Core/MMCA.Common.Shared/Http/ConcurrencyETag.cs:41-45`). The tag is weak on
@@ -2541,27 +2551,27 @@ The companion [`DependencyInjection`](#dependencyinjection) extension `AddConfer
   message. Instead the service runs the sequence and returns **one**
   [`Result`](group-01-result-error-handling.md#result) carrying a
   [`SessionizeRefreshOutcome`](#sessionizerefreshoutcome), so the page reads one value and reports one
-  failure (`EventService.cs:93-123`, contract documented at `IEventUIService.cs:19-28`).
+  failure (`EventService.cs:92-122`, contract documented at `IEventUIService.cs:19-28`).
   `[Rubric §18, UI Architecture]` (assesses whether orchestration lives in a service rather than in
   component code) and `[Rubric §24, Forms/Validation/UX Safety]` (one failure branch means one message,
   and no half-reported gesture).
 - **Walkthrough**
-  - `AddAsync(entity, ct)`, `UpdateAsync(entity, ct)`, `DeleteAsync(id, ct)` (`EventService.cs:31-46`):
+  - `AddAsync(entity, ct)`, `UpdateAsync(entity, ct)`, `DeleteAsync(id, ct)` (`EventService.cs:30-45`):
     `override`s of the base CRUD, each `InvalidateEventsOnSuccess(await base.XAsync(...))`.
-  - `PublishAsync(id, rowVersion, ct)` (`EventService.cs:48-58`): a body-less POST to
+  - `PublishAsync(id, rowVersion, ct)` (`EventService.cs:47-57`): a body-less POST to
     `{Endpoint}/{id}/publish` built with `string.Create(CultureInfo.InvariantCulture, ...)` (`:54`),
     dispatched through the base's valueless `SendRequestAsync` with
     `ifMatch: ConcurrencyETag.Format(rowVersion)` (`:58`), the whole call wrapped in
     `InvalidateEventsOnSuccess` (`:52`). The base attaches the header and turns the
     response into a [`Result`](group-01-result-error-handling.md#result).
-  - `UnpublishAsync(id, rowVersion, ct)` (`EventService.cs:60-70`): the exact mirror against
+  - `UnpublishAsync(id, rowVersion, ct)` (`EventService.cs:59-69`): the exact mirror against
     `{Endpoint}/{id}/unpublish` (`:66`), same conditional header (`:70`), same invalidation (`:64`).
-  - `RefreshFromSessionizeAsync(id, ct)` (`EventService.cs:72-91`): POSTs `{Endpoint}/{id}/refresh`
+  - `RefreshFromSessionizeAsync(id, ct)` (`EventService.cs:71-90`): POSTs `{Endpoint}/{id}/refresh`
     (`:76-81`) through the value-returning `SendRequestAsync<T>` and yields the import summary as a
     `Result<`[`RefreshFromSessionizeResultDTO`](group-17-conference-domain.md#refreshfromsessionizeresultdto)`>`.
     No `If-Match` here: an import is not a conditional edit of the caller's copy. On success it
     invalidates both the event and the speaker lookup (`:83-88`).
-  - `RefreshFromSessionizeWithCodeAsync(current, sessionizeCode, ct)` (`EventService.cs:93-123`): guards a
+  - `RefreshFromSessionizeWithCodeAsync(current, sessionizeCode, ct)` (`EventService.cs:92-122`): guards a
     null event (`:98`); compares the edited code against the stored one with `StringComparison.Ordinal`
     and, only when they differ, persists it first through the overridden `UpdateAsync` on a `with`-copy
     of the DTO, because the import reads the code off the **stored** event (`:101-103`); short-circuits on
@@ -2573,7 +2583,7 @@ The companion [`DependencyInjection`](#dependencyinjection) extension `AddConfer
     the underlying call's own `Errors`, so nothing is re-worded on the way out. Because the persist goes
     through the overridden `UpdateAsync`, the code-change path invalidates the event lookup before the
     import runs.
-  - `InvalidateEventsOnSuccess<TResult>(result)` (`EventService.cs:125-134`): the private helper.
+  - `InvalidateEventsOnSuccess<TResult>(result)` (`EventService.cs:124-133`): the private helper.
 - **Why it's built this way**: publish, unpublish and refresh are server-owned transitions with their own
   endpoints and their own authorization, so they are additive methods on the event's interface rather
   than flags smuggled through a PUT. The composed method exists because the reload after an import is not
@@ -2595,14 +2605,14 @@ The companion [`DependencyInjection`](#dependencyinjection) extension `AddConfer
 
 ### PublicSessionScheduleService
 
-> MMCA.ADC.Conference.UI · `MMCA.ADC.Conference.UI.Services.Public` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/Services/Public/PublicSessionScheduleService.cs:20` · Level 5 · class (sealed)
+> MMCA.ADC.Conference.UI · `MMCA.ADC.Conference.UI.Services.Public` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/Services/Public/PublicSessionScheduleService.cs:19` · Level 5 · class (sealed)
 
 - **What it is**: the offline-first page fetch behind the public session schedule. It runs the live paged
   session query and keeps the last successful **first** page in the device-local cache, so a dead venue
-  network still shows a programme (`PublicSessionScheduleService.cs:20-194`). It implements
+  network still shows a programme (`PublicSessionScheduleService.cs:19-193`). It implements
   [`IPublicSessionScheduleService`](#ipublicsessionscheduleservice).
 - **Depends on**: [`ISessionUIService`](#isessionuiservice) as the live query (constructor,
-  `PublicSessionScheduleService.cs:21`), so it composes over
+  `PublicSessionScheduleService.cs:20`), so it composes over
   [`SessionService`](#sessionservice) rather than issuing HTTP itself;
   [`ILocalCacheStore`](group-26-device-capability-layer.md#ilocalcachestore) and
   [`IConnectivityStatusService`](group-26-device-capability-layer.md#iconnectivitystatusservice)
@@ -2630,7 +2640,7 @@ The companion [`DependencyInjection`](#dependencyinjection) extension `AddConfer
   looking at).
 - **Concept introduced, only the programme is remembered, and only the programme is answered from.**
   Page 1 alone is not a sufficient condition for the write-back or the read. The private
-  `IsProgrammePage` check (`PublicSessionScheduleService.cs:146-147`) admits a page only when it is not
+  `IsProgrammePage` check (`PublicSessionScheduleService.cs:145-146`) admits a page only when it is not
   "My Schedule" and carries no filter key other than the event scope (`EventId`, the key
   [`PublicSessionList`](#publicsessionlist) writes). Any other key, such as a title search, a room or a
   grid column filter, marks a narrowed view that must never overwrite the cached programme, nor be
@@ -2639,7 +2649,7 @@ The companion [`DependencyInjection`](#dependencyinjection) extension `AddConfer
   failed "My Schedule" fetch would be answered with the whole programme as its own result
   (comment at `:77-80`). `[Rubric §19, State Management]`.
 - **Concept introduced, the snapshot is scoped per page shape and per event.** The programme snapshot is
-  no longer one fixed slot. `SnapshotFor(request)` (`PublicSessionScheduleService.cs:42`) builds an
+  no longer one fixed slot. `SnapshotFor(request)` (`PublicSessionScheduleService.cs:41`) builds an
   [`OfflineFirstPageSnapshot<SessionDTO>`](group-15-common-ui-framework.md#offlinefirstpagesnapshottitem)
   per call under the key `ScheduleCacheKey + ".s" + PageSize` (invariant culture), so a page of another
   size never stands in for this one (L214, doc comment `:35-41`). The event scope is deliberately not in
@@ -2652,24 +2662,24 @@ The companion [`DependencyInjection`](#dependencyinjection) extension `AddConfer
 - **Concept introduced, scoping "My Schedule" server-side.** The private `QueryAsync` shows the third
   idea. When the "My Schedule" view is active, the request carries the attendee's bookmarked session ids,
   and the service copies the grid's filter dictionary and adds an `Id IN (...)` filter built from those
-  ids (`PublicSessionScheduleService.cs:160-165`), then lets the server page the result
+  ids (`PublicSessionScheduleService.cs:159-164`), then lets the server page the result
   (`:167-170`). The doc comment records what this replaced and why it matters:
   pulling a 500-row page and filtering in memory also reported a wrong total past 500 rows
   (`:149-152`). `[Rubric §12, Performance & Scalability]`.
 - **Walkthrough**
-  - `ScheduleCacheKey = "conference.publicSessions.page1"` (`PublicSessionScheduleService.cs:30`): the
+  - `ScheduleCacheKey = "conference.publicSessions.page1"` (`PublicSessionScheduleService.cs:29`): the
     device-local cache key prefix, unique to this surface. The comment states the consequence of changing
     it (`:25-29`): every already-cached schedule is orphaned; `SnapshotFor` appends the page-size suffix.
     The uniqueness requirement is the framework's, since a shared key would let one list serve another
     list's rows (`OfflineFirstPageSnapshot.cs:17-21`).
-  - `SnapshotFor(request)` (`PublicSessionScheduleService.cs:42`): a private method (it replaces the old
+  - `SnapshotFor(request)` (`PublicSessionScheduleService.cs:41`): a private method (it replaces the old
     single `_snapshot` field) that returns a fresh
     [`OfflineFirstPageSnapshot<SessionDTO>`](group-15-common-ui-framework.md#offlinefirstpagesnapshottitem)
     from the store, the connectivity probe and the page-size-scoped key. The snapshot object is cheap to
     rebuild because the persisted state lives in the store, not in the object.
-  - `MatchesEventScope(request, cached)` (`PublicSessionScheduleService.cs:53-55`): the read-time event
+  - `MatchesEventScope(request, cached)` (`PublicSessionScheduleService.cs:52-54`): the read-time event
     check described above.
-  - `FetchPageAsync(request, onCacheStateChanged, ct)` (`PublicSessionScheduleService.cs:58-97`), the
+  - `FetchPageAsync(request, onCacheStateChanged, ct)` (`PublicSessionScheduleService.cs:57-96`), the
     first public method, and it has three exits.
     1. **Live success**: `QueryAsync` returns a page (`:65`), the snapshot records it only when
        `IsProgrammePage(request)` holds (`:68-71`), through `RememberSnapshotAsync(SnapshotFor(request), ...)`
@@ -2686,27 +2696,27 @@ The companion [`DependencyInjection`](#dependencyinjection) extension `AddConfer
        filter (`:86`) still guards the paths that can throw rather than fail, the local cache store itself
        and a cancelled fetch (`:88`). If the snapshot has nothing, the exception is rethrown (`:90-93`) so
        cancellation and genuine faults are not swallowed.
-  - `TryReadOfflineSnapshotAsync(request, onCacheStateChanged, ct)` (`PublicSessionScheduleService.cs:100-110`):
+  - `TryReadOfflineSnapshotAsync(request, onCacheStateChanged, ct)` (`PublicSessionScheduleService.cs:99-109`):
     the second public method. It reads the snapshot without a live fetch, for a page that cannot run
     its query at all (its event scope or bookmarks could not be read). It answers only on the
     fallback's terms: `IsProgrammePage(request) && SnapshotFor(request).CanServe(request.Page)` (`:107`),
     else a completed task holding `null` (`:109`). It guards a null request with
     `ArgumentNullException.ThrowIfNull` (`:105`).
-  - `RememberSnapshotAsync(snapshot, fetched, page)` (`PublicSessionScheduleService.cs:121-136`): now a
+  - `RememberSnapshotAsync(snapshot, fetched, page)` (`PublicSessionScheduleService.cs:120-135`): now a
     `private static` method taking the request's snapshot as its first argument. It writes under its own
     `CancellationTokenSource` bounded by `SnapshotWriteTimeout`, a five-second
     `static readonly TimeSpan` (`:33`), not the grid's token (`:127`). A superseding reload (or the
     pre-render timeout) that cancels the grid's token after the 200 arrived therefore cannot turn that
     success into an empty page; an `OperationCanceledException` is swallowed because the snapshot is
     best-effort (`:131-135`, doc comment `:112-120`).
-  - `IsProgrammePage(request)` (`PublicSessionScheduleService.cs:146-147`): a `private static` predicate,
+  - `IsProgrammePage(request)` (`PublicSessionScheduleService.cs:145-146`): a `private static` predicate,
     `request.MyScheduleSessionIds is null && request.Filters.Keys.All(key => key == "EventId")`, the
     gate for every snapshot write and read described above.
-  - `QueryAsync(request, ct)` (`PublicSessionScheduleService.cs:156-171`): builds the effective filters
+  - `QueryAsync(request, ct)` (`PublicSessionScheduleService.cs:155-170`): builds the effective filters
     described above and calls
     [`ISessionUIService`](#isessionuiservice)`.GetPagedAsync` with `includeChildren: true`, since the
     public schedule renders each session's child data (`:167-170`).
-  - `ReadSnapshotAsync(request, onCacheStateChanged, ct)` (`PublicSessionScheduleService.cs:179-193`): reads
+  - `ReadSnapshotAsync(request, onCacheStateChanged, ct)` (`PublicSessionScheduleService.cs:178-192`): reads
     the request's snapshot via `SnapshotFor(request).TryReadAsync` (`:184`) and returns `null` when nothing
     is cached or `MatchesEventScope` rejects it (`:185-188`); only when a snapshot actually answers does it
     raise the "showing cached data" banner and return the page (`:190-191`).
@@ -2780,14 +2790,14 @@ The companion [`DependencyInjection`](#dependencyinjection) extension `AddConfer
     section.
 - **Why it's built this way**: the three sources keep their own services because other pages share
   them; [SpeakerDetailLookupService](#speakerdetaillookupservice) only composes them, short-circuiting
-  on the first failure (`SpeakerDetailLookupService.cs:22-39`) so the caller reports one error instead
+  on the first failure (`SpeakerDetailLookupService.cs:21-38`) so the caller reports one error instead
   of branching three times. Note the composition is sequential, not parallel: each `await` completes
   before the next begins.
 - **Where it's used**: [SpeakerDetail](#speakerdetail) holds exactly one nullable field of this type
-  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/Pages/Speakers/SpeakerDetail.razor.cs:72`),
-  loads it once when it is still null (`SpeakerDetail.razor.cs:123-131`), and reads `QuestionTexts`
+  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/Pages/Speakers/SpeakerDetail.razor.cs:75`),
+  loads it once when it is still null (`SpeakerDetail.razor.cs:119-127`), and reads `QuestionTexts`
   when rendering an answer, falling back to the raw id when a question is missing
-  (`SpeakerDetail.razor.cs:193`). `CategoryTitles` is handed down to
+  (`SpeakerDetail.razor.cs:180`). `CategoryTitles` is handed down to
   [SpeakerCategoryItemsPanel](#speakercategoryitemspanel) as a parameter
   (`SpeakerCategoryItemsPanel.razor.cs:30`, read at `:36-37`).
 
@@ -2807,7 +2817,7 @@ The companion [`DependencyInjection`](#dependencyinjection) extension `AddConfer
   - `SortOrder` (`:68`): the tie-break between activities starting at the same instant.
   - Derived (`:71-86`): `HasStart` and `HasEnd` report whether both halves are present; `StartsAt` and `EndsAt` collapse a date plus a `TimeSpan` into one `DateTime` and are documented as valid only once the matching `Has*` is true (`:76-79`, `:82-85`).
 - **Why it's built this way**: the create form and the edit form of the same aggregate diverging is a classic and invisible defect (a field that is required on one and optional on the other). Making the shared base the only declaration site removes the possibility rather than testing for it.
-- **Where it's used**: subclassed by [`ActivityCreateModel`](#activitycreatemodel) and [`ActivityEditModel`](#activityeditmodel); bound by [`ActivityCreate`](#activitycreate) (`ActivityCreate.razor.cs:90`) and [`ActivityDetail`](#activitydetail) (`ActivityDetail.razor.cs:72`) through the shared `ActivityFormFields` component.
+- **Where it's used**: subclassed by [`ActivityCreateModel`](#activitycreatemodel) and [`ActivityEditModel`](#activityeditmodel); bound by [`ActivityCreate`](#activitycreate) (`ActivityCreate.razor.cs:90`) and [`ActivityDetail`](#activitydetail) (`ActivityDetail.razor.cs:71`) through the shared `ActivityFormFields` component.
 
 ---
 
@@ -2848,12 +2858,12 @@ The companion [`DependencyInjection`](#dependencyinjection) extension `AddConfer
   them individually; only the *composition* is speaker-detail-specific, so only the composition gets a
   new type. The implementation short-circuits on the first failure, which is what makes "one error to
   report" true rather than aspirational
-  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/Services/Speakers/SpeakerDetailLookupService.cs:22-35`).
+  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/Services/Speakers/SpeakerDetailLookupService.cs:21-34`).
 - **Where it's used**: implemented by [SpeakerDetailLookupService](#speakerdetaillookupservice),
   registered scoped in the Conference UI composition root under a comment that repeats the rationale
   (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/DependencyInjection.cs:62-64`), and
   injected into exactly one page, [SpeakerDetail](#speakerdetail)
-  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/Pages/Speakers/SpeakerDetail.razor.cs:28`).
+  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/Pages/Speakers/SpeakerDetail.razor.cs:29`).
 
 ### ISpeakerLookupService
 
@@ -2950,8 +2960,8 @@ The companion [`DependencyInjection`](#dependencyinjection) extension `AddConfer
   `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/DependencyInjection.cs:40` (an
   explicit `AddScoped` because it is not an `IEntityService<,>` and the assembly scan would not find
   it); injected into [SpeakerDashboard](#speakerdashboard)
-  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/Pages/Speakers/SpeakerDashboard.razor.cs:26`),
-  which calls three of the four methods (`SpeakerDashboard.razor.cs:115`, `:136`, `:269`).
+  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/Pages/Speakers/SpeakerDashboard.razor.cs:28`),
+  which calls three of the four methods (`SpeakerDashboard.razor.cs:136`, `:136`, `:269`).
 - **Caveats / not-in-source**: `GetSessionBookmarkCountAsync`, the single-session count, has no page
   consumer today; the dashboard uses the batched form. It remains on the contract, is implemented
   (`SpeakerDashboardService.cs:45`), and is covered by unit tests
@@ -2982,7 +2992,7 @@ The companion [`DependencyInjection`](#dependencyinjection) extension `AddConfer
   - `LoadFrom(ActivityDTO)` (`:16-34`): null-guards, then copies the ten editable values off the loaded record, splitting the two instants back into the four picker halves (`:22-25`).
   - `ToUpdated(ActivityDTO)` (`:38-56`): rebuilds the DTO from the edited values over three preserved fields, `Id` (`:44`), `RowVersion` (`:45`) and `EventId` (`:54`). Preserving the event id here, rather than binding it, is what enforces the class doc's rule (`:6-10`) that moving an activity between events is a create plus a delete.
 - **Why it's built this way**: an unmapped field is the failure mode of a hand-rolled edit form; keeping copy-in and copy-out adjacent in one small file makes the two halves reviewable against each other.
-- **Where it's used**: [`ActivityDetail`](#activitydetail) holds one instance (`ActivityDetail.razor.cs:72`), seeds it in `StartEditing` (`ActivityDetail.razor.cs:151`) and posts `ToUpdated` from `SaveChangesAsync` (`ActivityDetail.razor.cs:222`).
+- **Where it's used**: [`ActivityDetail`](#activitydetail) holds one instance (`ActivityDetail.razor.cs:71`), seeds it in `StartEditing` (`ActivityDetail.razor.cs:130`) and posts `ToUpdated` from `SaveChangesAsync` (`ActivityDetail.razor.cs:201`).
 
 ---
 
@@ -3034,7 +3044,7 @@ The companion [`DependencyInjection`](#dependencyinjection) extension `AddConfer
   (`SpeakerDashboardService.cs:14-16`).
 - **Depends on**: [`AuthenticatedServiceBase`](group-15-common-ui-framework.md#authenticatedservicebase)
   for `CreateAuthenticatedClientAsync()` and the shared static Polly `RetryPolicy`
-  (`MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/Api/AuthenticatedServiceBase.cs:27,59`);
+  (`MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/Api/AuthenticatedServiceBase.cs:30,62`);
   [`HttpResultExecutor`](group-15-common-ui-framework.md#httpresultexecutor) and
   [`ProblemDetailsResultReader`](group-08-auth.md#problemdetailsresultreader);
   [`PagedCollectionResult<T>`](group-01-result-error-handling.md#pagedcollectionresultt);
@@ -3053,7 +3063,7 @@ The companion [`DependencyInjection`](#dependencyinjection) extension `AddConfer
     [`SessionsController`](group-20-conference-api-grpc.md#sessionscontroller) removes the key from the
     filter dictionary, parses it with `TryParse` under the invariant culture, and resolves it through the
     SessionSpeaker join before ANDing the result with the public-session specification
-    (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/Sessions/SessionsController.cs:120-129`,
+    (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/Sessions/SessionsController.cs:119-128`,
     documented at `:90-94`). The request also asks for `includeFKs=false&includeChildren=false` and caps
     the page at `MaxSpeakerSessions = 100` (`SpeakerDashboardService.cs:19,38`). The comment records what
     this replaced: fetching the whole catalog with every child collection and filtering client-side.
@@ -3160,7 +3170,7 @@ The companion [`DependencyInjection`](#dependencyinjection) extension `AddConfer
   `[Rubric §23, Front-End Performance]` (assesses whether a view avoids N per-item round trips; one paged
   sweep serves a whole grid). `[Rubric §9, API & Contract Design]` shows up in the URL
   `PagedReadAll.LookupPageUrl` builds: `speakers/paged?...&pageSize=500&sortColumn=Id&sortDirection=asc&includeFKs=false&includeChildren=false`
-  (`MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/Api/PagedReadAll.cs:43-46`). The stable id
+  (`MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/Api/PagedReadAll.cs:42-45`). The stable id
   order keeps consecutive pages from skipping or repeating a row, and the two `include` flags ask for the
   flat rows only, so the bulk read stays cheap on both ends. The dictionary is keyed by the identifier
   alias rather than a bare primitive, which is what makes a wrong-id lookup a compile error
@@ -3195,12 +3205,12 @@ The companion [`DependencyInjection`](#dependencyinjection) extension `AddConfer
     [`ProblemDetailsResultReader`](group-08-auth.md#problemdetailsresultreader) (`:101-102`).
     `ReadAllAsync` loops pages from 1, stopping on an empty page or once the accumulated count reaches
     the reported `TotalItemCount`, and returns the first failing page's errors unchanged
-    (`PagedReadAll.cs:65-89`). The method then `Map`s the accumulated `List<SpeakerDTO>` through
+    (`PagedReadAll.cs:64-88`). The method then `Map`s the accumulated `List<SpeakerDTO>` through
     `BuildLookup` (`SpeakerLookupService.cs:106`). Mapping rather than unwrapping is the point: the
     projection runs only on success, and an API-described failure travels out with its
     [`ErrorType`](group-01-result-error-handling.md#errortype) intact.
   - `BuildLookup(speakers)` (`SpeakerLookupService.cs:119-130`) is a private static taking the flattened
-    `List<SpeakerDTO>`; the null-`Items` guard now lives in `ReadAllAsync` (`PagedReadAll.cs:75`). It
+    `List<SpeakerDTO>`; the null-`Items` guard now lives in `ReadAllAsync` (`PagedReadAll.cs:74`). It
     fills a `Dictionary<SpeakerIdentifierType, SpeakerInfo>` with `Id`, `FullName` and `ProfilePicture`
     per speaker (`SpeakerLookupService.cs:122-127`) and returns it as an `IReadOnlyDictionary` (`:129`).
     Being `static` is not decoration: it proves the projection touches no instance state, so it reads in
@@ -3210,7 +3220,7 @@ The companion [`DependencyInjection`](#dependencyinjection) extension `AddConfer
   the three display fields the UI needs rather than the full
   [`SpeakerDTO`](group-17-conference-domain.md#speakerdto), so what a page holds in memory stays small.
   Paging to the reported total, instead of asking for one oversized page, is the only route that does not
-  truncate silently at the API's page-size clamp (`PagedReadAll.cs:12-17`).
+  truncate silently at the API's page-size clamp (`PagedReadAll.cs:11-16`).
 - **Where it's used**: registered as [`ISpeakerLookupService`](#ispeakerlookupservice) among the
   "cross-module lookup services"
   (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/DependencyInjection.cs:58`), and injected
@@ -3226,9 +3236,9 @@ The companion [`DependencyInjection`](#dependencyinjection) extension `AddConfer
   (`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/SelfHttpOutputCacheWarmupTask.cs:55`), so the
   output cache is warm for it.
 - **Caveats / not-in-source**: `ReadAllAsync` stops after 40 pages of 500 (20,000 rows) whatever the
-  server reports (`PagedReadAll.cs:22-28`), and returns success with what it has, so a speaker set past
+  server reports (`PagedReadAll.cs:21-27`), and returns success with what it has, so a speaker set past
   that would still be cut short without a signal. The warm-up literal must match `LookupPageUrl` byte for
-  byte (`PagedReadAll.cs:33-34`); a change to the URL format silently turns the warm-up into a miss.
+  byte (`PagedReadAll.cs:32-33`); a change to the URL format silently turns the warm-up into a miss.
   The memo is unsynchronized by design (remarks, `SpeakerLookupService.cs:24-26`): it relies on Blazor
   dispatching a scope's callbacks on one logical thread, so the class must stay Scoped. A write made
   outside this scope (another organizer, or a Sessionize refresh the caller did not trigger) is not seen
@@ -3238,17 +3248,17 @@ The companion [`DependencyInjection`](#dependencyinjection) extension `AddConfer
 
 ### SpeakerDetailLookupService
 
-> MMCA.ADC.Conference.UI · `MMCA.ADC.Conference.UI.Services.Speakers` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/Services/Speakers/SpeakerDetailLookupService.cs:13` · Level 5 · class (sealed)
+> MMCA.ADC.Conference.UI · `MMCA.ADC.Conference.UI.Services.Speakers` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/Services/Speakers/SpeakerDetailLookupService.cs:12` · Level 5 · class (sealed)
 
 - **What it is**: a composite read service that gathers the three display lookups the speaker detail
   page needs (the category items a speaker can be tagged with, the titles of the categories those
   items belong to, and the text of the questions a speaker answered) behind one call, answering with a
   single [`Result`](group-01-result-error-handling.md#result) that carries either all three or the
-  first failure (`SpeakerDetailLookupService.cs:13-40`). It implements
+  first failure (`SpeakerDetailLookupService.cs:12-39`). It implements
   [`ISpeakerDetailLookupService`](#ispeakerdetaillookupservice) and its success value is the
   [`SpeakerDetailLookups`](#speakerdetaillookups) record.
 - **Depends on**: three services injected through the primary constructor
-  (`SpeakerDetailLookupService.cs:13-17`):
+  (`SpeakerDetailLookupService.cs:12-16`):
   [`ICategoryItemLookupService`](#icategoryitemlookupservice) (implemented by
   [`CategoryItemLookupService`](#categoryitemlookupservice)),
   [`IConferenceCategoryUIService`](#iconferencecategoryuiservice) and
@@ -3256,7 +3266,7 @@ The companion [`DependencyInjection`](#dependencyinjection) extension `AddConfer
   [`IEntityService<TEntityDTO, TIdentifierType>`](group-15-common-ui-framework.md#ientityservicetentitydto-tidentifiertype)
   CRUD contracts (`IConferenceCategoryUIService.cs:9-11`, `IQuestionUIService.cs:9-11`). Also
   [`Result`](group-01-result-error-handling.md#result) and its `Map`
-  (`MMCA.Common/Source/Core/MMCA.Common.Shared/Abstractions/Result.cs:276-280`), the `TryGetValue`
+  (`MMCA.Common/Source/Core/MMCA.Common.Shared/Abstractions/Result.cs:297-301`), the `TryGetValue`
   extension from [`ResultUiExtensions`](group-15-common-ui-framework.md#resultuiextensions)
   (`MMCA.Common/Source/Presentation/MMCA.Common.UI/Common/ResultUiExtensions.cs:103`),
   [`CategoryItemInfo`](#categoryiteminfo),
@@ -3267,7 +3277,7 @@ The companion [`DependencyInjection`](#dependencyinjection) extension `AddConfer
   failure branch. A composite lookup collapses that into one interface, one call, one value object and
   one failure branch. The load-bearing detail is that it **composes, it does not replace**: each
   underlying lookup keeps its own service because other pages use them independently, and this class
-  holds no state and no cache of its own (`SpeakerDetailLookupService.cs:13-18` declares nothing but
+  holds no state and no cache of its own (`SpeakerDetailLookupService.cs:12-17` declares nothing but
   the three injected dependencies). `[Rubric §1, SOLID]` (assesses whether a type has one reason to
   change): the page's job is rendering, and the gathering of its reference data now lives in one
   substitutable class, so a fourth lookup is a change here rather than a fourth branch in the page.
@@ -3275,7 +3285,7 @@ The companion [`DependencyInjection`](#dependencyinjection) extension `AddConfer
   depends on one narrow interface instead of three. `[Rubric §2, Design Patterns]` (assesses whether a
   recognized pattern is applied where it earns its keep): this is a facade over three collaborators,
   deliberately thin enough that it adds no behavior beyond ordering and failure short-circuiting.
-- **Walkthrough** (`SpeakerDetailLookupService.cs:20-40`, one method)
+- **Walkthrough** (`SpeakerDetailLookupService.cs:19-39`, one method)
   - `GetAllAsync(cancellationToken)` starts with the category items:
     `categoryItemLookupService.GetAllAsync(cancellationToken)` (`:20`), then unwraps with the
     `TryGetValue` UI extension (`:21`). On failure it re-wraps the errors into a failure of the
@@ -3287,7 +3297,7 @@ The companion [`DependencyInjection`](#dependencyinjection) extension `AddConfer
     flags (`MMCA.Common/Source/Presentation/MMCA.Common.UI/Common/Interfaces/IEntityService.cs:25-28`),
     so this call takes both defaults and asks only for the flat rows.
   - The question load is last, so it needs no early return: `questionsResult.Map(...)` (`:32`, `:34`)
-    either projects the success value or passes the errors through unchanged (`Result.cs:276-280`).
+    either projects the success value or passes the errors through unchanged (`Result.cs:297-301`).
   - The projection builds the [`SpeakerDetailLookups`](#speakerdetaillookups) record (`:34-37`). The
     category-item dictionary arrives already keyed from
     [`ICategoryItemLookupService`](#icategoryitemlookupservice) (`ICategoryItemLookupService.cs:20-21`),
@@ -3312,8 +3322,8 @@ The companion [`DependencyInjection`](#dependencyinjection) extension `AddConfer
   (`SpeakerDetail.razor.cs:198-199`) and hands `CategoryItems` plus `CategoryTitles` to
   [`SpeakerCategoryItemsPanel`](#speakercategoryitemspanel)
   (`Pages/Speaker/SpeakerDetail.razor:169-172`). The interface is also what
-  [`SpeakerDetailTests`](group-28-testing-infrastructure.md#per-project-test-rollup) mocks
-  (`MMCA.ADC/Tests/Modules/Conference/MMCA.ADC.Conference.UI.Tests/Pages/Speakers/SpeakerDetailTests.cs:31`),
+  [`SpeakerDetailTests`](group-29-testing-infrastructure.md#per-project-test-rollup) mocks
+  (`MMCA.ADC/Tests/Modules/Conference/MMCA.ADC.Conference.UI.Tests/Pages/Speakers/SpeakerDetailTests.cs:33`),
   which is the practical payoff of the facade: one `Mock<ISpeakerDetailLookupService>` stands in for
   three collaborators. `[Rubric §14, Testability]` (assesses whether collaborators can be substituted
   at a narrow boundary).
@@ -3389,8 +3399,8 @@ The companion [`DependencyInjection`](#dependencyinjection) extension `AddConfer
     `new Uri($"{Endpoint}/{speakerId}/link", UriKind.Relative)` (`:49-52`). The URI is relative because
     the base resolves the named API client, and its configured base address, inside
     `CreateAuthenticatedClientAsync`
-    (`MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/Api/AuthenticatedServiceBase.cs:59-61`), which
-    is also where the bearer token is attached (`AuthenticatedServiceBase.cs:65-70`). The interpolated
+    (`MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/Api/AuthenticatedServiceBase.cs:62-64`), which
+    is also where the bearer token is attached (`AuthenticatedServiceBase.cs:68-73`). The interpolated
     `speakerId` is culture-safe because `SpeakerIdentifierType` aliases `System.Guid`
     (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Shared/MMCA.ADC.Conference.GlobalUsings.IdentifierType.cs:23`,
     [ADR-048](https://ivanball.github.io/docs/adr/048-primitive-identifier-type-aliases.html)).
@@ -3464,22 +3474,22 @@ The companion [`DependencyInjection`](#dependencyinjection) extension `AddConfer
 > MMCA.ADC.Conference.UI · `MMCA.ADC.Conference.UI.Pages.Activities` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/Pages/Activities/ActivityDetail.razor.cs:21` · Level 9 · class (Blazor code-behind)
 
 - **What it is**: the organizer's activity record page. It loads one activity by route id, inline-edits every field except the owning event, and deletes with confirmation (class doc, `:14-18`).
-- **Depends on**: [`DetailPageBase`](group-15-common-ui-framework.md#detailpagebase) (`ActivityDetail.razor:7`), which supplies `PageToken`, `IsEditing`/`IsDirty` and the `BeginEdit`/`EndEdit` transitions plus disposal of its own `CancellationTokenSource`. Also [`IActivityUIService`](#iactivityuiservice) (`:25`), [`IEventLookupService`](#ieventlookupservice) returning [`EventInfo`](#eventinfo) (`:26,66`), [`IToastService`](group-15-common-ui-framework.md#itoastservice) (`:28`), [`ActivityEditModel`](#activityeditmodel) (`:72`), [`ActivityDTO`](group-17-conference-domain.md#activitydto) (`:67`), [`CommittedWriteReload`](#committedwritereload) (`:75`), [`ModelValidation`](group-15-common-ui-framework.md#modelvalidation) with [`DataAnnotationsModelValidator`](group-15-common-ui-framework.md#dataannotationsmodelvalidator) (`:62`), [`ErrorMessages`](group-15-common-ui-framework.md#errormessages) (`:113,218,224`), and [`ConferenceRoutePaths`](#conferenceroutepaths) (`:57,296`), plus the shared `DeleteConfirmation` component (`:79`). Through the base it also uses [`LatestLoadGuard`](group-15-common-ui-framework.md#latestloadguard), exposed as the protected `LoadGuard` property (`MMCA.Common/Source/Presentation/MMCA.Common.UI/Pages/Common/DetailPageBase.cs:43`). Externals: `System.Globalization`, MudBlazor's `MudForm`, and the `IStringLocalizer<ActivityDetail>` from the template.
-- **Concept introduced, culture-formatted display and the field that is deliberately not editable.** The detail-page mechanics are the ones [`SpeakerDetail`](#speakerdetail) teaches (load-once guard on `_loadedId`, `:85-94`; edit buffer; confirm-then-delete). This page now extends [`DetailPageBase`](group-15-common-ui-framework.md#detailpagebase) (`ActivityDetail.razor:7`) for the edit-lifecycle plumbing and the `CancellationTokenSource`, rather than owning its own `_cts` and `_isEditing` field as it once did; `StartEditingAsync` and `CancelEditing`/`SaveChangesAsync` call the base's `BeginEdit()` / `EndEdit()` (`:165,176,253`) instead of setting the flags directly. Four things are specific here.
-  1. **Two computed display properties.** `EventName` (`:37-41`) resolves the activity's `EventId` against the lookup and falls back to the invariant-culture id, so the read-only event line never renders blank. `TimeRange` (`:43-49`) formats the window as one localized sentence by passing the start (`"f"`, full date and time) and the end (`"t"`, short time) rendered in `CultureInfo.CurrentCulture` into the `Text.TimeRange` resource; the joining wording lives in the `.resx`, not in the code, so a locale can reorder or reword the range. `[Rubric §27, Internationalization]` (assesses whether user-visible text and formats follow the request culture, [ADR-027](https://ivanball.github.io/docs/adr/027-multi-locale-i18n.html)).
+- **Depends on**: [`DetailPageBase`](group-15-common-ui-framework.md#detailpagebase) (`ActivityDetail.razor:7`), which supplies `PageToken`, `IsEditing`/`IsDirty` and the `BeginEdit`/`EndEdit` transitions plus disposal of its own `CancellationTokenSource`. Also [`IActivityUIService`](#iactivityuiservice) (`:25`), [`IEventLookupService`](#ieventlookupservice) returning [`EventInfo`](#eventinfo) (`:26,66`), [`IToastService`](group-15-common-ui-framework.md#itoastservice) (`:28`), [`ActivityEditModel`](#activityeditmodel) (`:71`), [`ActivityDTO`](group-17-conference-domain.md#activitydto) (`:67`), [`CommittedWriteReload`](#committedwritereload) (`:74`), [`ModelValidation`](group-15-common-ui-framework.md#modelvalidation) with [`DataAnnotationsModelValidator`](group-15-common-ui-framework.md#dataannotationsmodelvalidator) (`:62`), [`ErrorMessages`](group-15-common-ui-framework.md#errormessages) (`:197,203`), and [`ConferenceRoutePaths`](#conferenceroutepaths) (`:57,275`), plus the shared `DeleteConfirmation` component (`:78`). Through the base it also uses the load-state pair `BeginLoad()` / `CompleteLoad(generation, result)` (`MMCA.Common/Source/Presentation/MMCA.Common.UI/Pages/Common/DetailPageBase.cs:59,78`), which drive the protected [`DetailLoadState`](group-15-common-ui-framework.md#detailloadstate) property `LoadState` (`DetailPageBase.cs:52`) over a [`LatestLoadGuard`](group-15-common-ui-framework.md#latestloadguard) exposed as `LoadGuard` (`DetailPageBase.cs:45`). Externals: `System.Globalization`, MudBlazor's `MudForm`, and the `IStringLocalizer<ActivityDetail>` from the template.
+- **Concept introduced, culture-formatted display and the field that is deliberately not editable.** The detail-page mechanics are the ones [`SpeakerDetail`](#speakerdetail) teaches (load-once guard on `_loadedId`, `:84-93`; edit buffer; confirm-then-delete). This page extends [`DetailPageBase`](group-15-common-ui-framework.md#detailpagebase) (`ActivityDetail.razor:7`) for the load state, the edit-lifecycle plumbing and the `CancellationTokenSource`; it declares no `IsLoading`, `_cts` or `_isEditing` field of its own, and `StartEditingAsync` and `CancelEditing`/`SaveChangesAsync` call the base's `BeginEdit()` / `EndEdit()` (`:144,155,232`) instead of setting flags directly. Four things are specific here.
+  1. **Two computed display properties.** `EventName` (`:37-40`) resolves the activity's `EventId` against the lookup and falls back to the invariant-culture id, so the read-only event line never renders blank. `TimeRange` (`:43-49`) formats the window as one localized sentence by passing the start (`"f"`, full date and time) and the end (`"t"`, short time) rendered in `CultureInfo.CurrentCulture` into the `Text.TimeRange` resource; the joining wording lives in the `.resx`, not in the code, so a locale can reorder or reword the range. `[Rubric §27, Internationalization]` (assesses whether user-visible text and formats follow the request culture, [ADR-027](https://ivanball.github.io/docs/adr/027-multi-locale-i18n.html)).
   2. **The immutable field on an editable record.** [`ActivityEditModel`](#activityeditmodel) has no event property and re-sends `EventId` from the loaded record, so this form cannot even express a move between events, which is the rule the class doc states (`:15-17`). `[Rubric §24, Forms, Validation & UX Safety]`.
-  3. **A stale-response guard on the load.** `LoadAsync` opens with `var (token, generation) = LoadGuard.Begin()` (`:99`), which supersedes any load already in flight and hands back that load's own token and generation number. Every `await` result is then checked with `LoadGuard.IsCurrent(generation)` before it is used (`:105-108`), so a slow response for a previous route id cannot overwrite the record a newer navigation loaded. The same check wraps the `finally` (`:141-144`): only the current generation may clear `IsLoading`, because an unconditional clear would let a superseded response switch off the spinner the newer load had just turned on (comment, `:138-140`). `[Rubric §29, Resilience & Business Continuity]`.
-  4. **A committed write whose reload fails.** The page holds a [`CommittedWriteReload`](#committedwritereload) (`:74-75`, tagged M246 in the source). After `UpdateAsync` succeeds the update is committed, so the edit ends even if the re-fetch fails: a failed reload no longer returns early with the form still open. Entering edit mode also goes through the helper (see `StartEditingAsync` below), so a record left stale by a failed reload is re-read before the next edit begins. `[Rubric §19, State Management]`.
-  The window check reappears here as `ValidateSchedule` (`:184-206`) with the same three localized keys as [`ActivityCreate`](#activitycreate), so the create and edit paths validate a window identically. They are two copies of the same small method rather than one shared helper, which is the maintenance cost of keeping each page self-contained. `[Rubric §15, Best Practices & Code Quality]`.
+  3. **A stale-response guard on the load, with the outcome stated by the page body.** `LoadAsync` opens with `var (token, generation) = BeginLoad()` (`:98`), which supersedes any load already in flight, puts the base's `LoadState` back to `Loading`, and hands back that load's own token and generation number (`DetailPageBase.cs:59-64`). The fetch result then goes through `CompleteLoad(generation, result)` (`:106`): a superseded generation returns `false` and leaves the page state alone, so a slow response for a previous route id cannot overwrite the record a newer navigation loaded; a current failure sets `LoadState` to `NotFound` or `Failed` (`DetailPageBase.cs:82-94`). The page raises no toast for either: the comment (`:104-105`) records that the body (`DetailLoadStateContent`, with Retry for a failure) states a not-found or failed load. `[Rubric §29, Resilience & Business Continuity]`.
+  4. **A committed write whose reload fails.** The page holds a [`CommittedWriteReload`](#committedwritereload) (`:73-74`, tagged M246 in the source). After `UpdateAsync` succeeds the update is committed, so the edit ends even if the re-fetch fails: a failed reload no longer returns early with the form still open. Entering edit mode also goes through the helper (see `StartEditingAsync` below), so a record left stale by a failed reload is re-read before the next edit begins. `[Rubric §19, State Management]`.
+  The window check reappears here as `ValidateSchedule` (`:163-185`) with the same three localized keys as [`ActivityCreate`](#activitycreate), so the create and edit paths validate a window identically. They are two copies of the same small method rather than one shared helper, which is the maintenance cost of keeping each page self-contained. `[Rubric §15, Best Practices & Code Quality]`.
 - **Walkthrough**
   - `OnInitialized` (`:51-63`): breadcrumbs plus the validation delegate.
-  - `OnParametersSetAsync` (`:85-94`, a non-`async` method that returns `Task.CompletedTask` or the `LoadAsync` task directly) then `LoadAsync` (`:96-146`): begin the guarded load (`:99`), fetch with children through the guard's `token` (`:104`) and return if the generation is no longer current (`:105-108`), treat `IsNotFound()` as the page's not-found state with a localized message (`:110-115`), report any other failure through `NotifyOnFailure` (`:119`), then hydrate the event lookup once, again through `token` (`:127-131`), with the comment noting that a failed lookup is reported and stops the load exactly as it did when the same failure arrived as an exception (`:125-126`). The `finally` clears `IsLoading` only for the current generation (`:141-144`).
-  - `StartEditingAsync` (`:148-171`): now asynchronous. It captures the shown record, then asks `_writeReload.EnsureCurrentAsync` (`:157`) to re-read it through `GetByIdAsync(shown.Id, true, PageToken)` when a prior reload failed, and returns without entering edit mode if no current record comes back. Otherwise it adopts the current record, seeds the edit model from it, clears `_scheduleError` and calls the base's `BeginEdit()` (`:165`). An `OperationCanceledException` is swallowed as the expected disposal case (`:167-170`).
-  - `CancelEditing` (`:173-177`): clears `_scheduleError` and calls the base's `EndEdit()` (`:176`) so neither a stale cross-field error nor the unsaved-changes guard can fire after a cancel.
-  - `SaveChangesAsync` (`:208-263`): validate the form, run `ValidateSchedule`, post `_model.ToUpdated(Activity)` (`:231`), then re-fetch (`:239`). Save and re-fetch still run on the base's `PageToken`, not on the load guard. The reload has two handled outcomes and a silent third. `IsNotFound()` drops the page into its not-found state and toasts success (`:240-246`, with the comment recording that this matches the previous null answer). A value is adopted through `_writeReload.TryAdopt(reloaded, Toast, L["Snackbar.SavedRefreshFailed"], out var refreshed)` (`:247`), which refreshes the page and toasts success (`:249-250`). When `TryAdopt` declines, it has already reported the failure with the saved-but-refresh-failed message, and the page keeps the old record. In every case `EndEdit()` runs (`:253`), because the update committed (M246 comment, `:238`).
-  - `DeleteActivityAsync` (`:265-294`): confirm through `_deleteConfirm.ShowAsync(Activity.Name)` (`:272`), return unless the answer is exactly `true` (`:273`), delete, toast, and navigate back to the list.
+  - `OnParametersSetAsync` (`:84-93`, a non-`async` method that returns `Task.CompletedTask` or the `LoadAsync` task directly) then `LoadAsync` (`:95-125`): begin the guarded load (`:98`), fetch with children through the guard's `token` (`:102`), and return unless `CompleteLoad` reports a current success and the value unwraps (`:106-109`), which covers a superseded, not-found or failed load without a toast. It then adopts the activity (`:111`) and hydrates the event lookup once, again through `token` (`:115-119`), with the comment noting that a failed lookup is reported through `NotifyOnFailure` and stops the load exactly as it did when the same failure arrived as an exception (`:113-114`). An `OperationCanceledException` is swallowed (`:121-124`); there is no `finally`, since the base owns the load state.
+  - `StartEditingAsync` (`:127-150`): asynchronous. It captures the shown record, then asks `_writeReload.EnsureCurrentAsync` (`:136`) to re-read it through `GetByIdAsync(shown.Id, true, PageToken)` when a prior reload failed, and returns without entering edit mode if no current record comes back. Otherwise it adopts the current record, seeds the edit model from it, clears `_scheduleError` and calls the base's `BeginEdit()` (`:144`). An `OperationCanceledException` is swallowed as the expected disposal case (`:146-149`).
+  - `CancelEditing` (`:152-156`): clears `_scheduleError` and calls the base's `EndEdit()` (`:155`) so neither a stale cross-field error nor the unsaved-changes guard can fire after a cancel.
+  - `SaveChangesAsync` (`:187-242`): validate the form, run `ValidateSchedule`, post `_model.ToUpdated(Activity)` (`:210`), then re-fetch (`:218`). Save and re-fetch run on the base's `PageToken`, not on the load guard. The reload has two handled outcomes and a silent third. `IsNotFound()` sets `Activity` to null and toasts success (`:219-225`, with the comment recording that this matches the previous null answer). A value is adopted through `_writeReload.TryAdopt(reloaded, Toast, L["Snackbar.SavedRefreshFailed"], out var refreshed)` (`:226`), which refreshes the page and toasts success (`:228-229`). When `TryAdopt` declines, it has already reported the failure with the saved-but-refresh-failed message, and the page keeps the old record. In every case `EndEdit()` runs (`:232`), because the update committed (M246 comment, `:217`).
+  - `DeleteActivityAsync` (`:244-273`): confirm through `_deleteConfirm.ShowAsync(Activity.Name)` (`:251`), return unless the answer is exactly `true` (`:252`), delete, toast, and navigate back to the list.
   - No disposal code remains on the page itself: `DetailPageBase` owns the `CancellationTokenSource` and its guarded `Dispose(bool)` pair, so `ActivityDetail` no longer declares `IDisposable`.
-- **Why it's built this way**: an activity is a per-event programme item, so its name, window, order and venue are freely editable while its owning event is not. The re-fetch after save keeps the concurrency token current for the next edit, and handling the reload's not-found branch means a record deleted by someone else mid-edit resolves to the same empty state the page shows on a bad id.
+- **Why it's built this way**: an activity is a per-event programme item, so its name, window, order and venue are freely editable while its owning event is not. The re-fetch after save keeps the concurrency token current for the next edit, and handling the reload's not-found branch means a record deleted by someone else mid-edit resolves to the same not-found body the page shows on a bad id: the template maps a loaded state with a null `Activity` to `DetailLoadState.NotFound` (`ActivityDetail.razor:17-20`).
 - **Where it's used**: the `/activities/{Id:int}` route with `[Authorize(Roles = "Organizer")]` (`ActivityDetail.razor:1-2`), reached from [`ActivityList`](#activitylist) rows and from [`ActivityCreate`](#activitycreate)'s success redirect. It edits the aggregate the [`Activity`](group-17-conference-domain.md#activity) entity models.
 
 ---
@@ -3493,7 +3503,7 @@ The companion [`DependencyInjection`](#dependencyinjection) extension `AddConfer
 - **Concept introduced, the event-filtered list page as a thin override set.** Once the base class owns the event lookup, the persisted `eventId` filter and the current-or-next default, a list page is reduced to five small overrides, and this page is the clearest place to read them.
   - `SavePageFilters` / `RestorePageFilters` (`:39-43`) persist only the page's **own** filter, the search string; the event choice is the base's business.
   - `ReloadForEventFilterAsync` (`:48`) tells the base how to refresh this page, which here means "reload whichever layout is on screen".
-  - `ApplyFilters` (`:69-74`) adds the search term as a `contains` filter on `Name` and then calls the base's `ApplyEventFilter` (`:73`), which adds `EventId` equals when a scope is selected (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/Pages/Common/EventFilteredListPageBase.cs:194-199`). For activities that key needs no special handling: `EventId` is a real Activity column, so it travels straight through the generic filter pipeline (class doc, `:14-16`). Contrast [`SpeakerList`](#speakerlist).
+  - `ApplyFilters` (`:69-74`) adds the search term as a `contains` filter on `Name` and then calls the base's `ApplyEventFilter` (`:73`), which adds `EventId` equals when a scope is selected (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/Pages/Common/EventFilteredListPageBase.cs:193-198`). For activities that key needs no special handling: `EventId` is a real Activity column, so it travels straight through the generic filter pipeline (class doc, `:14-16`). Contrast [`SpeakerList`](#speakerlist).
   - `GridRef` (`:28`) hands the base the grid instance it needs to reload.
   `[Rubric §15, Best Practices & Code Quality]` (assesses whether shared behavior is factored rather than repeated) and `[Rubric §1, SOLID]`: the base defines the algorithm, the page supplies the varying steps.
   The **startup race** the base solves is still visible in the page: both fetch paths await `WaitForEventsAsync()` first (`:60`, `:79`), because the grid's first `ServerData` call can run ahead of initialization and `ApplyFilters` executes inside the base's `LoadServerDataAsync` (in-code comment, `:58-59`). Miss that await and the first page loads unscoped.
@@ -3826,77 +3836,83 @@ The companion [`DependencyInjection`](#dependencyinjection) extension `AddConfer
   route id, runs the inline category editor and the delete flow, and hosts the item panel that owns the
   child-entity CRUD.
 - **Depends on**: [`DetailPageBase`](group-15-common-ui-framework.md#detailpagebase) (via `@inherits`,
-  `.../Pages/ConferenceCategory/ConferenceCategoryDetail.razor:3`),
+  `.../Pages/Categories/ConferenceCategoryDetail.razor:3`) for `BeginLoad`, `CompleteLoad`, `LoadState`,
+  `PageToken`, `BeginEdit` and `EndEdit`,
   [`IConferenceCategoryUIService`](#iconferencecategoryuiservice) (line 23),
   [`IToastService`](group-15-common-ui-framework.md#itoastservice) (line 25),
-  [`ConferenceCategoryEditModel`](#conferencecategoryeditmodel) (line 53),
-  [`CommittedWriteReload`](#committedwritereload) (line 56),
+  [`ConferenceCategoryEditModel`](#conferencecategoryeditmodel) (line 52),
+  [`CommittedWriteReload`](#committedwritereload) (line 55),
   [`ConferenceCategoryItemsPanel`](#conferencecategoryitemspanel)
-  (`.../Pages/ConferenceCategory/ConferenceCategoryDetail.razor:73`),
-  [`ResultUiExtensions`](group-15-common-ui-framework.md#resultuiextensions) for `IsNotFound()` and
-  `NotifyOnFailure` (lines 90,98,160,202),
-  [`ConferenceRoutePaths`](#conferenceroutepaths) (lines 39,219), and
-  [`ErrorMessages`](group-15-common-ui-framework.md#errormessages) (lines 94,150). Externals: MudBlazor
-  `MudForm`, plus the `PageLoadingState`, `PageErrorState`, `ErrorSummary`, `UnsavedChangesGuard`, and
+  (`.../Pages/Categories/ConferenceCategoryDetail.razor:74`),
+  [`ResultUiExtensions`](group-15-common-ui-framework.md#resultuiextensions) for `NotifyOnFailure`
+  (lines 141,183),
+  [`ConferenceRoutePaths`](#conferenceroutepaths) (lines 39,200), and
+  [`ErrorMessages`](group-15-common-ui-framework.md#errormessages) (line 131). Externals: MudBlazor
+  `MudForm`, plus the `UnsavedChangesGuard`, `DetailLoadStateContent`, `ErrorSummary`, and
   `DeleteConfirmation` components from `MMCA.Common.UI`
-  (`.../Pages/ConferenceCategory/ConferenceCategoryDetail.razor:11,18,22,44,82`).
+  (`.../Pages/Categories/ConferenceCategoryDetail.razor:13,20,45,83`).
 - **Concept introduced, the container/presentational split of a parent-with-children editor.** The class
   doc states the division (lines 14-18): this page owns the loaded aggregate, the inline category editor,
   and the delete flow; the item CRUD lives in the presentational
   [`ConferenceCategoryItemsPanel`](#conferencecategoryitemspanel), which reloads the aggregate itself and
   hands the refreshed copy back through a callback that this page adopts in one line
-  (`OnCategoryReloaded`, line 217). The page therefore has exactly one mutation entry point for child data
+  (`OnCategoryReloaded`, line 198). The page therefore has exactly one mutation entry point for child data
   and no child-collection logic at all. `[Rubric §18, UI Architecture & Component Design]` (assesses
   decomposition) and `[Rubric §19, State Management & Data Flow]` (assesses single ownership of state): the
   category has one owner (this page) and one place it can be replaced.
-  Three further mechanisms are worth reading.
+  Four further mechanisms are worth reading.
   - **Load once on parameters.** The route `Id` is a typed `ConferenceCategoryIdentifierType` parameter
     (line 27), so there is no string parse; `OnParametersSetAsync` compares it against `_loadedId`
-    (lines 67-72) so a re-render does not refetch.
-  - **A 404 is a distinct outcome.** `result.IsNotFound()` (line 90) clears `Category` and reports a
-    not-found message; anything else routes through `NotifyOnFailure` (line 98). The comment at line 92
-    records the defect this replaced, where a 404 arrived as a null success. `[Rubric §29, Resilience &
-    Business Continuity]`: not-found, failed, and empty are three different rendered states.
-  - **Refetch, do not patch.** A successful update is followed by a fresh `GetByIdAsync` (line 165) and the
+    (lines 66-69) and returns the `LoadAsync` task directly (line 72), so a re-render does not refetch.
+  - **The load state belongs to the base, not the page.** `LoadAsync` opens with `BeginLoad()` (line 78)
+    and hands the fetch result to `CompleteLoad(generation, result)` (line 86), which records `Loaded`,
+    `NotFound`, or `Failed` on the base's `LoadState` and drops a superseded response
+    (`MMCA.Common/Source/Presentation/MMCA.Common.UI/Pages/Common/DetailPageBase.cs:78`). The page adopts
+    the category only when that call answers `true`. A not-found or failed load raises no toast: the
+    comment at lines 84-85 states that the page body (`DetailLoadStateContent`,
+    `.../Pages/Categories/ConferenceCategoryDetail.razor:20`) states it, with Retry for a failure.
+    `[Rubric §29, Resilience & Business Continuity]`: not-found and failed are distinct rendered states.
+  - **Refetch, do not patch.** A successful update is followed by a fresh `GetByIdAsync` (line 146) and the
     page renders the server's answer. That costs one extra read and removes an entire class of drift
     between what was saved and what is shown.
   - **A committed save ends the edit even when the reload fails (M246).** The page holds a
-    [`CommittedWriteReload`](#committedwritereload) (line 56). `TryAdopt` (line 166) adopts the refreshed
+    [`CommittedWriteReload`](#committedwritereload) (line 55). `TryAdopt` (line 147) adopts the refreshed
     record and toasts success only when the reload worked; otherwise it reports the
-    `Snackbar.SavedRefreshFailed` message, and `EndEdit()` (line 172) runs either way, because the update
-    already committed. The stale page is then repaired lazily: `StartEditingAsync` (lines 116-138) calls
-    `EnsureCurrentAsync` (line 125) to re-read before the next edit begins.
+    `Snackbar.SavedRefreshFailed` message, and `EndEdit()` (line 153) runs either way, because the update
+    already committed. The stale page is then repaired lazily: `StartEditingAsync` (lines 97-119) calls
+    `EnsureCurrentAsync` (line 106) to re-read before the next edit begins.
   `[Rubric §8, Data Architecture]`: the save posts `_model.ToUpdated(Category)`, which round-trips the
   `RowVersion` ([ADR-035](https://ivanball.github.io/docs/adr/035-optimistic-concurrency.html)).
   `[Rubric §11, Security]`: organizer-only route
-  (`.../Pages/ConferenceCategory/ConferenceCategoryDetail.razor:2`).
+  (`.../Pages/Categories/ConferenceCategoryDetail.razor:2`).
 - **Walkthrough**
   - `OnInitialized` (lines 33-45): breadcrumbs (lines 36-41) and the validation delegate (line 44).
-  - `OnParametersSetAsync` (lines 65-114): the `_loadedId` guard (lines 67-72),
-    `LoadGuard.Begin()` (line 75) to supersede any load already in flight, `GetByIdAsync(Id, true, token)` (line 80)
-    with children using the guard's token, a `LoadGuard.IsCurrent(generation)` check that drops a superseded
-    response, the three-way result handling above, `OperationCanceledException` swallowed, and a `finally`
-    that clears `IsLoading` only when the generation is still current, so a stale response cannot switch off
-    the spinner a newer load just turned on. `LoadGuard` comes from [`DetailPageBase`](group-15-common-ui-framework.md#detailpagebase), so the page
-    itself never declares a `CancellationTokenSource`.
-  - `StartEditingAsync` (lines 116-138): re-reads the category through
-    `_writeReload.EnsureCurrentAsync` (line 125) and returns without editing if that yields nothing, then
-    adopts the current record (line 130), copies it into the edit model (line 131) and calls the
-    base's `BeginEdit()` (line 132), which sets `IsEditing` and clears `IsDirty` in one place. A cancelled
-    token is swallowed (lines 134-137).
-  - `SaveChangesAsync` (lines 140-182): validate the form (lines 147-152), `UpdateAsync(_model.ToUpdated(Category))`
-    (line 157), report a failure through `NotifyOnFailure` (line 160), refetch (line 165), adopt the
-    refreshed record through `TryAdopt` (lines 166-170), toast, and call `EndEdit()` (line 172) so the dirty flag
+  - `OnParametersSetAsync` (lines 64-73): the `_loadedId` guard (lines 66-69), then `return LoadAsync()`
+    (line 72).
+  - `LoadAsync` (lines 75-95): `BeginLoad()` (line 78) supersedes any load already in flight and puts the
+    base back in `Loading`; `GetByIdAsync(Id, true, token)` (line 82) fetches with children on the guard's
+    token; `CompleteLoad(generation, result) && result.TryGetValue(out var category)` (line 86) adopts the
+    category; `OperationCanceledException` is swallowed (lines 91-94). There is no `finally` and no page
+    `IsLoading` flag: the spinner is the base's `LoadState`, which only the current generation can move,
+    and the page itself never declares a `CancellationTokenSource`.
+  - `StartEditingAsync` (lines 97-119): re-reads the category through
+    `_writeReload.EnsureCurrentAsync` (line 106) and returns without editing if that yields nothing, then
+    adopts the current record (line 111), copies it into the edit model (line 112) and calls the
+    base's `BeginEdit()` (line 113), which sets `IsEditing` and clears `IsDirty` in one place. A cancelled
+    token is swallowed (lines 115-118).
+  - `SaveChangesAsync` (lines 121-163): validate the form (lines 128-133), `UpdateAsync(_model.ToUpdated(Category))`
+    (line 138), report a failure through `NotifyOnFailure` (line 141), refetch (line 146), adopt the
+    refreshed record through `TryAdopt` (lines 147-151), toast, and call `EndEdit()` (line 153) so the dirty flag
     can never be left set behind a closed editor.
-  - `DeleteCategoryAsync` (lines 184-213): confirm through the shared `DeleteConfirmation` dialog seeded
-    with the category title (line 191), delete (line 199), then navigate back to the list (line 207).
-  - `OnCategoryReloaded` (line 217) and `NavigateToList` (line 219) are one-liners.
+  - `DeleteCategoryAsync` (lines 165-194): confirm through the shared `DeleteConfirmation` dialog seeded
+    with the category title (line 172), delete (line 180), then navigate back to the list (line 188).
+  - `OnCategoryReloaded` (line 198) and `NavigateToList` (line 200) are one-liners.
 - **Why it's built this way**: a category is only meaningful together with its items (a topic list, a
   session-level list, a locality list), so editing them on two routes would be worse than one composite
   page. Splitting the panel out keeps that composite page readable: the container is now roughly the size
   of any other detail page, and the child-entity concerns are in a component that can be read on its own.
-- **Where it's used**: the `/conferencecategories/{Id}` route
-  (`.../Pages/ConferenceCategory/ConferenceCategoryDetail.razor:1-2`), reached from
+- **Where it's used**: the `/conferencecategories/{Id:int}` route
+  (`.../Pages/Categories/ConferenceCategoryDetail.razor:1-2`), reached from
   [`ConferenceCategoryList`](#conferencecategorylist) rows and
   [`ConferenceCategoryCreate`](#conferencecategorycreate)'s redirect. The items authored here are what
   [`ICategoryItemLookupService`](#icategoryitemlookupservice) resolves for the session and speaker pages.
@@ -3965,67 +3981,87 @@ The companion [`DependencyInjection`](#dependencyinjection) extension `AddConfer
 
 ### ConferenceCategoryItemsPanel
 
-> MMCA.ADC.Conference.UI · `MMCA.ADC.Conference.UI.Pages.Categories` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/Pages/Categories/ConferenceCategoryItemsPanel.razor.cs:22` · Level 6 · class (Blazor component code-behind)
+> MMCA.ADC.Conference.UI · `MMCA.ADC.Conference.UI.Pages.Categories` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/Pages/Categories/ConferenceCategoryItemsPanel.razor.cs:23` · Level 6 · class (Blazor component code-behind)
 
 - **What it is**: the category-item half of the category detail page: the item-count header, the inline add
   form, and the item table with its inline edit row and delete action. It performs the child-entity
   mutations itself and hands the reloaded parent category back to the page.
-- **Depends on**: [`ICategoryItemUIService`](#icategoryitemuiservice) (line 25) for the mutations and
-  [`IConferenceCategoryUIService`](#iconferencecategoryuiservice) (line 24) for the reload;
+- **Depends on**: [`ICategoryItemUIService`](#icategoryitemuiservice) (line 26) for the mutations and
+  [`IConferenceCategoryUIService`](#iconferencecategoryuiservice) (line 25) for the reload;
   [`ConferenceCategoryDTO`](group-17-conference-domain.md#conferencecategorydto) and
   [`CategoryItemDTO`](group-17-conference-domain.md#categoryitemdto); the `CategoryItemIdentifierType`
-  alias (line 56); [`ConferenceCategoryItemEditModel`](#conferencecategoryitemeditmodel) (line 45) with
+  alias (line 61); [`ConferenceCategoryItemEditModel`](#conferencecategoryitemeditmodel) (line 46) with
   [`ModelValidation`](group-15-common-ui-framework.md#modelvalidation) and
   [`DataAnnotationsModelValidator`](group-15-common-ui-framework.md#dataannotationsmodelvalidator)
-  (line 66); [`IToastService`](group-15-common-ui-framework.md#itoastservice) (line 26); and
-  [`ErrorMessages`](group-15-common-ui-framework.md#errormessages) (line 89). The localized
-  `EntityName` noun (line 37, resource key `CategoryItem.EntityName`) is declared for the delete
+  (line 71); [`CommittedWriteReload`](#committedwritereload) (line 50);
+  [`IToastService`](group-15-common-ui-framework.md#itoastservice) (line 27); and
+  [`ErrorMessages`](group-15-common-ui-framework.md#errormessages) (line 94). The localized
+  `EntityName` noun (line 38, resource key `CategoryItem.EntityName`) is declared for the delete
   confirmation (ADR-027). Externals: MudBlazor
   `MudForm`, the shared `ErrorSummary` and `DeleteConfirmation` components
-  (`.../Pages/ConferenceCategory/ConferenceCategoryItemsPanel.razor:53,106`).
+  (`.../Pages/Categories/ConferenceCategoryItemsPanel.razor:53,107`).
 - **Concept introduced, the presentational child that owns its own writes.** This is a different split
   from the filter-bar style of presentational component. The panel takes the category as a `[Parameter]`
-  (line 29) and never mutates it; instead, every mutation re-reads the aggregate through
-  `ReloadCategoryAsync` (lines 212-222) and raises the refreshed copy on the
-  `CategoryChanged` callback (line 220), which the page adopts. State therefore still has exactly one
+  (line 30) and never mutates it; instead, every committed mutation re-reads the aggregate through
+  `ReloadCategoryAsync` (lines 242-249) and raises the refreshed copy on the
+  `CategoryChanged` callback (line 247), which the page adopts. State therefore still has exactly one
   owner ([`ConferenceCategoryDetail`](#conferencecategorydetail)) while the write logic lives next to the
   markup that triggers it. `[Rubric §18, UI Architecture & Component Design]` and
   `[Rubric §19, State Management & Data Flow]`.
-  Two details reward a close read.
+  Three details reward a close read.
+  - **A committed item write is reported even when the reload fails (M252).** The panel holds its own
+    [`CommittedWriteReload`](#committedwritereload) (line 50). After a successful add, update, or delete it
+    toasts success and closes the editor first, then calls `ReloadCategoryAsync` (lines 120-122, 193-195,
+    230-231), whose `TryAdopt` (line 245) either hands the refreshed category to the page or reports
+    `Snackbar.SavedRefreshFailed` and marks the panel stale. Every later item edit or write starts with
+    `EnsureCurrentCategoryAsync` (lines 254-268): when nothing is stale it answers the shown `Category`
+    (line 258); otherwise it re-reads through `EnsureCurrentAsync` (line 261), hands the result to the page
+    (line 266), and answers `null` on a failed re-read so the write does not run. `StartEditingItemAsync`
+    opens the row on the re-read category's copy of the item and does not open an item the re-read no
+    longer contains (lines 141-145), so an update posts what the server holds.
+    `[Rubric §29, Resilience & Business Continuity]`.
   - **The panel injects the page's localizer.** Its template declares
     `@inject IStringLocalizer<ConferenceCategoryDetail> L`
-    (`.../Pages/ConferenceCategory/ConferenceCategoryItemsPanel.razor:4`), so every string keeps the exact
+    (`.../Pages/Categories/ConferenceCategoryItemsPanel.razor:4`), so every string keeps the exact
     wording it had before the split and no second resource file appears.
     `[Rubric §27, Internationalization]`.
   - **The two editors are mutually exclusive by construction.** `StartAddingItem` closes any open row edit
-    (line 74) and `StartEditingItem` closes the add form (line 133), so the panel can never show two open
+    (line 79) and `StartEditingItemAsync` closes the add form (line 150), so the panel can never show two open
     editors at once. `[Rubric §24, Forms, Validation & UX Safety]`.
   `[Rubric §21, Accessibility]`: every icon-only action carries an `aria-label` read from the localizer
-  (`.../Pages/ConferenceCategory/ConferenceCategoryItemsPanel.razor:78,80,91,93`).
+  (`.../Pages/Categories/ConferenceCategoryItemsPanel.razor:79,81,92,94`).
   `[Rubric §8, Data Architecture]`: neither the item add nor the item update carries a `RowVersion`
-  (lines 96,154), so a category item is a last-writer-wins edit while the category itself is not. That is a
+  (lines 106,181), so a category item is a last-writer-wins edit while the category itself is not. That is a
   real asymmetry, not an oversight in the reading: `CategoryItemDTO` declares no concurrency token.
 - **Walkthrough**
-  - `OnInitialized` (lines 61-67) builds the validation delegate over the panel's own
-    [`ConferenceCategoryItemEditModel`](#conferencecategoryitemeditmodel) (line 66).
-  - Add: `StartAddingItem` (lines 69-75) clears the model and the sort field and opens the form;
-    `AddItemAsync` (lines 79-126) validates its own `MudForm` (lines 86-91), builds a
+  - `OnInitialized` (lines 66-72) builds the validation delegate over the panel's own
+    [`ConferenceCategoryItemEditModel`](#conferencecategoryitemeditmodel) (line 71).
+  - Add: `StartAddingItem` (lines 74-80) clears the model and the sort field and opens the form;
+    `AddItemAsync` (lines 84-132) validates its own `MudForm` (lines 91-96), runs
+    `EnsureCurrentCategoryAsync` (line 101), builds a
     [`CategoryItemDTO`](group-17-conference-domain.md#categoryitemdto) stamped with the parent
-    `CategoryId` (line 96), posts (line 97), and on a failed add shows the API's own localized message
+    `CategoryId` (line 106), posts (line 107), and on a failed add shows the API's own localized message
     unless the error is `Unexpected`, in which case it falls back to the fixed `Snackbar.ItemSaveFailed`
-    text (lines 100-106, the O-07 carve-out to ADR-027 Decision 9). A failed reload is a separate
-    outcome with the fixed message (lines 109-113) before success is toasted (line 115).
-  - Edit: `StartEditingItem` (lines 128-134) seeds the row-edit fields from the clicked item, and
-    `UpdateItemAsync` (lines 138-182) is the one path that does **not** use a `MudForm`: it hand-checks
+    text (lines 108-117, the O-07 carve-out to ADR-027 Decision 9). On success it toasts (line 120),
+    closes the form (line 121), and reloads (line 122).
+  - Edit: `StartEditingItemAsync` (lines 134-156) seeds the row-edit fields from the re-read copy of the
+    clicked item (lines 147-150), and
+    `UpdateItemAsync` (lines 160-205) is the one path that does **not** use a `MudForm`: it hand-checks
     `string.IsNullOrWhiteSpace(_editItemName)` and warns with the same resource key the model declares
-    (lines 145-149), because the row editor is inline in the table rather than a form. A failed update
-    surfaces the API's own message the same way `AddItemAsync` does (lines 159-163, BR-138 rename conflict).
-  - Delete: `DeleteItemAsync` (lines 184-207) confirms through the `DeleteConfirmation` dialog seeded with
-    the item name (line 186), deletes (line 194), and reloads.
-  - `ReloadCategoryAsync` (lines 212-222): re-reads the category with children (line 214) and returns
-    `false` when the read comes back empty, leaving the caller to report its own failure message; the
-    comment at lines 209-211 states that contract.
-  - Disposal (lines 224-249): the panel owns its own `CancellationTokenSource` (line 34) and implements the
+    (lines 167-171), because the row editor is inline in the table rather than a form. After
+    `EnsureCurrentCategoryAsync` (line 176) it posts (line 182); a failed update
+    surfaces the API's own message the same way `AddItemAsync` does (lines 183-190, BR-138 rename
+    conflict), and a committed one toasts, closes the row, and reloads (lines 193-195).
+  - Delete: `DeleteItemAsync` (lines 207-237) confirms through the `DeleteConfirmation` dialog seeded with
+    the item name (line 209), runs `EnsureCurrentCategoryAsync` (line 217), deletes (line 222), reports
+    `Snackbar.ItemDeleteFailed` only for a failed delete (lines 223-227), then toasts and reloads
+    (lines 230-231).
+  - `ReloadCategoryAsync` (lines 242-249): re-reads the category with children (line 244) and raises
+    `CategoryChanged` only when `TryAdopt` succeeds; the comment at lines 239-241 states that a failed
+    reload is not a failed write.
+  - `EnsureCurrentCategoryAsync` (lines 254-268): the stale-repair step described above; the comment at
+    lines 251-253 states its contract.
+  - Disposal (lines 270-296): the panel owns its own `CancellationTokenSource` (line 35) and implements the
     standard `Dispose(bool)` pattern, because it is a component rather than a page and so does not inherit
     [`DetailPageBase`](group-15-common-ui-framework.md#detailpagebase)'s `LoadGuard`. Every service call
     (add, update, delete, and the category reload) takes the `LifetimeToken` property (`_cts.LifetimeToken()`)
@@ -4037,7 +4073,7 @@ The companion [`DependencyInjection`](#dependencyinjection) extension `AddConfer
   leaving the page with one aggregate, one editor, and one callback.
 - **Where it's used**: rendered once by [`ConferenceCategoryDetail`](#conferencecategorydetail) as
   `<ConferenceCategoryItemsPanel Category="Category" CategoryChanged="OnCategoryReloaded" />`
-  (`.../Pages/ConferenceCategory/ConferenceCategoryDetail.razor:73`).
+  (`.../Pages/Categories/ConferenceCategoryDetail.razor:74`).
 
 ### PartnerCreate
 
@@ -4116,48 +4152,51 @@ The companion [`DependencyInjection`](#dependencyinjection) extension `AddConfer
 - **Depends on**: [`IPartnerUIService`](#ipartneruiservice) (line 24) for load/save/delete,
   [`IEventLookupService`](#ieventlookupservice) (line 25) for the event name,
   [`IToastService`](group-15-common-ui-framework.md#itoastservice) (line 27),
-  [`PartnerEditModel`](#partnereditmodel) (line 64),
-  [`CommittedWriteReload`](#committedwritereload) (line 67), and
-  [`ErrorMessages`](group-15-common-ui-framework.md#errormessages) (lines 103,174). Externals: MudBlazor
-  `MudForm`, plus the shared `DeleteConfirmation` component.
+  [`PartnerEditModel`](#partnereditmodel) (line 63),
+  [`CommittedWriteReload`](#committedwritereload) (line 66), and
+  [`ErrorMessages`](group-15-common-ui-framework.md#errormessages) (line 153). Externals: MudBlazor
+  `MudForm`, plus the shared `DetailLoadStateContent` and `DeleteConfirmation` components
+  (`.../Pages/Partners/PartnerDetail.razor:19,105`).
 - **Concept introduced**: none new. This is the same load/edit/save/delete container shape taught on
   [`ConferenceCategoryDetail`](#conferencecategorydetail): load-once on parameters
-  (`OnParametersSetAsync` comparing `Id` to `_loadedId`, lines 75-84, which now returns the `LoadAsync`
-  task directly instead of awaiting it), a 404 as a distinct outcome
-  (`partnerResult.IsNotFound()`, lines 100-105), refetch rather than patch after a save (a fresh
-  `GetByIdAsync` at line 189, adopted through `TryAdopt` at line 190), and validate-before-mutate on
-  `SaveChangesAsync` (lines 171-176). The M246 committed-write contract is the same as on that page: the
-  update has committed, so `EndEdit()` (line 196) runs even when the reload fails, and
-  `StartEditingAsync` re-reads through `EnsureCurrentAsync` (line 147) before the next edit. One addition:
+  (`OnParametersSetAsync` comparing `Id` to `_loadedId`, lines 74-83, returning the `LoadAsync`
+  task directly), the load state recorded by the base's `CompleteLoad` so not-found and failed render
+  through `DetailLoadStateContent` with no toast (line 96), refetch rather than patch after a save (a fresh
+  `GetByIdAsync` at line 168, adopted through `TryAdopt` at line 169), and validate-before-mutate on
+  `SaveChangesAsync` (lines 150-155). The M246 committed-write contract is the same as on that page: the
+  update has committed, so `EndEdit()` (line 175) runs even when the reload fails, and
+  `StartEditingAsync` re-reads through `EnsureCurrentAsync` (line 126) before the next edit. One addition:
   the event name is resolved for display rather than edited.
   - **The event name is a computed property over the loaded lookup, not a field.** `EventName` (lines
     39-42) reads the partner's `EventId` out of `_events` when the lookup succeeded, and falls back to
     the raw id formatted with `InvariantCulture` otherwise, so the page degrades gracefully rather than
     blanking the row. `[Rubric §29, Resilience & Business Continuity]`.
   - **A failed event lookup stops the load, not the render.** Inside `LoadAsync`, once the partner is
-    fetched, a failed event lookup is reported through `NotifyOnFailure` and returns (lines 117-121), the
-    same failure-handling contract the doc comment on the equivalent `ConferenceCategoryDetail` codepath
-    uses, but here it runs only once per page instance (`_events is null` guard, line 117) since the
+    fetched and adopted (line 101), a failed event lookup is reported through `NotifyOnFailure` and
+    returns (lines 105-109, the comment at lines 103-104 records that the partner itself is already
+    loaded). It runs only once per page instance (`_events is null` guard, line 105) since the
     lookup does not change per partner.
   `[Rubric §8, Data Architecture]`: `SaveChangesAsync` posts `_model.ToUpdated(Partner)`, round-tripping
   the `RowVersion` ([ADR-035](https://ivanball.github.io/docs/adr/035-optimistic-concurrency.html)).
 - **Walkthrough**
   - `OnInitialized` (lines 44-56): breadcrumbs and the validation delegate.
-  - `OnParametersSetAsync` (lines 75-84) and `LoadAsync` (lines 86-136): fetch by `Id`, the three-way
-    result handling (not-found at lines 100-105, failure at lines 107-111, success at line 113), the
-    event-lookup guard (lines 117-121), `OperationCanceledException` swallowed (lines 123-126), and a
-    `finally` that clears `IsLoading` (lines 127-135). `LoadAsync` opens with `LoadGuard.Begin()` (line 89) to supersede
-    any load in flight, passes the guard's token to both fetches, returns early when
-    `LoadGuard.IsCurrent(generation)` is false, and clears `IsLoading` only for the current generation.
-  - `StartEditingAsync` (lines 138-160): re-reads the partner through `_writeReload.EnsureCurrentAsync`
-    (line 147), returns without editing if that yields nothing, otherwise adopts the current record,
-    loads the edit model from it (line 154) and calls `BeginEdit()` (line 155).
-  - `SaveChangesAsync` (lines 164-206): validate, `UpdateAsync(_model.ToUpdated(Partner))` (line 181),
-    report a failure, refetch (line 189), adopt the refreshed record and toast only when `TryAdopt`
-    succeeds (lines 190-194), and `EndEdit()` (line 196).
-  - `DeletePartnerAsync` (lines 208-237): confirm through `DeleteConfirmation` seeded with the partner
-    name (line 215), delete (line 223), toast, and navigate back to the list.
-  - `TypeLabel(PartnerType type)` (line 36) and `NavigateToList` (line 239) are one-liners.
+  - `OnParametersSetAsync` (lines 74-83) and `LoadAsync` (lines 85-115): `BeginLoad()` (line 88)
+    supersedes any load in flight, `GetByIdAsync(Id, true, token)` (line 92) fetches the partner,
+    `!CompleteLoad(generation, partnerResult) || !partnerResult.TryGetValue(out var partner)` returns early
+    for a superseded, not-found, or failed load (lines 96-99), the partner is adopted (line 101), then the
+    event-lookup guard runs on the same token (lines 105-109) and `OperationCanceledException` is
+    swallowed (lines 111-114). There is no `finally` and no page `IsLoading` flag: the base's `LoadState`
+    carries the spinner.
+  - `StartEditingAsync` (lines 117-139): re-reads the partner through `_writeReload.EnsureCurrentAsync`
+    (line 126), returns without editing if that yields nothing, otherwise adopts the current record,
+    loads the edit model from it (line 132) and calls `BeginEdit()` (line 133). `CancelEditing` (line 141)
+    is `EndEdit()`.
+  - `SaveChangesAsync` (lines 143-185): validate, `UpdateAsync(_model.ToUpdated(Partner))` (line 160),
+    report a failure (line 163), refetch (line 168), adopt the refreshed record and toast only when `TryAdopt`
+    succeeds (lines 169-173), and `EndEdit()` (line 175).
+  - `DeletePartnerAsync` (lines 187-216): confirm through `DeleteConfirmation` seeded with the partner
+    name (line 194), delete (line 202), toast, and navigate back to the list.
+  - `TypeLabel(PartnerType type)` (line 36) and `NavigateToList` (line 218) are one-liners.
 - **Why it's built this way**: the same container shape as every other detail page in the module, with
   the one variation the entity requires: a read-only lookup of the owning event's name rather than a
   second editable field, because the owning event is fixed at creation.
@@ -4561,7 +4600,7 @@ The companion [`DependencyInjection`](#dependencyinjection) extension `AddConfer
   (`.../Pages/Question/QuestionCreate.razor:1-2`), reached from [`QuestionList`](#questionlist)'s create
   button; on success it hands off to [`QuestionDetail`](#questiondetail). It is also the one page in this
   unit with a bUnit component test class,
-  [`QuestionCreateTests`](group-28-testing-infrastructure.md#per-project-test-rollup)
+  [`QuestionCreateTests`](group-29-testing-infrastructure.md#per-project-test-rollup)
   (`MMCA.ADC/Tests/Modules/Conference/MMCA.ADC.Conference.UI.Tests/Pages/Questions/QuestionCreateTests.cs:19`),
   which asserts that a blank submit shows the model's own required message without MudBlazor's duplicate,
   that the required field keeps its `aria-required` affordance, that an overlong text shows the model's
@@ -4705,23 +4744,24 @@ The companion [`DependencyInjection`](#dependencyinjection) extension `AddConfer
   smallest detail page in the group: three editable fields, no lookups, and no child entities.
 - **Depends on**: [`DetailPageBase`](group-15-common-ui-framework.md#detailpagebase) (base class, `.../Pages/Questions/QuestionDetail.razor:7`),
   [`IQuestionUIService`](#iquestionuiservice) (line 18),
-  [`QuestionEditModel`](#questioneditmodel) (line 62),
+  [`QuestionEditModel`](#questioneditmodel) (line 61),
   [`IToastService`](group-15-common-ui-framework.md#itoastservice) (line 20),
-  [`ResultUiExtensions`](group-15-common-ui-framework.md#resultuiextensions) for `IsNotFound()` and
-  `NotifyOnFailure` (lines 96,104,155,162,198),
-  [`CommittedWriteReload`](#committedwritereload) (field at line 65),
-  [`ConferenceRoutePaths`](#conferenceroutepaths) (lines 49,211),
-  [`ErrorMessages`](group-15-common-ui-framework.md#errormessages) (lines 100,145), and
+  [`ResultUiExtensions`](group-15-common-ui-framework.md#resultuiextensions) for `NotifyOnFailure`
+  (lines 151,193),
+  [`CommittedWriteReload`](#committedwritereload) (field at line 64),
+  [`ConferenceRoutePaths`](#conferenceroutepaths) (lines 49,206),
+  [`ErrorMessages`](group-15-common-ui-framework.md#errormessages) (line 141), and
   [`ModelValidation`](group-15-common-ui-framework.md#modelvalidation) (line 54). Externals: MudBlazor
-  `MudForm`, plus the `PageLoadingState`, `PageErrorState`, `ErrorSummary`, `UnsavedChangesGuard`, and
-  `DeleteConfirmation` components (`.../Pages/Questions/QuestionDetail.razor:19,23,43,12,82`).
+  `MudForm`, plus the `DetailLoadStateContent`, `ErrorSummary`, `UnsavedChangesGuard`, and
+  `DeleteConfirmation` components (`.../Pages/Questions/QuestionDetail.razor:19,42,12,81`).
 - **Concept introduced**: none new. Typed route-id binding, load-once-on-parameters, the edit buffer, the
   `RowVersion` round trip, and refetch-after-save are all covered on
   [`ConferenceCategoryDetail`](#conferencecategorydetail) and
   [`QuestionEditModel`](#questioneditmodel). The page-scoped `CancellationTokenSource`
-  (`PageToken`), the `IsEditing` / `IsDirty` pair, and `BeginEdit` / `EndEdit` are inherited from
+  (`PageToken`), the load state machine (`LoadState`, `BeginLoad`, `CompleteLoad`), the `IsEditing` /
+  `IsDirty` pair, and `BeginEdit` / `EndEdit` are inherited from
   [`DetailPageBase`](group-15-common-ui-framework.md#detailpagebase)
-  (`MMCA.Common/Source/Presentation/MMCA.Common.UI/Pages/Common/DetailPageBase.cs:36,46,49,68,75`)
+  (`MMCA.Common/Source/Presentation/MMCA.Common.UI/Pages/Common/DetailPageBase.cs:38,52,59,78,98,101,120,127`)
   rather than declared here, so the code-behind carries none of that plumbing itself.
   `[Rubric Section 8, Data Architecture]`: the immutable-after-create fields (`QuestionEntity`, `QuestionType`)
   are round-tripped by [`QuestionEditModel.ToUpdated`](#questioneditmodel) rather than omitted, so the
@@ -4735,29 +4775,31 @@ The companion [`DependencyInjection`](#dependencyinjection) extension `AddConfer
     delegate (line 54).
   - The route id is already typed: `[Parameter] public QuestionIdentifierType Id` (line 22) and
     `_loadedId` is a `QuestionIdentifierType?`, so the page does no string parsing.
-  - `OnParametersSetAsync` (lines 73-122): the `_loadedId` guard (lines 75-78), then
-    `LoadGuard.Begin()` (line 83), which supersedes any load already in flight and returns a
-    `(token, generation)` pair. `GetByIdAsync(Id, ...)` with that `token` instead of `PageToken`
-    (line 88), and an early return when `LoadGuard.IsCurrent(generation)`
-    is false (lines 89-92), so a superseded response never overwrites the newer one. Then the not-found
-    branch that clears `Question` and reports through
-    [`ErrorMessages`](group-15-common-ui-framework.md#errormessages) (lines 98-103), `NotifyOnFailure`
-    for anything else (line 106), and a `finally` that clears `IsLoading` only when the generation is
-    still current (lines 113-121), so a stale response cannot switch off the spinner the newer load
-    just turned on.
-  - `StartEditingAsync` (lines 124-146) is now asynchronous. It asks
-    [`CommittedWriteReload`](#committedwritereload)`.EnsureCurrentAsync` (line 133) to re-read the question
+  - `OnParametersSetAsync` (lines 72-81) is synchronous: the `_loadedId` guard returns
+    `Task.CompletedTask` (lines 74-77), otherwise it records the id and returns `LoadAsync()` (line 80).
+  - `LoadAsync` (lines 83-103) is a separate method so the markup's Retry can call it again
+    (`.../Pages/Questions/QuestionDetail.razor:22`). It calls the inherited `BeginLoad()` (line 86),
+    which supersedes any load already in flight, resets `LoadState` to `Loading`, and returns a
+    `(token, generation)` pair (`.../Pages/Common/DetailPageBase.cs:59-64`). `GetByIdAsync(Id, ...)`
+    runs with that `token` instead of `PageToken` (line 90), and the page adopts the question only when
+    `CompleteLoad(generation, result)` returns true and the value unwraps (line 94). `CompleteLoad`
+    ignores a superseded generation and otherwise sets `LoadState` to `Loaded`, `NotFound`, or `Failed`
+    (`.../Pages/Common/DetailPageBase.cs:78-95`). A not-found or failed load raises no toast: the
+    template's `DetailLoadStateContent` states it, with Retry for a failure
+    (`.../Pages/Questions/QuestionDetail.razor:17-23`).
+  - `StartEditingAsync` (lines 105-127) is asynchronous. It asks
+    [`CommittedWriteReload`](#committedwritereload)`.EnsureCurrentAsync` (line 114) to re-read the question
     when an earlier committed save's reload failed, and returns without opening the editor if that yields
-    nothing. Otherwise it adopts the current record into `Question`, loads the edit model from it (line 139)
-    and opens the editor with the inherited `BeginEdit` (line 140); `OperationCanceledException` is
-    swallowed (lines 142-145). `CancelEditing` (line 148) is a one-line forward to the inherited `EndEdit`.
-  - `SaveChangesAsync` (lines 150-192): validate (lines 157-162), `UpdateAsync(_model.ToUpdated(Question))`
-    (line 167), then refetch (line 175). The update has already committed at that point, so
-    `_writeReload.TryAdopt` (line 176) adopts the refreshed record and toasts `Snackbar.Updated` on success
-    (lines 178-179), or toasts `Snackbar.SavedRefreshFailed` when the reload fails; either way the editor
-    closes with `EndEdit` (line 182), so a failed reload no longer strands the organizer in edit mode.
-  - `DeleteQuestionAsync` (lines 194-223): confirm with the question text as the label (line 201), delete
-    (line 209), and navigate back to the list (line 217).
+    nothing. Otherwise it adopts the current record into `Question`, loads the edit model from it (line 120)
+    and opens the editor with the inherited `BeginEdit` (line 121); `OperationCanceledException` is
+    swallowed (lines 123-126). `CancelEditing` (line 129) is a one-line forward to the inherited `EndEdit`.
+  - `SaveChangesAsync` (lines 131-173): validate (lines 138-143), `UpdateAsync(_model.ToUpdated(Question))`
+    (line 148), then refetch (line 156). The update has already committed at that point, so
+    `_writeReload.TryAdopt` (line 157) adopts the refreshed record and toasts `Snackbar.Updated` on success
+    (lines 159-160), or toasts `Snackbar.SavedRefreshFailed` when the reload fails; either way the editor
+    closes with `EndEdit` (line 163), so a failed reload does not strand the organizer in edit mode.
+  - `DeleteQuestionAsync` (lines 175-204): confirm with the question text as the label (line 182), delete
+    (line 190), and navigate back to the list (line 198).
 - **Why it's built this way**: a question's entity and type determine how every existing answer was
   captured, so changing them after answers exist would invalidate stored data; restricting the edit surface
   to text, order, and required-ness is the simplest way to keep answers interpretable.
@@ -4767,7 +4809,7 @@ The companion [`DependencyInjection`](#dependencyinjection) extension `AddConfer
 
 ### RoomDetail
 
-> MMCA.ADC.Conference.UI · `MMCA.ADC.Conference.UI.Pages.Rooms` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/Pages/Rooms/RoomDetail.razor.cs:15` · Level 8 · class (Blazor code-behind)
+> MMCA.ADC.Conference.UI · `MMCA.ADC.Conference.UI.Pages.Rooms` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/Pages/Rooms/RoomDetail.razor.cs:16` · Level 8 · class (Blazor code-behind)
 
 - **What it is**: the organizer's single-room page at `/rooms/{Id}`
   (`.../Pages/Rooms/RoomDetail.razor:1`, `Authorize(Roles = RoleNames.Organizer)` at `:2`). It loads one
@@ -4777,80 +4819,93 @@ The companion [`DependencyInjection`](#dependencyinjection) extension `AddConfer
   [`IRoomUIService`](#iroomuiservice) (line 20),
   [`IEventLookupService`](#ieventlookupservice) (line 21),
   [`IToastService`](group-15-common-ui-framework.md#itoastservice) (line 23),
-  [`RoomEditModel`](#roomeditmodel) (line 50), [`RoomDTO`](group-17-conference-domain.md#roomdto)
-  (line 46), [`ConferenceRoutePaths`](#conferenceroutepaths) (lines 37, 211 and
-  `.../Pages/Rooms/RoomDetail.razor:61`),
-  [`ErrorMessages`](group-15-common-ui-framework.md#errormessages) (lines 84, 145),
-  [`ResultUiExtensions`](group-15-common-ui-framework.md#resultuiextensions) for `IsNotFound` and
-  `NotifyOnFailure` (lines 81, 90, 99, 155, 162, 198), and
+  [`RoomEditModel`](#roomeditmodel) (line 49), [`RoomDTO`](group-17-conference-domain.md#roomdto)
+  (line 46), [`CommittedWriteReload`](#committedwritereload) (field at line 52),
+  [`ConferenceRoutePaths`](#conferenceroutepaths) (lines 37, 205 and
+  `.../Pages/Rooms/RoomDetail.razor:60`),
+  [`ErrorMessages`](group-15-common-ui-framework.md#errormessages) (line 140),
+  [`ResultUiExtensions`](group-15-common-ui-framework.md#resultuiextensions) for `NotifyOnFailure`
+  (lines 93, 150, 192), and
   [`ModelValidation`](group-15-common-ui-framework.md#modelvalidation) (line 42). Externals: Blazor
   (`[Parameter]`, `NavigationManager`), MudBlazor (`MudForm`, `MudSimpleTable`, `BreadcrumbItem`),
-  `System.Globalization.CultureInfo` (line 120). The markup composes `PageLoadingState`,
-  `PageErrorState`, `ErrorSummary`, `UnsavedChangesGuard`, `QrCodeButton` and `DeleteConfirmation` from
-  `MMCA.Common.UI.Components` (`.../Pages/Rooms/RoomDetail.razor:19,23,43,12,61,93`).
-- **Concept introduced, the three-state detail page and the string route parameter.** The template is a
-  single `if / else if / else` chain over three page states: loading, not-found, and loaded, with the
-  loaded state further split by the inherited `IsEditing`
-  (`.../Pages/Rooms/RoomDetail.razor:17,21,25`). That chain is why the page never renders a
-  half-populated card.
-  The genuinely new mechanic on this page is how the route id is handled. `Id` is declared
-  `[Parameter] public RoomIdentifierType Id` (line 24), the module's identifier alias, so the code-behind
-  passes it straight to `GetByIdAsync(Id, ...)` (line 73) with no string parsing in between.
+  `System.Globalization.CultureInfo` (line 105). The markup composes `DetailLoadStateContent`,
+  `ErrorSummary`, `UnsavedChangesGuard`, `QrCodeButton` and `DeleteConfirmation` from
+  `MMCA.Common.UI.Components` (`.../Pages/Rooms/RoomDetail.razor:19,42,12,60,92`).
+- **Concept introduced, the load-state detail page and the typed route parameter.** The template is a
+  single `if / else if / else` chain: anything short of a loaded room, then the editor, then the
+  read-only card (`.../Pages/Rooms/RoomDetail.razor:17,24,52`). The first branch hands the inherited
+  `LoadState` ([`DetailLoadState`](group-15-common-ui-framework.md#detailloadstate)) to
+  `DetailLoadStateContent`, which renders loading, not-found, or failed-with-Retry
+  (`.../Pages/Rooms/RoomDetail.razor:19-22`), so a missing room and an unreachable one never share the
+  same body. That chain is why the page never renders a half-populated card.
+  The other mechanic on this page is how the route id is handled. `Id` is declared
+  `[Parameter] public RoomIdentifierType Id` (line 25), the module's identifier alias, so the code-behind
+  passes it straight to `GetByIdAsync(Id, ...)` (line 79) with no string parsing in between.
   [`SponsorDetail`](#sponsordetail) binds its id the same way, with a constrained `{Id:int}` route and an
   `int` parameter (`.../Pages/Sponsor/SponsorDetail.razor:1`,
   `.../Pages/Sponsor/SponsorDetail.razor.cs:27`).
   The reload guard is worth internalizing: `OnParametersSetAsync` returns immediately when
-  `Id == _loadedId` (lines 60-63), where `_loadedId` is a `RoomIdentifierType?`. Blazor calls `OnParametersSetAsync` on every parameter set, not only
+  `Id == _loadedId` (lines 63-66), where `_loadedId` is a `RoomIdentifierType?`. Blazor calls `OnParametersSetAsync` on every parameter set, not only
   on navigation, so without this guard an unrelated re-render would refetch the room.
   `[Rubric Section 19, State Management]` assesses whether component state is fetched once and
   invalidated deliberately: `_loadedId` is the invalidation key, and `_events` is fetched only when
-  still null (line 98), so switching rooms does not refetch the event lookup.
-  `[Rubric Section 24, Forms, Validation & UX Safety]` shows up in the edit lifecycle: `StartEditing`
-  seeds the model and opens the editor with the inherited `BeginEdit` (lines 122-131), `CancelEditing`
-  is a one-line forward to the inherited `EndEdit` (line 133), and a successful save re-reads the room
-  from the server before leaving edit mode (lines 159-168) rather than trusting the local projection.
+  still null (line 92), so switching rooms does not refetch the event lookup.
+  `[Rubric Section 24, Forms, Validation & UX Safety]` shows up in the edit lifecycle:
+  `StartEditingAsync` seeds the model and opens the editor with the inherited `BeginEdit`
+  (lines 107-126), `CancelEditing` is a one-line forward to the inherited `EndEdit` (line 128), and a
+  committed save re-reads the room from the server before leaving edit mode (lines 155-162) rather than
+  trusting the local projection.
 - **Walkthrough**
   - `OnInitialized` (lines 31-43) builds the breadcrumbs synchronously and constructs the shared
     validation delegate (line 42), the same one-line wiring [`RoomCreate`](#roomcreate) uses.
-  - `OnParametersSetAsync` (lines 59-117) sets `_loadedId`, then calls `LoadGuard.Begin()` (line 69)
-    to supersede any load already in flight, receiving a `(token, generation)` pair. It flips
-    `IsLoading` and fetches the typed `Id` through
-    [`IRoomUIService`](#iroomuiservice)`.GetByIdAsync` with that `token` rather than `PageToken`
-    (line 73). If `LoadGuard.IsCurrent(generation)` is false the method returns (lines 74-77), so a
-    superseded response never overwrites a newer one. A
-    [`Result`](group-01-result-error-handling.md#result) carrying `NotFound` is handled distinctly from
-    any other failure: it nulls `Room` and toasts `ErrorMessages.NotFound(EntityName, Id)`
-    (lines 81-86), which is what makes the template's `PageErrorState` branch
-    (`.../Pages/Rooms/RoomDetail.razor:21-24`) reachable. Every other failure goes through
-    `NotifyOnFailure` (line 90).
-  - The event lookup is loaded once, lazily, only after the room is in hand (lines 98-102), and it
-    also uses the guarded `token` (line 98). The in-code
-    comment (lines 96-97) notes that a failed lookup is reported and stops the load, which is the same
-    behavior an exception used to produce. `IsLoading` is cleared in the `finally` only when the
-    generation is still current (lines 108-116), so a superseded response cannot switch off the spinner
-    the newer load just turned on.
-  - `GetEventName` (lines 119-120) resolves an event's display name from the lookup, falling back to
+  - `OnParametersSetAsync` (lines 61-70) is synchronous: past the guard it sets `_loadedId` and returns
+    `LoadAsync()` (line 69). `LoadAsync` (lines 72-102) is its own method because the template's Retry
+    calls it again (`.../Pages/Rooms/RoomDetail.razor:22`).
+  - `LoadAsync` calls the inherited `BeginLoad()` (line 75), which supersedes any load already in
+    flight through [`LatestLoadGuard`](group-15-common-ui-framework.md#latestloadguard), resets
+    `LoadState` to `Loading`, and returns a `(token, generation)` pair
+    (`MMCA.Common/Source/Presentation/MMCA.Common.UI/Pages/Common/DetailPageBase.cs:59-64`). It fetches
+    the typed `Id` through [`IRoomUIService`](#iroomuiservice)`.GetByIdAsync` with that `token` rather
+    than `PageToken` (line 79), then returns unless `CompleteLoad(generation, result)` is true and the
+    room unwraps (lines 83-86). `CompleteLoad` drops a superseded generation and otherwise sets
+    `LoadState` to `Loaded`, `NotFound` (when the
+    [`Result`](group-01-result-error-handling.md#result) is not-found), or `Failed`
+    (`.../Pages/Common/DetailPageBase.cs:78-95`). A not-found or failed room load raises no toast; the
+    page body states it.
+  - The event lookup is loaded once, lazily, only after the room is in hand (lines 92-96), and it
+    also uses the guarded `token` (line 92). The in-code comment (lines 90-91) notes that a failed
+    lookup is reported through `NotifyOnFailure` (line 93) and stops the load, with the room itself
+    already adopted (line 88).
+  - `GetEventName` (lines 104-105) resolves an event's display name from the lookup, falling back to
     the raw id under `CultureInfo.InvariantCulture`. The template only renders the event row when there
-    is more than one event to distinguish (`.../Pages/Rooms/RoomDetail.razor:71-74`).
-  - `StartEditing` (lines 122-131) loads the edit model from the fetched room (line 129) and opens the
-    editor with `BeginEdit` (line 130); `CancelEditing` (line 133) forwards to `EndEdit`.
-  - `SaveChangesAsync` (lines 135-178) validates the form (lines 142-147), posts
-    `_model.ToUpdated(Room)` through `UpdateAsync` (line 152), then re-fetches the room (line 159)
-    and swaps `Room` for the refreshed instance before toasting and closing the editor with `EndEdit`
-    (lines 166-168). `IsSaving` is cleared in the `finally` (lines 174-177).
-  - `DeleteRoomAsync` (lines 180-209) awaits `_deleteConfirm.ShowAsync(Room.Name)` and treats anything
-    other than `true` as a cancel (lines 187-191), then calls
-    [`IRoomUIService`](#iroomuiservice)`.DeleteAsync(Room.Id, Room.EventId, PageToken)` (line 195),
+    is more than one event to distinguish (`.../Pages/Rooms/RoomDetail.razor:70-73`).
+  - `StartEditingAsync` (lines 107-126) asks
+    [`CommittedWriteReload`](#committedwritereload)`.EnsureCurrentAsync` (lines 111-112) to re-read the
+    room when an earlier committed save's reload failed, and returns without opening the editor if that
+    yields nothing. Otherwise it adopts the current record into `Room` (line 118), loads the edit model
+    from it (line 119) and opens the editor with `BeginEdit` (line 120); `OperationCanceledException`
+    is swallowed (lines 122-125). `CancelEditing` (line 128) forwards to `EndEdit`.
+  - `SaveChangesAsync` (lines 130-172) validates the form (lines 137-142), posts
+    `_model.ToUpdated(Room)` through `UpdateAsync` (line 147), then re-fetches the room (line 155).
+    The update has already committed, so `_writeReload.TryAdopt` (line 156) either swaps `Room` for the
+    refreshed instance and toasts `Snackbar.Updated` (lines 158-159), or toasts
+    `Snackbar.SavedRefreshFailed`; either way the editor closes with `EndEdit` (line 162).
+    `IsSaving` is cleared in the `finally` (lines 168-171).
+  - `DeleteRoomAsync` (lines 174-203) awaits `_deleteConfirm.ShowAsync(Room.Name)` (line 181) and
+    treats anything other than `true` as a cancel (lines 182-185), then calls
+    [`IRoomUIService`](#iroomuiservice)`.DeleteAsync(Room.Id, Room.EventId, PageToken)` (line 189),
     toasts and navigates back to the list.
 - **Why it's built this way**: an inline editor on the same page as the read-only record keeps the
   organizer's context (they are looking at the room they are changing) and lets one component,
   `RoomFormFields`, serve both create and edit. Re-fetching after a successful update is the honest
   choice: the server may have normalized values, and the page then shows what was actually stored.
+  Because the update has already committed when that re-fetch runs, a failed reload ends the edit
+  anyway and leaves `CommittedWriteReload` to re-read before the next edit opens.
 - **Where it's used**: it is the navigation target of [`RoomCreate`](#roomcreate) on success
-  (`.../Pages/Rooms/RoomCreate.razor.cs:113`) and of every row link and mobile card on
+  (`.../Pages/Rooms/RoomCreate.razor.cs:121`) and of every row link and mobile card on
   [`RoomList`](#roomlist) (`.../Pages/Rooms/RoomList.razor.cs:78`,
   `.../Pages/Rooms/RoomList.razor:51,89,102`). Its `QrCodeButton` points at
-  `ConferenceRoutePaths.RoomCheckInLink(Room.Id)` (`.../Pages/Rooms/RoomDetail.razor:61`), which
+  `ConferenceRoutePaths.RoomCheckInLink(Room.Id)` (`.../Pages/Rooms/RoomDetail.razor:60`), which
   resolves to the Engagement-owned `/engage/rooms/{id}` landing page
   (`.../MMCA.ADC.Conference.UI/ConferenceRoutePaths.cs:65`), so the printed code takes an attendee to
   self check-in rather than to this management screen.
@@ -5148,7 +5203,9 @@ The companion [`DependencyInjection`](#dependencyinjection) extension `AddConfer
   `TryGetValue`, lines 33 and 68), [`IToastService`](group-15-common-ui-framework.md#itoastservice) for the
   warning (line 40), and `IStringLocalizer` plus
   [`ResultUiExtensions`](group-15-common-ui-framework.md#resultuiextensions)`.NotifyOnFailure` for a failed
-  re-read (line 74). Externals: `[NotNullWhen(true)]` on the `out` parameter (line 31).
+  re-read (line 74). Externals: `[MaybeNullWhen(false)]` on the `out TDto refreshed` parameter (line 31),
+  so a caller that gets `true` back may read the record without a null check, whatever `TDto`'s
+  nullability.
 - **Concept introduced, a committed write is not a failed write.** A save that posts an update and then
   re-fetches has two outcomes that look like one: the update failed, or the update succeeded and only the
   follow-up read failed. Reporting the second as a failure tells the organizer to retry a save that already
@@ -5167,10 +5224,16 @@ The companion [`DependencyInjection`](#dependencyinjection) extension `AddConfer
 - **Why it's built this way**: the guard is a plain object rather than a base-class feature, so each detail
   page composes it with `private readonly CommittedWriteReload _writeReload = new()` and the policy lives
   once instead of being re-derived per page (`[Rubric §15, Best Practices and Code Quality]`).
-- **Where it's used**: six Conference detail pages hold one: [`SponsorDetail`](#sponsordetail)
-  (`.../Pages/Sponsors/SponsorDetail.razor.cs:67`, `TryAdopt` at `:190`, `EnsureCurrentAsync` at `:147`),
-  plus `ActivityDetail`, `ConferenceCategoryDetail`, `EventDetail`, `PartnerDetail` and `QuestionDetail`
-  (one use site each under `MMCA.ADC.Conference.UI/Pages/`).
+- **Where it's used**: ten Conference detail pages hold one: [`SponsorDetail`](#sponsordetail)
+  (`.../Pages/Sponsors/SponsorDetail.razor.cs:66`, `TryAdopt` at `:169`, `EnsureCurrentAsync` at `:126`)
+  and [`SessionDetail`](#sessiondetail) (`.../Pages/Sessions/SessionDetail.razor.cs:73`, `TryAdopt` at
+  `:217`, `EnsureCurrentAsync` at `:174`), plus [`ActivityDetail`](#activitydetail),
+  [`ConferenceCategoryDetail`](#conferencecategorydetail), [`EventDetail`](#eventdetail),
+  [`PartnerDetail`](#partnerdetail), [`QuestionDetail`](#questiondetail), [`RoomDetail`](#roomdetail),
+  [`SpeakerDashboard`](#speakerdashboard) and [`SpeakerDetail`](#speakerdetail) (one use site each under
+  `MMCA.ADC.Conference.UI/Pages/`). The category-items child panel,
+  [`ConferenceCategoryItemsPanel`](#conferencecategoryitemspanel), references it twice
+  (`.../Pages/Categories/ConferenceCategoryItemsPanel.razor.cs`).
 
 ### SessionCreateModel
 
@@ -5253,7 +5316,7 @@ The companion [`DependencyInjection`](#dependencyinjection) extension `AddConfer
 
 ### SessionLookups
 
-> MMCA.ADC.Conference.UI · `MMCA.ADC.Conference.UI.Pages.Sessions` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/Pages/Sessions/SessionLookups.cs:32` · Level 5 · sealed class (page collaborator)
+> MMCA.ADC.Conference.UI · `MMCA.ADC.Conference.UI.Pages.Sessions` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/Pages/Sessions/SessionLookups.cs:31` · Level 5 · sealed class (page collaborator)
 
 - **What it is**: the display-enrichment layer behind [`SessionDetail`](#sessiondetail). It holds the
   three global lookup dictionaries (events, speakers, category items) plus the room list of the loaded
@@ -5407,64 +5470,75 @@ The companion [`DependencyInjection`](#dependencyinjection) extension `AddConfer
 
 ### SessionDetail
 
-> MMCA.ADC.Conference.UI · `MMCA.ADC.Conference.UI.Pages.Sessions` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/Pages/Sessions/SessionDetail.razor.cs:23` · Level 9 · class (Blazor code-behind)
+> MMCA.ADC.Conference.UI · `MMCA.ADC.Conference.UI.Pages.Sessions` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/Pages/Sessions/SessionDetail.razor.cs:24` · Level 9 · class (Blazor code-behind)
 
 - **What it is**: the organizer's full **session editor**: load one session by route id, inline-edit it,
   delete it, and manage its two child collections (speakers and category items), with event, room,
   speaker, and category names resolved through [`SessionLookups`](#sessionlookups). It is the
   join-heaviest detail page in the Conference UI.
 - **Depends on**: [`DetailPageBase`](group-15-common-ui-framework.md#detailpagebase) (`@inherits`,
-  `.../Pages/Sessions/SessionDetail.razor:9`); seven service clients,
+  `.../Pages/Sessions/SessionDetail.razor:9`), which supplies `BeginLoad`, `CompleteLoad`, `LoadState`,
+  `LoadGuard`, `PageToken` and the `BeginEdit`/`EndEdit` pair; seven service clients,
   [`ISessionUIService`](#isessionuiservice), [`IEventLookupService`](#ieventlookupservice),
   [`ISpeakerLookupService`](#ispeakerlookupservice),
   [`ICategoryItemLookupService`](#icategoryitemlookupservice),
   [`ISessionSpeakerUIService`](#isessionspeakeruiservice),
   [`ISessionCategoryItemUIService`](#isessioncategoryitemuiservice), and
-  [`IRoomUIService`](#iroomuiservice) (lines 29-35), plus
-  [`IToastService`](group-15-common-ui-framework.md#itoastservice) (line 35);
-  [`SessionLookups`](#sessionlookups) (line 44) and [`SessionEditModel`](#sessioneditmodel) (line 70),
-  with [`SessionFormModel`](#sessionformmodel) for the BR-122 key (line 190);
-  a shared `LoadGuard` helper for the load-generation protocol (line 98); the
+  [`IRoomUIService`](#iroomuiservice) (lines 28-34), plus
+  [`IToastService`](group-15-common-ui-framework.md#itoastservice) (line 36);
+  [`SessionLookups`](#sessionlookups) (line 45), [`SessionEditModel`](#sessioneditmodel) (line 70) and
+  [`CommittedWriteReload`](#committedwritereload) (line 73), with
+  [`SessionFormModel`](#sessionformmodel) for the BR-122 key (line 201); the
   [`SessionDTO`](group-17-conference-domain.md#sessiondto) shape and the
   [`SpeakerInfo`](#speakerinfo) / [`CategoryItemInfo`](#categoryiteminfo) lookup records;
   [`Result`](group-01-result-error-handling.md#result),
   [`ResultUiExtensions`](group-15-common-ui-framework.md#resultuiextensions)`.NotifyOnFailure`,
   [`ConferenceRoutePaths`](#conferenceroutepaths),
-  [`ErrorMessages`](group-15-common-ui-framework.md#errormessages) (line 112), and the `DeleteConfirmation`
-  component. The route `Id` is already a `SessionIdentifierType` parameter (line 37), so the page
-  passes it straight to `GetByIdAsync` (line 103) with no string parse. Uses the
+  [`ErrorMessages`](group-15-common-ui-framework.md#errormessages) (`ValidationError`, line 195), the
+  `DetailLoadStateContent` component (`.../Pages/Sessions/SessionDetail.razor:19-24`) and the
+  `DeleteConfirmation` component. The route `Id` is already a `SessionIdentifierType` parameter
+  (line 38), so the page passes it straight to `GetByIdAsync` (line 105) with no string parse. Uses the
   `Event`/`Room`/`Speaker`/`Session`/`SessionSpeaker`/`SessionCategoryItem`/`CategoryItem` aliases.
 - **Concept introduced, the load generation and the join-collection editor.** The route-id parsing,
   load-once-on-parameters, and model-based shadow editing are [`EventDetail`](#eventdetail)'s. Two things
   are new:
-  1. **A monotonic load generation, factored into a shared `LoadGuard` helper.** `LoadAsync` calls
-     `LoadGuard.Begin()` (line 98) for a cancellation token and a generation number, then re-checks
-     `LoadGuard.IsCurrent(generation)` after each of its three awaits (lines 104, 128, 139) and drops its
-     results if a newer load has started; the token from `Begin()`, not `PageToken`, is what each of those
-     three calls passes down. `_loadedId` is stamped **synchronously before** the load starts (line 91, typed `SessionIdentifierType?` at line 63), so two
-     rapid route changes would otherwise let the later-completing fetch paint the wrong session; the
-     generation, not `_loadedId`, is what is authoritative here. A failed load also nulls `Session`
-     (line 120, comment lines 118-119), because the edit, delete and child-mutation actions are
-     bound to `Session` and must not act on the previous session under the new id. The `finally` is
-     guarded the same way (`LoadGuard.IsCurrent(generation)`, line 154), because an unconditional clear would let a superseded
-     response switch off the spinner the newer load just turned on. Keeping the counter in `LoadGuard`
-     rather than a page-local field makes the same protocol available to any page that needs it.
+  1. **A monotonic load generation, owned by the base page.** `LoadAsync` calls
+     [`DetailPageBase`](group-15-common-ui-framework.md#detailpagebase)`.BeginLoad()` (line 101,
+     `MMCA.Common/Source/Presentation/MMCA.Common.UI/Pages/Common/DetailPageBase.cs:59`), which begins a
+     generation on the shared [`LatestLoadGuard`](group-15-common-ui-framework.md#latestloadguard) and puts
+     `LoadState` back to `Loading`. After the session fetch it calls `CompleteLoad(generation,
+     sessionResult)` (line 109, `DetailPageBase.cs:78`), which ignores a superseded response and otherwise
+     records [`DetailLoadState`](group-15-common-ui-framework.md#detailloadstate) `Loaded`, `NotFound` or
+     `Failed`; the two later awaits re-check `LoadGuard.IsCurrent(generation)` themselves (lines 124,
+     135) and drop their results if a newer load has started. The token from `BeginLoad()`, not
+     `PageToken`, is what each of the three calls passes down. `_loadedId` is stamped **synchronously
+     before** the load starts (line 94, typed `SessionIdentifierType?` at line 64), so two rapid route
+     changes would otherwise let the later-completing fetch paint the wrong session; the generation, not
+     `_loadedId`, is what is authoritative here. A failed current load also nulls `Session` (lines
+     113-116, comment lines 111-112), because the edit, delete and child-mutation actions are bound to
+     `Session` and must not act on the previous session under the new id. A not-found or failed load
+     raises no toast (comment lines 107-108): the template renders `DetailLoadStateContent` for every
+     state but `Loaded`, with `OnRetry="LoadAsync"` for a failure
+     (`.../Pages/Sessions/SessionDetail.razor:19-24`), so a missing record and an unreachable one never
+     share the same body.
      `[Rubric §19, State Management & Data Flow]` assesses whether concurrent updates to view state are
      ordered: this is an explicit last-writer-wins protocol rather than an implicit one.
      `[Rubric §12, Performance & Scalability]`: a superseded load's results are discarded rather than painted,
      so nothing stale is rendered.
   2. **Join management as an add/remove/available triple, factored once.** The same three-method pattern
      applies twice, to speakers and to category items, and both funnel through `MutateChildAsync`
-     (lines 300-322), which takes the operation, its own failure and success resource keys, and an
-     optional picker-clearing callback. Each mutation ends with a full `LoadAsync` (line 316) rather than
-     a local patch. Its failure toast depends on the error kind (lines 308-310, doc comment lines
-     293-299): an `ErrorType.Unexpected` fault (a 500, transport failure, or timeout) shows that
+     (lines 311-333), which takes the operation, its own failure and success resource keys, and an
+     optional picker-clearing callback. Each mutation ends with a full `LoadAsync` (line 327) rather than
+     a local patch. Its failure toast depends on the error kind (lines 319-321, doc comment lines
+     304-310): an `ErrorType.Unexpected` fault (a 500, transport failure, or timeout) shows that
      operation's fixed failure message rather than raw diagnostic text, while any refusal the API stated
      (O-46, for example "already associated") shows the API's own localized message via
      `LocalizedErrorMessage(L)`, falling back to the fixed key (ADR-027 Decision 9 carve-out).
   `[Rubric §8, Data Architecture]`: the update DTO re-sends the loaded `RowVersion` through
   [`SessionEditModel`](#sessioneditmodel)`.ToUpdated`, the client half of the optimistic-concurrency
-  token (ADR-035).
+  token (ADR-035). A save whose update committed but whose reload failed leaves the page stale through
+  [`CommittedWriteReload`](#committedwritereload), and the next edit re-reads before opening the form, so
+  the next save does not post the old `RowVersion`.
   `[Rubric §24, Forms, Validation & UX Safety]`: the save refuses an end that is not after the start
   (BR-122) on the client, through the shared [`SessionFormModel`](#sessionformmodel)`.HasEndAfterStart`,
   before it posts.
@@ -5472,34 +5546,44 @@ The companion [`DependencyInjection`](#dependencyinjection) extension `AddConfer
   join collections, four lookups, seven clients), not from bespoke mechanics; enrichment lives in
   [`SessionLookups`](#sessionlookups) and form shape in [`SessionEditModel`](#sessioneditmodel).
 - **Walkthrough**
-  - `OnInitialized` (lines 46-61) builds breadcrumbs, constructs [`SessionLookups`](#sessionlookups) from
-    the four injected lookup clients (lines 56-57), and wires the validation delegate (line 60).
-  - `OnParametersSetAsync` (lines 84-93) loads only when the route `Id` differs from `_loadedId`. It is a
+  - `OnInitialized` (lines 47-62) builds breadcrumbs, constructs [`SessionLookups`](#sessionlookups) from
+    the four injected lookup clients (lines 57-58), and wires the validation delegate (line 61).
+  - `OnParametersSetAsync` (lines 87-96) loads only when the route `Id` differs from `_loadedId`. It is a
     non-async method that returns `Task.CompletedTask` for the unchanged id and `LoadAsync()` directly
-    otherwise (lines 88, 92), since it has no work to do after the await.
-  - `LoadAsync` (lines 95-159): `LoadGuard.Begin()` for the token and generation (line 98),
-    `GetByIdAsync(id, true, token)` so the join collections arrive with the record (line 103), toast
-    `ErrorMessages.NotFound` and bail when the session is missing (lines 109-114), null `Session` and report
-    any other failure through `NotifyOnFailure` (lines 116-123), then hydrate the global lookups (line 127)
-    and the event's rooms (line 138), each followed by a `LoadGuard.IsCurrent` re-check.
-  - Edit and save (lines 161-222): `StartEditing` calls `_model.LoadFrom(Session)` then `BeginEdit`
-    (lines 168-169). `SaveChangesAsync` clears `_scheduleError` (line 179, the field is declared at
-    line 73), validates the form (lines 181-186), then refuses a schedule whose end is not after its start:
+    otherwise (lines 91, 95), since it has no work to do after the await.
+  - `LoadAsync` (lines 98-146): `BeginLoad()` for the token and generation (line 101),
+    `GetByIdAsync(Id, true, token)` so the join collections arrive with the record (line 105), then
+    `CompleteLoad` (line 109); on a failed or superseded load it nulls `Session` only for the current
+    generation and returns (lines 109-119). Otherwise it adopts the session (line 121), hydrates the
+    global lookups (line 123) and the event's rooms (line 134), each followed by a `LoadGuard.IsCurrent`
+    re-check (lines 124, 135), reporting a lookup failure through `NotifyOnFailure` (lines 129, 140).
+    There is no `finally` and no page-local spinner flag: the base's `LoadState` drives the loading body.
+  - Edit (lines 148-181): `StartEditingAsync` asks `EnsureCurrentSessionAsync` (lines 171-181, doc
+    comment lines 166-170) for the record to edit. That helper returns `null` when nothing is shown or
+    when [`CommittedWriteReload`](#committedwritereload)`.EnsureCurrentAsync` (line 174) reports a failed
+    re-read; otherwise it swaps `Session` for the current record (line 179). `StartEditingAsync` then
+    calls `_model.LoadFrom(current)` and `BeginEdit` (lines 157-158), with an
+    `OperationCanceledException` catch for disposal and render-mode transitions (lines 160-163).
+  - Save (lines 183-233): `SaveChangesAsync` clears `_scheduleError` (line 190, the field is declared at
+    line 76), validates the form (lines 192-197), then refuses a schedule whose end is not after its start:
     when `_model.HasEndAfterStart()` is false it stores the localized
     `SessionFormModel.EndsAtAfterStartsAtKey` text in `_scheduleError`, toasts it as a warning, and
-    returns without posting (lines 188-193); the template renders it as an inline `MudAlert`
-    (`.../Pages/Sessions/SessionDetail.razor:52-54`). Otherwise it posts `_model.ToUpdated(Session)` and
-    refetches, both written as a single expression chaining `NotifyOnFailure` into `IsFailure` /
-    `TryGetValue` (lines 198-208), then toasts and `EndEdit` (lines 211-212).
-  - Delete (lines 224-250): confirm through `_deleteConfirm.ShowAsync(Session.Title)` (line 231), delete,
+    returns without posting (lines 199-204); the template renders it as an inline `MudAlert`
+    (`.../Pages/Sessions/SessionDetail.razor:51-54`). Otherwise it posts `_model.ToUpdated(Session)`
+    and stops on a failed update (lines 209-213). It then re-fetches with `includeChildren: true` (line
+    216) and hands the outcome to `_writeReload.TryAdopt` (line 217): on success it swaps `Session` for
+    the refreshed record and toasts `Snackbar.Updated` (lines 219-220); on a failed reload the page is
+    marked stale and the `Snackbar.SavedRefreshFailed` warning shows instead. Either way the edit ends
+    through `EndEdit` (line 223), because the update already committed (comment, line 215).
+  - Delete (lines 235-261): confirm through `_deleteConfirm.ShowAsync(Session.Title)` (line 242), delete,
     navigate back to the list.
-  - Joins: `GetAvailableSpeakers` / `GetAvailableCategoryItems` (lines 252-256) delegate the set
+  - Joins: `GetAvailableSpeakers` / `GetAvailableCategoryItems` (lines 263-267) delegate the set
     difference to [`SessionLookups`](#sessionlookups) so a picker never offers an already-assigned entry;
-    `AddSessionSpeakerAsync` (lines 258-270) and `AddSessionCategoryItemAsync` (lines 276-287) each
+    `AddSessionSpeakerAsync` (lines 269-281) and `AddSessionCategoryItemAsync` (lines 287-298) each
     capture their ids into locals **before** building the delegate, with an in-code note that nullable
-    flow analysis does not reach inside a lambda (line 265); both are non-async methods that return the
-    `MutateChildAsync` task directly (lines 267, 284) and `Task.CompletedTask` on the guard path; the two
-    remove methods (lines 272-274, 289-291) are one-liners over the same `MutateChildAsync`.
+    flow analysis does not reach inside a lambda (line 276); both are non-async methods that return the
+    `MutateChildAsync` task directly (lines 278, 295) and `Task.CompletedTask` on the guard path; the two
+    remove methods (lines 283-285, 300-302) are one-liners over the same `MutateChildAsync`.
 - **Why it's built this way**: a session is the join-heavy center of the program (speakers, category
   items, room, event, timing), so the organizer edits all of it from one console. Reloading after each
   join mutation keeps the page a single source of truth instead of hand-patching local collections, and
@@ -5509,7 +5593,9 @@ The companion [`DependencyInjection`](#dependencyinjection) extension `AddConfer
   (`.../Pages/Sessions/SessionDetail.razor:1`), reached from [`SessionList`](#sessionlist) rows and from
   [`SessionCreate`](#sessioncreate)'s success redirect; its "view feedback" button opens
   [`OrganizerSessionFeedback`](#organizersessionfeedback) through
-  `ConferenceRoutePaths.SessionFeedbackOrganizer` (`.../Pages/Sessions/SessionDetail.razor:182-186`).
+  `ConferenceRoutePaths.SessionFeedbackOrganizer` (`.../Pages/Sessions/SessionDetail.razor:181-185`).
+  Its UI tests live under `MMCA.ADC/Tests/Modules/Conference/MMCA.ADC.Conference.UI.Tests/Pages/Sessions/`
+  (`SessionDetailStaleLoadTests`, `SessionDetailScheduleTests`, `SessionDetailChipErrorTests` and others).
 - **Caveats / not-in-source**: reads pass `includeChildren: true` so the join collections populate; how
   the server populates children is outside this page.
 
@@ -5597,114 +5683,121 @@ The companion [`DependencyInjection`](#dependencyinjection) extension `AddConfer
 > MMCA.ADC.Conference.UI · `MMCA.ADC.Conference.UI.Pages.Sponsors` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/Pages/Sponsors/SponsorDetail.razor.cs:20` · Level 9 · class (Blazor code-behind)
 
 - **What it is**: the organizer's sponsor record page at `/sponsors/{Id:int}`
-  (`.../Pages/Sponsor/SponsorDetail.razor:1-2`, Organizer-only). It loads one sponsor, renders it as a
+  (`.../Pages/Sponsors/SponsorDetail.razor:1-2`, Organizer-only). It loads one sponsor, renders it as a
   branded card, inline-edits every field except the owning event, deletes behind a confirmation, and
   exposes the booth-visit QR code. The class doc states the event exclusion and its reason (lines
   13-17).
-- **Depends on**: [`DetailPageBase`](group-15-common-ui-framework.md#detailpagebase) (the `@inherits` base: supplies `PageToken`,
-  `IsEditing`/`IsDirty` and the `BeginEdit`/`EndEdit` transitions),
+- **Depends on**: [`DetailPageBase`](group-15-common-ui-framework.md#detailpagebase) (the `@inherits` base,
+  `.../Pages/Sponsors/SponsorDetail.razor:8`: supplies `PageToken`, `BeginLoad`/`CompleteLoad` and
+  `LoadState`, `IsEditing`/`IsDirty` and the `BeginEdit`/`EndEdit` transitions),
   [`ISponsorUIService`](#isponsoruiservice) (line 24),
   [`IEventLookupService`](#ieventlookupservice) (line 25),
   [`IToastService`](group-15-common-ui-framework.md#itoastservice) (line 27),
-  [`SponsorEditModel`](#sponsoreditmodel) (line 64),
+  [`SponsorEditModel`](#sponsoreditmodel) (line 63),
   [`SponsorDTO`](group-17-conference-domain.md#sponsordto) (line 60),
   [`SponsorTier`](group-17-conference-domain.md#sponsortier) (line 36),
-  [`ConferenceRoutePaths`](#conferenceroutepaths) (lines 50, 239 and
-  `.../Pages/Sponsor/SponsorDetail.razor:70`),
-  [`ErrorMessages`](group-15-common-ui-framework.md#errormessages) (lines 103, 174),
-  [`ResultUiExtensions`](group-15-common-ui-framework.md#resultuiextensions) (lines 109, 118, 184, 226),
+  [`ConferenceRoutePaths`](#conferenceroutepaths) (lines 50, 218 and
+  `.../Pages/Sponsors/SponsorDetail.razor:73`),
+  [`ErrorMessages`](group-15-common-ui-framework.md#errormessages) (`ValidationError`, line 153),
+  [`ResultUiExtensions`](group-15-common-ui-framework.md#resultuiextensions) (lines 106, 163, 205),
   [`ModelValidation`](group-15-common-ui-framework.md#modelvalidation) (line 55),
-  [`CommittedWriteReload`](#committedwritereload) (line 67), and the shared
-  `LoadGuard` (lines 89, 95, 131). Externals: Blazor,
+  [`CommittedWriteReload`](#committedwritereload) (line 66), and the `DetailLoadStateContent` component
+  (`.../Pages/Sponsors/SponsorDetail.razor:18-24`). Externals: Blazor,
   MudBlazor (`MudForm`, `MudAvatar`, `MudImage`, `MudSimpleTable`, `MudDivider`, `MudLink`),
-  `System.Globalization.CultureInfo` (lines 42, 103).
+  `System.Globalization.CultureInfo` (line 42).
 - **Concept introduced, localized enum rendering by convention.** `TierLabel(SponsorTier tier)` (line
   36) is a one-liner: `L[$"Tier.{tier}"].Value`. The enum member's name is interpolated into a resource
   key, so adding a tier means adding a resource entry, not a `switch`. The same helper appears on
-  [`SponsorList`](#sponsorlist) (`.../Pages/Sponsor/SponsorList.razor.cs:36`).
+  [`SponsorList`](#sponsorlist) (`.../Pages/Sponsors/SponsorList.razor.cs:37`).
   `[Rubric §27, Internationalization]` assesses whether every user-visible string is externalized: this
   is the pattern that keeps enums from leaking English identifiers into the UI.
   The second idea, contrasted against [`RoomDetail`](#roomdetail), is the **typed route parameter**.
   `[Parameter] public int Id` (line 29) plus the `{Id:int}` route constraint
-  (`.../Pages/Sponsor/SponsorDetail.razor:1`) pushes the conversion into the router, so the page has no
+  (`.../Pages/Sponsors/SponsorDetail.razor:1`) pushes the conversion into the router, so the page has no
   parse step and a non-numeric URL never reaches this component. The same `_loadedId` reload guard
-  applies (lines 75-84), just typed `int?` (line 58).
-  The page no longer declares its own `IDisposable`, `CancellationTokenSource`, or edit-mode fields: it
-  now extends [`DetailPageBase`](group-15-common-ui-framework.md#detailpagebase), which owns the page-scoped `PageToken` the save, reload
-  and delete calls take (lines 147, 181, 189, 223), and the `IsEditing`/`IsDirty` pair the unsaved-changes guard
-  reads. `StartEditingAsync` opens the editor through `BeginEdit()` (line 154) instead of setting two fields
-  by hand, and both `CancelEditing` (line 162) and the end of `SaveChangesAsync` (line 196)
-  close it through `EndEdit()`, so the dirty flag can never be left set behind a closed editor.
-  `LoadAsync`, though, does not take `PageToken`: it begins a monotonic load generation with
-  `LoadGuard.Begin()` (line 89), passes that token to both fetches (lines 94, 117), re-checks
-  `LoadGuard.IsCurrent(generation)` after the sponsor fetch (line 95), and clears `IsLoading` only for the
-  current generation (lines 131-134, in-code comment lines 129-130), so a superseded response cannot
-  switch off the spinner a newer load just turned on. It is the same protocol
-  [`SessionDetail`](#sessiondetail) uses.
+  applies (lines 74-83), just typed `int?` (line 58).
+  The page declares no `IDisposable`, `CancellationTokenSource`, load-state or edit-mode fields of its
+  own: it extends [`DetailPageBase`](group-15-common-ui-framework.md#detailpagebase), which owns the
+  page-scoped `PageToken` the save, reload and delete calls take (lines 160, 168, 202), and the
+  `IsEditing`/`IsDirty` pair the unsaved-changes guard reads. `StartEditingAsync` opens the editor through
+  `BeginEdit()` (line 133), and both `CancelEditing` (line 141) and the end of `SaveChangesAsync` (line
+  175) close it through `EndEdit()`, so the dirty flag can never be left set behind a closed editor.
+  `LoadAsync`, though, does not take `PageToken`: it starts a load generation with the base's
+  `BeginLoad()` (line 88, `MMCA.Common/Source/Presentation/MMCA.Common.UI/Pages/Common/DetailPageBase.cs:59`),
+  passes that token to both fetches (lines 92, 105), and records the outcome with
+  `CompleteLoad(generation, sponsorResult)` (line 96, `DetailPageBase.cs:78`), which ignores a superseded
+  response and otherwise sets [`DetailLoadState`](group-15-common-ui-framework.md#detailloadstate)
+  `Loaded`, `NotFound` or `Failed`. It is the same protocol [`SessionDetail`](#sessiondetail) uses.
   `[Rubric section 3, Clean Architecture]` (assesses reuse over per-page duplication of a
-  cross-cutting concern): the edit-mode and token plumbing lives once in the shared base, and the
-  load-generation counter once in `LoadGuard`, rather than being repeated per detail page.
+  cross-cutting concern): the edit-mode, token and load-state plumbing lives once in the shared base,
+  and the load-generation counter once in
+  [`LatestLoadGuard`](group-15-common-ui-framework.md#latestloadguard), rather than being repeated per
+  detail page.
   `[Rubric §26, Front-End Security]` assesses outbound-link handling: the two sponsor URLs render as
   `MudLink` with `Target="_blank"` and `rel="noopener noreferrer"`
-  (`.../Pages/Sponsor/SponsorDetail.razor:119,123`), and the whole links block is only rendered when at
-  least one of the three link fields has content (`:110-112`).
+  (`.../Pages/Sponsors/SponsorDetail.razor:122,126`), and the whole links block is only rendered when at
+  least one of the three link fields has content (`:113-115`).
   `[Rubric §21, Accessibility]` assesses whether structure and labelling carry meaning to assistive
   technology: the detail table uses `<th scope="row">` for its labels rather than bold `<td>`
-  (`.../Pages/Sponsor/SponsorDetail.razor:85,89,93`), the logo image gets `Alt="@Sponsor.Name"` (`:59`),
-  and both header icon buttons carry `aria-label` (`:72-73`).
+  (`.../Pages/Sponsors/SponsorDetail.razor:88,92,96`), the logo image gets `Alt="@Sponsor.Name"` (`:62`),
+  and both header icon buttons carry `aria-label` (`:75-76`).
 - **Walkthrough**
   - `EntityName` (line 22) and `Title` (line 31) are localizer lookups; `EventName` (lines 39-42)
     resolves the owning event's display name from the lookup and falls back to the invariant-formatted
     id.
   - `OnInitialized` (lines 44-56) builds the breadcrumbs and the validation delegate (line 55).
-  - `OnParametersSetAsync` (lines 75-84) is a thin reload guard delegating to `LoadAsync`; it is a
-    non-async method that returns `Task.CompletedTask` or `LoadAsync()` directly (lines 79, 83).
-  - `LoadAsync` (lines 86-136) begins a load generation (line 89) and fetches with
-    `GetByIdAsync(Id, true, token)` (line 94), using the guard's token rather than a page-owned
-    `CancellationTokenSource`. Note the second
-    argument: `includeChildren: true`, which [`RoomDetail`](#roomdetail) does not request
-    (`.../Pages/Room/RoomDetail.razor.cs:75` passes the token by name and leaves the flag defaulted).
-    A `NotFound` [`Result`](group-01-result-error-handling.md#result) nulls `Sponsor` and toasts
-    (lines 100-105); any other failure goes through `NotifyOnFailure` (line 109). The event lookup is
-    then loaded once, lazily, with the guard's token (lines 117-121), and `IsLoading` is cleared in the
-    `finally` only for the current generation (lines 127-135).
-  - `StartEditingAsync` (lines 138-160) first asks [`CommittedWriteReload`](#committedwritereload)`.EnsureCurrentAsync`
-    for the record to edit (line 147): unchanged when the page is fresh, a re-read when an earlier save
+  - `OnParametersSetAsync` (lines 74-83) is a thin reload guard delegating to `LoadAsync`; it is a
+    non-async method that returns `Task.CompletedTask` or `LoadAsync()` directly (lines 78, 82).
+  - `LoadAsync` (lines 85-115) begins a load generation (line 88) and fetches with
+    `GetByIdAsync(Id, true, token)` (line 92), using the generation's token rather than a page-owned
+    `CancellationTokenSource`. Note the second argument: `includeChildren: true`, which
+    [`RoomDetail`](#roomdetail) does not request (`.../Pages/Rooms/RoomDetail.razor.cs:79` passes the token
+    by name and leaves the flag defaulted). A not-found, failed or superseded
+    [`Result`](group-01-result-error-handling.md#result) makes `CompleteLoad` return `false` and the method
+    returns without a toast (lines 94-99): the template renders `DetailLoadStateContent` for every state
+    but `Loaded`, with `OnRetry="LoadAsync"` (`.../Pages/Sponsors/SponsorDetail.razor:18-24`). On success
+    it adopts the sponsor (line 101), then loads the event lookup once, lazily, with the same token,
+    reporting a failure through `NotifyOnFailure` and stopping (lines 103-109). There is no `finally` and
+    no page-local spinner flag: the base's `LoadState` drives the loading body.
+  - `StartEditingAsync` (lines 117-139) first asks [`CommittedWriteReload`](#committedwritereload)`.EnsureCurrentAsync`
+    for the record to edit (line 126): unchanged when the page is fresh, a re-read when an earlier save
     committed but its reload failed. When the re-read fails the method returns without opening the editor.
-    Otherwise it swaps `Sponsor` for the current record (line 152), seeds [`SponsorEditModel`](#sponsoreditmodel)
-    from it (line 153) and opens the editor through [`DetailPageBase`](group-15-common-ui-framework.md#detailpagebase)'s `BeginEdit()` (line 154), with an
-    `OperationCanceledException` catch for disposal and render-mode transitions (lines 156-159);
-    `CancelEditing` (line 162) closes it again through `EndEdit()` without touching `Sponsor`.
-  - `SaveChangesAsync` (lines 164-206) validates (lines 171-176), posts `_model.ToUpdated(Sponsor)`
-    (line 181), then re-fetches with `includeChildren: true` (line 189) and hands the outcome to
-    `_writeReload.TryAdopt` (line 190). On success it swaps `Sponsor` for the refreshed instance and
-    toasts `Snackbar.Updated` (lines 192-193); on a failed reload the page is marked stale and the
+    Otherwise it swaps `Sponsor` for the current record (line 131), seeds [`SponsorEditModel`](#sponsoreditmodel)
+    from it (line 132) and opens the editor through [`DetailPageBase`](group-15-common-ui-framework.md#detailpagebase)'s `BeginEdit()` (line 133), with an
+    `OperationCanceledException` catch for disposal and render-mode transitions (lines 135-138);
+    `CancelEditing` (line 141) closes it again through `EndEdit()` without touching `Sponsor`.
+  - `SaveChangesAsync` (lines 143-185) validates (lines 150-155), posts `_model.ToUpdated(Sponsor)`
+    (line 160), then re-fetches with `includeChildren: true` (line 168) and hands the outcome to
+    `_writeReload.TryAdopt` (line 169). On success it swaps `Sponsor` for the refreshed instance and
+    toasts `Snackbar.Updated` (lines 171-172); on a failed reload the page is marked stale and the
     `Snackbar.SavedRefreshFailed` warning shows instead. Either way the edit ends through `EndEdit()`
-    (line 196), because the update already committed (comment, line 188). Because
+    (line 175), because the update already committed (comment, line 167). Because
     [`SponsorEditModel`](#sponsoreditmodel) carries `RowVersion` through the projection, this is the
     round trip that keeps optimistic concurrency meaningful, and the stale-page re-read in
     `StartEditingAsync` is what stops the next save posting the old `RowVersion`.
-  - `DeleteSponsorAsync` (lines 208-237) confirms through `_deleteConfirm.ShowAsync(Sponsor.Name)`
-    (line 215), deletes (line 223), toasts and returns to the list.
-  - The read-only card renders the logo as a `MudAvatar` when present (`:57-60`), the name and localized
-    tier (`:62-63`), then a compact table of event, sort and exhibitor status, where the exhibitor row
+  - `DeleteSponsorAsync` (lines 187-216) confirms through `_deleteConfirm.ShowAsync(Sponsor.Name)`
+    (line 194), deletes (line 202), toasts and returns to the list.
+  - The read-only card renders the logo as a `MudAvatar` when present (`:60-63`), the name and localized
+    tier (`:65-66`), then a compact table of event, sort and exhibitor status, where the exhibitor row
     picks between three localized strings depending on whether the sponsor exhibits and whether a booth
-    number is known (`:95-99`).
+    number is known (`:98-107`).
 - **Why it's built this way**: the sponsor record is the one Conference screen an organizer shows to a
   paying customer, so it renders branding (logo, name, tier) before administrative fields, and it hides
   empty sections entirely rather than showing blank rows.
 - **Where it's used**: the navigation target of [`SponsorCreate`](#sponsorcreate)
-  (`.../Pages/Sponsor/SponsorCreate.razor.cs:113`) and of [`SponsorList`](#sponsorlist)
-  (`.../Pages/Sponsor/SponsorList.razor.cs:99`). Its `QrCodeButton` points at
-  `ConferenceRoutePaths.SponsorVisitLink(Sponsor.Id)` (`.../Pages/Sponsor/SponsorDetail.razor:70`),
-  which resolves to the Engagement-owned `/engage/sponsors/{id}` landing page
-  (`.../MMCA.ADC.Conference.UI/ConferenceRoutePaths.cs:60`), so the printed booth code takes an attendee
-  to the visit flow, not to this management screen.
+  (`.../Pages/Sponsors/SponsorCreate.razor.cs:134`) and of [`SponsorList`](#sponsorlist)
+  (`.../Pages/Sponsors/SponsorList.razor.cs:100`), both through `ConferenceRoutePaths.SponsorDetails`. Its
+  `QrCodeButton` points at `ConferenceRoutePaths.SponsorVisitLink(Sponsor.Id)`
+  (`.../Pages/Sponsors/SponsorDetail.razor:73`), which resolves to the Engagement-owned
+  `/engage/sponsors/{id}` landing page (`.../MMCA.ADC.Conference.UI/ConferenceRoutePaths.cs:64`), so the
+  printed booth code takes an attendee to the visit flow, not to this management screen. Its UI tests
+  are `SponsorDetailTests`, `SponsorDetailSavedRefreshFailedTests` and `SponsorDetailStaleLoadTests`
+  under `MMCA.ADC/Tests/Modules/Conference/MMCA.ADC.Conference.UI.Tests/Pages/Sponsors/`.
 - **Caveats / not-in-source**: what `includeChildren: true` actually pulls back for a sponsor is decided
   by the API's read model, not by this page.
 
 ### EventFilteredListPageBase<TDto>
-> MMCA.ADC.Conference.UI · `MMCA.ADC.Conference.UI.Pages.Common` · `MMCA.ADC.Conference.UI/Pages/Common/EventFilteredListPageBase.cs:25` · Level 9 · class (abstract, generic)
+> MMCA.ADC.Conference.UI · `MMCA.ADC.Conference.UI.Pages.Common` · `MMCA.ADC.Conference.UI/Pages/Common/EventFilteredListPageBase.cs:24` · Level 9 · class (abstract, generic)
 
 - **What it is**: the base class for every Conference list page whose rows are scoped to a single conference event. It adds three things on top of the framework's grid base: the event lookup, a persisted `eventId` filter, and the default (current or next) event resolution. A derived page supplies only what differs: how it saves and restores its own filters, and what it reloads when the scope changes.
 - **Depends on**: [DataGridListPageBase<TDto>](group-15-common-ui-framework.md#datagridlistpagebasetdto) (its base, `:25`), [IEventLookupService](#ieventlookupservice) and its [EventInfo](#eventinfo) record (injected at `:27`, `:31`), [CurrentEventSelector](group-17-conference-domain.md#currenteventselector) (`:3`, `:183`), and the `EventIdentifierType` alias. Externals: `Microsoft.AspNetCore.Components` for `[Inject]` and `RendererInfo`, `System.Globalization.CultureInfo` (`:1`), and an injected `TimeProvider` (`:28`) that is the clock for the default-event computation (`:188`).
@@ -5723,7 +5816,7 @@ The companion [`DependencyInjection`](#dependencyinjection) extension `AddConfer
   - **`ApplyEventFilter`** (`:196-200`): adds `EventId` as an `("equals", value)` pair to the outgoing filter dictionary, and only when an event is selected, so "all events" is the absence of a filter rather than a sentinel.
   - **`OnEventFilterChanged`** (`:203-208`): bound to the picker's `ValueChanged`. It sets the id, marks the scope resolved, and returns the page's `ReloadForEventFilterAsync()` task (a non-async method). A `null` value clears the scope.
   - **`GetEventName` / `SelectedEventName`** (`:211-220`): display helpers that degrade rather than throw, falling back to the raw id and to an empty string respectively when the lookup has nothing.
-- **Why it's built this way**: [Rubric §19, State Management and Data Flow] is the through-line. There is one scope variable, one place that decides its default, one place that persists it, and one place that reloads on change, and the `sealed override` on the two persistence hooks is what keeps it that way as pages are added. [Rubric §11, Security] shows up in the `EventsLoadFailed` flag: a public reader whose lookup failed must not fall through to an unscoped query, so the flag exists specifically to let such a page fail closed, which [PublicSpeakerList](#publicspeakerlist) does through its `ScopeUnresolvedForPublicReader()` check (`PublicSpeakerList.razor.cs:154`). [Rubric §15, Best Practices & Code Quality]: six list pages share this, and each one's event handling is now three overrides.
+- **Why it's built this way**: [Rubric §19, State Management and Data Flow] is the through-line. There is one scope variable, one place that decides its default, one place that persists it, and one place that reloads on change, and the `sealed override` on the two persistence hooks is what keeps it that way as pages are added. [Rubric §11, Security] shows up in the `EventsLoadFailed` flag: a public reader whose lookup failed must not fall through to an unscoped query, so the flag exists specifically to let such a page fail closed, which [PublicSpeakerList](#publicspeakerlist) does through its `ScopeUnresolvedForPublicReader()` check (`PublicSpeakerList.razor.cs:168`). [Rubric §15, Best Practices & Code Quality]: six list pages share this, and each one's event handling is now three overrides.
 - **Where it's used**: six Conference list pages derive from it, each pairing an `@inherits` directive with a partial class: [SponsorList](#sponsorlist) (`MMCA.ADC.Conference.UI/Pages/Sponsors/SponsorList.razor.cs:19`), [PartnerList](#partnerlist) (`Pages/Partners/PartnerList.razor.cs:19`), [SpeakerList](#speakerlist) (`Pages/Speakers/SpeakerList.razor.cs:19`), [RoomList](#roomlist) (`Pages/Rooms/RoomList.razor.cs:13`), [ActivityList](#activitylist) (`Pages/Activities/ActivityList.razor.cs:20`), and [PublicSpeakerList](#publicspeakerlist) (`Pages/Public/Speakers/PublicSpeakerList.razor.cs:32`). The five organizer pages, PartnerList included, follow one shape verbatim (`SavePageFilters`/`RestorePageFilters`, `ReloadForEventFilterAsync => ReloadActiveLayoutAsync()`, `await WaitForEventsAsync()` before each fetch, `ApplyEventFilter(filters)` inside it); the public page is the variant that exercises every extension point, overriding `EventFilterIsUserControlled` (`:52`), `OnEventsLoadingAsync` (`:90`), and re-calling `LoadEventsAndResolveDefaultAsync()` on retry (`:114`).
 
 ### SessionStatusDisplay
@@ -5750,13 +5843,13 @@ The companion [`DependencyInjection`](#dependencyinjection) extension `AddConfer
   [`SessionSelectionDisplay`](#sessionselectiondisplay) share them instead of each page keeping its own
   copy of the same six-case switch.
 - **Where it's used**: [`SessionList`](#sessionlist) (`StatusLabel`,
-  `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/Pages/Sessions/SessionList.razor.cs:98`)
+  `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/Pages/Sessions/SessionList.razor.cs:97`)
   and `SessionSelectionDisplay`
   (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/Pages/Sessions/Selection/SessionSelectionDisplay.cs`).
 
 ### SessionList
 
-> MMCA.ADC.Conference.UI · `MMCA.ADC.Conference.UI.Pages.Sessions` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/Pages/Sessions/SessionList.razor.cs:22` · Level 10 · class (Blazor code-behind)
+> MMCA.ADC.Conference.UI · `MMCA.ADC.Conference.UI.Pages.Sessions` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/Pages/Sessions/SessionList.razor.cs:21` · Level 10 · class (Blazor code-behind)
 
 - **What it is**: the organizer browse page for sessions and the richest list in the Conference UI. It
   carries three filters (free-text title search, session status, and event), enriches each row with room
@@ -6012,11 +6105,11 @@ The companion [`DependencyInjection`](#dependencyinjection) extension `AddConfer
   [IOrganizerEventFeedbackUIService](#iorganizereventfeedbackuiservice).
 - **Depends on**: [AuthenticatedServiceBase](group-15-common-ui-framework.md#authenticatedservicebase)
   (its base, supplying `CreateAuthenticatedClientAsync()` at
-  `MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/Api/AuthenticatedServiceBase.cs:59` and the
+  `MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/Api/AuthenticatedServiceBase.cs:62` and the
   shared static Polly `RetryPolicy` at `:25`),
   [ITokenStorageService](group-15-common-ui-framework.md#itokenstorageservice) (the bearer-token
   source), [PagedReadAll](group-15-common-ui-framework.md#pagedreadall) (the read-every-page loop,
-  `MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/Api/PagedReadAll.cs:19`),
+  `MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/Api/PagedReadAll.cs:18`),
   [HttpResultExecutor](group-15-common-ui-framework.md#httpresultexecutor) and
   [ProblemDetailsResultReader](group-08-auth.md#problemdetailsresultreader) (the railway conversion),
   [PagedCollectionResult<T>](group-01-result-error-handling.md#pagedcollectionresultt) (the paged
@@ -6043,18 +6136,18 @@ The companion [`DependencyInjection`](#dependencyinjection) extension `AddConfer
   - `GetAllAnswersAsync(eventId, ct)` (`:21-45`): hands a per-page delegate to
     [PagedReadAll](group-15-common-ui-framework.md#pagedreadall)`.ReadAllAsync` (`:27`), which calls it
     for pages 1, 2, ... until a page comes back empty or the accumulated count reaches the server's
-    reported total, stopping after 40 pages regardless (`PagedReadAll.cs:28,48-79`). The in-code comment
+    reported total, stopping after 40 pages regardless (`PagedReadAll.cs:27,47-78`). The in-code comment
     (`:25-26`) names the reason: a single request would stop silently at the API's page-size clamp and the
     organizer report would aggregate a truncated answer set. Each page builds
     `{Endpoint}/paged?filters[EventId].operator=equals&filters[EventId].value={eventId}&pageNumber={pageNumber}&pageSize={PagedReadAll.PageSize}&sortColumn=Id&sortDirection=asc&includeChildren=false`
     with `string.Create(CultureInfo.InvariantCulture, ...)` (`:31-32`, culture-invariant so the id
-    renders stably; `PageSize` is 500 at `PagedReadAll.cs:22`, and the stable `Id` ascending sort keeps
+    renders stably; `PageSize` is 500 at `PagedReadAll.cs:21`, and the stable `Id` ascending sort keeps
     consecutive pages from skipping or repeating a row); runs the GET inside
     `HttpResultExecutor.ExecuteAsync` (`:28`) with the request itself wrapped in
     `RetryPolicy.ExecuteAsync` (`:35-37`); and reads the response through
     `ProblemDetailsResultReader.ReadAsync<PagedCollectionResult<EventQuestionAnswerDTO>>` (`:38-39`).
     The accumulated list is then `Map`ped to `IReadOnlyList<EventQuestionAnswerDTO>` (`:44`); the first
-    failed page short-circuits the loop and its failure comes back unchanged (`PagedReadAll.cs:69-73`).
+    failed page short-circuits the loop and its failure comes back unchanged (`PagedReadAll.cs:68-72`).
     The nesting order is the point: the reader turns any *response* into a
     [Result](group-01-result-error-handling.md#result), the executor turns the *absence* of a response
     into one, the retry policy sits inside both, and the paging loop sits outside all three.
@@ -6072,7 +6165,7 @@ The companion [`DependencyInjection`](#dependencyinjection) extension `AddConfer
   [PagedReadAll](group-15-common-ui-framework.md#pagedreadall) keeps the organizer feedback grid
   simple (it still receives one complete list) without inheriting the silent truncation a single
   oversized request would suffer: per its remarks, the API clamps any requested page size to its own
-  maximum (`PagedReadAll.cs:12-18`).
+  maximum (`PagedReadAll.cs:11-17`).
 - **Where it's used**: registered explicitly as
   [IOrganizerEventFeedbackUIService](#iorganizereventfeedbackuiservice) under a comment naming BR-53
   moderation
@@ -6084,10 +6177,10 @@ The companion [`DependencyInjection`](#dependencyinjection) extension `AddConfer
   (`OrganizerFeedbackService.cs:70`) and differs only in resource root, filter key and delete scope.
   It is covered by `OrganizerEventFeedbackServiceTests` in the Conference UI test project.
 - **Caveats / not-in-source**: the read is bounded by `PagedReadAll`'s runaway guard of 40 pages of
-  500 rows, 20,000 answers (`PagedReadAll.cs:22-28`); past that the loop stops. An event with more
+  500 rows, 20,000 answers (`PagedReadAll.cs:21-27`); past that the loop stops. An event with more
   answers than that would still be truncated, and nothing in this class reports it. The server-side
   maximum page size is configured elsewhere (`ApplicationSettings.MaxPageSize`, per the remarks at
-  `PagedReadAll.cs:14`), so whether a deployment lowers it below 500 is not determinable from this file.
+  `PagedReadAll.cs:13`), so whether a deployment lowers it below 500 is not determinable from this file.
 
 ### OrganizerSessionFeedbackService
 
@@ -6177,13 +6270,13 @@ The companion [`DependencyInjection`](#dependencyinjection) extension `AddConfer
   (`Pages/Feedback/OrganizerSessionFeedback.razor.cs:20`).
 - **Caveats / not-in-source**: the read is no longer a single capped call, but it is still bounded:
   [`PagedReadAll`](group-15-common-ui-framework.md#pagedreadall) stops after 40 pages of 500 rows
-  (`MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/Api/PagedReadAll.cs:22-28`), so a session
+  (`MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/Api/PagedReadAll.cs:21-27`), so a session
   with more than 20,000 captured answers would be truncated in the organizer grid, and nothing in this
   class detects that.
 
 ### SpeakerUserSearch
 
-> MMCA.ADC.Conference.UI · `MMCA.ADC.Conference.UI.Pages.Speakers` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/Pages/Speakers/SpeakerUserSearch.cs:12` · Level 4 · class (internal static)
+> MMCA.ADC.Conference.UI · `MMCA.ADC.Conference.UI.Pages.Speakers` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/Pages/Speakers/SpeakerUserSearch.cs:11` · Level 4 · class (internal static)
 
 - **What it is**: the candidate lookup behind the speaker-to-user link picker on [`SpeakerDetail`](#speakerdetail). Given typed text, it returns up to ten distinct users whose email, first name or last name contains it.
 - **Depends on**: the generic [`IEntityService<TEntityDTO, TIdentifierType>`](group-15-common-ui-framework.md#ientityservicetentitydto-tidentifiertype) closed over [`UserListDTO`](group-24-identity-module.md#userlistdto) (`:35`), the standard paged `users` client rather than a bespoke Identity lookup service, and [`Result<T>`](group-01-result-error-handling.md#result) (`:64,73`).
@@ -6195,7 +6288,7 @@ The companion [`DependencyInjection`](#dependencyinjection) extension `AddConfer
   - `FindAsync` (`:35-75`): returns empty for blank input (`:40-43`); starts the three tasks without awaiting each in turn (`:47-49`) via the local `FindByAsync(field)` (`:64-71`, page 1, no sort) and joins them with `Task.WhenAll` (`:51`), so the three round trips overlap; concatenates, then `DistinctBy(u => u.Id)` (`:56`) because a person matching on two fields must appear once.
   - `ItemsOf` (`:73-74`) is a `static` local function, which is the pattern the analyzer baseline pushes toward: no closure over the enclosing method's state.
 - **Why it's built this way**: linking a speaker record to a login is a rare organizer action against a large user set, so the search has to be forgiving about which field the organizer remembers while staying one interaction, not three.
-- **Where it's used**: called only by [`SpeakerDetail`](#speakerdetail)'s `SearchUsersAsync` (`SpeakerDetail.razor.cs:284-285`), which is bound to the `MudAutocomplete`'s `SearchFunc` (`SpeakerDetail.razor:146-148`).
+- **Where it's used**: called only by [`SpeakerDetail`](#speakerdetail)'s `SearchUsersAsync` (`SpeakerDetail.razor.cs:294-295`), which is bound to the `MudAutocomplete`'s `SearchFunc` (`SpeakerDetail.razor:146-148`).
 
 ---
 
@@ -6269,7 +6362,7 @@ The companion [`DependencyInjection`](#dependencyinjection) extension `AddConfer
   - `LoadFrom(SpeakerDTO)` (`:18-32`): null-guards, then copies the ten editable values off the displayed speaker. The doc frames the value plainly (`:13-16`): opening the editor becomes one call rather than ten assignments on the page.
   - `ToUpdated(SpeakerDTO)` (`:41-58`): returns `speaker with { ... }` (`:45`), overriding only the ten edited values plus the recomposed `FullName` (`:49`). Everything else on the loaded record round-trips untouched, and the doc names what that covers (`:34-38`): the identity, the `RowVersion` concurrency token ([ADR-035](https://ivanball.github.io/docs/adr/035-optimistic-concurrency.html)), the linked user, and fields this form does not show, such as the Top Speaker flag. Linking and unlinking is its own action on the detail page (see [`SpeakerDetail`](#speakerdetail)), so `LinkedUserId` cannot be bound here and cannot be lost. `[Rubric §24, Forms, Validation & UX Safety]`.
 - **Why it's built this way**: an edit form that silently drops a field it does not display is the failure this shape removes. A fresh DTO that copies named fields resets any field added later and not listed; the `with` expression inverts the default, so a new field on [`SpeakerDTO`](group-17-conference-domain.md#speakerdto) is preserved unless this model chooses to edit it.
-- **Where it's used**: [`SpeakerDetail`](#speakerdetail) holds one instance (`SpeakerDetail.razor.cs:63`), seeds it in `StartEditing` (`SpeakerDetail.razor.cs:202`) and posts `ToUpdated` from `SaveChangesAsync` (`SpeakerDetail.razor.cs:225`).
+- **Where it's used**: [`SpeakerDetail`](#speakerdetail) holds one instance (`SpeakerDetail.razor.cs:63`), seeds it in `StartEditing` (`SpeakerDetail.razor.cs:202`) and posts `ToUpdated` from `SaveChangesAsync` (`SpeakerDetail.razor.cs:236`).
 
 ---
 
@@ -6324,9 +6417,9 @@ The companion [`DependencyInjection`](#dependencyinjection) extension `AddConfer
 
 ### SpeakerQr
 
-> MMCA.ADC.Conference.UI · `MMCA.ADC.Conference.UI.Pages.Speakers` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/Pages/Speakers/SpeakerQr.razor.cs:24` · Level 6 · class (Blazor code-behind)
+> MMCA.ADC.Conference.UI · `MMCA.ADC.Conference.UI.Pages.Speakers` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/Pages/Speakers/SpeakerQr.razor.cs:23` · Level 6 · class (Blazor code-behind)
 
-- **What it is**: the speaker-facing side of their own QR code. It renders one full-screen code that points at the speaker's PUBLIC profile page, for holding up at the podium or parking on a booth screen (class doc, `SpeakerQr.razor.cs:10-13`).
+- **What it is**: the speaker-facing side of their own QR code. It renders one full-screen code that points at the speaker's PUBLIC profile page, for holding up at the podium or parking on a booth screen (class doc, `SpeakerQr.razor.cs:9-12`).
 - **Depends on**: [`IPublicLinkBuilder`](group-15-common-ui-framework.md#ipubliclinkbuilder) (`:26`), [`ISpeakerUIService`](#ispeakeruiservice) (`:27`), [`ConferenceRoutePaths`](#conferenceroutepaths)'s `PublicSpeakerDetails(id)` route factory (`:62`, defined at `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/ConferenceRoutePaths.cs:52`). Externals: the cascading `Task<AuthenticationState>` (`:29-30`), MudBlazor's `BreadcrumbItem` and `Icons` (`:32,40`), and the `IStringLocalizer<SpeakerQr>` injected by the template (`SpeakerQr.razor:4`). The code image itself is the shared `QrCodeImage` component from `MMCA.Common.UI`, configured in markup (`SpeakerQr.razor:26-30`).
 - **Concept introduced, the payload that needs no fetch and the absolute-URL payload rule.** Two ideas keep this one of the smallest complete pages in the group.
   1. **The payload needs no backend call; only the label does.** The speaker's identity comes from the `speaker_id` JWT claim (`:56`) and the payload string is composed locally (`:62`), so the code itself depends on nothing but the cascading auth state. The class doc states the consequence (`:15-17`): the code renders on the SSR prerender pass as readily as on the interactive pass, which avoids the loading-state and double-fetch problem that pages such as [`SpeakerDashboard`](#speakerdashboard) have to solve. The single read is the name beside the code: after the payload is set, `SpeakerService.GetByIdAsync(speakerId, false, CancellationToken.None)` (`:66`) fetches the linked speaker, and a non-blank `FullName` replaces the account name (`:67-70`). The code comment (`:64-65`) gives the reason: the code opens the speaker profile, so the name beside it is that profile's, and the two differ whenever an organizer linked an account to a speaker record. The class doc adds why the read can succeed on a non-public profile: the speaker service's self-read carve-out (`:17-19`). A failed read is not an error path; the account name set earlier (`:54`) simply stays. `[Rubric §23, Front-End Performance & Rendering]` (assesses network work per view): the payload is still the fetch that does not exist, and only the human-readable label costs a call.
@@ -6388,50 +6481,54 @@ The companion [`DependencyInjection`](#dependencyinjection) extension `AddConfer
 
 ### SpeakerDetail
 
-> MMCA.ADC.Conference.UI · `MMCA.ADC.Conference.UI.Pages.Speakers` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/Pages/Speakers/SpeakerDetail.razor.cs:22` · Level 6 · class (Blazor code-behind)
+> MMCA.ADC.Conference.UI · `MMCA.ADC.Conference.UI.Pages.Speakers` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/Pages/Speakers/SpeakerDetail.razor.cs:23` · Level 6 · class (Blazor code-behind)
 
 - **What it is**: the organizer's speaker console. It loads one speaker with children by route id, inline-edits the profile, shows the answered questions and the speaker's sessions, hosts the category-item panel, links or unlinks a login, and deletes with confirmation.
-- **Depends on**: [`ISpeakerUIService`](#ispeakeruiservice), [`ISessionUIService`](#isessionuiservice), [`ISpeakerDetailLookupService`](#ispeakerdetaillookupservice) returning [`SpeakerDetailLookups`](#speakerdetaillookups), and the generic [`IEntityService<TEntityDTO, TIdentifierType>`](group-15-common-ui-framework.md#ientityservicetentitydto-tidentifiertype) closed over [`UserListDTO`](group-24-identity-module.md#userlistdto) as `UserService` (`:26-29`); [`IToastService`](group-15-common-ui-framework.md#itoastservice) (`:31`); [`SpeakerEditModel`](#speakereditmodel) (`:63`), [`SpeakerUserSearch`](#speakerusersearch) (`:284-285`), [`ModelValidation`](group-15-common-ui-framework.md#modelvalidation) and [`DataAnnotationsModelValidator`](group-15-common-ui-framework.md#dataannotationsmodelvalidator) (`:53`), [`ErrorMessages`](group-15-common-ui-framework.md#errormessages) (`:106,218`), and [`ConferenceRoutePaths`](#conferenceroutepaths) (`:48`). The route `Id` is a typed `[Parameter] SpeakerIdentifierType` (`:33`), no longer a string. It extends [`DetailPageBase`](group-15-common-ui-framework.md#detailpagebase) (`SpeakerDetail.razor:8`), which supplies `PageToken`, `IsEditing`, `IsDirty`, `MarkDirty`, `BeginEdit`, `EndEdit`, the shared `LoadGuard` and the disposal pattern. Externals: MudBlazor's `MudForm`, `MudAutocomplete` and `BreadcrumbItem`, plus the `IStringLocalizer<SpeakerDetail>` from the template.
-- **Concept introduced, the load-generation guard, now carried by the base page.** Every detail page in this group guards against a re-render refetching (`OnParametersSetAsync` compares the typed `Id` against `_loadedId`, `:75-84`). This page used to own a second, page-local generation counter; it now delegates that guard to [`DetailPageBase`](group-15-common-ui-framework.md#detailpagebase)'s `LoadGuard` property, a `LatestLoadGuard` instance (`MMCA.Common/Source/Presentation/MMCA.Common.UI/Pages/Common/DetailPageBase.cs:43`). `LoadAsync` calls `var (token, generation) = LoadGuard.Begin()` at its top (`:89`), which cancels whatever load is already in flight and hands back the token to pass into every fetch, and each awaited step re-checks `LoadGuard.IsCurrent(generation)` before touching page state (`:98`, `:126`, `:178`). The reasoning is unchanged: `_loadedId` is stamped synchronously *before* the await, so two rapid route changes would let a later-completing fetch of the older speaker paint over the newer one, and the generation, not the route id, is authoritative. The `finally` applies the same rule to the spinner (`:143-151`): only the current generation may clear `IsLoading`, because an unconditional clear would switch off a spinner that a newer load just turned on. A second, newer guard concerns **stale view state across route ids**: `LoadAsync` empties `_speakerSessions` right after `Begin()` (`:91-92`), because the list belongs to the previous speaker until this load replaces it, and a failed speaker fetch sets `Speaker = null` before reporting (`:112-115`), because the edit and delete actions are bound to `Speaker` and must not stay live against the previous record under the new id. `[Rubric §19, State Management & Data Flow]`. `[Rubric §19, State Management & Data Flow]` (assesses reconciliation of concurrent updates to view state) and `[Rubric §12, Performance & Scalability]` (the cheap fix is to serialize the loads, which would be slower and still wrong). Moving the guard onto the base means [`SessionDetail`](#sessiondetail) and the module's public detail pages share the identical mechanism instead of each carrying its own counter.
-  Two further mechanisms sit alongside it.
-  1. **Server-side filtering instead of client-side filtering.** `LoadSpeakerSessionsAsync` (`:162-190`) sends a `SpeakerId` equals filter (`:165-168`) with `includeChildren: false` (`:175`) and `sortColumn: "StartsAt"` (`:173`), capped at `MaxSpeakerSessions = 100` (`:36`), threading the same guard token through as `cancellationToken` (`:176`). The remark records what it replaced (`:154-161`): the page used to pull the entire session catalog with all child collections and filter it in memory on `SessionSpeakers`, purely so it could match. `[Rubric §12, Performance & Scalability]` (assesses whether work happens where the data lives).
-  2. **One composite lookup, cached for the page.** The three display lookups arrive in a single `LookupService.GetAllAsync(token)` call, and only when `_lookups is null` (`:123-135`), so re-entering `LoadAsync` after a link or unlink does not refetch them. A failed lookup is reported and stops the load (`:131-134`). `[Rubric §23, Front-End Performance & Rendering]`.
-  Result handling is uniform: `IsNotFound()` gets a dedicated not-found message and a null record (`:103-108`), and every other failure goes through `NotifyOnFailure(Toast, L)` (`:115,228,235,270`), which is the framework's one-line "report whatever went wrong, localized" path.
+- **Depends on**: [`ISpeakerUIService`](#ispeakeruiservice), [`ISessionUIService`](#isessionuiservice), [`ISpeakerDetailLookupService`](#ispeakerdetaillookupservice) returning [`SpeakerDetailLookups`](#speakerdetaillookups), and the generic [`IEntityService<TEntityDTO, TIdentifierType>`](group-15-common-ui-framework.md#ientityservicetentitydto-tidentifiertype) closed over [`UserListDTO`](group-24-identity-module.md#userlistdto) as `UserService` (`:27-30`); [`IToastService`](group-15-common-ui-framework.md#itoastservice) (`:32`); [`SpeakerEditModel`](#speakereditmodel) (`:63`), [`CommittedWriteReload`](#committedwritereload) (`:66`), [`SpeakerUserSearch`](#speakerusersearch) (`:294-295`), [`ModelValidation`](group-15-common-ui-framework.md#modelvalidation) and [`DataAnnotationsModelValidator`](group-15-common-ui-framework.md#dataannotationsmodelvalidator) (`:54`), [`ErrorMessages`](group-15-common-ui-framework.md#errormessages) (`:229`), and [`ConferenceRoutePaths`](#conferenceroutepaths) (`:49`, `:347`). The route `Id` is a typed `[Parameter] SpeakerIdentifierType` (`:34`). It extends [`DetailPageBase`](group-15-common-ui-framework.md#detailpagebase) (`SpeakerDetail.razor:10`), which supplies `PageToken`, `IsEditing`, `IsDirty`, `MarkDirty`, `BeginEdit`, `EndEdit`, the shared `LoadGuard`, the [`DetailLoadState`](group-15-common-ui-framework.md#detailloadstate) `LoadState` with its `BeginLoad` / `CompleteLoad` pair, and the disposal pattern. Externals: MudBlazor's `MudForm`, `MudAutocomplete` and `BreadcrumbItem`, the framework's `DetailLoadStateContent` component the markup renders for every state but `Loaded` (`SpeakerDetail.razor:20-25`), plus the `IStringLocalizer<SpeakerDetail>` from the template.
+- **Concept introduced, the load-generation guard and the load state, both carried by the base page.** Every detail page in this group guards against a re-render refetching (`OnParametersSetAsync` compares the typed `Id` against `_loadedId`, `:78-87`). The guard itself lives on [`DetailPageBase`](group-15-common-ui-framework.md#detailpagebase): its `LoadGuard` property is a [`LatestLoadGuard`](group-15-common-ui-framework.md#latestloadguard) (`MMCA.Common/Source/Presentation/MMCA.Common.UI/Pages/Common/DetailPageBase.cs:45`). `LoadAsync` opens with `var (token, generation) = BeginLoad()` (`:92`), which supersedes the load already in flight through that guard, puts `LoadState` back to `Loading`, and hands back the token to pass into every fetch (`DetailPageBase.cs:59-63`). The speaker fetch's outcome goes through `CompleteLoad(generation, speakerResult)` (`:103`), which changes nothing for a superseded generation and otherwise records `Loaded`, `NotFound` or `Failed` (`DetailPageBase.cs:78-95`); the later awaited steps re-check `LoadGuard.IsCurrent(generation)` before touching page state (`:122`, `:165`). The generation, not the route id, is authoritative because `_loadedId` is stamped synchronously *before* the await, so two rapid route changes would otherwise let a later-completing fetch of the older speaker paint over the newer one. Because the base owns the load state, the page keeps no `IsLoading` flag of its own: the markup reads `LoadState` and renders `DetailLoadStateContent` for a missing or failed speaker, with Retry wired to `LoadAsync` (`SpeakerDetail.razor:20-25`), so a not-found or failed route load raises no toast (comment, `:101-102`). A second guard concerns **stale view state across route ids**: `LoadAsync` empties `_speakerSessions` right after `BeginLoad()` (`:95`), because the list belongs to the previous speaker until this load replaces it, and a failed speaker fetch whose generation is still current sets `Speaker = null` (`:107-110`), because the edit and delete actions are bound to `Speaker` and must not stay live against the previous record under the new id. `[Rubric §19, State Management & Data Flow]` (assesses reconciliation of concurrent updates to view state) and `[Rubric §12, Performance & Scalability]` (the cheap fix is to serialize the loads, which would be slower and still wrong). Keeping the guard and the load state on the base means [`SessionDetail`](#sessiondetail) and the module's other detail pages share the identical mechanism instead of each carrying its own counter and spinner flag.
+  Three further mechanisms sit alongside it.
+  1. **Server-side filtering instead of client-side filtering.** `LoadSpeakerSessionsAsync` (`:149-177`) sends a `SpeakerId` equals filter (`:151-154`) with `includeChildren: false` (`:162`) and `sortColumn: "StartsAt"` (`:160`), capped at `MaxSpeakerSessions = 100` (`:37`), threading the same load token through as `cancellationToken` (`:163`). The remark records what it replaced (`:141-148`): the page used to pull the entire session catalog with all child collections and filter it in memory on `SessionSpeakers`, purely so it could match. `[Rubric §12, Performance & Scalability]` (assesses whether work happens where the data lives).
+  2. **One composite lookup, cached for the page.** The three display lookups arrive in a single `LookupService.GetAllAsync(token)` call (`:121`), and only when `_lookups is null` (`:119-131`), so re-entering `LoadAsync` after a link or unlink does not refetch them. A failed lookup is reported and stops the load (`:127`). `[Rubric §23, Front-End Performance & Rendering]`.
+  3. **A committed save whose reload failed.** `SaveChangesAsync` re-reads the speaker after the update succeeds (`:244`), and the comment states the rule (`:243`): the update committed, so the edit ends even when that reload fails. The reload is handed to [`CommittedWriteReload`](#committedwritereload)'s `TryAdopt` (`:245`): on success the page adopts the fresh record, with its new `RowVersion`, and shows `Snackbar.Updated`; on failure the helper marks the page stale and shows the localized `Snackbar.SavedRefreshFailed` warning instead of reporting the save as failed (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/Pages/Common/CommittedWriteReload.cs:31-42`). `EndEdit()` runs either way (`:251`). The stale mark is consumed by `EnsureCurrentSpeakerAsync` (`:205-215`): before the next edit opens it returns the shown speaker unchanged unless the page is stale, in which case it re-reads it (`:208`, `CommittedWriteReload.cs:55-76`), so the form and the next save carry the row version the server holds rather than one it would refuse as a concurrency conflict. A failed re-read is reported and the editor stays closed. `[Rubric §24, Forms, Validation & UX Safety]` and `[Rubric §29, Resilience & Business Continuity]`.
+  Result handling is uniform outside the route load: every failure goes through `NotifyOnFailure(Toast, L)` (`:127,172,239,280`), which is the framework's one-line "report whatever went wrong, localized" path, and link and unlink show their own fixed localized failure messages (`:309`, `:334`).
 - **Walkthrough**
-  - `OnInitialized` (`:42-54`): breadcrumbs plus the shared validation delegate over `_model` (`:53`).
-  - `OnParametersSetAsync` (`:75-84`, a non-async method that returns `LoadAsync()` directly) then `LoadAsync` (`:86-156`): begin the guard (`:89`), clear the previous speaker's sessions (`:92`), fetch with children using the typed `Id` as is (`:97`; the route parameter is a `SpeakerIdentifierType`, so the old defensive string parse and its `Guid.Empty` fallback are gone), null `Speaker` on a failed load (`:114`), fetch the lookups once (`:123-135`), then the sessions with the same `Id` (`:137`).
-  - Edit cycle: `StartEditing` (`:195-204`) seeds [`SpeakerEditModel`](#speakereditmodel) from the loaded record and calls the base's `BeginEdit()`; `CancelEditing` (`:206`) is one call to `EndEdit()`, which clears the dirty flag the unsaved-changes guard reads (`SpeakerDetail.razor:13`). `SaveChangesAsync` (`:208-251`) validates the form, posts `_model.ToUpdated(Speaker)` (`:225`), then **re-fetches** the speaker (`:232`) so the page shows the server's version, including the new `RowVersion` for the next edit.
-  - `DeleteSpeakerAsync` (`:253-281`): confirms through the shared `DeleteConfirmation` dialog seeded with the speaker's full name (`:260`), and treats anything other than exactly `true` as a cancel, so a dismissed dialog is not a delete.
-  - Link and unlink (`:284-335`): `SearchUsersAsync` delegates to [`SpeakerUserSearch`](#speakerusersearch), passing the injected `UserService` (`:284-285`); `OnUserPickedAsync` (`:287-310`) posts `LinkUserAsync` with the picked user's `Id` (`:296`; the DTO key is `Id`, not the old `UserId`) and reloads; `UnlinkUserAsync` (`:312-335`) is the mirror. Both reload through `LoadAsync` rather than patching local state, which is exactly why the guard matters: a link followed quickly by an unlink starts two loads.
-  - `GetQuestionText` (`:192-193`) resolves an answered question's text from the cached lookups with an id fallback.
-- **Why it's built this way**: this page is the widest read surface in the organizer area, so it composes four services rather than growing one. Delegating the chip panel to [`SpeakerCategoryItemsPanel`](#speakercategoryitemspanel), the candidate search to [`SpeakerUserSearch`](#speakerusersearch), the field rules to [`SpeakerFormModel`](#speakerformmodel), and the edit lifecycle and load guard to [`DetailPageBase`](group-15-common-ui-framework.md#detailpagebase) is what keeps the code-behind at load, save, delete and link. `[Rubric §15, Best Practices & Code Quality]`.
-- **Where it's used**: the `/speakers/{Id}` route with a bare `[Authorize]` (`SpeakerDetail.razor:1-2`), reached from [`SpeakerList`](#speakerlist) rows and from [`SpeakerCreate`](#speakercreate)'s success redirect. Session rows link straight to [`SessionDetail`](#sessiondetail) through a `MudLink` built in the markup from `ConferenceRoutePaths.SessionDetails(session.Id)`; there is no code-behind navigation method for it. It edits the aggregate the [`Speaker`](group-17-conference-domain.md#speaker) entity models.
+  - `OnInitialized` (`:43-55`): breadcrumbs plus the shared validation delegate over `_model` (`:54`).
+  - `OnParametersSetAsync` (`:78-87`, a non-async method that returns `LoadAsync()` directly) then `LoadAsync` (`:89-139`): begin the load (`:92`), clear the previous speaker's sessions (`:95`), fetch with children using the typed `Id` as is (`:99`), record the outcome and null `Speaker` on a current failed load (`:103-110`), fetch the lookups once (`:119-131`), then the sessions with the same `Id` (`:133`).
+  - Edit cycle: `StartEditingAsync` (`:182-198`) asks `EnsureCurrentSpeakerAsync` for the record to edit (a fresh read only when the page is stale), seeds [`SpeakerEditModel`](#speakereditmodel) from it (`:191`) and calls the base's `BeginEdit()` (`:192`); `CancelEditing` (`:217`) is one call to `EndEdit()`, which clears the dirty flag the unsaved-changes guard reads (`SpeakerDetail.razor:15`). `SaveChangesAsync` (`:219-261`) validates the form (an invalid form shows `ErrorMessages.ValidationError`, `:229`), posts `_model.ToUpdated(Speaker)` (`:236`), then **re-fetches** the speaker (`:244`) through the committed-save handling above, so the page shows the server's version, including the new `RowVersion` for the next edit.
+  - `DeleteSpeakerAsync` (`:263-291`): confirms through the shared `DeleteConfirmation` dialog seeded with the speaker's full name (`:270`), and treats anything other than exactly `true` as a cancel, so a dismissed dialog is not a delete.
+  - Link and unlink (`:294-345`): `SearchUsersAsync` delegates to [`SpeakerUserSearch`](#speakerusersearch), passing the injected `UserService` (`:294-295`); `OnUserPickedAsync` (`:297-320`) posts `LinkUserAsync` with the picked user's `Id` (`:306`) and reloads (`:314`); `UnlinkUserAsync` (`:322-345`) is the mirror (`:339`). Both reload through `LoadAsync` rather than patching local state, which is exactly why the guard matters: a link followed quickly by an unlink starts two loads.
+  - `GetQuestionText` (`:179-180`) resolves an answered question's text from the cached lookups with an id fallback.
+- **Why it's built this way**: this page is the widest read surface in the organizer area, so it composes four services rather than growing one. Delegating the chip panel to [`SpeakerCategoryItemsPanel`](#speakercategoryitemspanel), the candidate search to [`SpeakerUserSearch`](#speakerusersearch), the field rules to [`SpeakerFormModel`](#speakerformmodel), the stale-after-save rule to [`CommittedWriteReload`](#committedwritereload), and the edit lifecycle, load guard and load state to [`DetailPageBase`](group-15-common-ui-framework.md#detailpagebase) is what keeps the code-behind at load, save, delete and link. `[Rubric §15, Best Practices & Code Quality]`.
+- **Where it's used**: the `/speakers/{Id:guid}` route, restricted to `RoleNames.Organizer` (`SpeakerDetail.razor:1-2`), reached from [`SpeakerList`](#speakerlist) rows and from [`SpeakerCreate`](#speakercreate)'s success redirect. Session rows link straight to [`SessionDetail`](#sessiondetail) through a `MudLink` built in the markup from `ConferenceRoutePaths.SessionDetails(session.Id)` (`SpeakerDetail.razor:210`); there is no code-behind navigation method for it. It edits the aggregate the [`Speaker`](group-17-conference-domain.md#speaker) entity models.
 
 ---
 
 ### SpeakerDashboard
 
-> MMCA.ADC.Conference.UI · `MMCA.ADC.Conference.UI.Pages.Speakers` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/Pages/Speakers/SpeakerDashboard.razor.cs:23` · Level 9 · class (Blazor code-behind)
+> MMCA.ADC.Conference.UI · `MMCA.ADC.Conference.UI.Pages.Speakers` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/Pages/Speakers/SpeakerDashboard.razor.cs:25` · Level 9 · class (Blazor code-behind)
 
-- **What it is**: the signed-in speaker's own console. It shows their profile with an inline editor, the sessions they present at the current or next event, the bookmark count per session, and their per-session feedback on demand (class doc, `:13-19`).
-- **Depends on**: [`ISpeakerUIService`](#ispeakeruiservice) (`:24`), [`ISpeakerDashboardUIService`](#ispeakerdashboarduiservice) (`:25`), [`IEventLookupService`](#ieventlookupservice) (`:26`), `AuthenticationStateProvider` (`:27`), [`IToastService`](group-15-common-ui-framework.md#itoastservice) (`:28`), `TimeProvider` (`:29`), [`SpeakerDTO`](group-17-conference-domain.md#speakerdto) (`:42`), [`SessionDTO`](group-17-conference-domain.md#sessiondto), [`SessionFeedbackDTO`](group-17-conference-domain.md#sessionfeedbackdto) (`:46-50`), [`CurrentEventSelector`](group-17-conference-domain.md#currenteventselector) with [`EventInfo`](#eventinfo) (`:175,183-188`), the `LifetimeToken()` extension from [`ComponentLifetimeExtensions`](group-15-common-ui-framework.md#componentlifetimeextensions) (`:37`), and the `IStringLocalizer<SpeakerDashboard>` from the template.
-- **Concept introduced, the claim-scoped self-service page.** Four mechanisms distinguish this from the organizer pages in this unit.
-  1. **Identity comes from the token, not the route.** There is no `[Parameter]` id: the speaker is read from the `speaker_id` claim (`:90-100`), and a missing or unparseable claim sets `_hasSpeakerId = false` (`:95`) and renders one informational alert (`SpeakerDashboard.razor:19-21`). The server enforces the same scope; the claim just decides what this page asks for. `[Rubric §11, Security]` (assesses that a self-service view derives its subject from the authenticated principal, [ADR-004](https://ivanball.github.io/docs/adr/004-authentication-dual-fetch.html)) and `[Rubric §26, Front-End Security]`.
-  2. **Skip the loads on the prerender pass.** `OnInitializedAsync` returns immediately when `!RendererInfo.IsInteractive` (`:82-85`), with the comment recording exactly what that saves: the profile, the sessions and the per-session bookmark counts used to run twice per visit, once for SSR prerender and once for the interactive instance (`:79-81`). The prerender pass shows the loading skeleton instead. `[Rubric §23, Front-End Performance & Rendering]` and [ADR-056](https://ivanball.github.io/docs/adr/056-blazor-render-mode-strategy.html).
-  3. **One batched count call.** `GetSessionBookmarkCountsAsync(_speakerId, sessionIds, ...)` (`:150`) returns every count from one grouped query; the comment records that each count was previously its own cross-service hop, HTTP to Conference to gRPC to Engagement (`:143-145`). The result is best effort: a failure is ignored with no snackbar so the dashboard still renders (`:148-149`). `[Rubric §12, Performance & Scalability]` and `[Rubric §29, Resilience & Business Continuity]`.
-  4. **Every await reads a safe lifetime token.** The page's `_cts` (`:32`) is cancelled and then disposed, and reading `Token` off a disposed source throws `ObjectDisposedException`. A private `LifetimeToken` property (`:37`) forwards to the `LifetimeToken()` extension (`MMCA.Common/Source/Presentation/MMCA.Common.UI/Common/ComponentLifetimeExtensions.cs:26`), which returns an already-cancelled token once the source is cancelled, disposed or null, so a load that resumes after the user navigated away stops through the `OperationCanceledException` path (`:159-162`) instead of throwing. Every service call passes it: the profile read (`:103`), sessions (`:121`), counts (`:150`), event lookup (`:178`), update (`:244`), reload (`:256`) and feedback (`:295`). `[Rubric §19, State Management & Data Flow]`.
-  A fifth, smaller mechanism is the **unsaved-changes signal**. A private `IsDirty` property (`:69`) forwards to `HasUnsavedProfileEdits()` (`:211-215`), which is true only while the editor is open and any of the six `_edit*` fields differs from the loaded `Speaker`; `Differs` (`:218-219`) compares ordinally and treats null and empty as equal, so clearing a never-set field is not an edit. The check lives in a method because a property reading `_isEditingProfile` directly trips IDE0032 (comment at `:209-210`). Closing the editor, by save or cancel, clears the flag. `[Rubric §24, Forms, Validation & UX Safety]`.
-  The read scope is worth stating explicitly, because the class doc does (`:16-19`): a speaker is not a privileged reader, so the server returns only publicly visible sessions (accepted-or-unset), which means a submission still under review does not appear here. The empty-state copy names that. `[Rubric §11, Security]`.
-  Reads go through [`ISpeakerDashboardUIService`](#ispeakerdashboarduiservice) rather than the shared sessions service on purpose: the comment at `:118-120` records that the dashboard path bypasses the shared sessions output cache, so a just-made speaker assignment shows immediately instead of lagging behind a cached public list.
+- **What it is**: the signed-in speaker's own console. It shows their profile with an inline editor, the sessions they present at the current or next event, the bookmark count per session, and their per-session feedback on demand (class doc, `:17-24`).
+- **Depends on**: [`ISpeakerUIService`](#ispeakeruiservice) (`:27`), [`ISpeakerDashboardUIService`](#ispeakerdashboarduiservice) (`:28`), [`IEventLookupService`](#ieventlookupservice) (`:29`), `AuthenticationStateProvider` (`:30`), [`IToastService`](group-15-common-ui-framework.md#itoastservice) (`:31`), `TimeProvider` (`:32`), [`LatestLoadGuard`](group-15-common-ui-framework.md#latestloadguard) (`:43`), [`DetailLoadState`](group-15-common-ui-framework.md#detailloadstate) (`:49`), [`CommittedWriteReload`](#committedwritereload) (`:76`), [`SpeakerDTO`](group-17-conference-domain.md#speakerdto) (`:51`), [`SessionDTO`](group-17-conference-domain.md#sessiondto), [`SessionFeedbackDTO`](group-17-conference-domain.md#sessionfeedbackdto) (`:55-61`), [`CurrentEventSelector`](group-17-conference-domain.md#currenteventselector) with [`EventInfo`](#eventinfo) (`:221-235`), the `LifetimeToken()` extension from [`ComponentLifetimeExtensions`](group-15-common-ui-framework.md#componentlifetimeextensions) (`:39`), the framework's `DetailLoadStateContent` component in the markup (`SpeakerDashboard.razor:22-27`), and the `IStringLocalizer<SpeakerDashboard>` from the template.
+- **Concept introduced, the claim-scoped self-service page.** Five mechanisms distinguish this from the organizer pages in this unit.
+  1. **Identity comes from the token, not the route.** There is no `[Parameter]` id: the speaker is read from the `speaker_id` claim (`:116-122`), and a missing or unparseable claim sets `_hasSpeakerId = false` with the load state `Loaded` (`:121-122`), which renders one informational alert (`SpeakerDashboard.razor:16-20`). The server enforces the same scope; the claim just decides what this page asks for. `[Rubric §11, Security]` (assesses that a self-service view derives its subject from the authenticated principal, [ADR-004](https://ivanball.github.io/docs/adr/004-authentication-dual-fetch.html)) and `[Rubric §26, Front-End Security]`.
+  2. **Skip the loads on the prerender pass.** `OnInitializedAsync` returns `RendererInfo.IsInteractive ? LoadAsync() : Task.CompletedTask` (`:95`), with the comment recording exactly what that saves: the profile, the sessions and the per-session bookmark counts used to run twice per visit, once for SSR prerender and once for the interactive instance (`:92-94`). The prerender pass shows the loading skeleton instead. `[Rubric §23, Front-End Performance & Rendering]` and [ADR-056](https://ivanball.github.io/docs/adr/056-blazor-render-mode-strategy.html).
+  3. **One batched count call.** `GetSessionBookmarkCountsAsync(_speakerId, sessionIds, token)` (`:211`) returns every count from one grouped query; the comment records that each count was previously its own cross-service hop, HTTP to Conference to gRPC to Engagement (`:204-206`). The result is best effort: a failure is ignored with no snackbar so the dashboard still renders (`:209-210`), and the counts are applied only when the call succeeded and its load is still current (`:212`). `[Rubric §12, Performance & Scalability]` and `[Rubric §29, Resilience & Business Continuity]`.
+  4. **Its own load guard and load state, because it has no route.** The page is not a [`DetailPageBase`](group-15-common-ui-framework.md#detailpagebase), so it carries a private `LatestLoadGuard _load` (`:43`), which the comment says supersedes a load still in flight when Retry starts another (`:41-42`), and a `DetailLoadState _loadState` (`:49`) that keeps a missing profile and a profile that could not be fetched as separate body states (`:47-48`). `LoadAsync` (`:102-161`) is both the initial load and the Retry action (doc, `:98-101`): it begins the guard (`:104`), resets the state to `Loading` (`:105`), and returns without touching page state if a newer load has started by the time the authentication state (`:111`) or the profile (`:132`) arrives. A failed profile fetch records `NotFound` or `Failed` (`:139`) and raises no toast; the markup renders `DetailLoadStateContent` for any state but `Loaded`, with Retry wired to `LoadAsync` (`SpeakerDashboard.razor:22-27`). The sessions are a secondary load, `LoadSessionsAsync` (`:167-219`): the profile is already on screen, so a failed session read keeps its `Snackbar.LoadFailed` toast (`:180`, doc `:163-166`), and each of its awaits re-checks the generation (`:173`, `:189`, `:212`). `[Rubric §19, State Management & Data Flow]`.
+  5. **Handlers read a safe lifetime token.** The page's `_cts` (`:34`) is cancelled and then disposed (`:385-386`), and reading `Token` off a disposed source throws `ObjectDisposedException`. A private `LifetimeToken` property (`:39`) forwards to the `LifetimeToken()` extension (`MMCA.Common/Source/Presentation/MMCA.Common.UI/Common/ComponentLifetimeExtensions.cs:26`), which returns an already-cancelled token once the source is cancelled, disposed or null, so a call that resumes after the user navigated away stops through its `OperationCanceledException` path instead of throwing. The user-driven calls pass it: the edit-time re-read (`:244`), the update (`:301`), the post-save reload (`:314`) and feedback (`:351`). The load path passes the guard's token instead (`:131`, `:172`, `:188`, `:211`), and `Dispose` disposes the guard as well (`:384`).
+  A smaller mechanism is the **unsaved-changes signal**. A private `IsDirty` property (`:82`) forwards to `HasUnsavedProfileEdits()` (`:268-272`), which is true only while the editor is open and any of the six `_edit*` fields differs from the loaded `Speaker`; `Differs` (`:275-276`) compares ordinally and treats null and empty as equal, so clearing a never-set field is not an edit. The check lives in a method because a property reading `_isEditingProfile` directly trips IDE0032 (comment at `:266-267`). Closing the editor, by save or cancel, clears the flag. `[Rubric §24, Forms, Validation & UX Safety]`.
+  The profile editor also follows the **committed-save rule** [`SpeakerDetail`](#speakerdetail) uses. After the update succeeds, `SaveProfileAsync` re-reads the profile (`:314`) and hands the result to [`CommittedWriteReload`](#committedwritereload)'s `TryAdopt` (`:315`): a successful reload is adopted and shows `Snackbar.ProfileUpdated`, a failed one marks the page stale and shows `Snackbar.SavedRefreshFailed`, and the editor closes either way (comment `:313`, `:321`). The next `StartEditingProfileAsync` then opens on a fresh read through `EnsureCurrentAsync` when the page is stale (`:244`, comment `:241-242`), so its fields and the row version the save posts come from what the server holds. `[Rubric §29, Resilience & Business Continuity]`.
+  The read scope is worth stating explicitly, because the class doc does (`:21-23`): a speaker is not a privileged reader, so the server returns only publicly visible sessions (accepted-or-unset), which means a submission still under review does not appear here. The empty-state copy names that. `[Rubric §11, Security]`.
+  Reads go through [`ISpeakerDashboardUIService`](#ispeakerdashboarduiservice) rather than the shared sessions service on purpose: the comment at `:169-171` records that the dashboard path bypasses the shared sessions output cache, so a just-made speaker assignment shows immediately instead of lagging behind a cached public list.
 - **Walkthrough**
-  - State (`:41-69`): the claim flag and id, the full session list and the event-narrowed one, the current event name, and four collections keyed by session id, `_bookmarkCounts`, `_sessionFeedback`, `_expandedSessions` and `_feedbackLoading`, plus the profile edit fields and the derived `IsDirty` (`:69`).
-  - `OnInitializedAsync` (`:71-173`): breadcrumbs, the interactivity gate, the claim read, the profile load (a not-found renders the empty dashboard without a toast, `:104-113`), the session load ordered by `StartsAt` (`:128`), the current-event narrowing (`:130-141`), and the batched counts. The outer `catch (Exception)` (`:163-168`) is explained in place: the authentication state provider is the one collaborator that still reports failure by throwing, while everything else returns a [`Result`](group-01-result-error-handling.md#result).
-  - `ResolveCurrentEventAsync` (`:175-189`): non-critical by design (comment, `:177`), it returns null on a failed lookup and the page then shows all of the speaker's sessions rather than none. "Now" is the injected `TimeProvider.GetUtcNow().UtcDateTime` (`:188`), not the static clock.
-  - Profile edit (`:191-275`): `StartEditingProfile` copies six fields into `_edit*` shadow fields (`:198-203`); `CancelEditingProfile` (`:207`) just closes the editor, which also clears `IsDirty`; `SaveProfileAsync` (`:221`) builds the update as `Speaker with { ... }` over the loaded record (`:234-242`), overriding only the six edited fields, so the identity, `RowVersion` and every field the speaker may not edit round-trip unchanged. The comment (`:231-233`) names the case this protects: the Top Speaker flag is preserved, so an organizer who is also the linked speaker does not reset it by saving a bio. It then posts (`:244`). A failed update no longer always shows the fixed message: the comment (`:247-249`) says a refusal the API stated (an invalid social URL, say) shows the API's own localized message, and only an unexpected fault (a 500, a transport failure, a timeout) falls back to `Snackbar.ProfileUpdateFailed` (`:250-252`), by testing `HasErrorType(ErrorType.Unexpected)` and otherwise `LocalizedErrorMessage(L)` (ADR-027 Decision 9 carve-out). It then re-fetches (`:256`) and leaves edit mode (`:265`). This is the same `with` shape [`SpeakerEditModel`](#speakereditmodel) uses for the organizer editor.
-  - `ToggleFeedbackAsync` (`:277-315`): the `HashSet.Add` return value doubles as the toggle (`:279-283`), an already-cached session returns immediately (`:285-288`), and the fetch sets a per-session loading flag with an explicit `StateHasChanged()` (`:290-291`) because the spinner has to appear before the await. A not-found is treated as "no feedback captured yet" and left to the panel's empty state rather than reported (`:300-305`). `[Rubric §23, Front-End Performance & Rendering]`: feedback is fetched per session on first expand, never for the whole list.
-- **Why it's built this way**: the dashboard is the one page a speaker sees on conference day, so it favors rendering something useful over rendering everything: a failed count load, a failed event lookup, or missing feedback each degrade to a smaller view rather than an error page.
+  - State (`:43-82`): the load guard and load state, the claim flag and id, the full session list and the event-narrowed one, the current event name, and four collections keyed by session id, `_bookmarkCounts`, `_sessionFeedback`, `_expandedSessions` and `_feedbackLoading`, plus the profile edit fields, the `_writeReload` tracker (`:76`) and the derived `IsDirty` (`:82`).
+  - `OnInitializedAsync` (`:84-96`): breadcrumbs, then the interactivity gate. `LoadAsync` (`:102-161`): the guard, the claim read, the profile load, then `LoadSessionsAsync` (`:146`). The outer `catch (Exception)` (`:152-160`) is explained in place: the authentication state provider is the one collaborator that still reports failure by throwing, so it lands here and sets `Failed` (for the current generation only, `:158`), while everything else returns a [`Result`](group-01-result-error-handling.md#result).
+  - `LoadSessionsAsync` (`:167-219`): the session load through the dashboard service (`:172`) ordered by `StartsAt` (`:184`), the current-event narrowing (`:188-202`), and the batched counts (`:211-218`).
+  - `ResolveCurrentEventAsync` (`:221-235`): takes the load's token, is non-critical by design (comment, `:223`), and returns null on a failed lookup, so the page then shows all of the speaker's sessions rather than none. "Now" is the injected `TimeProvider.GetUtcNow().UtcDateTime` (`:234`), not the static clock.
+  - Profile edit (`:237-331`): `StartEditingProfileAsync` copies six fields from the current record into `_edit*` shadow fields (`:250-255`); `CancelEditingProfile` (`:264`) just closes the editor, which also clears `IsDirty`; `SaveProfileAsync` (`:278`) builds the update as `Speaker with { ... }` over the loaded record (`:291-299`), overriding only the six edited fields, so the identity, `RowVersion` and every field the speaker may not edit round-trip unchanged. The comment (`:288-290`) names the case this protects: the Top Speaker flag is preserved, so an organizer who is also the linked speaker does not reset it by saving a bio. It then posts (`:301`). A failed update does not always show the fixed message: the comment (`:304-306`) says a refusal the API stated (an invalid social URL, say) shows the API's own localized message, and only an unexpected fault (a 500, a transport failure, a timeout) falls back to `Snackbar.ProfileUpdateFailed` (`:307-309`), by testing `HasErrorType(ErrorType.Unexpected)` and otherwise `LocalizedErrorMessage(L)` (ADR-027 Decision 9 carve-out). It then re-fetches (`:314`) and leaves edit mode (`:321`). This is the same `with` shape [`SpeakerEditModel`](#speakereditmodel) uses for the organizer editor.
+  - `ToggleFeedbackAsync` (`:333-371`): the `HashSet.Add` return value doubles as the toggle (`:335-339`), an already-cached session returns immediately (`:341-344`), and the fetch sets a per-session loading flag with an explicit `StateHasChanged()` (`:346-347`) because the spinner has to appear before the await. A not-found is treated as "no feedback captured yet" and left to the panel's empty state rather than reported (`:356-361`). `[Rubric §23, Front-End Performance & Rendering]`: feedback is fetched per session on first expand, never for the whole list.
+- **Why it's built this way**: the dashboard is the one page a speaker sees on conference day, so it favors rendering something useful over rendering everything: a failed count load, a failed event lookup, or missing feedback each degrade to a smaller view rather than an error page, and a failed profile fetch is a retryable page state rather than a dead end.
 - **Where it's used**: the `/speaker/dashboard` route with a bare `[Authorize]` (`SpeakerDashboard.razor:1-2`); the claim, not the role, decides what it can show. It reads the same aggregate [`SpeakerDetail`](#speakerdetail) edits.
-- **Caveats / not-in-source**: the profile editor here does **not** use [`SpeakerFormModel`](#speakerformmodel). It binds six loose `_edit*` fields (`:57-62`) and its caps come from `SpeakerDTO` constants applied as MudBlazor `MaxLength` / `Counter` affordances in markup (`SpeakerDashboard.razor:42-55`), so it has no DataAnnotations pass and its `MudForm` (`:63`) is never validated in the code-behind. The organizer create and edit forms share their rules; this third editing surface does not.
+- **Caveats / not-in-source**: the profile editor here does **not** use [`SpeakerFormModel`](#speakerformmodel). It binds six loose `_edit*` fields (`:66-71`) and its caps come from `SpeakerDTO` constants applied as MudBlazor `MaxLength` / `Counter` affordances in markup (`SpeakerDashboard.razor:44-57`), so it has no DataAnnotations pass and its `MudForm` (`:72`) is never validated in the code-behind. The organizer create and edit forms share their rules; this third editing surface does not.
 
 ---
 
@@ -6921,7 +7018,7 @@ The companion [`DependencyInjection`](#dependencyinjection) extension `AddConfer
 
 ### FeedbackQuestionLoader
 
-> MMCA.ADC.Conference.UI · `MMCA.ADC.Conference.UI.Pages.Feedback` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/Pages/Feedback/FeedbackQuestionLoader.cs:17` · Level 5 · internal static class (helper)
+> MMCA.ADC.Conference.UI · `MMCA.ADC.Conference.UI.Pages.Feedback` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/Pages/Feedback/FeedbackQuestionLoader.cs:16` · Level 5 · internal static class (helper)
 
 - **What it is**: a one-method helper that reads **every** feedback question of one entity type
   (`"Event"` or `"Session"`), paging until the server's reported total is reached, so an organizer
@@ -6977,63 +7074,73 @@ The companion [`DependencyInjection`](#dependencyinjection) extension `AddConfer
   [`IQuestionUIService`](#iquestionuiservice) (line 20),
   [`IEventLookupService`](#ieventlookupservice) (line 21) returning [`EventInfo`](#eventinfo),
   [`IToastService`](group-15-common-ui-framework.md#itoastservice) (line 22), and
-  [`FeedbackQuestionLoader`](#feedbackquestionloader) (line 72); the
+  [`FeedbackQuestionLoader`](#feedbackquestionloader) (line 86); the
   [`QuestionDTO`](group-17-conference-domain.md#questiondto) and
   [`EventQuestionAnswerDTO`](group-17-conference-domain.md#eventquestionanswerdto) shapes;
   [`ConferenceRoutePaths`](#conferenceroutepaths). Externals: Blazor
-  `[Parameter]`, MudBlazor (`MudRating`, `MudCard`, `BreadcrumbItem`), and the `PageLoadingState` /
-  `PageErrorState` components from `MMCA.Common.UI`.
-- **Concept introduced, the inline page-level error state.** Unlike the create and detail pages, which
-  toast their failures, this page keeps a `_loadError` string (line 37) and renders `PageErrorState`
-  **instead of** the body when the load failed (`.../Pages/Feedback/OrganizerEventFeedback.razor:17-20`).
-  The distinction is deliberate: a toast expires, and a feedback page that silently shows zero responses
-  after a failed fetch reads as "nobody answered". A missing event sets the same field with
-  `L["Error.EventNotFound"]` (line 66) rather than the generic message.
+  `[Parameter]`, MudBlazor (`MudCard`, `MudIconButton`, `BreadcrumbItem`), and from `MMCA.Common.UI` the
+  `PageLoadingState` and `DetailLoadStateContent` components, the
+  [`DetailLoadState`](group-15-common-ui-framework.md#detailloadstate) enum, and
+  [`RatingStars`](group-15-common-ui-framework.md#ratingstars).
+- **Concept introduced, the inline page-level error state with a classified Retry.** Unlike the create
+  and detail pages, which toast their failures, this page keeps a `_loadError` string (line 37) and
+  renders `DetailLoadStateContent` **instead of** the body when the load failed
+  (`.../Pages/Feedback/OrganizerEventFeedback.razor:17-24`). The distinction is deliberate: a toast
+  expires, and a feedback page that silently shows zero responses after a failed fetch reads as "nobody
+  answered". A second field, `_loadNotFound` (line 40), records whether the error is a missing record
+  rather than a failed load: a missing event sets it together with `L["Error.EventNotFound"]`
+  (lines 79-80), and the template maps it to `DetailLoadState.NotFound` versus `DetailLoadState.Failed`
+  (`.../OrganizerEventFeedback.razor:20`). Only the failed state offers Retry, wired as
+  `OnRetry="LoadAsync"` (`.../OrganizerEventFeedback.razor:23`): retrying a fetch can succeed, retrying
+  a nonexistent event cannot.
   `[Rubric §19, State Management & Data Flow]` assesses where view state lives and how failure is
-  represented: loading, error, empty, and populated are four distinct rendered states driven by
-  `IsLoading` (line 35), `_loadError`, and the two collections.
+  represented: loading, not-found, failed, empty, and populated are distinct rendered states driven by
+  `IsLoading` (line 35), `_loadError`, `_loadNotFound`, and the two collections.
   `[Rubric §30, Compliance, Privacy & Data Governance]` assesses control over user-submitted content:
   answer deletion is the organizer's moderation lever over free-text feedback (BR-53, cited in the type's
   own doc comment, lines 12-15).
   `[Rubric §23, Front-End Performance & Rendering]`: aggregation happens client-side over one bulk answer
-  fetch (line 83) rather than per-question round trips.
+  fetch (line 97) rather than per-question round trips.
 - **Walkthrough**
   - The route id arrives already typed as `[Parameter] public EventIdentifierType EventId` (line 24), so
-    the page passes it straight to the event lookup and feedback calls (lines 60, 83, 106, 119) with no
+    the page passes it straight to the event lookup and feedback calls (lines 73, 97, 120, 133) with no
     string parse step and no separate parsed-id field; the alias keeps the page compiling whichever
     primitive it maps to (ADR-048, revisited in ADR-085).
   - Every awaited call takes `LifetimeToken` (line 31) instead of reading `_cts.Token` directly: reading
     `Token` off a disposed source throws `ObjectDisposedException`, and `Dispose` cancels before it
-    disposes (lines 138-152), so a load or handler resuming after the user navigated away gets a
+    disposes (lines 151-165), so a load or handler resuming after the user navigated away gets a
     cancelled token and stops through its `OperationCanceledException` path.
-  - `OnInitializedAsync` (lines 42-100) builds breadcrumbs (lines 44-49), resolves the event name from the
-    lookup dictionary and bails with `Error.EventNotFound` when the id is unknown (lines 54-68), loads
-    **every** event question through
+  - `OnInitializedAsync` (lines 45-55) only builds breadcrumbs (lines 47-52) and returns `LoadAsync()`
+    (line 54). `LoadAsync` (lines 58-114) is both the first load and the Retry action, so it starts by
+    resetting `IsLoading`, `_loadError` and `_loadNotFound` (lines 60-62). It then resolves the event
+    name from the lookup dictionary, flagging a lookup failure as `Error.LoadFailed` (lines 67-71) and an
+    unknown id as not-found (lines 73-82), loads **every** event question through
     [`FeedbackQuestionLoader`](#feedbackquestionloader)`.LoadAllAsync(QuestionService, "Event", ...)`
-    (lines 72-73), then loads all answers for the event (line 83). The `finally` always clears
-    `IsLoading` (lines 96-99).
-  - Rendering (`.../Pages/Feedback/OrganizerEventFeedback.razor:37-88`) pairs each question with
-    `_answers.Where(a => a.QuestionId == question.Id)` (line 39). A question whose `QuestionType` is
-    `"Rating"` (case-insensitive, line 55) parses the answer values to integers, drops the unparseable
-    ones, and renders a read-only `MudRating` at the rounded average plus the average to one decimal and
-    the ratings count (lines 57-69). Anything else renders each answer as pre-wrapped text with a delete
-    icon button carrying an `aria-label` (lines 74-83). `[Rubric §21, Accessibility]`.
-  - `DeleteAnswerAsync` (lines 102-134) deletes one answer and, on failure, toasts
-    `Snackbar.AnswerDeleteFailed` and stops (lines 106-111). On success it drops the answer from
-    `_answers` locally and toasts `Snackbar.AnswerDeleted` immediately (lines 116-117), **then**
-    refetches the whole answer set to refresh the tallies (line 119). A failed refetch toasts
-    `Error.LoadFailed` (line 126), a load failure, never a failed delete.
+    (lines 86-87), then loads all answers for the event (line 97). The `finally` always clears
+    `IsLoading` (lines 110-113).
+  - Rendering (`.../Pages/Feedback/OrganizerEventFeedback.razor:41-92`) pairs each question with
+    `_answers.Where(a => a.QuestionId == question.Id)` (line 43). A question whose `QuestionType` is
+    `"Rating"` (case-insensitive, line 59) parses the answer values to integers, drops the unparseable
+    ones, and renders a `RatingStars` at the average with its own `AriaLabel`, plus the average to one
+    decimal and the ratings count (lines 61-74). Anything else renders each answer as pre-wrapped text
+    with a delete icon button carrying an `aria-label` (lines 79-88). `[Rubric §21, Accessibility]`.
+  - `DeleteAnswerAsync` (lines 116-147) deletes one answer and, on failure, toasts
+    `Snackbar.AnswerDeleteFailed` and stops (lines 120-125). On success it drops the answer from
+    `_answers` locally and toasts `Snackbar.AnswerDeleted` immediately (lines 130-131), **then**
+    refetches the whole answer set to refresh the tallies (line 133). A failed refetch toasts
+    `Error.LoadFailed` (line 140), a load failure, never a failed delete.
 - **Why it's built this way**: the organizer needs one screen that answers "what did attendees say about
   this event", and the aggregate-versus-free-text split follows from the question model itself: ratings
   are only meaningful in aggregate, free text is only meaningful individually (and is the only thing that
   can need moderating).
 - **Where it's used**: the `/events/{EventId}/feedback` route
   (`.../Pages/Feedback/OrganizerEventFeedback.razor:1-2`, organizer-only), reached from the "view
-  feedback" button on [`EventDetail`](#eventdetail) (`.../Pages/Event/EventDetail.razor:135-136`). The
-  attendee-facing counterpart lives in the Engagement module
+  feedback" button on [`EventDetail`](#eventdetail), which links through
+  `ConferenceRoutePaths.EventFeedbackOrganizer` (`.../Pages/Events/EventDetail.razor:141-142`,
+  `.../ConferenceRoutePaths.cs:73`). The attendee-facing counterpart lives in the Engagement module
   ([`EventFeedback`](group-22-engagement-module.md#eventfeedback)).
 - **Caveats / not-in-source**: the delete affordance renders only in the non-rating branch
-  (`.../Pages/Feedback/OrganizerEventFeedback.razor:74-83`), so a rating answer has no moderation button
+  (`.../Pages/Feedback/OrganizerEventFeedback.razor:79-88`), so a rating answer has no moderation button
   on this page.
 
 ### OrganizerSessionFeedback
@@ -7047,33 +7154,38 @@ The companion [`DependencyInjection`](#dependencyinjection) extension `AddConfer
   [`IQuestionUIService`](#iquestionuiservice) (line 20), and [`ISessionUIService`](#isessionuiservice)
   (line 21) in place of the event lookup, plus
   [`IToastService`](group-15-common-ui-framework.md#itoastservice) (line 22) and
-  [`FeedbackQuestionLoader`](#feedbackquestionloader) (line 69); the
+  [`FeedbackQuestionLoader`](#feedbackquestionloader) (line 83); the
   [`SessionQuestionAnswerDTO`](group-17-conference-domain.md#sessionquestionanswerdto) and
   [`QuestionDTO`](group-17-conference-domain.md#questiondto) shapes;
   [`ConferenceRoutePaths`](#conferenceroutepaths).
-- **Concept introduced**: none new. The page-level error state, the rating-versus-text rendering split,
-  the `LifetimeToken` guard (line 31), and the remove-then-refetch-after-delete rule are the ones taught in
+- **Concept introduced**: none new. The page-level error state with its not-found-versus-failed Retry
+  split (`_loadNotFound`, line 40; `.../Pages/Feedback/OrganizerSessionFeedback.razor:18-25`), the
+  rating-versus-text rendering split, the `LifetimeToken` guard (line 31), and the
+  remove-then-refetch-after-delete rule are the ones taught in
   [`OrganizerEventFeedback`](#organizereventfeedback).
 - **Walkthrough** (only the differences from its twin):
   - The route parameter is typed directly as `[Parameter] public SessionIdentifierType SessionId`
     (line 24), so there is no parse step and no parsed-id field; the id goes straight to the session fetch
-    and the feedback calls (lines 54, 80, 103, 116).
+    and the feedback calls (lines 67, 94, 117, 130).
+  - `OnInitializedAsync` (lines 45-55) again only builds breadcrumbs and returns `LoadAsync()`, the
+    load that doubles as the Retry action (lines 58-111).
   - The title comes from the session itself rather than a lookup dictionary:
-    `SessionService.GetByIdAsync(SessionId, false, ...)` with `includeChildren: false` (line 54),
-    since only `session.Title` is needed (line 65).
+    `SessionService.GetByIdAsync(SessionId, false, ...)` with `includeChildren: false` (line 67),
+    since only `session.Title` is needed (line 79).
   - **Failure is classified, not flattened.** The load distinguishes a genuine miss from any other error:
-    `sessionResult.IsNotFound()` chooses `L["Error.SessionNotFound"]`, anything else keeps the generic
-    `L["Error.LoadFailed"]` (lines 59-61), and the in-code comment (lines 57-58) records that this is the
-    `Result`-based replacement for what used to arrive as a null success. The event twin cannot do this,
-    because its miss is a dictionary lookup rather than a fetch.
-  - The question filter is `"Session"` (line 70), the other half of the same question table that the
+    `sessionResult.IsNotFound()` sets `_loadNotFound` (line 72), which chooses
+    `L["Error.SessionNotFound"]` and suppresses Retry, while anything else keeps the generic
+    `L["Error.LoadFailed"]` with Retry (lines 73-75); the in-code comment (lines 70-71) records that
+    this is the `Result`-based replacement for what used to arrive as a null success. The event twin
+    makes the same split from a dictionary miss rather than from a fetch result.
+  - The question filter is `"Session"` (line 84), the other half of the same question table that the
     event page filters on `"Event"`.
-  - `DeleteAnswerAsync` (lines 99-130) takes a `SessionQuestionAnswerIdentifierType` and passes the
-    route session id alongside it (line 103); the local removal and success toast (lines 113-114) precede
-    the refetch (line 116), whose failure toasts `Error.LoadFailed` (line 123).
+  - `DeleteAnswerAsync` (lines 113-144) takes a `SessionQuestionAnswerIdentifierType` and passes the
+    route session id alongside it (line 117); the local removal and success toast (lines 127-128) precede
+    the refetch (line 130), whose failure toasts `Error.LoadFailed` (line 137).
   - The template renders the session title as a `MudLink` back to its detail page
-    (`.../Pages/Feedback/OrganizerSessionFeedback.razor:23`) where the event page renders plain text, and
-    ends with a back button to the same route (line 92).
+    (`.../Pages/Feedback/OrganizerSessionFeedback.razor:28`) where the event page renders plain text, and
+    ends with a back button to the same route (lines 96-100).
 - **Why it's built this way**: session and event feedback are two instances of one questionnaire model,
   so the two pages stay structurally identical rather than sharing a parameterized component. The cost is
   duplication; the benefit is that each page's queries and route contract read literally. The genuinely
@@ -7081,7 +7193,8 @@ The companion [`DependencyInjection`](#dependencyinjection) extension `AddConfer
   [`FeedbackQuestionLoader`](#feedbackquestionloader) rather than duplicated.
 - **Where it's used**: the `/sessions/{SessionId}/feedback` route
   (`.../Pages/Feedback/OrganizerSessionFeedback.razor:1-2`), reached from the "view feedback" button on
-  [`SessionDetail`](#sessiondetail) (`.../Pages/Session/SessionDetail.razor:161-162`). The
+  [`SessionDetail`](#sessiondetail) through `ConferenceRoutePaths.SessionFeedbackOrganizer`
+  (`.../Pages/Sessions/SessionDetail.razor:183-184`, `.../ConferenceRoutePaths.cs:74`). The
   attendee-facing counterpart is [`SessionFeedback`](group-22-engagement-module.md#sessionfeedback).
 
 ### PublicActivityList
@@ -7102,7 +7215,7 @@ The companion [`DependencyInjection`](#dependencyinjection) extension `AddConfer
   - `OpenDirectionsAsync` (`:128-145`): does nothing for an activity with no venue address (`:130-133`), otherwise launches the platform maps app on native heads or a maps site in a browser (`:135-139`), labelling the pin with the venue name and falling back to the activity name when the venue is unnamed (`:138`); a false return raises one warning toast (`:141-144`).
   - Disposal (`:147-169`) is the standard cancel-on-disposal pattern over the `CancellationTokenSource` at `:35`.
 - **Why it's built this way**: a fixed-order programme wants a readable timeline, not sortable columns, and the read is small enough that one bounded call beats the machinery of server paging.
-- **Where it's used**: the `/conference/activities` route (`PublicActivityList.razor:1`, the same string as `ConferenceRoutePaths.PublicActivities` at `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/ConferenceRoutePaths.cs:54`), reached from [`PublicEventDetail`](#publiceventdetail)'s `ViewActivities` action (`PublicEventDetail.razor.cs:175`).
+- **Where it's used**: the `/conference/activities` route (`PublicActivityList.razor:1`, the same string as `ConferenceRoutePaths.PublicActivities` at `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/ConferenceRoutePaths.cs:54`), reached from [`PublicEventDetail`](#publiceventdetail)'s `ViewActivities` action (`PublicEventDetail.razor.cs:188`).
 - **Caveats / not-in-source**: the page relies on the server scoping non-privileged callers to published events (class doc, `:15-17`); that scoping is enforced in the Conference API, not here. For staff callers the page adds its own published-only filter (`:81`).
 
 ### PublicSponsorList
@@ -7126,43 +7239,44 @@ The companion [`DependencyInjection`](#dependencyinjection) extension `AddConfer
 > MMCA.ADC.Conference.UI · `MMCA.ADC.Conference.UI.Pages.Public.Speakers` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/Pages/Public/Speakers/PublicSpeakerDetail.razor.cs:21` · Level 10 · class (Blazor code-behind)
 
 - **What it is**: the public speaker profile: photo, bio, social links, and the sessions that speaker presents at the conference the reader is allowed to see. Email is deliberately **not** rendered, BR-66 (class doc, `PublicSpeakerDetail.razor.cs:17-20`).
-- **Depends on**: [`ISpeakerUIService`](#ispeakeruiservice), [`ISessionUIService`](#isessionuiservice) and [`IEventUIService`](#ieventuiservice) (`:23-25`), `AuthenticationStateProvider` read directly rather than as a cascading task (`:26`), [`IToastService`](group-15-common-ui-framework.md#itoastservice) (`:28`), the injected `TimeProvider` (`:29`), [`LatestLoadGuard`](group-15-common-ui-framework.md#latestloadguard) (`:59`), [`SpeakerDTO`](group-17-conference-domain.md#speakerdto) and [`SessionDTO`](group-17-conference-domain.md#sessiondto), [`ConferenceReadAudience`](group-17-conference-domain.md#conferencereadaudience) (`:209`), [`CurrentEventDefaults`](group-17-conference-domain.md#currenteventdefaults) (`:216`), and [`ConferenceRoutePaths`](#conferenceroutepaths) (`:46`, `:220`). The route parameter `Id` is typed `SpeakerIdentifierType` directly (`:31`), so the page no longer string-parses it.
-- **Concept introduced, the prerender skip, the server-side filter that replaced an in-memory one, fail-closed audience scoping, and clearing stale child data before a reload.**
-  1. **Prerender skip.** `OnParametersSetAsync` returns `Task.CompletedTask` immediately when `!RendererInfo.IsInteractive` (`:76-79`): under InteractiveAuto the interactive instance re-runs the method, so without this guard every visit fetched the speaker and the session catalog twice. The prerender pass renders the loading skeleton, and the comment names the sibling pages that use the same guard (`:73-75`). The method is no longer `async`: it hands back the `LoadSpeakerAsync()` task directly (`:87`) after comparing the typed `Id` with `_loadedId` (`:81`). `[Rubric §23, Front-End Performance & Rendering]` (assesses avoidable duplicate work per view).
-  2. **Push the filter to the server.** `LoadSpeakerSessionsAsync` (`:160-197`) sends a `SpeakerId equals` filter with `includeChildren: false`, sorted by `StartsAt` ascending, capped at `MaxSpeakerSessions = 100` (`:33-34`, request at `:181-188`). The remarks block (`:150-155`) records what this replaced: the page used to pull the entire session catalog with all child collections and filter it in memory on `SessionSpeakers`, so viewing one speaker cost a full-catalog read. Since the page never renders those children, they are gone from the request too. `[Rubric §12, Performance & Scalability]` and `[Rubric §8, Data Architecture]` (a bounded page size instead of an unbounded read).
-  3. **Fail closed on the audience scope.** `ResolveSessionEventScopeAsync` (`:205-218`) returns an unscoped result for a privileged reader (`:208-212`) and otherwise resolves the current or next event through [`CurrentEventDefaults`](group-17-conference-domain.md#currenteventdefaults), with `TimeProvider.GetUtcNow().UtcDateTime` as "now" (`:216`); a failed events lookup returns `(false, null)`, an *unresolved* scope rather than a wide one, and the caller turns that into a load failure (`:170-174`). The comment states the leak it prevents (`:167-169`): without this, a speaker who also presented at past conferences leaked those sessions to attendees here. `[Rubric §11, Security]` and `[Rubric §26, Front-End Security]`.
-  4. **Clear the previous speaker's sessions up front.** `LoadSpeakerAsync` resets `_speakerSessions` to empty right after `_load.Begin()` and before any await (`:95-97`, the L156 comment): the session list belongs to the previous speaker until this load replaces it, so a failed scope or fetch for the new speaker cannot leave the old speaker's sessions on screen. `[Rubric §24, Forms, Validation & UX Safety]` (stale data is never shown under the wrong heading).
+- **Depends on**: inherits [`DetailPageBase`](group-15-common-ui-framework.md#detailpagebase) (`PublicSpeakerDetail.razor:6`), which supplies the page-lifetime `PageToken` (`MMCA.Common/Source/Presentation/MMCA.Common.UI/Pages/Common/DetailPageBase.cs:38`), the [`LatestLoadGuard`](group-15-common-ui-framework.md#latestloadguard) exposed as `LoadGuard` (`DetailPageBase.cs:45`), the [`DetailLoadState`](group-15-common-ui-framework.md#detailloadstate) `LoadState` (`DetailPageBase.cs:52`), `BeginLoad` / `CompleteLoad` (`DetailPageBase.cs:59`, `:78`) and disposal (`DetailPageBase.cs:28`, `:138-149`). Injected: [`ISpeakerUIService`](#ispeakeruiservice), [`ISessionUIService`](#isessionuiservice) and [`IEventUIService`](#ieventuiservice) (`:23-25`), `AuthenticationStateProvider` read directly rather than as a cascading task (`:26`), [`IToastService`](group-15-common-ui-framework.md#itoastservice) (`:28`), the injected `TimeProvider` (`:29`). Also [`SpeakerDTO`](group-17-conference-domain.md#speakerdto) and [`SessionDTO`](group-17-conference-domain.md#sessiondto), [`ConferenceReadAudience`](group-17-conference-domain.md#conferencereadaudience) (`:245`), [`CurrentEventDefaults`](group-17-conference-domain.md#currenteventdefaults) (`:252`), and [`ConferenceRoutePaths`](#conferenceroutepaths) (`:46`, `:256`). The route parameter `Id` is typed `SpeakerIdentifierType` directly (`:31`), so the page does not string-parse it.
+- **Concept introduced, a prerender that fetches once and hands off, the server-side filter that replaced an in-memory one, fail-closed audience scoping, clearing stale child data before a reload, and a load state the page body states instead of a toast.**
+  1. **Prerender fetches the speaker once and hands it over.** When `!RendererInfo.IsInteractive`, `OnParametersSetAsync` returns `PrerenderSpeakerAsync()` (`:85-88`): under InteractiveAuto the interactive instance re-runs the method, so a naive page fetched the speaker and the session catalog twice per visit (comment, `:80-84`). `PrerenderSpeakerAsync` (`:103-118`) fetches only the speaker, with `PageToken` (`:107`), and stores it in the two `[PersistentState]` properties `PrerenderedSpeaker` and `PrerenderedSpeakerId` (`:56-67`), so persistent component state carries it to the interactive instance; an abandoned prerender's `OperationCanceledException` is swallowed (`:114-117`). The page state stays Loading, so the prerendered markup is the same skeleton (doc, `:99-102`), and the session read stays interactive-only. On the interactive side `TakePrerenderedSpeaker` (`:124-130`) returns the persisted speaker only when it was fetched for the current route `Id`, and clears both properties either way, so it answers one load at most and never a different id. The interactive path still compares the typed `Id` with `_loadedId` (`:90`, comment at `:51-53`: the load generation, not this id, is authoritative) and hands back the `LoadSpeakerAsync()` task (`:96`). [ADR-056](https://ivanball.github.io/docs/adr/056-blazor-render-mode-strategy.html) is the render-mode strategy this works within. `[Rubric §23, Front-End Performance & Rendering]` (assesses avoidable duplicate work per view).
+  2. **Push the filter to the server.** `LoadSpeakerSessionsAsync` (`:196-233`) sends a `SpeakerId equals` filter with `includeChildren: false`, sorted by `StartsAt` ascending, capped at `MaxSpeakerSessions = 100` (`:33-34`, request at `:217-224`). The remarks block (`:186-191`) records what this replaced: the page used to pull the entire session catalog with all child collections and filter it in memory on `SessionSpeakers`, so viewing one speaker cost a full-catalog read. Since the page never renders those children, they are gone from the request too. `[Rubric §12, Performance & Scalability]` and `[Rubric §8, Data Architecture]` (a bounded page size instead of an unbounded read).
+  3. **Fail closed on the audience scope.** `ResolveSessionEventScopeAsync` (`:241-254`) returns an unscoped result for a privileged reader (`:245-248`) and otherwise resolves the current or next event through [`CurrentEventDefaults`](group-17-conference-domain.md#currenteventdefaults), with `TimeProvider.GetUtcNow().UtcDateTime` as "now" (`:252`); a failed events lookup returns `(false, null)` (`:253`), an *unresolved* scope rather than a wide one, and the caller turns that into a load failure (`:206-210`). The comment states the leak it prevents (`:203-205`): without this, a speaker who also presented at past conferences leaked those sessions to attendees here. `[Rubric §11, Security]` and `[Rubric §26, Front-End Security]`.
+  4. **Clear the previous speaker's sessions up front.** `LoadSpeakerAsync` resets `_speakerSessions` to empty right after `BeginLoad()` and before any await (`:137-139`, the L156 comment): the session list belongs to the previous speaker until this load replaces it, so a failed scope or fetch for the new speaker cannot leave the old speaker's sessions on screen. `[Rubric §24, Forms, Validation & UX Safety]` (stale data is never shown under the wrong heading).
+  5. **The page body states a missing or failed speaker.** `CompleteLoad(generation, result)` (`:149`) moves `LoadState` to Loaded, NotFound or Failed, and only for the current generation (`DetailPageBase.cs:78-93`); the markup renders `DetailLoadStateContent` for every state but Loaded (`PublicSpeakerDetail.razor:16`), with Retry for a failure, so a not-found or failed speaker raises no toast (comment, `:147-148`). A transport fault is mapped to `Error.Unexpected("PublicSpeakerDetail.LoadFailed", ...)` and completed the same way (`:174`). The one toast left is for a session-list failure after the speaker loaded (`:162-165`). `[Rubric §24, Forms, Validation & UX Safety]`.
   `[Rubric §30, Compliance, Privacy & Data Governance]` (assesses deliberate handling of personal data): the speaker email exists on the DTO but is never rendered on the public page, and the class doc names the rule.
 - **Walkthrough**
   - `OnInitialized` (`:40-49`) builds the Home / Speakers / Profile breadcrumbs; unlike [`PublicEventDetail`](#publiceventdetail) it is synchronous, because the speaker list is reachable by every audience and the trail does not vary.
-  - `HasSocialLinks` (`:65-69`) collapses the four optional link fields into a single render guard, so the social row is absent rather than empty when a speaker supplied none.
-  - `LoadSpeakerAsync` (`:90-144`): begin a new load through [`LatestLoadGuard`](group-15-common-ui-framework.md#latestloadguard)`.Begin()`, which returns the cancellation token and the generation together (`:93`, field doc at `:53-58`), empty `_speakerSessions` (`:95-97`), `GetByIdAsync(Id, true, token)` with the already-typed id (`:102`), clear `Speaker` and toast not-found-versus-load-failed on failure (`:108-118`), then load the sessions and toast one load failure if that resolver returned false (`:122-125`); `OperationCanceledException` is swallowed (`:127-130`), any other exception raises the load-failure toast (`:131-134`), and the `_load.IsCurrent(generation)`-guarded `finally` clears `IsLoading` (`:135-143`).
-  - Session links are plain `MudLink` markup to `ConferenceRoutePaths.PublicSessionDetails(session.Id)` (`PublicSpeakerDetail.razor:117`), not a code-behind navigation method; the page keeps only `NavigateToList` (`:220`) for the back action. Disposal (`:222-243`) delegates to `_load.Dispose()` (`:233`), so the same [`LatestLoadGuard`](group-15-common-ui-framework.md#latestloadguard) that owns the load generation also owns cancellation of the in-flight fetch.
-- **Why it's built this way**: a public profile is a read-only, cache-friendly page; keeping its fetches narrow (one speaker, that speaker's sessions for one event, no children) is what makes it cheap enough to serve to an anonymous crowd, and scoping those sessions to the reader's event keeps the profile consistent with the schedule they can actually browse.
-- **Where it's used**: the `/conference/speakers/{Id}` route (`PublicSpeakerDetail.razor:1`), reached from [`PublicSpeakerList`](#publicspeakerlist) cards and from session pages. Its markup renders the `QrCodeButton` for its own link (`PublicSpeakerDetail.razor:45`).
+  - `HasSocialLinks` (`:72-76`) collapses the four optional link fields into a single render guard, so the social row is absent rather than empty when a speaker supplied none.
+  - `LoadSpeakerAsync` (`:132-180`): `BeginLoad()` (`:135`) supersedes the load in flight through `LoadGuard` and puts the page back in Loading (`DetailPageBase.cs:59-62`), returning the cancellation token and the generation together; empty `_speakerSessions` (`:137-139`); take the prerendered speaker, else `GetByIdAsync(Id, true, token)` with the already-typed id (`:143-145`); when `CompleteLoad` reports a superseded response or the result carries no speaker, clear `Speaker` only if this generation is still current and return (`:149-158`); otherwise set `Speaker` (`:160`), load the sessions and toast one load failure if that resolver returned false (`:162-165`). `OperationCanceledException` is swallowed (`:167-170`); any other exception completes the load as a failure and clears `Speaker` for the current generation (`:171-179`).
+  - Session links are plain `MudLink` markup to `ConferenceRoutePaths.PublicSessionDetails(session.Id)` (`PublicSpeakerDetail.razor:117`), not a code-behind navigation method; the page keeps only `NavigateToList` (`:256`) for the back action. The page declares no disposal of its own: [`DetailPageBase`](group-15-common-ui-framework.md#detailpagebase) implements `IDisposable` and disposes `LoadGuard` and its token source (`DetailPageBase.cs:147`, `:149`), so the base that owns the load generation also owns cancellation of the in-flight fetch.
+- **Why it's built this way**: a public profile is a read-only, cache-friendly page; keeping its fetches narrow (one speaker, fetched once across prerender and interactive render, that speaker's sessions for one event, no children) is what makes it cheap enough to serve to an anonymous crowd, and scoping those sessions to the reader's event keeps the profile consistent with the schedule they can actually browse.
+- **Where it's used**: the `/conference/speakers/{Id:guid}` route (`PublicSpeakerDetail.razor:1`), reached from [`PublicSpeakerList`](#publicspeakerlist) cards and from session pages. Its markup renders the `QrCodeButton` for its own link (`PublicSpeakerDetail.razor:47`).
 
 ### PublicSpeakerList
 > MMCA.ADC.Conference.UI · `MMCA.ADC.Conference.UI.Pages.Public.Speakers` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/Pages/Public/Speakers/PublicSpeakerList.razor.cs:32` · Level 10 · class (Blazor code-behind)
 
 - **What it is**: the public speaker directory, rendered as a photo-forward responsive **card grid** with infinite scroll, the same layout on desktop and mobile. Read-only for everyone (BR-43), no emails (BR-66), and the server returns only speakers with a visible session in the listed event, or in any published event when no event filter is applied, BR-239 (class doc, `PublicSpeakerList.razor.cs:9-31`).
-- **Depends on**: extends [`EventFilteredListPageBase<TDto>`](#eventfilteredlistpagebasetdto) closed over [`SpeakerDTO`](group-17-conference-domain.md#speakerdto) (`:32`), which itself extends [`DataGridListPageBase<TDto>`](group-15-common-ui-framework.md#datagridlistpagebasetdto) (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/Pages/Common/EventFilteredListPageBase.cs:25`); [`ISpeakerUIService`](#ispeakeruiservice) (`:41`), [`PublicReadAudience`](#publicreadaudience) (`:121`), which applies [`ConferenceReadAudience`](group-17-conference-domain.md#conferencereadaudience)'s privileged roles (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/Pages/Public/PublicReadAudience.cs:28`), and [`InfiniteScrollSentinel`](group-15-common-ui-framework.md#infinitescrollsentinel) (`PublicSpeakerList.razor:144`). Note what is **absent**: no `MudDataGrid`, no `GridRef` override, no [`MobileInfiniteScrollList<TItem>`](group-15-common-ui-framework.md#mobileinfinitescrolllisttitem).
-- **Concept introduced, borrowing a base class's plumbing for a layout it was not written for.** A speaker is a face and a tagline, not a row of columns, so this page throws away the grid and keeps everything else. The class doc explains the trade (`:20-27`): paging keeps the page-based model of the base's mobile path (`MobileItems`, `MobileCurrentPage`, `MobileTotalItems`, `MobilePageSize`, declared at `MMCA.Common/Source/Presentation/MMCA.Common.UI/Pages/Common/DataGridListPageBase.cs:61-64`), which already owns the cancellation token, the loading and failure flags, and the saved-state plumbing, and layers infinite scroll on top by **appending** each fetched page to `_loadedSpeakers` (`:54`) through `AppendNewSpeakers` (`:201-214`, called at `:185` and `:251`) rather than replacing, which is what the base's mobile path does on its own.
-  The event-filter half is not hand-rolled either: [`EventFilteredListPageBase<TDto>`](#eventfilteredlistpagebasetdto) owns the events load, the `"all"` sentinel, the picker, and the `EventId` filter, and this page supplies four overrides. `EventFilterIsUserControlled => _isPrivileged` (`:52`) is the audience gate: only privileged readers pick their own event, so only their choice is persisted and restored, and everyone else is recomputed to the current or next event (doc at `:48-51`, base contract at `EventFilteredListPageBase.cs:58`). `OnEventsLoadingAsync` (`:114-122`) resolves privileged status *before* the events are fetched, because that decides whether a restored choice survives. It returns early, leaving the reader non-privileged, when no authentication state cascades (`:116-119`), and otherwise delegates to `PublicReadAudience.IsPrivilegedReaderAsync` (`:121`), whose catch degrades any non-cancellation failure to the least-privileged audience (`PublicReadAudience.cs:30-34`). `ReloadForEventFilterAsync` (`:284`), `SavePageFilters` / `RestorePageFilters` (`:96-100`) and `OnRestoredStateAppliedAsync` (`:275-276`, below) fill in the rest. `[Rubric §15, Best Practices & Code Quality]` and `[Rubric §1, SOLID]` (assess reuse of one tested mechanism rather than a parallel implementation); `[Rubric §11, Security]` and `[Rubric §26, Front-End Security]` for the persistence gate.
+- **Depends on**: extends [`EventFilteredListPageBase<TDto>`](#eventfilteredlistpagebasetdto) closed over [`SpeakerDTO`](group-17-conference-domain.md#speakerdto) (`:32`), which itself extends [`DataGridListPageBase<TDto>`](group-15-common-ui-framework.md#datagridlistpagebasetdto) (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/Pages/Common/EventFilteredListPageBase.cs:24`); [`ISpeakerUIService`](#ispeakeruiservice) (`:41`), [`PublicReadAudience`](#publicreadaudience) (`:121`), which applies [`ConferenceReadAudience`](group-17-conference-domain.md#conferencereadaudience)'s privileged roles (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/Pages/Public/PublicReadAudience.cs:28`), and [`InfiniteScrollSentinel`](group-15-common-ui-framework.md#infinitescrollsentinel) (`PublicSpeakerList.razor:146`). Note what is **absent**: no `MudDataGrid`, no `GridRef` override, no [`MobileInfiniteScrollList<TItem>`](group-15-common-ui-framework.md#mobileinfinitescrolllisttitem).
+- **Concept introduced, borrowing a base class's plumbing for a layout it was not written for.** A speaker is a face and a tagline, not a row of columns, so this page throws away the grid and keeps everything else. The class doc explains the trade (`:20-27`): paging keeps the page-based model of the base's mobile path (`MobileItems`, `MobileCurrentPage`, `MobileTotalItems`, `MobilePageSize`, declared at `MMCA.Common/Source/Presentation/MMCA.Common.UI/Pages/Common/DataGridListPageBase.cs:77-80`), which already owns the cancellation token, the loading and failure flags, and the saved-state plumbing, and layers infinite scroll on top by **appending** each fetched page to `_loadedSpeakers` (`:54`) through `AppendNewSpeakers` (`:212-229`, called at `:200` and `:266`) rather than replacing, which is what the base's mobile path does on its own.
+  The event-filter half is not hand-rolled either: [`EventFilteredListPageBase<TDto>`](#eventfilteredlistpagebasetdto) owns the events load, the `"all"` sentinel, the picker, and the `EventId` filter, and this page supplies four overrides. `EventFilterIsUserControlled => _isPrivileged` (`:52`) is the audience gate: only privileged readers pick their own event, so only their choice is persisted and restored, and everyone else is recomputed to the current or next event (doc at `:48-51`, base contract at `EventFilteredListPageBase.cs:57`). `OnEventsLoadingAsync` (`:114-122`) resolves privileged status *before* the events are fetched, because that decides whether a restored choice survives. It returns early, leaving the reader non-privileged, when no authentication state cascades (`:116-119`), and otherwise delegates to `PublicReadAudience.IsPrivilegedReaderAsync` (`:121`), whose catch degrades any non-cancellation failure to the least-privileged audience (`PublicReadAudience.cs:30-34`). `ReloadForEventFilterAsync` (`:299`), `SavePageFilters` / `RestorePageFilters` (`:96-100`) and `OnRestoredStateAppliedAsync` (`:290-291`, below) fill in the rest. `[Rubric §15, Best Practices & Code Quality]` and `[Rubric §1, SOLID]` (assess reuse of one tested mechanism rather than a parallel implementation); `[Rubric §11, Security]` and `[Rubric §26, Front-End Security]` for the persistence gate.
   Six correctness details make that borrowing safe, and they are the real lesson of this page.
-  1. **A generation counter supersedes in-flight fetches.** `_generation` (`:88`) is bumped by every reset (search, event filter, breakpoint change, retry) inside `LoadSpeakersAsync` (`:162`), and both `LoadSpeakersAsync` (`:178-181`) and `LoadMoreSpeakersAsync` (`:228`, `:237-240`, `:255-262`) discard their rows when a newer generation has taken over. Without it a slow page-1 fetch could append to the list a later query had already cleared. `[Rubric §19, State Management & Data Flow]`.
-  2. **The list is cleared before the await, not after.** The comment (`:168-169`) states why: the grid, and with it the sentinel, is gone while page 1 is in flight, so a stray intersection-observer callback cannot ask for page 2 of the query being replaced. The id set is cleared alongside it (`:170-171`). `[Rubric §18, UI Architecture & Component Design]`.
-  3. **The page number is committed only on success.** `LoadMoreSpeakersAsync` saves `previousPage`, optimistically advances, and rolls back when `LoadFailed` is set (`:229-253`), so the retry button re-requests the same page instead of silently skipping it. `[Rubric §29, Resilience & Business Continuity]`.
-  4. **An unscoped query is refused rather than issued.** `ScopeUnresolvedForPublicReader()` (`:154`) is true exactly when a non-privileged reader has no event scope *because the events fetch failed*. `FetchCurrentPageAsync` (`:128-151`) re-resolves the events first in that state (`:140-143`), which heals a transient failure on the retry path, and the fetch delegate then throws rather than falling through to an unscoped query that would show other conferences' speakers (`:145-150`). The comment records the invariant and its one deliberate exception (`:134-139`): a *successful* fetch that genuinely found no published events keeps the unscoped default, matching [`PublicSessionList`](#publicsessionlist). `[Rubric §11, Security]` and `[Rubric §26, Front-End Security]`.
-  5. **Offset paging can repeat a row, so appends are de-duplicated and the end is detected.** `_loadedSpeakerIds` (`:61`) records every id shown, and `AppendNewSpeakers` (`:201-214`) adds only unseen speakers, lazily, so a repeat inside one page is skipped too (the cards are keyed by id, and a repeat would render two siblings with one key). Paging still advances by page number; `EndReached` (`:81`) is set when an append fetched a short page yet added nothing (`:250-252`), and `HasMoreSpeakers` (`:94`) includes `!EndReached`, so the sentinel stops instead of re-requesting empty pages forever while `MobileTotalItems` still counts rows the shifting window skipped. `[Rubric §29, Resilience & Business Continuity]`.
-  6. **"No speakers found." is withheld while a reset is still resolving scope.** `_resetInFlight` (`:74`) starts `true`, is set again by every reset (`:165`), and is cleared in the `finally` only by the reset of the current generation (`:187-194`). A reset resolves the event scope, with retries, before the base's loading flag flips, so without it the empty state would flash during that gap. For the same ordering reason `FetchCurrentPageAsync` first awaits `WaitForEventsAsync()` (`:132`): the viewport subscription can fire a reset right after first render, before initialization's event load has finished. `[Rubric §24, Forms, Validation & UX Safety]`.
+  1. **A generation counter supersedes in-flight fetches.** `_generation` (`:88`) is bumped by every reset (search, event filter, breakpoint change, retry) inside `LoadSpeakersAsync` (`:176`), and both `LoadSpeakersAsync` (`:191-196`) and `LoadMoreSpeakersAsync` (`:243`, `:252-255`, `:270-277`) discard their rows when a newer generation has taken over. Without it a slow page-1 fetch could append to the list a later query had already cleared. The check also runs *before* the fetch: both callers pass their generation into `FetchCurrentPageAsync(int generation)` (`:134`, called at `:189` and `:250`), which returns without fetching when a newer reset took over during the `WaitForEventsAsync()` await (`:139-142`) or the events re-lookup (`:153-156`). The doc (U-20, `:124-133`) gives the reason: the base hands the rows to whichever load entered `LoadMobileDataAsync` last, so a superseded reset that entered after its replacement would take the rows the newest reset needs and leave it painting "No speakers found."; checking with no await between the check and the call keeps the newest generation and the base's newest load the same. `[Rubric §19, State Management & Data Flow]`.
+  2. **The list is cleared before the await, not after.** The comment (`:182-183`) states why: the grid, and with it the sentinel, is gone while page 1 is in flight, so a stray intersection-observer callback cannot ask for page 2 of the query being replaced. The id set is cleared alongside it (`:184-185`). `[Rubric §18, UI Architecture & Component Design]`.
+  3. **The page number is committed only on success.** `LoadMoreSpeakersAsync` saves `previousPage`, optimistically advances, and rolls back when `LoadFailed` is set (`:244-268`), so the retry button re-requests the same page instead of silently skipping it. `[Rubric §29, Resilience & Business Continuity]`.
+  4. **An unscoped query is refused rather than issued.** `ScopeUnresolvedForPublicReader()` (`:168`) is true exactly when a non-privileged reader has no event scope *because the events fetch failed*. `FetchCurrentPageAsync` (`:134-165`) re-resolves the events first in that state (`:150-156`), which heals a transient failure on the retry path, and the fetch delegate then throws rather than falling through to an unscoped query that would show other conferences' speakers (`:159-164`). The comment records the invariant and its one deliberate exception (`:144-149`): a *successful* fetch that genuinely found no published events keeps the unscoped default, matching [`PublicSessionList`](#publicsessionlist). `[Rubric §11, Security]` and `[Rubric §26, Front-End Security]`.
+  5. **Offset paging can repeat a row, so appends are de-duplicated and the end is detected.** `_loadedSpeakerIds` (`:61`) records every id shown, and `AppendNewSpeakers` (`:212-229`) adds only unseen speakers, lazily, so a repeat inside one page is skipped too (the cards are keyed by id, and a repeat would render two siblings with one key). Paging still advances by page number; `EndReached` (`:81`) is set when an append fetched a short page yet added nothing (`:265-267`), and `HasMoreSpeakers` (`:94`) includes `!EndReached`, so the sentinel stops instead of re-requesting empty pages forever while `MobileTotalItems` still counts rows the shifting window skipped. `[Rubric §29, Resilience & Business Continuity]`.
+  6. **"No speakers found." is withheld while a reset is still resolving scope.** `_resetInFlight` (`:74`) starts `true`, is set again by every reset (`:179`), and is cleared in the `finally` only by the reset of the current generation (`:202-209`). A reset resolves the event scope, with retries, before the base's loading flag flips, so without it the empty state would flash during that gap. For the same ordering reason `FetchCurrentPageAsync` first awaits `WaitForEventsAsync()` (`:138`): the viewport subscription can fire a reset right after first render, before initialization's event load has finished. `[Rubric §24, Forms, Validation & UX Safety]`.
 - **Walkthrough**
   - `CardsPerPage = 12` (`:34-35`) is assigned to the base's `MobilePageSize` in the constructor (`:37`), with the reasoning on the constant: a multiple of 2, 3 and 4 so a full chunk fills whole rows at every breakpoint. `[Rubric §22, Responsive & Cross-Browser]`.
-  - `HasMoreSpeakers` (`:94`) is true exactly while pages remain unfetched (and the end has not been detected), and that is exactly when the sentinel renders (`PublicSpeakerList.razor:133-147`, comment at `:131-132`), so the trigger and the condition cannot disagree; the markup comment notes that the sentinel's absence *is* the "everything is loaded" signal, for the reader and for the tests.
+  - `HasMoreSpeakers` (`:94`) is true exactly while pages remain unfetched (and the end has not been detected), and that is exactly when the sentinel renders (`PublicSpeakerList.razor:135-149`, comment at `:133-134`), so the trigger and the condition cannot disagree; the markup comment notes that the sentinel's absence *is* the "everything is loaded" signal, for the reader and for the tests.
   - `OnInitializedAsync` (`:102-108`) awaits the base first, because the base starts the events load before its own first await so the default event filter is resolved before the first speaker fetch, then runs `LoadSpeakersAsync`.
-  - `FetchCurrentPageAsync` (`:128-151`) delegates to the base's `LoadMobileDataAsync` (`DataGridListPageBase.cs:950`) with a fixed `FullName` ascending sort; `ApplyFilters` (`:286-291`) emits `FullName contains` plus the base's `ApplyEventFilter` (`:290`, `EventFilteredListPageBase.cs:196`), which travels as the **virtual** `EventId` filter key that the speakers endpoint resolves through the EventSpeaker and SessionSpeaker joins, since a Speaker row has no `EventId` column (class doc, `:18-19`).
-  - `OnMobileDataRequestedAsync` (`:269`) is the base's breakpoint-change hook (`DataGridListPageBase.cs:1202`, invoked at `:313`), overridden here to restart the accumulation rather than fetch one replacement page.
-  - `RetryLoadAsync` (`:266`), `OnSearchChanged` (`:278-282`, now a non-`async` method returning the reset task), `ReloadForEventFilterAsync` (`:284`) and `OnRestoredStateAppliedAsync` (`:275-276`) all funnel through `LoadSpeakersAsync`, which is the single reset entry point. The last is the late-restore hook (M245, doc at `:271-274`): the page has no data grid for the base to reload, so a search or event restored from sessionStorage after first render (a new circuit) reloads the cards here when `needsReload` is true.
-  - `Initials` (`:293-301`) builds the no-photo avatar text with spans, tolerating a blank first or last name; `HasSocialLinks` (`:303-307`) hides the social row when a speaker supplied none.
+  - `FetchCurrentPageAsync` (`:134-165`) delegates to the base's `LoadMobileDataAsync` (`DataGridListPageBase.cs:1001`) with a fixed `FullName` ascending sort; `ApplyFilters` (`:301-306`) emits `FullName contains` plus the base's `ApplyEventFilter` (`:305`, `EventFilteredListPageBase.cs:195`), which travels as the **virtual** `EventId` filter key that the speakers endpoint resolves through the EventSpeaker and SessionSpeaker joins, since a Speaker row has no `EventId` column (class doc, `:18-19`).
+  - `OnMobileDataRequestedAsync` (`:284`) is the base's breakpoint-change hook (`DataGridListPageBase.cs:1306`, invoked at `:344`), overridden here to restart the accumulation rather than fetch one replacement page.
+  - `RetryLoadAsync` (`:281`), `OnSearchChanged` (`:293-297`, a non-`async` method returning the reset task), `ReloadForEventFilterAsync` (`:299`) and `OnRestoredStateAppliedAsync` (`:290-291`) all funnel through `LoadSpeakersAsync`, which is the single reset entry point. The last is the late-restore hook (M245, doc at `:286-289`): the page has no data grid for the base to reload, so a search or event restored from sessionStorage after first render (a new circuit) reloads the cards here when `needsReload` is true.
+  - `Initials` (`:308-316`) builds the no-photo avatar text with spans, tolerating a blank first or last name; `HasSocialLinks` (`:318-322`) hides the social row when a speaker supplied none.
 - **Why it's built this way**: attendees browse "the speakers at this conference", not a lifetime roster, so the default filter is the primary behavior and the picker is the privileged exception; and a directory of faces reads better as an endless wall of cards than as a pager. The class doc adds one more deliberate omission (`:28-30`): category chips are absent because the paged endpoint is called with `includeChildren=false`, so asking for them would both enlarge the payload and change the URL the output-cache warmup pins ([ADR-040](https://ivanball.github.io/docs/adr/040-authenticated-output-caching-for-public-reads.html)).
 - **Where it's used**: the `/conference/speakers` route (`PublicSpeakerList.razor:1`, matching `ConferenceRoutePaths.PublicSpeakers` at `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/ConferenceRoutePaths.cs:51`); cards navigate to [`PublicSpeakerDetail`](#publicspeakerdetail).
 - **Caveats / not-in-source**: the join-based resolution of the virtual `EventId` filter is asserted by the class doc comment; the resolution itself lives in the Conference API. A restored mobile page number is deliberately ignored (class doc, `:26-27`), so a reader returning to this page starts at page 1 rather than at the scroll depth they left.

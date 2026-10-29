@@ -132,7 +132,8 @@
         <li><a href="group-25-adc-host-composition.html">25. ADC Application Host, UI Shell &amp; Cross-Module Composition</a></li>
         <li><a href="group-26-device-capability-layer.html">26. Device Capability Abstraction Layer (Native Contracts, MAUI, Browser &amp; Fallback Adapters)</a></li>
         <li><a href="group-27-common-ai-integration.html">27. Common AI Integration</a></li>
-        <li><a href="group-28-testing-infrastructure.html">28. Testing &amp; Quality Infrastructure</a></li>
+        <li><a href="group-28-common-cloud-provider-adapters.html">28. Common Cloud Provider Adapters (AWS, Azure, GCP)</a></li>
+        <li><a href="group-29-testing-infrastructure.html">29. Testing &amp; Quality Infrastructure</a></li>
         <li><a href="devops-aspire.html">Aspire Orchestration and Containers</a></li>
         <li><a href="devops-cicd.html">CI/CD and Operations</a></li>
         <li><a href="devops-iac.html">Infrastructure as Code, ADC Azure Deployment</a></li>
@@ -242,7 +243,14 @@
           <a href="group-05-cqrs-pipeline.html#icommandhandlerin-tcommand-tresult"><code>ICommandHandler&lt;in TCommand, TResult&gt;</code></a>
           and <a href="group-05-cqrs-pipeline.html#iqueryhandlerin-tquery-tresult"><code>IQueryHandler&lt;in TQuery, TResult&gt;</code></a>
           instances for its writes and bespoke reads<span class="cite"><span> (<code>SessionsController.cs:45-57</code>)</span></span>, then folds any
-          <code>Result.Failure</code> back through the inherited <code>HandleFailure</code>. That is the <code>[Rubric §1, SOLID]</code> and
+          <code>Result.Failure</code> back through the inherited <code>HandleFailure</code>. The success side is unwrapped the same way
+          in every one of these controllers: the action asks the generic
+          <a href="group-01-result-error-handling.html#result"><code>Result</code></a>&#39;s <code>TryGetValue(out T value)</code><span class="cite"><span>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Shared/Abstractions/Result.cs:218</code>)</span></span> and returns <code>HandleFailure</code>
+          when it answers <code>false</code>, so the value it goes on to read (the created row for <code>CreatedAtRoute</code>, a
+          page for the pagination header, a calendar string) is already non-null and no action dereferences
+          <code>Value</code> behind a null-forgiving <code>!</code> (for example <span class="cite"><span><code>SessionsController.cs:278</code></span></span>,
+          <span class="cite"><span><code>RoomsController.cs:230</code></span></span>, <span class="cite"><span><code>SessionCalendarController.cs:42</code></span></span>). That is the <code>[Rubric §1, SOLID]</code> and
           <code>[Rubric §15, Best Practices &amp; Code Quality]</code> payoff the generic base exists for (the generic-controller and
           dynamic-query contract of
           <a href="https://ivanball.github.io/docs/adr/034-generic-entity-query-layer.html" target="_blank" rel="noopener">ADR-034</a>): the CRUD logic
@@ -257,7 +265,7 @@
           <code>GetExportSpecification</code><span class="cite"><span> (<code>EntityControllerBase.cs:601</code>)</span></span>, itself <code>null</code>, so a controller that
           overrides neither reads unscoped. Thirteen of the twenty-three Conference controllers override one of the
           two. Ten override the asynchronous hook because their rule is resolved through a query handler:
-          <a href="#sessionscontroller"><code>SessionsController</code></a><span class="cite"><span> (<code>SessionsController.cs:76</code>)</span></span>,
+          <a href="#sessionscontroller"><code>SessionsController</code></a><span class="cite"><span> (<code>SessionsController.cs:75</code>)</span></span>,
           <a href="#speakerscontroller"><code>SpeakersController</code></a><span class="cite"><span> (<code>SpeakersController.cs:110</code>)</span></span>,
           <a href="#roomscontroller"><code>RoomsController</code></a><span class="cite"><span> (<code>RoomsController.cs:120</code>)</span></span>,
           <a href="#sponsorscontroller"><code>SponsorsController</code></a><span class="cite"><span> (<code>SponsorsController.cs:69</code>)</span></span>,
@@ -279,7 +287,7 @@
           excludes is a <strong>404, not a 403</strong> (a &quot;forbidden&quot; answer would confirm the id exists), the lookup
           endpoint receives the same scope as the specification&#39;s <code>Criteria</code> predicate, and the read actions in
           these files are attribute-plus-guard passthroughs whose bodies call <code>base</code> behind one fail-closed
-          check (for example <span class="cite"><span><code>EventQuestionAnswersController.cs:147-157</code></span></span>, <span class="cite"><span><code>SessionsController.cs:219-240</code></span></span>),
+          check (for example <span class="cite"><span><code>EventQuestionAnswersController.cs:147-157</code></span></span>, <span class="cite"><span><code>SessionsController.cs:218-239</code></span></span>),
           kept only because the route attributes must sit on the derived action. That guard is worth reading
           once: because the hook answers <code>null</code> for two different reasons (an Organizer whose scoping is
           deliberately skipped, and a non-Organizer whose owner claim cannot be resolved), each answer-controller
@@ -298,7 +306,7 @@
           (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/EntityControllerBase.cs:272-274,508,608-613</code>)</span></span>.
           Sixteen Conference controllers opt in, each naming exactly the audience whose <code>null</code> is deliberate.
           The ten async-hook controllers answer with their own <code>IsPrivileged</code> read-audience check (for example
-          <span class="cite"><span><code>SessionsController.cs:94</code></span></span>, <span class="cite"><span><code>RoomsController.cs:138</code></span></span>, <span class="cite"><span><code>SpeakerCategoryItemsController.cs:91</code></span></span>), and
+          <span class="cite"><span><code>SessionsController.cs:93</code></span></span>, <span class="cite"><span><code>RoomsController.cs:138</code></span></span>, <span class="cite"><span><code>SpeakerCategoryItemsController.cs:91</code></span></span>), and
           <a href="#eventscontroller"><code>EventsController</code></a> with the same check inline<span class="cite"><span> (<code>EventsController.cs:80</code>)</span></span>, because
           the hook returns <code>null</code> precisely for a privileged reader who already lists every row. The two answer
           controllers opt in through <code>OwnershipHelper.IsAdmin(currentUserService, RoleNames.Organizer)</code>, the
@@ -309,7 +317,7 @@
           (<code>CategoryItemsController.cs:73</code>, <code>ConferenceCategoriesController.cs:47</code>, <code>QuestionsController.cs:46</code>)</span></span>.</p>
           <p>The CSV export keeps a second, blunter guard on top of the hook. Twelve controllers override
           <code>ExportAsync</code> and return <code>Forbid()</code> outright for a caller who is not a privileged reader, rather than
-          serving a scoped file: <span class="cite"><span><code>SessionsController.cs:250-260</code></span></span>, <span class="cite"><span><code>SpeakersController.cs:325-335</code></span></span>,
+          serving a scoped file: <span class="cite"><span><code>SessionsController.cs:249-259</code></span></span>, <span class="cite"><span><code>SpeakersController.cs:325-335</code></span></span>,
           <span class="cite"><span><code>EventsController.cs:139-149</code></span></span>, <span class="cite"><span><code>SponsorsController.cs:154-164</code></span></span>, <span class="cite"><span><code>ActivitiesController.cs:153-163</code></span></span>,
           <span class="cite"><span><code>PartnersController.cs:144-158</code></span></span> (which belts the guard with a capability attribute on the export
           action itself, <code>[HasPermission(ConferencePermissions.PartnersManage)]</code> at <span class="cite"><span><code>PartnersController.cs:143</code></span></span>),
@@ -339,7 +347,7 @@
           <code>QuestionsManage</code><span class="cite"><span> (<code>QuestionsController.cs:34</code>)</span></span>, <code>SpeakersManage</code><span class="cite"><span>
           (<code>SpeakerCategoryItemsController.cs:47</code>)</span></span> and <code>SessionSelectionManage</code><span class="cite"><span>
           (<code>SessionSelectionController.cs:34</code>)</span></span>. Reads are then re-opened action by action with
-          <code>[AllowAnonymous]</code> (BR-43 public browse, for example <span class="cite"><span><code>SessionsController.cs:145</code></span></span>,
+          <code>[AllowAnonymous]</code> (BR-43 public browse, for example <span class="cite"><span><code>SessionsController.cs:144</code></span></span>,
           <span class="cite"><span><code>RoomsController.cs:145</code></span></span>). Twelve capability constants exist in total, declared once in
           <code>ConferencePermissions.All</code><span class="cite"><span>
           (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Shared/Authorization/ConferencePermissions.cs:58-72</code>)</span></span>.</p>
@@ -355,7 +363,7 @@
           <code>[Authorize]</code><span class="cite"><span> (<code>SpeakersController.cs:371</code>)</span></span> and decides inside the action whether the caller holds
           <code>SpeakersManage</code> (asked of <code>IPermissionRegistry</code>, so Organizer and ContentEditor alike,
           <span class="cite"><span><code>SpeakersController.cs:383</code></span></span>) or is the speaker themselves, comparing the <code>speaker_id</code> JWT claim to the
-          route id<span class="cite"><span> (<code>SpeakersController.cs:384</code>)</span></span>, and answers <code>403</code> for neither<span class="cite"><span> (<code>:384-385</code>)</span></span>. It passes the
+          route id<span class="cite"><span> (<code>SpeakersController.cs:384</code>)</span></span>, and answers <code>403</code> for neither<span class="cite"><span> (<code>:385-386</code>)</span></span>. It passes the
           answer down as <code>CallerCanManageSpeakers</code>, so the handler can refuse a self-edit of the curation-only
           <code>IsTopSpeaker</code> field, alongside <code>CallerCanSeeEmail</code>, so a caller who cannot read the speaker email
           (BR-66) cannot overwrite it either<span class="cite"><span> (<code>SpeakersController.cs:358-361,394-395</code>)</span></span>.
@@ -474,18 +482,18 @@
           <h2 id="where-the-generic-shape-gives-way-filters-warnings-calendars-and-conditional-writes">Where the generic shape gives way: filters, warnings, calendars and conditional writes</h2>
           <p><a href="#sessionscontroller"><code>SessionsController</code></a> shows best <em>how</em> a controller earns its overrides. Every
           read action is <code>[AllowAnonymous]</code> and <code>[OutputCache(PolicyName = &quot;SessionsCache&quot;)]</code>
-          (<span class="cite"><span><code>SessionsController.cs:145-146,171-172,220-221,232-233</code></span></span>, plus the split-out calendar read at
+          (<span class="cite"><span><code>SessionsController.cs:144-145,170-171,219-220,231-232</code></span></span>, plus the split-out calendar read at
           <span class="cite"><span><code>SessionCalendarController.cs:35-36</code></span></span>). Its read hook dispatches
           <a href="group-18-conference-application.html#getpublicsessionfilterquery"><code>GetPublicSessionFilterQuery</code></a> so a
           non-organizer never sees declined sessions (BR-132/BR-49), and because <code>Session</code> and <code>Event</code> can live
           in different data sources the published-event check is resolved by that handler through the
-          framework&#39;s cross-source specification helper rather than by a join (<span class="cite"><span><code>SessionsController.cs:62-86</code></span></span>;
+          framework&#39;s cross-source specification helper rather than by a join (<span class="cite"><span><code>SessionsController.cs:62-85</code></span></span>;
           <a href="https://ivanball.github.io/docs/adr/018-polyglot-persistence.html" target="_blank" rel="noopener">ADR-018</a>). The paged read adds a
-          second layer in <code>BuildPagedSessionSpecificationAsync</code><span class="cite"><span> (<code>SessionsController.cs:114</code>)</span></span>: <code>Session</code> has no
+          second layer in <code>BuildPagedSessionSpecificationAsync</code><span class="cite"><span> (<code>SessionsController.cs:113</code>)</span></span>: <code>Session</code> has no
           <code>SpeakerId</code> column, so that filter key is intercepted and <code>Remove</code>d before the generic filter pipeline
           can reject it, resolved to an id list through
           <a href="group-18-conference-application.html#getsessionsbyspeakerfilterquery"><code>GetSessionsBySpeakerFilterQuery</code></a>,
-          and <strong>ANDed</strong> with the public filter rather than substituted for it<span class="cite"><span> (<code>SessionsController.cs:114-137</code>)</span></span>,
+          and <strong>ANDed</strong> with the public filter rather than substituted for it<span class="cite"><span> (<code>SessionsController.cs:113-136</code>)</span></span>,
           because substituting would leak non-accepted sessions to anonymous callers; an unparseable value
           simply ignores the key<span class="cite"><span> (<code>:119-124</code>)</span></span>. The Sessions surface adds three things the base has no notion of:
           a <code>GET /{id}/ics</code> action that streams one public session as <code>text/calendar</code> for the add-to-calendar
@@ -494,20 +502,20 @@
           lives on the split-out <a href="#sessioncalendarcontroller"><code>SessionCalendarController</code></a><span class="cite"><span>
           (<code>SessionCalendarController.cs:34-45</code>)</span></span>, a BR-86 <code>X-Warning</code> header raised on create by comparing the
           request times against the event&#39;s <code>StartDate</code>/<code>EndDate</code> and on update from the handler&#39;s
-          <code>HasDateRangeWarning</code> flag<span class="cite"><span> (<code>SessionsController.cs:284-298</code>, <code>:328-332</code>)</span></span>, and an explicit
+          <code>HasDateRangeWarning</code> flag<span class="cite"><span> (<code>SessionsController.cs:281-295</code>, <code>:328-332</code>)</span></span>, and an explicit
           <a href="group-12-api-hosting-mapping.html#idempotentattribute"><code>Idempotent</code></a> declaration on the create override
-          so the contract is visible at the ADC endpoint rather than only inherited<span class="cite"><span> (<code>:273</code>)</span></span>. Every mutating
+          so the contract is visible at the ADC endpoint rather than only inherited<span class="cite"><span> (<code>:272</code>)</span></span>. Every mutating
           action ends by evicting the <code>conference:sessions</code> and <code>conference</code> output-cache tags<span class="cite"><span>
-          (<code>SessionsController.cs:300,337,348</code>)</span></span>, the write-side half of the caching contract.</p>
+          (<code>SessionsController.cs:297,334,345</code>)</span></span>, the write-side half of the caching contract.</p>
           <p>Conditional writes are now uniform: an update states its precondition in the HTTP <code>If-Match</code> header
           and nowhere else. <a href="group-12-api-hosting-mapping.html#supportsifmatchattribute"><code>SupportsIfMatch</code></a> sits
-          on the session update<span class="cite"><span> (<code>SessionsController.cs:313</code>)</span></span>, the event update<span class="cite"><span> (<code>EventsController.cs:228</code>)</span></span>,
+          on the session update<span class="cite"><span> (<code>SessionsController.cs:310</code>)</span></span>, the event update<span class="cite"><span> (<code>EventsController.cs:228</code>)</span></span>,
           the event publish and unpublish<span class="cite"><span> (<code>EventLifecycleController.cs:53,86</code>)</span></span>, the speaker update<span class="cite"><span> (<code>SpeakersController.cs:372</code>)</span></span>, the category
           update<span class="cite"><span> (<code>ConferenceCategoriesController.cs:118</code>)</span></span>, the question update<span class="cite"><span> (<code>QuestionsController.cs:117</code>)</span></span>
           and the sponsor, partner and activity updates<span class="cite"><span> (<code>SponsorsController.cs:192</code>,
           <code>PartnersController.cs:181</code>, <code>ActivitiesController.cs:191</code>)</span></span>, and
           each action pulls the token with <code>SupportsIfMatchAttribute.RequiredToken(HttpContext)</code><span class="cite"><span>
-          (<code>SessionsController.cs:322</code>, <code>EventsController.cs:237</code>, <code>EventLifecycleController.cs:61,94</code>,
+          (<code>SessionsController.cs:319</code>, <code>EventsController.cs:237</code>, <code>EventLifecycleController.cs:61,94</code>,
           <code>SpeakersController.cs:388</code>,
           <code>SponsorsController.cs:201</code>, <code>PartnersController.cs:190</code>)</span></span>: a request with no header answers
           <strong>428 Precondition Required</strong> and a
@@ -522,7 +530,11 @@
           <a href="#speakerscontroller"><code>SpeakersController</code></a><code>.GetAllForLookupAsync</code> constrains the <em>label</em> as well as
           the rows: only <code>FirstName</code> and <code>LastName</code> may be requested by a non-privileged caller<span class="cite"><span>
           (<code>SpeakersController.cs:74,248-257</code>)</span></span>, because <code>nameProperty=Email</code> would project the speaker email
-          straight into the lookup label and go around the DTO mapper that redacts it (BR-66). Second, that
+          straight into the lookup label and go around the DTO mapper that redacts it (BR-66). The <code>Email</code>
+          label is checked first and more strictly than the rest: it is refused to any caller who fails
+          <a href="group-18-conference-application.html#speakerdtomapper"><code>SpeakerDTOMapper</code></a><code>.CanSeeEmail</code> (Organizer
+          only), privileged reader or not, because the privileged read audience also admits ContentEditor<span class="cite"><span>
+          (<code>SpeakersController.cs:229-242</code>)</span></span>. Second, that
           controller&#39;s <code>GetByIdAsync</code> drops the public specification when the caller&#39;s <code>speaker_id</code> claim equals
           the route id (the self-edit form cannot load without reading the profile it edits), and because the
           output-cache key does not vary by caller it turns storage off for that response through
@@ -631,7 +643,7 @@
           API layer&#39;s thin bridge to the real seeding logic: it resolves <code>IUnitOfWork</code> and <code>IConfiguration</code> from
           the passed service provider, reads <code>Seeding:IncludeSampleConferenceData</code> (false when the key is
           absent, and set to <code>true</code> only by the local AppHost at
-          <span class="cite"><span><code>MMCA.ADC/Source/Hosting/MMCA.ADC.AppHost/Program.cs:206</code></span></span>), then constructs and runs
+          <span class="cite"><span><code>MMCA.ADC/Source/Hosting/MMCA.ADC.AppHost/Program.cs:207</code></span></span>), then constructs and runs
           <a href="group-19-conference-infrastructure.html#conferencemoduledbseeder"><code>ConferenceModuleDbSeeder</code></a> from
           <a href="group-19-conference-infrastructure.html">G19</a> with that flag<span class="cite"><span> (<code>ConferenceModuleSeeder.cs:21-29</code>)</span></span>. Three
           anchor types round out the project: <code>AssemblyReference</code> and <code>ClassReference</code><span class="cite"><span>
@@ -653,7 +665,7 @@
           &quot;give me the session ids for this event&quot;<span class="cite"><span> (<code>SessionBookmarksGrpcService.cs:45</code>)</span></span>.
           <a href="#eventlivevalidationgrpcservice"><code>EventLiveValidationGrpcService</code></a> exposes
           <code>IEventLiveValidationService</code> to Engagement&#39;s conference-day live layer and to Notification&#39;s
-          live-channel join check<span class="cite"><span> (<code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:460-463</code>)</span></span>
+          live-channel join check<span class="cite"><span> (<code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:471-474</code>)</span></span>
           across <strong>four</strong> methods, each
           projecting a domain record onto the wire shape: <code>GetEventLiveInfo</code> returns an
           <a href="group-17-conference-domain.html#eventliveinfo"><code>EventLiveInfo</code></a> as publish state plus live-window
@@ -723,7 +735,7 @@
           (<code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Contracts/DependencyInjection.cs:44</code>)</span></span>,
           <code>AddConferenceEventLiveValidationClient(...)</code><span class="cite"><span> (<code>DependencyInjection.cs:74</code>)</span></span> and
           <code>AddConferenceUserExportClient(...)</code><span class="cite"><span> (<code>DependencyInjection.cs:102</code>)</span></span>, the last one called by the
-          Identity host<span class="cite"><span> (<code>MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:332</code>)</span></span>. Each does exactly two
+          Identity host<span class="cite"><span> (<code>MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:344</code>)</span></span>. Each does exactly two
           things: registers a typed gRPC client through Common&#39;s <code>AddTypedGrpcClient&lt;TClient&gt;(serviceName)</code>
           (<span class="cite"><span><code>:46,76,104</code></span></span>, which resolves <code>http://conference</code> through Aspire service discovery and attaches the
           JWT-forwarding interceptor plus the Polly resilience handler), then calls <code>services.Replace(...)</code> with
@@ -736,27 +748,27 @@
           contracts to Engagement and also consumes Engagement&#39;s
           <a href="group-22-engagement-module.html#ibookmarkcountservice"><code>IBookmarkCountService</code></a>, so the Conference host
           registers <code>AddEngagementBookmarkCountClient()</code><span class="cite"><span>
-          (<code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:420</code>)</span></span> and the AppHost deliberately
+          (<code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:431</code>)</span></span> and the AppHost deliberately
           gives only the Engagement-to-Conference edge a startup <code>WaitFor</code>, leaving the reverse edge a plain
           <code>WithReference</code> so the pair cannot deadlock; transient &quot;peer not ready&quot; errors self-heal through the
-          resilience pipeline (<span class="cite"><span><code>MMCA.ADC/Source/Hosting/MMCA.ADC.AppHost/Program.cs:266,269</code></span></span>;
+          resilience pipeline (<span class="cite"><span><code>MMCA.ADC/Source/Hosting/MMCA.ADC.AppHost/Program.cs:267,270</code></span></span>;
           <a href="https://ivanball.github.io/docs/adr/008-service-extraction-topology.html" target="_blank" rel="noopener">ADR-008</a>, <code>[Rubric §29, Resilience]</code>).</p>
           <h2 id="the-service-host-kestrel-first-then-caching-and-warm-up">The service host: Kestrel first, then caching and warm-up</h2>
           <p>The <code>MMCA.ADC.Conference.Service</code> <code>Program.cs</code> boots only the Conference module. Kestrel is configured
           before anything else, and the whole of it is one line:
           <code>builder.ConfigureEndpointsWithHealthProbe(HttpProtocols.Http2)</code><span class="cite"><span>
-          (<code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:87</code>)</span></span>, the shared extension from
+          (<code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:88</code>)</span></span>, the shared extension from
           Common&#39;s <a href="group-16-aspire-orchestration.html#kestrelendpointextensions"><code>KestrelEndpointExtensions</code></a>
           (<a href="group-16-aspire-orchestration.html">G16</a>). Passing <code>HttpProtocols.Http2</code> sets every endpoint default to
           HTTP/2-only on cleartext (h2c prior knowledge), so cross-service gRPC clients negotiate HTTP/2 without
           TLS or ALPN; on a cleartext endpoint <code>Http1AndHttp2</code> would effectively disable HTTP/2 and Kestrel would
-          reject gRPC frames with <code>GOAWAY HTTP_1_1_REQUIRED</code><span class="cite"><span> (<code>Program.cs:77-85</code>)</span></span>. That transport choice is
+          reject gRPC frames with <code>GOAWAY HTTP_1_1_REQUIRED</code><span class="cite"><span> (<code>Program.cs:78-86</code>)</span></span>. That transport choice is
           <a href="https://ivanball.github.io/docs/adr/012-grpc-host-transport.html" target="_blank" rel="noopener">ADR-012</a>. The same helper adds a
           dedicated HTTP/1.1-only listener for the ACA <code>httpGet</code> probes when <code>HealthProbe:Port</code> is configured,
           because the h2c-only endpoint rejects the platform&#39;s HTTP/1.1 probe requests. The rest of the host is
           the standard ADC REST composition: Serilog registered through <code>AddCommonSerilog</code> as one provider
           rather than through <code>UseSerilog()</code> so the OpenTelemetry-to-Azure-Monitor provider survives<span class="cite"><span>
-          (<code>Program.cs:96-102</code>)</span></span>, an optional Key Vault configuration source layered in before anything binds
+          (<code>Program.cs:97-103</code>)</span></span>, an optional Key Vault configuration source layered in before anything binds
           settings<span class="cite"><span> (<code>:114</code>)</span></span>, the governed AI chat client behind the session scorer<span class="cite"><span> (<code>:154</code>)</span></span> with the framework&#39;s
           <code>MMCA.Common.AI</code> meter and activity source switched on for its token spend and per-call spans<span class="cite"><span>
           (<code>:172-174</code>)</span></span>, health checks with a relational database required<span class="cite"><span> (<code>:216</code>)</span></span>, CORS, API versioning and
@@ -766,7 +778,7 @@
           <a href="https://ivanball.github.io/docs/adr/004-authentication-dual-fetch.html" target="_blank" rel="noopener">ADR-004</a>,
           <a href="https://ivanball.github.io/docs/adr/019-rate-limiting.html" target="_blank" rel="noopener">ADR-019</a>,
           <a href="https://ivanball.github.io/docs/adr/079-shared-http-middleware-pipeline.html" target="_blank" rel="noopener">ADR-079</a>).</p>
-          <p>Output caching is where this host carries the most bespoke configuration<span class="cite"><span> (<code>Program.cs:229-302</code>)</span></span>. The
+          <p>Output caching is where this host carries the most bespoke configuration<span class="cite"><span> (<code>Program.cs:235-308</code>)</span></span>. The
           base policy is deny-by-default <code>NoCache</code><span class="cite"><span> (<code>:231</code>)</span></span>, so only explicitly decorated endpoints cache at all.
           <code>ConferenceCache</code> stays on the built-in default semantics because the permission-gated
           <a href="#sessionselectioncontroller"><code>SessionSelectionController</code></a> references it, and
@@ -792,7 +804,7 @@
           real traffic.</p>
           <p>Two mechanisms close the distance that TTLs alone cannot. First, at two replicas the store itself must
           be shared: when a Redis connection string is present the host backs the <strong>output</strong> cache with Redis as
-          well as the distributed cache<span class="cite"><span> (<code>Program.cs:185,196</code>)</span></span>, because the default per-replica memory store
+          well as the distributed cache<span class="cite"><span> (<code>Program.cs:191,202</code>)</span></span>, because the default per-replica memory store
           meant an eviction reached only the replica that served the mutation while the other kept serving the
           pre-edit payload for the full TTL; the same branch adds a two-level cache, an in-process L1 over the
           Redis L2 under a disjoint keyspace, so a repeat read inside one replica never leaves the process while
@@ -805,13 +817,13 @@
           <a href="#conferencebrokerconsumers"><code>ConferenceBrokerConsumers</code></a><span class="cite"><span>
           (<code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/ConferenceBrokerConsumers.cs:37</code>)</span></span>, and the tag
           is dropped on arrival. Registering only one of the two halves is a silent no-op<span class="cite"><span>
-          (<code>Program.cs:304-306</code>)</span></span>. The host also contributes the module&#39;s error-code translations to the edge
-          localizer with <code>AddErrorResources&lt;ConferenceErrorResources&gt;()</code><span class="cite"><span> (<code>Program.cs:380</code>)</span></span>, so a Conference domain error like
+          (<code>Program.cs:310-312</code>)</span></span>. The host also contributes the module&#39;s error-code translations to the edge
+          localizer with <code>AddErrorResources&lt;ConferenceErrorResources&gt;()</code><span class="cite"><span> (<code>Program.cs:386</code>)</span></span>, so a Conference domain error like
           <code>Event.Name.Empty</code> is rendered in the caller&#39;s culture by the shared
           <a href="group-12-api-hosting-mapping.html#errorlocalizer"><code>ErrorLocalizer</code></a>
           (<a href="https://ivanball.github.io/docs/adr/027-multi-locale-i18n.html" target="_blank" rel="noopener">ADR-027</a>).</p>
           <p>One more startup extension point matters: <a href="#selfhttpoutputcachewarmuptask"><code>SelfHttpOutputCacheWarmupTask</code></a>,
-          registered via <code>AddWarmupTask&lt;T&gt;()</code><span class="cite"><span> (<code>Program.cs:314</code>)</span></span> as an
+          registered via <code>AddWarmupTask&lt;T&gt;()</code><span class="cite"><span> (<code>Program.cs:320</code>)</span></span> as an
           <a href="https://ivanball.github.io/docs/adr/025-startup-warmup-readiness.html" target="_blank" rel="noopener">ADR-025</a>
           <a href="group-16-aspire-orchestration.html#iwarmuptask"><code>IWarmupTask</code></a>. The task itself is almost empty: it
           derives from <a href="group-16-aspire-orchestration.html#selfhttpwarmuptaskbase"><code>SelfHttpWarmupTaskBase</code></a><span class="cite"><span>
@@ -831,7 +843,7 @@
           nothing.</p>
           <h2 id="the-runtime-picture-one-host-two-transports">The runtime picture, one host, two transports</h2>
           <p>Module discovery is built by <code>AddModuleHost</code>, which names the single Conference assembly so discovery
-          looks nowhere else<span class="cite"><span> (<code>Program.cs:373-375</code>)</span></span>. One <code>AddMmcaApplicationPipeline</code> call then runs, in order,
+          looks nowhere else<span class="cite"><span> (<code>Program.cs:379-381</code>)</span></span>. One <code>AddMmcaApplicationPipeline</code> call then runs, in order,
           the module registration, the Engagement gRPC client and the broker, and seals the decorator pipeline
           behind them<span class="cite"><span> (<code>:418-421</code>)</span></span>. The broker step hands MassTransit
           <a href="#conferencebrokerconsumers"><code>ConferenceBrokerConsumers</code></a><code>.Register</code>, a small class kept out of
@@ -840,14 +852,14 @@
           registers three consumers<span class="cite"><span> (<code>ConferenceBrokerConsumers.cs:32-37</code>)</span></span>: <code>UserRegistered</code>, which drives the
           BR-207 email-match speaker auto-link through
           <a href="group-18-conference-application.html#userregisteredhandler"><code>UserRegisteredHandler</code></a>; <code>UserDeleted</code>,
-          which erases the feedback answers a deleted account wrote<span class="cite"><span> (<code>Program.cs:412-414</code>)</span></span>; and the output-cache
+          which erases the feedback answers a deleted account wrote<span class="cite"><span> (<code>Program.cs:418-420</code>)</span></span>; and the output-cache
           eviction consumer described above. <code>UserDeleted</code> is the one with an explicit queue,
           <code>adc-conference-user-deleted</code><span class="cite"><span> (<code>ConferenceBrokerConsumers.cs:28,35-36</code>)</span></span>: every service keeps
           MassTransit&#39;s default endpoint names, which derive the queue from the consumer type alone, and
           Engagement registers the same generic consumer, so on the default name the two services would be
           competing consumers of one queue and each erasure would reach only one of them<span class="cite"><span>
           (<code>ConferenceBrokerConsumers.cs:14-27</code>)</span></span>. The host then adds <code>AddGrpcServiceDefaults()</code><span class="cite"><span>
-          (<code>Program.cs:430</code>)</span></span> and the per-module health checks<span class="cite"><span> (<code>:433</code>)</span></span>, initializes the database before serving
+          (<code>Program.cs:441</code>)</span></span> and the per-module health checks<span class="cite"><span> (<code>:433</code>)</span></span>, initializes the database before serving
           traffic unless this is the design-time OpenAPI run<span class="cite"><span> (<code>:447</code>)</span></span>, maps the shared health endpoints<span class="cite"><span> (<code>:449</code>)</span></span>,
           and publishes <strong>all three</strong> gRPC services over the same Kestrel HTTP/2 channel the REST controllers serve
           through <a href="#conferencegrpcendpoints"><code>ConferenceGrpcEndpoints</code></a><code>.Map</code><span class="cite"><span> (<code>:464</code>)</span></span>, adding gRPC reflection in
@@ -1057,8 +1069,10 @@
           <li><code>CreateAsync</code><span class="cite"><span> (<code>:133</code>)</span></span>: <code>[HttpPost]</code><span class="cite"><span> (<code>:131</code>)</span></span> and <code>[Idempotent]</code><span class="cite"><span> (<code>:132</code>)</span></span>, binds
           <code>[FromBody] AddCategoryItemRequest</code>, dispatches
           <code>new AddCategoryItemCommand(request.CategoryId, request.CategoryItemId, request.Name, request.Sort)</code><span class="cite"><span>
-          (<code>:138-142</code>)</span></span>; on failure <code>HandleFailure</code><span class="cite"><span> (<code>:145-148</code>)</span></span>, otherwise it evicts and returns
-          <code>CreatedAtRoute(&quot;GetCategoryItemById&quot;, new { id = result.Value!.Id }, result.Value)</code><span class="cite"><span> (<code>:151-154</code>)</span></span>. The
+          (<code>:138-142</code>)</span></span>; it unwraps the outcome with <code>if (!result.TryGetValue(out var categoryItem))</code>, returning
+          <code>HandleFailure</code> on the failure branch<span class="cite"><span> (<code>:145-148</code>)</span></span>, otherwise it evicts and returns
+          <code>CreatedAtRoute(&quot;GetCategoryItemById&quot;, new { id = categoryItem.Id }, categoryItem)</code><span class="cite"><span> (<code>:151-154</code>)</span></span>, so
+          the success path reads the bound DTO rather than a null-forgiven <code>result.Value!</code>. The
           doc comment records why the replay contract is declared here rather than inherited: this create is
           hand-written, not the base action<span class="cite"><span> (<code>:124-130</code>)</span></span>.</li>
           <li><code>UpdateAsync</code><span class="cite"><span> (<code>:159</code>)</span></span>: <code>[HttpPut(&quot;{id}&quot;)]</code><span class="cite"><span> (<code>:158</code>)</span></span>, binds the route <code>id</code> and
@@ -1072,7 +1086,7 @@
           re-validation in the handler.</li>
           <li>All three mutations end with <code>outputCacheStore.EvictTagsAsync(cancellationToken, &quot;conference:categories&quot;, &quot;conference&quot;)</code><span class="cite"><span> (<code>:150, 177, 197</code>)</span></span>, and all three return <code>HandleFailure</code>
           <em>before</em> the eviction, so a rejected command never disturbs the cache. <code>[Rubric §12, Performance &amp; Scalability]</code>: without that call the cached reads would serve the pre-edit item list for the full
-          5-minute policy TTL<span class="cite"><span> (<code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:280</code>)</span></span>, so an
+          5-minute policy TTL<span class="cite"><span> (<code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:286</code>)</span></span>, so an
           organizer renaming a track would not see it on the public session pages until the entry expired.</li>
           </ul>
           </li>
@@ -1570,17 +1584,17 @@
           <a href="group-12-api-hosting-mapping.html#entitycontrollerbasetentity-tentitydto-tidentifiertype"><code>EntityControllerBase&lt;TEntity, TEntityDTO, TIdentifierType&gt;</code></a>
           (the read-only base, <span class="cite"><span><code>EventQuestionAnswersController.cs:88</code></span></span>); the
           <a href="group-03-querying-specifications.html#ientityqueryservicetentity-tentitydto-tidentifiertype"><code>IEntityQueryService</code></a><span class="cite"><span>
-          (<code>:79</code>)</span></span>; four
+          (<code>:81</code>)</span></span>; four
           <a href="group-05-cqrs-pipeline.html#icommandhandlerin-tcommand-tresult"><code>ICommandHandler</code></a> injections for
           <a href="group-18-conference-application.html#addeventquestionanswercommand"><code>AddEventQuestionAnswerCommand</code></a>,
           <code>BatchAddEventQuestionAnswersCommand</code>,
           <a href="group-18-conference-application.html#updateeventquestionanswercommand"><code>UpdateEventQuestionAnswerCommand</code></a>
           and <a href="group-18-conference-application.html#removeeventquestionanswercommand"><code>RemoveEventQuestionAnswerCommand</code></a><span class="cite"><span>
-          (<code>:80-83</code>)</span></span>; <a href="group-08-auth.html#icurrentuserservice"><code>ICurrentUserService</code></a> and
-          <a href="group-24-identity-module.html#rolenames"><code>RoleNames</code></a> for the scoping decision<span class="cite"><span> (<code>:84</code>)</span></span>;
+          (<code>:82-85</code>)</span></span>; <a href="group-08-auth.html#icurrentuserservice"><code>ICurrentUserService</code></a> and
+          <a href="group-24-identity-module.html#rolenames"><code>RoleNames</code></a> for the scoping decision<span class="cite"><span> (<code>:86</code>)</span></span>;
           <a href="group-08-auth.html#ownershiphelper"><code>OwnershipHelper</code></a>, which supplies all three ownership decisions:
-          <code>GetOwnershipSpecification&lt;TSpec, TId&gt;</code> for the read scope<span class="cite"><span> (<code>:107-112</code>)</span></span>, <code>IsAdmin</code> for the export
-          opt-in<span class="cite"><span> (<code>:119</code>)</span></span> and <code>RequireResolvableOwner&lt;TId&gt;</code> for the fail-closed gate<span class="cite"><span> (<code>:135-143</code>)</span></span>;
+          <code>GetOwnershipSpecification&lt;TSpec, TId&gt;</code> for the read scope<span class="cite"><span> (<code>:109-114</code>)</span></span>, <code>IsAdmin</code> for the export
+          opt-in<span class="cite"><span> (<code>:121</code>)</span></span> and <code>RequireResolvableOwner&lt;TId&gt;</code> for the fail-closed gate<span class="cite"><span> (<code>:137-145</code>)</span></span>;
           <a href="group-03-querying-specifications.html#ownedbyuserspecificationtentity-tidentifiertype"><code>OwnedByUserSpecification&lt;TEntity, TIdentifierType&gt;</code></a>
           as the filter it builds; the <a href="group-12-api-hosting-mapping.html#idempotentattribute"><code>IdempotentAttribute</code></a>
           on its create and its batch create; the
@@ -1605,7 +1619,7 @@
           owner claim, a factory that builds <code>new OwnedByUserSpecification&lt;EventQuestionAnswer, EventQuestionAnswerIdentifierType&gt;(userId)</code>, and <code>RoleNames.Organizer</code> as the bypass role<span class="cite"><span>
           (<code>EventQuestionAnswersController.cs:109-114</code>)</span></span>, which is the same helper shape Store&#39;s <code>OrdersController</code>
           and <code>ReviewsController</code> use and ADC&#39;s Engagement <code>AddModuleEngagementAPI</code> passes to
-          <code>OwnerOrAdminFilter</code> (doc <span class="cite"><span><code>:97-105</code></span></span>). The specification is composed into the <em>database query</em>, so
+          <code>OwnerOrAdminFilter</code> (doc <span class="cite"><span><code>:100-107</code></span></span>). The specification is composed into the <em>database query</em>, so
           the scoping happens in SQL, paging counts stay honest, and nothing is filtered out of an already-fetched
           page. Two consequences the base states explicitly: the specification never replaces the caller&#39;s own
           <code>filters</code> (the query service ANDs the two, so a caller can only narrow what the rule already allows,
@@ -1637,7 +1651,7 @@
           exports through <code>AllowUnscopedExport</code>, which is <code>false</code> by default<span class="cite"><span> (<code>:508</code>)</span></span>. That null is ambiguous
           here for the same two reasons as the read gate, so this controller opts in only for the Organizer
           bypass: <code>AllowUnscopedExport =&gt; OwnershipHelper.IsAdmin(currentUserService, RoleNames.Organizer)</code>
-          (<span class="cite"><span><code>EventQuestionAnswersController.cs:121</code></span></span>, doc <span class="cite"><span><code>:114-118</code></span></span>), and a non-Organizer with an unresolvable
+          (<span class="cite"><span><code>EventQuestionAnswersController.cs:121</code></span></span>, doc <span class="cite"><span><code>:116-120</code></span></span>), and a non-Organizer with an unresolvable
           owner claim keeps the framework&#39;s 403. On top of that, <code>ExportAsync</code> is overridden to <code>Forbid()</code> unless
           <code>currentUserService.IsInRole(RoleNames.Organizer)</code>, then delegate to the base (<span class="cite"><span><code>:247-262</code></span></span>, gate at
           <span class="cite"><span><code>:256-259</code></span></span>). <code>[Rubric §30, Compliance/Privacy/Data Governance]</code> assesses whether personal data has a
@@ -1666,10 +1680,10 @@
           <li><strong>Walkthrough</strong><ul>
           <li>Primary-constructor injection<span class="cite"><span> (<code>EventQuestionAnswersController.cs:80-87</code>)</span></span>: query service, four
           command handlers (add, batch-add, update, remove), <code>ICurrentUserService</code>, logger. The base is
-          constructed with <code>(queryService, logger)</code><span class="cite"><span> (<code>:86</code>)</span></span>.</li>
-          <li><code>GetExportSpecification()</code><span class="cite"><span> (<code>:107-112</code>)</span></span>: the <code>OwnershipHelper</code> delegation described above, with the doc
-          comment at <span class="cite"><span><code>:88-106</code></span></span>.</li>
-          <li><code>AllowUnscopedExport</code><span class="cite"><span> (<code>:119</code>)</span></span>: the Organizer-only export opt-in, with the doc comment at <span class="cite"><span><code>:114-118</code></span></span>.</li>
+          constructed with <code>(queryService, logger)</code><span class="cite"><span> (<code>:88</code>)</span></span>.</li>
+          <li><code>GetExportSpecification()</code><span class="cite"><span> (<code>:109-114</code>)</span></span>: the <code>OwnershipHelper</code> delegation described above, with the doc
+          comment at <span class="cite"><span><code>:90-108</code></span></span>.</li>
+          <li><code>AllowUnscopedExport</code><span class="cite"><span> (<code>:121</code>)</span></span>: the Organizer-only export opt-in, with the doc comment at <span class="cite"><span><code>:116-120</code></span></span>.</li>
           <li><code>RequireResolvableOwner()</code><span class="cite"><span> (<code>:137-145</code>)</span></span>: the fail-closed gate, with the doc comment at <span class="cite"><span><code>:123-136</code></span></span>.</li>
           <li>The four reads<span class="cite"><span> (<code>:147-201</code>)</span></span> are guard-plus-passthrough: each calls <code>RequireResolvableOwner()</code> first and,
           if it returns non-null, returns that result instead of calling the base action. <code>GetAllAsync</code><span class="cite"><span>
@@ -1687,7 +1701,9 @@
           comment records that the attribute is declared here because this create is hand-written rather than the
           base action<span class="cite"><span> (<code>:264-270</code>)</span></span>. It dispatches
           <code>new AddEventQuestionAnswerCommand(request.EventId, null, request.QuestionId, request.AnswerValue)</code><span class="cite"><span>
-          (<code>:278</code>)</span></span>, the <code>null</code> being the child id the domain mints, then <code>CreatedAtRoute</code><span class="cite"><span> (<code>:283-286</code>)</span></span>.</li>
+          (<code>:278</code>)</span></span>, the <code>null</code> being the child id the domain mints, then unwraps the created answer with
+          <code>result.TryGetValue(out var answer)</code><span class="cite"><span> (<code>:281</code>)</span></span> and returns <code>CreatedAtRoute</code> with <code>answer.Id</code> as the
+          route value and <code>answer</code> as the body<span class="cite"><span> (<code>:283-286</code>)</span></span>.</li>
           <li><code>CreateBatchAsync</code><span class="cite"><span> (<code>:300</code>)</span></span> is the batch sibling of <code>CreateAsync</code>, described above; see
           <a href="#batchaddeventquestionanswersrequest"><code>BatchAddEventQuestionAnswersRequest</code></a>.</li>
           <li><code>UpdateAsync</code><span class="cite"><span> (<code>:319</code>)</span></span> dispatches
@@ -1774,9 +1790,9 @@
           entity tags the import touches (events, sessions, speakers, categories, rooms, questions) plus the
           broad <code>conference</code> tag<span class="cite"><span> (<code>:144-153</code>)</span></span> and returns <code>Ok(result.Value)</code><span class="cite"><span> (<code>:154</code>)</span></span>.</li>
           <li>The broad <code>conference</code> tag is the one every Conference output-cache policy carries<span class="cite"><span>
-          (<code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:238-239,270-287</code>)</span></span>, so evicting it
+          (<code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:244-245,276-293</code>)</span></span>, so evicting it
           also drops the entries of <code>ConferenceCache</code> and <code>ConferencePublicCache</code>, which carry no
-          entity-specific tag<span class="cite"><span> (<code>Program.cs:239,270</code>)</span></span> and would otherwise serve the pre-transition event
+          entity-specific tag<span class="cite"><span> (<code>Program.cs:245,276</code>)</span></span> and would otherwise serve the pre-transition event
           until their 5-minute TTL ran out.</li>
           </ul>
           </li>
@@ -1841,12 +1857,12 @@
           (<code>EntityControllerBase.cs:273-274,508</code>)</span></span>, so only the privileged audience may export the whole table.
           <code>[Rubric §12, Performance &amp; Scalability]</code>: the reads are cached under the <code>EventsCache</code> policy (5-minute
           TTL, tags <code>conference</code> and <code>conference:events</code>,
-          <span class="cite"><span><code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:271</code></span></span>), which is exactly why the writes
+          <span class="cite"><span><code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:277</code></span></span>), which is exactly why the writes
           must evict. That policy is a
           <a href="group-12-api-hosting-mapping.html#publicendpointoutputcachepolicy"><code>PublicEndpointOutputCachePolicy</code></a>
           registration and it bypasses the cache entirely for the privileged read audience
           (<a href="https://ivanball.github.io/docs/adr/040-authenticated-output-caching-for-public-reads.html" target="_blank" rel="noopener">ADR-040</a>,
-          <span class="cite"><span><code>Program.cs:241-269</code></span></span>), which is what keeps an organizer&#39;s everything-inclusive payload out of the shared
+          <span class="cite"><span><code>Program.cs:247-275</code></span></span>), which is what keeps an organizer&#39;s everything-inclusive payload out of the shared
           public entry.</li>
           <li><strong>Walkthrough</strong><ul>
           <li><code>GetReadSpecificationAsync</code><span class="cite"><span> (<code>EventSpeakersController.cs:72-82</code>)</span></span> is the one place the rule lives; the
@@ -1865,8 +1881,9 @@
           (<code>:140-145</code>)</span></span>.</li>
           <li><code>CreateAsync</code><span class="cite"><span> (<code>:172</code>)</span></span> is <code>[HttpPost]</code><span class="cite"><span> (<code>:170</code>)</span></span> and <code>[Idempotent]</code><span class="cite"><span> (<code>:171</code>)</span></span>, dispatches
           <code>AddEventSpeakerCommand(request.EventId, null, request.SpeakerId)</code><span class="cite"><span> (<code>:177</code>)</span></span>, returns <code>HandleFailure</code>
-          on failure<span class="cite"><span> (<code>:180-183</code>)</span></span>, then evicts and returns <code>CreatedAtRoute(&quot;GetEventSpeakerById&quot;, ...)</code><span class="cite"><span>
-          (<code>:185-189</code>)</span></span>.</li>
+          when <code>result.TryGetValue(out var eventSpeaker)</code> is false<span class="cite"><span> (<code>:180-183</code>)</span></span>, then evicts and returns
+          <code>CreatedAtRoute(&quot;GetEventSpeakerById&quot;, ...)</code> with <code>eventSpeaker.Id</code> as the route value and
+          <code>eventSpeaker</code> as the body<span class="cite"><span> (<code>:185-189</code>)</span></span>.</li>
           <li><code>DeleteAsync</code><span class="cite"><span> (<code>:194</code>)</span></span> reads the parent <code>eventId</code> <code>[FromQuery]</code><span class="cite"><span> (<code>:196</code>)</span></span>, dispatches
           <code>RemoveEventSpeakerCommand(eventId, id)</code><span class="cite"><span> (<code>:200</code>)</span></span>, evicts<span class="cite"><span> (<code>:208</code>)</span></span> and returns <code>NoContent()</code>.</li>
           <li>Both mutations evict <strong>both</strong> parents&#39; tags plus the broad one:
@@ -1930,7 +1947,7 @@
           assesses caching strategy: every read here is decorated <code>[OutputCache(PolicyName = &quot;RoomsCache&quot;)]</code><span class="cite"><span>
           (<code>RoomsController.cs:146,162,183,196</code>)</span></span>, so anonymous room reads are served from a 5-minute entry
           tagged <code>conference</code> and <code>conference:rooms</code><span class="cite"><span>
-          (<code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:279</code>)</span></span>. The correctness half is
+          (<code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:285</code>)</span></span>. The correctness half is
           eviction: each mutation ends by calling
           <code>outputCacheStore.EvictTagsAsync(cancellationToken, &quot;conference:rooms&quot;, &quot;conference:sessions&quot;, &quot;conference&quot;)</code><span class="cite"><span>
           (<code>:235, 266, 286</code>)</span></span>. All three evict the same three tags, because cached session reads and the <code>.ics</code>
@@ -1952,8 +1969,9 @@
           event exists or that a venue has been booked for it&quot;<span class="cite"><span> (<code>:189-193</code>)</span></span>.</li>
           <li><code>CreateAsync</code><span class="cite"><span> (<code>:214</code>)</span></span> is <code>[HttpPost]</code><span class="cite"><span> (<code>:212</code>)</span></span> and <code>[Idempotent]</code><span class="cite"><span> (<code>:213</code>)</span></span>, maps <code>AddRoomRequest</code> onto
           <code>AddRoomCommand</code> positionally (<span class="cite"><span><code>:218-228</code></span></span>, note the optional client-supplied <code>RoomId</code> in slot two),
-          returns <code>HandleFailure</code> on failure<span class="cite"><span> (<code>:230-231</code>)</span></span>, evicts<span class="cite"><span> (<code>:235</code>)</span></span> and returns
-          <code>CreatedAtRoute(&quot;GetRoomById&quot;, ...)</code><span class="cite"><span> (<code>:236-239</code>)</span></span>.</li>
+          returns <code>HandleFailure</code> when <code>result.TryGetValue(out var room)</code> is false<span class="cite"><span> (<code>:230-231</code>)</span></span>, evicts<span class="cite"><span>
+          (<code>:235</code>)</span></span> and returns <code>CreatedAtRoute(&quot;GetRoomById&quot;, ...)</code> with <code>room.Id</code> as the route value and
+          <code>room</code> as the body<span class="cite"><span> (<code>:236-239</code>)</span></span>.</li>
           <li><code>UpdateAsync</code><span class="cite"><span> (<code>:244</code>)</span></span> dispatches <code>UpdateRoomCommand</code> with the parent <code>EventId</code> from the body and the
           child id from the route<span class="cite"><span> (<code>:249-259</code>)</span></span>, evicts<span class="cite"><span> (<code>:266</code>)</span></span> and returns <code>NoContent()</code><span class="cite"><span> (<code>:267</code>)</span></span>.</li>
           <li><code>DeleteAsync</code><span class="cite"><span> (<code>:272</code>)</span></span> reads the parent <code>eventId</code> <code>[FromQuery]</code><span class="cite"><span> (<code>:274</code>)</span></span>, dispatches
@@ -1980,7 +1998,7 @@
           <hr>
           <h3 id="eventscontroller">EventsController</h3>
           <blockquote>
-          <p>MMCA.ADC.Conference.API · <code>MMCA.ADC.Conference.API.Controllers.Events</code> · <span class="cite"><span><code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/Events/EventsController.cs:47</code></span></span> · Level 10 · class (sealed)</p>
+          <p>MMCA.ADC.Conference.API · <code>MMCA.ADC.Conference.API.Controllers.Events</code> · <span class="cite"><span><code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/Events/EventsController.cs:47</code></span></span> · Level 9 · class (sealed)</p>
           </blockquote>
           <ul>
           <li><strong>What it is</strong>: the REST controller for the <a href="group-17-conference-domain.html#event"><code>Event</code></a> aggregate
@@ -2039,14 +2057,15 @@
           <li>The reads<span class="cite"><span> (<code>:82-129</code>)</span></span> attach <code>[AllowAnonymous]</code> + <code>[OutputCache(PolicyName = &quot;EventsCache&quot;)]</code> and
           delegate to the base, which threads the published-event specification; <code>GetByIdAsync</code> carries the named
           route <code>&quot;GetEventById&quot;</code><span class="cite"><span> (<code>:120</code>)</span></span>.</li>
-          <li><code>ExportCalendarAsync</code><span class="cite"><span> (<code>:159-170</code>)</span></span> streams an <code>.ics</code> document via <code>File(...)</code> with the <code>text/calendar</code>
-          content type and an <code>event-{id}.ics</code> file name<span class="cite"><span> (<code>:169</code>)</span></span>.</li>
+          <li><code>ExportCalendarAsync</code><span class="cite"><span> (<code>:159-170</code>)</span></span> unwraps the handler&#39;s calendar text with
+          <code>result.TryGetValue(out var calendar)</code><span class="cite"><span> (<code>:167</code>)</span></span> and streams it as an <code>.ics</code> document via <code>File(...)</code>
+          with the <code>text/calendar</code> content type and an <code>event-{id}.ics</code> file name<span class="cite"><span> (<code>:169</code>)</span></span>.</li>
           <li><code>GetNowNextAsync</code><span class="cite"><span> (<code>:176-185</code>)</span></span> and <code>GetCurrentNowNextAsync</code><span class="cite"><span> (<code>:191-199</code>)</span></span> serve the now/next snapshot for
           a given event or, with <code>new GetNowNextQuery(EventId: null)</code><span class="cite"><span> (<code>:197</code>)</span></span>, for the current one; both use the
           short-TTL <code>NowNextCache</code> policy (60 seconds,
-          <span class="cite"><span><code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:287</code></span></span>) because the payload changes with
+          <span class="cite"><span><code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:293</code></span></span>) because the payload changes with
           the clock. That policy is registered without the privileged-reader bypass, because the snapshot is
-          identical for every role<span class="cite"><span> (<code>Program.cs:285-287</code>)</span></span>.</li>
+          identical for every role<span class="cite"><span> (<code>Program.cs:291-293</code>)</span></span>.</li>
           <li><code>CreateAsync</code><span class="cite"><span> (<code>:206-216</code>)</span></span> is an override gated by <code>[HasPermission(ConferencePermissions.EventsManage)]</code><span class="cite"><span>
           (<code>:207</code>)</span></span> and marked <code>[Idempotent]</code><span class="cite"><span> (<code>:208</code>)</span></span>, so a retried POST carrying
           the same <code>Idempotency-Key</code> is deduplicated; it calls <code>base.CreateAsync</code> then evicts
@@ -2054,14 +2073,16 @@
           the inherited one instead of duplicating it (doc <span class="cite"><span><code>:201-205</code></span></span>).</li>
           <li><code>UpdateAsync</code><span class="cite"><span> (<code>:226-256</code>)</span></span> carries the same <code>EventsManage</code> capability<span class="cite"><span> (<code>:227</code>)</span></span>, reads the required
           token<span class="cite"><span> (<code>:237</code>)</span></span>, dispatches
-          <code>new UpdateEventCommand(id, request, rowVersion)</code><span class="cite"><span> (<code>:239-241</code>)</span></span>, appends a non-fatal <code>X-Warning</code> header
-          when a timezone change leaves existing sessions semantically stale (BR-131, <span class="cite"><span><code>:246-252</code></span></span>), evicts
-          <code>conference:events</code> and the broad <code>conference</code> tag<span class="cite"><span> (<code>:254</code>)</span></span> and returns <code>Ok(result.Value.Event)</code><span class="cite"><span>
-          (<code>:255</code>)</span></span>.</li>
+          <code>new UpdateEventCommand(id, request, rowVersion)</code><span class="cite"><span> (<code>:239-241</code>)</span></span>, unwraps the
+          <a href="group-18-conference-application.html#updateeventresult"><code>UpdateEventResult</code></a> with
+          <code>result.TryGetValue(out var update)</code><span class="cite"><span> (<code>:243</code>)</span></span>, appends a non-fatal <code>X-Warning</code> header when
+          <code>update.HasTimeZoneWarning</code> reports that a timezone change leaves existing sessions semantically stale
+          (BR-131, <span class="cite"><span><code>:246-252</code></span></span>), evicts <code>conference:events</code> and the broad <code>conference</code> tag<span class="cite"><span> (<code>:254</code>)</span></span> and returns
+          <code>Ok(update.Event)</code><span class="cite"><span> (<code>:255</code>)</span></span>.</li>
           <li><code>DeleteAsync</code><span class="cite"><span> (<code>:261-271</code>)</span></span>, also gated by <code>EventsManage</code><span class="cite"><span> (<code>:262</code>)</span></span>, additionally evicts
           <code>conference:sessions</code> and <code>conference:rooms</code>, plus the
           broad <code>conference</code> tag, because soft-deleting an event cascades to its children<span class="cite"><span> (<code>:268-269</code>)</span></span>. The
-          broad tag is carried by every Conference cache policy<span class="cite"><span> (<code>Program.cs:238-239,270-287</code>)</span></span>, so update and
+          broad tag is carried by every Conference cache policy<span class="cite"><span> (<code>Program.cs:244-245,276-293</code>)</span></span>, so update and
           delete also drop the entries of the policies that carry no entity-specific tag; create does not.</li>
           </ul>
           </li>
@@ -2285,20 +2306,23 @@
           <a href="group-18-conference-application.html#exportsessioncalendarquery"><code>ExportSessionCalendarQuery</code></a><span class="cite"><span>
           (<code>SessionCalendarController.cs:26</code>)</span></span>; <a href="group-01-result-error-handling.html#result"><code>Result</code></a>; ASP.NET Core
           <code>[AllowAnonymous]</code> and <code>[OutputCache]</code>; BCL <code>System.Text.Encoding</code> and <code>System.Globalization.CultureInfo</code>.</li>
-          <li><strong>Walkthrough</strong>: <code>ExportCalendarAsync</code><span class="cite"><span> (<code>:36-44</code>)</span></span> dispatches <code>ExportSessionCalendarQuery(id)</code> to the
-          handler<span class="cite"><span> (<code>:40</code>)</span></span> and, on success, returns a <code>File(...)</code> result carrying the UTF-8 bytes of the generated
-          <code>.ics</code> text under content type <code>&quot;text/calendar&quot;</code>, with a <code>session-{id}.ics</code> filename built with
-          <code>CultureInfo.InvariantCulture</code><span class="cite"><span> (<code>:43</code>)</span></span>; a failed result maps through <code>HandleFailure</code><span class="cite"><span> (<code>:41-42</code>)</span></span>. The
-          action is <code>[HttpGet(&quot;{id}/ics&quot;)]</code>, <code>[AllowAnonymous]</code>, and <code>[OutputCache(PolicyName = &quot;SessionsCache&quot;)]</code><span class="cite"><span>
-          (<code>:33-35</code>)</span></span>.</li>
-          <li><strong>Why it&#39;s built this way</strong>: this endpoint used to be a method on
-          <a href="#sessionscontroller"><code>SessionsController</code></a>; it was split out into its own single-purpose controller so
-          the calendar export has its own route and dependency surface rather than adding one more handler to an
-          already large aggregate-root controller.</li>
+          <li><strong>Walkthrough</strong>: <code>ExportCalendarAsync</code><span class="cite"><span> (<code>:37-45</code>)</span></span> dispatches <code>ExportSessionCalendarQuery(id)</code> to the
+          handler<span class="cite"><span> (<code>:41</code>)</span></span> and unwraps the outcome with <code>result.TryGetValue(out var calendar)</code><span class="cite"><span> (<code>:42</code>)</span></span>: a failed
+          result maps through <code>HandleFailure(result.Errors)</code><span class="cite"><span> (<code>:43</code>)</span></span>, and on success the action returns a
+          <code>File(...)</code> result carrying the UTF-8 bytes of the generated <code>.ics</code> text under content type
+          <code>&quot;text/calendar&quot;</code>, with a <code>session-{id}.ics</code> filename built with <code>CultureInfo.InvariantCulture</code><span class="cite"><span>
+          (<code>:44</code>)</span></span>. The action is <code>[HttpGet(&quot;{id}/ics&quot;)]</code>, <code>[AllowAnonymous]</code>, and
+          <code>[OutputCache(PolicyName = &quot;SessionsCache&quot;)]</code><span class="cite"><span> (<code>:34-36</code>)</span></span>.</li>
+          <li><strong>Why it&#39;s built this way</strong>: the class doc comment<span class="cite"><span> (<code>SessionCalendarController.cs:15-21</code>)</span></span> states it:
+          the export is split out of <a href="#sessionscontroller"><code>SessionsController</code></a> so the session CRUD controller
+          stays within the repo&#39;s constructor-dependency ceiling (this controller takes one query handler, <span class="cite"><span><code>:27</code></span></span>).
+          It carries the same <code>[Route(&quot;Sessions&quot;)]</code> prefix<span class="cite"><span> (<code>:23</code>)</span></span>, the same action template and the same
+          anonymous, output-cached posture, so the public URL <code>/Sessions/{id}/ics</code>, the verb and the authorization
+          posture are those of the agenda reads it belongs to.</li>
           <li><strong>Where it&#39;s used</strong>: the add-to-calendar affordance on the public schedule UI.</li>
-          <li><strong>Caveats / not-in-source</strong>: whether the split from <code>SessionsController</code> changed the public route path is
-          not determinable from this file alone; both controllers apply the same <code>SessionsCache</code> output-cache
-          policy.</li>
+          <li><strong>Caveats / not-in-source</strong>: the class also carries <code>[HasPermission(ConferencePermissions.SessionsManage)]</code><span class="cite"><span>
+          (<code>:25</code>)</span></span> above the action-level <code>[AllowAnonymous]</code><span class="cite"><span> (<code>:35</code>)</span></span>, the same pairing the public Sessions reads use; both controllers apply the
+          same <code>SessionsCache</code> output-cache policy.</li>
           </ul>
           <h3 id="sessionselectioncontroller">SessionSelectionController</h3>
           <blockquote>
@@ -2465,8 +2489,10 @@
           is not an <code>async</code> method: it returns <code>Task.FromResult&lt;IActionResult&gt;(Forbid())</code> for a non-privileged
           caller<span class="cite"><span> (<code>:158</code>)</span></span> and otherwise hands back the base&#39;s task directly, with no await.
           <code>CreateAsync</code> (<code>[HttpPost]</code> at <span class="cite"><span><code>:171</code></span></span>, <code>[Idempotent]</code> at <span class="cite"><span><code>:172</code></span></span>) dispatches
-          <code>AddSessionCategoryItemCommand(request.SessionId, null, request.CategoryItemId)</code><span class="cite"><span> (<code>:178</code>)</span></span>, evicts<span class="cite"><span>
-          (<code>:186</code>)</span></span> and returns <code>CreatedAtRoute(&quot;GetSessionCategoryItemById&quot;, ...)</code><span class="cite"><span> (<code>:187-190</code>)</span></span>; <code>DeleteAsync</code>
+          <code>AddSessionCategoryItemCommand(request.SessionId, null, request.CategoryItemId)</code><span class="cite"><span> (<code>:178</code>)</span></span>, returns
+          <code>HandleFailure</code> when <code>result.TryGetValue(out var sessionCategoryItem)</code> fails<span class="cite"><span> (<code>:181-184</code>)</span></span>, evicts<span class="cite"><span>
+          (<code>:186</code>)</span></span> and returns <code>CreatedAtRoute(&quot;GetSessionCategoryItemById&quot;, ...)</code> with the unwrapped DTO as both
+          the route <code>id</code> and the body<span class="cite"><span> (<code>:187-190</code>)</span></span>; <code>DeleteAsync</code>
           (<code>[HttpDelete(&quot;{id}&quot;)]</code> at <span class="cite"><span><code>:194</code></span></span>) reads the parent <code>sessionId</code> <code>[FromQuery]</code><span class="cite"><span> (<code>:197</code>)</span></span>, dispatches
           <code>RemoveSessionCategoryItemCommand(sessionId, id)</code><span class="cite"><span> (<code>:201</code>)</span></span>, evicts<span class="cite"><span> (<code>:209</code>)</span></span> and returns <code>NoContent()</code><span class="cite"><span>
           (<code>:210</code>)</span></span>. Both evictions clear <code>conference:sessions</code>, <code>conference:categories</code> and <code>conference</code><span class="cite"><span>
@@ -2566,13 +2592,15 @@
           (<code>:226-234</code>)</span></span>, and returns the page with <code>Ok(result.Value)</code><span class="cite"><span> (<code>:236-238</code>)</span></span>.</li>
           <li><code>ExportAsync</code><span class="cite"><span> (<code>:241-263</code>)</span></span> is a non-<code>async</code> override that returns <code>Task.FromResult&lt;IActionResult&gt;(Forbid())</code>
           unless the caller is an organizer<span class="cite"><span> (<code>:257-260</code>)</span></span>, otherwise the base&#39;s task directly, the BR-9
-          form of the row-scoping bypass gate. The doc comment<span class="cite"><span> (<code>:241-247</code>)</span></span> now explains the layering: the
+          form of the row-scoping bypass gate. The doc comment<span class="cite"><span> (<code>:241-247</code>)</span></span> explains the layering: the
           inherited CSV export streams only the rows <code>GetExportSpecification</code> scopes and refuses an unscoped export
           unless <code>AllowUnscopedExport</code> opts in (for the organizer alone), and this override keeps the download
           itself organizer-only, denying everyone else before any row is read.</li>
           <li><code>CreateAsync</code><span class="cite"><span> (<code>:265-288</code>)</span></span> is <code>[Idempotent]</code><span class="cite"><span> (<code>:273</code>)</span></span> and dispatches
           <code>AddSessionQuestionAnswerCommand(request.SessionId, null, request.QuestionId, request.AnswerValue)</code><span class="cite"><span>
-          (<code>:279</code>)</span></span>, then <code>CreatedAtRoute</code><span class="cite"><span> (<code>:284-287</code>)</span></span>.</li>
+          (<code>:279</code>)</span></span>, unwraps the outcome with <code>result.TryGetValue(out var answer)</code><span class="cite"><span> (<code>:282</code>)</span></span>, and answers
+          <code>HandleFailure</code> on failure or <code>CreatedAtRoute(&quot;GetSessionQuestionAnswerById&quot;, ...)</code> with the
+          unwrapped DTO<span class="cite"><span> (<code>:284-287</code>)</span></span>.</li>
           <li><code>UpdateAsync</code><span class="cite"><span> (<code>:318-332</code>)</span></span> dispatches
           <code>UpdateSessionQuestionAnswerCommand(request.SessionId, id, request.AnswerValue)</code><span class="cite"><span> (<code>:326</code>)</span></span> and returns
           <code>NoContent()</code>. <code>DeleteAsync</code><span class="cite"><span> (<code>:335-348</code>)</span></span> reads the parent <code>sessionId</code> <code>[FromQuery]</code><span class="cite"><span> (<code>:338</code>)</span></span> and
@@ -2631,68 +2659,75 @@
           <a href="group-12-api-hosting-mapping.html#supportsifmatchattribute"><code>SupportsIfMatchAttribute</code></a>.</li>
           <li><strong>Concept introduced, a cross-source visibility specification.</strong> <code>[Rubric §8, Data Architecture]</code> and
           <code>[Rubric §7, Microservices Readiness]</code>: BR-132 / BR-49 hides non-accepted sessions and the sessions of
-          unpublished events from non-privileged readers, but a <code>Session</code> can live in one data source while its
-          parent <code>Event</code>&#39;s published flag lives in another (the doc comment at <span class="cite"><span><code>SessionsController.cs:62-67</code></span></span> names
-          Session in Cosmos and Event in SQL Server at <span class="cite"><span><code>:65</code></span></span>, the polyglot option of
+          unpublished events from non-privileged readers, and the published flag belongs to the parent <code>Event</code>,
+          not to the <code>Session</code> row. The doc comment<span class="cite"><span> (<code>SessionsController.cs:62-74</code>)</span></span> says the published-event check
+          is resolved by the <code>GetPublicSessionFilterQuery</code> handler with the framework&#39;s cross-source specification
+          helper<span class="cite"><span> (<code>:64-66</code>)</span></span>, so the check does not assume both aggregates share one store (the polyglot option of
           <a href="https://ivanball.github.io/docs/adr/018-polyglot-persistence.html" target="_blank" rel="noopener">ADR-018</a>). Rather than a
-          cross-database join, <code>GetReadSpecificationAsync</code><span class="cite"><span> (<code>:76-86</code>)</span></span> delegates to the <code>GetPublicSessionFilterQuery</code>
-          handler, which uses the framework&#39;s cross-source specification helper to produce a
+          cross-database join, <code>GetReadSpecificationAsync</code><span class="cite"><span> (<code>:75-85</code>)</span></span> delegates to that handler<span class="cite"><span> (<code>:81-84</code>)</span></span> to
+          produce a
           <a href="group-03-querying-specifications.html#specificationtentity-tidentifiertype"><code>Specification&lt;TEntity, TIdentifierType&gt;</code></a>
-          the query service can apply; privileged readers get <code>null</code>. Because that <code>null</code> means &quot;privileged&quot;, the
-          controller overrides <code>AllowUnscopedExport =&gt; IsPrivileged</code><span class="cite"><span> (<code>:94</code>)</span></span>, opting exactly that audience in to
+          the query service can apply; privileged readers get <code>null</code><span class="cite"><span> (<code>:78-79</code>)</span></span>. Because that <code>null</code> means
+          &quot;privileged&quot;, the controller overrides <code>AllowUnscopedExport =&gt; IsPrivileged</code><span class="cite"><span> (<code>:93</code>)</span></span>, opting exactly that audience in to
           the unscoped table under the framework&#39;s fail-closed export (default <code>false</code> at
           <span class="cite"><span><code>MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/EntityControllerBase.cs:508</code></span></span>, refusal at
           <span class="cite"><span><code>:273-274</code></span></span>).
           <code>[Rubric §12, Performance &amp; Scalability]</code>: reads are <code>[OutputCache(PolicyName = &quot;SessionsCache&quot;)]</code><span class="cite"><span>
-          (<code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:277</code>)</span></span> and the default sort is the
-          single-column <code>nameof(SessionDTO.StartsAt)</code> constant<span class="cite"><span> (<code>:142</code>)</span></span>, sorting the schedule chronologically. The
-          comment above it<span class="cite"><span> (<code>:139-141</code>)</span></span> records why it is one column rather than the earlier comma-joined string:
-          <code>QueryFieldService</code> resolves a sort column against the entity&#39;s own properties, so a comma-joined
-          <code>&quot;StartsAt,RoomId&quot;</code> value matches none of them and silently falls back to the framework&#39;s <code>Id</code> tie-break
-          instead of sorting by room; sessions that share a start time now fall through to that same <code>Id</code> tie-break
-          rather than to a secondary room sort.</li>
+          (<code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:283</code>)</span></span> and the default sort is the
+          single-column <code>nameof(SessionDTO.StartsAt)</code> constant<span class="cite"><span> (<code>:141</code>)</span></span>, sorting the schedule chronologically. The
+          comment above it<span class="cite"><span> (<code>:138-140</code>)</span></span> records why it is one column: <code>QueryFieldService</code> resolves a sort column
+          against the entity&#39;s properties, so a comma-joined list matches none of them and silently falls back to
+          the framework&#39;s <code>Id</code> tie-break; sessions that share a start time fall through to that same <code>Id</code>
+          tie-break.</li>
           <li><strong>Walkthrough</strong><ul>
-          <li><code>BuildPagedSessionSpecificationAsync</code> (<span class="cite"><span><code>SessionsController.cs:114-137</code></span></span>, doc and remarks <span class="cite"><span><code>:96-113</code></span></span>) is
-          the paged read&#39;s specification builder: it starts from the hook<span class="cite"><span> (<code>:118</code>)</span></span>, then intercepts and removes
-          the virtual <code>SpeakerId</code> filter key (<code>Session</code> has no such column, <span class="cite"><span><code>:120-125</code></span></span>), resolves it through
-          <code>GetSessionsBySpeakerFilterQuery</code><span class="cite"><span> (<code>:127-129</code>)</span></span> and <strong>ANDs</strong> the two with
-          <code>publicSpecification.And(...)</code><span class="cite"><span> (<code>:134-136</code>)</span></span>. As in <a href="#speakerscontroller"><code>SpeakersController</code></a>,
-          substitution would leak non-accepted sessions, and an unparseable value or a failed handler result
-          simply drops the scope<span class="cite"><span> (<code>:120-125, 131-132</code>)</span></span>.</li>
-          <li><code>GetAllAsync</code><span class="cite"><span> (<code>:147-168</code>)</span></span> keeps a body only to apply the default sort: it queries with the hook&#39;s
-          specification<span class="cite"><span> (<code>:157</code>)</span></span>, <code>DefaultSortColumn</code><span class="cite"><span> (<code>:159</code>)</span></span> and <code>pageSize: MaxPageSize</code><span class="cite"><span> (<code>:163</code>)</span></span>. The paged
-          overload<span class="cite"><span> (<code>:173-211</code>)</span></span> clamps the page size<span class="cite"><span> (<code>:184</code>)</span></span>, defaults the sort when none was supplied<span class="cite"><span>
-          (<code>:186-190</code>)</span></span>, calls the builder above<span class="cite"><span> (<code>:196</code>)</span></span> and writes the <code>X-Pagination</code> header through the
-          <code>Response.AppendPaginationHeader(result.Value!.PaginationMetadata)</code> extension<span class="cite"><span> (<code>:209</code>)</span></span> instead of
-          serializing the metadata inline.</li>
-          <li><code>GetAllForLookupAsync</code><span class="cite"><span> (<code>:222-225</code>)</span></span> and <code>GetByIdAsync</code><span class="cite"><span> (<code>:234-240</code>)</span></span> are attribute-only passthroughs;
-          the base applies the same hook, so a hidden session is a 404 there (doc <span class="cite"><span><code>:213-218</code></span></span> and <span class="cite"><span><code>:227-230</code></span></span>).</li>
-          <li><code>ExportAsync</code><span class="cite"><span> (<code>:251-265</code>)</span></span> is the same bypass gate the other row-scoped controllers use. It is no
-          longer an <code>async</code> method: it returns <code>Task.FromResult&lt;IActionResult&gt;(Forbid())</code> for a non-privileged
-          caller<span class="cite"><span> (<code>:259-262</code>)</span></span>, otherwise hands back the base&#39;s task directly<span class="cite"><span> (<code>:264</code>)</span></span>, with no await or
-          <code>ConfigureAwait</code>. Its doc comment<span class="cite"><span> (<code>:242-249</code>)</span></span> now
+          <li><code>BuildPagedSessionSpecificationAsync</code> (<span class="cite"><span><code>SessionsController.cs:113-136</code></span></span>, doc and remarks <span class="cite"><span><code>:95-112</code></span></span>) is
+          the paged read&#39;s specification builder: it starts from the hook<span class="cite"><span> (<code>:117</code>)</span></span>, then intercepts and removes
+          the virtual <code>SpeakerId</code> filter key (<code>Session</code> has no such column, <span class="cite"><span><code>:119-124</code></span></span>), resolves it through
+          <code>GetSessionsBySpeakerFilterQuery</code><span class="cite"><span> (<code>:126-128</code>)</span></span>, unwraps that result with
+          <code>speakerResult.TryGetValue(out var speakerSpecification)</code><span class="cite"><span> (<code>:130</code>)</span></span> and <strong>ANDs</strong> the two with
+          <code>publicSpecification.And(speakerSpecification)</code><span class="cite"><span> (<code>:133-135</code>)</span></span>. As in
+          <a href="#speakerscontroller"><code>SpeakersController</code></a>, substitution would leak non-accepted sessions, and an
+          unparseable value or a failed handler result simply drops the speaker scope, returning the public
+          specification alone<span class="cite"><span> (<code>:119-124, 130-131</code>)</span></span>.</li>
+          <li><code>GetAllAsync</code><span class="cite"><span> (<code>:146-167</code>)</span></span> keeps a body only to apply the default sort: it queries with the hook&#39;s
+          specification<span class="cite"><span> (<code>:156</code>)</span></span>, <code>DefaultSortColumn</code><span class="cite"><span> (<code>:158</code>)</span></span> and <code>pageSize: MaxPageSize</code><span class="cite"><span> (<code>:162</code>)</span></span>. The paged
+          overload<span class="cite"><span> (<code>:172-210</code>)</span></span> clamps the page size<span class="cite"><span> (<code>:183</code>)</span></span>, defaults the sort when none was supplied<span class="cite"><span>
+          (<code>:185-189</code>)</span></span>, calls the builder above<span class="cite"><span> (<code>:195</code>)</span></span>, unwraps the page with
+          <code>result.TryGetValue(out var page)</code><span class="cite"><span> (<code>:205</code>)</span></span> and writes the <code>X-Pagination</code> header through the
+          <code>Response.AppendPaginationHeader(page.PaginationMetadata)</code> extension<span class="cite"><span> (<code>:208</code>)</span></span> instead of serializing
+          the metadata inline, then returns <code>Ok(page)</code><span class="cite"><span> (<code>:209</code>)</span></span>.</li>
+          <li><code>GetAllForLookupAsync</code><span class="cite"><span> (<code>:221-224</code>)</span></span> and <code>GetByIdAsync</code><span class="cite"><span> (<code>:233-239</code>)</span></span> are attribute-only passthroughs;
+          the base applies the same hook, so a hidden session is a 404 there (doc <span class="cite"><span><code>:212-217</code></span></span> and <span class="cite"><span><code>:226-229</code></span></span>).</li>
+          <li><code>ExportAsync</code><span class="cite"><span> (<code>:250-264</code>)</span></span> is the same bypass gate the other row-scoped controllers use. It is not an
+          <code>async</code> method: it returns <code>Task.FromResult&lt;IActionResult&gt;(Forbid())</code> for a non-privileged
+          caller<span class="cite"><span> (<code>:258-261</code>)</span></span>, otherwise hands back the base&#39;s task directly<span class="cite"><span> (<code>:263</code>)</span></span>, with no await or
+          <code>ConfigureAwait</code>. Its doc comment<span class="cite"><span> (<code>:241-248</code>)</span></span>
           states the layering: the inherited CSV export streams only the rows the read hook scopes and refuses an
           unscoped export unless <code>AllowUnscopedExport</code> opts in, which it does for privileged readers
           (Organizer/ContentEditor) alone; this override keeps the download itself privileged, so everyone else is
           denied before any row is read rather than served even the public catalog in one file. Privileged
           readers see everything, &quot;declined and draft-event sessions included&quot;. The single-session iCalendar export lives on its own controller,
           <a href="#sessioncalendarcontroller"><code>SessionCalendarController</code></a>.</li>
-          <li><code>CreateAsync</code><span class="cite"><span> (<code>:274-302</code>)</span></span> is an override marked <code>[Idempotent]</code><span class="cite"><span> (<code>:273</code>)</span></span> that calls
-          <code>CreateHandler.HandleAsync</code> directly<span class="cite"><span> (<code>:278</code>)</span></span> rather than <code>base.CreateAsync</code>, because it needs the
-          typed <a href="group-01-result-error-handling.html#result"><code>Result</code></a> in order to run the BR-86 check: when the
-          request set start or end times, it re-reads the parent event and appends a non-fatal <code>X-Warning</code> header
-          if the session falls outside the event&#39;s date range<span class="cite"><span> (<code>:285-298</code>)</span></span>. Note that the parent re-read
-          pattern-matches the widened query result with <code>eventResult.Value is EventDTO evt</code><span class="cite"><span> (<code>:292</code>)</span></span> rather than
-          a dynamic member access, because <code>IEntityQueryService</code> widens its return to <code>object</code> for field
-          projection, so the controller narrows it back with a type pattern (the reason is written into the
-          comment at <span class="cite"><span><code>:287-288</code></span></span>).</li>
-          <li><code>UpdateAsync</code><span class="cite"><span> (<code>:317-339</code>)</span></span> carries <code>[SupportsIfMatch]</code><span class="cite"><span> (<code>:313</code>)</span></span> with the 409/412/428
-          <code>[ProducesResponseType]</code> triple<span class="cite"><span> (<code>:314-316</code>)</span></span>, reads the required token<span class="cite"><span> (<code>:322</code>)</span></span>, dispatches
-          <code>new UpdateSessionCommand(id, request, rowVersion)</code><span class="cite"><span> (<code>:325</code>)</span></span>, surfaces the same BR-86 warning from
-          <code>result.Value!.HasDateRangeWarning</code><span class="cite"><span> (<code>:332</code>)</span></span> and returns <code>Ok(result.Value.Session)</code><span class="cite"><span> (<code>:338</code>)</span></span>.
-          <code>DeleteAsync</code><span class="cite"><span> (<code>:343-350</code>)</span></span> calls the base and evicts.</li>
+          <li><code>CreateAsync</code><span class="cite"><span> (<code>:273-299</code>)</span></span> is an override marked <code>[Idempotent]</code><span class="cite"><span> (<code>:272</code>)</span></span> that calls
+          <code>CreateHandler.HandleAsync</code> directly<span class="cite"><span> (<code>:277</code>)</span></span> rather than <code>base.CreateAsync</code>, because it needs the
+          typed <a href="group-01-result-error-handling.html#result"><code>Result</code></a> in order to run the BR-86 check. It unwraps
+          the created DTO with <code>result.TryGetValue(out var session)</code><span class="cite"><span> (<code>:278-279</code>)</span></span>; then, when the request set
+          start or end times, it re-reads the parent event and appends a non-fatal <code>X-Warning</code> header if the
+          session falls outside the event&#39;s date range<span class="cite"><span> (<code>:281-295</code>)</span></span>, and answers
+          <code>CreatedAtRoute(&quot;GetSessionById&quot;, new { id = session.Id }, session)</code><span class="cite"><span> (<code>:298</code>)</span></span>. Note that the parent
+          re-read pattern-matches the widened query result with <code>eventResult.Value is EventDTO evt</code><span class="cite"><span> (<code>:289</code>)</span></span>
+          rather than a dynamic member access, because <code>IEntityQueryService</code> widens its return to <code>object</code> for
+          field projection, so the controller narrows it back with a type pattern (the reason is written into the
+          comment at <span class="cite"><span><code>:284-285</code></span></span>).</li>
+          <li><code>UpdateAsync</code><span class="cite"><span> (<code>:314-336</code>)</span></span> carries <code>[SupportsIfMatch]</code><span class="cite"><span> (<code>:310</code>)</span></span> with the 409/412/428
+          <code>[ProducesResponseType]</code> triple<span class="cite"><span> (<code>:311-313</code>)</span></span>, reads the required token<span class="cite"><span> (<code>:319</code>)</span></span>, dispatches
+          <code>new UpdateSessionCommand(id, request, rowVersion)</code><span class="cite"><span> (<code>:322</code>)</span></span>, unwraps the
+          <a href="group-18-conference-application.html#updatesessionresult"><code>UpdateSessionResult</code></a> with
+          <code>result.TryGetValue(out var update)</code><span class="cite"><span> (<code>:325</code>)</span></span>, surfaces the same BR-86 warning from
+          <code>update.HasDateRangeWarning</code><span class="cite"><span> (<code>:329</code>)</span></span> and returns <code>Ok(update.Session)</code><span class="cite"><span> (<code>:335</code>)</span></span>.
+          <code>DeleteAsync</code><span class="cite"><span> (<code>:340-347</code>)</span></span> calls the base<span class="cite"><span> (<code>:344</code>)</span></span> and evicts.</li>
           <li>Every mutation ends at
-          <code>EvictTagsAsync(cancellationToken, &quot;conference:sessions&quot;, &quot;conference&quot;)</code><span class="cite"><span> (<code>:300, 337, 348</code>)</span></span>, the broad
+          <code>EvictTagsAsync(cancellationToken, &quot;conference:sessions&quot;, &quot;conference&quot;)</code><span class="cite"><span> (<code>:297, 334, 345</code>)</span></span>, the broad
           tag included because cross-entity projections (the speaker bookmark-count endpoints) are cached under
           <code>conference:sessions</code> and <code>conference</code> rather than under a speakers tag.</li>
           </ul>
@@ -2752,8 +2787,8 @@
           <code>&quot;GetSessionSpeakerById&quot;</code>), all scoped by the hook. <code>CreateAsync</code> (<code>[HttpPost]</code> at <span class="cite"><span><code>:171</code></span></span>,
           <code>[Idempotent]</code> at <span class="cite"><span><code>:172</code></span></span>) dispatches
           <code>AddSessionSpeakerCommand(request.SessionId, null, request.SpeakerId)</code><span class="cite"><span> (<code>:178</code>)</span></span>, returns <code>HandleFailure</code>
-          first on failure<span class="cite"><span> (<code>:181-184</code>)</span></span>, evicts<span class="cite"><span> (<code>:188</code>)</span></span> and returns <code>CreatedAtRoute(&quot;GetSessionSpeakerById&quot;, ...)</code><span class="cite"><span>
-          (<code>:189-192</code>)</span></span>; <code>DeleteAsync</code><span class="cite"><span> (<code>:197</code>)</span></span> reads the parent <code>sessionId</code> <code>[FromQuery]</code><span class="cite"><span> (<code>:199</code>)</span></span>, dispatches
+          first when <code>result.TryGetValue(out var sessionSpeaker)</code> fails<span class="cite"><span> (<code>:181-184</code>)</span></span>, evicts<span class="cite"><span> (<code>:188</code>)</span></span> and returns
+          <code>CreatedAtRoute(&quot;GetSessionSpeakerById&quot;, ...)</code> with the unwrapped DTO<span class="cite"><span> (<code>:189-192</code>)</span></span>; <code>DeleteAsync</code><span class="cite"><span> (<code>:197</code>)</span></span> reads the parent <code>sessionId</code> <code>[FromQuery]</code><span class="cite"><span> (<code>:199</code>)</span></span>, dispatches
           <code>RemoveSessionSpeakerCommand(sessionId, id)</code><span class="cite"><span> (<code>:203</code>)</span></span>, evicts<span class="cite"><span> (<code>:211</code>)</span></span> and returns <code>NoContent()</code><span class="cite"><span>
           (<code>:212</code>)</span></span>. The class gate is <code>[HasPermission(ConferencePermissions.SessionsManage)]</code><span class="cite"><span> (<code>:47</code>)</span></span>.</li>
           <li><strong>Why it&#39;s built this way</strong>: the eviction crosses aggregates deliberately, because the session&#39;s cached
@@ -2816,7 +2851,7 @@
           translations therefore needs some type to name, and that type needs no behavior whatsoever. This class is
           exactly that anchor. The host registers it once
           (<code>services.AddErrorResources&lt;ConferenceErrorResources&gt;()</code>,
-          <span class="cite"><span><code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:380</code></span></span>) and every Conference error code
+          <span class="cite"><span><code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:386</code></span></span>) and every Conference error code
           becomes translatable from then on, with no per-error registration and no <code>switch</code> anywhere.
           <code>[Rubric §27, i18n]</code> assesses whether localization is a structural property of the system rather than a
           per-screen retrofit: because errors travel as stable machine-readable <strong>codes</strong> through
@@ -2846,7 +2881,7 @@
           module&#39;s translations inside the module&#39;s own assembly, which is what lets the Conference module boot in
           its own service host and still carry its language support with it.</li>
           <li><strong>Where it&#39;s used</strong>: registered in the extracted Conference host<span class="cite"><span>
-          (<code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:380</code>)</span></span> and in the localization test&#39;s
+          (<code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:386</code>)</span></span> and in the localization test&#39;s
           service collection<span class="cite"><span> (<code>ConferenceErrorResourcesTests.cs:22</code>)</span></span>. No other code names it.</li>
           </ul>
           <h3 id="selfhttpoutputcachewarmuptask">SelfHttpOutputCacheWarmupTask</h3>
@@ -2940,7 +2975,7 @@
           fail.</p>
           </li>
           <li><p><strong>Where it&#39;s used</strong>: registered as <code>services.AddWarmupTask&lt;SelfHttpOutputCacheWarmupTask&gt;()</code> in the
-          Conference host<span class="cite"><span> (<code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:314</code>)</span></span> and executed by
+          Conference host<span class="cite"><span> (<code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:320</code>)</span></span> and executed by
           the warm-up runner that <code>AddServiceDefaults()</code> installs. <code>SelfHttpOutputCacheWarmupTaskTests</code> reads
           <code>RequestedPaths</code> to pin the lookup family. Three sibling copies of the same pattern live in the Store
           services; each differs only in its <code>Paths</code> list.</p>
@@ -3068,8 +3103,8 @@
           <li><strong>Concept introduced, the shared-list invariant between visibility and cache keys.</strong> The same
           <code>ConferenceReadAudience.PrivilegedRoles</code> list is spread into the output-cache bypass roles in the host
           (<code>string[] adminBypassRoles = [.. ConferenceReadAudience.PrivilegedRoles];</code>,
-          <span class="cite"><span><code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:269</code></span></span>), and the comment right above it
-          names this helper as the other half of the pair<span class="cite"><span> (<code>Program.cs:267-269</code>)</span></span>. The reason is a real correctness
+          <span class="cite"><span><code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:275</code></span></span>), and the comment right above it
+          names this helper as the other half of the pair<span class="cite"><span> (<code>Program.cs:273-275</code>)</span></span>. The reason is a real correctness
           hazard, not tidiness: if the visibility check and the cache-bypass list ever named different roles, a
           privileged reader&#39;s unfiltered payload would be written into a shared cache entry and then served to the
           public. Declaring the roles once makes that class of bug impossible rather than merely unlikely<span class="cite"><span>
@@ -3157,7 +3192,7 @@
           <li><code>AllowUnscopedExport =&gt; true</code><span class="cite"><span> (<code>:46</code>)</span></span> is the export opt-in described above.</li>
           <li>All four reads<span class="cite"><span> (<code>:48-95</code>)</span></span> re-open with <code>[AllowAnonymous]</code> and attach
           <code>[OutputCache(PolicyName = &quot;QuestionsCache&quot;)]</code> (5-minute TTL, tags <code>conference</code> and
-          <code>conference:questions</code>, <span class="cite"><span><code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:281</code></span></span>), then
+          <code>conference:questions</code>, <span class="cite"><span><code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:287</code></span></span>), then
           delegate; <code>GetByIdAsync</code> carries the named route <code>&quot;GetQuestionById&quot;</code><span class="cite"><span> (<code>:81</code>)</span></span>.</li>
           <li><code>CreateAsync</code><span class="cite"><span> (<code>:98-106</code>)</span></span> and <code>DeleteAsync</code><span class="cite"><span> (<code>:140-148</code>)</span></span> are thin overrides: call the base, then
           <code>EvictTagsAsync(cancellationToken, &quot;conference:questions&quot;)</code><span class="cite"><span> (<code>:104, 146</code>)</span></span>, then return the base&#39;s
@@ -3247,8 +3282,10 @@
           <li><code>GetBySessionAsync</code><span class="cite"><span> (<code>:80-100</code>)</span></span>: the anonymous, output-cached list read described above; delegates to
           <code>getBySessionHandler</code> with <code>(sessionId, actingSpeakerId, isPrivileged)</code><span class="cite"><span> (<code>:95-97</code>)</span></span> so the query itself
           decides which rows a non-owning, non-privileged caller sees.</li>
-          <li><code>AddLinkAsync</code><span class="cite"><span> (<code>:118-132</code>)</span></span> and <code>UploadFileAsync</code><span class="cite"><span> (<code>:161-219</code>)</span></span> both dispatch with <code>(request, ActingSpeakerId, IsPrivileged)</code> and, on success, call <code>EvictSessionCachesAsync</code> then return
-          <code>Created(SessionListUri(result.Value!.SessionId), result.Value)</code><span class="cite"><span> (<code>:129-131</code>, <code>:216-218</code>)</span></span>. Because there
+          <li><code>AddLinkAsync</code><span class="cite"><span> (<code>:118-132</code>)</span></span> and <code>UploadFileAsync</code><span class="cite"><span> (<code>:161-219</code>)</span></span> both dispatch with <code>(request, ActingSpeakerId, IsPrivileged)</code>, unwrap the created DTO with <code>result.TryGetValue(out var asset)</code><span class="cite"><span>
+          (<code>:126</code>, <code>:213</code>)</span></span>, answering <code>HandleFailure(result.Errors)</code> when it fails, and on success call
+          <code>EvictSessionCachesAsync</code> then return <code>Created(SessionListUri(asset.SessionId), asset)</code><span class="cite"><span> (<code>:129-131</code>,
+          <code>:216-218</code>)</span></span>. Because there
           is no by-id GET, the <code>Created</code> location points at the session&#39;s asset list rather than at a single
           resource, and the doc comment on <code>SessionListUri</code><span class="cite"><span> (<code>:283-289</code>)</span></span> states that choice explicitly: the
           filtered list IS the canonical location of the new resource. <code>UploadFileAsync</code> first runs a claim-level
@@ -3331,7 +3368,7 @@
           <code>IsPrivileged</code><span class="cite"><span> (<code>:59</code>)</span></span> short-circuiting for Organizer and ContentEditor.</li>
           <li><strong>Walkthrough</strong>: shape-for-shape the same as <a href="#eventspeakerscontroller"><code>EventSpeakersController</code></a>, with
           the <code>SpeakersCache</code> policy instead of <code>EventsCache</code><span class="cite"><span>
-          (<code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:278</code>)</span></span>. The four reads are
+          (<code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:284</code>)</span></span>. The four reads are
           <code>[AllowAnonymous]</code> + <code>[OutputCache(PolicyName = &quot;SpeakersCache&quot;)]</code> passthroughs
           (<span class="cite"><span><code>SpeakerCategoryItemsController.cs:93,103,122,130</code></span></span>, the last carrying the named route
           <code>&quot;GetSpeakerCategoryItemById&quot;</code>), all scoped by the hook. The export is guarded twice. The inherited
@@ -3344,7 +3381,9 @@
           <code>ExportAsync</code> override (<code>[HttpGet(&quot;export&quot;)]</code> at <span class="cite"><span><code>:147</code></span></span>) still repeats the privileged-reader gate with
           <code>Forbid()</code> at <span class="cite"><span><code>:158</code></span></span> (wrapped in <code>Task.FromResult</code>, since the override is no longer <code>async</code>) before returning the base call directly<span class="cite"><span> (<code>:161</code>)</span></span>. <code>CreateAsync</code> (<code>[HttpPost]</code> at <span class="cite"><span><code>:171</code></span></span>, <code>[Idempotent]</code>
           at <span class="cite"><span><code>:172</code></span></span>) dispatches <code>AddSpeakerCategoryItemCommand(request.SpeakerId, null, request.CategoryItemId)</code><span class="cite"><span>
-          (<code>:178</code>)</span></span>, evicts<span class="cite"><span> (<code>:186</code>)</span></span> and returns <code>CreatedAtRoute(&quot;GetSpeakerCategoryItemById&quot;, ...)</code><span class="cite"><span> (<code>:187-190</code>)</span></span>;
+          (<code>:178</code>)</span></span>, unwraps the created DTO with <code>result.TryGetValue(out var speakerCategoryItem)</code><span class="cite"><span> (<code>:181</code>)</span></span>,
+          answering <code>HandleFailure(result.Errors)</code> when it fails, evicts<span class="cite"><span> (<code>:186</code>)</span></span> and returns
+          <code>CreatedAtRoute(&quot;GetSpeakerCategoryItemById&quot;, ...)</code> with that DTO&#39;s <code>Id</code> as the route value<span class="cite"><span> (<code>:187-190</code>)</span></span>;
           <code>DeleteAsync</code> (<code>[HttpDelete(&quot;{id}&quot;)]</code> at <span class="cite"><span><code>:194</code></span></span>) reads the parent <code>speakerId</code> <code>[FromQuery]</code><span class="cite"><span> (<code>:197</code>)</span></span>,
           dispatches <code>RemoveSpeakerCategoryItemCommand(speakerId, id)</code><span class="cite"><span> (<code>:201</code>)</span></span>, evicts<span class="cite"><span> (<code>:209</code>)</span></span> and returns
           <code>NoContent()</code><span class="cite"><span> (<code>:210</code>)</span></span>. Both evictions clear <code>conference:speakers</code>, <code>conference:categories</code> and
@@ -3408,150 +3447,6 @@
           the organizer speaker-linking tool.</li>
           </ul>
           <hr>
-          <h3 id="speakerscontroller">SpeakersController</h3>
-          <blockquote>
-          <p>MMCA.ADC.Conference.API · <code>MMCA.ADC.Conference.API.Controllers.Speakers</code> · <span class="cite"><span><code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/Speakers/SpeakersController.cs:44</code></span></span> · Level 9 · class (sealed)</p>
-          </blockquote>
-          <ul>
-          <li><strong>What it is</strong>: the REST controller for the <a href="group-17-conference-domain.html#speaker"><code>Speaker</code></a> aggregate
-          root (<code>/Speakers</code>), and the most authorization-dense controller in the group. On top of aggregate-root
-          CRUD it carries the BR-239 public-speaker projection, a virtual <code>EventId</code> filter, a self-read carve-out
-          with a cache opt-out, resource-level self-edit authorization (BR-214), and a capability-gated CSV
-          export. Speaker linking/unlinking (BR-209) and the three cross-entity session projections (BR-210) were
-          split into <a href="#speakerlinkscontroller"><code>SpeakerLinksController</code></a> and
-          <a href="#speakersessionscontroller"><code>SpeakerSessionsController</code></a> to keep this constructor under the repo&#39;s
-          dependency ceiling.</li>
-          <li><strong>Depends on</strong>:
-          <a href="group-12-api-hosting-mapping.html#aggregaterootentitycontrollerbasetentity-tentitydto-tidentifiertype-tcreaterequest"><code>AggregateRootEntityControllerBase</code></a><span class="cite"><span>
-          (<code>SpeakersController.cs:55-56</code>)</span></span>; the
-          <a href="group-03-querying-specifications.html#ientityqueryservicetentity-tentitydto-tidentifiertype"><code>IEntityQueryService</code></a><span class="cite"><span>
-          (<code>:43</code>)</span></span>; three <a href="group-05-cqrs-pipeline.html#icommandhandlerin-tcommand-tresult"><code>ICommandHandler</code></a>s for
-          <a href="group-18-conference-application.html#speakercreaterequest"><code>SpeakerCreateRequest</code></a>,
-          <a href="group-18-conference-application.html#updatespeakercommand"><code>UpdateSpeakerCommand</code></a> and
-          <a href="group-05-cqrs-pipeline.html#deleteentitycommandtentity-tidentifiertype"><code>DeleteEntityCommand&lt;TEntity, TIdentifierType&gt;</code></a><span class="cite"><span>
-          (<code>:44-46</code>)</span></span>; two <a href="group-05-cqrs-pipeline.html#iqueryhandlerin-tquery-tresult"><code>IQueryHandler</code></a>s for
-          <a href="group-18-conference-application.html#getspeakersbyeventfilterquery"><code>GetSpeakersByEventFilterQuery</code></a> and
-          <a href="group-18-conference-application.html#getpublicspeakerfilterquery"><code>GetPublicSpeakerFilterQuery</code></a><span class="cite"><span>
-          (<code>:47-48</code>)</span></span>; <a href="group-08-auth.html#icurrentuserservice"><code>ICurrentUserService</code></a> with the
-          <a href="#currentuserserviceextensions"><code>CurrentUserServiceExtensions</code></a> helper<span class="cite"><span> (<code>:49, 57</code>)</span></span>;
-          <a href="group-08-auth.html#ipermissionregistry"><code>IPermissionRegistry</code></a><span class="cite"><span> (<code>:50</code>)</span></span>, checked against
-          <a href="group-17-conference-domain.html#conferencepermissions"><code>ConferencePermissions</code></a><code>.SpeakersManage</code> on the
-          update path; <code>IOutputCacheStore</code><span class="cite"><span> (<code>:51</code>)</span></span>; the <a href="group-17-conference-domain.html#speakerdto"><code>SpeakerDTO</code></a> and
-          <a href="group-18-conference-application.html#speakerupdaterequest"><code>SpeakerUpdateRequest</code></a>; the
-          <a href="group-08-auth.html#haspermissionattribute"><code>HasPermissionAttribute</code></a> and
-          <a href="group-12-api-hosting-mapping.html#supportsifmatchattribute"><code>SupportsIfMatchAttribute</code></a>; the
-          <a href="group-03-querying-specifications.html#specificationextensions"><code>SpecificationExtensions</code></a> <code>And</code> composer
-          that yields an
-          <a href="group-03-querying-specifications.html#andspecificationtentity-tidentifiertype"><code>AndSpecification&lt;TEntity, TIdentifierType&gt;</code></a>;
-          and <a href="group-01-result-error-handling.html#error"><code>Error</code></a>.</li>
-          <li><strong>Concept introduced, per-action authorization plus row-level ownership checks.</strong> <code>[Rubric §11, Security]</code>: unlike the other aggregate-root controllers (which gate the whole class with one
-          <code>[HasPermission(...)]</code>), <code>SpeakersController</code> carries a bare class-level <code>[Authorize]</code><span class="cite"><span>
-          (<code>SpeakersController.cs:43</code>)</span></span> and then varies authorization per action. The catalog reads are
-          <code>[AllowAnonymous]</code>; export, create and delete each re-assert
-          <code>[HasPermission(ConferencePermissions.SpeakersManage)]</code><span class="cite"><span> (<code>:325, 344, 408</code>)</span></span>; and <code>UpdateAsync</code>
-          performs a <em>resource-ownership</em> check in code (<span class="cite"><span><code>:381-386</code></span></span>, BR-214). It computes <code>canManage</code> as
-          <code>permissionRegistry.HasPermission(currentUserService.Roles, ConferencePermissions.SpeakersManage)</code><span class="cite"><span>
-          (<code>:383</code>)</span></span>, the same capability the sibling create and delete actions require, so ContentEditor qualifies
-          alongside Organizer (comment <span class="cite"><span><code>:381-382</code></span></span>); it compares the caller&#39;s <code>speaker_id</code> JWT claim with the route
-          id<span class="cite"><span> (<code>:384</code>)</span></span>; and it returns <code>Forbid()</code> when the caller is neither<span class="cite"><span> (<code>:385-386</code>)</span></span>. That is authorization a
-          policy attribute cannot express, because it depends on the specific row being edited; the management
-          flag is then passed on to the handler as
-          <code>new UpdateSpeakerCommand(id, request, CallerCanManageSpeakers: canManage, CallerCanSeeEmail: SpeakerDTOMapper.CanSeeEmail(currentUserService), RowVersion: rowVersion)</code><span class="cite"><span> (<code>:391-396</code>)</span></span> so the handler
-          keeps the curation field <code>IsTopSpeaker</code> unchanged on a self-edit and writes the email only for a caller
-          who can read it (BR-66, the same check the DTO mapper redacts with), meaning a self-edit or a
-          ContentEditor PUT built from a redacted GET keeps the stored email (the rule is written out at
-          <span class="cite"><span><code>:354-363</code></span></span>).</li>
-          <li><strong>Concept introduced, the virtual filter key.</strong> <code>[Rubric §9, API &amp; Contract Design]</code>: <code>EventId</code> is not a
-          <code>Speaker</code> column, so the paged action removes it from the generic filter dictionary before the pipeline
-          can reject it<span class="cite"><span> (<code>:149-159</code>)</span></span>, translates it into a specification via <code>GetSpeakersByEventFilterQuery</code><span class="cite"><span>
-          (<code>:166-167</code>)</span></span>, and <strong>ANDs</strong> it with the public-speaker specification rather than substituting
-          (<span class="cite"><span><code>:171-173</code></span></span>, <code>publicSpecification.And(...)</code> at <span class="cite"><span><code>:173</code></span></span>, the extension member declared at
-          <span class="cite"><span><code>MMCA.Common/Source/Core/MMCA.Common.Domain/Specifications/SpecificationExtensions.cs:54</code></span></span>). Substituting
-          would leak hidden speakers to a non-privileged caller; an unparseable value simply drops the scope
-          instead of failing the request. The remarks at <span class="cite"><span><code>:126-132</code></span></span> add the reason the two are not redundant: the
-          event filter answers &quot;linked to this event&quot;, the public filter answers &quot;accepted for this event&quot;.</li>
-          <li><strong>Walkthrough</strong><ul>
-          <li><code>IsPrivileged</code><span class="cite"><span> (<code>SpeakersController.cs:71</code>)</span></span> is the shared read-audience check;
-          <code>BuildPublicSpeakerSpecificationAsync</code> (<span class="cite"><span><code>:76-87</code></span></span>, doc <span class="cite"><span><code>:62-75</code></span></span>) is the BR-239 projection, parameterized
-          by an optional <code>eventId</code> because a speaker accepted for one event is not thereby public on another.
-          Privileged readers get <code>null</code>.</li>
-          <li><code>GetReadSpecificationAsync</code><span class="cite"><span> (<code>:96-98</code>)</span></span> is the framework hook, and it delegates to that builder with
-          no event context: the list, lookup and by-id actions read their scope from here, while the paged action
-          resolves its own because it carries an event id (doc <span class="cite"><span><code>:89-95</code></span></span>).</li>
-          <li><code>AllowUnscopedExport =&gt; IsPrivileged</code><span class="cite"><span> (<code>:119</code>)</span></span> is the opt-in the fail-closed inherited
-          export needs<span class="cite"><span>
-          (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/EntityControllerBase.cs:272-274</code>)</span></span>: the hook
-          returns <code>null</code> for a privileged reader, so without it even an organizer&#39;s export would be refused, and
-          for everyone else the opt-in is <code>false</code>.</li>
-          <li><code>GetAllAsync</code><span class="cite"><span> (<code>:108-116</code>)</span></span> is a plain passthrough. The paged overload<span class="cite"><span> (<code>:136-195</code>)</span></span> clamps <code>pageSize</code> to
-          <code>MaxPageSize</code><span class="cite"><span> (<code>:147</code>)</span></span>, performs the <code>EventId</code> interception described above, then queries with the
-          composed specification<span class="cite"><span> (<code>:177-188</code>)</span></span> and appends the <code>X-Pagination</code> header carrying the result&#39;s
-          <a href="group-01-result-error-handling.html#paginationmetadata"><code>PaginationMetadata</code></a> through the
-          <code>Response.AppendPaginationHeader(...)</code> helper instead of hand-serializing the header<span class="cite"><span> (<code>:207</code>)</span></span>.</li>
-          <li><code>GetAllForLookupAsync</code><span class="cite"><span> (<code>:225</code>)</span></span> has three guards. First, a request labelled <code>Email</code> from a caller for
-          whom <code>SpeakerDTOMapper.CanSeeEmail(currentUserService)</code> is false (Organizer only, BR-66, not the wider
-          privileged-reader audience that also admits ContentEditor) is refused with an
-          <a href="group-01-result-error-handling.html#error"><code>Error</code></a><code>.Validation</code> carrying the code
-          <code>Speaker.Lookup.EmailNotAvailable</code> (<code>LookupEmailNotAvailableCode</code>, <span class="cite"><span><code>:62</code></span></span>; check at <span class="cite"><span><code>:231-242</code></span></span>). Its
-          message names no runtime value, so the Conference error resources translate it. Second, privileged
-          readers (a <code>null</code> specification) fall through to the base action<span class="cite"><span> (<code>:246</code>)</span></span>. Third, everyone else must
-          name the label column from the allow-list <code>PublicLookupNameProperties</code> (first or last name only) or
-          receive an <code>Error.Validation</code> failure with the code <code>Speaker.Lookup.FieldNotAvailable</code>
-          (<code>LookupFieldNotAvailableCode</code>, <span class="cite"><span><code>:68</code></span></span>; <span class="cite"><span><code>:253</code></span></span>); that message names the requested field, so it carries no
-          resource entry and reaches the client in English with the value intact. This closes a BR-66 side
-          channel: <code>nameProperty=Email</code> would otherwise project the speaker email into the lookup label,
-          bypassing the DTO mapper that redacts it. The checks run before the query service, so a rejected label
-          is never queried; the scoped path then forwards <code>specification.Criteria</code> as the lookup <code>where</code><span class="cite"><span>
-          (<code>:260</code>)</span></span> and rewraps the rows into a
-          <a href="group-01-result-error-handling.html#collectionresultt"><code>CollectionResult&lt;T&gt;</code></a> of
-          <a href="group-12-api-hosting-mapping.html#baselookuptidentifiertype"><code>BaseLookup&lt;TIdentifierType&gt;</code></a>.</li>
-          <li><code>GetByIdAsync</code><span class="cite"><span> (<code>:274</code>)</span></span> carries the self-read carve-out: when the caller&#39;s <code>speaker_id</code> claim
-          matches the route id the specification is dropped so a speaker can always load their own profile<span class="cite"><span>
-          (<code>:287</code>)</span></span>, and because that response can contain data the public cannot see while the output-cache
-          key does not vary by caller, the action turns storage off for this response via
-          <code>HttpContext.Features.Get&lt;IOutputCacheFeature&gt;()?.Context.AllowCacheStorage = false</code><span class="cite"><span> (<code>:294</code>)</span></span>. The
-          policy only ever turns storage off, never back on, so the opt-out sticks. On success the override
-          calls <code>SetConcurrencyETag(result.Value)</code> (<span class="cite"><span><code>:311</code></span></span>, O-38): the inherited GET emits the weak ETag a
-          conditional write needs, and this override replaced that GET, so it emits the same token or a speaker
-          could never be edited under <code>If-Match</code>.</li>
-          <li><code>ExportAsync</code> (<span class="cite"><span><code>:326-340</code></span></span>, a non-<code>async</code> override that returns <code>Task.FromResult&lt;IActionResult&gt;(Forbid())</code>
-          for the denied path and the base call directly otherwise) is the strongest form of the export gate
-          taught at
-          <a href="#eventquestionanswerscontroller"><code>EventQuestionAnswersController</code></a>: a declarative
-          <code>[HasPermission(ConferencePermissions.SpeakersManage)]</code><span class="cite"><span> (<code>:325</code>)</span></span> <strong>plus</strong> the imperative
-          <code>if (!IsPrivileged) return Forbid();</code><span class="cite"><span> (<code>:334-337</code>)</span></span>, on top of the base&#39;s fail-closed refusal. The doc
-          comment records that the inherited export streams only the rows the read hook scopes and refuses an
-          unscoped export unless <code>AllowUnscopedExport</code> opts in, and that this override keeps the download itself
-          privileged so everyone else is denied before any row is read; it also records that the attribute is
-          stated explicitly because the class carries only a bare <code>[Authorize]</code> for the inherited action to pick
-          up<span class="cite"><span> (<code>:315-323</code>)</span></span>.
-          <code>[Rubric §30, Compliance/Privacy/Data Governance]</code>: a speaker roster is personal data, so bulk egress
-          is a named capability rather than a side effect of reading the list.</li>
-          <li><code>CreateAsync</code><span class="cite"><span> (<code>:345-352</code>)</span></span> and <code>DeleteAsync</code><span class="cite"><span> (<code>:409-416</code>)</span></span> call the base and evict. <code>UpdateAsync</code><span class="cite"><span>
-          (<code>:376-404</code>)</span></span> runs the BR-214 check<span class="cite"><span> (<code>:381-386</code>)</span></span>, reads the required <code>If-Match</code> token<span class="cite"><span> (<code>:388</code>)</span></span>,
-          dispatches<span class="cite"><span> (<code>:390-397</code>)</span></span> and evicts<span class="cite"><span> (<code>:402</code>)</span></span>. Every mutation ends at
-          <code>EvictTagsAsync(cancellationToken, &quot;conference:speakers&quot;, &quot;conference&quot;)</code><span class="cite"><span> (<code>:350, 402, 414</code>)</span></span>.</li>
-          <li>The link/unlink actions (BR-209) and the three BR-210 session read projections (aggregated feedback,
-          single and batched bookmark counts) are not on this class: they live on
-          <a href="#speakerlinkscontroller"><code>SpeakerLinksController</code></a> and
-          <a href="#speakersessionscontroller"><code>SpeakerSessionsController</code></a> respectively, both sharing this controller&#39;s
-          <code>/Speakers</code> route prefix.</li>
-          </ul>
-          </li>
-          <li><strong>Why it&#39;s built this way</strong>: speaker profiles are edited both by speaker managers and by the speakers
-          themselves, so the controller needs row-aware authorization that a static policy cannot provide; keeping
-          that check inline mirrors the per-mutation ownership pattern used across the codebase. Deriving the
-          update&#39;s management flag from the same <code>SpeakersManage</code> capability the create and delete attributes use
-          keeps the three mutations agreeing on who counts as a manager. The virtual <code>EventId</code> filter gives clients
-          an event-scoped speaker list without adding a denormalized column to the aggregate. The link/session
-          split keeps the constructor&#39;s dependency count under <code>ConstructorDependencyCountTests</code>&#39; ceiling without
-          shrinking the resource&#39;s surface.</li>
-          <li><strong>Where it&#39;s used</strong>: the Conference service host behind the Gateway route <code>/Speakers/{**catch-all}</code><span class="cite"><span>
-          (<code>MMCA.ADC/Source/Hosts/MMCA.ADC.Gateway/appsettings.json:86</code>)</span></span>; consumed by the public speaker directory
-          (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/Pages/Public/Speakers/PublicSpeakerList.razor</code>), the
-          speaker self-service profile page, and organizer linking tools.</li>
-          </ul>
-          <hr>
           <h3 id="speakersessionscontroller">SpeakerSessionsController</h3>
           <blockquote>
           <p>MMCA.ADC.Conference.API · <code>MMCA.ADC.Conference.API.Controllers.Speakers</code> · <span class="cite"><span><code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/Speakers/SpeakerSessionsController.cs:29</code></span></span> · Level 9 · class (sealed)</p>
@@ -3583,10 +3478,10 @@
           <code>BookmarkCountsCache</code>: <code>GetSessionBookmarkCountAsync</code> (<span class="cite"><span><code>:66-81</code></span></span>, doc <span class="cite"><span><code>:64-65</code></span></span>) and the batched
           <code>GetSessionBookmarkCountsAsync</code> (<span class="cite"><span><code>:86-101</code></span></span>, doc <span class="cite"><span><code>:83-85</code></span></span>), both a 60-second policy tagged <code>conference</code>
           and <code>conference:sessions</code><span class="cite"><span>
-          (<code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:301</code>)</span></span>. <code>[Rubric §7, Microservices Readiness]</code>: bookmark counts are owned by the Engagement service, in another process, whose writes have
+          (<code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:307</code>)</span></span>. <code>[Rubric §7, Microservices Readiness]</code>: bookmark counts are owned by the Engagement service, in another process, whose writes have
           no handle on this host&#39;s cache store, so Engagement&#39;s bookmark handler publishes an eviction request
           over the broker that this host turns into a tag drop, and the short TTL stays as the backstop for a
-          message that never lands<span class="cite"><span> (<code>Program.cs:289-301</code>)</span></span>. The batched form<span class="cite"><span> (<code>:94-96</code>)</span></span> replaces the speaker
+          message that never lands<span class="cite"><span> (<code>Program.cs:295-307</code>)</span></span>. The batched form<span class="cite"><span> (<code>:94-96</code>)</span></span> replaces the speaker
           dashboard&#39;s per-session fan-out and only ever counts sessions actually assigned to the speaker.</li>
           <li><strong>Why it&#39;s built this way</strong>: same rationale as <a href="#speakerlinkscontroller"><code>SpeakerLinksController</code></a>: the
           split is a constructor-dependency fix, not a design change. Feedback stays uncached because every
@@ -3638,7 +3533,7 @@
           editor can run the social programme without holding event, room or question rights.
           <code>[Rubric §12, Performance &amp; Scalability]</code>: reads run under the <code>ActivitiesCache</code> policy (5-minute TTL,
           tags <code>conference</code> and <code>conference:activities</code>,
-          <span class="cite"><span><code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:284</code></span></span>) and every mutation evicts both
+          <span class="cite"><span><code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:290</code></span></span>) and every mutation evicts both
           tags.</li>
           <li><strong>Walkthrough</strong><ul>
           <li><code>IsPrivileged</code><span class="cite"><span> (<code>ActivitiesController.cs:53</code>)</span></span> is the shared
@@ -3721,7 +3616,7 @@
           editor can manage the partner roster without holding event, room or question rights.
           <code>[Rubric #12, Performance &amp; Scalability]</code>: reads run under the <code>PartnersCache</code> policy (5-minute TTL, tags
           <code>conference</code> and <code>conference:partners</code>,
-          <span class="cite"><span><code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:283</code></span></span>) and every mutation evicts both tags.</li>
+          <span class="cite"><span><code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:289</code></span></span>) and every mutation evicts both tags.</li>
           <li><strong>Walkthrough</strong><ul>
           <li><code>IsPrivileged</code><span class="cite"><span> (<code>PartnersController.cs:57</code>)</span></span> is the shared <code>currentUserService.IsPrivilegedConferenceReader()</code>
           read-audience check; <code>GetReadSpecificationAsync</code><span class="cite"><span> (<code>:66-76</code>)</span></span> returns <code>null</code> for a privileged reader and
@@ -3769,6 +3664,151 @@
           1 test).</li>
           </ul>
           <hr>
+          <h3 id="speakerscontroller">SpeakersController</h3>
+          <blockquote>
+          <p>MMCA.ADC.Conference.API · <code>MMCA.ADC.Conference.API.Controllers.Speakers</code> · <span class="cite"><span><code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/Speakers/SpeakersController.cs:44</code></span></span> · Level 10 · class (sealed)</p>
+          </blockquote>
+          <ul>
+          <li><strong>What it is</strong>: the REST controller for the <a href="group-17-conference-domain.html#speaker"><code>Speaker</code></a> aggregate
+          root (<code>/Speakers</code>), and the most authorization-dense controller in the group. On top of aggregate-root
+          CRUD it carries the BR-239 public-speaker projection, a virtual <code>EventId</code> filter, a self-read carve-out
+          with a cache opt-out, resource-level self-edit authorization (BR-214), and a capability-gated CSV
+          export. Speaker linking/unlinking (BR-209) and the three cross-entity session projections (BR-210) were
+          split into <a href="#speakerlinkscontroller"><code>SpeakerLinksController</code></a> and
+          <a href="#speakersessionscontroller"><code>SpeakerSessionsController</code></a> to keep this constructor under the repo&#39;s
+          dependency ceiling.</li>
+          <li><strong>Depends on</strong>:
+          <a href="group-12-api-hosting-mapping.html#aggregaterootentitycontrollerbasetentity-tentitydto-tidentifiertype-tcreaterequest"><code>AggregateRootEntityControllerBase</code></a><span class="cite"><span>
+          (<code>SpeakersController.cs:55-56</code>)</span></span>; the
+          <a href="group-03-querying-specifications.html#ientityqueryservicetentity-tentitydto-tidentifiertype"><code>IEntityQueryService</code></a><span class="cite"><span>
+          (<code>:45</code>)</span></span>; three <a href="group-05-cqrs-pipeline.html#icommandhandlerin-tcommand-tresult"><code>ICommandHandler</code></a>s for
+          <a href="group-18-conference-application.html#speakercreaterequest"><code>SpeakerCreateRequest</code></a>,
+          <a href="group-18-conference-application.html#updatespeakercommand"><code>UpdateSpeakerCommand</code></a> and
+          <a href="group-05-cqrs-pipeline.html#deleteentitycommandtentity-tidentifiertype"><code>DeleteEntityCommand&lt;TEntity, TIdentifierType&gt;</code></a><span class="cite"><span>
+          (<code>:46-48</code>)</span></span>; two <a href="group-05-cqrs-pipeline.html#iqueryhandlerin-tquery-tresult"><code>IQueryHandler</code></a>s for
+          <a href="group-18-conference-application.html#getspeakersbyeventfilterquery"><code>GetSpeakersByEventFilterQuery</code></a> and
+          <a href="group-18-conference-application.html#getpublicspeakerfilterquery"><code>GetPublicSpeakerFilterQuery</code></a><span class="cite"><span>
+          (<code>:49-50</code>)</span></span>; <a href="group-08-auth.html#icurrentuserservice"><code>ICurrentUserService</code></a> with the
+          <a href="#currentuserserviceextensions"><code>CurrentUserServiceExtensions</code></a> helper<span class="cite"><span> (<code>:51, 71</code>)</span></span>;
+          <a href="group-08-auth.html#ipermissionregistry"><code>IPermissionRegistry</code></a><span class="cite"><span> (<code>:52</code>)</span></span>, checked against
+          <a href="group-17-conference-domain.html#conferencepermissions"><code>ConferencePermissions</code></a><code>.SpeakersManage</code> on the
+          update path; <code>IOutputCacheStore</code><span class="cite"><span> (<code>:53</code>)</span></span>; the <a href="group-17-conference-domain.html#speakerdto"><code>SpeakerDTO</code></a> and
+          <a href="group-18-conference-application.html#speakerupdaterequest"><code>SpeakerUpdateRequest</code></a>; the
+          <a href="group-08-auth.html#haspermissionattribute"><code>HasPermissionAttribute</code></a> and
+          <a href="group-12-api-hosting-mapping.html#supportsifmatchattribute"><code>SupportsIfMatchAttribute</code></a>; the
+          <a href="group-03-querying-specifications.html#specificationextensions"><code>SpecificationExtensions</code></a> <code>And</code> composer
+          that yields an
+          <a href="group-03-querying-specifications.html#andspecificationtentity-tidentifiertype"><code>AndSpecification&lt;TEntity, TIdentifierType&gt;</code></a>;
+          and <a href="group-01-result-error-handling.html#error"><code>Error</code></a>.</li>
+          <li><strong>Concept introduced, per-action authorization plus row-level ownership checks.</strong> <code>[Rubric §11, Security]</code>: unlike the other aggregate-root controllers (which gate the whole class with one
+          <code>[HasPermission(...)]</code>), <code>SpeakersController</code> carries a bare class-level <code>[Authorize]</code><span class="cite"><span>
+          (<code>SpeakersController.cs:43</code>)</span></span> and then varies authorization per action. The catalog reads are
+          <code>[AllowAnonymous]</code>; export, create and delete each re-assert
+          <code>[HasPermission(ConferencePermissions.SpeakersManage)]</code><span class="cite"><span> (<code>:325, 344, 408</code>)</span></span>; and <code>UpdateAsync</code>
+          performs a <em>resource-ownership</em> check in code (<span class="cite"><span><code>:381-386</code></span></span>, BR-214). It computes <code>canManage</code> as
+          <code>permissionRegistry.HasPermission(currentUserService.Roles, ConferencePermissions.SpeakersManage)</code><span class="cite"><span>
+          (<code>:383</code>)</span></span>, the same capability the sibling create and delete actions require, so ContentEditor qualifies
+          alongside Organizer (comment <span class="cite"><span><code>:381-382</code></span></span>); it compares the caller&#39;s <code>speaker_id</code> JWT claim with the route
+          id<span class="cite"><span> (<code>:384</code>)</span></span>; and it returns <code>Forbid()</code> when the caller is neither<span class="cite"><span> (<code>:385-386</code>)</span></span>. That is authorization a
+          policy attribute cannot express, because it depends on the specific row being edited; the management
+          flag is then passed on to the handler as
+          <code>new UpdateSpeakerCommand(id, request, CallerCanManageSpeakers: canManage, CallerCanSeeEmail: SpeakerDTOMapper.CanSeeEmail(currentUserService), RowVersion: rowVersion)</code><span class="cite"><span> (<code>:391-396</code>)</span></span> so the handler
+          keeps the curation field <code>IsTopSpeaker</code> unchanged on a self-edit and writes the email only for a caller
+          who can read it (BR-66, the same check the DTO mapper redacts with), meaning a self-edit or a
+          ContentEditor PUT built from a redacted GET keeps the stored email (the rule is written out at
+          <span class="cite"><span><code>:354-363</code></span></span>).</li>
+          <li><strong>Concept introduced, the virtual filter key.</strong> <code>[Rubric §9, API &amp; Contract Design]</code>: <code>EventId</code> is not a
+          <code>Speaker</code> column, so the paged action removes it from the generic filter dictionary before the pipeline
+          can reject it<span class="cite"><span> (<code>:163-173</code>)</span></span>, translates it into a specification via <code>GetSpeakersByEventFilterQuery</code><span class="cite"><span>
+          (<code>:180-181</code>)</span></span>, and, only when that query succeeds (<code>filterResult.TryGetValue(out var eventSpecification)</code>, <span class="cite"><span><code>:183</code></span></span>), <strong>ANDs</strong> it with the public-speaker specification rather than substituting
+          (<span class="cite"><span><code>:183-188</code></span></span>, <code>publicSpecification.And(eventSpecification)</code> at <span class="cite"><span><code>:187</code></span></span>, the extension member declared at
+          <span class="cite"><span><code>MMCA.Common/Source/Core/MMCA.Common.Domain/Specifications/SpecificationExtensions.cs:54</code></span></span>). Substituting
+          would leak hidden speakers to a non-privileged caller; an unparseable value simply drops the scope
+          instead of failing the request. The remarks at <span class="cite"><span><code>:140-146</code></span></span> add the reason the two are not redundant: the
+          event filter answers &quot;linked to this event&quot;, the public filter answers &quot;accepted for this event&quot;.</li>
+          <li><strong>Walkthrough</strong><ul>
+          <li><code>IsPrivileged</code><span class="cite"><span> (<code>SpeakersController.cs:71</code>)</span></span> is the shared read-audience check;
+          <code>BuildPublicSpeakerSpecificationAsync</code> (<span class="cite"><span><code>:90-101</code></span></span>, doc <span class="cite"><span><code>:76-88</code></span></span>) is the BR-239 projection, parameterized
+          by an optional <code>eventId</code> because a speaker accepted for one event is not thereby public on another.
+          Privileged readers get <code>null</code>.</li>
+          <li><code>GetReadSpecificationAsync</code><span class="cite"><span> (<code>:110-112</code>)</span></span> is the framework hook, and it delegates to that builder with
+          no event context: the list, lookup and by-id actions read their scope from here, while the paged action
+          resolves its own because it carries an event id (doc <span class="cite"><span><code>:104-109</code></span></span>).</li>
+          <li><code>AllowUnscopedExport =&gt; IsPrivileged</code><span class="cite"><span> (<code>:120</code>)</span></span> is the opt-in the fail-closed inherited
+          export needs<span class="cite"><span>
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/EntityControllerBase.cs:272-274</code>)</span></span>: the hook
+          returns <code>null</code> for a privileged reader, so without it even an organizer&#39;s export would be refused, and
+          for everyone else the opt-in is <code>false</code>.</li>
+          <li><code>GetAllAsync</code><span class="cite"><span> (<code>:122-130</code>)</span></span> is a plain passthrough. The paged overload<span class="cite"><span> (<code>:147-209</code>)</span></span> clamps <code>pageSize</code> to
+          <code>MaxPageSize</code><span class="cite"><span> (<code>:161</code>)</span></span>, performs the <code>EventId</code> interception described above, then queries with the
+          composed specification<span class="cite"><span> (<code>:191-202</code>)</span></span>, unwraps the page with <code>result.TryGetValue(out var page)</code><span class="cite"><span> (<code>:204</code>)</span></span>
+          and appends the <code>X-Pagination</code> header carrying that page&#39;s
+          <a href="group-01-result-error-handling.html#paginationmetadata"><code>PaginationMetadata</code></a> through the
+          <code>Response.AppendPaginationHeader(...)</code> helper instead of hand-serializing the header<span class="cite"><span> (<code>:207</code>)</span></span>.</li>
+          <li><code>GetAllForLookupAsync</code><span class="cite"><span> (<code>:225</code>)</span></span> has three guards. First, a request labelled <code>Email</code> from a caller for
+          whom <code>SpeakerDTOMapper.CanSeeEmail(currentUserService)</code> is false (Organizer only, BR-66, not the wider
+          privileged-reader audience that also admits ContentEditor) is refused with an
+          <a href="group-01-result-error-handling.html#error"><code>Error</code></a><code>.Validation</code> carrying the code
+          <code>Speaker.Lookup.EmailNotAvailable</code> (<code>LookupEmailNotAvailableCode</code>, <span class="cite"><span><code>:62</code></span></span>; check at <span class="cite"><span><code>:231-242</code></span></span>). Its
+          message names no runtime value, so the Conference error resources translate it. Second, privileged
+          readers (a <code>null</code> specification) fall through to the base action<span class="cite"><span> (<code>:246</code>)</span></span>. Third, everyone else must
+          name the label column from the allow-list <code>PublicLookupNameProperties</code> (first or last name only) or
+          receive an <code>Error.Validation</code> failure with the code <code>Speaker.Lookup.FieldNotAvailable</code>
+          (<code>LookupFieldNotAvailableCode</code>, <span class="cite"><span><code>:68</code></span></span>; <span class="cite"><span><code>:253</code></span></span>); that message names the requested field, so it carries no
+          resource entry and reaches the client in English with the value intact. This closes a BR-66 side
+          channel: <code>nameProperty=Email</code> would otherwise project the speaker email into the lookup label,
+          bypassing the DTO mapper that redacts it. The checks run before the query service, so a rejected label
+          is never queried; the scoped path then forwards <code>specification.Criteria</code> as the lookup <code>where</code><span class="cite"><span>
+          (<code>:262</code>)</span></span> and, once <code>result.TryGetValue(out var lookups)</code> succeeds<span class="cite"><span> (<code>:266</code>)</span></span>, rewraps the rows into a
+          <a href="group-01-result-error-handling.html#collectionresultt"><code>CollectionResult&lt;T&gt;</code></a> of
+          <a href="group-12-api-hosting-mapping.html#baselookuptidentifiertype"><code>BaseLookup&lt;TIdentifierType&gt;</code></a>.</li>
+          <li><code>GetByIdAsync</code><span class="cite"><span> (<code>:274</code>)</span></span> carries the self-read carve-out: when the caller&#39;s <code>speaker_id</code> claim
+          matches the route id the specification is dropped so a speaker can always load their own profile<span class="cite"><span>
+          (<code>:287</code>)</span></span>, and because that response can contain data the public cannot see while the output-cache
+          key does not vary by caller, the action turns storage off for this response via
+          <code>HttpContext.Features.Get&lt;IOutputCacheFeature&gt;()?.Context.AllowCacheStorage = false</code><span class="cite"><span> (<code>:294</code>)</span></span>. The
+          policy only ever turns storage off, never back on, so the opt-out sticks. On success the override
+          calls <code>SetConcurrencyETag(result.Value)</code> (<span class="cite"><span><code>:311</code></span></span>, O-38): the inherited GET emits the weak ETag a
+          conditional write needs, and this override replaced that GET, so it emits the same token or a speaker
+          could never be edited under <code>If-Match</code>.</li>
+          <li><code>ExportAsync</code> (<span class="cite"><span><code>:326-340</code></span></span>, a non-<code>async</code> override that returns <code>Task.FromResult&lt;IActionResult&gt;(Forbid())</code>
+          for the denied path and the base call directly otherwise) is the strongest form of the export gate
+          taught at
+          <a href="#eventquestionanswerscontroller"><code>EventQuestionAnswersController</code></a>: a declarative
+          <code>[HasPermission(ConferencePermissions.SpeakersManage)]</code><span class="cite"><span> (<code>:325</code>)</span></span> <strong>plus</strong> the imperative
+          <code>if (!IsPrivileged) return Forbid();</code><span class="cite"><span> (<code>:334-337</code>)</span></span>, on top of the base&#39;s fail-closed refusal. The doc
+          comment records that the inherited export streams only the rows the read hook scopes and refuses an
+          unscoped export unless <code>AllowUnscopedExport</code> opts in, and that this override keeps the download itself
+          privileged so everyone else is denied before any row is read; it also records that the attribute is
+          stated explicitly because the class carries only a bare <code>[Authorize]</code> for the inherited action to pick
+          up<span class="cite"><span> (<code>:315-323</code>)</span></span>.
+          <code>[Rubric §30, Compliance/Privacy/Data Governance]</code>: a speaker roster is personal data, so bulk egress
+          is a named capability rather than a side effect of reading the list.</li>
+          <li><code>CreateAsync</code><span class="cite"><span> (<code>:345-352</code>)</span></span> and <code>DeleteAsync</code><span class="cite"><span> (<code>:409-416</code>)</span></span> call the base and evict. <code>UpdateAsync</code><span class="cite"><span>
+          (<code>:376-404</code>)</span></span> runs the BR-214 check<span class="cite"><span> (<code>:381-386</code>)</span></span>, reads the required <code>If-Match</code> token<span class="cite"><span> (<code>:388</code>)</span></span>,
+          dispatches<span class="cite"><span> (<code>:390-397</code>)</span></span> and evicts<span class="cite"><span> (<code>:402</code>)</span></span>. Every mutation ends at
+          <code>EvictTagsAsync(cancellationToken, &quot;conference:speakers&quot;, &quot;conference&quot;)</code><span class="cite"><span> (<code>:350, 402, 414</code>)</span></span>.</li>
+          <li>The link/unlink actions (BR-209) and the three BR-210 session read projections (aggregated feedback,
+          single and batched bookmark counts) are not on this class: they live on
+          <a href="#speakerlinkscontroller"><code>SpeakerLinksController</code></a> and
+          <a href="#speakersessionscontroller"><code>SpeakerSessionsController</code></a> respectively, both sharing this controller&#39;s
+          <code>/Speakers</code> route prefix.</li>
+          </ul>
+          </li>
+          <li><strong>Why it&#39;s built this way</strong>: speaker profiles are edited both by speaker managers and by the speakers
+          themselves, so the controller needs row-aware authorization that a static policy cannot provide; keeping
+          that check inline mirrors the per-mutation ownership pattern used across the codebase. Deriving the
+          update&#39;s management flag from the same <code>SpeakersManage</code> capability the create and delete attributes use
+          keeps the three mutations agreeing on who counts as a manager. The virtual <code>EventId</code> filter gives clients
+          an event-scoped speaker list without adding a denormalized column to the aggregate. The link/session
+          split keeps the constructor&#39;s dependency count under <code>ConstructorDependencyCountTests</code>&#39; ceiling without
+          shrinking the resource&#39;s surface.</li>
+          <li><strong>Where it&#39;s used</strong>: the Conference service host behind the Gateway route <code>/Speakers/{**catch-all}</code><span class="cite"><span>
+          (<code>MMCA.ADC/Source/Hosts/MMCA.ADC.Gateway/appsettings.json:86</code>)</span></span>; consumed by the public speaker directory
+          (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/Pages/Public/Speakers/PublicSpeakerList.razor</code>), the
+          speaker self-service profile page, and organizer linking tools.</li>
+          </ul>
+          <hr>
           <h3 id="sponsorscontroller">SponsorsController</h3>
           <blockquote>
           <p>MMCA.ADC.Conference.API · <code>MMCA.ADC.Conference.API.Controllers.Sponsors</code> · <span class="cite"><span><code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/Sponsors/SponsorsController.cs:40</code></span></span> · Level 10 · class (sealed)</p>
@@ -3813,7 +3853,7 @@
           <span class="cite"><span><code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Shared/Authorization/ConferencePermissions.cs:33</code></span></span>
           and included in the <code>ContentManagement</code> curation subset<span class="cite"><span> (<code>ConferencePermissions.cs:79-88</code>)</span></span>, so a content
           editor can manage the sponsor roster without holding event, room or question rights. <code>[Rubric §12, Performance &amp; Scalability]</code>: reads run under the <code>SponsorsCache</code> policy (5-minute TTL, tags <code>conference</code>
-          and <code>conference:sponsors</code>, <span class="cite"><span><code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:282</code></span></span>) and
+          and <code>conference:sponsors</code>, <span class="cite"><span><code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:288</code></span></span>) and
           every mutation evicts both tags<span class="cite"><span> (<code>:177, 209, 221</code>)</span></span>.</li>
           <li><strong>Walkthrough</strong>: the file is line-for-line the structural twin of
           <a href="#activitiescontroller"><code>ActivitiesController</code></a>, so every member sits at the same line number in both.
@@ -3966,8 +4006,8 @@
           </li>
           <li><p><strong>Where it&#39;s used</strong>: mapped in the Conference host as
           <code>app.MapGrpcService&lt;SessionBookmarksGrpcService&gt;().RequireAuthorization()</code><span class="cite"><span>
-          (<code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:462</code>)</span></span>. The <code>RequireAuthorization()</code> is
-          deliberate and explained inline<span class="cite"><span> (<code>Program.cs:454-460</code>)</span></span>: these RPCs answer conference-state questions
+          (<code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:473</code>)</span></span>. The <code>RequireAuthorization()</code> is
+          deliberate and explained inline<span class="cite"><span> (<code>Program.cs:465-471</code>)</span></span>: these RPCs answer conference-state questions
           raised on behalf of a specific end user, so internal-only ingress is not considered sufficient. Every
           caller is an Engagement handler sitting behind an authenticated controller, so an inbound bearer token is
           always present for
@@ -4041,11 +4081,11 @@
           <code>Conference.Shared</code>&#39;s interface and not the other way round.</li>
           <li><strong>Where it&#39;s used</strong>: registered by <code>AddConferenceSessionValidationClient()</code> (see
           <a href="#dependencyinjection-1">DependencyInjection</a>), which the Engagement host calls<span class="cite"><span>
-          (<code>MMCA.ADC/Source/Services/MMCA.ADC.Engagement.Service/Program.cs:289</code>)</span></span>. Its eventual consumers are
+          (<code>MMCA.ADC/Source/Services/MMCA.ADC.Engagement.Service/Program.cs:301</code>)</span></span>. Its eventual consumers are
           <a href="group-22-engagement-module.html#createbookmarkhandler">CreateBookmarkHandler</a> and
           <a href="group-22-engagement-module.html#getuserbookmarkshandler">GetUserBookmarksHandler</a> behind
           <a href="group-22-engagement-module.html#bookmarkscontroller">BookmarksController</a><span class="cite"><span>
-          (<code>MMCA.ADC/Source/Services/MMCA.ADC.Engagement.Service/Program.cs:234-240</code>)</span></span>.</li>
+          (<code>MMCA.ADC/Source/Services/MMCA.ADC.Engagement.Service/Program.cs:240-246</code>)</span></span>.</li>
           </ul>
           <h3 id="userconferenceexportgrpcservice">UserConferenceExportGrpcService</h3>
           <blockquote>
@@ -4113,7 +4153,7 @@
           one it got.</li>
           <li><strong>Where it&#39;s used</strong>: registered by <code>AddConferenceUserExportClient()</code> (see
           <a href="#dependencyinjection-1">DependencyInjection</a>), called from the Identity host<span class="cite"><span>
-          (<code>MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:332</code>)</span></span>.</li>
+          (<code>MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:344</code>)</span></span>.</li>
           </ul>
           <h3 id="eventlivevalidationgrpcservice">EventLiveValidationGrpcService</h3>
           <blockquote>
@@ -4283,8 +4323,8 @@
           </li>
           <li><p><strong>Where it&#39;s used</strong>: registered by <code>AddConferenceEventLiveValidationClient()</code> (see
           <a href="#dependencyinjection-1">DependencyInjection</a>), called from the Engagement host<span class="cite"><span>
-          (<code>MMCA.ADC/Source/Services/MMCA.ADC.Engagement.Service/Program.cs:290</code>)</span></span>. Consumers are Engagement&#39;s
-          live-poll and session-question handlers<span class="cite"><span> (<code>Program.cs:241-242</code>)</span></span>.</p>
+          (<code>MMCA.ADC/Source/Services/MMCA.ADC.Engagement.Service/Program.cs:302</code>)</span></span>. Consumers are Engagement&#39;s
+          live-poll and session-question handlers<span class="cite"><span> (<code>Program.cs:247-248</code>)</span></span>.</p>
           </li>
           </ul>
           <h3 id="dependencyinjection-1">DependencyInjection</h3>
@@ -4349,17 +4389,17 @@
           Conference export section, whose aggregation is best-effort per section.</li>
           <li>The <code>serviceName</code> default is <code>&quot;conference&quot;</code>, chosen to match the AppHost resource name<span class="cite"><span> (<code>:41-42</code>,
           <code>:71-72</code>, <code>:97-98</code>)</span></span>. <code>AddTypedGrpcClient</code> turns that name into the address <code>http://{serviceName}</code><span class="cite"><span>
-          (<code>MMCA.Common/Source/Presentation/MMCA.Common.Grpc/DependencyInjection.cs:98-99</code>)</span></span>, which Aspire service
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.Grpc/DependencyInjection.cs:110-111</code>)</span></span>, which Aspire service
           discovery resolves. A typo in the name is a runtime resolution failure, not a compile error, which is
           why the default exists at all.</li>
           <li>Everything else the client needs comes from <code>AddTypedGrpcClient</code>, not from here: the
           <a href="group-13-grpc-contracts.html#jwtforwardingclientinterceptor">JwtForwardingClientInterceptor</a> that
           forwards the caller&#39;s bearer token<span class="cite"><span>
-          (<code>MMCA.Common/Source/Presentation/MMCA.Common.Grpc/DependencyInjection.cs:95</code>, <code>:77</code>)</span></span>, an explicit
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.Grpc/DependencyInjection.cs:107</code>, <code>:77</code>)</span></span>, an explicit
           <code>SocketsHttpHandler</code> that opts into HTTP/2 with the connection-hygiene values from
-          <a href="group-16-aspire-orchestration.html#httpresiliencedefaults">HttpResilienceDefaults</a><span class="cite"><span> (<code>:89-98</code>)</span></span>, and a
+          <a href="group-16-aspire-orchestration.html#httpresiliencedefaults">HttpResilienceDefaults</a><span class="cite"><span> (<code>:124-132</code>)</span></span>, and a
           standard resilience handler configured from
-          <a href="group-16-aspire-orchestration.html#grpcresiliencedefaults">GrpcResilienceDefaults</a><span class="cite"><span> (<code>:100-108</code>)</span></span>. This is
+          the <code>Grpc</code>-prefixed members of <a href="group-16-aspire-orchestration.html#httpresiliencedefaults">HttpResilienceDefaults</a><span class="cite"><span> (<code>:142-168</code>)</span></span>. This is
           why the per-call deadlines in the adapters are a <em>separate</em> budget: the pipeline owns retries and
           the circuit breaker, the deadline owns a hung peer.</li>
           <li>All three adapters register as <code>Scoped</code><span class="cite"><span> (<code>:50</code>, <code>:80</code>, <code>:108</code>)</span></span>, matching the lifetime the in-process implementations
@@ -4374,12 +4414,12 @@
           whole answer in one 114-line file.</li>
           <li><strong>Where it&#39;s used</strong>: the Engagement service host calls the first two inside its application-pipeline
           registration, in the documented order after <code>moduleHost.RegisterModules</code><span class="cite"><span>
-          (<code>MMCA.ADC/Source/Services/MMCA.ADC.Engagement.Service/Program.cs:289-290</code>)</span></span>, with the rationale for each
-          written out immediately above<span class="cite"><span> (<code>Program.cs:234-242</code>)</span></span>. The Identity host calls
-          <code>AddConferenceUserExportClient()</code> (<span class="cite"><span><code>MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:332</code></span></span>,
+          (<code>MMCA.ADC/Source/Services/MMCA.ADC.Engagement.Service/Program.cs:301-302</code>)</span></span>, with the rationale for each
+          written out immediately above<span class="cite"><span> (<code>Program.cs:240-248</code>)</span></span>. The Identity host calls
+          <code>AddConferenceUserExportClient()</code> (<span class="cite"><span><code>MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:344</code></span></span>,
           rationale at <span class="cite"><span><code>:315</code></span></span>). The AppHost declares the matching Engagement to Conference reference<span class="cite"><span>
-          (<code>MMCA.ADC/Source/Hosting/MMCA.ADC.AppHost/Program.cs:265</code>)</span></span> and the Identity to Conference one<span class="cite"><span>
-          (<code>Program.cs:289</code>)</span></span>.</li>
+          (<code>MMCA.ADC/Source/Hosting/MMCA.ADC.AppHost/Program.cs:266</code>)</span></span> and the Identity to Conference one<span class="cite"><span>
+          (<code>Program.cs:290</code>)</span></span>.</li>
           <li><strong>Caveats / not-in-source</strong>: the &quot;call this after <code>DiscoverAndRegister</code>&quot; requirement is carried by
           convention and by the doc comments only. Nothing in this file detects a too-early call.</li>
           </ul>

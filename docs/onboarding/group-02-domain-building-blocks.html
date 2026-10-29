@@ -132,7 +132,8 @@
         <li><a href="group-25-adc-host-composition.html">25. ADC Application Host, UI Shell &amp; Cross-Module Composition</a></li>
         <li><a href="group-26-device-capability-layer.html">26. Device Capability Abstraction Layer (Native Contracts, MAUI, Browser &amp; Fallback Adapters)</a></li>
         <li><a href="group-27-common-ai-integration.html">27. Common AI Integration</a></li>
-        <li><a href="group-28-testing-infrastructure.html">28. Testing &amp; Quality Infrastructure</a></li>
+        <li><a href="group-28-common-cloud-provider-adapters.html">28. Common Cloud Provider Adapters (AWS, Azure, GCP)</a></li>
+        <li><a href="group-29-testing-infrastructure.html">29. Testing &amp; Quality Infrastructure</a></li>
         <li><a href="devops-aspire.html">Aspire Orchestration and Containers</a></li>
         <li><a href="devops-cicd.html">CI/CD and Operations</a></li>
         <li><a href="devops-iac.html">Infrastructure as Code, ADC Azure Deployment</a></li>
@@ -169,6 +170,8 @@
           (<a href="#addressinvariants"><code>AddressInvariants</code></a>, <a href="#emailinvariants"><code>EmailInvariants</code></a>,
           <a href="#phonenumberinvariants"><code>PhoneNumberInvariants</code></a>) plus the shared <a href="#commoninvariants"><code>CommonInvariants</code></a>
           toolbox, and the <a href="#currencyjsonconverter"><code>CurrencyJsonConverter</code></a> that puts <code>Currency</code> on the wire.
+          Beside them sits one piece of reference data, <a href="#uspostalregions"><code>UsPostalRegions</code></a>, the closed
+          list of <a href="#uspostalregion"><code>UsPostalRegion</code></a> codes that US address validation checks a state against.
           The <strong>smart-enumeration</strong> trio (<a href="#enumerationtenumeration"><code>Enumeration&lt;TEnumeration&gt;</code></a> with its
           <a href="#enumerationjsonconverterfactory"><code>EnumerationJsonConverterFactory</code></a> and the factory&#39;s nested
           <a href="#enumerationconvertertenumeration"><code>EnumerationConverter&lt;TEnumeration&gt;</code></a>) is a deliberate cousin of
@@ -266,18 +269,18 @@
           <li><code>RemoveChildOrNotFound&lt;TChild, TChildId&gt;</code> is that lookup followed by the child&#39;s own <code>Delete()</code>,
           short-circuiting on either failure and handing the deleted child <em>back</em> rather than consuming it,
           because which domain event a removal raises is aggregate vocabulary the framework must not invent<span class="cite"><span>
-          (<code>AuditableAggregateRootEntity.cs:158-180</code>)</span></span>.</li>
+          (<code>AuditableAggregateRootEntity.cs:158-178</code>)</span></span>.</li>
           <li><code>RestoreChild&lt;TChild, TChildId&gt;</code> brings a soft-deleted child back (BR-135). It takes the child as an
           instance rather than an id, because a soft-deleted row is excluded by the global query filter and is
           not reachable through the loaded collection: the caller resolves it with an <code>ignoreQueryFilters</code> read
           and hands it in. The helper enforces only the &quot;must actually be soft-deleted&quot; rule, calls
           <code>Reactivate()</code>, and re-adds the child only when the collection does not already carry it
-          (<span class="cite"><span><code>AuditableAggregateRootEntity.cs:214-251</code></span></span>, the duplicate guard at <span class="cite"><span><code>:243</code></span></span>). Its <code>TChild</code> is
+          (<span class="cite"><span><code>AuditableAggregateRootEntity.cs:212-249</code></span></span>, the duplicate guard at <span class="cite"><span><code>:243</code></span></span>). Its <code>TChild</code> is
           constrained to <a href="#ireactivatable"><code>IReactivatable</code></a>, which is exactly how the type system expresses
           &quot;resurrection is opt-in&quot;.</li>
           <li><code>DeleteChildren&lt;TChild, TChildId&gt;</code> cascades a soft delete across a child collection, skipping
           already-deleted children so re-deleting a parent stays idempotent, and combining the failures into one
-          result<span class="cite"><span> (<code>AuditableAggregateRootEntity.cs:275-294</code>)</span></span>.</li>
+          result<span class="cite"><span> (<code>AuditableAggregateRootEntity.cs:273-292</code>)</span></span>.</li>
           </ul>
           <p><code>RemoveDomainEvents</code> is worth pausing on: it takes out exactly the events the persistence layer
           captured, matched by <strong>reference</strong> equality<span class="cite"><span> (<code>AuditableAggregateRootEntity.cs:43</code>)</span></span>, because two
@@ -303,7 +306,7 @@
           64-character <code>string</code> on purpose, because it arrives from a claim, a header, or configuration, all of
           which are strings<span class="cite"><span> (<code>ITenantEntity.cs:22-25</code>)</span></span>. Adopting tenancy is three things together: marking
           entities, calling <code>AddMultiTenancy(configuration)</code><span class="cite"><span>
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:282</code>)</span></span>, and setting
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:297</code>)</span></span>, and setting
           <code>Tenancy:Enabled</code><span class="cite"><span> (<code>ITenantEntity.cs:26-31</code>)</span></span>; a host that never resolves a tenant behaves exactly as it
           did before (<a href="https://ivanball.github.io/docs/adr/073-multi-tenancy-model.html" target="_blank" rel="noopener">ADR-073</a>).</p>
           <p><a href="#iauditedentity"><code>IAuditedEntity</code></a><span class="cite"><span>
@@ -341,20 +344,20 @@
           captures every tracked <a href="#iaggregateroot"><code>IAggregateRoot</code></a> that has pending events via
           <code>context.ChangeTracker.Entries&lt;IAggregateRoot&gt;()</code>, snapshotting each aggregate&#39;s event list at capture
           time<span class="cite"><span>
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Interceptors/DomainEventSaveChangesInterceptor.cs:207</code>,
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Interceptors/DomainEventSaveChangesInterceptor.cs:209</code>,
           <code>:220-224</code>)</span></span>, serializes them into <a href="group-04-events-outbox.html#outboxmessage"><code>OutboxMessage</code></a> rows <strong>in
-          the same transaction</strong> as the data<span class="cite"><span> (<code>DomainEventSaveChangesInterceptor.cs:236-253</code>)</span></span>, then after a
+          the same transaction</strong> as the data<span class="cite"><span> (<code>DomainEventSaveChangesInterceptor.cs:238-255</code>)</span></span>, then after a
           successful save dispatches the local <a href="group-04-events-outbox.html#idomainevent"><code>IDomainEvent</code></a>s in
           process, marks their outbox rows processed, and removes exactly the captured events from each aggregate<span class="cite"><span>
-          (<code>DomainEventSaveChangesInterceptor.cs:430-433</code>)</span></span>. That last step is why <code>IAggregateRoot</code> grew
+          (<code>DomainEventSaveChangesInterceptor.cs:461-464</code>)</span></span>. That last step is why <code>IAggregateRoot</code> grew
           <code>RemoveDomainEvents</code>: clearing wholesale would also discard anything a handler raised on the same
           aggregate during in-process dispatch, and those events would never dispatch and never reach the outbox<span class="cite"><span>
           (<code>IAggregateRoot.cs:25-31</code>)</span></span>. Integration events
           (<a href="group-04-events-outbox.html#iintegrationevent"><code>IIntegrationEvent</code></a>) deliberately get rows but no
           in-process dispatch; the <a href="group-04-events-outbox.html#outboxprocessor"><code>OutboxProcessor</code></a> publishes them<span class="cite"><span>
-          (<code>DomainEventSaveChangesInterceptor.cs:274-283</code>)</span></span>. Inside a transactional command the whole flush is
+          (<code>DomainEventSaveChangesInterceptor.cs:276-285</code>)</span></span>. Inside a transactional command the whole flush is
           deferred until after commit through a <code>DeferredDispatch</code> record<span class="cite"><span>
-          (<code>DomainEventSaveChangesInterceptor.cs:357-358</code>)</span></span>, so a handler never acts on state that could still roll
+          (<code>DomainEventSaveChangesInterceptor.cs:359-360</code>)</span></span>, so a handler never acts on state that could still roll
           back. The <a href="#domainentitystate"><code>DomainEntityState</code></a> enum (<code>Unchanged</code>/<code>Added</code>/<code>Updated</code>/<code>Deleted</code>, with
           explicit numeric values at
           <span class="cite"><span><code>MMCA.Common/Source/Core/MMCA.Common.Domain/Enums/DomainEntityState.cs:9-12</code></span></span>) is the small vocabulary an
@@ -438,19 +441,24 @@
           <ul>
           <li><strong>Owned-type composites</strong>: <a href="#address"><code>Address</code></a><span class="cite"><span>
           (<code>MMCA.Common/Source/Core/MMCA.Common.Shared/ValueObjects/Contact/Address.cs:16</code>)</span></span> and <a href="#money"><code>Money</code></a><span class="cite"><span>
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Shared/ValueObjects/Financial/Money.cs:21</code>)</span></span> are stored by EF as <code>OwnsOne</code>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Shared/ValueObjects/Financial/Money.cs:22</code>)</span></span> are stored by EF as <code>OwnsOne</code>
           nested columns; both carry <code>[DataContract]</code> with ordered <code>[DataMember(Order = n)]</code> properties to pin
           the serialization shape<span class="cite"><span> (<code>Address.cs:19-40</code>, <code>Money.cs:21-36</code>)</span></span>. <code>Address</code> requires only
           <code>AddressLine1</code> and leaves the other five fields optional for international formats<span class="cite"><span>
           (<code>Address.cs:69-78</code>)</span></span>. <code>Money</code> is the richest: it pairs a <code>decimal Amount</code> with a
           <a href="#currency"><code>Currency</code></a>, defines <code>+</code> and <code>*</code> operators <em>and</em> a <code>Result</code>-returning <code>Add</code><span class="cite"><span>
-          (<code>Money.cs:102</code>, <code>:96</code>, <code>:107</code>)</span></span>, and treats <code>Currency.None</code> as an additive identity so <code>Money.Zero()</code>
-          works as an accumulator seed regardless of the eventual currency<span class="cite"><span> (<code>Money.cs:149-160</code>)</span></span>. Note the
+          (<code>Money.cs:108</code>, <code>:120</code>, <code>:131</code>)</span></span>, and treats <code>Currency.None</code> as an additive identity so <code>Money.Zero()</code>
+          works as an accumulator seed regardless of the eventual currency<span class="cite"><span> (<code>Money.cs:155-166</code>)</span></span>. Note the
           asymmetry worth remembering: the <code>+</code> operator <em>throws</em> <code>InvalidOperationException</code> on a currency
-          mismatch<span class="cite"><span> (<code>Money.cs:107</code>)</span></span> while <code>Add</code> returns a <code>CurrencyMismatch</code> failure<span class="cite"><span> (<code>Money.cs:130</code>)</span></span>, so prefer
-          <code>Add</code> in domain code. <code>Money</code> also asks to be mapped through the shipped <code>OwnsMoney</code> helper rather
-          than a hand-rolled <code>OwnsOne</code> block, so the currency round-trip fallback is not re-typed per entity<span class="cite"><span>
-          (<code>Money.cs:15-20</code>)</span></span>.</li>
+          mismatch<span class="cite"><span> (<code>Money.cs:113</code>)</span></span> while <code>Add</code> returns a <code>CurrencyMismatch</code> failure<span class="cite"><span> (<code>Money.cs:136</code>)</span></span>, so prefer
+          <code>Add</code> in domain code. Because JSON and EF materialize <code>Money</code> through its round-trip constructor
+          rather than through <code>Create</code>, that constructor guards the wire on its own: a missing or <code>null</code>
+          currency throws <code>JsonException</code><span class="cite"><span> (<code>Money.cs:55-65</code>)</span></span>, and the type implements <code>IJsonOnDeserialized</code><span class="cite"><span>
+          (<code>Money.cs:22</code>)</span></span> to refuse a non-zero amount carrying the <code>Currency.None</code> sentinel<span class="cite"><span> (<code>Money.cs:76-82</code>)</span></span>,
+          so a malformed payload becomes a 400 rather than a value whose amount the arithmetic silently drops.
+          That callback is JSON-only, so a stored row is never refused on read<span class="cite"><span> (<code>Money.cs:72-73</code>)</span></span>. <code>Money</code> also
+          asks to be mapped through the shipped <code>OwnsMoney</code> helper rather than a hand-rolled <code>OwnsOne</code> block,
+          so the currency round-trip fallback is not re-typed per entity<span class="cite"><span> (<code>Money.cs:15-20</code>)</span></span>.</li>
           <li><strong>Closed enumeration</strong>: <a href="#currency"><code>Currency</code></a><span class="cite"><span>
           (<code>MMCA.Common/Source/Core/MMCA.Common.Shared/ValueObjects/Financial/Currency.cs:16</code>)</span></span> is a record with a private
           constructor<span class="cite"><span> (<code>Currency.cs:33</code>)</span></span> and a fixed <code>All</code> set of exactly <code>Usd</code> and <code>Eur</code><span class="cite"><span> (<code>Currency.cs:56-60</code>)</span></span>,
@@ -477,6 +485,21 @@
           <code>Create</code> rejects <code>end &lt; start</code><span class="cite"><span> (<code>DateRange.cs:30-35</code>, <code>DateTimeRange.cs:31-36</code>)</span></span>. Read the boundary
           rules carefully: <code>Contains</code> is inclusive on both ends<span class="cite"><span> (<code>DateRange.cs:56-57</code>)</span></span> while <code>Overlaps</code>
           compares half-open<span class="cite"><span> (<code>DateRange.cs:47-51</code>)</span></span>.</li>
+          <li><strong>Reference data, not a value object</strong>: <a href="#uspostalregions"><code>UsPostalRegions</code></a><span class="cite"><span>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Shared/ValueObjects/Contact/UsPostalRegions.cs:12</code>)</span></span> is a static
+          class holding the USPS regions as an <code>All</code> list of <a href="#uspostalregion"><code>UsPostalRegion</code></a> code/name
+          pairs (<span class="cite"><span><code>UsPostalRegions.cs:15-32</code></span></span>, the record itself at <span class="cite"><span><code>UsPostalRegions.cs:76</code></span></span>): the 50 states and
+          DC, the five inhabited territories, and the three military regions, in that display order<span class="cite"><span>
+          (<code>UsPostalRegions.cs:7-9</code>, <code>:14</code>)</span></span>. It answers three questions: <code>IsKnownCode</code> (case-insensitive,
+          trimmed, <span class="cite"><span><code>UsPostalRegions.cs:43</code></span></span>), <code>ToCode</code> (accepts a code or a full name such as <code>&quot;Georgia&quot;</code>, for
+          addresses saved before a picker existed, and returns the upper-case code or <code>null</code>,
+          <span class="cite"><span><code>UsPostalRegions.cs:51-61</code></span></span>), and <code>IsValidZipCode</code> (5 digits or ZIP+4, through a source-generated
+          regex with a 100 ms match timeout, <span class="cite"><span><code>UsPostalRegions.cs:66-70</code></span></span>). It lives in Shared so a UI state
+          picker and server validation accept exactly the same codes<span class="cite"><span> (<code>UsPostalRegions.cs:9-10</code>)</span></span>; the server
+          half is the opt-in <code>UsAddressValidator</code>, whose <code>UsStateRules&lt;T&gt;</code> and <code>UsZipCodeRules&lt;T&gt;</code> call
+          <code>IsKnownCode</code> and <code>IsValidZipCode</code><span class="cite"><span>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Validation/UsAddressValidationRules.cs:45</code>, <code>:57</code>)</span></span>.
+          <a href="#address"><code>Address</code></a> itself stays country-neutral: the US rules are layered on by the caller.</li>
           </ul>
           <h2 id="smart-enumerations-a-closed-set-that-can-carry-behavior">Smart enumerations, a closed set that can carry behavior</h2>
           <p><a href="#enumerationtenumeration"><code>Enumeration&lt;TEnumeration&gt;</code></a><span class="cite"><span>
@@ -553,12 +576,12 @@
           <a href="#ianonymizable"><code>IAnonymizable</code></a><span class="cite"><span> (<code>SensitiveAttribute.cs:7-10</code>)</span></span>, so tagging a credential never drags a
           non-personal entity into the erasure convention. Its one consumer is the audit trail: the interceptor
           folds every <code>[Sensitive]</code> property into a per-type cached set of credential names
-          (<span class="cite"><span><code>AuditTrailSaveChangesInterceptor.cs:669-692</code></span></span>, the attribute probe at <span class="cite"><span><code>:688</code></span></span>), and a property in that
+          (<span class="cite"><span><code>AuditTrailSaveChangesInterceptor.cs:670-693</code></span></span>, the attribute probe at <span class="cite"><span><code>:688</code></span></span>), and a property in that
           set is written as the same <code>RedactedToken</code> on both sides of the change regardless of whether the type
-          carries any PII<span class="cite"><span> (<code>AuditTrailSaveChangesInterceptor.cs:637-640</code>)</span></span>. The password hash and salt of an
+          carries any PII<span class="cite"><span> (<code>AuditTrailSaveChangesInterceptor.cs:638-641</code>)</span></span>. The password hash and salt of an
           <code>IAuthUser</code> entity land in that set without any marker, so the attribute is for the secrets the
           framework cannot recognize on its own<span class="cite"><span> (<code>SensitiveAttribute.cs:15-16</code>,
-          <code>AuditTrailSaveChangesInterceptor.cs:675-685</code>)</span></span>.</p>
+          <code>AuditTrailSaveChangesInterceptor.cs:676-686</code>)</span></span>.</p>
           <p><a href="#ianonymizable"><code>IAnonymizable</code></a><span class="cite"><span>
           (<code>MMCA.Common/Source/Core/MMCA.Common.Domain/Interfaces/IAnonymizable.cs:22</code>)</span></span> defines the erasure
           contract itself: an idempotent <code>Anonymize()</code> returning
@@ -633,7 +656,7 @@
           <code>Updated</code> from mutation methods, <code>Deleted</code> from <code>Delete()</code>. Aggregates follow it literally (for
           example <a href="group-17-conference-domain.html#category"><code>Category</code></a> at
           <span class="cite"><span><code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Categories/Category.cs:73,97,113</code></span></span>
-          for the root and <span class="cite"><span><code>Category.cs:146,178,196</code></span></span> for its child items), and handlers short-circuit on it
+          for the root and <span class="cite"><span><code>Category.cs:149,183,200</code></span></span> for its child items), and handlers short-circuit on it
           (for example
           <span class="cite"><span><code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Speakers/DomainEventHandlers/SpeakerDeletedHandler.cs:29</code></span></span>
           and
@@ -817,7 +840,7 @@
           uninitialized <code>bool</code> and therefore <code>false</code> unless configured). Marked aggregates today: ADC&#39;s
           <a href="group-24-identity-module.html#user"><code>User</code></a>
           (<span class="cite"><span><code>MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Domain/Users/User.cs:35</code></span></span>, rationale at
-          <span class="cite"><span><code>User.cs:27-30</code></span></span>), <code>Event</code><span class="cite"><span>
+          <span class="cite"><span><code>User.cs:28-31</code></span></span>), <code>Event</code><span class="cite"><span>
           (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Events/Event.cs:24</code>)</span></span>, <code>Session</code><span class="cite"><span>
           (<code>.../Sessions/Session.cs:22</code>)</span></span>, <code>Speaker</code><span class="cite"><span> (<code>.../Speakers/Speaker.cs:22</code>)</span></span>, <code>CheckIn</code><span class="cite"><span>
           (<code>MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Domain/CheckIns/CheckIn.cs:28</code>)</span></span>,
@@ -826,8 +849,8 @@
           <code>TicketComment</code> deliberately does NOT carry it, and says so<span class="cite"><span>
           (<code>MMCA.Helpdesk/Source/Modules/Tickets/MMCA.Helpdesk.Tickets.Domain/Tickets/TicketComment.cs:12,16</code>)</span></span>.
           The opting-in hosts are the three ADC services<span class="cite"><span>
-          (<code>MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:250</code>,
-          <code>MMCA.ADC.Conference.Service/Program.cs:356</code>, <code>MMCA.ADC.Engagement.Service/Program.cs:202</code>)</span></span> and the
+          (<code>MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:257</code>,
+          <code>MMCA.ADC.Conference.Service/Program.cs:362</code>, <code>MMCA.ADC.Engagement.Service/Program.cs:208</code>)</span></span> and the
           Helpdesk web host<span class="cite"><span> (<code>MMCA.Helpdesk/Source/Hosts/MMCA.Helpdesk.Web/Program.cs:78</code>)</span></span>.</li>
           <li><strong>Caveats / not-in-source</strong>: retention is not automatic. <code>AuditTrailSettings.RetentionDays</code> defaults
           to 90<span class="cite"><span> (<code>AuditTrailSettings.cs:38</code>)</span></span>, but the doc comment states the purge only happens if the host
@@ -889,7 +912,7 @@
           (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Configuration/EntityTypeConfiguration/EntityTypeConfiguration.cs:63</code>)</span></span>
           as well as by entity factory methods deciding whether to set <code>Id</code> (for example ADC&#39;s
           <a href="group-24-identity-module.html#user"><code>User</code></a>, marked <code>[IdValueGenerated]</code> at
-          <span class="cite"><span><code>MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Domain/Users/User.cs:33</code></span></span>).</li>
+          <span class="cite"><span><code>MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Domain/Users/User.cs:34</code></span></span>).</li>
           </ul>
           <h3 id="ihasorderingkey">IHasOrderingKey</h3>
           <blockquote>
@@ -972,13 +995,13 @@
           client sends back the token it last read, and the <code>UPDATE</code> includes it in the <code>WHERE</code> clause. If
           someone else changed the row in between, zero rows match, EF Core raises
           <code>DbUpdateConcurrencyException</code>, and the API maps that to <code>409 Conflict</code><span class="cite"><span>
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Interfaces/Infrastructure/Persistence/IRepository.cs:401-405</code>)</span></span>.
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Interfaces/Infrastructure/Persistence/IRepository.cs:389-393</code>)</span></span>.
           The interesting design point is <em>why the token needs its own interface at all</em>: the repository&#39;s
-          aggregate-typed overload <code>SetOriginalRowVersion(TEntity, byte[])</code><span class="cite"><span> (<code>IRepository.cs:408</code>)</span></span> can only
+          aggregate-typed overload <code>SetOriginalRowVersion(TEntity, byte[])</code><span class="cite"><span> (<code>IRepository.cs:396</code>)</span></span> can only
           reach the aggregate <strong>root</strong>, because <code>TEntity</code> is the root type. A child entity edit (a
           <code>ProductVariant</code> under a <code>Product</code>) would otherwise need a second generic parameter for the child&#39;s
           own identifier type. <code>IRowVersioned</code> erases that identifier type: the child overload<span class="cite"><span>
-          (<code>IRepository.cs:419</code>)</span></span> accepts any <code>IRowVersioned</code>, so child-level edits get the same stale-token
+          (<code>IRepository.cs:407</code>)</span></span> accepts any <code>IRowVersioned</code>, so child-level edits get the same stale-token
           protection as the root. The doc comment states this rationale and cites <a href="https://ivanball.github.io/docs/adr/035-optimistic-concurrency.html" target="_blank" rel="noopener">ADR-035</a><span class="cite"><span>
           (<code>IRowVersioned.cs:3-10</code>)</span></span>.</li>
           <li><strong>Walkthrough</strong>: one getter, <code>byte[] RowVersion</code><span class="cite"><span> (<code>IRowVersioned.cs:15</code>)</span></span>, wrapped in a scoped
@@ -995,14 +1018,14 @@
           <code>RowVersion</code> property is a private-set <code>byte[]</code> defaulting to <code>[]</code><span class="cite"><span> (<code>AuditableBaseEntity.cs:53</code>)</span></span>, so
           every auditable entity (aggregate roots <strong>and</strong> their children) satisfies it. Consumed by
           <a href="group-07-persistence-ef-core.html#irepositorytentity-tidentifiertype"><code>IRepository&lt;TEntity, TIdentifierType&gt;</code></a><span class="cite"><span>
-          (<code>IRepository.cs:419</code>)</span></span> and implemented in
-          <span class="cite"><span><code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Repositories/EFRepository.cs:87-94</code></span></span>,
+          (<code>IRepository.cs:407</code>)</span></span> and implemented in
+          <span class="cite"><span><code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Repositories/EFRepository.cs:58-65</code></span></span>,
           which casts the child to <code>object</code>, walks to
           <code>_context.Entry(...).Property(nameof(AuditableBaseEntity&lt;&gt;.RowVersion))</code> and assigns <code>OriginalValue</code>;
           the decorator forwards both overloads unchanged<span class="cite"><span>
           (<code>.../EFRepositoryDecorator.cs:41-46</code>)</span></span>.</li>
           <li><strong>Caveats / not-in-source</strong>: both <code>SetOriginalRowVersion</code> overloads reject a null token outright with
-          <code>ArgumentNullException.ThrowIfNull</code><span class="cite"><span> (<code>EFRepository.cs:78-79,89-90</code>)</span></span>, but neither rejects an <strong>empty</strong>
+          <code>ArgumentNullException.ThrowIfNull</code><span class="cite"><span> (<code>EFRepository.cs:49-50,60-61</code>)</span></span>, but neither rejects an <strong>empty</strong>
           array: <code>[]</code> is assigned as the original value like any other token. Whether an empty token can ever
           match a real SQL Server <code>rowversion</code> is not determinable from source here; it is decided by the
           provider&#39;s comparison, not by this code.</li>
@@ -1066,7 +1089,7 @@
           <a href="group-07-persistence-ef-core.html#crosstenantwriteexception"><code>CrossTenantWriteException</code></a> rather than
           writing a row nobody can read<span class="cite"><span> (<code>:101-110</code>)</span></span>, and a declared-versus-current mismatch is rejected the
           same way<span class="cite"><span> (<code>:123</code>)</span></span>. The host gate is <code>AddMultiTenancy</code><span class="cite"><span>
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:282</code>)</span></span> plus
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:297</code>)</span></span> plus
           <a href="group-07-persistence-ef-core.html#tenancysettings"><code>TenancySettings</code></a> (<code>Tenancy:Enabled</code> at
           <span class="cite"><span><code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Tenancy/TenancySettings.cs:72</code></span></span>, claim-then-header
           resolution order at <span class="cite"><span><code>TenancySettings.cs:57</code></span></span>). The only entities marked in the workspace apps today
@@ -1077,7 +1100,7 @@
           today.</li>
           <li><strong>Caveats / not-in-source</strong>: <code>Tenancy:Enabled</code> gates <strong>resolution</strong>, not isolation. The filter and the
           interceptor are always registered and are inert whenever no tenant is resolved
-          (<span class="cite"><span><code>TenancySettings.cs:38-40</code></span></span>, and the registration note at <span class="cite"><span><code>DependencyInjection.cs:306</code></span></span>), so an
+          (<span class="cite"><span><code>TenancySettings.cs:38-40</code></span></span>, and the registration note at <span class="cite"><span><code>DependencyInjection.cs:321</code></span></span>), so an
           untenanted code path (a job, a seeder) reads every tenant&#39;s rows by design. That is the documented
           behavior, not an oversight, but it means &quot;tenant safety&quot; is a property of the request pipeline
           resolving a tenant, not of the entity marker alone.</li>
@@ -1116,7 +1139,7 @@
           alternative (a hand-maintained list of which fields are personal) drifts out of sync with the model.</li>
           <li><strong>Where it&#39;s used</strong>: applied to four properties of the ADC Identity
           <a href="group-24-identity-module.html#user"><code>User</code></a> aggregate: <code>Email</code>, <code>FirstName</code>, <code>LastName</code> and
-          <code>AvatarUrl</code><span class="cite"><span> (<code>MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Domain/Users/User.cs:51,55,59,127</code>)</span></span>;
+          <code>AvatarUrl</code><span class="cite"><span> (<code>MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Domain/Users/User.cs:52,56,60,128</code>)</span></span>;
           <code>User</code> reaches <a href="#ianonymizable"><code>IAnonymizable</code></a> through
           <a href="group-08-auth.html#ierasableuser"><code>IErasableUser</code></a>, which extends it<span class="cite"><span>
           (<code>User.cs:35</code> and
@@ -1151,7 +1174,7 @@
           old and new value columns of a change row<span class="cite"><span> (<code>:309-310</code>)</span></span>.</li>
           <li><strong>Caveats / not-in-source</strong>: the interceptor&#39;s per-property check only sees properties EF maps to a
           real CLR member. A shadow property has no <code>PropertyInfo</code> and therefore cannot carry the attribute, so
-          it is never treated as personal data<span class="cite"><span> (<code>AuditTrailSaveChangesInterceptor.cs:643-650</code>)</span></span>.</li>
+          it is never treated as personal data<span class="cite"><span> (<code>AuditTrailSaveChangesInterceptor.cs:644-651</code>)</span></span>.</li>
           </ul>
           <h3 id="redactableproperty">RedactableProperty</h3>
           <blockquote>
@@ -1201,7 +1224,7 @@
           <a href="group-07-persistence-ef-core.html#audittrailsavechangesinterceptor"><code>AuditTrailSaveChangesInterceptor</code></a>,
           which collects the per-type set of redacted property names with
           <code>Attribute.IsDefined(property, typeof(SensitiveAttribute), inherit: true)</code>
-          (<span class="cite"><span><code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/AuditTrail/AuditTrailSaveChangesInterceptor.cs:688</code></span></span>,
+          (<span class="cite"><span><code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/AuditTrail/AuditTrailSaveChangesInterceptor.cs:689</code></span></span>,
           computed once per type, <span class="cite"><span><code>:667</code></span></span>). The same redaction rule is documented on <code>AuditTrailEntry</code><span class="cite"><span>
           (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/AuditTrail/AuditTrailEntry.cs:59,68</code>)</span></span>
           and exercised in <code>AuditTrailSaveChangesInterceptorTests</code>.</li>
@@ -1253,7 +1276,7 @@
           <a href="group-07-persistence-ef-core.html#domaineventsavechangesinterceptor"><code>DomainEventSaveChangesInterceptor</code></a>
           during persistence, whose <code>ClearDomainEvents(CapturedState)</code> helper retires exactly what it captured
           by calling <code>RemoveDomainEvents</code> per capture<span class="cite"><span>
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Interceptors/DomainEventSaveChangesInterceptor.cs:425-434</code>)</span></span>,
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Interceptors/DomainEventSaveChangesInterceptor.cs:456-465</code>)</span></span>,
           on the deferred-transaction path<span class="cite"><span> (<code>:312</code>)</span></span> and after in-process dispatch<span class="cite"><span> (<code>:331</code>)</span></span>.</li>
           </ul>
           <h3 id="piiredactor">PiiRedactor</h3>
@@ -1307,7 +1330,7 @@
           <code>[Pii]</code> property without repeating the marker stays redacted (asserted at <span class="cite"><span><code>PiiRedactorTests.cs:51</code></span></span>).
           This matches <a href="#piiattribute"><code>PiiAttribute</code></a>&#39;s <code>Inherited = true</code><span class="cite"><span>
           (<code>MMCA.Common/Source/Core/MMCA.Common.Domain/Attributes/PiiAttribute.cs:18</code>)</span></span>, and
-          <code>AuditTrailSaveChangesInterceptor</code> resolves the marker the same way<span class="cite"><span> (<code>AuditTrailSaveChangesInterceptor.cs:658</code>)</span></span>.</li>
+          <code>AuditTrailSaveChangesInterceptor</code> resolves the marker the same way<span class="cite"><span> (<code>AuditTrailSaveChangesInterceptor.cs:659</code>)</span></span>.</li>
           </ul>
           </li>
           <li><strong>Why it&#39;s built this way</strong>: a <code>static</code> pure helper has no DI dependency, so it can be called from
@@ -1372,12 +1395,12 @@
           entity silently lacks an erasure path (<a href="https://ivanball.github.io/docs/adr/005-soft-delete-vs-erasure.html" target="_blank" rel="noopener">ADR-005</a>).</li>
           <li><strong>Where it&#39;s used</strong>: satisfied by the ADC Identity <a href="group-24-identity-module.html#user"><code>User</code></a>
           aggregate, which holds the four <code>[Pii]</code> fields <code>Email</code>/<code>FirstName</code>/<code>LastName</code>/<code>AvatarUrl</code><span class="cite"><span>
-          (<code>MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Domain/Users/User.cs:51,55,59,127</code>)</span></span> and declares
+          (<code>MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Domain/Users/User.cs:52,56,60,128</code>)</span></span> and declares
           <a href="group-08-auth.html#ierasableuser"><code>IErasableUser</code></a><span class="cite"><span> (<code>User.cs:35</code>)</span></span>, which extends <code>IAnonymizable</code><span class="cite"><span>
           (<code>MMCA.Common/Source/Core/MMCA.Common.Domain/Auth/IErasableUser.cs:30</code>)</span></span>; the placement of that
           interface on <code>User</code> itself is load-bearing, because <code>User.Delete</code> hides the base soft-delete with
-          <code>new</code> (<span class="cite"><span><code>User.cs:497</code></span></span>, rationale at <span class="cite"><span><code>User.cs:22-25</code></span></span>), and the implementation is <code>User.Anonymize</code> at
-          <span class="cite"><span><code>User.cs:519</code></span></span>. Enforced by <code>PiiConventionTests</code> (G25), and exercised together with
+          <code>new</code> (<span class="cite"><span><code>User.cs:523</code></span></span>, rationale at <span class="cite"><span><code>User.cs:23-26</code></span></span>), and the implementation is <code>User.Anonymize</code> at
+          <span class="cite"><span><code>User.cs:545</code></span></span>. Enforced by <code>PiiConventionTests</code> (G25), and exercised together with
           <a href="#piiredactor"><code>PiiRedactor</code></a> by <code>PiiErasureContractFitnessTests</code><span class="cite"><span>
           (<code>MMCA.Common/Tests/Architecture/MMCA.Common.Architecture.Tests/Governance/PiiErasureContractFitnessTests.cs:19</code>)</span></span>.</li>
           </ul>
@@ -1410,14 +1433,14 @@
           interface teeth: the aggregate helper
           <a href="#auditableaggregaterootentitytidentifiertype"><code>AuditableAggregateRootEntity&lt;TIdentifierType&gt;</code></a><code>.RestoreChild&lt;TChild, TChildId&gt;</code>
           constrains its child to <code>where TChild : AuditableBaseEntity&lt;TChildId&gt;, IReactivatable</code><span class="cite"><span>
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Domain/Entities/AuditableAggregateRootEntity.cs:214-220</code>)</span></span>. A
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Domain/Entities/AuditableAggregateRootEntity.cs:212-218</code>)</span></span>. A
           child that does not implement the interface simply cannot be passed to the helper: resurrection is
           a business decision per entity, not a capability the base class hands out to every soft-deletable
           row.</li>
           </ul>
           </li>
           <li><strong>Why it&#39;s built this way</strong>: <code>RestoreChild</code> shows the payoff. It checks only the framework-level rule
-          (&quot;this candidate is soft-deleted&quot;, <span class="cite"><span><code>AuditableAggregateRootEntity.cs:225-233</code></span></span>), delegates the entity&#39;s
+          (&quot;this candidate is soft-deleted&quot;, <span class="cite"><span><code>AuditableAggregateRootEntity.cs:223-231</code></span></span>), delegates the entity&#39;s
           own rule to <code>child.Reactivate()</code> and propagates its failure verbatim<span class="cite"><span> (<code>:233-237</code>)</span></span>, then re-adds the
           child to the aggregate&#39;s collection only when it is not already there, because a caller who resolved
           the child through an <code>ignoreQueryFilters</code> read holds an instance the loaded collection never
@@ -1530,13 +1553,39 @@
           <code>[Parameter] string</code> route value into the module&#39;s identifier alias, for example
           <span class="cite"><span><code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/Pages/Speakers/SpeakerDetail.razor.cs:101</code></span></span>,
           <span class="cite"><span><code>.../Pages/Session/SessionDetail.razor.cs:104</code></span></span>, <span class="cite"><span><code>.../Pages/Event/EventDetail.razor.cs:86</code></span></span>, and
-          <span class="cite"><span><code>MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.UI/Pages/Feedback/EventFeedback.razor.cs:318</code></span></span>;
+          <span class="cite"><span><code>MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.UI/Pages/Feedback/EventFeedback.razor.cs:323</code></span></span>;
           Store&#39;s detail pages import the same namespace (for example
           <span class="cite"><span><code>MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.UI/Pages/Products/ProductDetail.razor.cs:4</code></span></span>).
           Unit-covered by <code>DomainHelperTests</code>
           (<code>MMCA.Common/Tests/Core/MMCA.Common.Shared.Tests/Extensions/DomainHelperTests.cs</code>, G25).</li>
           <li><strong>Caveats / not-in-source</strong>: supported target types are exactly those enumerated; anything else
           throws at runtime (there is no compile-time constraint preventing an unsupported <code>TIdentifier</code>).</li>
+          </ul>
+          <h3 id="uspostalregion">UsPostalRegion</h3>
+          <blockquote>
+          <p>MMCA.Common.Shared · <code>MMCA.Common.Shared.ValueObjects.Contact</code> · <span class="cite"><span><code>MMCA.Common/Source/Core/MMCA.Common.Shared/ValueObjects/Contact/UsPostalRegions.cs:76</code></span></span> · Level 0 · record (sealed)</p>
+          </blockquote>
+          <ul>
+          <li><strong>What it is</strong>: one United States postal region as a two-field positional record,
+          <code>public sealed record UsPostalRegion(string Code, string Name);</code><span class="cite"><span> (<code>UsPostalRegions.cs:76</code>)</span></span>: the
+          two-letter USPS code (<code>&quot;GA&quot;</code>) and the region&#39;s name (<code>&quot;Georgia&quot;</code>), per the parameter docs<span class="cite"><span>
+          (<code>UsPostalRegions.cs:73-75</code>)</span></span>.</li>
+          <li><strong>Depends on</strong>: nothing first-party. It is declared in the same file as its catalog,
+          <a href="#uspostalregions"><code>UsPostalRegions</code></a>, after that class closes.</li>
+          <li><strong>Concept introduced</strong>: none new. It is a plain data row, not a <a href="#valueobject"><code>ValueObject</code></a>: it
+          has no factory and no invariant, because every instance that exists is one of the fixed entries the
+          catalog constructs. Being a <code>record</code> still gives it structural equality and a readable
+          <code>ToString()</code> for free.</li>
+          <li><strong>Walkthrough</strong>: no members beyond the two positional properties <code>Code</code> and <code>Name</code>.</li>
+          <li><strong>Why it&#39;s built this way</strong>: a picker needs both the value to store (the code) and the text to show
+          (the name), so the catalog exposes pairs rather than two parallel lists that could fall out of step.</li>
+          <li><strong>Where it&#39;s used</strong>: only as the element type of <code>UsPostalRegions.All</code><span class="cite"><span> (<code>UsPostalRegions.cs:15</code>)</span></span>;
+          no first-party code outside the defining file names the type. Consumers iterate it indirectly, for
+          example Store&#39;s checkout state picker<span class="cite"><span>
+          (<code>MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.UI/Pages/Checkout/Checkout.razor:192</code>)</span></span>.</li>
+          <li><strong>Caveats / not-in-source</strong>: <code>Code</code> and <code>Name</code> are unvalidated strings, so nothing stops code
+          outside the catalog from constructing a <code>UsPostalRegion(&quot;ZZ&quot;, &quot;Nowhere&quot;)</code>; membership checks go
+          through <a href="#uspostalregions"><code>UsPostalRegions.IsKnownCode</code></a>, never through the record.</li>
           </ul>
           <h3 id="baseentitytidentifiertype">BaseEntity&lt;TIdentifierType&gt;</h3>
           <blockquote>
@@ -1607,44 +1656,72 @@
           collection afterwards. Code that has to track pre-save instances keys them by reference instead:
           <a href="group-07-persistence-ef-core.html#domaineventsavechangesinterceptor"><code>DomainEventSaveChangesInterceptor</code></a>
           builds its exclusion set with <code>ReferenceEqualityComparer.Instance</code><span class="cite"><span>
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Interceptors/DomainEventSaveChangesInterceptor.cs:202</code>)</span></span>,
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Interceptors/DomainEventSaveChangesInterceptor.cs:204</code>)</span></span>,
           and <code>RemoveDomainEvents</code> does the same<span class="cite"><span>
           (<code>MMCA.Common/Source/Core/MMCA.Common.Domain/Entities/AuditableAggregateRootEntity.cs:43</code>)</span></span>.</li>
           </ul>
-          <h3 id="entitytypeextensions">EntityTypeExtensions</h3>
+          <h3 id="uspostalregions">UsPostalRegions</h3>
           <blockquote>
-          <p>MMCA.Common.Domain · <code>MMCA.Common.Domain.Extensions</code> · <span class="cite"><span><code>MMCA.Common/Source/Core/MMCA.Common.Domain/Extensions/EntityTypeExtensions.cs:9</code></span></span> · Level 1 · class (static, extension block)</p>
+          <p>MMCA.Common.Shared · <code>MMCA.Common.Shared.ValueObjects.Contact</code> · <span class="cite"><span><code>MMCA.Common/Source/Core/MMCA.Common.Shared/ValueObjects/Contact/UsPostalRegions.cs:12</code></span></span> · Level 1 · class (static, partial)</p>
           </blockquote>
           <ul>
-          <li><strong>What it is</strong>: a 21-line static class that adds one computed property, <code>IsIdValueGenerated</code>, to
-          <code>System.Type</code>, answering &quot;does this entity let the database assign its key?&quot;.</li>
-          <li><strong>Depends on</strong>: <a href="#idvaluegeneratedattribute"><code>IdValueGeneratedAttribute</code></a> (Level 0) and
-          <code>System.Reflection</code> from the BCL.</li>
-          <li><strong>Concept reinforced, C# <code>extension(T)</code> members.</strong> The <code>extension(Type entityType)</code> block<span class="cite"><span>
-          (<code>EntityTypeExtensions.cs:11</code>)</span></span> is the same preview language feature introduced by
-          <a href="#domainhelper"><code>DomainHelper</code></a>; here it is used to hang a <strong>property</strong> (not a method) off a type
-          the framework does not own, so call sites read <code>typeof(Ticket).IsIdValueGenerated</code> rather than
-          <code>EntityTypeExtensions.IsIdValueGenerated(typeof(Ticket))</code>. <code>[Rubric §8, Data Architecture]</code>
-          (assesses whether key-generation strategy is a deliberate, declared decision rather than an
-          accident of configuration): the strategy is declared once, as an attribute on the entity, and this
-          property is the single reader of that declaration. <code>[Rubric §15, Best Practices &amp; Code Quality]</code>: the reflection
-          call lives in exactly one place, so a change in how the strategy is declared is a one-file change.</li>
-          <li><strong>Walkthrough</strong>: the whole implementation is one expression-bodied property<span class="cite"><span>
-          (<code>EntityTypeExtensions.cs:19</code>)</span></span>: <code>entityType.GetCustomAttribute&lt;IdValueGeneratedAttribute&gt;() is not null</code>. There is no caching layer in this file; the doc comment<span class="cite"><span> (<code>EntityTypeExtensions.cs:13-18</code>)</span></span>
-          states the intended caller, a factory method deciding at runtime whether to assign an explicit id
-          or pass <code>default</code>.</li>
-          <li><strong>Why it&#39;s built this way</strong>: a factory cannot ask EF Core what the key strategy is (the Domain
-          layer sits below Infrastructure and has no <code>DbContext</code>), so the declaration has to live on the
-          domain type itself. An attribute plus a reflection reader keeps the Domain layer self-contained
-          and keeps the strategy visible on the entity where a reader of the code will look for it.</li>
-          <li><strong>Where it&#39;s used</strong>: entity factory methods across every consumer, always in the same shape,
-          <code>bool isIdValueGenerated = typeof(T).IsIdValueGenerated;</code> immediately before building the entity:
-          <span class="cite"><span><code>MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Domain/Orders/Order.cs:107</code></span></span>,
-          <span class="cite"><span><code>MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Domain/Orders/OrderLine.cs:67</code></span></span>,
-          <span class="cite"><span><code>MMCA.Store/Source/Modules/Identity/MMCA.Store.Identity.Domain/Customers/Customer.cs:88</code></span></span>, and
-          <span class="cite"><span><code>MMCA.Helpdesk/Source/Modules/Tickets/MMCA.Helpdesk.Tickets.Domain/Tickets/Ticket.cs:74</code></span></span>. Covered
-          by <code>EntityTypeExtensionsTests</code><span class="cite"><span>
-          (<code>MMCA.Common/Tests/Core/MMCA.Common.Domain.Tests/Extensions/EntityTypeExtensionsTests.cs:16</code>)</span></span>.</li>
+          <li><strong>What it is</strong>: the static catalog of United States postal regions by USPS code (the 50 states,
+          the District of Columbia, the five inhabited territories AS, GU, MP, PR, VI and the three military
+          regions AA, AE, AP), plus three lookups over it: <code>IsKnownCode</code>, <code>ToCode</code> and <code>IsValidZipCode</code><span class="cite"><span>
+          (<code>UsPostalRegions.cs:6-11</code>)</span></span>.</li>
+          <li><strong>Depends on</strong>: <a href="#uspostalregion"><code>UsPostalRegion</code></a> (Level 0). Externals are BCL only:
+          <code>System.Collections.Frozen</code> and <code>System.Text.RegularExpressions</code><span class="cite"><span> (<code>UsPostalRegions.cs:1-2</code>)</span></span>.</li>
+          <li><strong>Concept introduced, one reference list shared by client and server.</strong> <code>[Rubric §3, Clean Architecture]</code> (assesses whether code sits in the layer that lets every consumer reach it without
+          inverting a dependency): the class lives in Shared precisely so a UI&#39;s state picker and the
+          server&#39;s validation accept exactly the same codes<span class="cite"><span> (<code>UsPostalRegions.cs:9-10</code>)</span></span>. A Blazor page and a
+          FluentValidation rule read one list, so the picker can never offer a value the server then rejects.
+          <code>[Rubric §15, Best Practices &amp; Code Quality]</code> (assesses idiomatic, modern-language use): the lookup
+          tables are <code>FrozenSet</code> / <code>FrozenDictionary</code> (read-optimized, built once) and the ZIP pattern is a
+          source-generated <code>[GeneratedRegex]</code> with a match timeout.</li>
+          <li><strong>Walkthrough</strong><ul>
+          <li><code>All</code><span class="cite"><span> (<code>UsPostalRegions.cs:15-32</code>)</span></span>: an <code>IReadOnlyList&lt;UsPostalRegion&gt;</code> collection expression in
+          display order, states and DC first (alphabetical by name, with DC placed among them), then the
+          territories, then the military regions<span class="cite"><span> (<code>UsPostalRegions.cs:14</code>)</span></span>. 59 entries in total, which the
+          test pins as &quot;50 states + DC + 5 territories + 3 military regions&quot;<span class="cite"><span>
+          (<code>MMCA.Common/Tests/Core/MMCA.Common.Shared.Tests/ValueObjects/Contact/UsPostalRegionsTests.cs:15</code>)</span></span>.</li>
+          <li><code>Codes</code><span class="cite"><span> (<code>UsPostalRegions.cs:34-35</code>)</span></span> and <code>CodesByName</code><span class="cite"><span> (<code>UsPostalRegions.cs:37-38</code>)</span></span>: private
+          frozen lookups built from <code>All</code>, both with <code>StringComparer.OrdinalIgnoreCase</code>.</li>
+          <li><code>IsKnownCode(string?)</code><span class="cite"><span> (<code>UsPostalRegions.cs:43</code>)</span></span>: <code>false</code> for <code>null</code>, otherwise a trimmed,
+          case-insensitive membership test, so <code>&quot;ga&quot;</code> and <code>&quot; AE &quot;</code> are both known.</li>
+          <li><code>ToCode(string?)</code><span class="cite"><span> (<code>UsPostalRegions.cs:51-61</code>)</span></span>: normalizes either shape to the upper-case code.
+          Blank input returns <code>null</code>; a code is upper-cased; a full name (<code>&quot;Georgia&quot;</code>) is mapped through
+          <code>CodesByName</code>; anything else returns <code>null</code>. The doc comment names the case it serves: an address
+          saved as a full state name before a picker existed<span class="cite"><span> (<code>UsPostalRegions.cs:45-48</code>)</span></span>.</li>
+          <li><code>IsValidZipCode(string?)</code><span class="cite"><span> (<code>UsPostalRegions.cs:66-67</code>)</span></span>: a trimmed match against
+          <code>^\d{5}(-\d{4})?$</code><span class="cite"><span> (<code>UsPostalRegions.cs:69-70</code>)</span></span>, that is five digits or ZIP+4. The regex is
+          <code>CultureInvariant | ExplicitCapture</code> with <code>matchTimeoutMilliseconds: 100</code>.</li>
+          </ul>
+          </li>
+          <li><strong>Why it&#39;s built this way</strong>: the region list is fixed reference data, so a static catalog with
+          frozen lookups beats a database table or a configuration section: it costs nothing at runtime,
+          needs no I/O, and is available identically in WebAssembly, MAUI and the server. Keeping it apart
+          from <a href="#address"><code>Address</code></a> is deliberate: <code>Address</code> accepts international formats, and US-specific
+          rules are opt-in through <a href="group-06-validation.html#usaddressvalidator"><code>UsAddressValidator</code></a>, whose
+          doc comment states the country is not checked and the caller decides which addresses are US ones<span class="cite"><span>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Validation/UsAddressValidationRules.cs:7-14</code>)</span></span>.</li>
+          <li><strong>Where it&#39;s used</strong>: in Common,
+          <a href="group-06-validation.html#usstaterulest"><code>UsStateRules&lt;T&gt;</code></a> calls <code>.Must(UsPostalRegions.IsKnownCode)</code><span class="cite"><span>
+          (<code>UsAddressValidationRules.cs:45</code>)</span></span> and <a href="group-06-validation.html#uszipcoderulest"><code>UsZipCodeRules&lt;T&gt;</code></a>
+          calls <code>.Must(UsPostalRegions.IsValidZipCode)</code><span class="cite"><span> (<code>UsAddressValidationRules.cs:57</code>)</span></span>. In Store, the
+          checkout request validator uses the same two checks<span class="cite"><span>
+          (<code>MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Application/Orders/Checkout/CheckoutDeliveryRequestValidator.cs:70</code>,
+          <code>:76</code>)</span></span>; the checkout and profile pages render <code>All</code> as the state picker<span class="cite"><span>
+          (<code>MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.UI/Pages/Checkout/Checkout.razor:192</code>,
+          <code>MMCA.Store/Source/Modules/Identity/MMCA.Store.Identity.UI/Pages/Users/Profile/Profile.razor:73</code>)</span></span>;
+          and the checkout form model normalizes a stored state with <code>ToCode</code> before binding it<span class="cite"><span>
+          (<code>MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.UI/Pages/Checkout/AddressFormModel.cs:33</code>)</span></span>.
+          Covered by
+          <a href="group-29-testing-infrastructure.html#per-project-test-rollup"><code>UsPostalRegionsTests</code></a> and
+          <a href="group-29-testing-infrastructure.html#per-project-test-rollup"><code>UsAddressValidationRulesTests</code></a>.</li>
+          <li><strong>Caveats / not-in-source</strong>: the list covers USPS regions only and carries no country; deciding
+          that an address is a US one is the caller&#39;s job. The freely associated states that also take USPS
+          codes (for example the Marshall Islands) are not in the list (<span class="cite"><span><code>UsPostalRegions.cs:6-8</code></span></span> names
+          exactly what is included).</li>
           </ul>
           <h3 id="address">Address</h3>
           <blockquote>
@@ -2036,8 +2113,8 @@
           <a href="group-07-persistence-ef-core.html#auditsavechangesinterceptor"><code>AuditSaveChangesInterceptor</code></a><span class="cite"><span>
           (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Interceptors/AuditSaveChangesInterceptor.cs:142-143</code>)</span></span>
           and covered by
-          <a href="group-28-testing-infrastructure.html#per-project-test-rollup"><code>AuditableBaseEntityTests</code></a> and
-          <a href="group-28-testing-infrastructure.html#per-project-test-rollup"><code>AuditableBaseEntityAdditionalTests</code></a>.</li>
+          <a href="group-29-testing-infrastructure.html#per-project-test-rollup"><code>AuditableBaseEntityTests</code></a> and
+          <a href="group-29-testing-infrastructure.html#per-project-test-rollup"><code>AuditableBaseEntityAdditionalTests</code></a>.</li>
           <li><strong>Caveats / not-in-source</strong>: the delete stamps are written only on a <strong>transition</strong> of the flag<span class="cite"><span>
           (<code>AuditSaveChangesInterceptor.cs:136-140</code>)</span></span>, so updating an already-deleted row keeps the stamps of
           the delete that produced it rather than refreshing them.</li>
@@ -2173,23 +2250,26 @@
           <code>FirstOrDefault</code> over the in-memory collection matching on <code>Id.Equals(childId) &amp;&amp; !c.IsDeleted</code><span class="cite"><span>
           (<code>:112</code>)</span></span>, returning <code>Error.NotFound</code> with source and target rather than throwing or returning
           <code>null</code>.</li>
-          <li><code>RemoveChildOrNotFound&lt;TChild, TChildId&gt;</code><span class="cite"><span> (<code>AuditableAggregateRootEntity.cs:158-180</code>)</span></span>: the
+          <li><code>RemoveChildOrNotFound&lt;TChild, TChildId&gt;</code><span class="cite"><span> (<code>AuditableAggregateRootEntity.cs:158-178</code>)</span></span>: the
           lookup above followed by the child&#39;s own <code>Delete()</code>, short-circuiting on either failure. The
+          lookup is unwrapped with <code>TryGetValue(out var child)</code><span class="cite"><span> (<code>:166</code>)</span></span>, so the failed lookup result is
+          returned as-is and the success path reads the child without a null-forgiving <code>Value!</code>. The
           deleted child comes back <strong>in the result</strong> rather than being consumed here, because which domain
           event a removal raises is aggregate vocabulary and therefore the caller&#39;s decision
-          (<span class="cite"><span><code>:135-146</code></span></span> shows the intended call shape).</li>
-          <li><code>RestoreChild&lt;TChild, TChildId&gt;</code><span class="cite"><span> (<code>AuditableAggregateRootEntity.cs:214-251</code>)</span></span>: constrained
-          <code>where TChild : AuditableBaseEntity&lt;TChildId&gt;, IReactivatable</code><span class="cite"><span> (<code>:219</code>)</span></span>. It takes the child as an
+          (<span class="cite"><span><code>:135-146</code></span></span> shows the intended call shape, which unwraps the same way with
+          <code>TryGetValue(out var removed)</code>, <span class="cite"><span><code>:140</code></span></span>).</li>
+          <li><code>RestoreChild&lt;TChild, TChildId&gt;</code><span class="cite"><span> (<code>AuditableAggregateRootEntity.cs:212-249</code>)</span></span>: constrained
+          <code>where TChild : AuditableBaseEntity&lt;TChildId&gt;, IReactivatable</code><span class="cite"><span> (<code>:217</code>)</span></span>. It takes the child as an
           <strong>instance</strong>, not an id, because a soft-deleted row is hidden by the global query filter and is
           not reachable through the loaded collection: the caller resolves it with an <code>ignoreQueryFilters</code>
-          read<span class="cite"><span> (<code>:186-190</code>)</span></span>. It rejects a candidate that is not soft-deleted using an error code the
-          <strong>caller</strong> supplies<span class="cite"><span> (<code>:225-233</code>)</span></span>, calls <code>Reactivate()</code>, and re-adds the child only when the
-          collection does not already carry that id<span class="cite"><span> (<code>:245-248</code>)</span></span>.</li>
-          <li><code>DeleteChildren&lt;TChild, TChildId&gt;</code><span class="cite"><span> (<code>AuditableAggregateRootEntity.cs:275-294</code>)</span></span>: cascades a soft
-          delete across a child collection, <strong>skipping</strong> children that are already deleted<span class="cite"><span> (<code>:285-288</code>)</span></span> so
+          read<span class="cite"><span> (<code>:184-186</code>)</span></span>. It rejects a candidate that is not soft-deleted using an error code the
+          <strong>caller</strong> supplies<span class="cite"><span> (<code>:223-231</code>)</span></span>, calls <code>Reactivate()</code>, and re-adds the child only when the
+          collection does not already carry that id<span class="cite"><span> (<code>:243-246</code>)</span></span>.</li>
+          <li><code>DeleteChildren&lt;TChild, TChildId&gt;</code><span class="cite"><span> (<code>AuditableAggregateRootEntity.cs:273-292</code>)</span></span>: cascades a soft
+          delete across a child collection, <strong>skipping</strong> children that are already deleted<span class="cite"><span> (<code>:283-286</code>)</span></span> so
           re-deleting a parent is idempotent, and combining the rest with
-          <a href="group-01-result-error-handling.html#result"><code>Result.Combine</code></a><span class="cite"><span> (<code>:293</code>)</span></span>. The results list is
-          allocated lazily<span class="cite"><span> (<code>:281</code>, <code>:290</code>)</span></span>, so a childless cascade allocates nothing.</li>
+          <a href="group-01-result-error-handling.html#result"><code>Result.Combine</code></a><span class="cite"><span> (<code>:291</code>)</span></span>. The results list is
+          allocated lazily<span class="cite"><span> (<code>:279</code>, <code>:288</code>)</span></span>, so a childless cascade allocates nothing.</li>
           </ul>
           </li>
           <li><strong>Why it&#39;s built this way</strong>: every one of these helpers replaces a loop that each aggregate used
@@ -2198,28 +2278,67 @@
           event, which error code), which is why <code>RemoveChildOrNotFound</code> and <code>RestoreChild</code> hand the child
           back instead of raising an event themselves, and why <code>RestoreChild</code> takes
           <code>notDeletedErrorCode</code> as a parameter for the same reason <code>GetChildOrNotFound</code> takes <code>source</code><span class="cite"><span>
-          (<code>AuditableAggregateRootEntity.cs:203-208</code>)</span></span>. Ownership checks and field re-validation stay in the
+          (<code>AuditableAggregateRootEntity.cs:201-206</code>)</span></span>. Ownership checks and field re-validation stay in the
           calling method and run <strong>before</strong> the helper, so a rejected restore leaves the child untouched<span class="cite"><span>
-          (<code>:193-196</code>)</span></span>.</li>
+          (<code>:191-194</code>)</span></span>.</li>
           <li><strong>Where it&#39;s used</strong>: base class for every aggregate root in the consumers. ADC&#39;s <code>Event</code> uses
           three <code>DeleteChildren</code> calls in one <code>Result.Combine</code><span class="cite"><span>
-          (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Events/Event.cs:365-367</code>)</span></span>,
-          <code>RestoreChild</code> for room reinstatement<span class="cite"><span> (<code>Event.cs:511</code>)</span></span> and <code>RemoveChildOrNotFound</code> for room
-          removal<span class="cite"><span> (<code>Event.cs:528</code>)</span></span>; <code>Session</code> cascades to its speakers, question answers and category items<span class="cite"><span>
-          (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Sessions/Session.cs:339-341</code>)</span></span> and
-          <code>Category</code> to its items<span class="cite"><span>
-          (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Categories/Category.cs:109</code>)</span></span>. The
+          (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Events/Event.cs:365-367</code>)</span></span> and
+          <code>RestoreChild</code> for room and event-speaker reinstatement<span class="cite"><span> (<code>Event.cs:508</code>, <code>Event.cs:593</code>)</span></span>;
+          <code>Session</code> cascades to its speakers, question answers and category items<span class="cite"><span>
+          (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Sessions/Session.cs:339-341</code>)</span></span>,
+          restores speakers and category items<span class="cite"><span> (<code>Session.cs:405</code>, <code>Session.cs:485</code>)</span></span> and removes speakers,
+          category items and question answers with <code>RemoveChildOrNotFound</code><span class="cite"><span> (<code>Session.cs:422</code>,
+          <code>Session.cs:505</code>, <code>Session.cs:575</code>)</span></span>; <code>Category</code>
+          cascades to its items<span class="cite"><span>
+          (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Categories/Category.cs:109</code>)</span></span> and
+          removes one with <code>RemoveChildOrNotFound</code><span class="cite"><span> (<code>Category.cs:195</code>)</span></span>. The
           event queue is drained by
           <a href="group-07-persistence-ef-core.html#domaineventsavechangesinterceptor"><code>DomainEventSaveChangesInterceptor</code></a>,
           which calls <code>RemoveDomainEvents</code> per captured entry<span class="cite"><span>
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Interceptors/DomainEventSaveChangesInterceptor.cs:433</code>)</span></span>.
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Interceptors/DomainEventSaveChangesInterceptor.cs:464</code>)</span></span>.
           Covered by
-          <a href="group-28-testing-infrastructure.html#per-project-test-rollup"><code>AuditableAggregateRootEntityTests</code></a>
+          <a href="group-29-testing-infrastructure.html#per-project-test-rollup"><code>AuditableAggregateRootEntityTests</code></a>
           and
-          <a href="group-28-testing-infrastructure.html#per-project-test-rollup"><code>AuditableAggregateRootEntityAdditionalTests</code></a>.</li>
+          <a href="group-29-testing-infrastructure.html#per-project-test-rollup"><code>AuditableAggregateRootEntityAdditionalTests</code></a>.</li>
           <li><strong>Caveats / not-in-source</strong>: <code>SetItems</code> and the child helpers operate purely on the in-memory
           collection. If an aggregate was loaded without its children included, <code>GetChildOrNotFound</code> returns
           <code>NotFound</code> for a child that exists in the database; nothing in this class detects that case.</li>
+          </ul>
+          <h3 id="entitytypeextensions">EntityTypeExtensions</h3>
+          <blockquote>
+          <p>MMCA.Common.Domain · <code>MMCA.Common.Domain.Extensions</code> · <span class="cite"><span><code>MMCA.Common/Source/Core/MMCA.Common.Domain/Extensions/EntityTypeExtensions.cs:9</code></span></span> · Level 1 · class (static, extension block)</p>
+          </blockquote>
+          <ul>
+          <li><strong>What it is</strong>: a 21-line static class that adds one computed property, <code>IsIdValueGenerated</code>, to
+          <code>System.Type</code>, answering &quot;does this entity let the database assign its key?&quot;.</li>
+          <li><strong>Depends on</strong>: <a href="#idvaluegeneratedattribute"><code>IdValueGeneratedAttribute</code></a> (Level 0) and
+          <code>System.Reflection</code> from the BCL.</li>
+          <li><strong>Concept reinforced, C# <code>extension(T)</code> members.</strong> The <code>extension(Type entityType)</code> block<span class="cite"><span>
+          (<code>EntityTypeExtensions.cs:11</code>)</span></span> is the same preview language feature introduced by
+          <a href="#domainhelper"><code>DomainHelper</code></a>; here it is used to hang a <strong>property</strong> (not a method) off a type
+          the framework does not own, so call sites read <code>typeof(Ticket).IsIdValueGenerated</code> rather than
+          <code>EntityTypeExtensions.IsIdValueGenerated(typeof(Ticket))</code>. <code>[Rubric §8, Data Architecture]</code>
+          (assesses whether key-generation strategy is a deliberate, declared decision rather than an
+          accident of configuration): the strategy is declared once, as an attribute on the entity, and this
+          property is the single reader of that declaration. <code>[Rubric §15, Best Practices &amp; Code Quality]</code>: the reflection
+          call lives in exactly one place, so a change in how the strategy is declared is a one-file change.</li>
+          <li><strong>Walkthrough</strong>: the whole implementation is one expression-bodied property<span class="cite"><span>
+          (<code>EntityTypeExtensions.cs:19</code>)</span></span>: <code>entityType.GetCustomAttribute&lt;IdValueGeneratedAttribute&gt;() is not null</code>. There is no caching layer in this file; the doc comment<span class="cite"><span> (<code>EntityTypeExtensions.cs:13-18</code>)</span></span>
+          states the intended caller, a factory method deciding at runtime whether to assign an explicit id
+          or pass <code>default</code>.</li>
+          <li><strong>Why it&#39;s built this way</strong>: a factory cannot ask EF Core what the key strategy is (the Domain
+          layer sits below Infrastructure and has no <code>DbContext</code>), so the declaration has to live on the
+          domain type itself. An attribute plus a reflection reader keeps the Domain layer self-contained
+          and keeps the strategy visible on the entity where a reader of the code will look for it.</li>
+          <li><strong>Where it&#39;s used</strong>: entity factory methods across every consumer, always in the same shape,
+          <code>bool isIdValueGenerated = typeof(T).IsIdValueGenerated;</code> immediately before building the entity:
+          <span class="cite"><span><code>MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Domain/Orders/Order.cs:107</code></span></span>,
+          <span class="cite"><span><code>MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Domain/Orders/OrderLine.cs:67</code></span></span>,
+          <span class="cite"><span><code>MMCA.Store/Source/Modules/Identity/MMCA.Store.Identity.Domain/Customers/Customer.cs:88</code></span></span>, and
+          <span class="cite"><span><code>MMCA.Helpdesk/Source/Modules/Tickets/MMCA.Helpdesk.Tickets.Domain/Tickets/Ticket.cs:74</code></span></span>. Covered
+          by <code>EntityTypeExtensionsTests</code><span class="cite"><span>
+          (<code>MMCA.Common/Tests/Core/MMCA.Common.Domain.Tests/Extensions/EntityTypeExtensionsTests.cs:16</code>)</span></span>.</li>
           </ul>
           <h3 id="currency">Currency</h3>
           <blockquote>
@@ -2396,22 +2515,26 @@
           <li><strong>Errors as named constants.</strong> <code>NoCurrency</code> and <code>CurrencyMismatch</code><span class="cite"><span> (<code>Money.cs:25,28</code>)</span></span> are
           <code>public static readonly Error</code> fields, so a caller can compare against the constant instead of
           string-matching a message.</li>
-          <li><strong>Two addition paths.</strong> <code>operator +</code><span class="cite"><span> (<code>Money.cs:102</code>)</span></span> delegates to <code>Add</code> and <em>throws</em>
-          <code>InvalidOperationException</code> carrying <code>result.Errors[0].Message</code> when the currencies clash<span class="cite"><span>
-          (<code>Money.cs:104-107</code>)</span></span>; the doc comment above it<span class="cite"><span> (<code>Money.cs:95-98</code>)</span></span> tells you to &quot;prefer <code>Add</code> for
+          <li><strong>Two addition paths.</strong> <code>operator +</code><span class="cite"><span> (<code>Money.cs:108</code>)</span></span> delegates to <code>Add</code>, unwraps the sum with
+          <code>result.TryGetValue(out var sum)</code>, and otherwise <em>throws</em> <code>InvalidOperationException</code> carrying
+          <code>result.Errors[0].Message</code> when the currencies clash<span class="cite"><span> (<code>Money.cs:110-113</code>)</span></span>; the doc comment above it<span class="cite"><span> (<code>Money.cs:101-104</code>)</span></span> tells you to &quot;prefer <code>Add</code> for
           Result-based error handling&quot;. This is an intentional usability trade-off: operator syntax for
           trusted arithmetic inside one currency, the <code>Result</code> path for anything derived from untrusted
           input.</li>
-          <li><strong><code>Currency.None</code> as an additive identity.</strong> <code>AddUnchecked</code><span class="cite"><span> (<code>Money.cs:149-156</code>)</span></span> returns the other
+          <li><strong><code>Currency.None</code> as an additive identity.</strong> <code>AddUnchecked</code><span class="cite"><span> (<code>Money.cs:155-162</code>)</span></span> returns the other
           operand untouched when either side has no currency, which is what makes <code>Zero()</code> usable as an
           <code>Aggregate</code> seed before the target currency is known.</li>
           <li><strong>Fail-fast round-trip constructor.</strong> The <code>[JsonConstructor]</code> private constructor<span class="cite"><span>
-          (<code>Money.cs:52-59</code>)</span></span> calls <code>ArgumentNullException.ThrowIfNull(currency)</code>, and its doc comment<span class="cite"><span>
-          (<code>Money.cs:41-48</code>)</span></span> explains the contract: &quot;no currency&quot; is <code>Currency.None</code>, never <code>null</code>, so a
-          materializer that yields <code>null</code> is a broken contract and is surfaced here rather than as a
-          NullReferenceException three layers away. <code>[Rubric §15, Best Practices &amp; Code Quality]</code>.</li>
+          (<code>Money.cs:55-65</code>)</span></span> throws <code>JsonException(&quot;Money requires a currency.&quot;)</code> when <code>currency</code> is
+          <code>null</code><span class="cite"><span> (<code>Money.cs:58-61</code>)</span></span>, and its doc comment<span class="cite"><span> (<code>Money.cs:41-51</code>)</span></span> explains the contract: &quot;no
+          currency&quot; is <code>Currency.None</code>, never <code>null</code>. A JSON payload that omits the currency or carries a
+          JSON <code>null</code> is therefore refused as invalid JSON, so the MVC body formatter answers 400 with the
+          JSON path instead of a 500; an EF value converter that yields <code>null</code> is a broken contract and
+          fails fast with the same exception rather than surfacing as a NullReferenceException three layers
+          away. <code>Create</code> keeps <code>ArgumentNullException</code> for non-JSON callers<span class="cite"><span> (<code>Money.cs:93</code>)</span></span>.
+          <code>[Rubric §15, Best Practices &amp; Code Quality]</code>.</li>
           <li><strong>A JSON-only guard for the sentinel.</strong> <code>Money</code> implements <code>IJsonOnDeserialized</code><span class="cite"><span>
-          (<code>Money.cs:22</code>)</span></span>, and its explicit <code>OnDeserialized</code><span class="cite"><span> (<code>Money.cs:70</code>)</span></span> throws
+          (<code>Money.cs:22</code>)</span></span>, and its explicit <code>OnDeserialized</code><span class="cite"><span> (<code>Money.cs:76</code>)</span></span> throws
           <code>JsonException(&quot;A non-zero amount requires a currency.&quot;)</code> when <code>Currency == Currency.None</code> and
           <code>Amount != 0</code>. The round-trip constructor bypasses <code>Create</code>, and the JSON currency converters read
           the empty code back as <code>Currency.None</code> so a serialized <code>Zero()</code> round-trips; only a zero amount
@@ -2419,7 +2542,7 @@
           surfaces as invalid JSON (a 400 on the MVC path). EF materialization does not run the callback, so
           a stored row is never refused here.</li>
           <li><strong>A narrow test back-door.</strong> <code>internal static Money CreateUnsafe(decimal, Currency)</code><span class="cite"><span>
-          (<code>Money.cs:171</code>)</span></span> is exposed to test assemblies through <code>InternalsVisibleTo</code>, giving tests a way to
+          (<code>Money.cs:177</code>)</span></span> is exposed to test assemblies through <code>InternalsVisibleTo</code>, giving tests a way to
           build otherwise-illegal values without opening a public hole.</li>
           </ul>
           </li>
@@ -2428,17 +2551,17 @@
           and <code>[DataMember(Order = 2)]</code> under <code>[DataContract]</code><span class="cite"><span> (<code>Money.cs:21</code>)</span></span>. <code>IsNegative</code><span class="cite"><span>
           (<code>Money.cs:39</code>)</span></span> is a computed predicate; negative amounts are explicitly allowed (refunds,
           adjustments).</li>
-          <li><code>Create(decimal amount, Currency currency)</code><span class="cite"><span> (<code>Money.cs:85</code>)</span></span>: null-guards the reference, then
-          rejects <code>Currency.None</code> with <code>NoCurrency</code><span class="cite"><span> (<code>Money.cs:89-90</code>)</span></span>, because external callers must name a
+          <li><code>Create(decimal amount, Currency currency)</code><span class="cite"><span> (<code>Money.cs:91</code>)</span></span>: null-guards the reference, then
+          rejects <code>Currency.None</code> with <code>NoCurrency</code><span class="cite"><span> (<code>Money.cs:95-96</code>)</span></span>, because external callers must name a
           real currency.</li>
-          <li><code>operator +</code><span class="cite"><span> (<code>Money.cs:102</code>)</span></span> and <code>operator *</code> (<span class="cite"><span><code>Money.cs:114</code></span></span>, by an <code>int</code> quantity), with
-          <code>Multiply(Money, int)</code><span class="cite"><span> (<code>Money.cs:142</code>)</span></span> as the named alias the operator-averse analyzers expect.</li>
-          <li><code>Add(Money first, Money second)</code><span class="cite"><span> (<code>Money.cs:125</code>)</span></span>: returns <code>CurrencyMismatch</code> enriched with
+          <li><code>operator +</code><span class="cite"><span> (<code>Money.cs:108</code>)</span></span> and <code>operator *</code> (<span class="cite"><span><code>Money.cs:120</code></span></span>, by an <code>int</code> quantity), with
+          <code>Multiply(Money, int)</code><span class="cite"><span> (<code>Money.cs:148</code>)</span></span> as the named alias the operator-averse analyzers expect.</li>
+          <li><code>Add(Money first, Money second)</code><span class="cite"><span> (<code>Money.cs:131</code>)</span></span>: returns <code>CurrencyMismatch</code> enriched with
           <code>.WithSource(nameof(Add))</code> and <code>.WithTarget($&quot;{first.Currency.Code} + {second.Currency.Code}&quot;)</code><span class="cite"><span>
-          (<code>Money.cs:130-132</code>)</span></span> <strong>only</strong> when both sides carry a real and differing currency; otherwise it
+          (<code>Money.cs:136-138</code>)</span></span> <strong>only</strong> when both sides carry a real and differing currency; otherwise it
           delegates to <code>AddUnchecked</code>.</li>
-          <li><code>Zero()</code><span class="cite"><span> (<code>Money.cs:160</code>)</span></span> returns <code>new(0, Currency.None)</code>; <code>Zero(Currency)</code><span class="cite"><span> (<code>Money.cs:165</code>)</span></span> fixes
-          the currency. <code>IsZero()</code><span class="cite"><span> (<code>Money.cs:175</code>)</span></span> is <code>this == Zero(Currency)</code>, which works precisely
+          <li><code>Zero()</code><span class="cite"><span> (<code>Money.cs:166</code>)</span></span> returns <code>new(0, Currency.None)</code>; <code>Zero(Currency)</code><span class="cite"><span> (<code>Money.cs:171</code>)</span></span> fixes
+          the currency. <code>IsZero()</code><span class="cite"><span> (<code>Money.cs:181</code>)</span></span> is <code>this == Zero(Currency)</code>, which works precisely
           because record equality is structural.</li>
           </ul>
           </li>
@@ -2646,7 +2769,7 @@
           <span class="cite"><span><code>MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Domain/Orders/OrderInvariants.cs:28</code></span></span> and
           <span class="cite"><span><code>MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.Domain/Products/ProductInvariants.cs:76</code></span></span>.
           Exercised directly by
-          <a href="group-28-testing-infrastructure.html#per-project-test-rollup"><code>CommonInvariantsTests</code></a>.</p>
+          <a href="group-29-testing-infrastructure.html#per-project-test-rollup"><code>CommonInvariantsTests</code></a>.</p>
           </li>
           <li><p><strong>Caveats / not-in-source</strong>: <code>EnsureTimeZoneIsValid</code> resolves against the <strong>host&#39;s</strong> time zone
           database<span class="cite"><span> (<code>CommonInvariants.cs:268</code>)</span></span>, so an identifier valid on a Windows developer machine and an

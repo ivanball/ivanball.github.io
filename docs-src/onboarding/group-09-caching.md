@@ -61,31 +61,31 @@ infrastructure stays replaceable; this is that rule in one file, since the only 
 about caching is eight method signatures.
 
 **Backend selection happens once, at the composition root.** `AddCaching(IConfiguration?)`
-(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.Caching.cs:26`, called from
+(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.Caching.cs:27`, called from
 `AddInfrastructure` at `DependencyInjection.cs:134`) always calls `AddMemoryCache()`
-(`DependencyInjection.Caching.cs:28`), then binds the shared `Cache` configuration section three ways when
-configuration was supplied (`DependencyInjection.Caching.cs:39-52`): to
+(`DependencyInjection.Caching.cs:29`), then binds the shared `Cache` configuration section three ways when
+configuration was supplied (`DependencyInjection.Caching.cs:40-53`): to
 [`CacheKeyPrefixOptions`](#cachekeyprefixoptions) for the key namespace
-(`DependencyInjection.Caching.cs:41`), to [`CacheSettings`](#cachesettings)
-for the TTL policy (`DependencyInjection.Caching.cs:43-46`), and to
+(`DependencyInjection.Caching.cs:42`), to [`CacheSettings`](#cachesettings)
+for the TTL policy (`DependencyInjection.Caching.cs:44-47`), and to
 [`QueryCachePipelineSettings`](group-14-module-system-composition.md#querycachepipelinesettings) for
-the one knob the Application-layer query decorator needs (`DependencyInjection.Caching.cs:48-51`, defined in
+the one knob the Application-layer query decorator needs (`DependencyInjection.Caching.cs:49-52`, defined in
 that layer because it cannot reference Infrastructure). Without configuration both settings objects are
-still registered at their defaults (`DependencyInjection.Caching.cs:53-57`), so `IOptions<T>` always resolves.
+still registered at their defaults (`DependencyInjection.Caching.cs:54-58`), so `IOptions<T>` always resolves.
 [`ICacheService`](#icacheservice) itself is registered through `TryAddSingleton` with a factory that
-probes the container (`DependencyInjection.Caching.cs:59-80`). If an `IDistributedCache` is registered **and
-it is not the default `MemoryDistributedCache`** (`DependencyInjection.Caching.cs:62`), meaning a real
+probes the container (`DependencyInjection.Caching.cs:75-96`). If an `IDistributedCache` is registered **and
+it is not the default `MemoryDistributedCache`** (`DependencyInjection.Caching.cs:78`), meaning a real
 out-of-process store such as the Redis cache Aspire wires, the factory builds a
 [`DistributedCacheService`](#distributedcacheservice) with whatever `IConnectionMultiplexer` and
 `ILogger` it can resolve plus the bound key namespace and cache settings
-(`DependencyInjection.Caching.cs:64-73`); otherwise it falls back to a
+(`DependencyInjection.Caching.cs:80-89`); otherwise it falls back to a
 [`MemoryCacheService`](#memorycacheservice) over the registered `IMemoryCache`, handed the same bound
-cache settings (`DependencyInjection.Caching.cs:77-79`). The same method registers the
+cache settings (`DependencyInjection.Caching.cs:93-95`). The same method registers the
 [`IDistributedLock`](group-05-cqrs-pipeline.md#idistributedlock) that both in-framework callers pair
 with the cache, the API idempotency filter and password-reset token redemption
 (`DependencyInjection.Caching.cs:82-85`), [Redis-backed](group-14-module-system-composition.md#redisdistributedlock) when a
 multiplexer is present and [process-local](group-14-module-system-composition.md#inprocessdistributedlock)
-otherwise (`DependencyInjection.Caching.cs:88-102`). A single-process monolith therefore caches in-process for
+otherwise (`DependencyInjection.Caching.cs:105-119`). A single-process monolith therefore caches in-process for
 free, and the identical application code uses Redis the moment a distributed cache is present: no flag,
 no per-environment branch in a handler. This is the same "abstraction in Application, transport chosen
 at the edge" pattern the message bus and gRPC clients use, which is what [Rubric §7, Microservices
@@ -94,29 +94,29 @@ Readiness] looks for (can a module move to its own process without a code change
 without touching business code).
 
 **A third substrate, opt in and explicit.** `AddCommonHybridCache(Action<HybridCacheOptions>?)`
-(`DependencyInjection.Caching.cs:141`) calls `AddHybridCache()` (`DependencyInjection.Caching.cs:143`) and then
+(`DependencyInjection.Caching.cs:158`) calls `AddHybridCache()` (`DependencyInjection.Caching.cs:160`) and then
 configures `HybridCacheOptions` through the options pipeline rather than through the
-`AddHybridCache` callback (`DependencyInjection.Caching.cs:149-163`), because the TTL policy now comes from
+`AddHybridCache` callback (`DependencyInjection.Caching.cs:166-180`), because the TTL policy now comes from
 the bound [`CacheSettings`](#cachesettings) and the callback has no service provider to read it
 from; the framework sets `Expiration` from `DefaultDuration` and
 `LocalCacheExpiration` from `LocalCacheDuration` (falling back to
-`HybridCacheService.LocalCacheDefault`) at `DependencyInjection.Caching.cs:156-160`, and the host's own hook
-runs last so it can override anything (`DependencyInjection.Caching.cs:162`). The swap of the cache
+`HybridCacheService.LocalCacheDefault`) at `DependencyInjection.Caching.cs:173-177`, and the host's own hook
+runs last so it can override anything (`DependencyInjection.Caching.cs:179`). The swap of the cache
 implementation is deliberately `RemoveAll<ICacheService>()` followed by `AddSingleton`
-(`DependencyInjection.Caching.cs:167-181`) rather than `TryAdd`, so the call wins whether it runs before or
+(`DependencyInjection.Caching.cs:184-198`) rather than `TryAdd`, so the call wins whether it runs before or
 after `AddInfrastructure`; the source is equally explicit that this also removes a host's own bespoke
 `ICacheService`, so calling it is a statement that the two-level cache is the cache
-(`DependencyInjection.Caching.cs:130-133`). `AddCommonHybridCache` has no guard of its own, so the
+(`DependencyInjection.Caching.cs:147-150`). `AddCommonHybridCache` has no guard of its own, so the
 framework also ships the guarded form, `AddCommonHybridCacheWhenRedisConfigured(IConfiguration, string)`
-(`DependencyInjection.Caching.cs:202`), which calls it only when the `redis` connection string (the
-default `connectionName`) is non-empty (`DependencyInjection.Caching.cs:208-211`) and otherwise leaves
+(`DependencyInjection.Caching.cs:219`), which calls it only when the `redis` connection string (the
+default `connectionName`) is non-empty (`DependencyInjection.Caching.cs:225-228`) and otherwise leaves
 the registration untouched. All seven deployed service hosts call that guarded form unconditionally,
 right after `AddRedisCaching()`: ADC Conference at
-`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:204` and Store Catalog at
+`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:210` and Store Catalog at
 `MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:108`, with ADC Engagement, Identity
 and Notification and Store Sales and Identity alongside them. Without Redis the guard declines and
 the host keeps the auto-selected substrate, which is the point: an L1 in front of an in-process L2 buys
-nothing (`DependencyInjection.Caching.cs:191-193`,
+nothing (`DependencyInjection.Caching.cs:208-210`,
 [ADR-077](https://ivanball.github.io/docs/adr/077-hybridcache-substrate.html)).
 
 **The in-process adapter.** [`MemoryCacheService`](#memorycacheservice)
@@ -264,11 +264,11 @@ configured prefix when a host set one (`CacheKeyPrefix.cs:77-81`) and otherwise 
 [`ApplicationNamespace.Resolve`](group-14-module-system-composition.md#applicationnamespace)
 (`CacheKeyPrefix.cs:83-87`). That resolver reads `Application:Namespace`, falls back to the host's
 application name, and falls back again to the literal `app`
-(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Configuration/ApplicationNamespace.cs:53-67`,
-keys at `ApplicationNamespace.cs:31` and `ApplicationNamespace.cs:34`), so the resolved prefix is never
-empty and isolation is automatic rather than opt-in (`ApplicationNamespace.cs:45-48`). `Qualify`
+(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Configuration/ApplicationNamespace.cs:54-68`,
+keys at `ApplicationNamespace.cs:32` and `ApplicationNamespace.cs:35`), so the resolved prefix is never
+empty and isolation is automatic rather than opt-in (`ApplicationNamespace.cs:46-49`). `Qualify`
 (`CacheKeyPrefix.cs:91-92`) prepends it. The same namespace instance is handed to the Redis distributed
-lock registered beside the cache (`DependencyInjection.Caching.cs:95-96`), so one application's cache entries
+lock registered beside the cache (`DependencyInjection.Caching.cs:112-113`), so one application's cache entries
 and its lock keys carry one prefix. Both Redis-capable adapters honor it and apply it
 *inside* the adapter rather than through `RedisCacheOptions.InstanceName`; the rationale in the source
 (`CacheKeyPrefix.cs:16-25`) is precise, since `InstanceName` is prepended below this abstraction where
@@ -356,7 +356,7 @@ and evict it across replicas through the
 [`OutputCacheEvictionRequested`](group-04-events-outbox.md#outputcacheevictionrequested) integration
 event and its [`OutputCacheEvictionHandler`](group-12-api-hosting-mapping.md#outputcacheevictionhandler).
 Both adopters back that edge with Redis when Redis is configured
-(`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:196`;
+(`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:202`;
 `MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:100`), so the two tiers ride the same
 Redis instance from opposite ends: Tier 1 through `IDistributedCache` or `HybridCache`, Tier 2 through
 the output-cache store. ADR-026 also records an optional **third tier on the client**,
@@ -370,10 +370,10 @@ confuse them with Tier 1 when you meet `[OutputCache]` on a controller.
 Redis is live in the deployed services: every service host registers the Aspire Redis integration
 through [`RedisCachingExtensions`](group-16-aspire-orchestration.md#rediscachingextensions), whose
 `AddRedisCaching()` brings the `IConnectionMultiplexer` the SCAN needs along with the distributed cache
-(`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:185`;
+(`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:191`;
 `MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:89`), and the hybrid substrate is
 registered through the framework's connection-string guard
-(`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:204`). Write-side adoption is
+(`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:210`). Write-side adoption is
 broad: about forty types across ADC's Conference, Engagement and Identity modules implement
 [`ICacheInvalidating`](group-05-cqrs-pipeline.md#icacheinvalidating), for example
 `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Categories/UseCases/UpdateCategoryItem/UpdateCategoryItemCommand.cs:18`
@@ -385,11 +385,11 @@ relies on a Redis-backed output-cache policy instead
 the write-side query-cache invalidation currently evicts entries no ADC query wrote. The substrate's other production
 consumers are not decorators at all:
 [`LoginProtectionService`](group-08-auth.md#loginprotectionservice)
-(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Auth/LoginProtectionService.cs:28`) injects
+(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Auth/LoginProtectionService.cs:30`) injects
 [`ICacheService`](#icacheservice) for its brute-force and rate-limit counters
-(`LoginProtectionService.cs:89`, `LoginProtectionService.cs:170`), reading the lockout flag and the
-registration count back through `GetFromSharedStoreAsync` (`LoginProtectionService.cs:59`,
-`LoginProtectionService.cs:141`), covered in
+(`LoginProtectionService.cs:91`, `LoginProtectionService.cs:172`), reading the lockout flag and the
+registration count back through `GetFromSharedStoreAsync` (`LoginProtectionService.cs:61`,
+`LoginProtectionService.cs:143`), covered in
 [Group 8, Authentication and Authorization](group-08-auth.md), the password-reset and
 email-confirmation token services, which count requests through `IncrementAsync`
 (`PasswordResetTokenService.cs:68`, `EmailConfirmationTokenService.cs:53`) and redeem their single-use
@@ -424,9 +424,9 @@ a failed command) mean the layer errs toward correctness over hit rate, which is
 an opt-in cache bolted onto a database-per-service system. Everything in the bound `Cache` section is
 fail-open by design (`CacheSettings.cs:10-15`): no value there can turn a cache outage or a slow
 populate into an error. The unit tests for these types, including the Redis-backed
-[`DistributedCacheServiceRedisTests`](group-28-testing-infrastructure.md#per-project-test-rollup)
-and [`HybridCacheServiceRedisTests`](group-28-testing-infrastructure.md#per-project-test-rollup),
-are catalogued in [Group 27, Testing and Quality Infrastructure](group-28-testing-infrastructure.md).
+[`DistributedCacheServiceRedisTests`](group-29-testing-infrastructure.md#per-project-test-rollup)
+and [`HybridCacheServiceRedisTests`](group-29-testing-infrastructure.md#per-project-test-rollup),
+are catalogued in [Group 27, Testing and Quality Infrastructure](group-29-testing-infrastructure.md).
 
 ### CacheKeyPrefixOptions
 > MMCA.Common.Infrastructure · `MMCA.Common.Infrastructure.Caching` · `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Caching/CacheKeyPrefix.cs:31` · Level 0 · class (public sealed, options)
@@ -460,7 +460,7 @@ are catalogued in [Group 27, Testing and Quality Infrastructure](group-28-testin
     ([CacheSettings](group-09-caching.md#cachesettings)) and the query pipeline's
     populate-lock knob ([QueryCachePipelineSettings](group-14-module-system-composition.md#querycachepipelinesettings)),
     all three bound side by side in `AddCaching`
-    (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.Caching.cs:39-57`).
+    (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.Caching.cs:40-58`).
   - `KeyPrefix` (`CacheKeyPrefix.cs:46`, doc at `CacheKeyPrefix.cs:36-45`), `string` with
     `{ get; init; }` and a default of `string.Empty`. The property default is unchanged, but its meaning
     changed: an empty value now tells
@@ -478,17 +478,17 @@ are catalogued in [Group 27, Testing and Quality Infrastructure](group-28-testin
   [ADR-026](https://ivanball.github.io/docs/adr/026-caching-strategy.html) records the same reasoning
   (`026-caching-strategy.md:235-238`).
 - **Where it's used**: bound in `AddCaching()`
-  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.Caching.cs:41`) via
+  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.Caching.cs:42`) via
   `services.Configure<CacheKeyPrefixOptions>(configuration.GetSection(CacheKeyPrefixOptions.SectionName))`,
-  and only when a non-null `IConfiguration` was passed (`DependencyInjection.Caching.cs:39`).
+  and only when a non-null `IConfiguration` was passed (`DependencyInjection.Caching.cs:40`).
   `AddInfrastructure` always passes one
   (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:140`), so a host composing through the
   normal entry point gets the binding; a test calling the parameterless `AddCaching()` overload does
   not. The bound options are no longer read directly at the call sites; instead
   [CacheKeyNamespace](#cachekeynamespace)`.From(IServiceProvider)` resolves them (and the
   per-application fallback) once per registration, at three sites: the distributed cache factory
-  (`DependencyInjection.Caching.cs:67`), the Redis lock factory (`DependencyInjection.Caching.cs:95`) and
-  the opt-in hybrid factory (`DependencyInjection.Caching.cs:173`).
+  (`DependencyInjection.Caching.cs:83`), the Redis lock factory (`DependencyInjection.Caching.cs:112`) and
+  the opt-in hybrid factory (`DependencyInjection.Caching.cs:190`).
 - **Caveats / not-in-source**: [MemoryCacheService](#memorycacheservice) never sees the prefix, because
   a per-process keyspace is private by construction and a prefix would add nothing
   (`CacheKeyPrefix.cs:26-29`). The prior caveat here, that no checked-in `appsettings*.json` sets
@@ -551,7 +551,7 @@ are catalogued in [Group 27, Testing and Quality Infrastructure](group-28-testin
   (`CacheSettings.cs:32`), which is what both distributed adapters actually read at runtime.
   [MemoryCacheService](#memorycacheservice) does **not** route through this type at all; it builds
   `MemoryCacheEntryOptions` inline. Unit-tested by
-  [CacheOptionsTests](group-28-testing-infrastructure.md#per-project-test-rollup).
+  [CacheOptionsTests](group-29-testing-infrastructure.md#per-project-test-rollup).
 - **Caveats / not-in-source**: `DefaultExpiration` has no first-party caller outside `Create` itself
   (`CacheOptions.cs:41`) and its test; it is a published convenience on the package surface. And do not
   read the 30 seconds as a universal cache floor: because [MemoryCacheService](#memorycacheservice)
@@ -623,8 +623,8 @@ are catalogued in [Group 27, Testing and Quality Infrastructure](group-28-testin
   [HybridCacheService](#hybridcacheservice)`.RemoveByPrefixAsync`
   (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Caching/HybridCacheService.cs:231-237`).
   Exercised against a real Redis by
-  [DistributedCacheServiceRedisTests](group-28-testing-infrastructure.md#per-project-test-rollup)
-  and [HybridCacheServiceRedisTests](group-28-testing-infrastructure.md#per-project-test-rollup),
+  [DistributedCacheServiceRedisTests](group-29-testing-infrastructure.md#per-project-test-rollup)
+  and [HybridCacheServiceRedisTests](group-29-testing-infrastructure.md#per-project-test-rollup),
   which live in a separate `MMCA.Common.Infrastructure.Redis.Tests` project over Testcontainers rather
   than in the unit loop.
 - **Caveats / not-in-source**: `KeysAsync` (SCAN) is O(keyspace) on the Redis side. That is acceptable
@@ -676,7 +676,7 @@ are catalogued in [Group 27, Testing and Quality Infrastructure](group-28-testin
     [ApplicationNamespace](group-14-module-system-composition.md#applicationnamespace)`.Resolve` against
     the container's `IConfiguration` and `IHostEnvironment` and returns
     `new CacheKeyNamespace($"{applicationNamespace}:")` (`CacheKeyPrefix.cs:83-87`). Because
-    `ApplicationNamespace.Resolve` never returns empty (`ApplicationNamespace.cs:47-48`), this overload
+    `ApplicationNamespace.Resolve` never returns empty (`ApplicationNamespace.cs:48-49`), this overload
     never returns `None`.
   - `Qualify(string key)` (`CacheKeyPrefix.cs:91-92`), expression-bodied: returns `key` unchanged when
     `Prefix.Length == 0`, otherwise `string.Concat(Prefix, key)`. No separator is inserted for an
@@ -694,14 +694,14 @@ are catalogued in [Group 27, Testing and Quality Infrastructure](group-28-testin
   the singleton.
 - **Where it's used**: built via `From(IServiceProvider)` in three DI factories and passed as a
   constructor argument: to [DistributedCacheService](#distributedcacheservice)
-  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.Caching.cs:67`), to
+  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.Caching.cs:83`), to
   [RedisDistributedLock](group-14-module-system-composition.md#redisdistributedlock)
-  (`DependencyInjection.Caching.cs:95`), and to [HybridCacheService](#hybridcacheservice) in the opt-in
-  hybrid path (`DependencyInjection.Caching.cs:173`). Inside each adapter it lands in a `_keys` field
+  (`DependencyInjection.Caching.cs:112`), and to [HybridCacheService](#hybridcacheservice) in the opt-in
+  hybrid path (`DependencyInjection.Caching.cs:190`). Inside each adapter it lands in a `_keys` field
   with a `?? CacheKeyNamespace.None` fallback (`DistributedCacheService.cs:30`,
   `HybridCacheService.cs:113`). The in-process branch of `AddCaching()` constructs
   [MemoryCacheService](#memorycacheservice) with no namespace at all
-  (`DependencyInjection.Caching.cs:76-77`), and the comment above it says why: the keyspace is private
+  (`DependencyInjection.Caching.cs:92-93`), and the comment above it says why: the keyspace is private
   to the process, so neither the explicit prefix nor the per-application fallback is needed there.
 - **Caveats / not-in-source**: because `Qualify` is applied inside the adapter and not by Redis, keys
   written by any code path that bypasses [ICacheService](#icacheservice) and talks to
@@ -767,19 +767,19 @@ are catalogued in [Group 27, Testing and Quality Infrastructure](group-28-testin
     constructed outside the container still gets the framework defaults.
 - **Why it's built this way**: registration guarantees `IOptions<CacheSettings>` always resolves. When
   configuration is available the section is bound and validated
-  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.Caching.cs:43-46`, fail-fast
+  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.Caching.cs:44-47`, fail-fast
   via `ValidateOnStart`, see
   [ADR-070](https://ivanball.github.io/docs/adr/070-fail-fast-configuration-contract.html)); when the
   parameterless overload is used, `AddOptions<CacheSettings>()` is still called so the defaults
-  materialize instead of failing the host (`DependencyInjection.Caching.cs:55`, rationale at `:30-38`).
+  materialize instead of failing the host (`DependencyInjection.Caching.cs:56`, rationale at `:30-38`).
   The same values are then projected into `HybridCache`'s own option type through the options pipeline rather than the
   `AddHybridCache` callback, because the callback has no service provider to read the bound section
   from, and the host's own hook still runs last so it can override anything the framework set
-  (`DependencyInjection.Caching.cs:149-163`,
+  (`DependencyInjection.Caching.cs:166-180`,
   [ADR-077](https://ivanball.github.io/docs/adr/077-hybridcache-substrate.html)).
 - **Where it's used**: [DistributedCacheService](#distributedcacheservice) and
   [HybridCacheService](#hybridcacheservice) receive it through `IOptions<CacheSettings>`
-  (`DependencyInjection.Caching.cs:73`, `:176`), and the `HybridCacheOptions` projection reads it at
+  (`DependencyInjection.Caching.cs:89`, `:176`), and the `HybridCacheOptions` projection reads it at
   `:151-156`. Its defaults and binding are pinned by
   `MMCA.Common/Tests/Core/MMCA.Common.Infrastructure.Tests/Settings/CacheSettingsTests.cs`.
 
@@ -895,18 +895,18 @@ are catalogued in [Group 27, Testing and Quality Infrastructure](group-28-testin
   `.../CachingCommandDecorator.cs:35`). Outside the pipeline,
   [LoginProtectionService](group-08-auth.md#loginprotectionservice) calls `IncrementAsync` for failed
   logins and per-IP registrations
-  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Auth/LoginProtectionService.cs:89` and `:170`),
+  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Auth/LoginProtectionService.cs:91` and `:170`),
   and reads the lockout flag and the registration counter through `GetFromSharedStoreAsync`
-  (`LoginProtectionService.cs:59` and `:141`);
+  (`LoginProtectionService.cs:61` and `:141`);
   [PasswordResetTokenService](group-08-auth.md#passwordresettokenservice) uses it for the per-email
   request counter, the token write and the token read, the last through `GetFromSharedStoreAsync`
   (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Auth/PasswordResetTokenService.cs:68`, `:90`,
   `:128`); [EmailConfirmationTokenService](group-08-auth.md#emailconfirmationtokenservice) follows the
   same shape
-  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Auth/EmailConfirmationTokenService.cs:53`, `:75`,
+  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Auth/EmailConfirmationTokenService.cs:58`, `:75`,
   `:90`); [TwoFactorAuthenticator](group-08-auth.md#twofactorauthenticator) reads the last accepted
   time step through `GetFromSharedStoreAsync` and writes the new one with `SetAsync`
-  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Auth/TwoFactor/TwoFactorAuthenticator.cs:121`
+  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Auth/TwoFactor/TwoFactorAuthenticator.cs:151`
   and `:113`); [SoftDeletedUserCache](group-08-auth.md#softdeletedusercache) writes the soft-deleted
   marker with `SetAsync` (`MMCA.Common/Source/Core/MMCA.Common.Application/Auth/SoftDeletedUserCache.cs:63`),
   read back through `GetFromSharedStoreAsync` by
@@ -921,10 +921,10 @@ are catalogued in [Group 27, Testing and Quality Infrastructure](group-28-testin
   exchange-code entry with `SetAsync` (`OAuthControllerBase.cs:190`) and redeeming it through
   `GetFromSharedStoreAsync` (`OAuthControllerBase.cs:273`). Exactly one implementation is live per
   host: `AddCaching()` registers one via `TryAddSingleton`
-  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.Caching.cs:59`), and
-  `AddCommonHybridCache()` replaces it (`DependencyInjection.Caching.cs:167-168`). The default
+  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.Caching.cs:75`), and
+  `AddCommonHybridCache()` replaces it (`DependencyInjection.Caching.cs:184-185`). The default
   `GetOrCreateAsync` body is covered by
-  [CacheServiceGetOrCreateTests](group-28-testing-infrastructure.md#per-project-test-rollup).
+  [CacheServiceGetOrCreateTests](group-29-testing-infrastructure.md#per-project-test-rollup).
 - **Caveats / not-in-source**: `IncrementAsync` is **not atomic** on any shipped implementation. The
   default body is a read-modify-write, and both distributed adapters override it with the same shape
   rather than Redis `INCR`, for the storage-format reason spelled out in the
@@ -1042,25 +1042,25 @@ are catalogued in [Group 27, Testing and Quality Infrastructure](group-28-testin
   `internal sealed` because it is only ever resolved through the [ICacheService](#icacheservice)
   registration.
 - **Where it's used**: selected by `AddCaching()`
-  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.Caching.cs:59-80`). The
+  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.Caching.cs:75-96`). The
   `TryAddSingleton<ICacheService>` factory builds this implementation **only when** an
   `IDistributedCache` is present and is not the default `MemoryDistributedCache`
-  (`DependencyInjection.Caching.cs:62`), resolving the optional `IConnectionMultiplexer`
-  (`DependencyInjection.Caching.cs:64`), an `ILogger` with a `NullLogger` fallback
-  (`DependencyInjection.Caching.cs:65-66`), the [CacheKeyNamespace](#cachekeynamespace)
-  (`DependencyInjection.Caching.cs:67`) and the optional
+  (`DependencyInjection.Caching.cs:78`), resolving the optional `IConnectionMultiplexer`
+  (`DependencyInjection.Caching.cs:80`), an `ILogger` with a `NullLogger` fallback
+  (`DependencyInjection.Caching.cs:81-82`), the [CacheKeyNamespace](#cachekeynamespace)
+  (`DependencyInjection.Caching.cs:83`) and the optional
   [CacheSettings](group-09-caching.md#cachesettings)
-  (`DependencyInjection.Caching.cs:73`); otherwise it falls back to
+  (`DependencyInjection.Caching.cs:89`); otherwise it falls back to
   [MemoryCacheService](#memorycacheservice). Downstream it is consumed only through the interface.
   Covered by
-  [DistributedCacheServiceTests](group-28-testing-infrastructure.md#per-project-test-rollup) and,
+  [DistributedCacheServiceTests](group-29-testing-infrastructure.md#per-project-test-rollup) and,
   against a real Redis,
-  [DistributedCacheServiceRedisTests](group-28-testing-infrastructure.md#per-project-test-rollup).
+  [DistributedCacheServiceRedisTests](group-29-testing-infrastructure.md#per-project-test-rollup).
 - **Caveats / not-in-source**: all seven deployed service hosts call
   `AddCommonHybridCacheWhenRedisConfigured`, which registers the two-level cache only when the `redis`
   connection string is present
-  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.Caching.cs:201-213`; for
-  example `MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:204`,
+  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.Caching.cs:218-230`; for
+  example `MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:210`,
   `MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:108`), so this adapter is not the
   one the container hands out in those hosts when Redis is configured: it is the default for any host
   that registers a real distributed cache and does *not* opt in. `IncrementAsync` here is not atomic
@@ -1118,7 +1118,7 @@ are catalogued in [Group 27, Testing and Quality Infrastructure](group-28-testin
     It is both the default L1 lifetime and the **ceiling** applied to every entry, and
     `AddCommonHybridCache` seeds `HybridCacheOptions` from the same field when the host configured no
     `Cache:LocalCacheDuration`
-    (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.Caching.cs:159`).
+    (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.Caching.cs:176`).
   - `ReadOnlyOptions` (`HybridCacheService.cs:77-80`) and `SharedStoreReadOptions`
     (`HybridCacheService.cs:90-95`), two static option objects. The first sets
     `HybridCacheEntryFlags.DisableUnderlyingData`, which tells `HybridCache` not to invoke the factory
@@ -1210,28 +1210,28 @@ are catalogued in [Group 27, Testing and Quality Infrastructure](group-28-testin
   rather than default keeps the release non-breaking: a host that never calls `AddCommonHybridCache`
   gets a byte-identical registration to before, and a memory-only host would gain nothing from an L1 in
   front of an L1 anyway
-  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.Caching.cs:114-120`). The
+  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.Caching.cs:131-137`). The
   registration deliberately uses `RemoveAll` + `Add` rather than `TryAdd` so it wins in either call
-  order (`DependencyInjection.Caching.cs:165-168`), with the honest warning that `RemoveAll` does not
+  order (`DependencyInjection.Caching.cs:182-185`), with the honest warning that `RemoveAll` does not
   distinguish the framework's registration from a host's own custom
-  [ICacheService](#icacheservice) (`DependencyInjection.Caching.cs:129-134`). `[Rubric §29, Resilience]`
+  [ICacheService](#icacheservice) (`DependencyInjection.Caching.cs:146-151`). `[Rubric §29, Resilience]`
   shows up in the fail-soft read: the cache is an optimization, never the system of record, so an
   unreadable entry costs a database round trip rather than a failed request.
 - **Where it's used**: registered only by `AddCommonHybridCache`
-  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.Caching.cs:141-184`), which all
+  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.Caching.cs:158-201`), which all
   seven deployed service hosts reach through `AddCommonHybridCacheWhenRedisConfigured`, the guard that
   calls it only when the `redis` connection string is configured
-  (`DependencyInjection.Caching.cs:201-213`): `MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:204`,
-  `MMCA.ADC.Engagement.Service/Program.cs:116`, `MMCA.ADC.Identity.Service/Program.cs:139`,
-  `MMCA.ADC.Notification.Service/Program.cs:119`,
+  (`DependencyInjection.Caching.cs:218-230`): `MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:210`,
+  `MMCA.ADC.Engagement.Service/Program.cs:122`, `MMCA.ADC.Identity.Service/Program.cs:146`,
+  `MMCA.ADC.Notification.Service/Program.cs:125`,
   `MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:108`,
   `MMCA.Store.Sales.Service/Program.cs:113`, `MMCA.Store.Identity.Service/Program.cs:102`. Everything
   downstream still talks to [ICacheService](#icacheservice) and is unaware. Covered by
-  [HybridCacheServiceTests](group-28-testing-infrastructure.md#per-project-test-rollup), the
+  [HybridCacheServiceTests](group-29-testing-infrastructure.md#per-project-test-rollup), the
   registration semantics by
-  [AddCommonHybridCacheTests](group-28-testing-infrastructure.md#per-project-test-rollup), and the
+  [AddCommonHybridCacheTests](group-29-testing-infrastructure.md#per-project-test-rollup), and the
   storage format against a real Redis by
-  [HybridCacheServiceRedisTests](group-28-testing-infrastructure.md#per-project-test-rollup).
+  [HybridCacheServiceRedisTests](group-29-testing-infrastructure.md#per-project-test-rollup).
 - **Caveats / not-in-source**: replica L1 staleness after an invalidation is bounded by the local
   expiration (30 seconds by default, `Cache:LocalCacheDuration` to change it), not by the eviction,
   because only the evicting process's L1 is cleared (`HybridCacheService.cs:29-34`). That is the
@@ -1355,9 +1355,9 @@ are catalogued in [Group 27, Testing and Quality Infrastructure](group-28-testin
   `internal sealed` because it is only ever resolved through the [ICacheService](#icacheservice)
   registration.
 - **Where it's used**: the fallback branch of `AddCaching()`
-  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.Caching.cs:77-79`), which
-  passes the optional `IOptions<CacheSettings>` (`DependencyInjection.Caching.cs:79`). `AddCaching()`
-  always calls `AddMemoryCache()` first (`DependencyInjection.Caching.cs:28`), so when no real
+  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.Caching.cs:93-95`), which
+  passes the optional `IOptions<CacheSettings>` (`DependencyInjection.Caching.cs:95`). `AddCaching()`
+  always calls `AddMemoryCache()` first (`DependencyInjection.Caching.cs:29`), so when no real
   distributed cache is registered this is the [ICacheService](#icacheservice) the container hands out,
   and a host with no Redis behaves as a single-instance cached monolith with the full interface intact.
   Consumed through the interface by both CQRS caching decorators,
@@ -1365,7 +1365,7 @@ are catalogued in [Group 27, Testing and Quality Infrastructure](group-28-testin
   [PasswordResetTokenService](group-08-auth.md#passwordresettokenservice),
   [SoftDeletedUserCache](group-08-auth.md#softdeletedusercache) and
   [IdempotencyFilter](group-12-api-hosting-mapping.md#idempotencyfilter). Unit-tested by
-  [MemoryCacheServiceTests](group-28-testing-infrastructure.md#per-project-test-rollup), which pins the
+  [MemoryCacheServiceTests](group-29-testing-infrastructure.md#per-project-test-rollup), which pins the
   default-TTL behavior
   (`MMCA.Common/Tests/Core/MMCA.Common.Infrastructure.Tests/Caching/MemoryCacheServiceTests.cs:26`), the
   value-type `GetOrCreateAsync` miss that depends on `TryGetAsync` (`MemoryCacheServiceTests.cs:40`),

@@ -132,7 +132,8 @@
         <li><a href="group-25-adc-host-composition.html">25. ADC Application Host, UI Shell &amp; Cross-Module Composition</a></li>
         <li><a href="group-26-device-capability-layer.html">26. Device Capability Abstraction Layer (Native Contracts, MAUI, Browser &amp; Fallback Adapters)</a></li>
         <li><a href="group-27-common-ai-integration.html">27. Common AI Integration</a></li>
-        <li><a href="group-28-testing-infrastructure.html">28. Testing &amp; Quality Infrastructure</a></li>
+        <li><a href="group-28-common-cloud-provider-adapters.html">28. Common Cloud Provider Adapters (AWS, Azure, GCP)</a></li>
+        <li><a href="group-29-testing-infrastructure.html">29. Testing &amp; Quality Infrastructure</a></li>
         <li><a href="devops-aspire.html">Aspire Orchestration and Containers</a></li>
         <li><a href="devops-cicd.html">CI/CD and Operations</a></li>
         <li><a href="devops-iac.html" aria-current="page">Infrastructure as Code, ADC Azure Deployment</a></li>
@@ -160,7 +161,7 @@
           conference-day scale-up. The CI/CD workflow that <em>invokes</em> this Bicep, <code>deploy.yml</code>, is covered in
           the CI/CD chapter (<code>devops-cicd.md</code>); cross-references below mark exactly where each phase of that
           workflow touches these files. The alert-to-runbook build gate that ADR-062 also decides is a
-          fitness function and lives in <a href="group-28-testing-infrastructure.html#observabilityconventiontestsbase">group 27</a>.</p>
+          fitness function and lives in <a href="group-29-testing-infrastructure.html#observabilityconventiontestsbase">group 29</a>.</p>
           <p>Everything cited here is <strong>MMCA.ADC</strong>. MMCA.Store has files of the same names (<code>infra/main.bicep</code>,
           <code>infra/foundation.bicep</code>, <code>azure.yaml</code>, <code>deploy.yml</code>) describing a different topology; where a
           decision is shared, this chapter says so explicitly rather than letting the citation imply it.</p>
@@ -691,10 +692,17 @@ steps:
           per-service <code>OTEL_SERVICE_NAME</code> (e.g. <code>&#39;identity&#39;</code>, <code>&#39;conference&#39;</code>). The <code>OTEL_SERVICE_NAME</code> env
           var is what Azure Monitor maps to the Cloud Role Name, without it, all services appear as
           <code>&quot;unknown_service&quot;</code> in the Application Map.</p>
-          <p><code>MMCA.Common.Aspire</code>&#39;s <code>AddOpenTelemetryExporters</code> calls <code>UseAzureMonitor()</code> whenever
-          <code>APPLICATIONINSIGHTS_CONNECTION_STRING</code> is present (<span class="cite"><span><code>main.bicep:201-205</code></span></span> comment), so the Common
-          framework automatically routes OpenTelemetry spans, logs, and metrics to Azure Monitor in
-          production with no service-level code change.</p>
+          <p><code>MMCA.Common.Azure</code>&#39;s <code>AddAzureMonitorExporter</code>, which every host calls after
+          <code>AddServiceDefaults</code>, exports to Azure Monitor whenever <code>APPLICATIONINSIGHTS_CONNECTION_STRING</code> is
+          present (<span class="cite"><span><code>main.bicep:250-255</code></span></span> comment;
+          <span class="cite"><span><code>MMCA.Common/Source/Hosting/MMCA.Common.Azure/AzureMonitorExporterExtensions.cs:42</code></span></span>), so
+          OpenTelemetry spans, logs, and metrics reach Azure Monitor in production with one registration call
+          per host. The ordering is enforced rather than advised: called before <code>AddServiceDefaults</code>, the
+          method throws, because the outbox-poll and probe filter processors that service defaults register
+          must run before the exporter&#39;s batch processor, or the spans they drop are exported anyway<span class="cite"><span>
+          (<code>AzureMonitorExporterExtensions.cs:44-52</code>)</span></span>. The call also registers the marker the core startup
+          tripwire checks, so a host that receives the connection string without making the call fails at
+          startup instead of running with no telemetry export<span class="cite"><span> (<code>AzureMonitorExporterExtensions.cs:54-56</code>)</span></span>.</p>
           <p>Seven more shared env entries ride along with the connection string on every app, and all of them
           are cost controls, six on the pay-per-GB workspace and one on the Container Apps compute bill:</p>
           <ul>
@@ -735,7 +743,7 @@ steps:
           inbound against 1,000), so 64% of vCPU-seconds billed at the active rate, eight times the idle
           rate. The key lives under <code>AzureMonitor</code>, not <code>Telemetry</code>, because the distro binds its own
           <code>AzureMonitor</code> configuration section, and MMCA.Common pins that the key actually reaches it<span class="cite"><span>
-          (<code>MMCA.Common/Tests/Hosting/MMCA.Common.Aspire.Tests/Telemetry/LiveMetricsConfigurationTests.cs:20</code>)</span></span>,
+          (<code>MMCA.Common/Tests/Hosting/MMCA.Common.Azure.Tests/Telemetry/LiveMetricsConfigurationTests.cs:21</code>)</span></span>,
           so a distro change that stopped honoring it fails a test instead of silently restoring the chatter.</li>
           <li><code>OTEL_METRIC_EXPORT_INTERVAL: &#39;300000&#39;</code><span class="cite"><span> (<code>main.bicep:318-321</code>)</span></span> is the second stage of the
           AppMetrics cost control, and it works on cadence rather than on instrument selection. AppMetrics remained
@@ -918,24 +926,26 @@ steps:
           (<code>ObservabilityConventionTestsBase.cs:39</code>)</span></span> to six<span class="cite"><span>
           (<code>MMCA.ADC/Tests/Architecture/MMCA.ADC.Architecture.Tests/Governance/ObservabilityConventionTests.cs:14</code>)</span></span>,
           so a parse-anchor drift that found fewer specs fails rather than passing vacuously. That gate is covered in
-          <a href="group-28-testing-infrastructure.html#observabilityconventiontestsbase">group 27</a>; it is not
+          <a href="group-29-testing-infrastructure.html#observabilityconventiontestsbase">group 29</a>; it is not
           duplicated here. Note the coverage boundary, which the runbook itself spells out<span class="cite"><span>
           (<code>OPERATIONS.md:151-160</code>)</span></span>: only alerts inside that parse window are gated, so the operational rules
           and the availability alert below are provisioned but ungated, and their triage deliberately sits
           under <code>####</code> headings so the parser does not read them as SLO runbook sections.</p>
           <h3 id="operational-and-availability-alerts-mainbicep574-726-838-918">Operational and availability alerts (<code>main.bicep:574-726</code>, <code>:838-918</code>)</h3>
-          <p>Beyond the six SLOs, <code>main.bicep</code> provisions <strong>five</strong> more scheduled query rules from
-          <code>scheduledQueryAlertSpecs</code> (<span class="cite"><span><code>main.bicep:608-639</code></span></span>, materialized at <span class="cite"><span><code>:641</code></span></span>), all severity 2 on a
-          15-minute evaluation over a 15-minute window:</p>
+          <p>Beyond the six SLOs, <code>main.bicep</code> provisions <strong>eight</strong> more scheduled query rules from
+          <code>scheduledQueryAlertSpecs</code> (<span class="cite"><span><code>main.bicep:624-673</code></span></span>, materialized at <span class="cite"><span><code>:675-707</code></span></span>), all severity 2 on a
+          15-minute evaluation over a 15-minute window<span class="cite"><span> (<code>main.bicep:682-686</code>)</span></span>, each a <code>Count</code> of its query&#39;s
+          rows compared against the spec&#39;s <code>threshold</code><span class="cite"><span> (<code>main.bicep:691-694</code>)</span></span>:</p>
           <ul>
-          <li><code>outbox-dead-letter</code><span class="cite"><span> (<code>main.bicep:576-581</code>)</span></span> fires on <strong>any</strong> hit (<code>threshold: 0</code>) of an <code>AppTraces</code>
-          row at Error or above whose message contains <code>dead-lettered</code>. An outbox message that exhausted its
-          retries means an integration event was permanently lost. The row-age signal is DB-side and not
-          queryable from Log Analytics, so this Error line <em>is</em> the backlog alarm.</li>
-          <li><code>sql-dependency-failures</code><span class="cite"><span> (<code>main.bicep:582-587</code>)</span></span> fires above 10 failed SQL dependency calls. Every
+          <li><code>outbox-dead-letter</code> (<span class="cite"><span><code>main.bicep:625-630</code></span></span>, comment at <span class="cite"><span><code>:580-584</code></span></span>) fires on <strong>any</strong> hit
+          (<code>threshold: 0</code>) of an <code>AppTraces</code> row at Error or above whose message contains <code>dead-lettered</code>.
+          An outbox message that exhausted its retries means an integration event was permanently lost. It
+          fires only once a message has used every retry, so a processor that is slow or stuck never trips
+          it: <code>outbox-backlog-age</code> below covers that case.</li>
+          <li><code>sql-dependency-failures</code><span class="cite"><span> (<code>main.bicep:631-636</code>)</span></span> fires above 10 failed SQL dependency calls. Every
           service owns exactly one database, so a burst here means a service cannot reach its own DB, which
           also stalls its outbox drain.</li>
-          <li><code>revision-activation-failed</code><span class="cite"><span> (<code>main.bicep:588-593</code>)</span></span> is the most instructive of the four, because it exists to catch a failure the rest of the alerting stack is blind to. It
+          <li><code>revision-activation-failed</code><span class="cite"><span> (<code>main.bicep:637-642</code>)</span></span> is the most instructive of the four, because it exists to catch a failure the rest of the alerting stack is blind to. It
           queries <code>ContainerAppSystemLogs_CL</code> for <code>Reason_s startswith &quot;Deployment Progress Deadline Exceeded&quot;</code> and fires on any hit. When a revision&#39;s readiness probe never goes green, Container
           Apps keeps the <strong>previous</strong> revision serving: nothing outside-in degrades, every SLO stays quiet,
           and the deploy looks fine while the newly built code never takes traffic. The comment names the
@@ -943,7 +953,7 @@ steps:
           where an untagged infrastructure health check failed <code>/health/ready</code> on every backend and the
           older revision kept 100% of the traffic for days. The rule works at all only because the
           environment&#39;s <code>appLogsConfiguration</code> sends platform system logs to the same workspace.</li>
-          <li><code>signalr-backplane-errors</code> (<span class="cite"><span><code>main.bicep:594-599</code></span></span>, comment at <span class="cite"><span><code>:567-574</code></span></span>) is the newest, added with
+          <li><code>signalr-backplane-errors</code> (<span class="cite"><span><code>main.bicep:643-648</code></span></span>, comment at <span class="cite"><span><code>:595-602</code></span></span>) is the newest, added with
           the conference-day multi-replica work. It fires on any <code>AppTraces</code> row at Warning or above
           (<code>SeverityLevel &gt;= 2</code>) whose <code>Properties.CategoryName</code> starts with
           <code>Microsoft.AspNetCore.SignalR.StackExchangeRedis</code>. The failure it catches is silent by design: when
@@ -952,7 +962,7 @@ steps:
           because making Redis a readiness dependency would take the whole hub down during a blip. The
           comment also states why the query can see the signal at all: <code>otelLogLevelEnv</code> exports Warning and
           above, and Notification sets no category override below that.</li>
-          <li><code>broker-error-queue</code> (<span class="cite"><span><code>main.bicep:633-638</code></span></span>, comment at <span class="cite"><span><code>:601-607</code></span></span>) is the consumer-side twin of
+          <li><code>broker-error-queue</code> (<span class="cite"><span><code>main.bicep:649-654</code></span></span>, comment at <span class="cite"><span><code>:603-609</code></span></span>) is the consumer-side twin of
           <code>outbox-dead-letter</code>. When a MassTransit consumer exhausts its in-process retries <strong>and</strong> the
           delayed redeliveries, the message moves to its endpoint&#39;s <code>_error</code> queue and <code>MMCA.Common</code>&#39;s
           <code>FaultIntegrationEventConsumer</code> logs at Error that it &quot;was moved to the error queue&quot;. The rule fires
@@ -960,11 +970,30 @@ steps:
           holds whatever the event type or reason. The two rules split the delivery path between them: the
           outbox rule means an event never left the producer, this one means an event reached the consuming
           service and was never applied. The triage and replay procedure is in the runbook&#39;s &quot;Error queue&quot;
-          section<span class="cite"><span> (<code>OPERATIONS.md:231</code>)</span></span>.</li>
+          section<span class="cite"><span> (<code>OPERATIONS.md:232</code>)</span></span>.</li>
+          <li><code>outbox-backlog-age</code> (<span class="cite"><span><code>main.bicep:655-660</code></span></span>, comment at <span class="cite"><span><code>:610-616</code></span></span>) reads <code>AppMetrics</code> rather than
+          <code>AppTraces</code>: it fires when <code>MMCA.Common</code>&#39;s <code>outbox.oldest_pending.age</code> gauge, the age in seconds
+          of the oldest deliverable row per data source, reports a <code>Max</code> above 900. Delivery normally takes
+          seconds and the 300-second fallback poll bounds an idle source, so a row older than 15 minutes
+          means the broker is refusing publishes or the drain cannot keep up, neither of which dead-letters
+          until every retry is spent. This is the backlog alarm <code>outbox-dead-letter</code> cannot be. The comment
+          also names its blind spot: the gauge is sampled at the start of each processing cycle, so a
+          processor that stops cycling freezes it at its last value, and a dead host is left to the
+          availability and SQL rules.</li>
+          <li><code>outbox-broker-circuit-open</code> (<span class="cite"><span><code>main.bicep:661-666</code></span></span>, comment at <span class="cite"><span><code>:617-620</code></span></span>) fires when the
+          <code>broker.circuit.open.count</code> metric has a <code>Sum</code> above zero. The outbox&#39;s own broker circuit breaker
+          is built without Polly telemetry, so the resilience-circuit-open SLO rule cannot see it; any
+          opening means publishes to Service Bus are failing fast and every service&#39;s outbox is backing up
+          behind it.</li>
+          <li><code>live-broadcast-dropped</code> (<span class="cite"><span><code>main.bicep:667-672</code></span></span>, comment at <span class="cite"><span><code>:621-623</code></span></span>) fires on any <code>AppTraces</code>
+          row at Warning or above containing &quot;Live channel broadcast dropped under backpressure&quot;, the line
+          Engagement&#39;s <code>LiveChannelPublishQueue</code> logs each time it drops a live broadcast (poll results,
+          question updates). Attendees see a stale live view while nothing fails outright, so that drop line
+          is the only signal.</li>
           </ul>
-          <p>Every one of the five now has a <code>####</code> triage section in the runbook<span class="cite"><span> (<code>OPERATIONS.md:188</code>, <code>:231</code>,
-          <code>:278</code>, <code>:304</code>, <code>:334</code>)</span></span>, and so do the ingestion-cap rule below<span class="cite"><span> (<code>OPERATIONS.md:363</code>)</span></span> and the two
-          security rules<span class="cite"><span> (<code>OPERATIONS.md:399</code>, <code>:441</code>)</span></span>. They sit under <code>####</code> headings inside &quot;Operational
+          <p>Every one of the eight has a <code>####</code> triage section in the runbook<span class="cite"><span> (<code>OPERATIONS.md:189</code>, <code>:232</code>,
+          <code>:279</code>, <code>:305</code>, <code>:335</code>, <code>:364</code>, <code>:385</code>, <code>:400</code>)</span></span>, and so do the ingestion-cap rule below<span class="cite"><span>
+          (<code>OPERATIONS.md:418</code>)</span></span> and the two security rules<span class="cite"><span> (<code>OPERATIONS.md:454</code>, <code>:496</code>)</span></span>. They sit under <code>####</code> headings inside &quot;Operational
           alert runbooks&quot;<span class="cite"><span> (<code>OPERATIONS.md:174</code>)</span></span> precisely so the SLO parser does not read them as SLO sections,
           which is the ungated coverage boundary described above.</p>
           <p><strong>A standalone rule watches the detector itself</strong> (<span class="cite"><span><code>main.bicep:695-726</code></span></span>, added 2026-09-07 as
@@ -1480,24 +1509,25 @@ minimumTlsVersion: &#39;1.2&#39;</code></pre>
           <code>{eventId}/{sessionId}/{assetId}/{file}</code>, where <code>assetId</code> is a server-minted GUID, so knowing one
           asset&#39;s URL reveals nothing about any other. Nothing personal is stored there; a speaker uploading
           material is publishing it.</p>
-          <p>That container is also the reason for <code>sessionAssetMalwareScanning</code><span class="cite"><span> (<code>main.bicep:1315-1331</code>)</span></span>, a
-          Microsoft Defender for Storage setting declared <code>if (enableSessionAssetMalwareScanning)</code> with the
-          parameter defaulting to <strong>true</strong><span class="cite"><span> (<code>main.bicep:135-136</code>)</span></span>. It scans every upload on arrival, with
-          <code>capGBPerMonth: 50</code> and <code>sensitiveDataDiscovery</code> off. The guard started life as an opt-in knob, off
-          by default, for the reason <code>grantAvatarStorageRole</code> still is one: a write the deploy identity may not
-          be allowed to make fails the <strong>whole</strong> deployment rather than just this resource. The template
-          records why that reason no longer applies<span class="cite"><span> (<code>main.bicep:135</code>, <code>:1306-1309</code>)</span></span>: the deploy identity
-          holds Contributor on the resource group, which covers
-          <code>Microsoft.Security/defenderForStorageSettings/write</code> (verified 2026-09-21). The cap is the part that
-          did not change. This is still the one resource in the template billed per GB scanned, so the monthly
-          cap bounds a runaway or malicious upload burst and scanning simply stops for the rest of the month
-          once it is reached, which the comment calls the correct failure mode for defence in depth. The
-          parameter description sizes the risk<span class="cite"><span> (<code>main.bicep:135</code>)</span></span>: session assets are slide decks and speaker
-          headshots for one annual conference, so the cap is a bound on a burst rather than a budget anyone
-          expects to reach. Sensitive-data discovery is off because the account holds published conference
-          material and avatars, not records to classify, and it is priced separately. Scanning is defence in
-          depth here rather than the only control: the ADR-045 upload path already gates format by magic bytes
-          and stores under an unguessable asset id. Setting the parameter to <code>false</code> turns scanning off.</p>
+          <p>That container is also the reason for <code>sessionAssetMalwareScanning</code><span class="cite"><span> (<code>main.bicep:1558-1573</code>)</span></span>, the
+          Microsoft Defender for Storage setting on the account, whose parameter
+          <code>enableSessionAssetMalwareScanning</code> defaults to <strong>false</strong><span class="cite"><span> (<code>main.bicep:135-136</code>)</span></span>. The parameter
+          description records this as a cost decision dated 2026-10-26: the account-level plan bills about $10
+          per month (measured at $0.32 a day once the 30-day trial ended on 2026-10-21), yet on-upload malware
+          scanning never activated on this Sponsorship subscription, because it needs the subscription-level
+          <code>DefenderForStorageV2</code> plan that only the subscription owner can enable, so the bill bought activity
+          monitoring only. Setting it to <code>true</code> is meant only together with that subscription-level plan.</p>
+          <p>The resource is declared unconditionally rather than behind an <code>if</code>, with both <code>isEnabled</code> and
+          <code>malwareScanning.onUpload.isEnabled</code> bound to the parameter<span class="cite"><span> (<code>main.bicep:1565-1572</code>)</span></span>. The comment
+          gives the reason<span class="cite"><span> (<code>main.bicep:1558-1561</code>)</span></span>: deployments are Incremental, so dropping the resource
+          would leave a previously enabled plan running and billing, whereas declaring it always means <code>false</code>
+          actively writes <code>isEnabled: false</code>. When the plan is on, <code>capGBPerMonth: 50</code><span class="cite"><span> (<code>main.bicep:1573</code>)</span></span>
+          bounds the per-GB scan bill: a runaway or malicious upload burst stops scanning for the rest of the
+          month instead of becoming an unbounded bill. Sensitive-data discovery stays off<span class="cite"><span>
+          (<code>main.bicep:1576</code>)</span></span> because the account holds published conference material and avatars, not
+          records to classify, and it is priced separately. With the plan off, the control on this container
+          is the ADR-045 upload path: format gated by magic bytes, profile photos re-encoded, and blob names
+          carrying an unguessable asset id<span class="cite"><span> (<code>main.bicep:135</code>)</span></span>.</p>
           <p>The third container is <code>dataProtectionKeysContainer</code><span class="cite"><span> (<code>main.bicep:1268-1274</code>)</span></span>, named <code>dataprotection-keys</code> and
           explicitly <code>publicAccess: &#39;None&#39;</code>. It holds the shared ASP.NET Core DataProtection key ring for the
           two apps that mint cookies (Identity and UI), and its privacy is the whole point of declaring it
@@ -1529,7 +1559,7 @@ minimumTlsVersion: &#39;1.2&#39;</code></pre>
           delayed crypto grant would otherwise be able to break authentication outright, so at-rest
           encryption is kept as independent hardening rather than a prerequisite. The framework side is built the same way, with the key-vault
           step behind its own gate on <code>DataProtection:KeyVaultKeyUri</code><span class="cite"><span>
-          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Aspire/DataProtection/DataProtectionExtensions.cs:74-85</code>)</span></span>,
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Azure/AzureDataProtectionExtensions.cs:79-90</code>)</span></span>,
           so the infrastructure gap and the code path agree.</p>
           <h3 id="azure-managed-redis-mainbicep1364-1395">Azure Managed Redis (<code>main.bicep:1364-1395</code>)</h3>
           <p>One shared <code>Microsoft.Cache/redisEnterprise</code> instance at the <code>Balanced_B0</code> SKU (1 GB, HA disabled,
@@ -1699,7 +1729,9 @@ var acrRegistry = {
           <code>keyVaultUrl</code> secret references above, all six apps receive <code>KeyVault__Uri</code>
           (<span class="cite"><span><code>main.bicep:1724</code></span></span> Identity, <span class="cite"><span><code>:1918</code></span></span> Conference, <span class="cite"><span><code>:2058</code></span></span> Engagement, <span class="cite"><span><code>:2212</code></span></span> Notification, <span class="cite"><span><code>:2353</code></span></span>
           Gateway, <span class="cite"><span><code>:2483</code></span></span> UI), which turns the vault into an ASP.NET Core <strong>configuration source</strong>:
-          <code>MMCA.Common</code>&#39;s <code>AddCommonKeyVaultConfiguration</code> is a no-op without the key, and with it the host reads the vault
+          <code>MMCA.Common.Azure</code>&#39;s <code>AddAzureKeyVaultConfiguration</code><span class="cite"><span>
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Azure/AzureKeyVaultConfigurationExtensions.cs:80</code>)</span></span> is a
+          no-op without the key, and with it the host reads the vault
           synchronously at startup through <code>DefaultAzureCredential</code>. The Gateway is in that list as well, and
           the template comment names all six deployables<span class="cite"><span> (<code>main.bicep:1436-1438</code>)</span></span>. The two paths differ in
           who resolves the value: the platform does it for <code>secretRef</code> entries, the host process does it for
@@ -1844,10 +1876,11 @@ var acrRegistry = {
           <code>Scheduler</code> section at all. The template&#39;s own note says the same<span class="cite"><span>
           (<code>main.bicep:1671-1674</code>)</span></span>: the audit-trail cleanup job runs daily, which is what the interval
           paces.</li>
-          <li><code>InternalCommands__PollingIntervalSeconds: &#39;60&#39;</code> on Identity<span class="cite"><span> (<code>main.bicep:1670</code>)</span></span>, the ADR-114
+          <li><code>InternalCommands__PollingIntervalSeconds: &#39;60&#39;</code> on Identity<span class="cite"><span> (<code>main.bicep:1933</code>)</span></span>, the ADR-114
           internal-command runner, and the one interval deliberately set <em>below</em> the default. A row
-          enrolled in a transaction cannot be signalled when it is written, so the interval bounds only
-          that row and the retry of a failed one; 60 seconds keeps a deferred account or blob operation
+          scheduled outside a transaction is signalled the moment it is written, and one enrolled in a
+          transaction is signalled once that transaction commits, so the interval mainly bounds the retry
+          of a failed row<span class="cite"><span> (<code>main.bicep:1928-1932</code>)</span></span>; 60 seconds keeps a deferred account or blob operation
           from sitting for five minutes, and the idle cost is one small indexed query per minute per
           database<span class="cite"><span> (<code>main.bicep:1665-1669</code>)</span></span>.</li>
           <li><code>ConnectionStrings__redis</code> from Key Vault on all four services<span class="cite"><span> (<code>main.bicep:1679</code>, <code>:1897</code>,
@@ -2027,11 +2060,14 @@ var acrRegistry = {
           value on the UI, which is what makes the two apps share one ring rather than two). The comment
           above them<span class="cite"><span> (<code>main.bicep:1800-1803</code>)</span></span> states the failure mode: Identity does OAuth cookie
           cryptography across up to <code>conferenceScaledMaxReplicas</code> replicas with no session affinity, so with
-          the default per-replica in-memory ring a login started on one replica fails on another. <code>MMCA.Common</code>&#39;s
-          <code>AddCommonDataProtection</code> reads both keys, and <code>DataProtection:BlobStorageUri</code> is the gate: absent,
+          the default per-replica in-memory ring a login started on one replica fails on another. <code>MMCA.Common.Azure</code>&#39;s
+          <code>AddAzureDataProtection</code> reads both keys, and <code>DataProtection:BlobStorageUri</code> is the gate: absent,
           the method does nothing and the host keeps the in-memory default, which is what local development
           and the tests want<span class="cite"><span>
-          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Aspire/DataProtection/DataProtectionExtensions.cs:54-62</code>)</span></span>.</p>
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Azure/AzureDataProtectionExtensions.cs:59-67</code>)</span></span>. The call
+          also registers the marker the core startup tripwire checks, so a host given
+          <code>DataProtection:BlobStorageUri</code> without calling it fails at startup rather than running every
+          replica on its own key ring<span class="cite"><span> (<code>AzureDataProtectionExtensions.cs:55-57</code>)</span></span>.</p>
           <p>Identity is also the app that sends the account emails, so it receives the SMTP block
           (<span class="cite"><span><code>main.bicep:1277-1281</code></span></span>: <code>Smtp__Host</code>, <code>Smtp__Port</code>, <code>Smtp__Username</code>, <code>Smtp__EnableSsl: &#39;true&#39;</code>,
           <code>Smtp__From</code>) with the password arriving separately as a <code>secretRef</code> only when one is configured
@@ -2271,7 +2307,7 @@ output appInsightsName    string = appInsights.name</code></pre>
           </tr>
           <tr>
           <td>§13 Observability</td>
-          <td>Workspace-based App Insights; per-service <code>OTEL_SERVICE_NAME</code>; Application Map coverage; five SLO scheduled query rules (the AI-scoring token ceiling among them, enabled by <code>hasAiApiKey</code>) + workbook (<a href="https://ivanball.github.io/docs/adr/062-slo-alerting-as-code.html" target="_blank" rel="noopener">ADR-062</a>); outbox dead-letter, SQL dependency, revision-activation and SignalR backplane alerts over the same workspace; the 15-minute evaluation cadence and its stated detection-latency trade</td>
+          <td>Workspace-based App Insights; per-service <code>OTEL_SERVICE_NAME</code>; Application Map coverage; five SLO scheduled query rules (the AI-scoring token ceiling among them, enabled by <code>hasAiApiKey</code>) + workbook (<a href="https://ivanball.github.io/docs/adr/062-slo-alerting-as-code.html" target="_blank" rel="noopener">ADR-062</a>); outbox dead-letter, outbox backlog-age, outbox broker-breaker, SQL dependency, revision-activation, SignalR backplane, broker error-queue and live-broadcast-dropped alerts over the same workspace; the 15-minute evaluation cadence and its stated detection-latency trade</td>
           </tr>
           <tr>
           <td>§17 DevOps &amp; Deployment</td>
@@ -2283,7 +2319,7 @@ output appInsightsName    string = appInsights.name</code></pre>
           </tr>
           <tr>
           <td>§31 Cost Efficiency / FinOps</td>
-          <td><code>commonTags</code> on every resource plus a per-service <code>service</code> tag on the six apps and four databases; monthly budget with 80%/100% thresholds; <code>cost-guard.yml</code> surge-drift gate against a <code>maxReplicas</code> 2 / SQL Basic baseline that honours the <code>CONFERENCE_MODE_UNTIL</code> window; workspace <code>dailyQuotaGb: 1</code>; 25% trace sampling; Warning OTel log floor; the Gateway-only Warning floor on YARP&#39;s per-request logs; Basic-tier DB sizing plus the archived-and-dropped AtlDevCon database; 300s outbox and scheduler polls; the two disabled metric groups plus the 300s metric export interval; 30-second readiness probes; 15-minute SLO-rule and web-test cadences; the <code>aiScoringTokenCeiling</code> two-day AI provider token alert; the 50 GB monthly cap on on-upload malware scanning; 0.25 vCPU / 0.5 Gi baseline container sizing with the conference surge confined to a dated window; the daily two-step ACR purge task plus its post-deploy re-run</td>
+          <td><code>commonTags</code> on every resource plus a per-service <code>service</code> tag on the six apps and four databases; monthly budget with 80%/100% thresholds; <code>cost-guard.yml</code> surge-drift gate against a <code>maxReplicas</code> 2 / SQL Basic baseline that honours the <code>CONFERENCE_MODE_UNTIL</code> window; workspace <code>dailyQuotaGb: 1</code>; 25% trace sampling; Warning OTel log floor; the Gateway-only Warning floor on YARP&#39;s per-request logs; Basic-tier DB sizing plus the archived-and-dropped AtlDevCon database; 300s outbox and scheduler polls; the two disabled metric groups plus the 300s metric export interval; 30-second readiness probes; 15-minute SLO-rule and web-test cadences; the <code>aiScoringTokenCeiling</code> two-day AI provider token alert; Defender for Storage off by default (about $10 a month that bought activity monitoring only), declared unconditionally so <code>false</code> actively disables a previously enabled plan, with a 50 GB monthly cap on on-upload scanning when switched on; 0.25 vCPU / 0.5 Gi baseline container sizing with the conference surge confined to a dated window; the daily two-step ACR purge task plus its post-deploy re-run</td>
           </tr>
           </tbody></table></div>
           <hr>
@@ -2324,10 +2360,12 @@ output appInsightsName    string = appInsights.name</code></pre>
           GitHub secret, which reaches the parameters file as <code>aiApiKey</code> only when it is non-empty<span class="cite"><span>
           (<code>deploy.yml:1388</code>, <code>:1506-1509</code>)</span></span>. An environment without that secret deploys the scoring feature
           inert and the rule disabled.</li>
-          <li>Whether on-upload malware scanning is actually in effect on the storage account is not
-          determinable from source either: the template declares it on by default<span class="cite"><span> (<code>main.bicep:136</code>,
-          <code>:1315-1331</code>)</span></span>, but only the account&#39;s live <code>defenderForStorageSettings</code> resource shows whether the
-          setting took effect.</li>
+          <li>Whether Defender for Storage, and on-upload malware scanning in particular, is in effect on the
+          storage account is not determinable from source either: the template declares it off by default<span class="cite"><span>
+          (<code>main.bicep:136</code>, <code>:1565-1572</code>)</span></span>, and on-upload scanning additionally depends on the
+          subscription-level <code>DefenderForStorageV2</code> plan, which no file in the repository provisions<span class="cite"><span>
+          (<code>main.bicep:135</code>)</span></span>. Only the account&#39;s live <code>defenderForStorageSettings</code> resource and the
+          subscription&#39;s Defender plans show the state.</li>
           <li>The <code>azure/arm-deploy@v2</code> action&#39;s <code>deploymentMode</code> is not set explicitly in <code>deploy.yml</code>
           (<span class="cite"><span><code>deploy.yml:1115-1121</code></span></span> for foundation, <span class="cite"><span><code>deploy.yml:1489-1495</code></span></span> for main), the action defaults to
           Incremental, but this is not stated in the workflow file; it is inferred from the Incremental intent

@@ -6,21 +6,21 @@
   <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#0e151f" media="(prefers-color-scheme: dark)">
   <title>Phase 1b - Functional Group Taxonomy · MMCA · Ivan Ball-llovera</title>
-  <meta name="description" content="This is the primary axis of the guide. Every one of the 5,787 distinct first-party type nodes from 00-inventory.md is assigned to exactly one…">
+  <meta name="description" content="This is the primary axis of the guide. Every one of the 6,078 distinct first-party type nodes from 00-inventory.md is assigned to exactly one…">
   <link rel="canonical" href="https://ivanball.github.io/docs/onboarding/00-group-taxonomy.html">
   <link rel="icon" href="../../assets/img/favicon.svg" type="image/svg+xml">
   <link rel="alternate" type="application/rss+xml" title="Ivan Ball-llovera: deep dives on enterprise .NET" href="https://ivanball.github.io/feed.xml">
   <meta property="og:type" content="article">
   <meta property="og:site_name" content="Ivan Ball-llovera">
   <meta property="og:title" content="Phase 1b - Functional Group Taxonomy">
-  <meta property="og:description" content="This is the primary axis of the guide. Every one of the 5,787 distinct first-party type nodes from 00-inventory.md is assigned to exactly one…">
+  <meta property="og:description" content="This is the primary axis of the guide. Every one of the 6,078 distinct first-party type nodes from 00-inventory.md is assigned to exactly one…">
   <meta property="og:url" content="https://ivanball.github.io/docs/onboarding/00-group-taxonomy.html">
   <meta property="og:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <meta property="og:image:alt" content="Ivan Ball-llovera, Principal Software Architect">
   <meta property="og:locale" content="en_US">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="Phase 1b - Functional Group Taxonomy">
-  <meta name="twitter:description" content="This is the primary axis of the guide. Every one of the 5,787 distinct first-party type nodes from 00-inventory.md is assigned to exactly one…">
+  <meta name="twitter:description" content="This is the primary axis of the guide. Every one of the 6,078 distinct first-party type nodes from 00-inventory.md is assigned to exactly one…">
   <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Platform","item":"https://ivanball.github.io/platform.html"},{"@type":"ListItem","position":2,"name":"Reference","item":"https://ivanball.github.io/docs/index.html"},{"@type":"ListItem","position":3,"name":"Onboarding Guide","item":"https://ivanball.github.io/docs/onboarding/index.html"},{"@type":"ListItem","position":4,"name":"Phase 1b - Functional Group Taxonomy","item":"https://ivanball.github.io/docs/onboarding/00-group-taxonomy.html"}]}</script>
   <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);if(localStorage.getItem('mmca-rail')==='hidden')document.documentElement.setAttribute('data-rail','hidden');if(localStorage.getItem('mmca-cites')==='shown')document.documentElement.setAttribute('data-cites','shown');}catch(e){}})();</script>
@@ -130,7 +130,8 @@
         <li><a href="group-25-adc-host-composition.html">25. ADC Application Host, UI Shell &amp; Cross-Module Composition</a></li>
         <li><a href="group-26-device-capability-layer.html">26. Device Capability Abstraction Layer (Native Contracts, MAUI, Browser &amp; Fallback Adapters)</a></li>
         <li><a href="group-27-common-ai-integration.html">27. Common AI Integration</a></li>
-        <li><a href="group-28-testing-infrastructure.html">28. Testing &amp; Quality Infrastructure</a></li>
+        <li><a href="group-28-common-cloud-provider-adapters.html">28. Common Cloud Provider Adapters (AWS, Azure, GCP)</a></li>
+        <li><a href="group-29-testing-infrastructure.html">29. Testing &amp; Quality Infrastructure</a></li>
         <li><a href="devops-aspire.html">Aspire Orchestration and Containers</a></li>
         <li><a href="devops-cicd.html">CI/CD and Operations</a></li>
         <li><a href="devops-iac.html">Infrastructure as Code, ADC Azure Deployment</a></li>
@@ -145,7 +146,7 @@
         <article class="doc-content">
           <p class="eyebrow doc-kicker">Onboarding guide</p>
           <h1 id="phase-1b---functional-group-taxonomy">Phase 1b - Functional Group Taxonomy</h1>
-          <p>This is the <strong>primary axis</strong> of the guide. Every one of the <strong>5,787</strong> distinct first-party type
+          <p>This is the <strong>primary axis</strong> of the guide. Every one of the <strong>6,078</strong> distinct first-party type
           nodes from <a href="00-inventory.html"><code>00-inventory.md</code></a> is assigned to <strong>exactly one</strong> functional group -
           its primary <em>home</em>: the capability or cross-cutting concern it most exists to serve. A type used
           across many groups (e.g. <code>Result&lt;T&gt;</code>, the entity base) lives in the one foundational group that
@@ -212,7 +213,7 @@
           <tr>
           <td>G02</td>
           <td><strong>Domain Building Blocks (Entities, Value Objects, Aggregates)</strong><br/>group-02-domain-building-blocks.md</td>
-          <td>37</td>
+          <td>39</td>
           <td>L0-L5</td>
           <td>The DDD primitives: entity/aggregate base classes, audit fields, value objects + invariants, domain markers, attributes, identifier aliases.</td>
           </tr>
@@ -240,21 +241,21 @@
           <tr>
           <td>G06</td>
           <td><strong>Validation</strong><br/>group-06-validation.md</td>
-          <td>22</td>
+          <td>26</td>
           <td>L0-L9</td>
           <td>The FluentValidation-based validation contracts and failure mapping that gate commands before they execute.</td>
           </tr>
           <tr>
           <td>G07</td>
           <td><strong>Persistence &amp; EF Core</strong><br/>group-07-persistence-ef-core.md</td>
-          <td>181</td>
+          <td>182</td>
           <td>L0-L16</td>
           <td>The single SQLServerDbContext over the abstract ApplicationDbContext, interceptors, repositories, specifications evaluation, data-source routing (database-per-service), conventions, value generators, encryption, factories and design-time.</td>
           </tr>
           <tr>
           <td>G08</td>
           <td><strong>Authentication &amp; Authorization</strong><br/>group-08-auth.md</td>
-          <td>174</td>
+          <td>176</td>
           <td>L0-L14</td>
           <td>JWT/JWKS dual-fetch token validation, current-user/claims, password hashing, cookie sessions, and policy/authorization plumbing.</td>
           </tr>
@@ -282,7 +283,7 @@
           <tr>
           <td>G12</td>
           <td><strong>API Hosting, Middleware, Idempotency &amp; DTO/Contract Mapping</strong><br/>group-12-api-hosting-mapping.md</td>
-          <td>94</td>
+          <td>95</td>
           <td>L0-L16</td>
           <td>The ASP.NET Core edge: controller bases, middleware, startup, model binders, JSON converters, feature management, idempotency, correlation, and manual DTO/request mapping.</td>
           </tr>
@@ -296,21 +297,21 @@
           <tr>
           <td>G14</td>
           <td><strong>Module System, Composition &amp; Configuration</strong><br/>group-14-module-system-composition.md</td>
-          <td>92</td>
+          <td>95</td>
           <td>L0-L17</td>
           <td>IModule discovery + Kahn-ordered ModuleLoader, the DI composition roots, assembly markers, data-source/database attributes, and options/settings binding.</td>
           </tr>
           <tr>
           <td>G15</td>
           <td><strong>Common UI Framework (MudBlazor components, theme, base pages)</strong><br/>group-15-common-ui-framework.md</td>
-          <td>202</td>
+          <td>207</td>
           <td>L0-L15</td>
           <td>Reusable Blazor building blocks: the data-grid list page base, theme, common pages/services, and UI extensions shared by every consumer app.</td>
           </tr>
           <tr>
           <td>G16</td>
           <td><strong>Aspire Orchestration &amp; Service Defaults</strong><br/>group-16-aspire-orchestration.md</td>
-          <td>64</td>
+          <td>69</td>
           <td>L0-L11</td>
           <td>The Aspire AppHost wiring, ServiceDefaults, warmup, telemetry and security helpers that compose and run the distributed app locally and in Azure.</td>
           </tr>
@@ -366,7 +367,7 @@
           <tr>
           <td>G23</td>
           <td><strong>ADC Identity Module (Users, Profiles, GDPR Export/Erasure)</strong><br/>group-24-identity-module.md</td>
-          <td>117</td>
+          <td>119</td>
           <td>L0-L17</td>
           <td>The Identity bounded context end-to-end: the User aggregate, change-password/delete/export use cases, persistence, API/contracts/service, and profile/user UI.</td>
           </tr>
@@ -387,19 +388,26 @@
           <tr>
           <td>G28</td>
           <td><strong>Common AI Integration</strong><br/>group-27-common-ai-integration.md</td>
-          <td>32</td>
+          <td>33</td>
           <td>L0-L10</td>
           <td>The AI provider settings, bounded/metered chat client wrapper, and prompt contract types used to integrate LLM calls into Common-based apps.</td>
           </tr>
           <tr>
+          <td>G29</td>
+          <td><strong>Common Cloud Provider Adapters (AWS, Azure, GCP)</strong><br/>group-28-common-cloud-provider-adapters.md</td>
+          <td>67</td>
+          <td>L0-L8</td>
+          <td>Vendor-specific cloud adapters in MMCA.Common.Aws, .Azure and .Gcp (messaging transports, native push, file storage, secrets, database IAM auth, data protection, telemetry) that implement the provider-neutral Common abstractions.</td>
+          </tr>
+          <tr>
           <td>G25</td>
-          <td><strong>Testing &amp; Quality Infrastructure</strong><br/>group-28-testing-infrastructure.md</td>
-          <td>3364</td>
+          <td><strong>Testing &amp; Quality Infrastructure</strong><br/>group-29-testing-infrastructure.md</td>
+          <td>3562</td>
           <td>L0-L19</td>
           <td>All test projects + the reusable Testing/Testing.E2E/Testing.UI bases, architecture-fitness tests, and the component Gallery harness; individual [Fact]s are rolled up by project (logged exception).</td>
           </tr>
           </tbody></table></div>
-          <p><strong>Reconciliation:</strong> 2423 production types across 27 groups + 3364 test/testing types in G25 = <strong>5787</strong> (matches the inventory&#39;s distinct-node count). No type appears twice; none dropped.</p>
+          <p><strong>Reconciliation:</strong> 2516 production types across 28 groups + 3562 test/testing types in G25 = <strong>6078</strong> (matches the inventory&#39;s distinct-node count). No type appears twice; none dropped.</p>
           <hr>
           <h2 id="group-membership">Group membership</h2>
           <h3 id="g01---result--error-handling">G01 - Result &amp; Error Handling</h3>
@@ -514,7 +522,7 @@
           </tbody></table></div>
           <h3 id="g02---domain-building-blocks-entities-value-objects-aggregates">G02 - Domain Building Blocks (Entities, Value Objects, Aggregates)</h3>
           <blockquote>
-          <p><code>group-02-domain-building-blocks.md</code> | 37 types | The DDD primitives: entity/aggregate base classes, audit fields, value objects + invariants, domain markers, attributes, identifier aliases.</p>
+          <p><code>group-02-domain-building-blocks.md</code> | 39 types | The DDD primitives: entity/aggregate base classes, audit fields, value objects + invariants, domain markers, attributes, identifier aliases.</p>
           </blockquote>
           <div class="table-wrap"><table>
           <thead>
@@ -605,6 +613,12 @@
           </tr>
           <tr>
           <td>0</td>
+          <td><code>UsPostalRegion</code></td>
+          <td>record</td>
+          <td>MMCA.Common.Shared.ValueObjects.Contact</td>
+          </tr>
+          <tr>
+          <td>0</td>
           <td><code>ValueObject</code></td>
           <td>record</td>
           <td>MMCA.Common.Shared.ValueObjects</td>
@@ -632,6 +646,12 @@
           <td><code>PiiRedactor</code></td>
           <td>class</td>
           <td>MMCA.Common.Domain.Privacy</td>
+          </tr>
+          <tr>
+          <td>1</td>
+          <td><code>UsPostalRegions</code></td>
+          <td>class</td>
+          <td>MMCA.Common.Shared.ValueObjects.Contact</td>
           </tr>
           <tr>
           <td>3</td>
@@ -1656,7 +1676,7 @@
           </tbody></table></div>
           <h3 id="g06---validation">G06 - Validation</h3>
           <blockquote>
-          <p><code>group-06-validation.md</code> | 22 types | The FluentValidation-based validation contracts and failure mapping that gate commands before they execute.</p>
+          <p><code>group-06-validation.md</code> | 26 types | The FluentValidation-based validation contracts and failure mapping that gate commands before they execute.</p>
           </blockquote>
           <div class="table-wrap"><table>
           <thead>
@@ -1728,6 +1748,12 @@
           <td>MMCA.Common.Application.Validation</td>
           </tr>
           <tr>
+          <td>0</td>
+          <td><code>UsCityRules&lt;T&gt;</code></td>
+          <td>class</td>
+          <td>MMCA.Common.Application.Validation</td>
+          </tr>
+          <tr>
           <td>1</td>
           <td><code>CommandRequestValidator&lt;TCommand, TRequest&gt;</code></td>
           <td>class</td>
@@ -1736,6 +1762,18 @@
           <tr>
           <td>1</td>
           <td><code>StrongPasswordRules&lt;T&gt;</code></td>
+          <td>class</td>
+          <td>MMCA.Common.Application.Validation</td>
+          </tr>
+          <tr>
+          <td>2</td>
+          <td><code>UsStateRules&lt;T&gt;</code></td>
+          <td>class</td>
+          <td>MMCA.Common.Application.Validation</td>
+          </tr>
+          <tr>
+          <td>2</td>
+          <td><code>UsZipCodeRules&lt;T&gt;</code></td>
           <td>class</td>
           <td>MMCA.Common.Application.Validation</td>
           </tr>
@@ -1794,6 +1832,12 @@
           <td>MMCA.Common.Application.Validation</td>
           </tr>
           <tr>
+          <td>6</td>
+          <td><code>UsAddressValidator</code></td>
+          <td>class</td>
+          <td>MMCA.Common.Application.Validation</td>
+          </tr>
+          <tr>
           <td>9</td>
           <td><code>CurrentUserServiceExtensions</code></td>
           <td>class</td>
@@ -1802,7 +1846,7 @@
           </tbody></table></div>
           <h3 id="g07---persistence--ef-core">G07 - Persistence &amp; EF Core</h3>
           <blockquote>
-          <p><code>group-07-persistence-ef-core.md</code> | 181 types | The single SQLServerDbContext over the abstract ApplicationDbContext, interceptors, repositories, specifications evaluation, data-source routing (database-per-service), conventions, value generators, encryption, factories and design-time.</p>
+          <p><code>group-07-persistence-ef-core.md</code> | 182 types | The single SQLServerDbContext over the abstract ApplicationDbContext, interceptors, repositories, specifications evaluation, data-source routing (database-per-service), conventions, value generators, encryption, factories and design-time.</p>
           </blockquote>
           <div class="table-wrap"><table>
           <thead>
@@ -1968,6 +2012,12 @@
           <td><code>INativePushSender</code></td>
           <td>interface</td>
           <td>MMCA.Common.Application.Interfaces.Infrastructure.Notifications</td>
+          </tr>
+          <tr>
+          <td>0</td>
+          <td><code>INpgsqlDataSourceConfigurator</code></td>
+          <td>interface</td>
+          <td>MMCA.Common.Infrastructure.Persistence.DbContexts</td>
           </tr>
           <tr>
           <td>0</td>
@@ -2217,6 +2267,12 @@
           </tr>
           <tr>
           <td>1</td>
+          <td><code>NpgsqlDataSources</code></td>
+          <td>class</td>
+          <td>MMCA.Common.Infrastructure.Persistence.DbContexts</td>
+          </tr>
+          <tr>
+          <td>1</td>
           <td><code>PendingEntityKey</code></td>
           <td>record</td>
           <td>MMCA.Common.Infrastructure.Persistence.AuditTrail</td>
@@ -2320,12 +2376,6 @@
           <tr>
           <td>3</td>
           <td><code>IFileStorageService</code></td>
-          <td>interface</td>
-          <td>MMCA.Common.Application.Interfaces.Infrastructure.Storage</td>
-          </tr>
-          <tr>
-          <td>3</td>
-          <td><code>IImageProcessor</code></td>
           <td>interface</td>
           <td>MMCA.Common.Application.Interfaces.Infrastructure.Storage</td>
           </tr>
@@ -2902,7 +2952,7 @@
           </tbody></table></div>
           <h3 id="g08---authentication--authorization">G08 - Authentication &amp; Authorization</h3>
           <blockquote>
-          <p><code>group-08-auth.md</code> | 174 types | JWT/JWKS dual-fetch token validation, current-user/claims, password hashing, cookie sessions, and policy/authorization plumbing.</p>
+          <p><code>group-08-auth.md</code> | 176 types | JWT/JWKS dual-fetch token validation, current-user/claims, password hashing, cookie sessions, and policy/authorization plumbing.</p>
           </blockquote>
           <div class="table-wrap"><table>
           <thead>
@@ -2948,6 +2998,12 @@
           <td><code>AuthenticationResponse</code></td>
           <td>record struct</td>
           <td>MMCA.Common.Shared.Auth.Responses</td>
+          </tr>
+          <tr>
+          <td>0</td>
+          <td><code>AuthenticationServiceLog</code></td>
+          <td>class</td>
+          <td>MMCA.Common.Application.Auth</td>
           </tr>
           <tr>
           <td>0</td>
@@ -3636,6 +3692,12 @@
           <tr>
           <td>3</td>
           <td><code>IPasswordChangeableUser</code></td>
+          <td>interface</td>
+          <td>MMCA.Common.Domain.Auth</td>
+          </tr>
+          <tr>
+          <td>3</td>
+          <td><code>IPasswordRehashableUser</code></td>
           <td>interface</td>
           <td>MMCA.Common.Domain.Auth</td>
           </tr>
@@ -4482,7 +4544,7 @@
           </tbody></table></div>
           <h3 id="g12---api-hosting-middleware-idempotency--dtocontract-mapping">G12 - API Hosting, Middleware, Idempotency &amp; DTO/Contract Mapping</h3>
           <blockquote>
-          <p><code>group-12-api-hosting-mapping.md</code> | 94 types | The ASP.NET Core edge: controller bases, middleware, startup, model binders, JSON converters, feature management, idempotency, correlation, and manual DTO/request mapping.</p>
+          <p><code>group-12-api-hosting-mapping.md</code> | 95 types | The ASP.NET Core edge: controller bases, middleware, startup, model binders, JSON converters, feature management, idempotency, correlation, and manual DTO/request mapping.</p>
           </blockquote>
           <div class="table-wrap"><table>
           <thead>
@@ -4537,9 +4599,9 @@
           </tr>
           <tr>
           <td>0</td>
-          <td><code>DbUpdateExceptionHandler</code></td>
+          <td><code>ConcurrencyConflictMetrics</code></td>
           <td>class</td>
-          <td>MMCA.Common.API.Middleware</td>
+          <td>MMCA.Common.API.Concurrency</td>
           </tr>
           <tr>
           <td>0</td>
@@ -4714,6 +4776,12 @@
           <td><code>CommonForwardedHeadersExtensions</code></td>
           <td>class</td>
           <td>MMCA.Common.API.Startup</td>
+          </tr>
+          <tr>
+          <td>1</td>
+          <td><code>DbUpdateExceptionHandler</code></td>
+          <td>class</td>
+          <td>MMCA.Common.API.Middleware</td>
           </tr>
           <tr>
           <td>1</td>
@@ -5170,7 +5238,7 @@
           </tbody></table></div>
           <h3 id="g14---module-system-composition--configuration">G14 - Module System, Composition &amp; Configuration</h3>
           <blockquote>
-          <p><code>group-14-module-system-composition.md</code> | 92 types | IModule discovery + Kahn-ordered ModuleLoader, the DI composition roots, assembly markers, data-source/database attributes, and options/settings binding.</p>
+          <p><code>group-14-module-system-composition.md</code> | 95 types | IModule discovery + Kahn-ordered ModuleLoader, the DI composition roots, assembly markers, data-source/database attributes, and options/settings binding.</p>
           </blockquote>
           <div class="table-wrap"><table>
           <thead>
@@ -5227,6 +5295,12 @@
           <td>0</td>
           <td><code>ClassReference</code></td>
           <td>class</td>
+          <td>MMCA.Common.Infrastructure</td>
+          </tr>
+          <tr>
+          <td>0</td>
+          <td><code>ClassReference</code></td>
+          <td>class</td>
           <td>MMCA.Common.Application</td>
           </tr>
           <tr>
@@ -5237,9 +5311,9 @@
           </tr>
           <tr>
           <td>0</td>
-          <td><code>ClassReference</code></td>
+          <td><code>CloudAdapterTripwireOptions</code></td>
           <td>class</td>
-          <td>MMCA.Common.Infrastructure</td>
+          <td>MMCA.Common.Infrastructure.Configuration</td>
           </tr>
           <tr>
           <td>0</td>
@@ -5252,12 +5326,6 @@
           <td><code>FaultEndpointConfigurator</code></td>
           <td>class</td>
           <td>MMCA.Common.Infrastructure.Messaging.Consumers</td>
-          </tr>
-          <tr>
-          <td>0</td>
-          <td><code>FileStorageSettings</code></td>
-          <td>class</td>
-          <td>MMCA.Common.Infrastructure.Storage</td>
           </tr>
           <tr>
           <td>0</td>
@@ -5297,9 +5365,9 @@
           </tr>
           <tr>
           <td>0</td>
-          <td><code>MessageBusProvider</code></td>
-          <td>enum</td>
-          <td>MMCA.Common.Infrastructure.Messaging</td>
+          <td><code>MessageBusProviders</code></td>
+          <td>class</td>
+          <td>MMCA.Common.Infrastructure.Messaging.Transports</td>
           </tr>
           <tr>
           <td>0</td>
@@ -5321,15 +5389,15 @@
           </tr>
           <tr>
           <td>0</td>
-          <td><code>NativePushSettings</code></td>
-          <td>class</td>
-          <td>MMCA.Common.Infrastructure.Notifications.Push</td>
-          </tr>
-          <tr>
-          <td>0</td>
           <td><code>PeriodicBackgroundService</code></td>
           <td>class</td>
           <td>MMCA.Common.Infrastructure.Hosting.Background</td>
+          </tr>
+          <tr>
+          <td>0</td>
+          <td><code>PostgreSqlTransportSettings</code></td>
+          <td>class</td>
+          <td>MMCA.Common.Infrastructure.Messaging.Transports</td>
           </tr>
           <tr>
           <td>0</td>
@@ -5363,12 +5431,6 @@
           </tr>
           <tr>
           <td>0</td>
-          <td><code>ServiceBusEmulatorSupport</code></td>
-          <td>class</td>
-          <td>MMCA.Common.Infrastructure.Messaging</td>
-          </tr>
-          <tr>
-          <td>0</td>
           <td><code>SmtpSettings</code></td>
           <td>class</td>
           <td>MMCA.Common.Infrastructure.Mail</td>
@@ -5390,12 +5452,6 @@
           <td><code>UserDataExportSectionDefaults</code></td>
           <td>class</td>
           <td>MMCA.Common.Application.Users.UseCases.ExportUserData</td>
-          </tr>
-          <tr>
-          <td>1</td>
-          <td><code>AzureNotificationHubNativePushSender</code></td>
-          <td>class</td>
-          <td>MMCA.Common.Infrastructure.Notifications.Push</td>
           </tr>
           <tr>
           <td>1</td>
@@ -5477,6 +5533,24 @@
           </tr>
           <tr>
           <td>2</td>
+          <td><code>BrokerTransportContext</code></td>
+          <td>class</td>
+          <td>MMCA.Common.Infrastructure.Messaging.Transports</td>
+          </tr>
+          <tr>
+          <td>2</td>
+          <td><code>BrokerTransportPolicies</code></td>
+          <td>class</td>
+          <td>MMCA.Common.Infrastructure.Messaging.Transports</td>
+          </tr>
+          <tr>
+          <td>2</td>
+          <td><code>CloudAdapterTripwire</code></td>
+          <td>class</td>
+          <td>MMCA.Common.Infrastructure.Configuration</td>
+          </tr>
+          <tr>
+          <td>2</td>
           <td><code>FaultIntegrationEventConsumer&lt;TEvent&gt;</code></td>
           <td>class</td>
           <td>MMCA.Common.Infrastructure.Messaging.Consumers</td>
@@ -5513,6 +5587,12 @@
           </tr>
           <tr>
           <td>3</td>
+          <td><code>IBrokerTransport</code></td>
+          <td>interface</td>
+          <td>MMCA.Common.Infrastructure.Messaging.Transports</td>
+          </tr>
+          <tr>
+          <td>3</td>
           <td><code>IInternalCommand</code></td>
           <td>interface</td>
           <td>MMCA.Common.Application.InternalCommands</td>
@@ -5522,18 +5602,6 @@
           <td><code>IInternalCommandAdministration</code></td>
           <td>interface</td>
           <td>MMCA.Common.Application.InternalCommands</td>
-          </tr>
-          <tr>
-          <td>4</td>
-          <td><code>AzureBlobFileStorageService</code></td>
-          <td>class</td>
-          <td>MMCA.Common.Infrastructure.Storage</td>
-          </tr>
-          <tr>
-          <td>4</td>
-          <td><code>AzureNotificationHubDeviceRegistrar</code></td>
-          <td>class</td>
-          <td>MMCA.Common.Infrastructure.Notifications.Push</td>
           </tr>
           <tr>
           <td>4</td>
@@ -5567,12 +5635,6 @@
           </tr>
           <tr>
           <td>4</td>
-          <td><code>ImageSharpImageProcessor</code></td>
-          <td>class</td>
-          <td>MMCA.Common.Infrastructure.Storage</td>
-          </tr>
-          <tr>
-          <td>4</td>
           <td><code>NullFileStorageService</code></td>
           <td>class</td>
           <td>MMCA.Common.Infrastructure.Storage</td>
@@ -5582,6 +5644,18 @@
           <td><code>NullPushDeviceRegistrar</code></td>
           <td>class</td>
           <td>MMCA.Common.Infrastructure.Notifications.Push</td>
+          </tr>
+          <tr>
+          <td>4</td>
+          <td><code>PostgreSqlBrokerTransport</code></td>
+          <td>class</td>
+          <td>MMCA.Common.Infrastructure.Messaging.Transports</td>
+          </tr>
+          <tr>
+          <td>4</td>
+          <td><code>RabbitMqBrokerTransport</code></td>
+          <td>class</td>
+          <td>MMCA.Common.Infrastructure.Messaging.Transports</td>
           </tr>
           <tr>
           <td>4</td>
@@ -5624,6 +5698,12 @@
           <td><code>ScopedUserOverride</code></td>
           <td>class</td>
           <td>MMCA.Common.Infrastructure.Context</td>
+          </tr>
+          <tr>
+          <td>6</td>
+          <td><code>ChangePreferencesCommandValidatorBase&lt;TCommand&gt;</code></td>
+          <td>class</td>
+          <td>MMCA.Common.Application.Users.UseCases.ChangePreferences</td>
           </tr>
           <tr>
           <td>6</td>
@@ -5728,6 +5808,12 @@
           <td>MMCA.Common.Infrastructure.Scheduling</td>
           </tr>
           <tr>
+          <td>14</td>
+          <td><code>StartupConfigurationSummaryService</code></td>
+          <td>class</td>
+          <td>MMCA.Common.Infrastructure.Configuration</td>
+          </tr>
+          <tr>
           <td>17</td>
           <td><code>DependencyInjection</code></td>
           <td>class</td>
@@ -5736,7 +5822,7 @@
           </tbody></table></div>
           <h3 id="g15---common-ui-framework-mudblazor-components-theme-base-pages">G15 - Common UI Framework (MudBlazor components, theme, base pages)</h3>
           <blockquote>
-          <p><code>group-15-common-ui-framework.md</code> | 202 types | Reusable Blazor building blocks: the data-grid list page base, theme, common pages/services, and UI extensions shared by every consumer app.</p>
+          <p><code>group-15-common-ui-framework.md</code> | 207 types | Reusable Blazor building blocks: the data-grid list page base, theme, common pages/services, and UI extensions shared by every consumer app.</p>
           </blockquote>
           <div class="table-wrap"><table>
           <thead>
@@ -5836,6 +5922,12 @@
           <td><code>CultureDelegatingHandler</code></td>
           <td>class</td>
           <td>MMCA.Common.UI.Services.Culture</td>
+          </tr>
+          <tr>
+          <td>0</td>
+          <td><code>DetailLoadState</code></td>
+          <td>enum</td>
+          <td>MMCA.Common.UI.Components.PageState</td>
           </tr>
           <tr>
           <td>0</td>
@@ -6115,9 +6207,21 @@
           </tr>
           <tr>
           <td>0</td>
+          <td><code>ServiceWorkerEndpointExtensions</code></td>
+          <td>class</td>
+          <td>MMCA.Common.UI.Web.Pwa</td>
+          </tr>
+          <tr>
+          <td>0</td>
           <td><code>SharedResource</code></td>
           <td>class</td>
           <td>MMCA.Common.UI.Resources</td>
+          </tr>
+          <tr>
+          <td>0</td>
+          <td><code>StaleToastSweeper</code></td>
+          <td>class</td>
+          <td>MMCA.Common.UI.Components.Notifications</td>
           </tr>
           <tr>
           <td>0</td>
@@ -6223,12 +6327,6 @@
           </tr>
           <tr>
           <td>1</td>
-          <td><code>AuthenticatedServiceBase</code></td>
-          <td>class</td>
-          <td>MMCA.Common.UI.Services.Api</td>
-          </tr>
-          <tr>
-          <td>1</td>
           <td><code>AuthFieldMessages</code></td>
           <td>class</td>
           <td>MMCA.Common.UI.Resources</td>
@@ -6253,6 +6351,12 @@
           </tr>
           <tr>
           <td>1</td>
+          <td><code>ColorModeStamp</code></td>
+          <td>class</td>
+          <td>MMCA.Common.UI.Theme</td>
+          </tr>
+          <tr>
+          <td>1</td>
           <td><code>ConfigurationOAuthUISettings</code></td>
           <td>class</td>
           <td>MMCA.Common.UI.Services.Auth.OAuth</td>
@@ -6268,12 +6372,6 @@
           <td><code>DefaultOAuthUISettings</code></td>
           <td>class</td>
           <td>MMCA.Common.UI.Services.Auth.OAuth</td>
-          </tr>
-          <tr>
-          <td>1</td>
-          <td><code>DetailPageBase</code></td>
-          <td>class</td>
-          <td>MMCA.Common.UI.Pages.Common</td>
           </tr>
           <tr>
           <td>1</td>
@@ -6307,6 +6405,12 @@
           </tr>
           <tr>
           <td>1</td>
+          <td><code>ISessionAwareTokenStorage</code></td>
+          <td>interface</td>
+          <td>MMCA.Common.UI.Services.Auth.Tokens</td>
+          </tr>
+          <tr>
+          <td>1</td>
           <td><code>IToastService</code></td>
           <td>interface</td>
           <td>MMCA.Common.UI.Common.Interfaces</td>
@@ -6320,12 +6424,6 @@
           <tr>
           <td>1</td>
           <td><code>JsFetchSessionCookieSync</code></td>
-          <td>class</td>
-          <td>MMCA.Common.UI.Services.Auth</td>
-          </tr>
-          <tr>
-          <td>1</td>
-          <td><code>JwtAuthenticationStateProvider</code></td>
           <td>class</td>
           <td>MMCA.Common.UI.Services.Auth</td>
           </tr>
@@ -6457,12 +6555,6 @@
           </tr>
           <tr>
           <td>1</td>
-          <td><code>UiRateLimitingExtensions</code></td>
-          <td>class</td>
-          <td>MMCA.Common.UI.Web.Hardening</td>
-          </tr>
-          <tr>
-          <td>1</td>
           <td><code>UiReadCache</code></td>
           <td>class</td>
           <td>MMCA.Common.UI.Services.Caching</td>
@@ -6487,9 +6579,9 @@
           </tr>
           <tr>
           <td>2</td>
-          <td><code>AuthDelegatingHandler</code></td>
+          <td><code>AuthenticatedServiceBase</code></td>
           <td>class</td>
-          <td>MMCA.Common.UI.Services.Auth</td>
+          <td>MMCA.Common.UI.Services.Api</td>
           </tr>
           <tr>
           <td>2</td>
@@ -6541,12 +6633,6 @@
           </tr>
           <tr>
           <td>2</td>
-          <td><code>IdempotentReadRetry</code></td>
-          <td>class</td>
-          <td>MMCA.Common.UI.Services.Api</td>
-          </tr>
-          <tr>
-          <td>2</td>
           <td><code>InfiniteScrollSentinel</code></td>
           <td>class</td>
           <td>MMCA.Common.UI.Components.Lists</td>
@@ -6556,6 +6642,12 @@
           <td><code>IUIModule</code></td>
           <td>interface</td>
           <td>MMCA.Common.UI.Common.Interfaces</td>
+          </tr>
+          <tr>
+          <td>2</td>
+          <td><code>JwtAuthenticationStateProvider</code></td>
+          <td>class</td>
+          <td>MMCA.Common.UI.Services.Auth</td>
           </tr>
           <tr>
           <td>2</td>
@@ -6631,6 +6723,12 @@
           </tr>
           <tr>
           <td>2</td>
+          <td><code>UiRateLimitingExtensions</code></td>
+          <td>class</td>
+          <td>MMCA.Common.UI.Web.Hardening</td>
+          </tr>
+          <tr>
+          <td>2</td>
           <td><code>UserSessionsTable</code></td>
           <td>class</td>
           <td>MMCA.Common.UI.Components.Auth</td>
@@ -6643,15 +6741,21 @@
           </tr>
           <tr>
           <td>3</td>
+          <td><code>AuthDelegatingHandler</code></td>
+          <td>class</td>
+          <td>MMCA.Common.UI.Services.Auth</td>
+          </tr>
+          <tr>
+          <td>3</td>
           <td><code>DataGridListPageBase&lt;TDto&gt;</code></td>
           <td>class</td>
           <td>MMCA.Common.UI.Pages.Common</td>
           </tr>
           <tr>
           <td>3</td>
-          <td><code>DirectApiTokenRefresher</code></td>
+          <td><code>DetailPageBase</code></td>
           <td>class</td>
-          <td>MMCA.Common.UI.Services.Auth.Tokens</td>
+          <td>MMCA.Common.UI.Pages.Common</td>
           </tr>
           <tr>
           <td>3</td>
@@ -6662,6 +6766,12 @@
           <tr>
           <td>3</td>
           <td><code>HttpResultExecutor</code></td>
+          <td>class</td>
+          <td>MMCA.Common.UI.Services.Api</td>
+          </tr>
+          <tr>
+          <td>3</td>
+          <td><code>IdempotentReadRetry</code></td>
           <td>class</td>
           <td>MMCA.Common.UI.Services.Api</td>
           </tr>
@@ -6742,6 +6852,12 @@
           <td><code>ConfirmEmail</code></td>
           <td>class</td>
           <td>MMCA.Common.UI.Pages.Auth</td>
+          </tr>
+          <tr>
+          <td>4</td>
+          <td><code>DirectApiTokenRefresher</code></td>
+          <td>class</td>
+          <td>MMCA.Common.UI.Services.Auth.Tokens</td>
           </tr>
           <tr>
           <td>4</td>
@@ -6962,7 +7078,7 @@
           </tbody></table></div>
           <h3 id="g16---aspire-orchestration--service-defaults">G16 - Aspire Orchestration &amp; Service Defaults</h3>
           <blockquote>
-          <p><code>group-16-aspire-orchestration.md</code> | 64 types | The Aspire AppHost wiring, ServiceDefaults, warmup, telemetry and security helpers that compose and run the distributed app locally and in Azure.</p>
+          <p><code>group-16-aspire-orchestration.md</code> | 69 types | The Aspire AppHost wiring, ServiceDefaults, warmup, telemetry and security helpers that compose and run the distributed app locally and in Azure.</p>
           </blockquote>
           <div class="table-wrap"><table>
           <thead>
@@ -6987,6 +7103,12 @@
           </tr>
           <tr>
           <td>0</td>
+          <td><code>CapturingBuilder</code></td>
+          <td>class</td>
+          <td>MMCA.Common.Aspire.Health</td>
+          </tr>
+          <tr>
+          <td>0</td>
           <td><code>CspNonce</code></td>
           <td>class</td>
           <td>MMCA.Common.Aspire.Security</td>
@@ -6996,12 +7118,6 @@
           <td><code>CspPolicy</code></td>
           <td>record</td>
           <td>MMCA.Common.Aspire.Security</td>
-          </tr>
-          <tr>
-          <td>0</td>
-          <td><code>DataProtectionExtensions</code></td>
-          <td>class</td>
-          <td>MMCA.Common.Aspire</td>
           </tr>
           <tr>
           <td>0</td>
@@ -7059,6 +7175,12 @@
           </tr>
           <tr>
           <td>0</td>
+          <td><code>GatewayRetryAfter</code></td>
+          <td>class</td>
+          <td>MMCA.Common.Gateway.RateLimiting</td>
+          </tr>
+          <tr>
+          <td>0</td>
           <td><code>GatewayRoutePolicyPartition</code></td>
           <td>enum</td>
           <td>MMCA.Common.Gateway</td>
@@ -7095,6 +7217,24 @@
           </tr>
           <tr>
           <td>0</td>
+          <td><code>HostIntegrationMarker</code></td>
+          <td>class</td>
+          <td>MMCA.Common.Aspire.Integrations</td>
+          </tr>
+          <tr>
+          <td>0</td>
+          <td><code>HostIntegrationNames</code></td>
+          <td>class</td>
+          <td>MMCA.Common.Aspire.Integrations</td>
+          </tr>
+          <tr>
+          <td>0</td>
+          <td><code>HostIntegrationTripwireOptions</code></td>
+          <td>class</td>
+          <td>MMCA.Common.Aspire.Integrations</td>
+          </tr>
+          <tr>
+          <td>0</td>
           <td><code>HttpResilienceDefaults</code></td>
           <td>class</td>
           <td>MMCA.Common.Shared.Resilience</td>
@@ -7110,12 +7250,6 @@
           <td><code>KestrelListenerSpec</code></td>
           <td>record</td>
           <td>MMCA.Common.Aspire.Kestrel</td>
-          </tr>
-          <tr>
-          <td>0</td>
-          <td><code>KeyVaultConfigurationExtensions</code></td>
-          <td>class</td>
-          <td>MMCA.Common.Aspire</td>
           </tr>
           <tr>
           <td>0</td>
@@ -7191,21 +7325,9 @@
           </tr>
           <tr>
           <td>1</td>
-          <td><code>GatewayRateLimitingExtensions</code></td>
-          <td>class</td>
-          <td>MMCA.Common.Aspire.Gateway</td>
-          </tr>
-          <tr>
-          <td>1</td>
           <td><code>GatewayRoutePolicySettings</code></td>
           <td>class</td>
           <td>MMCA.Common.Gateway</td>
-          </tr>
-          <tr>
-          <td>1</td>
-          <td><code>GrpcResilienceDefaults</code></td>
-          <td>class</td>
-          <td>MMCA.Common.Shared.Resilience</td>
           </tr>
           <tr>
           <td>1</td>
@@ -7218,6 +7340,12 @@
           <td><code>H2cHealthCheckExtensions</code></td>
           <td>class</td>
           <td>MMCA.Common.Aspire.Hosting</td>
+          </tr>
+          <tr>
+          <td>1</td>
+          <td><code>HostIntegrationTripwire</code></td>
+          <td>class</td>
+          <td>MMCA.Common.Aspire.Integrations</td>
           </tr>
           <tr>
           <td>1</td>
@@ -7239,6 +7367,18 @@
           </tr>
           <tr>
           <td>1</td>
+          <td><code>PostgreSqlHealthCheckRegistration</code></td>
+          <td>class</td>
+          <td>MMCA.Common.Aspire.Health</td>
+          </tr>
+          <tr>
+          <td>1</td>
+          <td><code>RetryAfterHeader</code></td>
+          <td>class</td>
+          <td>MMCA.Common.Shared.Resilience</td>
+          </tr>
+          <tr>
+          <td>1</td>
           <td><code>SelfHttpWarmupTaskBase</code></td>
           <td>class</td>
           <td>MMCA.Common.Aspire.Warmup</td>
@@ -7254,6 +7394,12 @@
           <td><code>WarmupReadinessHealthCheck</code></td>
           <td>class</td>
           <td>MMCA.Common.Aspire.Warmup</td>
+          </tr>
+          <tr>
+          <td>2</td>
+          <td><code>GatewayRateLimitingExtensions</code></td>
+          <td>class</td>
+          <td>MMCA.Common.Aspire.Gateway</td>
           </tr>
           <tr>
           <td>2</td>
@@ -9373,12 +9519,6 @@
           </tr>
           <tr>
           <td>9</td>
-          <td><code>AddSpeakerCategoryItemHandler</code></td>
-          <td>class</td>
-          <td>MMCA.ADC.Conference.Application.Speakers.UseCases.AddSpeakerCategoryItem</td>
-          </tr>
-          <tr>
-          <td>9</td>
           <td><code>BatchAddEventQuestionAnswersCommandValidator</code></td>
           <td>class</td>
           <td>MMCA.ADC.Conference.Application.Events.UseCases.BatchAddEventQuestionAnswers</td>
@@ -9775,12 +9915,6 @@
           </tr>
           <tr>
           <td>10</td>
-          <td><code>AddSessionCategoryItemHandler</code></td>
-          <td>class</td>
-          <td>MMCA.ADC.Conference.Application.Sessions.UseCases.AddSessionCategoryItem</td>
-          </tr>
-          <tr>
-          <td>10</td>
           <td><code>AddSessionQuestionAnswerCommandValidator</code></td>
           <td>class</td>
           <td>MMCA.ADC.Conference.Application.Sessions.UseCases.AddSessionQuestionAnswer</td>
@@ -9794,12 +9928,6 @@
           <tr>
           <td>10</td>
           <td><code>AddSessionSpeakerCommandValidator</code></td>
-          <td>class</td>
-          <td>MMCA.ADC.Conference.Application.Sessions.UseCases.AddSessionSpeaker</td>
-          </tr>
-          <tr>
-          <td>10</td>
-          <td><code>AddSessionSpeakerHandler</code></td>
           <td>class</td>
           <td>MMCA.ADC.Conference.Application.Sessions.UseCases.AddSessionSpeaker</td>
           </tr>
@@ -10198,6 +10326,24 @@
           <td><code>UpdateSpeakerHandler</code></td>
           <td>class</td>
           <td>MMCA.ADC.Conference.Application.Speakers.UseCases.Update</td>
+          </tr>
+          <tr>
+          <td>14</td>
+          <td><code>AddSessionCategoryItemHandler</code></td>
+          <td>class</td>
+          <td>MMCA.ADC.Conference.Application.Sessions.UseCases.AddSessionCategoryItem</td>
+          </tr>
+          <tr>
+          <td>14</td>
+          <td><code>AddSessionSpeakerHandler</code></td>
+          <td>class</td>
+          <td>MMCA.ADC.Conference.Application.Sessions.UseCases.AddSessionSpeaker</td>
+          </tr>
+          <tr>
+          <td>14</td>
+          <td><code>AddSpeakerCategoryItemHandler</code></td>
+          <td>class</td>
+          <td>MMCA.ADC.Conference.Application.Speakers.UseCases.AddSpeakerCategoryItem</td>
           </tr>
           <tr>
           <td>14</td>
@@ -13632,7 +13778,7 @@
           </tbody></table></div>
           <h3 id="g23---adc-identity-module-users-profiles-gdpr-exporterasure">G23 - ADC Identity Module (Users, Profiles, GDPR Export/Erasure)</h3>
           <blockquote>
-          <p><code>group-24-identity-module.md</code> | 117 types | The Identity bounded context end-to-end: the User aggregate, change-password/delete/export use cases, persistence, API/contracts/service, and profile/user UI.</p>
+          <p><code>group-24-identity-module.md</code> | 119 types | The Identity bounded context end-to-end: the User aggregate, change-password/delete/export use cases, persistence, API/contracts/service, and profile/user UI.</p>
           </blockquote>
           <div class="table-wrap"><table>
           <thead>
@@ -13647,19 +13793,7 @@
           <td>0</td>
           <td><code>AssemblyReference</code></td>
           <td>class</td>
-          <td>MMCA.ADC.Identity.API</td>
-          </tr>
-          <tr>
-          <td>0</td>
-          <td><code>AssemblyReference</code></td>
-          <td>class</td>
           <td>MMCA.ADC.Identity.Infrastructure</td>
-          </tr>
-          <tr>
-          <td>0</td>
-          <td><code>AssemblyReference</code></td>
-          <td>class</td>
-          <td>MMCA.ADC.Identity.Application</td>
           </tr>
           <tr>
           <td>0</td>
@@ -13669,6 +13803,18 @@
           </tr>
           <tr>
           <td>0</td>
+          <td><code>AssemblyReference</code></td>
+          <td>class</td>
+          <td>MMCA.ADC.Identity.API</td>
+          </tr>
+          <tr>
+          <td>0</td>
+          <td><code>AssemblyReference</code></td>
+          <td>class</td>
+          <td>MMCA.ADC.Identity.Application</td>
+          </tr>
+          <tr>
+          <td>0</td>
           <td><code>ClassReference</code></td>
           <td>class</td>
           <td>MMCA.ADC.Identity.API</td>
@@ -13677,7 +13823,7 @@
           <td>0</td>
           <td><code>ClassReference</code></td>
           <td>class</td>
-          <td>MMCA.ADC.Identity.Infrastructure</td>
+          <td>MMCA.ADC.Identity.Application</td>
           </tr>
           <tr>
           <td>0</td>
@@ -13688,12 +13834,6 @@
           <tr>
           <td>0</td>
           <td><code>ClassReference</code></td>
-          <td>class</td>
-          <td>MMCA.ADC.Identity.Application</td>
-          </tr>
-          <tr>
-          <td>0</td>
-          <td><code>DependencyInjection</code></td>
           <td>class</td>
           <td>MMCA.ADC.Identity.Infrastructure</td>
           </tr>
@@ -13945,6 +14085,12 @@
           </tr>
           <tr>
           <td>3</td>
+          <td><code>IImageProcessor</code></td>
+          <td>interface</td>
+          <td>MMCA.ADC.Identity.Application.Users</td>
+          </tr>
+          <tr>
+          <td>3</td>
           <td><code>IUserUIService</code></td>
           <td>interface</td>
           <td>MMCA.ADC.Identity.UI.Services</td>
@@ -13987,6 +14133,12 @@
           </tr>
           <tr>
           <td>4</td>
+          <td><code>SkiaSharpImageProcessor</code></td>
+          <td>class</td>
+          <td>MMCA.ADC.Identity.Infrastructure.Services.Users</td>
+          </tr>
+          <tr>
+          <td>4</td>
           <td><code>TokenPermissionGrants</code></td>
           <td>class</td>
           <td>MMCA.ADC.Identity.Service.Authorization</td>
@@ -14008,6 +14160,12 @@
           <td><code>DeleteAvatarBlobInternalCommand</code></td>
           <td>record</td>
           <td>MMCA.ADC.Identity.Application.Users.UseCases.DeleteAvatarBlob</td>
+          </tr>
+          <tr>
+          <td>5</td>
+          <td><code>DependencyInjection</code></td>
+          <td>class</td>
+          <td>MMCA.ADC.Identity.Infrastructure</td>
           </tr>
           <tr>
           <td>5</td>
@@ -15114,7 +15272,7 @@
           </tbody></table></div>
           <h3 id="g28---common-ai-integration">G28 - Common AI Integration</h3>
           <blockquote>
-          <p><code>group-27-common-ai-integration.md</code> | 32 types | The AI provider settings, bounded/metered chat client wrapper, and prompt contract types used to integrate LLM calls into Common-based apps.</p>
+          <p><code>group-27-common-ai-integration.md</code> | 33 types | The AI provider settings, bounded/metered chat client wrapper, and prompt contract types used to integrate LLM calls into Common-based apps.</p>
           </blockquote>
           <div class="table-wrap"><table>
           <thead>
@@ -15140,6 +15298,12 @@
           <tr>
           <td>0</td>
           <td><code>ChatToolPolicy</code></td>
+          <td>class</td>
+          <td>MMCA.Common.AI.Guardrails</td>
+          </tr>
+          <tr>
+          <td>0</td>
+          <td><code>ContentMetadata</code></td>
           <td>class</td>
           <td>MMCA.Common.AI.Guardrails</td>
           </tr>
@@ -15318,9 +15482,425 @@
           <td>MMCA.Common.AI</td>
           </tr>
           </tbody></table></div>
+          <h3 id="g29---common-cloud-provider-adapters-aws-azure-gcp">G29 - Common Cloud Provider Adapters (AWS, Azure, GCP)</h3>
+          <blockquote>
+          <p><code>group-28-common-cloud-provider-adapters.md</code> | 67 types | Vendor-specific cloud adapters in MMCA.Common.Aws, .Azure and .Gcp (messaging transports, native push, file storage, secrets, database IAM auth, data protection, telemetry) that implement the provider-neutral Common abstractions.</p>
+          </blockquote>
+          <div class="table-wrap"><table>
+          <thead>
+          <tr>
+          <th>Level</th>
+          <th>Type</th>
+          <th>Kind</th>
+          <th>Namespace</th>
+          </tr>
+          </thead>
+          <tbody><tr>
+          <td>0</td>
+          <td><code>AmazonSqsTransportSettings</code></td>
+          <td>class</td>
+          <td>MMCA.Common.Aws.Messaging</td>
+          </tr>
+          <tr>
+          <td>0</td>
+          <td><code>AwsClientEndpoint</code></td>
+          <td>class</td>
+          <td>MMCA.Common.Aws</td>
+          </tr>
+          <tr>
+          <td>0</td>
+          <td><code>AwsSecretsManagerConfigurationProvider</code></td>
+          <td>class</td>
+          <td>MMCA.Common.Aws.Secrets</td>
+          </tr>
+          <tr>
+          <td>0</td>
+          <td><code>AwsStaticCredentials</code></td>
+          <td>class</td>
+          <td>MMCA.Common.Aws</td>
+          </tr>
+          <tr>
+          <td>0</td>
+          <td><code>AzureBlobFileStorageSettings</code></td>
+          <td>class</td>
+          <td>MMCA.Common.Azure.Storage</td>
+          </tr>
+          <tr>
+          <td>0</td>
+          <td><code>AzureNotificationHubSettings</code></td>
+          <td>class</td>
+          <td>MMCA.Common.Azure.Notifications</td>
+          </tr>
+          <tr>
+          <td>0</td>
+          <td><code>CloudSqlAccessTokenSource</code></td>
+          <td>class</td>
+          <td>MMCA.Common.Gcp.CloudSql</td>
+          </tr>
+          <tr>
+          <td>0</td>
+          <td><code>CloudSqlIamAuthenticationSettings</code></td>
+          <td>class</td>
+          <td>MMCA.Common.Gcp.CloudSql</td>
+          </tr>
+          <tr>
+          <td>0</td>
+          <td><code>FcmInstallation</code></td>
+          <td>record</td>
+          <td>MMCA.Common.Gcp.Notifications</td>
+          </tr>
+          <tr>
+          <td>0</td>
+          <td><code>FcmNativePushSettings</code></td>
+          <td>class</td>
+          <td>MMCA.Common.Gcp.Notifications</td>
+          </tr>
+          <tr>
+          <td>0</td>
+          <td><code>FcmSendOutcome</code></td>
+          <td>record</td>
+          <td>MMCA.Common.Gcp.Notifications</td>
+          </tr>
+          <tr>
+          <td>0</td>
+          <td><code>GcpKmsXmlDecryptor</code></td>
+          <td>class</td>
+          <td>MMCA.Common.Gcp.DataProtection</td>
+          </tr>
+          <tr>
+          <td>0</td>
+          <td><code>GcpKmsXmlEncryptor</code></td>
+          <td>class</td>
+          <td>MMCA.Common.Gcp.DataProtection</td>
+          </tr>
+          <tr>
+          <td>0</td>
+          <td><code>GcsFileStorageSettings</code></td>
+          <td>class</td>
+          <td>MMCA.Common.Gcp.Storage</td>
+          </tr>
+          <tr>
+          <td>0</td>
+          <td><code>GcsObjectLocation</code></td>
+          <td>record</td>
+          <td>MMCA.Common.Gcp.DataProtection</td>
+          </tr>
+          <tr>
+          <td>0</td>
+          <td><code>GoogleSecretManagerConfigurationProvider</code></td>
+          <td>class</td>
+          <td>MMCA.Common.Gcp.Secrets</td>
+          </tr>
+          <tr>
+          <td>0</td>
+          <td><code>IGoogleCloudTelemetryTokenSource</code></td>
+          <td>interface</td>
+          <td>MMCA.Common.Gcp.Telemetry</td>
+          </tr>
+          <tr>
+          <td>0</td>
+          <td><code>NativePushUserTags</code></td>
+          <td>class</td>
+          <td>MMCA.Common.Azure.Notifications</td>
+          </tr>
+          <tr>
+          <td>0</td>
+          <td><code>RdsIamAuthenticationSettings</code></td>
+          <td>class</td>
+          <td>MMCA.Common.Aws.Rds</td>
+          </tr>
+          <tr>
+          <td>0</td>
+          <td><code>S3FileStorageSettings</code></td>
+          <td>class</td>
+          <td>MMCA.Common.Aws.Storage</td>
+          </tr>
+          <tr>
+          <td>0</td>
+          <td><code>ServiceBusEmulatorSupport</code></td>
+          <td>class</td>
+          <td>MMCA.Common.Azure.Messaging</td>
+          </tr>
+          <tr>
+          <td>0</td>
+          <td><code>SnsInstallation</code></td>
+          <td>record</td>
+          <td>MMCA.Common.Aws.Notifications</td>
+          </tr>
+          <tr>
+          <td>1</td>
+          <td><code>ApplicationDefaultTelemetryTokenSource</code></td>
+          <td>class</td>
+          <td>MMCA.Common.Gcp.Telemetry</td>
+          </tr>
+          <tr>
+          <td>1</td>
+          <td><code>AwsDataProtectionExtensions</code></td>
+          <td>class</td>
+          <td>MMCA.Common.Aws</td>
+          </tr>
+          <tr>
+          <td>1</td>
+          <td><code>AwsSecretsManagerConfigurationSource</code></td>
+          <td>class</td>
+          <td>MMCA.Common.Aws.Secrets</td>
+          </tr>
+          <tr>
+          <td>1</td>
+          <td><code>AzureDataProtectionExtensions</code></td>
+          <td>class</td>
+          <td>MMCA.Common.Azure</td>
+          </tr>
+          <tr>
+          <td>1</td>
+          <td><code>AzureKeyVaultConfigurationExtensions</code></td>
+          <td>class</td>
+          <td>MMCA.Common.Azure</td>
+          </tr>
+          <tr>
+          <td>1</td>
+          <td><code>AzureMonitorExporterExtensions</code></td>
+          <td>class</td>
+          <td>MMCA.Common.Azure</td>
+          </tr>
+          <tr>
+          <td>1</td>
+          <td><code>AzureNotificationHubNativePushSender</code></td>
+          <td>class</td>
+          <td>MMCA.Common.Azure.Notifications</td>
+          </tr>
+          <tr>
+          <td>1</td>
+          <td><code>GcsObjectUrl</code></td>
+          <td>class</td>
+          <td>MMCA.Common.Gcp.Storage</td>
+          </tr>
+          <tr>
+          <td>1</td>
+          <td><code>GcsStorageClientFactory</code></td>
+          <td>class</td>
+          <td>MMCA.Common.Gcp.Storage</td>
+          </tr>
+          <tr>
+          <td>1</td>
+          <td><code>GcsXmlRepository</code></td>
+          <td>class</td>
+          <td>MMCA.Common.Gcp.DataProtection</td>
+          </tr>
+          <tr>
+          <td>1</td>
+          <td><code>GoogleCloudDataProtectionExtensions</code></td>
+          <td>class</td>
+          <td>MMCA.Common.Gcp</td>
+          </tr>
+          <tr>
+          <td>1</td>
+          <td><code>GoogleCloudTelemetryAccessToken</code></td>
+          <td>class</td>
+          <td>MMCA.Common.Gcp.Telemetry</td>
+          </tr>
+          <tr>
+          <td>1</td>
+          <td><code>GoogleSecretManagerConfigurationSource</code></td>
+          <td>class</td>
+          <td>MMCA.Common.Gcp.Secrets</td>
+          </tr>
+          <tr>
+          <td>1</td>
+          <td><code>IFcmInstallationRegistry</code></td>
+          <td>interface</td>
+          <td>MMCA.Common.Gcp.Notifications</td>
+          </tr>
+          <tr>
+          <td>1</td>
+          <td><code>IFcmMessagingClient</code></td>
+          <td>interface</td>
+          <td>MMCA.Common.Gcp.Notifications</td>
+          </tr>
+          <tr>
+          <td>1</td>
+          <td><code>S3ObjectUrl</code></td>
+          <td>class</td>
+          <td>MMCA.Common.Aws.Storage</td>
+          </tr>
+          <tr>
+          <td>1</td>
+          <td><code>S3StorageClientFactory</code></td>
+          <td>class</td>
+          <td>MMCA.Common.Aws.Storage</td>
+          </tr>
+          <tr>
+          <td>1</td>
+          <td><code>SnsNativePushSettings</code></td>
+          <td>class</td>
+          <td>MMCA.Common.Aws.Notifications</td>
+          </tr>
+          <tr>
+          <td>1</td>
+          <td><code>SnsPushMessage</code></td>
+          <td>class</td>
+          <td>MMCA.Common.Aws.Notifications</td>
+          </tr>
+          <tr>
+          <td>2</td>
+          <td><code>AwsSecretsManagerConfigurationExtensions</code></td>
+          <td>class</td>
+          <td>MMCA.Common.Aws</td>
+          </tr>
+          <tr>
+          <td>2</td>
+          <td><code>CloudSqlIamAuthenticationConfigurator</code></td>
+          <td>class</td>
+          <td>MMCA.Common.Gcp.CloudSql</td>
+          </tr>
+          <tr>
+          <td>2</td>
+          <td><code>FirebaseMessagingClient</code></td>
+          <td>class</td>
+          <td>MMCA.Common.Gcp.Notifications</td>
+          </tr>
+          <tr>
+          <td>2</td>
+          <td><code>FirestoreInstallationRegistry</code></td>
+          <td>class</td>
+          <td>MMCA.Common.Gcp.Notifications</td>
+          </tr>
+          <tr>
+          <td>2</td>
+          <td><code>GcpDataProtectionBuilderExtensions</code></td>
+          <td>class</td>
+          <td>MMCA.Common.Gcp.DataProtection</td>
+          </tr>
+          <tr>
+          <td>2</td>
+          <td><code>GoogleCloudTelemetryAuthHandler</code></td>
+          <td>class</td>
+          <td>MMCA.Common.Gcp.Telemetry</td>
+          </tr>
+          <tr>
+          <td>2</td>
+          <td><code>GoogleSecretManagerConfigurationExtensions</code></td>
+          <td>class</td>
+          <td>MMCA.Common.Gcp</td>
+          </tr>
+          <tr>
+          <td>2</td>
+          <td><code>RdsIamAuthenticationConfigurator</code></td>
+          <td>class</td>
+          <td>MMCA.Common.Aws.Rds</td>
+          </tr>
+          <tr>
+          <td>2</td>
+          <td><code>SnsPushClientFactory</code></td>
+          <td>class</td>
+          <td>MMCA.Common.Aws.Notifications</td>
+          </tr>
+          <tr>
+          <td>3</td>
+          <td><code>FcmPushClientFactory</code></td>
+          <td>class</td>
+          <td>MMCA.Common.Gcp.Notifications</td>
+          </tr>
+          <tr>
+          <td>3</td>
+          <td><code>GoogleCloudTelemetryExporterExtensions</code></td>
+          <td>class</td>
+          <td>MMCA.Common.Gcp</td>
+          </tr>
+          <tr>
+          <td>4</td>
+          <td><code>AmazonSqsTransport</code></td>
+          <td>class</td>
+          <td>MMCA.Common.Aws.Messaging</td>
+          </tr>
+          <tr>
+          <td>4</td>
+          <td><code>AzureBlobFileStorageService</code></td>
+          <td>class</td>
+          <td>MMCA.Common.Azure.Storage</td>
+          </tr>
+          <tr>
+          <td>4</td>
+          <td><code>AzureNotificationHubDeviceRegistrar</code></td>
+          <td>class</td>
+          <td>MMCA.Common.Azure.Notifications</td>
+          </tr>
+          <tr>
+          <td>4</td>
+          <td><code>AzureServiceBusTransport</code></td>
+          <td>class</td>
+          <td>MMCA.Common.Azure.Messaging</td>
+          </tr>
+          <tr>
+          <td>4</td>
+          <td><code>FcmPushDeviceRegistrar</code></td>
+          <td>class</td>
+          <td>MMCA.Common.Gcp.Notifications</td>
+          </tr>
+          <tr>
+          <td>4</td>
+          <td><code>GcsFileStorageService</code></td>
+          <td>class</td>
+          <td>MMCA.Common.Gcp.Storage</td>
+          </tr>
+          <tr>
+          <td>4</td>
+          <td><code>S3FileStorageService</code></td>
+          <td>class</td>
+          <td>MMCA.Common.Aws.Storage</td>
+          </tr>
+          <tr>
+          <td>5</td>
+          <td><code>AzureServiceCollectionExtensions</code></td>
+          <td>class</td>
+          <td>MMCA.Common.Azure</td>
+          </tr>
+          <tr>
+          <td>5</td>
+          <td><code>SnsInstallationRegistry</code></td>
+          <td>class</td>
+          <td>MMCA.Common.Aws.Notifications</td>
+          </tr>
+          <tr>
+          <td>6</td>
+          <td><code>FcmPushMessage</code></td>
+          <td>class</td>
+          <td>MMCA.Common.Gcp.Notifications</td>
+          </tr>
+          <tr>
+          <td>6</td>
+          <td><code>SnsNativePushSender</code></td>
+          <td>class</td>
+          <td>MMCA.Common.Aws.Notifications</td>
+          </tr>
+          <tr>
+          <td>6</td>
+          <td><code>SnsPushDeviceRegistrar</code></td>
+          <td>class</td>
+          <td>MMCA.Common.Aws.Notifications</td>
+          </tr>
+          <tr>
+          <td>7</td>
+          <td><code>AwsServiceCollectionExtensions</code></td>
+          <td>class</td>
+          <td>MMCA.Common.Aws</td>
+          </tr>
+          <tr>
+          <td>7</td>
+          <td><code>FcmNativePushSender</code></td>
+          <td>class</td>
+          <td>MMCA.Common.Gcp.Notifications</td>
+          </tr>
+          <tr>
+          <td>8</td>
+          <td><code>GcpServiceCollectionExtensions</code></td>
+          <td>class</td>
+          <td>MMCA.Common.Gcp</td>
+          </tr>
+          </tbody></table></div>
           <h3 id="g25---testing--quality-infrastructure">G25 - Testing &amp; Quality Infrastructure</h3>
           <blockquote>
-          <p><code>group-28-testing-infrastructure.md</code> | 3364 types | All test projects + the reusable Testing/Testing.E2E/Testing.UI bases, architecture-fitness tests, and the component Gallery harness; individual [Fact]s are rolled up by project (logged exception).</p>
+          <p><code>group-29-testing-infrastructure.md</code> | 3562 types | All test projects + the reusable Testing/Testing.E2E/Testing.UI bases, architecture-fitness tests, and the component Gallery harness; individual [Fact]s are rolled up by project (logged exception).</p>
           </blockquote>
           <p>Rolled up by project (individual <code>[Fact]</code>s not sectioned - logged exception). Reusable test
           infrastructure assemblies (sectioned in full in the chapter) are marked <strong>(infra)</strong>.</p>
@@ -15347,7 +15927,7 @@
           </tr>
           <tr>
           <td><code>MMCA.ADC.Conference.Application.Tests</code></td>
-          <td>198</td>
+          <td>200</td>
           <td>L0-L16</td>
           <td></td>
           </tr>
@@ -15359,7 +15939,7 @@
           </tr>
           <tr>
           <td><code>MMCA.ADC.Conference.Infrastructure.Tests</code></td>
-          <td>11</td>
+          <td>12</td>
           <td>L0-L15</td>
           <td></td>
           </tr>
@@ -15383,7 +15963,7 @@
           </tr>
           <tr>
           <td><code>MMCA.ADC.Conference.UI.Tests</code></td>
-          <td>125</td>
+          <td>129</td>
           <td>L0-L12</td>
           <td></td>
           </tr>
@@ -15395,7 +15975,7 @@
           </tr>
           <tr>
           <td><code>MMCA.ADC.E2E.Tests</code></td>
-          <td>96</td>
+          <td>97</td>
           <td>L0-L8</td>
           <td></td>
           </tr>
@@ -15437,7 +16017,7 @@
           </tr>
           <tr>
           <td><code>MMCA.ADC.Engagement.UI.Tests</code></td>
-          <td>47</td>
+          <td>54</td>
           <td>L0-L11</td>
           <td></td>
           </tr>
@@ -15467,7 +16047,7 @@
           </tr>
           <tr>
           <td><code>MMCA.ADC.Identity.Infrastructure.Tests</code></td>
-          <td>9</td>
+          <td>12</td>
           <td>L0-L16</td>
           <td></td>
           </tr>
@@ -15527,25 +16107,25 @@
           </tr>
           <tr>
           <td><code>MMCA.Common.AI.Tests</code></td>
-          <td>38</td>
+          <td>39</td>
           <td>L0-L10</td>
           <td></td>
           </tr>
           <tr>
           <td><code>MMCA.Common.API.Tests</code></td>
-          <td>208</td>
+          <td>215</td>
           <td>L0-L18</td>
           <td></td>
           </tr>
           <tr>
           <td><code>MMCA.Common.Application.Tests</code></td>
-          <td>420</td>
+          <td>428</td>
           <td>L0-L16</td>
           <td></td>
           </tr>
           <tr>
           <td><code>MMCA.Common.Architecture.Tests</code> <strong>(infra)</strong></td>
-          <td>302</td>
+          <td>317</td>
           <td>L0-L14</td>
           <td></td>
           </tr>
@@ -15557,8 +16137,26 @@
           </tr>
           <tr>
           <td><code>MMCA.Common.Aspire.Tests</code></td>
-          <td>58</td>
+          <td>54</td>
           <td>L0-L13</td>
+          <td></td>
+          </tr>
+          <tr>
+          <td><code>MMCA.Common.Aws.LocalStack.Tests</code></td>
+          <td>15</td>
+          <td>L0-L10</td>
+          <td></td>
+          </tr>
+          <tr>
+          <td><code>MMCA.Common.Aws.Tests</code></td>
+          <td>19</td>
+          <td>L0-L10</td>
+          <td></td>
+          </tr>
+          <tr>
+          <td><code>MMCA.Common.Azure.Tests</code></td>
+          <td>17</td>
+          <td>L0-L10</td>
           <td></td>
           </tr>
           <tr>
@@ -15575,8 +16173,20 @@
           </tr>
           <tr>
           <td><code>MMCA.Common.Gateway.Tests</code></td>
-          <td>8</td>
+          <td>10</td>
           <td>L0-L4</td>
+          <td></td>
+          </tr>
+          <tr>
+          <td><code>MMCA.Common.Gcp.Emulator.Tests</code></td>
+          <td>7</td>
+          <td>L0-L4</td>
+          <td></td>
+          </tr>
+          <tr>
+          <td><code>MMCA.Common.Gcp.Tests</code></td>
+          <td>34</td>
+          <td>L0-L8</td>
           <td></td>
           </tr>
           <tr>
@@ -15587,8 +16197,8 @@
           </tr>
           <tr>
           <td><code>MMCA.Common.Infrastructure.PostgreSQL.Tests</code></td>
-          <td>7</td>
-          <td>L2-L14</td>
+          <td>19</td>
+          <td>L0-L14</td>
           <td></td>
           </tr>
           <tr>
@@ -15605,7 +16215,7 @@
           </tr>
           <tr>
           <td><code>MMCA.Common.Infrastructure.Tests</code></td>
-          <td>566</td>
+          <td>583</td>
           <td>L0-L18</td>
           <td></td>
           </tr>
@@ -15617,19 +16227,19 @@
           </tr>
           <tr>
           <td><code>MMCA.Common.Shared.Tests</code></td>
-          <td>61</td>
+          <td>64</td>
           <td>L0-L7</td>
           <td></td>
           </tr>
           <tr>
           <td><code>MMCA.Common.Testing</code> <strong>(infra)</strong></td>
-          <td>35</td>
+          <td>34</td>
           <td>L0-L14</td>
           <td></td>
           </tr>
           <tr>
           <td><code>MMCA.Common.Testing.Architecture</code> <strong>(infra)</strong></td>
-          <td>77</td>
+          <td>78</td>
           <td>L0-L5</td>
           <td></td>
           </tr>
@@ -15652,14 +16262,32 @@
           <td></td>
           </tr>
           <tr>
+          <td><code>MMCA.Common.Testing.Azure</code></td>
+          <td>1</td>
+          <td>L0-L0</td>
+          <td></td>
+          </tr>
+          <tr>
+          <td><code>MMCA.Common.Testing.Azure.Tests</code></td>
+          <td>4</td>
+          <td>L1-L5</td>
+          <td></td>
+          </tr>
+          <tr>
           <td><code>MMCA.Common.Testing.E2E</code> <strong>(infra)</strong></td>
           <td>33</td>
           <td>L0-L4</td>
           <td></td>
           </tr>
           <tr>
+          <td><code>MMCA.Common.Testing.E2E.Tests</code></td>
+          <td>2</td>
+          <td>L0-L1</td>
+          <td></td>
+          </tr>
+          <tr>
           <td><code>MMCA.Common.Testing.Tests</code></td>
-          <td>39</td>
+          <td>36</td>
           <td>L0-L15</td>
           <td></td>
           </tr>
@@ -15671,7 +16299,7 @@
           </tr>
           <tr>
           <td><code>MMCA.Common.UI.E2E.Tests</code></td>
-          <td>32</td>
+          <td>33</td>
           <td>L0-L13</td>
           <td></td>
           </tr>
@@ -15683,13 +16311,13 @@
           </tr>
           <tr>
           <td><code>MMCA.Common.UI.Tests</code></td>
-          <td>249</td>
+          <td>269</td>
           <td>L0-L9</td>
           <td></td>
           </tr>
           <tr>
           <td><code>MMCA.Common.UI.Web.Tests</code></td>
-          <td>36</td>
+          <td>38</td>
           <td>L0-L15</td>
           <td></td>
           </tr>

@@ -132,7 +132,8 @@
         <li><a href="group-25-adc-host-composition.html">25. ADC Application Host, UI Shell &amp; Cross-Module Composition</a></li>
         <li><a href="group-26-device-capability-layer.html">26. Device Capability Abstraction Layer (Native Contracts, MAUI, Browser &amp; Fallback Adapters)</a></li>
         <li><a href="group-27-common-ai-integration.html">27. Common AI Integration</a></li>
-        <li><a href="group-28-testing-infrastructure.html">28. Testing &amp; Quality Infrastructure</a></li>
+        <li><a href="group-28-common-cloud-provider-adapters.html">28. Common Cloud Provider Adapters (AWS, Azure, GCP)</a></li>
+        <li><a href="group-29-testing-infrastructure.html">29. Testing &amp; Quality Infrastructure</a></li>
         <li><a href="devops-aspire.html">Aspire Orchestration and Containers</a></li>
         <li><a href="devops-cicd.html">CI/CD and Operations</a></li>
         <li><a href="devops-iac.html">Infrastructure as Code, ADC Azure Deployment</a></li>
@@ -1635,6 +1636,61 @@
           <li><strong>Governance events:</strong> none (no new group, no classifier rule).</li>
           </ul>
           </blockquote>
+          <blockquote>
+          <p><strong>Regeneration note (re-verified against current source, 2026-10-29 full drift sweep).</strong> Regenerated
+          at MMCA.Common <code>8658c6cf</code> + MMCA.ADC <code>360d86eab</code> (both clean; prior pass <code>51c321fe</code> /
+          <code>4a273123</code>, sixteen Common releases in between, v1.251.0 to v1.265.1). Net change: <strong>+283</strong> distinct nodes (5,795 to <strong>6,078</strong>),
+          325 added and 42 removed by name, <strong>108</strong> relocated (same type, new <code>file:line</code>),
+          335 body-only, 0 regrouped; <code>classify.ps1</code> reports 0 unmapped (after the G29 group below; the first
+          run refused 68 types) and the per-group counts sum to 6,078. Individually-sectioned types 2,975 to <strong>3,083</strong>, roll-ups 2,812 to <strong>2,995</strong>,
+          <code>###</code> sections 2,917 to <strong>3,024</strong>, cycles 51 to <strong>54</strong>,
+          edges 22,237 by namespace / 943 by unique-name fallback / 119 dropped.</p>
+          <ul>
+          <li><strong>Per-group movement</strong> (26 of 29 groups moved; the rest are unchanged):<ul>
+          <li><strong>G02 Domain Building Blocks</strong> (members 39): added 2, body 2. <code>UsPostalRegion</code> and <code>UsPostalRegions</code>, the US state/territory/military-region table behind the new address rules; <code>AuditableAggregateRootEntity&lt;TIdentifierType&gt;</code> and <code>Money</code> (the round-trip constructor now throws <code>JsonException</code> on a missing currency).</li>
+          <li><strong>G03 Querying</strong> (members 44): body 1. <code>EntityQueryService</code> unwraps <code>GetByIdAsync</code> through <code>Result.TryGetValue</code>.</li>
+          <li><strong>G04 Events + Outbox</strong> (members 39): body 4, lineShift 1. <code>OutboxSettings.DeadLetterRetentionDays</code> and <code>OutboxCleanupService</code> (the window runs from <code>LockedUntil</code>), the terminal unresolvable-type path in <code>OutboxProcessor</code>, the <code>SafeDomainEventHandler</code> rethrow message.</li>
+          <li><strong>G05 CQRS pipeline</strong> (members 61): body 4, lineShift 1. The create, add-child and mutate-payload handler bases and <code>IAuditTrailReader</code>.</li>
+          <li><strong>G06 Validation</strong> (members 26): added 4. <code>UsAddressValidator</code> and its <code>UsCityRules&lt;T&gt;</code>, <code>UsStateRules&lt;T&gt;</code> and <code>UsZipCodeRules&lt;T&gt;</code> rule sets over <code>UsPostalRegions</code>.</li>
+          <li><strong>G07 Persistence &amp; EF Core</strong> (members 182): added 2, removed 1, body 10, lineShift 11. <code>INpgsqlDataSourceConfigurator</code> and <code>NpgsqlDataSources</code> (the hook the RDS and Cloud SQL IAM adapters plug into); <code>IWriteRepository</code> loses <code>UpdateAsync</code>/<code>UpdateRange</code>; the audit-trail and domain-event interceptors; <code>IImageProcessor</code> leaves for ADC Identity (#608).</li>
+          <li><strong>G08 Auth</strong> (members 176): added 2, body 12, lineShift 3. Versioned password hashing with rehash on sign-in (<a href="https://ivanball.github.io/docs/adr/133-versioned-password-hash-work-factor.html" target="_blank" rel="noopener">ADR-133</a>): <code>IPasswordRehashableUser</code>, <code>IPasswordHasher.NeedsRehash</code>, <code>AuthenticationServiceLog</code>; <code>AuthSessionIssuer</code> reuse handling and <code>ClaimsPrincipalExtensions.GetRoleValues</code>.</li>
+          <li><strong>G10 Notifications</strong> (members 59): body 5. <code>SendPushNotificationHandler</code>, <code>LiveChannelJoinAuthorizer</code>, <code>NotificationsController</code> and the two notification <code>DependencyInjection</code> roots (the Notification Hubs registration moved to <code>MMCA.Common.Azure</code>, #596).</li>
+          <li><strong>G12 API hosting</strong> (members 95): added 1, body 13. <code>ConcurrencyConflictMetrics</code>; <code>DbUpdateExceptionHandler</code>, the controller bases and <code>EntityCsvExporter</code>.</li>
+          <li><strong>G13 gRPC contracts</strong> (members 16): body 2. <code>GrpcResilienceDefaults</code> folded into the <code>Grpc</code>-prefixed members of <code>HttpResilienceDefaults</code>; <code>ResultGrpcExtensions</code>.</li>
+          <li><strong>G14 Module system</strong> (members 95): added 11, removed 8, body 9, lineShift 4. The broker transport abstraction (<code>IBrokerTransport</code>, <code>BrokerTransportContext</code>, <code>BrokerTransportPolicies</code>, <code>MessageBusProviders</code> replacing the <code>MessageBusProvider</code> enum, RabbitMQ and PostgreSQL transports, #600), <code>CloudAdapterTripwire</code>, <code>StartupConfigurationSummaryService</code>, <code>ApplicationNamespace</code> (<a href="https://ivanball.github.io/docs/adr/135-application-namespace-keyspace-isolation.html" target="_blank" rel="noopener">ADR-135</a>); the Azure Blob, Notification Hubs and Service Bus types and their settings left for <code>MMCA.Common.Azure</code> (#596), and <code>ImageSharpImageProcessor</code> was retired (#603).</li>
+          <li><strong>G15 Common UI</strong> (members 207): added 5, body 17, lineShift 5. <code>ServiceWorkerEndpointExtensions</code> (the installable web app, <a href="https://ivanball.github.io/docs/adr/136-installable-web-app-service-worker.html" target="_blank" rel="noopener">ADR-136</a>, v1.264.0, #620), <code>ISessionAwareTokenStorage</code>, <code>StaleToastSweeper</code>, <code>ColorModeStamp</code>, <code>DetailLoadState</code>.</li>
+          <li><strong>G16 Aspire</strong> (members 69): added 8, removed 3, body 5. The host-integration tripwire family and the PostgreSQL health check, <code>GatewayRetryAfter</code>/<code>RetryAfterHeader</code>; <code>DataProtectionExtensions</code> and <code>KeyVaultConfigurationExtensions</code> moved into <code>MMCA.Common.Azure</code> as <code>AzureDataProtectionExtensions</code> and <code>AzureKeyVaultConfigurationExtensions</code> (#596).</li>
+          <li><strong>G17 Conference domain</strong> (members 117): body 4. <code>Category</code>, <code>Event</code>, <code>Session</code>, <code>Speaker</code>.</li>
+          <li><strong>G18 Conference application</strong> (members 365): body 20, lineShift 4. The add-child handlers (rooms, asset links, category items, speakers, question answers).</li>
+          <li><strong>G19 Conference infrastructure</strong> (members 29): body 1. <code>ConferenceModuleDbSeeder</code>.</li>
+          <li><strong>G20 Conference API/gRPC</strong> (members 56): body 13. The child-collection controllers (category items, question answers, rooms, session assets, event speakers) and <code>EventsController</code>.</li>
+          <li><strong>G21 Conference UI</strong> (members 168): body 21, lineShift 14. <code>ADCHome</code>, <code>ActivityDetail</code>, <code>EventDetail</code>, the category detail and items panels, <code>CommittedWriteReload</code>.</li>
+          <li><strong>G22 Engagement module</strong> (members 206): body 27, lineShift 8. The check-in surface (<code>CheckInProcessor</code>, <code>CheckInService</code>, <code>CheckInScan</code>, <code>CheckInState</code>, <code>CheckInAttendeeHandler</code>) and <code>BookmarksController</code>.</li>
+          <li><strong>G26 Engagement live layer</strong> (members 88): body 16. The live-poll handlers (create, close, delete, vote, open polls, results).</li>
+          <li><strong>G23 Identity module</strong> (members 119): added 2, body 9, lineShift 1. <code>IImageProcessor</code> and <code>SkiaSharpImageProcessor</code> now live in ADC Identity (image normalization left the framework, v1.259.0, #608); <code>AuthenticationService</code>, <code>User</code>, <code>SetUserAvatarHandler</code>, <code>UserAdministrationService</code>.</li>
+          <li><strong>G24 ADC host composition</strong> (members 17): body 1. <code>MainActivity</code> (the Android head).</li>
+          <li><strong>G27 Device capability layer</strong> (members 106): body 1. <code>DeepLinkDispatcher</code>.</li>
+          <li><strong>G28 Common AI</strong> (members 33): added 1, body 3. <code>ContentMetadata</code>; <code>ChatToolPolicy</code> and the content-policy and PII-redaction guardrails.</li>
+          <li><strong>G29 Common Cloud Provider Adapters</strong> (members 67): added 67, a new group and chapter (see Governance events).</li>
+          <li><strong>G25 Testing &amp; Quality</strong> (members 3562): added 220, removed 30, body 135, lineShift 56, relocate 5. The cloud-vendor isolation fitness base and tests (<code>CloudVendorIsolationTestsBase</code>, <code>CloudVendorRulesTests</code>), the vendor emulator fixtures and fakes (<code>LocalStackFixture</code>, <code>FakeGcsServerFixture</code>, <code>FirestoreEmulatorFixture</code>, <code>FakeFcmMessagingClient</code>, <code>InMemoryGcsStorageClient</code>) and the adapter test projects; the chapter moved from slot 28 to slot 29 (<code>group-29-testing-infrastructure.md</code>: 41 part files renamed, the stale <code>group-28-testing-infrastructure.md</code> removed, every link retargeted).</li>
+          </ul>
+          </li>
+          <li><strong>Handled mechanically (no re-authoring):</strong> citation remaps 2,401 over 216 part file(s), 248 flagged for an author (5 resolved by the baseline-text residual pass); repack moves 333, 13 flagged (five sections of types that moved chapter, eight orphan headings of removed types, deleted or rewritten by their authors).<ul>
+          <li>The 5 relocated types are all in G25; the remap found no section blockquote to rewrite for them, so <code>_citation-remap.json</code> reports 0 relocations.</li>
+          </ul>
+          </li>
+          <li><strong>Authoring pass:</strong> 160 units re-authored (13 overview, 1 rollup, 140 sections on opus, 5 devops, CONCEPT-MAPS) across 27 groups, all against real source
+          with <code>path:line</code> citations. Adversarial spot-checks: 6 of 6 CONFIRMED (g02, g06, g07, g08, g12, g14 overviews). A post-assembly fix pass cleared 34 verify failures the authors left (links to the sections that moved to the cloud adapter and Identity chapters, links to the removed <code>MessageBusProvider</code>, <code>GrpcResilienceDefaults</code> and <code>ServiceBusEmulatorFixtureBase</code> headings, cites past the end of the shrunken <code>DependencyInjection.Notifications.cs</code> and <code>MMCA.Common.Aspire.csproj</code>, and a test-fixture file name <code>Probe.razor</code> that is only ever written to a temp directory), plus three stale cites authors left at the tool budget; the <code>GrpcResilienceDefaults</code> sentence in the gRPC overview was also wrong, not just unlinked, and now states the gRPC-specific 8 s attempt and 20 s total timeouts<span class="cite"><span> (<code>HttpResilienceDefaults.cs:73</code>, <code>:76</code>)</span></span>.</li>
+          <li><strong>Outside the type pipeline:</strong> 5 of 5 <code>devops-*</code> chapters refreshed (devops-aspire, devops-cicd, devops-iac, devops-runbooks, devops-testing),
+          each because a file it cites has newer commits than the chapter: ADC <code>deploy.yml</code> (#289, #290), <code>e2e.yml</code> (#295), <code>infra/main.bicep</code> (#297, #303), <code>Directory.Packages.props</code> (#300, #301); Common <code>ci.yml</code> (#615, #616), <code>release.yml</code> (#603, #609), <code>load-tests.yml</code> (#603, #609), <code>samples/deployment/main.bicep</code> (#596) and <code>MMCA.Common.LayerEnforcement.targets</code> (#600, #630). <code>devops-testing</code> also reconciled 19 per-project test counts to the inventory.<ul>
+          <li>Coverage gaps (operational files no chapter mentions): the three <code>.bicep</code> files under <code>MMCA.Common/Tests/Architecture/MMCA.Common.Architecture.Tests/Fixtures/</code> are test fixtures, not deployed templates, and stay logged as an exception as in the 2026-10-08 pass.</li>
+          </ul>
+          </li>
+          <li><strong>CONCEPT-MAPS.md:</strong> 10 mechanical mismatches of 306 corrected (the group count 28 to 29 in the preamble and section 3, the <code>G28</code> label that now names the cloud adapters, the package count 22 to 26 in section 1, and the superseded ADR-102 cited as live in sections 9 and 13); section 1 now names the three adapter packages and the section 3 group map carries the new chapter as its own node.</li>
+          <li><strong>Verification:</strong> <code>verify.ps1</code>: <strong>0 missing</strong>, rubric <strong>34/34</strong>, 0 rollup, 0 citation (9,334 full-path cites), 0 anchor (27,472 links), 0 short-cite (16,850 cites); exit 0.</li>
+          <li><strong>Governance events:</strong> one new group, approved by the maintainer 2026-10-29. <strong>G29 Common Cloud Provider Adapters (AWS, Azure, GCP)</strong> (<code>group-28-common-cloud-provider-adapters.md</code>, 67 types): the <code>MMCA.Common.Aws</code>, <code>MMCA.Common.Azure</code> and <code>MMCA.Common.Gcp</code> adapter packages (#596, #600, <a href="https://ivanball.github.io/docs/adr/134-cloud-neutral-core-vendor-adapters.html" target="_blank" rel="noopener">ADR-134</a>), mapped by three namespace-prefix rules in <code>classify.ps1</code>. No existing group fit: the adapters span messaging, push, storage, secrets, database IAM auth, data protection and telemetry, and nothing else covers storage, secrets or IAM auth, so spreading them across functional chapters would scatter one package over six. A second classifier change routes the <code>MMCA.Common.Testing.Azure</code> assembly (<code>ServiceBusEmulatorFixtureBase</code>) to G25 as a rolled-up test assembly, like <code>MMCA.Common.Testing.Aspire</code>. The new group sits above Testing, which renumbers to chapter 29.</li>
+          </ul>
+          </blockquote>
           <hr>
           <h2 id="2-exceptions-log-every-deliberate-omission-with-reason">2. Exceptions log (every deliberate omission, with reason)</h2>
           <h3 id="21-generated--scaffolded-code-not-sectioned-134-files">2.1 Generated / scaffolded code, not sectioned (134 files)</h3>
@@ -1646,7 +1702,7 @@
           in <a href="00-inventory.html#generated--excluded-artifacts-no-type-sections-written"><code>00-inventory.md</code></a>.</p>
           <h3 id="22-per-fact-test-classes-rolled-up-by-project-2281-types">2.2 Per-<code>[Fact]</code> test classes, rolled up by project (2,281 types)</h3>
           <p>Per the guide&#39;s TESTS note, individual test classes are <strong>not</strong> given per-type sections. The
-          <a href="group-28-testing-infrastructure.html">Testing chapter (group-28)</a> instead:</p>
+          <a href="group-29-testing-infrastructure.html">Testing chapter (group-28)</a> instead:</p>
           <ul>
           <li>sections the <strong>reusable</strong> test infrastructure in full (the <strong>400</strong> types in <code>MMCA.Common.Testing</code>,
           <code>.Testing.E2E</code>, <code>.Testing.UI</code>, the shared <strong><code>.Testing.Architecture</code></strong> rule library + bases, now
@@ -1692,7 +1748,7 @@
           two different groups. Splitting it across the two service chapters is correct, since each chapter
           teaches its own class. The real cycles were re-verified as whole
           (including the two new in the v1.128.0 pass, both test-only and both wholly in
-          <a href="group-28-testing-infrastructure.html">group-28</a>: <code>MidSaveContextCreatingDbContext</code> /
+          <a href="group-29-testing-infrastructure.html">group-28</a>: <code>MidSaveContextCreatingDbContext</code> /
           <code>ReentrantSaveInterceptor</code> and <code>FailingSaveInterceptor</code> / <code>OutboxRoutingTestDbContext</code>, all four
           assigned <code>G25</code> in <code>out/00-assigned.csv</code>):
           the <code>ApplicationDbContext ↔ AuditSaveChangesInterceptor ↔ DomainEventSaveChangesInterceptor ↔ DataSourceModelCacheKeyFactory ↔ OutboxFinalizer ↔ DeferredDispatch</code> cycle (now 6 members, the
@@ -1701,7 +1757,7 @@
           Event/Session/Speaker/Category aggregate nav-cycles are wholly in
           <a href="group-17-conference-domain.html">group-17</a>; the <code>Address</code>/<code>Currency</code> value-object + converter pairs in
           <a href="group-02-domain-building-blocks.html">group-02</a> (plus polyglot-fitness and the new localization/markup
-          test cycles in <a href="group-28-testing-infrastructure.html">group-28</a>). Full list:
+          test cycles in <a href="group-29-testing-infrastructure.html">group-28</a>). Full list:
           <a href="00-dependency-manifest.html#cycles">manifest</a>.</li>
           <li><strong>Cross-group forward references are allowed and cross-linked.</strong> Because group order is functional
           (not a strict global topological sort), some sections reference a first-party type whose home group

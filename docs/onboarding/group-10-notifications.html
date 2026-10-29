@@ -132,7 +132,8 @@
         <li><a href="group-25-adc-host-composition.html">25. ADC Application Host, UI Shell &amp; Cross-Module Composition</a></li>
         <li><a href="group-26-device-capability-layer.html">26. Device Capability Abstraction Layer (Native Contracts, MAUI, Browser &amp; Fallback Adapters)</a></li>
         <li><a href="group-27-common-ai-integration.html">27. Common AI Integration</a></li>
-        <li><a href="group-28-testing-infrastructure.html">28. Testing &amp; Quality Infrastructure</a></li>
+        <li><a href="group-28-common-cloud-provider-adapters.html">28. Common Cloud Provider Adapters (AWS, Azure, GCP)</a></li>
+        <li><a href="group-29-testing-infrastructure.html">29. Testing &amp; Quality Infrastructure</a></li>
         <li><a href="devops-aspire.html">Aspire Orchestration and Containers</a></li>
         <li><a href="devops-cicd.html">CI/CD and Operations</a></li>
         <li><a href="devops-iac.html">Infrastructure as Code, ADC Azure Deployment</a></li>
@@ -162,9 +163,9 @@
           forwarder) is chosen at the composition root, and a default is always registered so nothing has to
           be configured for DI to resolve. <a href="#nullpushnotificationsender"><code>NullPushNotificationSender</code></a> and
           <a href="#nulllivechannelpublisher"><code>NullLiveChannelPublisher</code></a> are no-ops<span class="cite"><span>
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:331-332</code>)</span></span>,
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:346-347</code>)</span></span>,
           <code>IEmailSender</code> defaults to the real <a href="#smtpemailsender"><code>SmtpEmailSender</code></a><span class="cite"><span>
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:330</code>)</span></span>, and
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:345</code>)</span></span>, and
           <code>INotificationRecipientProvider</code> gets its default in the Application layer<span class="cite"><span>
           (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Notifications/DependencyInjection.cs:75</code>)</span></span>.</p>
           <p>There are really <strong>four delivery channels</strong> here, and it is worth separating them up front because
@@ -173,7 +174,7 @@
           <li><strong>The durable in-app inbox.</strong> Every send writes one <a href="#usernotification"><code>UserNotification</code></a> row
           per recipient, so a user who was offline at send time still sees the message when they next open
           their inbox<span class="cite"><span>
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Notifications/PushNotifications/UseCases/Send/SendPushNotificationHandler.cs:105-113</code>)</span></span>.
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Notifications/PushNotifications/UseCases/Send/SendPushNotificationHandler.cs:104-112</code>)</span></span>.
           This is the persistent half of the two-channel model (<a href="https://ivanball.github.io/docs/adr/024-push-notifications.html" target="_blank" rel="noopener">ADR-024</a>).</li>
           <li><strong>The transient SignalR push.</strong> <a href="#ipushnotificationsender"><code>IPushNotificationSender</code></a> fans the
           same message out to any connections the recipient has open right now via the
@@ -267,7 +268,7 @@
           <code>NotificationPermissions.Manage</code> to the Organizer role and to no other<span class="cite"><span>
           (<code>MMCA.ADC/Source/Modules/Notification/MMCA.ADC.Notification.Shared/Authorization/NotificationPermissionGrants.cs:34-39</code>)</span></span>,
           and the module registration applies it as <code>AddPermissions(NotificationPermissionGrants.Apply)</code><span class="cite"><span>
-          (<code>MMCA.ADC/Source/Modules/Notification/MMCA.ADC.Notification.API/DependencyInjection.cs:44</code>)</span></span>. The map
+          (<code>MMCA.ADC/Source/Modules/Notification/MMCA.ADC.Notification.API/DependencyInjection.cs:46</code>)</span></span>. The map
           is a named type rather than a lambda inside that registration because <strong>two</strong> hosts apply it: the
           Notification host gates the framework&#39;s endpoints with it, and the token-minting Identity host
           applies the same map so the issued access token carries the <code>permission</code> claim, which is what the
@@ -296,13 +297,13 @@
           delivered, and every retry of that key would then report success forever<span class="cite"><span>
           (<code>SendPushNotificationCommand.cs:11-19</code>)</span></span>. Inside that transaction the handler runs a deliberate
           ordering<span class="cite"><span>
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Notifications/PushNotifications/UseCases/Send/SendPushNotificationHandler.cs:52-159</code>)</span></span>:</p>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Notifications/PushNotifications/UseCases/Send/SendPushNotificationHandler.cs:52-158</code>)</span></span>:</p>
           <ul>
           <li><strong>Dedup lookup first</strong> (lines 39-50). When a key is present the handler requeries for an existing
           <a href="#pushnotification"><code>PushNotification</code></a> with that key and, on a hit, returns it mapped to a DTO
           without sending anything again. The lookup goes through
           <code>unitOfWork.GetReadRepository&lt;...&gt;()</code> rather than an injected repository, so it reads the same
-          data source the write below targets<span class="cite"><span> (<code>SendPushNotificationHandler.cs:188-197</code>)</span></span>.</li>
+          data source the write below targets<span class="cite"><span> (<code>SendPushNotificationHandler.cs:187-196</code>)</span></span>.</li>
           <li><strong>Resolve recipients</strong> through <a href="#inotificationrecipientprovider"><code>INotificationRecipientProvider</code></a>,
           failing early with a <code>PushNotification.NoRecipients</code> validation error when the set is empty
           (lines 52-62).</li>
@@ -356,7 +357,7 @@
           compiled once through a source-generated <code>[GeneratedRegex]</code> with a one-second match timeout<span class="cite"><span>
           (<code>NotificationScopeKey.cs:64</code>)</span></span>. That constant is also the default of
           <a href="group-14-module-system-composition.html#pushnotificationsettings"><code>PushNotificationSettings</code></a><code>.ChannelKeyPattern</code><span class="cite"><span>
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Notifications/Push/PushNotificationSettings.cs:33</code>)</span></span>, which
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Notifications/Push/PushNotificationSettings.cs:37</code>)</span></span>, which
           is what <a href="#notificationhub"><code>NotificationHub</code></a> enforces before a client may join a group. Producer and
           guard therefore cannot drift apart: keeping the format and its pattern in one type is the whole point
           of the class ([Rubric §15, Best Practices &amp; Code Quality]).</p>
@@ -444,7 +445,7 @@
           refused connections cannot lock the account out once aborted ones drain (the cap is
           <code>PushNotificationSettings.MaxConnectionsPerUser</code>, 20 by default:
           <span class="cite"><span><code>NotificationHub.cs:49-58,63-81,99-118</code></span></span>,
-          <span class="cite"><span><code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Notifications/Push/PushNotificationSettings.cs:46</code></span></span>).
+          <span class="cite"><span><code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Notifications/Push/PushNotificationSettings.cs:50</code></span></span>).
           It <strong>manages channel (SignalR group) membership</strong> through <code>JoinChannel</code>/<code>LeaveChannel</code>, validating
           each channel key against the configured pattern with a cached, one-second-timeout <code>Regex</code> so a bad
           key throws <code>HubException</code> rather than opening an injection or ReDoS hole<span class="cite"><span>
@@ -457,7 +458,7 @@
           caller may read what is published to it, and the keys are consecutive integers, so enumerating them
           costs nothing. A host that publishes anything channel-scoped which is not public to every signed-in
           user has to register one. ADC does, per connection in the Notification host<span class="cite"><span>
-          (<code>MMCA.ADC/Source/Services/MMCA.ADC.Notification.Service/Program.cs:239</code>)</span></span>, and the implementation is
+          (<code>MMCA.ADC/Source/Services/MMCA.ADC.Notification.Service/Program.cs:250</code>)</span></span>, and the implementation is
           <a href="#livechanneljoinauthorizer"><code>LiveChannelJoinAuthorizer</code></a>: it refuses an unauthenticated principal,
           admits the privileged read audience without a lookup (<code>ConferenceReadAudience.PrivilegedRoles</code>, the
           same Organizer / ContentEditor pair that reads the unfiltered catalog through REST), and otherwise
@@ -483,13 +484,13 @@
           (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Notifications/Live/SignalRLiveChannelPublisher.cs:14-18</code>)</span></span>.
           Both are wired by <code>AddPushNotifications(configuration)</code>, which also attaches a Redis backplane when
           a <code>redis</code> connection string is present, so the fan-out crosses replicas<span class="cite"><span>
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.Notifications.cs:41-73</code>)</span></span>.</p>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.Notifications.cs:38-70</code>)</span></span>.</p>
           <p>The live channel is where the extracted-service topology shows through
           ([Rubric §7, Microservices Readiness]). In a monolith the default
           <a href="#nulllivechannelpublisher"><code>NullLiveChannelPublisher</code></a> is registered, and a host that maps the hub
           swaps in the real <a href="#signalrlivechannelpublisher"><code>SignalRLiveChannelPublisher</code></a><span class="cite"><span>
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:332</code>,
-          <code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.Notifications.cs:66</code>)</span></span>. In extracted ADC, Engagement is a <em>different</em> process from the
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:347</code>,
+          <code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.Notifications.cs:63</code>)</span></span>. In extracted ADC, Engagement is a <em>different</em> process from the
           one that owns the WebSocket, so Engagement&#39;s live layer depends on
           <a href="#ilivechannelpublisher"><code>ILiveChannelPublisher</code></a> as usual but the composition root <code>Replace</code>s the
           registration with <a href="#livechannelpublishergrpcadapter"><code>LiveChannelPublisherGrpcAdapter</code></a><span class="cite"><span>
@@ -510,19 +511,19 @@
           named <code>grpc</code> (8081 in the container, 5996 locally) is declared in the <code>Kestrel:Endpoints</code> config
           section and resolved by peers as <code>_grpc.notification</code> through the
           <code>services__notification__grpc__0</code> entry<span class="cite"><span>
-          (<code>MMCA.ADC/Source/Services/MMCA.ADC.Notification.Service/Program.cs:57-72</code>)</span></span>. The host maps the hub
-          itself at <code>/hubs/notifications</code> via <code>MapNotificationHub()</code> (<span class="cite"><span><code>Program.cs:280-284</code></span></span>, the path coming
+          (<code>MMCA.ADC/Source/Services/MMCA.ADC.Notification.Service/Program.cs:58-73</code>)</span></span>. The host maps the hub
+          itself at <code>/hubs/notifications</code> via <code>MapNotificationHub()</code> (<span class="cite"><span><code>Program.cs:291-295</code></span></span>, the path coming
           from <code>PushNotificationSettings.HubPath</code>,
-          <span class="cite"><span><code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Notifications/Push/PushNotificationSettings.cs:21</code></span></span>) and both
-          gRPC services on that dedicated endpoint<span class="cite"><span> (<code>Program.cs:293,301</code>)</span></span>. The two gRPC surfaces are <strong>not</strong>
+          <span class="cite"><span><code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Notifications/Push/PushNotificationSettings.cs:25</code></span></span>) and both
+          gRPC services on that dedicated endpoint<span class="cite"><span> (<code>Program.cs:304,312</code>)</span></span>. The two gRPC surfaces are <strong>not</strong>
           protected alike, and the difference is deliberate: the live-channel ingress is mapped
-          <code>.AllowAnonymous()</code><span class="cite"><span> (<code>Program.cs:293</code>)</span></span> because it is reachable only on the internal service network
+          <code>.AllowAnonymous()</code><span class="cite"><span> (<code>Program.cs:304</code>)</span></span> because it is reachable only on the internal service network
           and its caller (Engagement&#39;s
           <a href="group-22-engagement-module.html#livechannelpublishprocessor"><code>LiveChannelPublishProcessor</code></a> background
           drain) has no HttpContext and forwards no bearer<span class="cite"><span>
           (<code>MMCA.ADC/Source/Services/MMCA.ADC.Notification.Service/Grpc/LiveChannelGrpcService.cs:16-23</code>)</span></span>,
           while the export rpc is mapped with <code>.RequireAuthorization()</code> because its response carries personal
-          data keyed by a raw user id<span class="cite"><span> (<code>Program.cs:297-301</code>)</span></span>.</p>
+          data keyed by a raw user id<span class="cite"><span> (<code>Program.cs:308-312</code>)</span></span>.</p>
           <h2 id="the-module-host-native-device-registration-and-the-privacy-export">The module host, native-device registration, and the privacy export</h2>
           <p>On the ADC side the whole capability is packaged by <a href="#notificationmodule"><code>NotificationModule</code></a><span class="cite"><span>
           (<code>MMCA.ADC/Source/Modules/Notification/MMCA.ADC.Notification.API/NotificationModule.cs:15</code>)</span></span>, an
@@ -532,13 +533,13 @@
           application handlers, the EF configurations, the SignalR push registration, the native-push channel,
           the one role-to-permission grant (<a href="#notificationpermissiongrants"><code>NotificationPermissionGrants</code></a>),
           and the Common controllers<span class="cite"><span>
-          (<code>MMCA.ADC/Source/Modules/Notification/MMCA.ADC.Notification.API/DependencyInjection.cs:30-50</code>)</span></span>. It
+          (<code>MMCA.ADC/Source/Modules/Notification/MMCA.ADC.Notification.API/DependencyInjection.cs:31-52</code>)</span></span>. It
           is a deliberately thin module (API + Application only, no Infrastructure project of its own). The
           framework&#39;s own registration<span class="cite"><span>
           (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Notifications/DependencyInjection.cs:36-78</code>)</span></span> uses
           <code>TryAddScoped</code> throughout so a consuming app can override any handler or the recipient provider, and
           the API-layer registration<span class="cite"><span>
-          (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Notifications/DependencyInjection.cs:19-23</code>)</span></span> adds
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Notifications/DependencyInjection.cs:24-28</code>)</span></span> adds
           the Common controllers as an MVC application part, because they ship in a NuGet assembly that
           ASP.NET does not scan by default ([Rubric §15, Best Practices &amp; Code Quality]).</p>
           <p>Native-device management is the third channel&#39;s control plane.
@@ -714,7 +715,7 @@
           <li><strong>Why it&#39;s built this way</strong>: keeping the interface in Application (and the SMTP dependency in
           Infrastructure) is what lets a test host register a no-op sender and production register
           <a href="#smtpemailsender">SmtpEmailSender</a>. Registration is <code>TryAddTransient&lt;IEmailSender, SmtpEmailSender&gt;()</code><span class="cite"><span>
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:330</code>)</span></span>, so the <code>TryAdd</code> lets
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:345</code>)</span></span>, so the <code>TryAdd</code> lets
           a host pre-register its own sender and win.</li>
           <li><strong>Where it&#39;s used</strong>: the framework&#39;s own consumer is the password-reset flow:
           <a href="group-14-module-system-composition.html#forgotpasswordhandlerbasetuser-tcommand">ForgotPasswordHandlerBase&lt;TUser, TCommand&gt;</a>
@@ -770,7 +771,7 @@
           of the business of knowing each live event&#39;s schema; the presentation and UI layers agree on the
           contract. Non-delivery to absent clients is the intended semantics, not a gap. The default registration
           is the inert <a href="#nulllivechannelpublisher">NullLiveChannelPublisher</a><span class="cite"><span>
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:332</code>)</span></span>, replaced by
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:347</code>)</span></span>, replaced by
           <a href="#signalrlivechannelpublisher">SignalRLiveChannelPublisher</a> when a host opts into the SignalR wiring
           (same file, line 632).</li>
           <li><strong>Where it&#39;s used</strong>: ADC&#39;s conference-day live layer does <strong>not</strong> inject it into command handlers.
@@ -857,7 +858,7 @@
           <li><strong>Why it&#39;s built this way</strong>: three targeting methods rather than one &quot;audience&quot; parameter keeps each
           call site&#39;s intent explicit and lets the SignalR implementation map user-targeting to hub groups
           directly. The default registration is the no-op<span class="cite"><span>
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:331</code>)</span></span> so a host with no
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:346</code>)</span></span> so a host with no
           real-time transport still resolves the port; the SignalR wiring replaces it with <code>AddTransient</code> (same
           file, line 631), a deliberate override rather than a <code>TryAdd</code>.</li>
           <li><strong>Where it&#39;s used</strong>: <a href="#sendpushnotificationhandler">SendPushNotificationHandler</a> fans a message out
@@ -1183,10 +1184,10 @@
           each row would have kept. The repository contract spells out the cost of the bypass: no domain events,
           global query filters still apply to the predicate, and the update runs on the ambient transaction when
           one is active<span class="cite"><span>
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Interfaces/Infrastructure/Persistence/IRepository.cs:460-483</code>)</span></span>.
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Interfaces/Infrastructure/Persistence/IRepository.cs:448-471</code>)</span></span>.
           Audit fields are not lost either: because <code>ExecuteUpdate</code> skips the save pipeline&#39;s audit interceptor,
           <code>EFRepository</code> stamps <code>LastModifiedOn</code> and <code>LastModifiedBy</code> itself unless the caller set them<span class="cite"><span>
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Repositories/EFRepository.cs:141-155</code>)</span></span>.
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Repositories/EFRepository.cs:112-126</code>)</span></span>.
           <code>[Rubric §12, Performance &amp; Scalability]</code>: one statement regardless of inbox size, with no
           materialization. <code>[Rubric §4, DDD]</code> assesses whether state changes go through the aggregate rather than
           around it: here they go around it on purpose, and the invariant <code>MarkAsRead</code> protects (an already-read
@@ -1405,7 +1406,7 @@
           strands. This type collapses both halves onto one static class<span class="cite"><span> (<code>NotificationScopeKey.cs:11-19</code>)</span></span>.
           The <code>Pattern</code> constant<span class="cite"><span> (<code>NotificationScopeKey.cs:32</code>)</span></span> is literally the default value of
           <code>PushNotificationSettings.ChannelKeyPattern</code><span class="cite"><span>
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Notifications/Push/PushNotificationSettings.cs:33</code>)</span></span>, the
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Notifications/Push/PushNotificationSettings.cs:37</code>)</span></span>, the
           regex <a href="#notificationhub">NotificationHub</a> enforces before a client may join a group<span class="cite"><span>
           (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Notifications/NotificationHub.cs:177</code>)</span></span>, so every key the
           factories produce is a key the hub accepts by construction. <code>[Rubric §15, Best Practices &amp; Code Quality]</code> assesses whether shared literals are centralized: the alternative here was a hand-written
@@ -1418,7 +1419,7 @@
           (line 26), <code>Pattern = &quot;^(event|session):[0-9]+$&quot;</code> (line 32), and <code>MetadataKey = &quot;scopeKey&quot;</code> (line 39),
           the key under which a live (SignalR) notification&#39;s metadata carries its scope key so a client can
           leave a notification for another scope out of its toast and badge; the sender writes it<span class="cite"><span>
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Notifications/PushNotifications/UseCases/Send/SendPushNotificationHandler.cs:181</code>)</span></span>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Notifications/PushNotifications/UseCases/Send/SendPushNotificationHandler.cs:180</code>)</span></span>
           and an unscoped send carries no metadata at all. Then two factories,
           <code>ForEvent(long)</code> (lines 44-45) and <code>ForSession(long)</code> (lines 50-51), both built with
           <code>string.Create(CultureInfo.InvariantCulture, $&quot;...&quot;)</code>, which formats into a stack buffer without an
@@ -1763,7 +1764,7 @@
           descriptor.</li>
           <li><strong>Where it&#39;s used</strong>: called first thing by the API-layer
           <a href="#dependencyinjection-1">DependencyInjection</a><code>.AddNotificationModule</code><span class="cite"><span>
-          (<code>MMCA.ADC/Source/Modules/Notification/MMCA.ADC.Notification.API/DependencyInjection.cs:32</code>)</span></span>, which is
+          (<code>MMCA.ADC/Source/Modules/Notification/MMCA.ADC.Notification.API/DependencyInjection.cs:33</code>)</span></span>, which is
           itself driven by <a href="#notificationmodule">NotificationModule</a><code>.Register</code>.</li>
           </ul>
           <h3 id="livechannelgrpcservice">LiveChannelGrpcService</h3>
@@ -1816,8 +1817,8 @@
           </li>
           <li><strong>Why it&#39;s built this way (security posture)</strong>: there is deliberately <strong>no <code>[Authorize]</code></strong>, and the
           endpoint is mapped with an explicit <code>.AllowAnonymous()</code><span class="cite"><span>
-          (<code>MMCA.ADC/Source/Services/MMCA.ADC.Notification.Service/Program.cs:293</code>)</span></span>. The comment above it<span class="cite"><span>
-          (<code>Program.cs:289-292</code>)</span></span> says why the opt-out is stated rather than implied: the framework&#39;s fallback
+          (<code>MMCA.ADC/Source/Services/MMCA.ADC.Notification.Service/Program.cs:304</code>)</span></span>. The comment above it<span class="cite"><span>
+          (<code>Program.cs:300-303</code>)</span></span> says why the opt-out is stated rather than implied: the framework&#39;s fallback
           authorization policy gates any endpoint that declares nothing (SEC-Common-16), which would have silenced
           the whole live layer. <code>[Rubric §11, Security]</code>:
           the doc comment<span class="cite"><span> (<code>LiveChannelGrpcService.cs:16-23</code>)</span></span> gives two reasons. First, this surface is reachable
@@ -1828,10 +1829,10 @@
           background drain, which runs with no <code>HttpContext</code> and therefore forwards no bearer token.
           Transport-wise it rides the <a href="https://ivanball.github.io/docs/adr/012-grpc-host-transport.html" target="_blank" rel="noopener">ADR-012</a>
           mixed-endpoint profile: Notification keeps its default endpoint <code>Http1AndHttp2</code> for SignalR WebSockets<span class="cite"><span>
-          (<code>Program.cs:72</code>)</span></span> and serves this h2c gRPC ingress on a dedicated <code>Http2</code>-only endpoint named <code>grpc</code>
+          (<code>Program.cs:73</code>)</span></span> and serves this h2c gRPC ingress on a dedicated <code>Http2</code>-only endpoint named <code>grpc</code>
           (port 8081 in the container, 5996 locally), declared in the <code>Kestrel:Endpoints</code> config section rather
-          than in code; the full reasoning is spelled out at <span class="cite"><span><code>Program.cs:57-71</code></span></span>.</li>
-          <li><strong>Where it&#39;s used</strong>: mapped by the Notification service&#39;s <code>Program.cs</code><span class="cite"><span> (<code>Program.cs:293</code>)</span></span>; invoked by
+          than in code; the full reasoning is spelled out at <span class="cite"><span><code>Program.cs:58-72</code></span></span>.</li>
+          <li><strong>Where it&#39;s used</strong>: mapped by the Notification service&#39;s <code>Program.cs</code><span class="cite"><span> (<code>Program.cs:304</code>)</span></span>; invoked by
           <a href="#livechannelpublishergrpcadapter">LiveChannelPublisherGrpcAdapter</a> running inside Engagement.</li>
           </ul>
           <hr>
@@ -1894,7 +1895,7 @@
           <a href="#nulllivechannelpublisher">NullLiveChannelPublisher</a> default<span class="cite"><span>
           (<code>MMCA.ADC/Source/Services/MMCA.ADC.Notification.Contracts/DependencyInjection.cs:48</code>)</span></span>. The one caller
           today is the Engagement service&#39;s composition root<span class="cite"><span>
-          (<code>MMCA.ADC/Source/Services/MMCA.ADC.Engagement.Service/Program.cs:291</code>)</span></span>.</li>
+          (<code>MMCA.ADC/Source/Services/MMCA.ADC.Engagement.Service/Program.cs:303</code>)</span></span>.</li>
           </ul>
           <hr>
           <h3 id="nulllivechannelpublisher">NullLiveChannelPublisher</h3>
@@ -1927,9 +1928,9 @@
           best-effort by design).</li>
           <li><strong>Where it&#39;s used</strong>: registered as the framework default with
           <code>services.TryAddTransient&lt;ILiveChannelPublisher, NullLiveChannelPublisher&gt;()</code><span class="cite"><span>
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:332</code>)</span></span> so the port is always
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:347</code>)</span></span> so the port is always
           resolvable; <code>AddPushNotifications</code> adds the SignalR implementation over it<span class="cite"><span>
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.Notifications.cs:66</code>)</span></span>, and in ADC Engagement&#39;s composition root <code>services.Replace(...)</code>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.Notifications.cs:63</code>)</span></span>, and in ADC Engagement&#39;s composition root <code>services.Replace(...)</code>
           overwrites it with the <a href="#livechannelpublishergrpcadapter">LiveChannelPublisherGrpcAdapter</a><span class="cite"><span>
           (<code>MMCA.ADC/Source/Services/MMCA.ADC.Notification.Contracts/DependencyInjection.cs:48</code>)</span></span>.</li>
           </ul>
@@ -1959,9 +1960,9 @@
           <code>AddPushNotifications()</code>. The send handler always calls the port; whether anything reaches a browser is
           a composition-root decision.</li>
           <li><strong>Where it&#39;s used</strong>: registered as the default <code>IPushNotificationSender</code> by <code>AddInfrastructure</code><span class="cite"><span>
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:331</code>)</span></span>; superseded by the
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:346</code>)</span></span>; superseded by the
           SignalR sender in any host that calls <code>AddPushNotifications</code><span class="cite"><span>
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.Notifications.cs:65</code>)</span></span>.</li>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.Notifications.cs:62</code>)</span></span>.</li>
           </ul>
           <hr>
           <h3 id="sendpushnotificationcommand">SendPushNotificationCommand</h3>
@@ -2090,7 +2091,7 @@
           would be a breaking public-API change. Unlike push, email has <strong>no</strong> null-object default:
           <code>SmtpEmailSender</code> itself is what <code>AddInfrastructure</code> registers as <code>IEmailSender</code>
           (<code>services.TryAddTransient&lt;IEmailSender, SmtpEmailSender&gt;()</code>,
-          <span class="cite"><span><code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:330</code></span></span>), so a host that never
+          <span class="cite"><span><code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:345</code></span></span>), so a host that never
           configures SMTP settings still resolves a real sender that will fail at send time rather than silently
           no-op.</li>
           <li><strong>Where it&#39;s used</strong>: injected as <code>IEmailSender</code> by callers (the port, not this class); the transient
@@ -2139,7 +2140,7 @@
           <a href="group-07-persistence-ef-core.html#ichanneljoinauthorizer">IChannelJoinAuthorizer</a> closes when a host
           registers one. <code>OnConnectedAsync</code>/<code>OnDisconnectedAsync</code><span class="cite"><span> (<code>NotificationHub.cs:59-93</code>)</span></span> additionally cap
           live connections per user identifier <strong>on this replica</strong> at <code>PushNotificationSettings.MaxConnectionsPerUser</code>
-          (default 20, <span class="cite"><span><code>PushNotificationSettings.cs:46</code></span></span>), the same per-process bound the in-memory rate limiters
+          (default 20, <span class="cite"><span><code>PushNotificationSettings.cs:50</code></span></span>), the same per-process bound the in-memory rate limiters
           use: it constrains what one token can do to one process, the resource actually being exhausted.</li>
           <li><code>[Rubric §12, Performance &amp; Scalability]</code> assesses whether hot paths avoid repeated work. The
           compiled <code>Regex</code> is cached in a static <code>ConcurrentDictionary</code> keyed by the pattern string
@@ -2211,7 +2212,7 @@
           The thin hub plus a configured channel-key pattern is the framework default; the pattern lives in
           <a href="group-14-module-system-composition.html#pushnotificationsettings">PushNotificationSettings</a> (it defaults
           to <a href="#notificationscopekey">NotificationScopeKey</a><code>.Pattern</code>,
-          <span class="cite"><span><code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Notifications/Push/PushNotificationSettings.cs:33</code></span></span>) so a host
+          <span class="cite"><span><code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Notifications/Push/PushNotificationSettings.cs:37</code></span></span>) so a host
           tunes which channels exist without touching code. The connection cap and the optional join authorizer
           are additive: neither changes the wire contract, and both are <code>null</code>/zero-safe so an existing host that
           configures neither keeps behaving exactly as before.</li>
@@ -2219,15 +2220,15 @@
           which reads the path from settings and only maps when push is enabled<span class="cite"><span>
           (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/SignalRExtensions.cs:22-31</code>)</span></span>; the default
           path is <code>/hubs/notifications</code><span class="cite"><span>
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Notifications/Push/PushNotificationSettings.cs:21</code>)</span></span>, and in
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Notifications/Push/PushNotificationSettings.cs:25</code>)</span></span>, and in
           ADC the Notification service calls it at
-          <span class="cite"><span><code>MMCA.ADC/Source/Services/MMCA.ADC.Notification.Service/Program.cs:284</code></span></span>. It is driven by
+          <span class="cite"><span><code>MMCA.ADC/Source/Services/MMCA.ADC.Notification.Service/Program.cs:295</code></span></span>. It is driven by
           <a href="#signalrpushnotificationsender">SignalRPushNotificationSender</a> (per-user notification delivery) and
           <a href="#signalrlivechannelpublisher">SignalRLiveChannelPublisher</a> (ephemeral channel events), both via
           <code>IHubContext&lt;NotificationHub&gt;</code>. <code>AddPushNotifications</code> registers the <code>IUserIdProvider</code>
           (<a href="group-08-auth.html#claimbaseduseridprovider">ClaimBasedUserIdProvider</a>) that maps a connection&#39;s claims
           to the user id the sender addresses<span class="cite"><span>
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.Notifications.cs:67</code>)</span></span>. ADC&#39;s
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.Notifications.cs:64</code>)</span></span>. ADC&#39;s
           <code>LiveChannelJoinAuthorizer</code> (<code>MMCA.ADC.Notification.Service.Live</code>) is the concrete
           <code>IChannelJoinAuthorizer</code> a host registers to gate channel membership beyond the shape check.</li>
           </ul>
@@ -2298,7 +2299,7 @@
           is not subscribed at publish time simply never receives the event.</li>
           <li><strong>Where it&#39;s used</strong>: registered over <a href="#nulllivechannelpublisher">NullLiveChannelPublisher</a> by
           <code>AddPushNotifications</code> in any host that maps the hub<span class="cite"><span>
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.Notifications.cs:66</code>)</span></span>; in ADC it is the
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.Notifications.cs:63</code>)</span></span>; in ADC it is the
           <em>local</em> implementation the Notification service&#39;s gRPC ingress
           (<a href="#livechannelgrpcservice">LiveChannelGrpcService</a>) delegates to. The browser side lives in
           <a href="group-15-common-ui-framework.html">group 15</a>.</li>
@@ -2346,7 +2347,7 @@
           the connection manager.</li>
           <li><strong>Where it&#39;s used</strong>: registered over <a href="#nullpushnotificationsender">NullPushNotificationSender</a> by
           <code>AddPushNotifications</code><span class="cite"><span>
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.Notifications.cs:65</code>)</span></span>; called by
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.Notifications.cs:62</code>)</span></span>; called by
           <a href="#sendpushnotificationhandler">SendPushNotificationHandler</a> after the inbox rows are persisted, inside
           a swallow-everything <code>try/catch</code> so a transport hiccup is recorded as a status rather than thrown.</li>
           </ul>
@@ -2448,11 +2449,13 @@
           any rows are written.</li>
           <li><strong>create the audit aggregate</strong><span class="cite"><span> (<code>SendPushNotificationHandler.cs:86-92</code>)</span></span> via
           <code>PushNotification.Create(title, body, sentByUserId, recipientIds.Count, dedupKey, scopeKey)</code>;
-          propagate errors on failure<span class="cite"><span> (<code>SendPushNotificationHandler.cs:93-96</code>)</span></span>, then add to the repository<span class="cite"><span>
-          (<code>SendPushNotificationHandler.cs:99-100</code>)</span></span>. This is where the aggregate&#39;s
+          <code>createResult.TryGetValue(out var notification)</code> both checks success and binds the aggregate, and
+          a failure propagates the errors as <code>Result.Failure&lt;PushNotificationDTO&gt;(createResult.Errors)</code><span class="cite"><span>
+          (<code>SendPushNotificationHandler.cs:93-96</code>)</span></span>; the bound aggregate is then added to the repository<span class="cite"><span>
+          (<code>SendPushNotificationHandler.cs:98-99</code>)</span></span>. This is where the aggregate&#39;s
           <a href="#pushnotificationcreated">PushNotificationCreated</a> domain event is captured to the outbox
           (<a href="https://ivanball.github.io/docs/adr/003-outbox-dual-dispatch.html" target="_blank" rel="noopener">ADR-003</a>).</li>
-          <li><strong>first save, a lost dedup race propagates</strong><span class="cite"><span> (<code>SendPushNotificationHandler.cs:102-103</code>)</span></span>: a bare
+          <li><strong>first save, a lost dedup race propagates</strong><span class="cite"><span> (<code>SendPushNotificationHandler.cs:101-102</code>)</span></span>: a bare
           <code>SaveChangesAsync</code> with no catch. The dedup lookup in step 1 is a check-then-act, so two concurrent
           sends of one key can both pass it and the loser fails here, on the insert, against the filtered
           unique index on <code>DedupKey</code>. The class doc&#39;s &quot;Deduplication race&quot; paragraph<span class="cite"><span>
@@ -2464,47 +2467,47 @@
           unique violation has already aborted the transaction a requery would run in. (An earlier
           swallow-and-requery shape modelled on
           <a href="group-04-events-outbox.html#efinboxstore">EfInboxStore</a> no longer exists here.)</li>
-          <li><strong>durable inbox</strong> (<span class="cite"><span><code>SendPushNotificationHandler.cs:105-113</code></span></span>; second save <span class="cite"><span><code>:113</code></span></span>): one
+          <li><strong>durable inbox</strong> (<span class="cite"><span><code>SendPushNotificationHandler.cs:104-110</code></span></span>; second save <span class="cite"><span><code>:112</code></span></span>): one
           <code>UserNotification.Create(recipientId, notification.Id)</code> row per recipient, added and saved. This is
           what lets a user retrieve a notification they missed while offline.</li>
-          <li><strong>best-effort SignalR delivery</strong><span class="cite"><span> (<code>SendPushNotificationHandler.cs:115-134</code>)</span></span>:
+          <li><strong>best-effort SignalR delivery</strong><span class="cite"><span> (<code>SendPushNotificationHandler.cs:114-134</code>)</span></span>:
           <code>pushNotificationSender.SendToUsersAsync(...)</code> inside a <code>try/catch</code> with its own justified <code>CA1031</code>
-          suppression<span class="cite"><span> (<code>SendPushNotificationHandler.cs:129-131</code>)</span></span>. The live leg now carries the scope key as
+          suppression<span class="cite"><span> (<code>SendPushNotificationHandler.cs:128-130</code>)</span></span>. The live leg now carries the scope key as
           metadata, <code>LiveMetadata(notification.ScopeKey)</code><span class="cite"><span> (<code>SendPushNotificationHandler.cs:122</code>)</span></span>, so a client
           viewing another scope can leave the notification out of its toast and badge. <code>LiveMetadata</code><span class="cite"><span>
-          (<code>SendPushNotificationHandler.cs:172-181</code>)</span></span> returns a dictionary keyed by
+          (<code>SendPushNotificationHandler.cs:171-180</code>)</span></span> returns a dictionary keyed by
           <a href="#notificationscopekey">NotificationScopeKey</a><code>.MetadataKey</code> for a scoped send and <code>null</code> for an
           unscoped one. A delivery failure is <strong>non-fatal</strong>: success
-          calls <code>notification.MarkAsSent()</code> plus an info log<span class="cite"><span> (<code>SendPushNotificationHandler.cs:126-127</code>)</span></span>,
+          calls <code>notification.MarkAsSent()</code> plus an info log<span class="cite"><span> (<code>SendPushNotificationHandler.cs:125-126</code>)</span></span>,
           failure calls <code>notification.MarkAsFailed()</code> plus an error log<span class="cite"><span>
-          (<code>SendPushNotificationHandler.cs:133-134</code>)</span></span>; the failure becomes recorded <em>status</em>, not a thrown
+          (<code>SendPushNotificationHandler.cs:132-133</code>)</span></span>; the failure becomes recorded <em>status</em>, not a thrown
           exception.</li>
-          <li><strong>best-effort native push</strong> (<span class="cite"><span><code>SendPushNotificationHandler.cs:137-154</code></span></span>,
+          <li><strong>best-effort native push</strong> (<span class="cite"><span><code>SendPushNotificationHandler.cs:136-153</code></span></span>,
           <a href="https://ivanball.github.io/docs/adr/044-native-push-delivery.html" target="_blank" rel="noopener">ADR-044</a>):
           <code>nativePushSender.SendToUsersAsync(...)</code> in a third <code>try/catch</code> with its own suppression<span class="cite"><span>
-          (<code>SendPushNotificationHandler.cs:149-151</code>)</span></span>. This is the OS-level channel that can reach devices
-          whose app is backgrounded or killed (comment <span class="cite"><span><code>SendPushNotificationHandler.cs:137-140</code></span></span>). It is
+          (<code>SendPushNotificationHandler.cs:148-150</code>)</span></span>. This is the OS-level channel that can reach devices
+          whose app is backgrounded or killed (comment <span class="cite"><span><code>SendPushNotificationHandler.cs:136-139</code></span></span>). It is
           <strong>purely additive</strong>: the SignalR leg above already decided the audit status, so a native-push
-          failure only logs a warning (<code>LogNativePushFailed</code>, <span class="cite"><span><code>SendPushNotificationHandler.cs:153</code></span></span>) and never
+          failure only logs a warning (<code>LogNativePushFailed</code>, <span class="cite"><span><code>SendPushNotificationHandler.cs:152</code></span></span>) and never
           touches <code>Status</code>. The default
           <a href="group-14-module-system-composition.html#nullnativepushsender">NullNativePushSender</a> keeps this a no-op
           until a notification hub is configured.</li>
-          <li><strong>persist final status</strong><span class="cite"><span> (<code>SendPushNotificationHandler.cs:156</code>)</span></span> and <strong>return</strong> the mapped DTO<span class="cite"><span>
-          (<code>SendPushNotificationHandler.cs:158</code>)</span></span>.</li>
+          <li><strong>persist final status</strong><span class="cite"><span> (<code>SendPushNotificationHandler.cs:155</code>)</span></span> and <strong>return</strong> the mapped DTO<span class="cite"><span>
+          (<code>SendPushNotificationHandler.cs:157</code>)</span></span>.</li>
           </ol>
           <ul>
-          <li><code>SenderScopedDedupKey</code><span class="cite"><span> (<code>SendPushNotificationHandler.cs:168-170</code>)</span></span> derives the stored key as
+          <li><code>SenderScopedDedupKey</code><span class="cite"><span> (<code>SendPushNotificationHandler.cs:167-169</code>)</span></span> derives the stored key as
           <code>Convert.ToHexString(SHA256.HashData(...))</code> over the invariant-culture string
           <code>{sentByUserId}:{clientKey}</code>, so the persisted value is always <strong>64</strong> hex characters (within the
-          column) whatever the client sent (doc comment <span class="cite"><span><code>SendPushNotificationHandler.cs:161-167</code></span></span>). <code>[Rubric §11, Security]</code>: the client key alone no longer identifies a notification across senders.</li>
-          <li><code>FindByDedupKeyAsync</code><span class="cite"><span> (<code>SendPushNotificationHandler.cs:188-197</code>)</span></span> resolves the read repository from
-          the unit of work (<code>unitOfWork.GetReadRepository&lt;...&gt;()</code>, <span class="cite"><span><code>SendPushNotificationHandler.cs:190</code></span></span>), never
+          column) whatever the client sent (doc comment <span class="cite"><span><code>SendPushNotificationHandler.cs:160-166</code></span></span>). <code>[Rubric §11, Security]</code>: the client key alone no longer identifies a notification across senders.</li>
+          <li><code>FindByDedupKeyAsync</code><span class="cite"><span> (<code>SendPushNotificationHandler.cs:187-196</code>)</span></span> resolves the read repository from
+          the unit of work (<code>unitOfWork.GetReadRepository&lt;...&gt;()</code>, <span class="cite"><span><code>SendPushNotificationHandler.cs:189</code></span></span>), never
           an injected
           <a href="group-07-persistence-ef-core.html#irepositorytentity-tidentifiertype">IRepository&lt;TEntity, TIdentifierType&gt;</a>,
           so the lookup runs against the same data source as the write (its doc comment says exactly that,
-          <span class="cite"><span><code>SendPushNotificationHandler.cs:183-187</code></span></span>).</li>
+          <span class="cite"><span><code>SendPushNotificationHandler.cs:182-186</code></span></span>).</li>
           <li>Four source-generated <code>[LoggerMessage]</code> methods close the file<span class="cite"><span>
-          (<code>SendPushNotificationHandler.cs:199-209</code>)</span></span>: sent (Information), delivery-failed (Error),
+          (<code>SendPushNotificationHandler.cs:198-208</code>)</span></span>: sent (Information), delivery-failed (Error),
           native-failed (Warning), and dedup hit (Information).
           <code>[Rubric §13, Observability]</code>.</li>
           </ul>
@@ -2523,7 +2526,7 @@
           ADC by the Notification DI facade); the real-time legs land on connected clients through
           <a href="#notificationhub">NotificationHub</a> and, for native push, through the configured OS notification hub.</li>
           <li><strong>Caveats / not-in-source</strong>: the three <code>SaveChangesAsync</code> calls<span class="cite"><span>
-          (<code>SendPushNotificationHandler.cs:103</code>, <code>:113</code>, <code>:156</code>)</span></span> are separate saves, not separate transactions:
+          (<code>SendPushNotificationHandler.cs:102</code>, <code>:112</code>, <code>:155</code>)</span></span> are separate saves, not separate transactions:
           atomicity comes from the ambient transaction the Transactional decorator opens because the command
           implements <code>ITransactional</code>, so the decorator, not this file, is where the commit happens. A
           consequence the class doc accepts explicitly<span class="cite"><span> (<code>SendPushNotificationHandler.cs:28-30</code>)</span></span> is that both
@@ -2583,7 +2586,7 @@
           <li><strong>Why it&#39;s built this way (security posture)</strong>: unlike
           <a href="#livechannelgrpcservice">LiveChannelGrpcService</a>, this endpoint <strong>requires authorization</strong>: it is
           mapped with <code>.RequireAuthorization()</code><span class="cite"><span>
-          (<code>MMCA.ADC/Source/Services/MMCA.ADC.Notification.Service/Program.cs:301</code>)</span></span> and the class doc says why<span class="cite"><span>
+          (<code>MMCA.ADC/Source/Services/MMCA.ADC.Notification.Service/Program.cs:312</code>)</span></span> and the class doc says why<span class="cite"><span>
           (<code>UserNotificationExportGrpcService.cs:14-19</code>)</span></span>. <code>[Rubric §11, Security]</code>, <code>[Rubric §30, Compliance, Privacy &amp; Data Governance]</code>: internal-only ingress is <strong>not sufficient</strong> here because the response
           carries personal data keyed by a raw <code>UserId</code>, so the calling service forwards the end user&#39;s JWT via
           <a href="group-13-grpc-contracts.html#jwtforwardingclientinterceptor">JwtForwardingClientInterceptor</a> and
@@ -2591,7 +2594,7 @@
           endpoint as the live-channel ingress
           (<a href="https://ivanball.github.io/docs/adr/012-grpc-host-transport.html" target="_blank" rel="noopener">ADR-012</a> mixed-endpoint profile,
           <span class="cite"><span><code>UserNotificationExportGrpcService.cs:11-13</code></span></span>).</li>
-          <li><strong>Where it&#39;s used</strong>: mapped by the Notification service&#39;s <code>Program.cs</code><span class="cite"><span> (<code>Program.cs:301</code>)</span></span>; the wire is
+          <li><strong>Where it&#39;s used</strong>: mapped by the Notification service&#39;s <code>Program.cs</code><span class="cite"><span> (<code>Program.cs:312</code>)</span></span>; the wire is
           dialed by its client half
           <a href="#usernotificationexportservicegrpcadapter">UserNotificationExportServiceGrpcAdapter</a>, which runs
           inside the Identity service&#39;s export aggregator and stitches this Notification slice into the full
@@ -2670,7 +2673,7 @@
           <code>services.Replace(...)</code><span class="cite"><span>
           (<code>MMCA.ADC/Source/Services/MMCA.ADC.Notification.Contracts/DependencyInjection.cs:84</code>)</span></span>; the one caller
           today is the Identity service&#39;s composition root<span class="cite"><span>
-          (<code>MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:331</code>)</span></span>, whose
+          (<code>MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:343</code>)</span></span>, whose
           <a href="group-24-identity-module.html#exportuserdatahandler">ExportUserDataHandler</a> consumes the interface.</li>
           </ul>
           <hr>
@@ -2738,14 +2741,14 @@
           best-effort per section, so if this peer stays unreachable after the resilience pipeline the Identity
           handler marks the Notifications section unavailable instead of failing the whole export.</li>
           <li><strong>Where it&#39;s used</strong>: <code>AddNotificationLiveChannelClient</code> is called by the Engagement service&#39;s
-          application pipeline<span class="cite"><span> (<code>MMCA.ADC/Source/Services/MMCA.ADC.Engagement.Service/Program.cs:291</code>)</span></span>;
+          application pipeline<span class="cite"><span> (<code>MMCA.ADC/Source/Services/MMCA.ADC.Engagement.Service/Program.cs:303</code>)</span></span>;
           <code>AddNotificationUserExportClient</code> by the Identity service&#39;s<span class="cite"><span>
-          (<code>MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:331</code>)</span></span>. The matching AppHost references
+          (<code>MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:343</code>)</span></span>. The matching AppHost references
           that inject the <code>services__notification__grpc__0</code> entry are
           <code>engagementService.WithReference(notificationService)</code><span class="cite"><span>
-          (<code>MMCA.ADC/Source/Hosting/MMCA.ADC.AppHost/Program.cs:277</code>)</span></span> and
-          <code>identityService.WithReference(notificationService)</code><span class="cite"><span> (<code>Program.cs:288</code>)</span></span>, both deliberately without a
-          <code>WaitFor</code> so neither consumer blocks on Notification at startup (comments at <span class="cite"><span><code>Program.cs:270-276</code></span></span> and
+          (<code>MMCA.ADC/Source/Hosting/MMCA.ADC.AppHost/Program.cs:278</code>)</span></span> and
+          <code>identityService.WithReference(notificationService)</code><span class="cite"><span> (<code>Program.cs:289</code>)</span></span>, both deliberately without a
+          <code>WaitFor</code> so neither consumer blocks on Notification at startup (comments at <span class="cite"><span><code>Program.cs:271-277</code></span></span> and
           <span class="cite"><span><code>:282-290</code></span></span>).</li>
           </ul>
           <h3 id="notificationmodule">NotificationModule</h3>
@@ -2835,40 +2838,45 @@
           whether an authenticated caller may join a given <code>event:{id}</code> or <code>session:{id}</code> channel key.</li>
           <li><strong>Depends on</strong>: <a href="group-07-persistence-ef-core.html#ichanneljoinauthorizer">IChannelJoinAuthorizer</a> (its
           interface); <a href="group-17-conference-domain.html#ieventlivevalidationservice">IEventLiveValidationService</a>
-          (primary-constructor parameter, line 60); <a href="group-17-conference-domain.html#conferencereadaudience">ConferenceReadAudience</a>
-          (<code>PrivilegedRoles</code>, line 76); <a href="#notificationscopekey">NotificationScopeKey</a> (<code>EventPrefix</code> and
-          <code>SessionPrefix</code>, lines 101 and 110). Externals: <code>System.Security.Claims</code> (<code>ClaimsPrincipal</code>),
-          <code>Microsoft.Extensions.Logging</code> (<code>[LoggerMessage]</code>, source-generated), and <code>System.Globalization</code>
-          (<code>CultureInfo.InvariantCulture</code> for the id parse).</li>
+          (primary-constructor parameter, line 44); <a href="group-17-conference-domain.html#conferencereadaudience">ConferenceReadAudience</a>
+          (<code>PrivilegedRoles</code>, line 60); <a href="#notificationscopekey">NotificationScopeKey</a> (<code>EventPrefix</code> and
+          <code>SessionPrefix</code>, lines 85 and 94); <a href="group-01-result-error-handling.html#result">Result</a> (the
+          <code>TryGetValue</code> read of each lookup, lines 91 and 102). Externals: <code>System.Security.Claims</code>
+          (<code>ClaimsPrincipal</code>), <code>Microsoft.Extensions.Logging</code> (<code>[LoggerMessage]</code>, source-generated), and
+          <code>System.Globalization</code> (<code>CultureInfo.InvariantCulture</code> for the id parse).</li>
           <li><strong>Concept introduced, authorization by re-deriving public visibility, not by re-checking a role.</strong> A
           privileged caller (a role in <code>ConferenceReadAudience.PrivilegedRoles</code>) is admitted outright (lines
-          76-79). Everyone else is admitted only if the channel&#39;s subject is already something an ordinary
-          attendee sees on the public agenda: <code>IsPubliclyVisibleChannelAsync</code> (line 94) parses the channel key
+          60-63). Everyone else is admitted only if the channel&#39;s subject is already something an ordinary
+          attendee sees on the public agenda: <code>IsPubliclyVisibleChannelAsync</code> (line 78) parses the channel key
           and asks <a href="group-17-conference-domain.html#ieventlivevalidationservice">IEventLiveValidationService</a>
-          whether the event or session is published, and any failed lookup is a refusal (lines 107 and 118, and
-          the doc comment at lines 90-93). The method never re-derives a role check: it re-derives the same
+          whether the event or session is published, and any failed lookup is a refusal (lines 91 and 102, and
+          the doc comment at lines 74-77). The method never re-derives a role check: it re-derives the same
           published/unpublished question the public agenda already answers, so the live channel cannot show a
           caller more than the REST reads already would.
-          <code>[Rubric §11, Security]</code> assesses whether a boundary check fails closed: a failed or unparseable lookup
-          returns <code>false</code> (lines 98, 121), never <code>true</code>.</li>
+          <code>[Rubric §11, Security]</code> assesses whether a boundary check fails closed: an unparseable key or an
+          unknown scope returns <code>false</code> (lines 82, 105), and a failed lookup yields no value from
+          <code>TryGetValue</code>, so the join is refused rather than admitted.</li>
           <li><strong>Walkthrough</strong><ul>
-          <li><code>CanJoinAsync(ClaimsPrincipal? user, string channelKey, CancellationToken)</code> (line 64): an
-          unauthenticated user is refused immediately (lines 69-72). A privileged role short-circuits to <code>true</code>
-          (lines 76-79). Otherwise it awaits <code>IsPubliclyVisibleChannelAsync</code> (line 81), logs a refusal via the
-          source-generated <code>ChannelJoinRefused</code> (line 84, event id 5301) when admission fails, and returns the
-          result.</li>
-          <li><code>IsPubliclyVisibleChannelAsync</code> (line 94): calls the private <code>TryParseChannelKey</code> (line 96); an
-          unparseable key returns <code>false</code>. For <code>NotificationScopeKey.EventPrefix</code> it awaits
-          <code>GetEventLiveInfoAsync</code> and returns <code>IsSuccess &amp;&amp; Value!.IsPublished</code> (lines 103-107). For
-          <code>NotificationScopeKey.SessionPrefix</code> it awaits <code>GetSessionLiveInfoAsync</code> and returns the same shape
-          (lines 114-118); the comment at lines 112-113 notes this single check already covers &quot;no such
-          session&quot;, &quot;service session&quot; (BR-91), and any status that keeps a session off the public agenda,
-          because the published flag covers the owning event. Any other scope prefix returns <code>false</code> (line 121).</li>
-          <li><code>TryParseChannelKey(string? channelKey, out string scope, out int id)</code> (line 129): splits on the
-          first <code>:</code> (line 139); a missing or leading separator, or a non-integer suffix parsed with
-          <code>NumberStyles.None</code> under <code>CultureInfo.InvariantCulture</code> (lines 145-152), returns <code>false</code>. The doc
-          comment (lines 124-128) states this re-parses rather than trusts the hub&#39;s own pattern match, so the
-          gate does not depend on a pattern a host configuration could widen.</li>
+          <li><code>CanJoinAsync(ClaimsPrincipal? user, string channelKey, CancellationToken)</code> (line 48): an
+          unauthenticated user is refused immediately (lines 53-56). A privileged role short-circuits to <code>true</code>
+          (lines 60-63). Otherwise it awaits <code>IsPubliclyVisibleChannelAsync</code> (line 65), logs a refusal via the
+          source-generated <code>ChannelJoinRefused</code> (line 68; event id 5301, line 143) when admission fails, and
+          returns the result (line 71).</li>
+          <li><code>IsPubliclyVisibleChannelAsync</code> (line 78): calls the private <code>TryParseChannelKey</code> (line 80); an
+          unparseable key returns <code>false</code> (line 82). For <code>NotificationScopeKey.EventPrefix</code> it awaits
+          <code>GetEventLiveInfoAsync</code> and returns <code>eventInfo.TryGetValue(out var eventLive) &amp;&amp; eventLive.IsPublished</code>
+          (lines 85-91). For <code>NotificationScopeKey.SessionPrefix</code> it awaits <code>GetSessionLiveInfoAsync</code> and
+          returns the same <code>TryGetValue</code> shape (lines 94-102); the comment at lines 96-97 notes this single
+          check already covers &quot;no such session&quot;, &quot;service session&quot; (BR-91), and a status that keeps a session
+          off the public agenda (BR-49), because the published flag covers the owning event. <code>TryGetValue</code>
+          binds the value only on success, so there is no null-forgiving <code>Value!</code> read. Any other scope prefix
+          returns <code>false</code> (line 105).</li>
+          <li><code>TryParseChannelKey(string? channelKey, out string scope, out int id)</code> (line 113): a null or empty
+          key returns <code>false</code>; otherwise it splits on the first <code>:</code> (line 123), and a missing or leading
+          separator (lines 124-127) or a non-integer suffix parsed with <code>NumberStyles.None</code> under
+          <code>CultureInfo.InvariantCulture</code> (lines 129-136) returns <code>false</code>. The doc comment (lines 108-112)
+          states this re-parses rather than trusts the hub&#39;s own pattern match, so the gate does not depend on
+          a pattern a host configuration could widen.</li>
           </ul>
           </li>
           <li><strong>Why it&#39;s built this way</strong>: re-deriving public visibility from the same live-validation service the
@@ -3288,7 +3296,7 @@
           <code>[HasPermission(NotificationPermissions.Manage)]</code> (line 29) restricts both actions to callers holding
           the <code>notifications:manage</code> capability, because sending is a broadcast while the inbox is per-user.
           The gate names a capability rather than a role, so each host decides which of its roles holds it
-          (stated at <span class="cite"><span><code>NotificationsController.cs:20-24</code></span></span>); see
+          (stated at <span class="cite"><span><code>NotificationsController.cs:20-23</code></span></span>); see
           <a href="#notificationpermissions">NotificationPermissions</a> for the constant and
           <a href="group-08-auth.html#haspermissionattribute">HasPermissionAttribute</a> for the machinery behind the
           attribute.
@@ -3319,10 +3327,12 @@
           notification (comment lines 58-59). The header is read manually rather than bound with
           <code>[FromHeader]</code> (and Sonar&#39;s S6932 suppressed with that reason, lines 61 and 67) so protocol plumbing
           shared with the idempotency filter does not appear in the generated OpenAPI contract. It builds
-          <code>new SendPushNotificationCommand(request, userId.Value) { DedupKey = dedupKey }</code> (line 69) and on
-          success returns
-          <code>Created(new Uri(string.Create(CultureInfo.InvariantCulture, $&quot;/notifications/{result.Value!.Id}&quot;), UriKind.Relative), result.Value)</code>
-          (line 74).</li>
+          <code>new SendPushNotificationCommand(request, userId.Value) { DedupKey = dedupKey }</code> (line 69). The
+          result is branched with <code>!result.TryGetValue(out var created)</code> (line 72): a failure goes to
+          <code>HandleFailure(result.Errors)</code>, and a success returns
+          <code>Created(new Uri(string.Create(CultureInfo.InvariantCulture, $&quot;/notifications/{created.Id}&quot;), UriKind.Relative), created)</code>
+          (line 74), so the success path reads the bound <code>created</code> value rather than a null-forgiving
+          <code>result.Value!</code>.</li>
           <li><code>GetHistoryAsync</code> (line 80): <code>[HttpGet]</code> (line 78) with <code>[Range(1, int.MaxValue)]</code> paging,
           <code>pageSize</code> defaulting to 10 (lines 81-82). It runs
           <code>new GetNotificationHistoryQuery(pageNumber, pageSize)</code> (line 85) and returns 200 with the paged
@@ -3336,7 +3346,7 @@
           send gate by accident. Both stay behind
           <code>[FeatureGate(NotificationFeatures.PushNotifications)]</code> (line 28).</li>
           <li><strong>Where it&#39;s used</strong>: registered via <code>AddNotificationControllers</code>
-          (<a href="#dependencyinjection-3">DependencyInjection</a>, API layer, below); consumed by the organizer
+          (<a href="#dependencyinjection-2">DependencyInjection</a>, API layer, below); consumed by the organizer
           push-notification UI. Covered by <code>NotificationsControllerTests</code><span class="cite"><span>
           (<code>MMCA.Common/Tests/Presentation/MMCA.Common.API.Tests/Controllers/Notifications/NotificationsControllerTests.cs:16</code>)</span></span>.</li>
           </ul>
@@ -3414,34 +3424,42 @@
           both keep the raw type name as their heading.)</em></p>
           <ul>
           <li><strong>What it is</strong>: the API-layer DI helper for the notification subsystem. Its one member,
-          <code>AddNotificationControllers</code>, adds this package&#39;s assembly to the MVC application parts so ASP.NET Core
-          routing can discover the three notification controllers.</li>
+          <code>AddNotificationControllers</code>, adds this package&#39;s assembly to the MVC application parts, which makes
+          the host&#39;s dependency on the three notification controllers explicit.</li>
           <li><strong>Depends on</strong>: the <a href="#notificationscontroller">NotificationsController</a> type, used only as an assembly
-          anchor (line 21); externals <code>Microsoft.Extensions.DependencyInjection</code> (<code>IMvcBuilder</code>) and ASP.NET Core
+          anchor (line 26); externals <code>Microsoft.Extensions.DependencyInjection</code> (<code>IMvcBuilder</code>) and ASP.NET Core
           MVC application parts.</li>
-          <li><strong>Concept introduced, application parts for controllers that ship in a NuGet package.</strong> ASP.NET Core
-          discovers controllers by scanning the host&#39;s own assembly (and its application parts). The notification
-          controllers live in <code>MMCA.Common.API</code>, a referenced package, so without an explicit application part
-          they exist but are never routed (stated in the member&#39;s own documentation, lines 13-17).
-          <code>AddNotificationControllers</code> is written as an <code>extension(IMvcBuilder builder)</code> member (line 11) that
-          calls <code>builder.AddApplicationPart(typeof(NotificationsController).Assembly)</code> (line 21), which registers
-          all three controllers in one call because they share an assembly.
+          <li><strong>Concept introduced, an explicit application part for controllers that ship in a NuGet package.</strong>
+          ASP.NET Core discovers controllers through the host&#39;s application parts. The notification controllers
+          live in <code>MMCA.Common.API</code>, a referenced package, and the member&#39;s own documentation (lines 13-22)
+          records that a referencing host usually discovers them already: the SDK-generated
+          <code>MvcApplicationPartsAssemblyInfo</code> lists every referenced assembly that depends on MVC, so the
+          controllers are routed and appear in the host&#39;s OpenAPI document even without this call, and adding
+          the part again is a no-op. The call therefore states the dependency rather than switching something
+          on. The same comment names the step that IS required: exposing the endpoints does not serve them, and
+          the host must also call <code>AddNotificationApplicationServices</code> or the inbox endpoints fail to resolve
+          their handlers (lines 19-21). <code>AddNotificationControllers</code> is written as an
+          <code>extension(IMvcBuilder builder)</code> member (line 11) that calls
+          <code>builder.AddApplicationPart(typeof(NotificationsController).Assembly)</code> (line 26), which covers all
+          three controllers in one call because they share an assembly.
           <code>[Rubric §7, Microservices Readiness]</code> assesses whether a capability packages cleanly for reuse across
           hosts: shipping the controllers together with their own one-line registration means the whole
           notification HTTP surface moves into an extracted service without editing the controllers.
-          <code>[Rubric §3, Clean Architecture]</code> assesses whether composition stays at the edge: the host opts in
-          explicitly, so nothing is routed by a package the host merely references.</li>
+          <code>[Rubric §3, Clean Architecture]</code> assesses whether composition stays at the edge: the host&#39;s
+          composition root names the notification surface it depends on instead of leaving it implicit in a
+          package reference.</li>
           <li><strong>Walkthrough</strong>: inside the <code>extension(IMvcBuilder builder)</code> block (line 11),
-          <code>AddNotificationControllers()</code> (line 19) adds the application part (line 21) and returns the builder
-          for fluent chaining (line 22). There is no other member; the class is <code>static</code> (line 9).</li>
+          <code>AddNotificationControllers()</code> (line 24) adds the application part (line 26) and returns the builder
+          for fluent chaining (line 27). There is no other member; the class is <code>static</code> (line 9).</li>
           <li><strong>Why it&#39;s built this way</strong>: exposing the registration as a named <code>extension(IMvcBuilder)</code> member keeps
           a host&#39;s composition root declarative and reads as
           <code>AddControllers().AddNotificationControllers()</code> (see
           <a href="00-primer.html#c-extensiont-types-read-this-once">primer §4</a>). This is the API counterpart to the
           Application-layer <code>AddNotificationApplicationServices</code> below: one call wires the handlers, the other
-          exposes them over HTTP.</li>
+          exposes them over HTTP, and only the handler registration is load-bearing for serving requests.</li>
           <li><strong>Where it&#39;s used</strong>: called from a consuming host&#39;s MVC setup, alongside the Application-layer
-          registration.</li>
+          registration (for example
+          <span class="cite"><span><code>MMCA.ADC/Source/Modules/Notification/MMCA.ADC.Notification.API/DependencyInjection.cs:49</code></span></span>).</li>
           </ul>
           <hr>
           <h3 id="dependencyinjection-3">DependencyInjection</h3>
@@ -3532,7 +3550,7 @@
           </ul>
           <h3 id="dependencyinjection-4">DependencyInjection</h3>
           <blockquote>
-          <p>MMCA.ADC.Notification.API · <code>MMCA.ADC.Notification.API</code> · <span class="cite"><span><code>MMCA.ADC/Source/Modules/Notification/MMCA.ADC.Notification.API/DependencyInjection.cs:17</code></span></span> · Level 1 · class (static)</p>
+          <p>MMCA.ADC.Notification.API · <code>MMCA.ADC.Notification.API</code> · <span class="cite"><span><code>MMCA.ADC/Source/Modules/Notification/MMCA.ADC.Notification.API/DependencyInjection.cs:18</code></span></span> · Level 10 · class (static)</p>
           </blockquote>
           <ul>
           <li><strong>What it is</strong>: the Notification module&#39;s <em>outermost</em> DI composition. Its single extension method
@@ -3541,41 +3559,46 @@
           controllers.</li>
           <li><strong>Depends on</strong>: <a href="group-14-module-system-composition.html#applicationsettings">ApplicationSettings</a> and
           <code>IConfiguration</code> (parameters), the application-layer
-          <a href="#dependencyinjection-4">DependencyInjection</a><code>.AddModuleNotificationApplication</code>,
+          <a href="#dependencyinjection">DependencyInjection</a><code>.AddModuleNotificationApplication</code>,
           <code>AddNotificationInfrastructure()</code>, <code>AddPushNotifications(configuration)</code>,
-          <code>AddNativePushNotifications(configuration)</code>, <code>AddPermissions(...)</code> plus
-          <a href="#notificationpermissiongrants">NotificationPermissionGrants</a>, and
-          <code>AddControllers().AddNotificationControllers()</code>.</li>
+          <code>AddAzureNotificationHubsPush(configuration)</code> from <code>MMCA.Common.Azure</code><span class="cite"><span>
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Azure/AzureServiceCollectionExtensions.cs:83</code>)</span></span>,
+          <code>AddPermissions(...)</code> plus <a href="#notificationpermissiongrants">NotificationPermissionGrants</a>, and
+          <code>AddControllers().AddNotificationControllers()</code> (the API-layer
+          <a href="#dependencyinjection-2">DependencyInjection</a>).</li>
           <li><strong>Concept, the module composition root as a single ordered method.</strong> Where the application-layer
-          <a href="#dependencyinjection-4">DependencyInjection</a> registers only ADC&#39;s policy choices, this one composes
+          <a href="#dependencyinjection">DependencyInjection</a> registers only ADC&#39;s policy choices, this one composes
           every layer of the module in one readable sequence, so a reader can see the module&#39;s entire surface
           without opening five files. <code>[Rubric §3, Clean Architecture]</code> assesses layer separation: the calls
           descend from application to infrastructure to presentation in that order, and the framework pieces
-          (<code>AddPushNotifications</code>, <code>AddNotificationControllers</code>) come from <code>MMCA.Common</code> while only the
-          permission grant is app-specific. <code>[Rubric §11, Security]</code> shows in that grant: the doc comment
-          (lines 21-29) states the whole authorization story for the module in one place, that
+          (<code>AddPushNotifications</code>, <code>AddAzureNotificationHubsPush</code>, <code>AddNotificationControllers</code>) come from
+          <code>MMCA.Common</code> packages while only the permission grant is app-specific. The native-push vendor is
+          chosen here, at the module edge, by calling the Azure Notification Hubs adapter from the separate
+          <code>MMCA.Common.Azure</code> package (comment lines 37-39), rather than inside the framework&#39;s core
+          infrastructure. <code>[Rubric §11, Security]</code> shows in that grant: the doc comment
+          (lines 22-30) states the whole authorization story for the module in one place, that
           <a href="#notificationpermissions">NotificationPermissions</a><code>.Manage</code> is held by
           <a href="group-24-identity-module.html#rolenames">RoleNames</a><code>.Organizer</code> and by no other role, so an attendee cannot
           broadcast and no content editor holds a notification capability it was not given. The map itself now
           lives in <a href="#notificationpermissiongrants">NotificationPermissionGrants</a> rather than an inline lambda
-          here, because the token-minting Identity host applies the identical binding (comment lines 40-43).</li>
-          <li><strong>Walkthrough</strong>: an <code>extension(IServiceCollection services)</code> block (line 19) containing
-          <code>AddNotificationModule(ApplicationSettings, IConfiguration)</code> (lines 30-50). It calls
-          <code>AddModuleNotificationApplication(applicationSettings)</code> (line 32) for ADC&#39;s handlers and policies,
-          <code>AddNotificationInfrastructure()</code> (line 33) for the EF configuration, <code>AddPushNotifications(configuration)</code>
-          (line 34) for the SignalR sender and hub, and <code>AddNativePushNotifications(configuration)</code> (line 38)
-          for the native third channel. The comment on that last call (lines 36-37) records that it is a no-op
-          unless the <code>NativePush</code> configuration section is enabled and complete, which is why it is safe to
-          call unconditionally in every environment. Then the single grant,
-          <code>services.AddPermissions(NotificationPermissionGrants.Apply)</code> (line 44), and finally
-          <code>services.AddControllers().AddNotificationControllers()</code> (line 47), which registers the framework&#39;s
-          notification controllers as ASP.NET Core application parts so their routes are discovered even though
-          they live in a referenced assembly. The collection is returned for chaining (line 49).</li>
-          <li><strong>Why it&#39;s built this way</strong>: the framework ships the controllers, but a host only gets them if it opts
-          in through the application-part registration, so a host that does not want a push surface simply does
-          not load the module. Registering the native channel unconditionally and letting configuration decide
-          keeps environment differences in <code>appsettings</code>, not in code
-          (<a href="https://ivanball.github.io/docs/adr/044-native-push-delivery.html" target="_blank" rel="noopener">ADR-044</a>).</li>
+          here, because the token-minting Identity host applies the identical binding (comment lines 42-45).</li>
+          <li><strong>Walkthrough</strong>: an <code>extension(IServiceCollection services)</code> block (line 20) containing
+          <code>AddNotificationModule(ApplicationSettings, IConfiguration)</code> (lines 31-52). It calls
+          <code>AddModuleNotificationApplication(applicationSettings)</code> (line 33) for ADC&#39;s handlers and policies,
+          <code>AddNotificationInfrastructure()</code> (line 34) for the EF configuration, <code>AddPushNotifications(configuration)</code>
+          (line 35) for the SignalR sender and hub, and <code>AddAzureNotificationHubsPush(configuration)</code> (line 40)
+          for the native third channel over Azure Notification Hubs. The comment on that call (lines 37-39)
+          records that it is a no-op unless the <code>NativePush</code> configuration section is enabled and complete,
+          which is why it is safe to call unconditionally in every environment. Then the single grant,
+          <code>services.AddPermissions(NotificationPermissionGrants.Apply)</code> (line 46), and finally
+          <code>services.AddControllers().AddNotificationControllers()</code> (line 49), which adds the framework&#39;s
+          notification controllers as an explicit ASP.NET Core application part. The collection is returned for
+          chaining (line 51).</li>
+          <li><strong>Why it&#39;s built this way</strong>: one method that a module&#39;s <code>Register</code> calls keeps the whole notification
+          surface (handlers, persistence, push channels, grant, controllers) composed in one place, and naming
+          the Azure adapter here keeps the vendor choice at the app edge. Registering the native channel
+          unconditionally and letting configuration decide keeps environment differences in <code>appsettings</code>, not
+          in code (<a href="https://ivanball.github.io/docs/adr/044-native-push-delivery.html" target="_blank" rel="noopener">ADR-044</a>).</li>
           <li><strong>Where it&#39;s used</strong>: called from <a href="#notificationmodule">NotificationModule</a><code>.Register</code><span class="cite"><span>
           (<code>MMCA.ADC/Source/Modules/Notification/MMCA.ADC.Notification.API/NotificationModule.cs:31</code>)</span></span>.</li>
           </ul>

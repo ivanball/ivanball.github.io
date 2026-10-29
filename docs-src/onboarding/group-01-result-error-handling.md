@@ -83,17 +83,17 @@ a failure (the train stays on the failure track), and runs only if it is a succe
 on the success track or switch to failure. Control flows forward without nested
 `if (result.IsFailure)` checks.
 
-On `Result<T>` the surface is seven members. `Match(onSuccess, onFailure)` (`Result.cs:260`)
+On `Result<T>` the surface is seven members. `Match(onSuccess, onFailure)` (`Result.cs:281`)
 terminates the railway by collapsing both tracks to a single value, with `MatchAsync`
-(`Result.cs:355`) as its awaiting twin. `Map(mapper)` (`Result.cs:276`) transforms the success value
-while propagating errors untouched. `Bind(binder)` (`Result.cs:302`) and `BindAsync(binder)`
-(`Result.cs:289`) are the **monadic bind**, synchronous and asynchronous: they short-circuit on
+(`Result.cs:376`) as its awaiting twin. `Map(mapper)` (`Result.cs:297`) transforms the success value
+while propagating errors untouched. `Bind(binder)` (`Result.cs:323`) and `BindAsync(binder)`
+(`Result.cs:310`) are the **monadic bind**, synchronous and asynchronous: they short-circuit on
 failure, returning the original errors without invoking `binder`, and otherwise hand the success value
-to the next result-returning operation. `Tap(action)` (`Result.cs:314`) runs a side effect on the
+to the next result-returning operation. `Tap(action)` (`Result.cs:335`) runs a side effect on the
 success value and returns the same instance so the call can sit inline in a chain, and
-`Ensure(predicate, error)` (`Result.cs:334`) fails an otherwise-successful chain when the value does
+`Ensure(predicate, error)` (`Result.cs:355`) fails an otherwise-successful chain when the value does
 not satisfy a condition, without ever running the predicate on an already-failed result
-(`Result.cs:339-344`).
+(`Result.cs:360-365`).
 
 The non-generic base carries the valueless equivalents: `Match` (`Result.cs:155`), `Bind`
 (`Result.cs:187`), and `OnFailure(action)` (`Result.cs:169`), which runs a side effect on the error
@@ -107,8 +107,8 @@ when something actually failed (`Result.cs:131-140`), and it rejects an empty ca
 
 Three implicit conversions remove the remaining ceremony: an `Error` lifts into a failed `Result`
 (`Result.cs:43`, with the named alternate `FromError` at `Result.cs:49` for callers that prefer it) or
-into a failed `Result<T>` (`Result.cs:233`), and a bare value lifts into a successful `Result<T>`
-(`Result.cs:249`), so a guard clause writes `return someError;` and a happy path writes
+into a failed `Result<T>` (`Result.cs:254`), and a bare value lifts into a successful `Result<T>`
+(`Result.cs:270`), so a guard clause writes `return someError;` and a happy path writes
 `return theValue;`. [`ResultExtensions`](#resultextensions)
 (`MMCA.Common/Source/Core/MMCA.Common.Shared/Abstractions/ResultExtensions.cs:14`) then carries the
 same combinators over a **pending** `Task<Result<T>>` so an asynchronous pipeline composes end to end
@@ -121,8 +121,8 @@ duplication, which is the [Rubric §15, Best Practices & Code Quality] argument 
 
 ## Construction discipline, and the invariant it buys
 
-You cannot `new` a `Result<T>` directly: its constructors are `internal` (`Result.cs:211`,
-`Result.cs:217`), so the only way to produce one is through the static factory methods on the base
+You cannot `new` a `Result<T>` directly: its constructors are `internal` (`Result.cs:232`,
+`Result.cs:238`), so the only way to produce one is through the static factory methods on the base
 [`Result`](#result) class (`Success` / `Failure`, `Result.cs:62-102`). That is what guarantees the
 invariant the rest of the codebase relies on: a result is *always* either a clean success or a
 non-empty failure, never a half-built object. Two details make it airtight. First, the success path is
@@ -132,7 +132,7 @@ nothing. Second, `ThrowIfNoErrors` (`Result.cs:107-115`) throws `ArgumentExcepti
 factory is handed an empty collection, because `IsSuccess` is derived from the error count
 (`Result.cs:32`) and an accidentally-empty collection would otherwise turn an explicit `Failure(...)`
 call into a *success*. Both the non-generic `Failure` (`Result.cs:83-89`) and the generic failure
-constructor (`Result.cs:217-221`) route through that guard. Likewise, [`Error`](#error)'s factory
+constructor (`Result.cs:238-242`) route through that guard. Likewise, [`Error`](#error)'s factory
 methods are the canonical construction path because they fix the code-to-classification pairing at the
 call site. This is quiet [Rubric §15, Best Practices & Code Quality] work: the type system and the
 factories, not documentation, keep the envelope well-formed.
@@ -528,7 +528,7 @@ after them takes the railway for granted.
   - `MostSevere(IReadOnlyList<Error>)` (`ErrorTypeSeverity.cs:71-98`) selects the representative error. It null-checks (`ErrorTypeSeverity.cs:73`) and rejects an empty list outright with `ArgumentException` (`ErrorTypeSeverity.cs:75-80`), because a failure with no errors is not classifiable and the [`Result`](#result) factories already make that state unreachable. It then seeds from `errors[0]` (`ErrorTypeSeverity.cs:82-83`) and scans forward keeping strictly greater ranks (`ErrorTypeSeverity.cs:87-95`). The strict `>` is what implements "ties keep the earliest error", so a list of same-rank errors behaves exactly as a positional selection would, which is the compatibility property that made the change safe to make.
   - The scan is a hand-written index loop with a comment defending it (`ErrorTypeSeverity.cs:85-86`): a LINQ `MaxBy` would allocate an enumerator plus a comparer closure on a path that runs on *every* failure response. That is `[Rubric §12, Performance & Scalability]` reasoning applied at the right scale, a hot path, with the trade written down rather than assumed.
 - **Why it's built this way**: [ADR-013](https://ivanball.github.io/docs/adr/013-result-pattern.html) records the decision and its history. Only the *status* is ranked: every error still travels in the payload, in the Problem Details `errors` array on HTTP (`MMCA.Common/Source/Presentation/MMCA.Common.API/Middleware/ErrorHttpMapping.cs:62-70`) and in the gRPC trailers on the other edge. The ranking answers exactly one question, "what is this failure, in one word", and answers it the same way on both transports.
-- **Where it's used**: HTTP resolves a status through it, `ErrorHttpMapping.GetStatusCode(IReadOnlyList<Error>)` calling `MostSevere` (`ErrorHttpMapping.cs:51-52`) on behalf of [`ApiControllerBase`](group-12-api-hosting-mapping.md#apicontrollerbase)`.HandleFailure` (`MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/ApiControllerBase.cs:48`). gRPC does the same in [`ResultGrpcExtensions`](group-13-grpc-contracts.md#resultgrpcextensions)`.ToRpcException` (`MMCA.Common/Source/Presentation/MMCA.Common.Grpc/ResultGrpcExtensions.cs:124`, falling back to `Internal` for the impossible empty case). The UI uses the other half of the type: [`ResultUiExtensions`](group-15-common-ui-framework.md#resultuiextensions)`.LocalizedErrorMessages` orders the messages it shows a user by `Rank` descending, so the most severe error is read first (`MMCA.Common/Source/Presentation/MMCA.Common.UI/Common/ResultUiExtensions.cs:176`).
+- **Where it's used**: HTTP resolves a status through it, `ErrorHttpMapping.GetStatusCode(IReadOnlyList<Error>)` calling `MostSevere` (`ErrorHttpMapping.cs:51-52`) on behalf of [`ApiControllerBase`](group-12-api-hosting-mapping.md#apicontrollerbase)`.HandleFailure` (`MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/ApiControllerBase.cs:48`). gRPC does the same in [`ResultGrpcExtensions`](group-13-grpc-contracts.md#resultgrpcextensions)`.ToRpcException` (`MMCA.Common/Source/Presentation/MMCA.Common.Grpc/ResultGrpcExtensions.cs:124`, falling back to `Internal` for the impossible empty case). The UI uses the other half of the type: [`ResultUiExtensions`](group-15-common-ui-framework.md#resultuiextensions)`.LocalizedErrorMessages` orders the messages it shows a user by `Rank` descending, so the most severe error is read first (`MMCA.Common/Source/Presentation/MMCA.Common.UI/Common/ResultUiExtensions.cs:142`).
 
 ### Result
 > MMCA.Common.Shared · `MMCA.Common.Shared.Abstractions` · `MMCA.Common/Source/Core/MMCA.Common.Shared/Abstractions/Result.cs:19` · Level 2 · class
@@ -542,22 +542,22 @@ after them takes the railway for granted.
   The non-generic `Result`:
   - Two shared instances back the cheap paths: `CachedSuccess` (`Result.cs:21`) and an empty `NoErrors` array (`Result.cs:22`). Errors live in a lazily allocated `List<Error>? _errors` (`Result.cs:26`), and the comment above it states the reason (`Result.cs:24-25`): the success path, which is the overwhelming majority of results created per request, never pays for a list allocation.
   - `Errors` returns the list or falls back to the shared empty array (`Result.cs:29`); `IsSuccess` is `_errors is null || _errors.Count == 0` (`Result.cs:32`) and `IsFailure` is its negation (`Result.cs:35`). Success is therefore *derived from the error count*, not stored, which is the fact the guard two bullets down exists to protect.
-  - **Implicit lifting.** `public static implicit operator Result(Error error)` (`Result.cs:43`) lets a guard clause write `return someError;` with no factory named, and `FromError` (`Result.cs:49-53`) is the named alternate the analyzers require for that operator. The generic type has the same pair plus one more: `Error` to `Result<T>` (`Result.cs:233-237`) and, on the happy path, `T` to `Result<T>` (`Result.cs:249`) so a handler writes `return theValue;`. Both operators carry a `[SuppressMessage]` with the reasoning written into the `Justification` (`Result.cs:229-232,245-248`), which is worth reading as an example of how this codebase documents an analyzer exception at the point of the exception.
+  - **Implicit lifting.** `public static implicit operator Result(Error error)` (`Result.cs:43`) lets a guard clause write `return someError;` with no factory named, and `FromError` (`Result.cs:49-53`) is the named alternate the analyzers require for that operator. The generic type has the same pair plus one more: `Error` to `Result<T>` (`Result.cs:254-258`) and, on the happy path, `T` to `Result<T>` (`Result.cs:270`) so a handler writes `return theValue;`. Both operators carry a `[SuppressMessage]` with the reasoning written into the `Justification` (`Result.cs:250-253,266-269`), which is worth reading as an example of how this codebase documents an analyzer exception at the point of the exception.
   - `protected void AddErrors(IEnumerable<Error> errors)` (`Result.cs:57`) is the only mutation point, and it null-coalescing-assigns the list on first use.
   - `Result.Success()` (`Result.cs:62`) returns the shared singleton; `Result.Success<T>(value)` (`Result.cs:68`) wraps a value in a new `Result<T>`.
   - Four failure factories: `Failure<T>(IEnumerable<Error>)` (`Result.cs:74`), `Failure(IEnumerable<Error>)` (`Result.cs:83-89`), `Failure(Error)` (`Result.cs:94-95`), and `Failure<T>(Error)` (`Result.cs:101-102`), the single-error overloads delegating to the collection ones.
-  - `private protected static void ThrowIfNoErrors(Result result)` (`Result.cs:107-115`) is the guard that makes the derived-success design safe. Because `IsSuccess` is computed from the error count, an accidentally empty collection handed to `Failure(...)` would otherwise produce a **success** from a call that explicitly asked for a failure, so the guard throws `ArgumentException` instead. `Result.Failure(IEnumerable<Error>)` calls it after adding (`Result.cs:87`), and so does `Result<T>`'s failure constructor (`Result.cs:220`).
+  - `private protected static void ThrowIfNoErrors(Result result)` (`Result.cs:107-115`) is the guard that makes the derived-success design safe. Because `IsSuccess` is computed from the error count, an accidentally empty collection handed to `Failure(...)` would otherwise produce a **success** from a call that explicitly asked for a failure, so the guard throws `ArgumentException` instead. `Result.Failure(IEnumerable<Error>)` calls it after adding (`Result.cs:87`), and so does `Result<T>`'s failure constructor (`Result.cs:241`).
   - `Result.Combine(params ReadOnlySpan<Result> results)` (`Result.cs:124-145`) is the aggregate-all-failures combinator: it walks every input, collects *all* errors into one list, and returns success only when every input succeeded (`Result.cs:133-144`). It throws `ArgumentException` on an empty span, since combining nothing is a logic bug (`Result.cs:126-129`). Two allocation details: `params ReadOnlySpan<Result>` means the common call site passes a stack-allocated span rather than an array, and `allErrors` is only allocated once a failure is actually seen (`Result.cs:131,137`).
   - Three combinators on the valueless type so a void-equivalent step composes the same way: `Match` (`Result.cs:155-161`), `OnFailure`, which runs a side effect on the error list and returns the same instance so it can sit inline in a chain (`Result.cs:169-179`), and `Bind` (`Result.cs:187-191`).
 
   The generic `Result<T>` (`Result.cs:204`):
   - `sealed class Result<T> : Result` adding `public T? Value { get; }` (`Result.cs:207`), which is `null` when the result is a failure.
-  - Two `internal` constructors (`Result.cs:211` for success, `Result.cs:217-221` for failure) so only the base class's static factories can produce an instance. Application code can never write `new Result<Order>(...)`.
-  - `Match<TResult>(onSuccess, onFailure)` (`Result.cs:260-268`) terminates the railway by collapsing both tracks into one value; both delegates are null-checked and exactly one branch runs. `MatchAsync` (`Result.cs:355-365`) is the awaiting counterpart with the same guarantee.
-  - `Map<TOut>(mapper)` (`Result.cs:276-280`) transforms the success value and propagates the errors untouched on failure, so a DTO projection needs no `if`.
-  - `Bind<TOut>(binder)` (`Result.cs:302-306`) and `BindAsync<TOut>(binder)` (`Result.cs:289-293`) are the monadic bind, sync and async: on failure they short-circuit and return the original errors *without invoking* `binder`.
-  - `Tap(action)` (`Result.cs:314-324`) runs a side effect on the success value and returns the same instance, and `Ensure(predicate, error)` (`Result.cs:334-345`) fails an otherwise-successful chain with a supplied [`Error`](#error) when the value does not satisfy a predicate, leaving an already-failed result untouched and never running the predicate.
-  - Every combinator short-circuits on failure, at `Result.cs:279`, `:292`, `:305`, and `:339-342`. That uniformity is the property that makes them composable: you can read a chain top to bottom and know that nothing after the first failure ran.
+  - Two `internal` constructors (`Result.cs:232` for success, `Result.cs:238-242` for failure) so only the base class's static factories can produce an instance. Application code can never write `new Result<Order>(...)`.
+  - `Match<TResult>(onSuccess, onFailure)` (`Result.cs:281-289`) terminates the railway by collapsing both tracks into one value; both delegates are null-checked and exactly one branch runs. `MatchAsync` (`Result.cs:376-386`) is the awaiting counterpart with the same guarantee.
+  - `Map<TOut>(mapper)` (`Result.cs:297-301`) transforms the success value and propagates the errors untouched on failure, so a DTO projection needs no `if`.
+  - `Bind<TOut>(binder)` (`Result.cs:323-327`) and `BindAsync<TOut>(binder)` (`Result.cs:310-314`) are the monadic bind, sync and async: on failure they short-circuit and return the original errors *without invoking* `binder`.
+  - `Tap(action)` (`Result.cs:335-345`) runs a side effect on the success value and returns the same instance, and `Ensure(predicate, error)` (`Result.cs:355-366`) fails an otherwise-successful chain with a supplied [`Error`](#error) when the value does not satisfy a predicate, leaving an already-failed result untouched and never running the predicate.
+  - Every combinator short-circuits on failure, at `Result.cs:300`, `:292`, `:305`, and `:339-342`. That uniformity is the property that makes them composable: you can read a chain top to bottom and know that nothing after the first failure ran.
 - **Why it's built this way**: [ADR-013](https://ivanball.github.io/docs/adr/013-result-pattern.html) is the decision record. Expected failures are values, not exceptions, because an exception is invisible in the signature, easy to forget to catch, expensive on the throw path, and conflates "we will not do this" with "the process is broken". Keeping the value-bearing constructors `internal` and routing everything through the factories plus `ThrowIfNoErrors` is what makes the central invariant hold by construction: a result is always either a clean success or a non-empty failure, never a half-built object. The implicit conversions exist so that discipline costs nothing at the call site.
 - **Where it's used**: as a *return type*, everywhere. Value-object and entity factories return it, for example [`Address`](group-02-domain-building-blocks.md#address)`.Create` gathers its per-field checks with `Result.Combine` (`MMCA.Common/Source/Core/MMCA.Common.Shared/ValueObjects/Contact/Address.cs:77`), as does [`AddressInvariants`](group-02-domain-building-blocks.md#addressinvariants) (`MMCA.Common/Source/Core/MMCA.Common.Shared/ValueObjects/Contact/AddressInvariants.cs:40`); every CQRS handler in [Chapter 5](group-05-cqrs-pipeline.md) threads one through the decorator pipeline; every controller action in [Chapter 12](group-12-api-hosting-mapping.md) unwraps one; the repository contract of [Chapter 7](group-07-persistence-ef-core.md) returns `Result<KeysetCollectionResult<TEntity>>` for a keyset page; and [`ResultGrpcExtensions`](group-13-grpc-contracts.md#resultgrpcextensions) carries one across a process boundary in [Chapter 13](group-13-grpc-contracts.md).
 - **Caveats / not-in-source**: the two halves of the surface get very different amounts of use, and you should calibrate on that when you read the applications. `Result.Combine` and direct `IsFailure` / `Errors` / `Value` inspection are the dominant idioms (`Result.Combine` appears 8 times across 6 files in `MMCA.Common/Source` and 54 times across 29 files in `MMCA.ADC/Source`; `IsFailure` appears 341 times across 123 files in `MMCA.ADC/Source` alone). The fluent combinators (`Match`, `Map`, `Bind`, `BindAsync`, `Tap`, `Ensure`, `OnFailure`) are fully implemented and unit-tested in `MMCA.Common/Tests/Core/MMCA.Common.Shared.Tests/Abstractions/ResultTests.cs`, but a search of the workspace finds no production call site for them today. Read them as available surface, not as prevailing style.
@@ -604,11 +604,11 @@ after them takes the railway for granted.
 
   | Member | File:Line | What it forwards to |
   |--------|-----------|---------------------|
-  | `BindAsync<T, TOut>(Task<Result<T>>, Func<T, Task<Result<TOut>>>)` | `ResultExtensions.cs:24-33` | `Result<T>.BindAsync` (`Result.cs:289`), awaited |
-  | `BindAsync<T, TOut>(Task<Result<T>>, Func<T, Result<TOut>>)` | `ResultExtensions.cs:43-52` | `Result<T>.Bind` (`Result.cs:302`), the synchronous binder overload |
-  | `MapAsync<T, TOut>(Task<Result<T>>, Func<T, TOut>)` | `ResultExtensions.cs:62-71` | `Result<T>.Map` (`Result.cs:276`) |
+  | `BindAsync<T, TOut>(Task<Result<T>>, Func<T, Task<Result<TOut>>>)` | `ResultExtensions.cs:24-33` | `Result<T>.BindAsync` (`Result.cs:310`), awaited |
+  | `BindAsync<T, TOut>(Task<Result<T>>, Func<T, Result<TOut>>)` | `ResultExtensions.cs:43-52` | `Result<T>.Bind` (`Result.cs:323`), the synchronous binder overload |
+  | `MapAsync<T, TOut>(Task<Result<T>>, Func<T, TOut>)` | `ResultExtensions.cs:62-71` | `Result<T>.Map` (`Result.cs:297`) |
   | `TapAsync<T>(Task<Result<T>>, Func<T, Task>)` | `ResultExtensions.cs:81-95` | no instance equivalent; it inlines the `IsSuccess` check and awaits the async side effect (`ResultExtensions.cs:89-92`) |
-  | `MatchAsync<T, TResult>(Task<Result<T>>, Func<T, TResult>, Func<IEnumerable<Error>, TResult>)` | `ResultExtensions.cs:106-117` | `Result<T>.Match` (`Result.cs:260`) |
+  | `MatchAsync<T, TResult>(Task<Result<T>>, Func<T, TResult>, Func<IEnumerable<Error>, TResult>)` | `ResultExtensions.cs:106-117` | `Result<T>.Match` (`Result.cs:281`) |
   - The two `BindAsync` overloads are the reason the chain reads well: one accepts an async binder, the other a synchronous one, so a pipeline can mix "call another service" and "project this in memory" steps without the caller wrapping anything in `Task.FromResult`.
   - `TapAsync` is the one member with no instance twin, because `Result<T>.Tap` takes an `Action<T>` and cannot await. It is the only place in the file that touches `IsSuccess` and `Value` directly (`ResultExtensions.cs:89-91`), and it still returns the awaited result unchanged so it composes like the others.
   - Every `await` in the file uses `ConfigureAwait(false)` (`ResultExtensions.cs:31,32,50,69,88,91,115`), which is the library-wide policy of [ADR-049](https://ivanball.github.io/docs/adr/049-library-configureawait-policy.html): framework code must not capture a synchronization context.
