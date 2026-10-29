@@ -30,7 +30,7 @@ only, because their solutions are already fast enough not to need a CI subset:
 
 | File | Purpose |
 |---|---|
-| `MMCA.Common.slnx` | Full human solution, 16 source projects + 16 test projects (no `.slnf`) |
+| `MMCA.Common.slnx` | Full human solution, 25 source projects + 21 test projects (no `.slnf`) |
 | `MMCA.Helpdesk.slnx` | Full seed solution, three test projects, no database needed (no `.slnf`) |
 | `MMCA.ADC.slnx` | Full human solution, all source + all 32 in-solution test projects (`MMCA.ADC/MMCA.ADC.slnx:67-129`) |
 | `MMCA.ADC.CI.slnf` | CI fast path, source + unit/architecture/UI/host tests only |
@@ -247,6 +247,11 @@ files above. Counts are distinct types per project as reported by the Roslyn inv
 | `MMCA.Common.Gateway.Tests` | 10 | The shared YARP gateway kit: the rate-limit partitioning, correlation and downstream-readiness behavior the two app gateways inherit |
 | `MMCA.Common.Testing.Tests` | 36 | The framework dogfooding its own shipped test bases and helpers: `DecoratorPipelineOrderTests` and `MiddlewarePipelineOrderTests`, `MmcaGatewayHardeningTestsBaseTests`, `HandlerTestBaseTests`, `CrossServiceFixtureBaseTests`, `DependencyInjectionAssertTests`, `FeatureManagementTestExtensionsTests`, `JwtTokenGeneratorTests`, `RateLimiterTestExtensionsTests`, `RecordingHttpForwarderTests` and `TestPollingTests`, plus `CrossServiceHostIsolationTests`, the OpenAPI breaking-change detector (`OpenApiBreakingChangeDetectorTests`, `OpenApiBreakingChangeDetectorParameterTests`, `OpenApiContractTestsBaseBaselineTests`) and the tenant-resolution conformance pair (`TenantResolutionConformanceTests`, `TenantResolutionTestsBaseTests`) |
 | `MMCA.Common.Testing.Aspire.Tests` | 8 | The unit tier over the shipped `MMCA.Common.Testing.Aspire` package: `AppHostReadinessBudgetTests`, the three precondition gates (`AppHostEnvironmentGateTests`, `DockerAvailabilityTests`, `DeveloperCertificateAvailabilityTests`), `EphemeralRsaKeyPairTests`, and `AppHostProbePathsTests` plus the two h2c probe suites (`MMCA.Common/MMCA.Common.slnx:52`) |
+| `MMCA.Common.Testing.Azure.Tests` | 4 | The container-free contract of the shipped `ServiceBusEmulatorFixtureBase`: the emulator image pin, the bounded-phase budgets, the admin-plane connection string and the MassTransit entity defaults the emulator's quota forces (`MMCA.Common/Tests/Hosting/MMCA.Common.Testing.Azure.Tests/Fixtures/ServiceBusEmulatorFixtureBaseTests.cs:15`) |
+| `MMCA.Common.Testing.E2E.Tests` | 2 | The E2E settings parse: millisecond timeouts read with the invariant culture, and zero, negative or non-finite values fall back to the default (`MMCA.Common/Tests/Hosting/MMCA.Common.Testing.E2E.Tests/Infrastructure/E2ETestConfigurationTests.cs:21`) |
+| `MMCA.Common.Azure.Tests` | 17 | The Azure adapter package with no Azure resource: the Service Bus transport and emulator detection, Notification Hubs push and device registration, Blob storage, Key Vault configuration, the DataProtection key ring, the Monitor exporter, and the vendor-boundary rules (`MMCA.Common/Tests/Hosting/MMCA.Common.Azure.Tests/Messaging/AzureServiceBusTransportTests.cs:20`) |
+| `MMCA.Common.Aws.Tests` | 19 | The AWS adapter package with no AWS account: the SQS transport, S3 storage, SNS push and device registration, RDS IAM authentication, Secrets Manager configuration and the DataProtection key ring; the same surface runs against LocalStack in `MMCA.Common.Aws.LocalStack.Tests` (`MMCA.Common/Tests/Hosting/MMCA.Common.Aws.Tests/Messaging/AmazonSqsTransportTests.cs:21`) |
+| `MMCA.Common.Gcp.Tests` | 34 | The Google Cloud adapter package with no project: Cloud Storage, the KMS-encrypted GCS key ring, FCM push and device registration, Secret Manager configuration, Cloud SQL IAM authentication and the telemetry token source; the emulator tier is `MMCA.Common.Gcp.Emulator.Tests` (`MMCA.Common/Tests/Hosting/MMCA.Common.Gcp.Tests/Storage/GcsFileStorageServiceTests.cs:21`) |
 
 **Architecture**
 
