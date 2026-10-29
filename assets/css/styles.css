@@ -943,7 +943,8 @@ a.adr:hover .adr-title { color: var(--accent); }
 
 .article-card { padding: 0; overflow: hidden; }
 .article-card .thumb {
-  aspect-ratio: 16 / 9;
+  /* The 1600x840 hero ratio, so `cover` never crops the art's own margins. */
+  aspect-ratio: 40 / 21;
   background: linear-gradient(135deg, var(--accent-soft), var(--surface-alt));
   display: grid;
   place-items: center;
