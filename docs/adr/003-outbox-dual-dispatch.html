@@ -286,7 +286,9 @@
           (<code>LockedUntil</code>, falling back to <code>OccurredOn</code>), the terminal unresolvable-type path stamps
           <code>LockedUntil</code> instead of clearing it, and with no outbox row behind them local events are
           dispatched one at a time with each failure logged at Error (see the Revision (2026-10-26) at the
-          end).</p>
+          end).
+          Revised 2026-10-28: anchors refreshed after later MMCA.Common releases moved them (see the Revision
+          (2026-10-28) at the end).</p>
           <h2 id="context">Context</h2>
           <p>Domain events must be reliably published after aggregate changes are persisted. Two failure modes exist:</p>
           <ol>
@@ -891,6 +893,34 @@
           <code>ReleaseLocalLeaseAsync</code> <code>:439-453</code> (best-effort catch <code>:449-452</code>), sync path without a lease
           <code>:110-113</code>; <code>:20-23</code> unchanged. <code>OutboxFinalizer.cs:67</code> unchanged.</li>
           </ol>
+          <h2 id="revision-2026-10-28">Revision (2026-10-28)</h2>
+          <p>Re-verified against current source. No content change: the dual-dispatch decision, the claim lease,
+          the batched delivered stamps, the ordering guard, the jittered retry curve and every behavior
+          recorded above still hold, and the outbox-flag branch still registers <code>IOutboxAdministration</code>
+          whatever the flag says. What moved is line numbers cited by the Status and by earlier Revision
+          sections, which stay as written; for readers following them, the load-bearing locations now are:</p>
+          <ol>
+          <li><strong>Anchors re-verified against current source:</strong> <code>DependencyInjection.cs</code>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs</code>): the
+          <code>IsOutboxEnabled</code> branch at <code>:237-241</code> (<code>OutboxProcessor</code> and <code>OutboxCleanupService</code> at
+          <code>:239-240</code>), the <code>else</code> registering <code>OutboxDisabledNoticeService</code> at <code>:242-245</code> (<code>:244</code>), and the
+          scoped <code>IOutboxAdministration</code> registration after the branch at <code>:249-250</code> (the Revision
+          (2026-10-21) item 6 cites <code>:222-226</code>, <code>:227-230</code> and <code>:234-235</code>; the Revisions (2026-08-26),
+          (2026-10-01) and (2026-10-06) cite <code>:202-203</code>, <code>:219-220</code> and <code>:229</code>).
+          <code>MessageBusSettings.cs</code> (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Messaging/MessageBusSettings.cs</code>):
+          <code>PreserveDefaultEndpointNames</code> at <code>:90</code>, summary at <code>:82-89</code> (the Status and the Revision
+          (2026-10-01) item 5 cite <code>:75-83</code>); <code>EndpointPrefix</code> at <code>:80</code> (cited <code>:66</code> and <code>:73</code>);
+          <code>EnableInbox</code> at <code>:139</code> (cited <code>:117</code> under <code>Settings/</code> and <code>:133</code>).
+          <code>DependencyInjection.Messaging.cs</code>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.Messaging.cs</code>): the
+          <code>PreserveDefaultEndpointNames</code> opt-out skip at <code>:98-106</code> (cited <code>:75-86</code>), the endpoint prefix
+          resolved at <code>:100-102</code> (cited <code>:80-82</code> and <code>:81-83</code>). <code>MMCA.Common/CHANGELOG.md</code> is prepend-only,
+          so its line cites drift with every release; the entries now sit at: v1.240.0 (section <code>:490</code>) the
+          restored drain rate at <code>:494</code> (cited <code>:236</code>); v1.247.0 (section <code>:303</code>) the <strong>Breaking</strong>
+          <code>UserPermissions</code> entry at <code>:307</code> (cited <code>:49</code>); v1.261.0 (section <code>:50</code>) the per-event dispatch
+          of unbacked local events at <code>:54</code> (cited <code>:11</code>) and the dead-letter window from the last failed
+          attempt at <code>:63</code> (cited <code>:20</code>).</li>
+          </ol>
           
         <div class="doc-foot btn-row">
           <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
@@ -918,6 +948,7 @@
             <li><a href="#revision-2026-10-07">Revision (2026-10-07)</a></li>
             <li><a href="#revision-2026-10-21">Revision (2026-10-21)</a></li>
             <li><a href="#revision-2026-10-26">Revision (2026-10-26)</a></li>
+            <li><a href="#revision-2026-10-28">Revision (2026-10-28)</a></li>
             </ul>
           </nav>
         </aside>

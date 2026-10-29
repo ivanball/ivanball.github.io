@@ -63,6 +63,7 @@ redact through unchanged, and a rebuilt item keeps its metadata (still not `RawR
 Revised 2026-10-26: the Anthropic SDK pin is 13.3.0, ADC's section 16 score reads M4/I9 as the
 scorecard does, `ContentPolicyGuardrail` keeps item metadata like the PII policy and both guardrails keep
 `CreatedAt` (since v1.261.0), the type-level fitness rule's namespace root is stated, and anchors are refreshed.
+Revised 2026-10-28: anchors refreshed after MMCA.Common v1.265.1.
 
 ## Context
 Rubric section 16, AI-Native Application Architecture, asks one question of a product feature that
@@ -261,14 +262,14 @@ start, and the evaluation harness ships beside the package.**
    with no marker passes through by reference and a rebuilt text item keeps its
    `AdditionalProperties` and `Annotations` (`:337-341`), and both policies keep
    `ChatMessage.CreatedAt` on the message they rebuild (`:356`, `PiiRedactionGuardrail.cs:97`),
-   since v1.261.0 (`MMCA.Common/CHANGELOG.md:22`, L244). A configured pattern that does not compile fails the host at
+   since v1.261.0 (`MMCA.Common/CHANGELOG.md:65`, L244). A configured pattern that does not compile fails the host at
    startup rather than on a user's request (`ContentPolicySettings.cs:83`, `ValidateOnStart` at
    `Guardrails/GuardrailServiceCollectionExtensions.cs:67-70`), and
    `AddContentPolicyGuardrail(IConfiguration)` (`GuardrailServiceCollectionExtensions.cs:62`)
    registers one singleton under both interfaces (`:72-76`), so registering it satisfies
    `Ai:RequireGuardrail` exactly as the PII policy does. `PiiRedactionGuardrail` ships from
-   MMCA.Common v1.207.0 and `ContentPolicyGuardrail` from v1.208.0 (`MMCA.Common/CHANGELOG.md:1332`,
-   `:1286`).
+   MMCA.Common v1.207.0 and `ContentPolicyGuardrail` from v1.208.0 (`MMCA.Common/CHANGELOG.md:1375`,
+   `:1329`).
 
 8. **The configuration surface is one section, validated, and the switch is the registration.**
    `AiSettings` (`MMCA.Common/Source/Core/MMCA.Common.AI/AiSettings.cs:22`) binds `Ai` (`:25`) and
@@ -566,6 +567,17 @@ in v1.261.0, the live sections' section 16 score is corrected, and many anchors 
    (`MMCA.Common/CHANGELOG.md:1332`, `:1286`), and the `[1.207.0]` block of
    `MMCA.Common/UPGRADING.md` (`:1115-1164`, casing note at `:1145-1147`, defaults at
    `:1149-1160`). The earlier revisions keep their anchors as written.
+
+## Revision (2026-10-28)
+Re-verified against current source. No decision, rationale or trade-off changed; the release
+dating of both guardrails and of the v1.261.0 metadata fix is unchanged, and only their CHANGELOG
+anchors moved as the v1.264.0, v1.265.0 and v1.265.1 blocks landed above them.
+
+1. Anchors re-verified against current source: in Decision item 7 the v1.261.0 entry that keeps
+   `ChatMessage.CreatedAt` on a rebuilt message (L244) is at `MMCA.Common/CHANGELOG.md:65` (the
+   `[1.261.0]` block starts at `:50`), the `PiiRedactionGuardrail` release entry at `:1375` (the
+   `[1.207.0]` block starts at `:1345`) and the `ContentPolicyGuardrail` release entry at `:1329`
+   (the `[1.208.0]` block starts at `:1324`). The earlier revisions keep their anchors as written.
 
 ## Related
 [ADR-111](111-ai-session-scoring-governance.md) (the record this one extends: every scoring-specific

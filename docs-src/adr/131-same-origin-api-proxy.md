@@ -23,7 +23,7 @@ anchors are refreshed. Revised 2026-10-26: the `OPTIONS` step and the ADR-082 li
 preflight reaches the gateway while a forwarded request keeps the browser's `Origin` for the gateway's
 CORS middleware, the session cookie is also `Secure` on any HTTPS request in Development (MMCA.Common
 #588), and anchors are refreshed after MMCA.Common #587, #588, #590, #612 and the release notes through
-v1.261.0.
+v1.261.0. Revised 2026-10-28: anchors refreshed after MMCA.Common #615 (first tagged v1.262.0).
 
 ## Context
 A Blazor WebAssembly client calls the API through the gateway, which is a different origin from the
@@ -45,7 +45,7 @@ hybrid with the refresh token in the HttpOnly cookie and the access token held i
 the long-lived prize but still leaves a usable access token in script for its lifetime. The pieces A
 needs already existed: the cookie pair and its writer (`ISessionCookieStore`,
 `MMCA.Common/Source/Presentation/MMCA.Common.API/SessionCookies/ISessionCookieStore.cs:15`, HttpOnly,
-Secure outside Development and on any HTTPS request in Development, `SessionCookieJar.cs:68`, with a
+Secure outside Development and on any HTTPS request in Development, `SessionCookieJar.cs:69`, with a
 lifetime that defaults to `Jwt:RefreshTokenExpirationDays` when
 that section is bound and to 7 days otherwise,
 `MMCA.Common/Source/Presentation/MMCA.Common.API/SessionCookies/SessionCookieSettings.cs:31-38`,
@@ -431,6 +431,21 @@ release notes added since, through v1.261.0 (#613), moved the `UPGRADING.md` anc
    `:104-116` (carve-out `:112-115`); `UPGRADING.md:274` -> `:918`; `:659-690` -> `:887-918`;
    `:677-679`, `:679-683`, `:684-685` -> `:906-907`, `:907-911`, `:912-913`. Anchors inside the
    dated revisions above stay as written. The other live anchors still hold.
+
+## Revision (2026-10-28)
+Re-verified against current source. The gates, their order, the refresh outcomes, the session cookie
+flags and lifetime, the proxy settings and the `UPGRADING.md` anchors are unchanged. MMCA.Common #615
+(commit 0d40fff3, first tagged v1.262.0) rewrote the comment above the session cookie options, which
+moved the `Secure` anchor by one line.
+
+1. **`Secure` flag scope.** The cookie drops `Secure` for any plain-http request in Development,
+   whatever the host name (`Secure = !environment.IsDevelopment() || context.Request.IsHttps`,
+   `MMCA.Common/Source/Presentation/MMCA.Common.API/SessionCookies/SessionCookieJar.cs:69`); the
+   2026-10-26 item 3 wording "only a plain `http://localhost` run" names the common case, not the rule.
+   The Context paragraph already states the rule.
+2. Anchors re-verified against current source: `SessionCookieJar.cs:68` -> `:69` (Context);
+   `SessionCookieJar.cs:35-47` still holds. Anchors inside the dated revisions above stay as written
+   (`RefreshSessionSettings.cs:98` is now `:99`). The other live anchors still hold.
 
 ## Related
 [ADR-022](022-browser-session-cookie-auth.md) (the HttpOnly session cookie the proxy reads),

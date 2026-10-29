@@ -34,7 +34,8 @@ path; see the Revision (2026-10-19) at the end. Revised 2026-10-21: anchors refr
 the ADC and Store service hosts moved their `AddMmcaApplicationPipeline` call sites. Revised 2026-10-26:
 the Store UI adoption of `ModelValidation.For` is now 7 page call sites, and the Helpdesk
 decorator-order test composes through `AddMmcaApplicationPipeline`; all seven service-host call sites
-re-pointed.
+re-pointed. Revised 2026-10-28: anchors refreshed after the ADC Identity and Engagement hosts
+gained an `AddAzureServiceBusTransport()` registration ahead of their pipeline call.
 
 ## Context
 Commands and queries share cross-cutting concerns: validation, transactions, cache invalidation,
@@ -81,8 +82,8 @@ Use single-responsibility handlers behind a Scrutor-composed decorator pipeline.
   Revision (2026-08-26) below): the Helpdesk reference host
   (`MMCA.Helpdesk/Source/Hosts/MMCA.Helpdesk.Web/Program.cs:121`) and the seven production service
   hosts, ADC Identity / Conference / Engagement /
-  Notification (`MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:339`, `...Conference.Service/Program.cs:429`,
-  `...Engagement.Service/Program.cs:298`, `...Notification.Service/Program.cs:239`) and Store Identity /
+  Notification (`MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:340`, `...Conference.Service/Program.cs:429`,
+  `...Engagement.Service/Program.cs:299`, `...Notification.Service/Program.cs:239`) and Store Identity /
   Catalog / Sales (`MMCA.Store/Source/Services/MMCA.Store.Identity.Service/Program.cs:255`,
   `...Catalog.Service/Program.cs:267`, `...Sales.Service/Program.cs:248`). Only that decorators-last
   ordering is load-bearing; the relative position of `AddInfrastructure`/`AddAPI` is not.
@@ -568,3 +569,21 @@ earlier Revision sections are left as historical records; the items below state 
    `MMCA.Helpdesk/Source/Hosts/MMCA.Helpdesk.Web/Program.cs:121` still matches. The Decision's
    `DependencyInjection.cs:134-140` / `:143-148`, `ModelValidation.cs:26,43`, `IModelValidator.cs:13`,
    `ValidatingCommandDecorator.cs:32` and `CommandValidatorCoverageTestsBase.cs:22` still match.
+
+## Revision (2026-10-28)
+Re-verified against current source. The decision, both decorator chains
+(`MMCA.Common/Source/Core/MMCA.Common.Application/DependencyInjection.cs:134-140`, `:143-148`), the
+eight composing hosts and the validation homes are unchanged. Two ADC service-host call sites in the
+Decision moved by one line, because each host now registers `services.AddAzureServiceBusTransport()`
+directly above its `AddMmcaApplicationPipeline` call. Stale anchors inside the earlier Revision
+sections are left as historical records.
+
+1. Anchors re-verified against current source: in the Decision, ADC Identity
+   (`MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:340`) and Engagement
+   (`MMCA.ADC/Source/Services/MMCA.ADC.Engagement.Service/Program.cs:299`) are re-pointed. ADC
+   Conference (`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:429`) and
+   Notification (`MMCA.ADC/Source/Services/MMCA.ADC.Notification.Service/Program.cs:239`), Store
+   Identity (`MMCA.Store/Source/Services/MMCA.Store.Identity.Service/Program.cs:255`), Catalog
+   (`MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:267`) and Sales
+   (`MMCA.Store/Source/Services/MMCA.Store.Sales.Service/Program.cs:248`), and
+   `MMCA.Helpdesk/Source/Hosts/MMCA.Helpdesk.Web/Program.cs:121` still match.

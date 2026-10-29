@@ -1,7 +1,7 @@
 # ADR-130: Per-Engine Data Source Strategy (Engine Facts Instead of Branching on the Enum)
 
 ## Status
-Accepted (2026-10-01). Shipped in MMCA.Common v1.218.0 (`MMCA.Common/CHANGELOG.md:838`). Revised
+Accepted (2026-10-01). Shipped in MMCA.Common v1.218.0 (`MMCA.Common/CHANGELOG.md:881`). Revised
 2026-10-06: the release status now records v1.218.0 as shipped. Refines [ADR-018](018-polyglot-persistence.md) (engine as
 a routing decision) and [ADR-113](113-postgresql-as-a-first-class-engine.md) (the fourth engine)
 without changing [ADR-006](006-database-per-service.md) (one sealed context class per engine, one
@@ -12,6 +12,7 @@ startup bar only in Development; the replaced shape is cited through its squash 
 anchors refreshed. Revised 2026-10-25: re-checked for the PostgreSQL data-source extension point
 v1.257.0 adds; the engine strategy is unchanged and the extension point is recorded in ADR-113 (see
 Revision (2026-10-25) below). Revised 2026-10-26: anchors refreshed after the v1.261.0 release.
+Revised 2026-10-28: anchors refreshed after the v1.265.1 release.
 
 ## Context
 MMCA.Common persists through four engines named by one shipped public enum, `DataSource`
@@ -302,6 +303,20 @@ moved, and the resolver's engine reads are now listed in full.
    (`InProcessEventBus.cs:82` and `BrokerEventBus.cs:70` unchanged); and `AddRawSqlQueryExecutor`
    is declared at `DependencyInjection.cs:426` (still called at `:116`), with the relational check
    and registration at `:435-438` and its doc comment at `:416-422`.
+
+## Revision (2026-10-28)
+Re-verified against current source. The engine contract, the registry, the capabilities table, the
+call sites that read engine facts and the raw-SQL registration are unchanged; only the changelog
+anchor moved, because later release sections were added above it.
+
+1. Anchors re-verified against current source: the v1.218.0 release heading is
+   `MMCA.Common/CHANGELOG.md:881`, with the `RequestIdentityInsert` rename entry at `:887` and the
+   matching Removed entry at `:937`, now cited in the Status block (the `:838` and `:844` in the
+   2026-10-26 revision and the anchors in the earlier revisions are left as written); the resolver
+   reads at `DataSourceResolver.cs:23`, `:36`, `:307`, `:413` and `:470`, the outbox routing reads at
+   `InProcessEventBus.cs:82`, `BrokerEventBus.cs:70` and `DomainEventSaveChangesInterceptor.cs:259`,
+   include support at `DataSourceService.cs:32`, and `AddRawSqlQueryExecutor` at
+   `DependencyInjection.cs:426` (called at `:116`, relational check at `:435`) are unchanged.
 
 ## Related
 [ADR-006](006-database-per-service.md) (one sealed context per engine),

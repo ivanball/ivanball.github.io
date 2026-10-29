@@ -38,6 +38,8 @@ Revised 2026-10-26: `AddTypedServiceClient` and its registration test are gone (
 v1.254.0), so the HTTP half of Decision point 1 now rests on the global Aspire
 `ConfigureHttpClientDefaults` handler alone; other anchors refreshed.
 
+Revised 2026-10-28: anchors refreshed after the v1.265.1 release.
+
 ## Context
 The framework already supplies the *mechanisms* for surviving partial failure: a standard Polly
 resilience handler (timeout / retry / circuit breaker), the outbox for at-least-once delivery
@@ -62,7 +64,7 @@ resilience handler (timeout / retry / circuit breaker), the outbox for at-least-
    `HttpResilienceDefaults` (`:62-65`) and switches the retry off for POST and PATCH (`:74`). The
    framework no longer ships a typed HTTP service-client helper: `AddTypedServiceClient` was removed
    in v1.254.0, gRPC through `AddTypedGrpcClient` is the supported cross-service client, and a host
-   that wants a typed `HttpClient` registers it itself (`MMCA.Common/CHANGELOG.md:150`).
+   that wants a typed `HttpClient` registers it itself (`MMCA.Common/CHANGELOG.md:193`).
    `AddTypedGrpcClient` reads the `Grpc`-prefixed members of the same `HttpResilienceDefaults`
    (`MMCA.Common/Source/Presentation/MMCA.Common.Grpc/DependencyInjection.cs:141-167`). Its timeouts
    are the east-west path's own, not the outbound-HTTP 30s/90s: an 8-second attempt and a 20-second
@@ -417,3 +419,18 @@ One registration site recorded since 2026-06-14 no longer exists, and line posit
    `dr-freshness` gates at `MMCA.ADC/.github/workflows/deploy.yml:846-858` and
    `MMCA.Store/.github/workflows/deploy.yml:791-802` (the 8-day window at `:855` and `:799`).
    Citations inside the earlier Revision sections are left as recorded.
+
+## Revision (2026-10-28)
+Re-verified against current source. The Decision, the reference objectives, the outbox breaker, the
+database posture, the Stripe single-retry-owner pipeline and the removal of `AddTypedServiceClient`
+(no match remains under `MMCA.Common/Source`) stand as recorded. Only line positions moved, as
+later releases pushed the CHANGELOG entry down.
+
+1. Anchors re-verified against current source: the `AddTypedServiceClient` removal at
+   `MMCA.Common/CHANGELOG.md:193`, under the `### Breaking` heading at `:191` of the
+   `## [1.254.0] - 2026-10-24` section at `:178` (Decision point 1 re-pointed from `:150`). The
+   Stripe `IsTransientFailure` sits at
+   `MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Infrastructure/Payments/Stripe/StripePaymentService.cs:607-614`
+   (the timeout arm at `:612`), with the pipeline at `:76-113`, retry `:77`, breaker `:94` and both
+   `ShouldHandle` predicates through `IsTransientFailure` at `:87` and `:101` unchanged. Citations
+   inside the earlier Revision sections are left as recorded.

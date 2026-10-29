@@ -6,21 +6,21 @@
   <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#0e151f" media="(prefers-color-scheme: dark)">
   <title>ADR-134: Cloud-Neutral Core With Vendor Adapter Packages · MMCA · Ivan Ball-llovera</title>
-  <meta name="description" content="Accepted (2026-10-24). The change is the MMCA.Common v1.255.0 entry of the framework changelog (MMCA.Common/CHANGELOG.md:111, Added at :115-121, Fixed…">
+  <meta name="description" content="Accepted (2026-10-24). The change is the MMCA.Common v1.255.0 entry of the framework changelog (MMCA.Common/CHANGELOG.md:154, Added at :158-164, Fixed…">
   <link rel="canonical" href="https://ivanball.github.io/docs/adr/134-cloud-neutral-core-vendor-adapters.html">
   <link rel="icon" href="../../assets/img/favicon.svg" type="image/svg+xml">
   <link rel="alternate" type="application/rss+xml" title="Ivan Ball-llovera: deep dives on enterprise .NET" href="https://ivanball.github.io/feed.xml">
   <meta property="og:type" content="article">
   <meta property="og:site_name" content="Ivan Ball-llovera">
   <meta property="og:title" content="ADR-134: Cloud-Neutral Core With Vendor Adapter Packages">
-  <meta property="og:description" content="Accepted (2026-10-24). The change is the MMCA.Common v1.255.0 entry of the framework changelog (MMCA.Common/CHANGELOG.md:111, Added at :115-121, Fixed…">
+  <meta property="og:description" content="Accepted (2026-10-24). The change is the MMCA.Common v1.255.0 entry of the framework changelog (MMCA.Common/CHANGELOG.md:154, Added at :158-164, Fixed…">
   <meta property="og:url" content="https://ivanball.github.io/docs/adr/134-cloud-neutral-core-vendor-adapters.html">
   <meta property="og:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <meta property="og:image:alt" content="Ivan Ball-llovera, Principal Software Architect">
   <meta property="og:locale" content="en_US">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="ADR-134: Cloud-Neutral Core With Vendor Adapter Packages">
-  <meta name="twitter:description" content="Accepted (2026-10-24). The change is the MMCA.Common v1.255.0 entry of the framework changelog (MMCA.Common/CHANGELOG.md:111, Added at :115-121, Fixed…">
+  <meta name="twitter:description" content="Accepted (2026-10-24). The change is the MMCA.Common v1.255.0 entry of the framework changelog (MMCA.Common/CHANGELOG.md:154, Added at :158-164, Fixed…">
   <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Platform","item":"https://ivanball.github.io/platform.html"},{"@type":"ListItem","position":2,"name":"Reference","item":"https://ivanball.github.io/docs/index.html"},{"@type":"ListItem","position":3,"name":"Architecture Decision Records","item":"https://ivanball.github.io/docs/adr/index.html"},{"@type":"ListItem","position":4,"name":"134 · Cloud-Neutral Core With Vendor Adapter Packages","item":"https://ivanball.github.io/docs/adr/134-cloud-neutral-core-vendor-adapters.html"}]}</script>
   <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);if(localStorage.getItem('mmca-rail')==='hidden')document.documentElement.setAttribute('data-rail','hidden');if(localStorage.getItem('mmca-cites')==='shown')document.documentElement.setAttribute('data-cites','shown');}catch(e){}})();</script>
@@ -245,33 +245,35 @@
           <h1 id="adr-134-cloud-neutral-core-with-vendor-adapter-packages">ADR-134: Cloud-Neutral Core With Vendor Adapter Packages</h1>
           <h2 id="status">Status</h2>
           <p>Accepted (2026-10-24). The change is the MMCA.Common v1.255.0 entry of the framework changelog
-          (<code>MMCA.Common/CHANGELOG.md:111</code>, Added at <code>:115-121</code>, Fixed at <code>:125</code>, Breaking at <code>:129-133</code>) and
+          (<code>MMCA.Common/CHANGELOG.md:154</code>, Added at <code>:158-164</code>, Fixed at <code>:168</code>, Breaking at <code>:172-176</code>) and
           its upgrade section (<code>MMCA.Common/UPGRADING.md:98</code>). It amends the records whose Azure integrations
           moved: <a href="041-observability-and-telemetry.html">ADR-041</a>, <a href="044-native-push-delivery.html">ADR-044</a>,
           <a href="045-managed-file-storage-and-avatars.html">ADR-045</a>, <a href="061-runtime-secret-management.html">ADR-061</a>,
           <a href="066-broker-transport-selection.html">ADR-066</a>, <a href="069-shared-data-protection-key-ring.html">ADR-069</a>,
           <a href="015-architecture-fitness-functions.html">ADR-015</a> and
           <a href="118-message-transport-library-policy.html">ADR-118</a>; each carries a 2026-10-24 revision.</p>
-          <p>Revised 2026-10-25 (MMCA.Common v1.257.0, <code>MMCA.Common/CHANGELOG.md:69</code>): AWS gains the vault configuration, DataProtection key
+          <p>Revised 2026-10-25 (MMCA.Common v1.257.0, <code>MMCA.Common/CHANGELOG.md:112</code>): AWS gains the vault configuration, DataProtection key
           ring and native push Azure already had, plus passwordless PostgreSQL through RDS IAM (Azure covers
-          passwordless SQL Server through Entra instead) (<code>:73-77</code>); a third cloud adapter, MMCA.Common.Gcp, covers storage, secrets, the key ring, push,
-          passwordless PostgreSQL and telemetry for Google Cloud (<code>:78-85</code>); Google Cloud has no MassTransit v8
-          Pub/Sub transport, so its broker answer is a built-in, cloud-neutral <code>PostgreSql</code> provider (<code>:86</code>);
+          passwordless SQL Server through Entra instead) (<code>:116-120</code>); a third cloud adapter, MMCA.Common.Gcp, covers storage, secrets, the key ring, push,
+          passwordless PostgreSQL and telemetry for Google Cloud (<code>:121-128</code>); Google Cloud has no MassTransit v8
+          Pub/Sub transport, so its broker answer is a built-in, cloud-neutral <code>PostgreSql</code> provider (<code>:129</code>);
           the core gains the <code>INpgsqlDataSourceConfigurator</code> hook and the public <code>NativePushPayloads</code> builders
-          the adapters share (<code>:87-88</code>); the startup tripwires gain one check per new gate and the key-ring
-          rule now fails when more than one of three key-ring gates is set (<code>:89</code>, <code>:95</code>); and the type-level
-          vendor rule, which had passed vacuously for every Azure and AWS type, is fixed (<code>:94</code>). The Decision
+          the adapters share (<code>:130-131</code>); the startup tripwires gain one check per new gate and the key-ring
+          rule now fails when more than one of three key-ring gates is set (<code>:132</code>, <code>:138</code>); and the type-level
+          vendor rule, which had passed vacuously for every Azure and AWS type, is fixed (<code>:137</code>). The Decision
           below reads as the current state; the options weighed on 2026-10-25 are added to Alternatives
           rejected. Revised 2026-10-26: the MassTransit pins behind the SQS and PostgreSQL transports read
-          8.5.12 after v1.260.0, and anchors refreshed against v1.261.0.</p>
+          8.5.12 after v1.260.0, and anchors refreshed against v1.261.0. Revised 2026-10-28: the
+          <code>MMCA.Common.Testing.Azure</code> pin of the type-level vendor rule is recorded beside the three adapter
+          pins, and anchors refreshed after v1.265.1.</p>
           <h2 id="context">Context</h2>
           <p>Before v1.255.0 the core packages carried the Azure SDKs themselves: MMCA.Common.Infrastructure,
           MMCA.Common.Aspire, MMCA.Common.API and MMCA.Common.Testing each referenced Azure packages, and
           MMCA.Common.Testing brought Testcontainers.ServiceBus, Azure.Messaging.ServiceBus and
-          MassTransit.Azure.ServiceBus.Core into every test project that used it (<code>MMCA.Common/CHANGELOG.md:129</code>).
+          MassTransit.Azure.ServiceBus.Core into every test project that used it (<code>MMCA.Common/CHANGELOG.md:172</code>).
           A consumer that never runs on Azure (a self-hosted deployment, or one on AWS) still restored, audited
           and shipped those dependencies, and the broker selection was a closed enum, <code>MessageBusProvider</code>, so a
-          second cloud&#39;s transport could only be added by editing the core (<code>MMCA.Common/CHANGELOG.md:130</code>).</p>
+          second cloud&#39;s transport could only be added by editing the core (<code>MMCA.Common/CHANGELOG.md:173</code>).</p>
           <p>The framework already had a working shape for optional vendor code. The AI boundary
           (<a href="120-governed-chat-client-boundary.html">ADR-120</a>) keeps the provider SDKs in separate packages
           (<code>MMCA.Common.AI.Anthropic</code>, <code>MMCA.Common.AI.OpenAI</code>) and resolves a configured provider name against
@@ -281,10 +283,10 @@
           <h2 id="decision">Decision</h2>
           <p><strong>The core packages reference no cloud SDK. Each vendor integration ships in an adapter package that
           references the core, and a host opts in with one registration call per capability.</strong> The framework
-          guide states the rule (<code>MMCA.Common/AGENTS.md:146</code>).</p>
+          guide states the rule (<code>MMCA.Common/AGENTS.md:147</code>).</p>
           <ul>
           <li><strong>Three cloud adapter packages and one test adapter.</strong> Every call is opt-in and a no-op until its
-          gate key is set (<code>MMCA.Common/CHANGELOG.md:73</code>, <code>:78</code>).<ul>
+          gate key is set (<code>MMCA.Common/CHANGELOG.md:116</code>, <code>:121</code>).<ul>
           <li><code>MMCA.Common.Azure</code>: Key Vault as a configuration source, <code>AddAzureKeyVaultConfiguration()</code>
           (<code>MMCA.Common/Source/Hosting/MMCA.Common.Azure/AzureKeyVaultConfigurationExtensions.cs:23</code>, <code>:80</code>);
           the Blob plus Key Vault DataProtection key ring, <code>AddAzureDataProtection()</code>
@@ -296,7 +298,7 @@
           Hubs native push, <code>AddAzureNotificationHubsPush(configuration)</code> (<code>:83</code>); and the Service Bus
           transport, <code>AddAzureServiceBusTransport()</code> (<code>:117-118</code>). The Entra ID SQL authentication provider
           (<code>Microsoft.Data.SqlClient.Extensions.Azure</code>) arrives by referencing the package, with no call
-          (<code>MMCA.Common/CHANGELOG.md:115</code>).</li>
+          (<code>MMCA.Common/CHANGELOG.md:158</code>).</li>
           <li><code>MMCA.Common.Aws</code>: S3-compatible storage, <code>AddS3FileStorage(configuration)</code>, and the SQS/SNS
           transport, <code>AddAmazonSqsTransport()</code>
           (<code>MMCA.Common/Source/Hosting/MMCA.Common.Aws/AwsServiceCollectionExtensions.cs:29</code>, <code>:50</code>, <code>:85</code>);
@@ -308,13 +310,13 @@
           (<code>MMCA.Common/Source/Hosting/MMCA.Common.Aws/AwsDataProtectionExtensions.cs:57</code>, <code>:59</code>, <code>:76</code>;
           <code>Amazon.AspNetCore.DataProtection.SSM</code> at <code>MMCA.Common/Directory.Packages.props:164</code>); SNS mobile
           push with a DynamoDB installation registry, <code>AddAmazonSnsPush(configuration)</code>
-          (<code>AwsServiceCollectionExtensions.cs:164</code>; <code>MMCA.Common/CHANGELOG.md:76</code>); and RDS / Aurora IAM
-          authentication for PostgreSQL, <code>AddAwsRdsIamAuthentication(configuration)</code> (<code>:107</code>), gated on the
+          (<code>AwsServiceCollectionExtensions.cs:164</code>; <code>MMCA.Common/CHANGELOG.md:119</code>); and RDS / Aurora IAM
+          authentication for PostgreSQL, <code>AddAwsRdsIamAuthentication(configuration)</code> (<code>AwsServiceCollectionExtensions.cs:107</code>), gated on the
           <code>Rds:IamAuthentication</code> section
           (<code>MMCA.Common/Source/Hosting/MMCA.Common.Aws/Rds/RdsIamAuthenticationSettings.cs:11</code>) with the
           token refreshed every 10 minutes
           (<code>MMCA.Common/Source/Hosting/MMCA.Common.Aws/Rds/RdsIamAuthenticationConfigurator.cs:24</code>).</li>
-          <li><code>MMCA.Common.Gcp</code>, over Application Default Credentials throughout (<code>MMCA.Common/CHANGELOG.md:78</code>):
+          <li><code>MMCA.Common.Gcp</code>, over Application Default Credentials throughout (<code>MMCA.Common/CHANGELOG.md:121</code>):
           Cloud Storage, <code>AddGoogleCloudStorage(configuration)</code>
           (<code>MMCA.Common/Source/Hosting/MMCA.Common.Gcp/GcpServiceCollectionExtensions.cs:26</code>, <code>:48</code>), gated
           on <code>FileStorage:GcsBucket</code>
@@ -327,8 +329,8 @@
           (<code>MMCA.Common/Source/Hosting/MMCA.Common.Gcp/GoogleCloudDataProtectionExtensions.cs:24-25</code>, <code>:76</code>);
           FCM HTTP v1 push with a Firestore installation registry, <code>AddFirebaseCloudMessagingPush(configuration)</code>
           (<code>GcpServiceCollectionExtensions.cs:142</code>), which accepts FCM registration tokens only
-          (<code>MMCA.Common/CHANGELOG.md:82</code>); Cloud SQL IAM authentication for PostgreSQL,
-          <code>AddCloudSqlIamAuthentication(configuration)</code> (<code>:90</code>), gated on the <code>CloudSql:IamAuthentication</code>
+          (<code>MMCA.Common/CHANGELOG.md:125</code>); Cloud SQL IAM authentication for PostgreSQL,
+          <code>AddCloudSqlIamAuthentication(configuration)</code> (<code>GcpServiceCollectionExtensions.cs:90</code>), gated on the <code>CloudSql:IamAuthentication</code>
           section
           (<code>MMCA.Common/Source/Hosting/MMCA.Common.Gcp/CloudSql/CloudSqlIamAuthenticationSettings.cs:13</code>)
           with the token refreshed every minute
@@ -345,7 +347,7 @@
           </ul>
           </li>
           <li><strong>Configuration sections and keys are unchanged.</strong> Only the call and the type names moved; no shim
-          or <code>[Obsolete]</code> alias is left in the core (<code>MMCA.Common/CHANGELOG.md:129</code>). Each adapter binds the
+          or <code>[Obsolete]</code> alias is left in the core (<code>MMCA.Common/CHANGELOG.md:172</code>). Each adapter binds the
           section the core used: Blob storage and S3 both read <code>FileStorage</code>
           (<code>MMCA.Common/Source/Hosting/MMCA.Common.Aws/Storage/S3StorageClientFactory.cs:13</code>), and the
           Notification Hubs registration keeps the <code>NativePush</code> gate of <code>Enabled</code> plus a connection string and
@@ -375,7 +377,7 @@
           <code>Name</code> at <code>:43</code>) runs MassTransit&#39;s SQL transport, <code>MassTransit.SqlTransport.PostgreSQL</code> at 8.5.12
           (<code>MMCA.Common/Directory.Packages.props:131-136</code>), so any PostgreSQL is the broker, which is why it is
           core rather than an adapter (<code>PostgreSqlBrokerTransport.cs:10-14</code>). It is the broker for Google
-          Cloud, which has no MassTransit v8 Pub/Sub transport (<code>MMCA.Common/CHANGELOG.md:86</code>). The
+          Cloud, which has no MassTransit v8 Pub/Sub transport (<code>MMCA.Common/CHANGELOG.md:129</code>). The
           <code>MessageBus:PostgreSql</code> section
           (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Messaging/Transports/PostgreSqlTransportSettings.cs:11</code>)
           carries <code>Schema</code> and <code>Role</code> (<code>:20</code>, <code>:26</code>; both default <code>transport</code>, <code>PostgreSqlBrokerTransport.cs:18-19</code>)
@@ -389,7 +391,8 @@
           string (<code>:32-34</code>) for the contexts, the readiness check and the <code>PostgreSql</code> broker alike
           (<code>PostgreSqlBrokerTransport.cs:30-33</code>). With none registered the raw connection string path is
           unchanged (<code>INpgsqlDataSourceConfigurator.cs:12-13</code>). <code>AddAwsRdsIamAuthentication</code> and
-          <code>AddCloudSqlIamAuthentication</code> are both configurators behind this hook (<code>MMCA.Common/CHANGELOG.md:87</code>).</li>
+          <code>AddCloudSqlIamAuthentication</code> are both configurators behind this hook (<code>MMCA.Common/Source/Hosting/MMCA.Common.Aws/Rds/RdsIamAuthenticationConfigurator.cs:21</code>,
+          <code>MMCA.Common/Source/Hosting/MMCA.Common.Gcp/CloudSql/CloudSqlIamAuthenticationConfigurator.cs:23</code>).</li>
           <li><strong>The push payload builders are core.</strong> <code>NativePushPayloads</code>
           (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Notifications/Push/NativePushPayloads.cs:13</code>,
           <code>BuildFcmV1Payload</code> at <code>:20</code>, <code>BuildApnsPayload</code> at <code>:42</code>) is public and called by the
@@ -404,7 +407,7 @@
           is the adapter call <code>AddAzureMonitorExporter()</code>, which throws when it runs before
           <code>AddServiceDefaults()</code> because the framework&#39;s outbox and probe filter processors must be registered
           ahead of the exporter (<code>AzureMonitorExporterExtensions.cs:45-50</code>; <code>Extensions.Telemetry.cs:146</code>;
-          <code>MMCA.Common/CHANGELOG.md:131</code>).</li>
+          <code>MMCA.Common/CHANGELOG.md:174</code>).</li>
           <li><strong>Startup tripwires fail fast when vendor configuration exists without its adapter.</strong> Two
           <code>IValidateOptions</code> validators run under <code>ValidateOnStart</code>, before any hosted service starts.
           <code>CloudAdapterTripwire</code>
@@ -415,7 +418,7 @@
           naming the call of each of the three push adapters (<code>:53</code>). A tripwire fires only on a key that
           declares intent, so a <code>FileStorage</code> section, which is routinely shared across a solution&#39;s
           services, is deliberately not checked (<code>:22-26</code>); a host that lost its storage adapter fails each
-          upload with <code>FileStorage.NotConfigured</code> instead (v1.256.0, <code>MMCA.Common/CHANGELOG.md:101-109</code>).
+          upload with <code>FileStorage.NotConfigured</code> instead (v1.256.0, <code>MMCA.Common/CHANGELOG.md:144-152</code>).
           <code>HostIntegrationTripwire</code>
           (<code>MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Integrations/HostIntegrationTripwire.cs:15</code>, <code>:59</code>,
           registered by <code>AddServiceDefaults()</code> at <code>MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Extensions.cs:44-46</code>)
@@ -451,7 +454,11 @@
           SDK
           (<code>MMCA.Common/Tests/Hosting/MMCA.Common.Azure.Tests/CloudVendorRulesTests.cs:22</code>,
           <code>MMCA.Common/Tests/Hosting/MMCA.Common.Aws.Tests/CloudVendorRulesTests.cs:21</code>,
-          <code>MMCA.Common/Tests/Hosting/MMCA.Common.Gcp.Tests/CloudVendorRulesTests.cs:28</code>).</li>
+          <code>MMCA.Common/Tests/Hosting/MMCA.Common.Gcp.Tests/CloudVendorRulesTests.cs:28</code>), and the test
+          adapter&#39;s project pins its own adapter entry with a type naming <code>ServiceBusEmulatorFixtureBase</code>
+          (<code>MMCA.Common/Tests/Hosting/MMCA.Common.Testing.Azure.Tests/CloudVendorRulesTests.cs:21</code>,
+          <code>:24</code>), since the assembly rule also catches any name ending in <code>.Azure</code> and could not detect that
+          entry being dropped (<code>:9-12</code>).</li>
           <li><strong>Exactly two references are exempt, both database engines rather than cloud services.</strong>
           <code>Microsoft.EntityFrameworkCore.Cosmos</code> in MMCA.Common.Infrastructure, because Cosmos DB is one of the
           framework&#39;s data engines and brings <code>Microsoft.Azure.Cosmos</code> transitively, so that namespace is
@@ -460,13 +467,13 @@
           (<code>MMCA.Common.LayerEnforcement.targets:117-124</code>, exemptions at <code>:134-135</code>;
           <code>CloudVendorIsolationTestsBase.cs:21</code>). The Google Cloud additions added no exemption.</li>
           <li><strong>S3-compatible, not S3-only.</strong> <code>AddS3FileStorage</code> targets Amazon S3, Cloudflare R2, MinIO and the
-          GCS XML API from one <code>FileStorage</code> section (<code>MMCA.Common/CHANGELOG.md:116</code>;
+          GCS XML API from one <code>FileStorage</code> section (<code>MMCA.Common/CHANGELOG.md:159</code>;
           <code>MMCA.Common/Source/Hosting/MMCA.Common.Aws/Storage/S3FileStorageSettings.cs:13</code>,
           <code>S3FileStorageService.cs:23</code>). Request checksum calculation and response checksum validation both
           default to <code>WHEN_REQUIRED</code> rather than the AWS SDK default
           (<code>S3FileStorageSettings.cs:59</code>, <code>:65</code>, <code>:72</code>; <code>AwsServiceCollectionExtensions.cs:40-41</code>), the posture
           that keeps the non-AWS stores working. The native Google adapter reads its own <code>Gcs</code>-prefixed keys
-          of the same section, so the two never collide (<code>MMCA.Common/CHANGELOG.md:79</code>).</li>
+          of the same section, so the two never collide (<code>MMCA.Common/CHANGELOG.md:122</code>).</li>
           <li><strong>The SQS transport works within SQS limits.</strong> <code>AmazonSqsTransport</code> registers under the provider
           name <code>AmazonSqs</code>
           (<code>MMCA.Common/Source/Hosting/MMCA.Common.Aws/Messaging/AmazonSqsTransport.cs:37</code>, <code>:40</code>) and uses
@@ -476,14 +483,14 @@
           <code>[60, 300, 900]</code> (<code>:55</code>, applied at <code>:128</code>) and a configured interval over 900 fails
           <code>AddBrokerMessaging</code> instead of being silently shortened (<code>:159-161</code>). The <code>MMCA-*</code> ambient headers
           (<code>:46</code>) travel in the MassTransit envelope body, not as SQS/SNS message attributes (<code>:30-33</code>,
-          <code>:134-135</code>), so they never compete for the 10-attribute cap (<code>MMCA.Common/CHANGELOG.md:116</code>).</li>
+          <code>:134-135</code>), so they never compete for the 10-attribute cap (<code>MMCA.Common/CHANGELOG.md:159</code>).</li>
           <li><strong>The adapters are exercised against real infrastructure.</strong> The <code>aws-integration</code> CI job runs
           MMCA.Common.Aws against LocalStack through Testcontainers
-          (<code>MMCA.Common/.github/workflows/ci.yml:902-903</code>, test run with a floor of 14 tests at <code>:940</code>), and
+          (<code>MMCA.Common/.github/workflows/ci.yml:934-935</code>, test run with a floor of 14 tests at <code>:972</code>), and
           the <code>gcp-integration</code> job runs MMCA.Common.Gcp against fake-gcs-server and the Firestore emulator
-          (<code>:942-943</code>, floor of 14 at <code>:987</code>); neither is a required check (<code>MMCA.Common/CHANGELOG.md:85</code>,
-          <code>:121</code>). The PostgreSQL tier covers a periodic password provider and the <code>PostgreSql</code> broker
-          (<code>:90</code>).</li>
+          (<code>:974-975</code>, floor of 14 at <code>:1019</code>); neither is a required check (<code>MMCA.Common/CHANGELOG.md:128</code>,
+          <code>:164</code>). The PostgreSQL tier covers a periodic password provider and the <code>PostgreSql</code> broker
+          (<code>:133</code>).</li>
           </ul>
           <h2 id="rationale">Rationale</h2>
           <ul>
@@ -522,10 +529,10 @@
           900 seconds (<code>AmazonSqsTransport.cs:55</code>).</li>
           <li><strong>The AWS and Google Cloud tiers are not required checks.</strong> A regression in MMCA.Common.Aws or
           MMCA.Common.Gcp shows as a red <code>aws-integration</code> or <code>gcp-integration</code> job without blocking a merge
-          (<code>MMCA.Common/CHANGELOG.md:85</code>, <code>:121</code>).</li>
+          (<code>MMCA.Common/CHANGELOG.md:128</code>, <code>:164</code>).</li>
           <li><strong>Every consumer of MMCA.Common.Infrastructure restores the SQL transport.</strong> The built-in
           <code>PostgreSql</code> provider brings <code>MassTransit.SqlTransport.PostgreSQL</code> and Dapper to every consumer,
-          whichever broker it selects (<code>MMCA.Common/CHANGELOG.md:86</code>).</li>
+          whichever broker it selects (<code>MMCA.Common/CHANGELOG.md:129</code>).</li>
           <li><strong>An IAM-only broker database cannot migrate at startup.</strong> MassTransit&#39;s schema migrator opens its
           own connections from the connection string, so such a host sets <code>MigrateOnStartup=false</code> and
           creates the transport schema in a deployment step that connects with a password
@@ -534,9 +541,9 @@
           logs; metrics reach Google only through the Google-built OpenTelemetry Collector
           (<code>GoogleCloudTelemetryExporterExtensions.cs:78-88</code>).</li>
           <li><strong>The Google push adapter takes FCM tokens only.</strong> An APNs-platform registration fails validation,
-          so an iOS client registers an FCM token (<code>MMCA.Common/CHANGELOG.md:82</code>).</li>
+          so an iOS client registers an FCM token (<code>MMCA.Common/CHANGELOG.md:125</code>).</li>
           <li><strong>Neither managed SQL Server offers IAM database authentication.</strong> RDS for SQL Server keeps a password connection
-          string loaded from Secrets Manager (<code>MMCA.Common/CHANGELOG.md:77</code>); Cloud SQL for SQL Server (<code>:83</code>)
+          string loaded from Secrets Manager (<code>MMCA.Common/CHANGELOG.md:120</code>); Cloud SQL for SQL Server (<code>:126</code>)
           takes either a password connection string from Secret Manager or, on SQL Server 2022 and later, Entra
           ID through MMCA.Common.Azure (<code>MMCA.Common/Source/Hosting/MMCA.Common.Gcp/GcpServiceCollectionExtensions.cs:80-83</code>).</li>
           </ul>
@@ -560,7 +567,7 @@
           <p>Weighed and rejected on 2026-10-25.</p>
           <ul>
           <li><strong>A hand-written MassTransit transport for Google Pub/Sub.</strong> It would give Google Cloud a native
-          broker, but no MassTransit v8 Pub/Sub transport exists (<code>MMCA.Common/CHANGELOG.md:86</code>), so the
+          broker, but no MassTransit v8 Pub/Sub transport exists (<code>MMCA.Common/CHANGELOG.md:129</code>), so the
           framework would own a broker transport&#39;s delivery, redelivery and topology outside the MassTransit
           project. The <code>PostgreSql</code> provider gives Google Cloud a broker on Cloud SQL instead. Revisit if
           MassTransit ships a supported Pub/Sub transport on the line
@@ -570,7 +577,7 @@
           record names.</li>
           <li><strong>Google&#39;s own DataProtection packages.</strong> They are prerelease only, and a stable package cannot
           depend on a prerelease (NU5104), so the key-ring repository and the Cloud KMS encryptor are the
-          framework&#39;s own (<code>MMCA.Common/CHANGELOG.md:81</code>; <code>MMCA.Common/Directory.Packages.props:187-191</code>).
+          framework&#39;s own (<code>MMCA.Common/CHANGELOG.md:124</code>; <code>MMCA.Common/Directory.Packages.props:187-191</code>).
           Revisit when Google publishes a stable release.</li>
           <li><strong>Exporting Google Cloud metrics without a collector.</strong> The Telemetry API caps a metric request at
           200 data points and the OpenTelemetry .NET SDK offers no supported way to split one metric&#39;s points
@@ -587,12 +594,12 @@
           <li><strong>The change is breaking.</strong> The renames, moved types and new calls are mapped once in
           <code>MMCA.Common/UPGRADING.md:98</code> (the old-to-new table at <code>:106-122</code> and the seven-step fix per host
           at <code>:151-175</code>) rather than restated here; <code>Microsoft.Data.SqlClient.Extensions.Azure</code> now arrives only through
-          MMCA.Common.Azure, so any process whose SQL connection string uses <code>Authentication=Active Directory ...</code> references that package (<code>MMCA.Common/CHANGELOG.md:129</code>).</li>
+          MMCA.Common.Azure, so any process whose SQL connection string uses <code>Authentication=Active Directory ...</code> references that package (<code>MMCA.Common/CHANGELOG.md:172</code>).</li>
           <li><strong>A configured redelivery list now replaces the default.</strong> Making the provider a string came with
           <code>RedeliveryIntervalsSeconds</code> becoming <code>null</code> when unconfigured
           (<code>MessageBusSettings.cs:240</code>), which fixes the binder appending a configured list to the old
           initializer, so <code>[0]</code> turns second-level redelivery off as documented
-          (<code>BrokerTransportPolicies.cs:124-125</code>; <code>MMCA.Common/CHANGELOG.md:125</code>).</li>
+          (<code>BrokerTransportPolicies.cs:124-125</code>; <code>MMCA.Common/CHANGELOG.md:168</code>).</li>
           <li><strong>A new cloud is an adapter, not a core change.</strong> A transport implements <code>IBrokerTransport</code>, storage
           implements <code>IFileStorageService</code>, and a tripwire message names the call, with the build and
           architecture gates holding the core free of the new SDK.</li>
@@ -624,6 +631,26 @@
           <code>aws-integration</code> at <code>MMCA.Common/.github/workflows/ci.yml:902-903</code> (floor 14 at <code>:940</code>) and
           <code>gcp-integration</code> at <code>:942-943</code> (floor 14 at <code>:987</code>).</li>
           </ol>
+          <h2 id="revision-2026-10-28">Revision (2026-10-28)</h2>
+          <p>Re-verified against current source. The decision is unchanged: the core references no cloud SDK,
+          the adapters keep their calls and gates, both boundary gates still hold, and both CI tier floors
+          are still 14 tests. What moved is line numbers in the CHANGELOG, AGENTS and ci.yml after releases
+          through v1.265.1, plus one test pin the record had not named.</p>
+          <ol>
+          <li>The type-level vendor rule has a fourth pin: MMCA.Common.Testing.Azure.Tests names
+          <code>ServiceBusEmulatorFixtureBase</code> and asserts the type rule flags it
+          (<code>MMCA.Common/Tests/Hosting/MMCA.Common.Testing.Azure.Tests/CloudVendorRulesTests.cs:21</code>,
+          <code>:24</code>), because the assembly rule also matches any name ending in <code>.Azure</code> and so cannot catch
+          that adapter entry being dropped (<code>:9-12</code>). Listed under Fixed in v1.258.0 (<code>MMCA.Common/CHANGELOG.md:110</code>).</li>
+          <li>Anchors re-verified against current source: the v1.255.0 entry at <code>MMCA.Common/CHANGELOG.md:154</code>
+          (Added <code>:158-164</code>, Fixed <code>:168</code>, Breaking <code>:172-176</code>), the v1.256.0 entry at <code>:140</code> (Fixed
+          <code>:144-152</code>), and the v1.257.0 entry at <code>:112</code> (Added <code>:116-133</code>, Fixed <code>:137-138</code>); the guide
+          bullet at <code>MMCA.Common/AGENTS.md:147</code>; the CI jobs <code>aws-integration</code> at
+          <code>MMCA.Common/.github/workflows/ci.yml:934-935</code> (floor 14 at <code>:972</code>) and <code>gcp-integration</code> at
+          <code>:974-975</code> (floor 14 at <code>:1019</code>); and the two method anchors now named in full,
+          <code>AwsServiceCollectionExtensions.cs:107</code> (<code>AddAwsRdsIamAuthentication</code>) and
+          <code>GcpServiceCollectionExtensions.cs:90</code> (<code>AddCloudSqlIamAuthentication</code>).</li>
+          </ol>
           
         <div class="doc-foot btn-row">
           <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
@@ -642,6 +669,7 @@
             <li><a href="#alternatives-rejected">Alternatives rejected</a></li>
             <li><a href="#consequences">Consequences</a></li>
             <li><a href="#revision-2026-10-26">Revision (2026-10-26)</a></li>
+            <li><a href="#revision-2026-10-28">Revision (2026-10-28)</a></li>
             </ul>
           </nav>
         </aside>

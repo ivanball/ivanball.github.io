@@ -22,7 +22,8 @@ overtaken by a login or logout, and the bearer handler marks replay safety on a 
 anchors refreshed. Revised 2026-10-26: both browser storage services raise `SessionEnded`
 (`ISessionAwareTokenStorage`) when a held session ends on the server and the auth-state provider
 signs the shell out on it (no MAUI equivalent), the WASM clients pre-hydrate the token through
-`TokenHydrationWarmup`, and Decision anchors are refreshed.
+`TokenHydrationWarmup`, and Decision anchors are refreshed. Revised 2026-10-28: anchors refreshed
+after the 2026-10-27 ADC and Store Server host `Program.cs` changes.
 
 ## Context
 ADR-022 and ADR-050 describe the two server halves of authentication: the Blazor host's
@@ -80,8 +81,8 @@ match its safe-storage story; the UI code above them never branches on render mo
   (`SameOriginProxyTokenRefresher.cs:19-20`).
 - **On a same-origin API proxy host the browser never holds a credential.** Both consumer Server
   hosts call `AddCommonSameOriginApiProxy` and `MapCommonSameOriginApiProxy`
-  (`MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs:167`, `Program.cs:290`;
-  `MMCA.Store/Source/Hosts/UI/MMCA.Store.UI.Web/Program.cs:159`, `Program.cs:268`; ADR-131). That
+  (`MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs:168`, `Program.cs:291`;
+  `MMCA.Store/Source/Hosts/UI/MMCA.Store.UI.Web/Program.cs:160`, `Program.cs:269`; ADR-131). That
   call replaces the Server circuit's `ITokenRefresher` with `HandoffTokenRefresher` and its
   `ISessionCookieSync` with `HandoffSessionCookieSync`
   (`MMCA.Common/Source/Presentation/MMCA.Common.UI.Web/SameOriginProxy/SameOriginApiProxyServiceExtensions.cs:83-84`).
@@ -266,11 +267,11 @@ match its safe-storage story; the UI code above them never branches on render mo
   registers `ServerTokenStorageService` via `AddCommonServerTokenStorage`
   (`MMCA.Common/Source/Presentation/MMCA.Common.UI.Web/DependencyInjection.cs:41`,
   `DependencyInjection.cs:50`) plus the same proxy refresher and auth-state provider
-  (`MMCA.Store/Source/Hosts/UI/MMCA.Store.UI.Web/Program.cs:148-149`, `Program.cs:161`;
-  `MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs:156-157`, `Program.cs:169`), and in both hosts
+  (`MMCA.Store/Source/Hosts/UI/MMCA.Store.UI.Web/Program.cs:149-150`, `Program.cs:162`;
+  `MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs:157-158`, `Program.cs:170`), and in both hosts
   the later `AddCommonSameOriginApiProxy` call overrides that refresher with `HandoffTokenRefresher`
-  (`MMCA.Store/Source/Hosts/UI/MMCA.Store.UI.Web/Program.cs:159`,
-  `MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs:167`; the auth-state provider registration
+  (`MMCA.Store/Source/Hosts/UI/MMCA.Store.UI.Web/Program.cs:160`,
+  `MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs:168`; the auth-state provider registration
   follows that call); the MAUI host
   registers the shared SecureStorage-backed pair via `AddCommonMauiTokenStorage` plus
   `DirectApiTokenRefresher` + `JwtAuthenticationStateProvider`
@@ -607,3 +608,19 @@ moved no longer holds).
    `:290` and `MMCA.Store/Source/Hosts/UI/MMCA.Store.UI.Web/Program.cs:148-149`, `:159`, `:161`,
    `:268`. `SessionClaimsToken.cs:10` and `:17` and `SameOriginProxyTransformer.cs:60` stand as
    written.
+
+## Revision (2026-10-28)
+Re-verified against current source. The head-specific trios, the same-origin proxy handoff and the
+override order are unchanged: in both Server hosts `AddCommonSameOriginApiProxy` still follows the
+`SameOriginProxyTokenRefresher` registration and precedes the auth-state provider, and the call still
+replaces `ITokenRefresher` with `HandoffTokenRefresher` and `ISessionCookieSync` with
+`HandoffSessionCookieSync`
+(`MMCA.Common/Source/Presentation/MMCA.Common.UI.Web/SameOriginProxy/SameOriginApiProxyServiceExtensions.cs:83-84`).
+Only the Server host `Program.cs` anchors moved, each by one line, and the Decision is re-pointed in
+place. The dated Revisions above keep their anchors as written.
+
+1. Anchors re-verified against current source: `MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs:157`
+   (`AddCommonServerTokenStorage`), `:158` (`SameOriginProxyTokenRefresher`), `:168`
+   (`AddCommonSameOriginApiProxy`), `:170` (`JwtAuthenticationStateProvider`), `:291`
+   (`MapCommonSameOriginApiProxy`); `MMCA.Store/Source/Hosts/UI/MMCA.Store.UI.Web/Program.cs:149`,
+   `:150`, `:160`, `:162`, `:269` (same order).

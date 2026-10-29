@@ -44,6 +44,8 @@ Revised 2026-10-26: the dead-letter retention window runs from the last failed a
 `LockedUntil` instead of clearing it, and with no outbox row behind them local events are
 dispatched one at a time with each failure logged at Error (see the Revision (2026-10-26) at the
 end).
+Revised 2026-10-28: anchors refreshed after later MMCA.Common releases moved them (see the Revision
+(2026-10-28) at the end).
 
 ## Context
 Domain events must be reliably published after aggregate changes are persisted. Two failure modes exist:
@@ -654,3 +656,31 @@ Revision sections stay as written.
    `NewLocalLease` `:317-318`, failed-dispatch catch `:390-401` (release call `:397`),
    `ReleaseLocalLeaseAsync` `:439-453` (best-effort catch `:449-452`), sync path without a lease
    `:110-113`; `:20-23` unchanged. `OutboxFinalizer.cs:67` unchanged.
+
+## Revision (2026-10-28)
+Re-verified against current source. No content change: the dual-dispatch decision, the claim lease,
+the batched delivered stamps, the ordering guard, the jittered retry curve and every behavior
+recorded above still hold, and the outbox-flag branch still registers `IOutboxAdministration`
+whatever the flag says. What moved is line numbers cited by the Status and by earlier Revision
+sections, which stay as written; for readers following them, the load-bearing locations now are:
+
+1. **Anchors re-verified against current source:** `DependencyInjection.cs`
+   (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs`): the
+   `IsOutboxEnabled` branch at `:237-241` (`OutboxProcessor` and `OutboxCleanupService` at
+   `:239-240`), the `else` registering `OutboxDisabledNoticeService` at `:242-245` (`:244`), and the
+   scoped `IOutboxAdministration` registration after the branch at `:249-250` (the Revision
+   (2026-10-21) item 6 cites `:222-226`, `:227-230` and `:234-235`; the Revisions (2026-08-26),
+   (2026-10-01) and (2026-10-06) cite `:202-203`, `:219-220` and `:229`).
+   `MessageBusSettings.cs` (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Messaging/MessageBusSettings.cs`):
+   `PreserveDefaultEndpointNames` at `:90`, summary at `:82-89` (the Status and the Revision
+   (2026-10-01) item 5 cite `:75-83`); `EndpointPrefix` at `:80` (cited `:66` and `:73`);
+   `EnableInbox` at `:139` (cited `:117` under `Settings/` and `:133`).
+   `DependencyInjection.Messaging.cs`
+   (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.Messaging.cs`): the
+   `PreserveDefaultEndpointNames` opt-out skip at `:98-106` (cited `:75-86`), the endpoint prefix
+   resolved at `:100-102` (cited `:80-82` and `:81-83`). `MMCA.Common/CHANGELOG.md` is prepend-only,
+   so its line cites drift with every release; the entries now sit at: v1.240.0 (section `:490`) the
+   restored drain rate at `:494` (cited `:236`); v1.247.0 (section `:303`) the **Breaking**
+   `UserPermissions` entry at `:307` (cited `:49`); v1.261.0 (section `:50`) the per-event dispatch
+   of unbacked local events at `:54` (cited `:11`) and the dead-letter window from the last failed
+   attempt at `:63` (cited `:20`).

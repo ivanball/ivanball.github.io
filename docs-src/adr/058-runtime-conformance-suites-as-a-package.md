@@ -9,6 +9,7 @@ Revised 2026-10-06: the consumers' lockstep `MMCA.Common.Shared` pin is now 1.23
 Revised 2026-10-07: the consumers' lockstep `MMCA.Common.Shared` pin is now 1.233.0 and the ADC pin anchor moved to `Directory.Packages.props:101`; see the Revision (2026-10-07) below.
 Revised 2026-10-21: the OpenAPI base gains an opt-in committed-baseline breaking-change diff that all seven OpenAPI subclasses adopt, the decorator pipeline is now sealed against late registration through the framework helpers, the lockstep pin is 1.250.0, and anchors are refreshed; see the Revision (2026-10-21) below.
 Revised 2026-10-26: anchors refreshed after the v1.261.0 consumer sweep (the lockstep `MMCA.Common.Shared` pin is now 1.261.0 and the ADC pin anchor moved to `Directory.Packages.props:108`), with the `MiddlewarePipelineOrderTestsBase` and ADR-015 / ADR-046 cross-reference anchors re-pointed; see the Revision (2026-10-26) below.
+Revised 2026-10-28: the lockstep `MMCA.Common.Shared` pin is now 1.265.1, and the inventory of MMCA.Common's own conformance self-tests names the tenancy-base and breaking-change-detector tests; see the Revision (2026-10-28) below.
 
 ## Context
 ADR-015 turned the architecture invariants into build-gating tests, and drew its own boundary
@@ -198,6 +199,11 @@ through a private stub-fixture subclass
 (`Tests/Hosting/MMCA.Common.Testing.Tests/Conformance/OpenApiContractTestsBaseBaselineTests.cs:155-156`),
 and the gateway-hardening base is checked for shape over an abstract sample
 (`Tests/Hosting/MMCA.Common.Testing.Tests/Conformance/MmcaGatewayHardeningTestsBaseTests.cs:21`, `:75`).
+The folder's remaining files are self-tests of the pieces outside the seven: the tenancy fitness base
+is exercised through its one private `Probe` subclass, instantiated with different settings
+(`Tests/Hosting/MMCA.Common.Testing.Tests/Conformance/TenantResolutionTestsBaseTests.cs:15`, `:163`),
+and the breaking-change detector behind the OpenAPI baseline gate has its own unit tests
+(`OpenApiBreakingChangeDetectorTests.cs:14`, `OpenApiBreakingChangeDetectorParameterTests.cs:15`).
 
 **MMCA.Helpdesk adopts exactly one of them, the decorator suite**, having adopted none of them when
 this record was written. Its architecture-test project now references `MMCA.Common.Testing` alongside the
@@ -506,6 +512,30 @@ the subclass inventory above stand. The lockstep pin moved, and four anchors wer
    (was `:29`; the pinned 1.261.0 contains the two added lines); and the Context cross-references are
    `015-architecture-fitness-functions.md:118` (was `:95`) and `046-http-api-versioning.md:100`
    (was `:99`).
+
+## Revision (2026-10-28)
+
+Re-verified against current source. No decision, rationale or adoption changed; the seven bases and
+the subclass inventory above stand. The lockstep pin moved, and the inventory of MMCA.Common's own
+conformance tests now names every file in that folder.
+
+1. **The lockstep pin is now 1.265.1.** MMCA.ADC, MMCA.Store and MMCA.Helpdesk all pin
+   `MMCA.Common.Shared` 1.265.1 (`MMCA.ADC/Directory.Packages.props:108`,
+   `MMCA.Store/Directory.Packages.props:8`, `MMCA.Helpdesk/Directory.Packages.props:83`), not the
+   1.261.0 the 2026-10-26 Revision recorded, so every consumer still carries the compile-time layer
+   targets in a package-mode build.
+2. **MMCA.Common's conformance self-tests are listed in full.** Beyond the OpenAPI baseline stub and
+   the gateway-hardening sample, the `Tests/Hosting/MMCA.Common.Testing.Tests/Conformance` folder holds
+   `TenantResolutionTestsBaseTests` (`TenantResolutionTestsBaseTests.cs:15`, with its private `Probe`
+   subclass at `:163`), a self-test of the no-host tenancy base, and two unit-test classes for the
+   breaking-change detector (`OpenApiBreakingChangeDetectorTests.cs:14`,
+   `OpenApiBreakingChangeDetectorParameterTests.cs:15`). None of them is adoption, and none tests one
+   of the seven bases directly; the adoption inventory in the Decision section now names them.
+3. Anchors re-verified against current source: the three pin lines (`:108`, `:8`, `:83`) are
+   unchanged from the 2026-10-26 Revision; the Decision's `MinimumPathCount` (`:58`) and
+   `CorePublicResources` (`:71`) anchors in `OpenApiContractTestsBase.cs` are current, which
+   supersedes the `:38` and `:51` the 2026-09-25 Revision cites (`:51` now declares
+   `OpenApiDocumentPath`).
 
 ## Related
 ADR-015 (the structural / registration fitness layer this complements; its stated non-goal, "not

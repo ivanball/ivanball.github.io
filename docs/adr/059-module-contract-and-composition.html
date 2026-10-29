@@ -247,13 +247,16 @@
           <p>Accepted (2026-07-28; revised 2026-08-14). Revised 2026-10-07: anchors refreshed after the v1.233.0 release.
           Revised 2026-10-19: ADC Conference and Engagement gain module conformance tests, so seven of the eight modules are checked (only Helpdesk Tickets is not).
           Revised 2026-10-21: ADC <code>ConferenceModule</code> registers three stubs (adding the <code>IUserConferenceExportService</code> export stub), <code>DisabledEventLiveValidationService</code> fails open across five members, the empty-export stub list names the Conference and Store Catalog export stubs, and host anchors are refreshed.
-          Revised 2026-10-26: service-host anchors refreshed after the host Program.cs files moved (no behavior change).</p>
+          Revised 2026-10-26: service-host anchors refreshed after the host Program.cs files moved (no behavior change).
+          Revised 2026-10-28: the Trade-offs list of undeclared cross-module gRPC edges grows from two to five consuming modules (ADC Engagement, Notification and Identity join ADC Conference and Store Identity), the ADR-008 reading is corrected (only <code>ModuleLoader</code> is its Context; the <code>Disabled*</code> stubs belong to its Strangler Fig step), and anchors are refreshed.</p>
           <h2 id="context">Context</h2>
           <p>The framework&#39;s headline claim is that an application is built as a modular monolith and later
           extracted into services without rewriting business logic. ADR-008 states the extracted shape in one
-          sentence, &quot;Each service is the monolith with one module enabled&quot;, and it treats <code>ModuleLoader</code> and
-          the <code>Disabled*</code> stubs as <strong>pre-existing context</strong> before deciding the extraction topology
-          (<code>Website/docs-src/adr/008-service-extraction-topology.md:23,44,52-53</code>). ADR-006 decides the database axis
+          sentence, &quot;Each service is the monolith with one module enabled&quot;
+          (<code>Website/docs-src/adr/008-service-extraction-topology.md:51</code>). It treats <code>ModuleLoader</code> as
+          <strong>pre-existing context</strong> before deciding the extraction topology (<code>:30</code>), and relies on the
+          <code>Disabled*</code> stubs in its Strangler Fig extraction step, where the combined host keeps running with
+          the extracted module turned off (<code>:57-59</code>). ADR-006 decides the database axis
           of the same split. Neither records the composition model itself: how a module declares itself, how a
           host finds it, in what order registrations run, what &quot;disabled&quot; does to the container, and what a
           dependent resolves when its peer is not in the process. That mechanism is what makes the ADR-008
@@ -294,7 +297,7 @@
           which is how the service hosts pass it: Store
           (<code>MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:131-133</code>,
           <code>MMCA.Store.Identity.Service/Program.cs:126-128</code>, <code>MMCA.Store.Sales.Service/Program.cs:139-141</code>) and
-          ADC (<code>MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:272-274</code>,
+          ADC (<code>MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:273-275</code>,
           <code>MMCA.ADC.Conference.Service/Program.cs:379-381</code>, <code>MMCA.ADC.Engagement.Service/Program.cs:220-222</code>,
           <code>MMCA.ADC.Notification.Service/Program.cs:202-204</code>) each name the single assembly of the one module
           that host enables, so an extracted service&#39;s scan surface equals its own module. Helpdesk calls
@@ -370,7 +373,7 @@
           invoked from startup database initialization
           (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/DatabaseInitializationExtensions.cs:51-54,137</code>).
           <code>AddModuleHealthChecks</code> publishes one <code>module-{Name}</code> check per module, Healthy when enabled and
-          Degraded when disabled (<code>DependencyInjection.cs:212-234</code>).</li>
+          Degraded when disabled (<code>DependencyInjection.cs:217-239</code>).</li>
           <li><strong>A remote-dependency validator exists but is not wired.</strong> <code>ValidateRemoteDependencies</code> re-resolves
           every service type a disabled dependency&#39;s stub registered, throwing when it no longer resolves and
           warning when it still resolves to the stub type (<code>ModuleLoader.cs:212-257</code>). It is exercised only by
@@ -386,8 +389,8 @@
           <code>:27-28</code>) and <code>SalesModule</code>, which declares <code>[&quot;Catalog&quot;, &quot;Identity&quot;]</code> with
           <code>RequiresDependencies = true</code> and publishes one cross-module contract of its own,
           <code>IUserSalesExportService</code> stubbed by <code>DisabledUserSalesExportService</code>
-          (<code>MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.API/SalesModule.cs:23-88</code>, the stub registration at
-          <code>:45-46</code>,
+          (<code>MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.API/SalesModule.cs:24-99</code>, the stub registration at
+          <code>:46-47</code>,
           <code>MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Shared/Exports/DisabledUserSalesExportService.cs:7-12</code>).
           Store has two data-subject export edges into Identity, Sales and Catalog, which is why Store&#39;s
           <code>IdentityModule.Register</code> adds both <code>AddUserDataExportSection&lt;SalesUserDataExportSection&gt;()</code> and
@@ -416,14 +419,22 @@
           (<code>MMCA.Store/Source/Services/MMCA.Store.Sales.Service/Program.cs:252,258-259</code>); because the host names
           only its own module assembly, the peer modules are never discovered there and their stubs are never
           registered. ADC Engagement declares
-          <code>[&quot;Conference&quot;]</code> remote (<code>MMCA.ADC/Source/Services/MMCA.ADC.Engagement.Service/appsettings.json:38-46</code>)
-          and ADC Notification declares <code>[&quot;Identity&quot;]</code> remote
-          (<code>MMCA.ADC/Source/Services/MMCA.ADC.Notification.Service/appsettings.json:27-35</code>), while ADC
-          Conference enables one module and declares nothing remote
-          (<code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/appsettings.json:21-26</code>) even though it wires
-          Engagement&#39;s <code>IBookmarkCountService</code> as a gRPC client
-          (<code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:431</code>), because
-          <code>ConferenceModule</code> never declares Engagement in <code>Dependencies</code>.</p>
+          <code>[&quot;Conference&quot;]</code> remote (<code>MMCA.ADC/Source/Services/MMCA.ADC.Engagement.Service/appsettings.json:38-46</code>,
+          the list at <code>:43</code>) and ADC Notification declares <code>[&quot;Identity&quot;]</code> remote
+          (<code>MMCA.ADC/Source/Services/MMCA.ADC.Notification.Service/appsettings.json:27-35</code>, the list at <code>:33</code>),
+          while ADC Conference and ADC Identity each enable one module and declare nothing remote
+          (<code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/appsettings.json:21-26</code>,
+          <code>MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/appsettings.json:30-33</code>). Those declarations
+          cover only the peers a module lists in <code>Dependencies</code>. Every ADC host also wires at least one peer
+          gRPC client it declares nowhere: Conference wires Engagement&#39;s <code>IBookmarkCountService</code>
+          (<code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:431</code>), Engagement wires
+          Notification&#39;s live-channel client
+          (<code>MMCA.ADC/Source/Services/MMCA.ADC.Engagement.Service/Program.cs:303</code>), Notification wires
+          Conference&#39;s event-live validation client
+          (<code>MMCA.ADC/Source/Services/MMCA.ADC.Notification.Service/Program.cs:242</code>), and Identity wires the
+          Engagement, Notification and Conference export clients
+          (<code>MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:342-344</code>). The Trade-offs record
+          those undeclared edges.</p>
           <h2 id="rationale">Rationale</h2>
           <ul>
           <li><strong>Reflection discovery keeps hosts out of the module registration business.</strong> A host names the
@@ -441,7 +452,7 @@
           which never discovers its peers, registers a real cross-process adapter for the same contract
           instead (<code>Sales.Service/Program.cs:258-259</code>).</li>
           <li><strong>Two strictness levels, chosen per module.</strong> A module that genuinely cannot function without a
-          peer opts into <code>RequiresDependencies = true</code> and fails fast (<code>SalesModule.cs:36</code>,
+          peer opts into <code>RequiresDependencies = true</code> and fails fast (<code>SalesModule.cs:37</code>,
           <code>EngagementModule.cs:23</code>, <code>NotificationModule.cs:24</code>); everything else tolerates a missing peer and
           degrades, which is the safer default for a module whose cross-module call is advisory.</li>
           <li><strong><code>RemoteDependencies</code> keeps strictness usable after extraction.</strong> Without it, every strict module
@@ -464,7 +475,7 @@
           the same omission depend on whether some code path happened to load the assembly first
           (<code>ModuleLoader.cs:49-54</code>).</li>
           <li><strong>Stubs degrade silently by design.</strong> A stub answers success-shaped defaults: an always-open live
-          window (<code>DisabledEventLiveValidationService.cs:26,35-42</code>), a passing bookmark validation
+          window (<code>DisabledEventLiveValidationService.cs:27,36-43</code>), a passing bookmark validation
           (<code>DisabledSessionBookmarkValidationService.cs:33-34</code>), zero counts
           (<code>MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Shared/UserSessionBookmarks/DisabledBookmarkCountService.cs:7-23</code>),
           an empty attendee list
@@ -481,13 +492,23 @@
           so a data-subject export assembled while a module is disabled reads as a complete document.
           A wrongly disabled module therefore produces plausible wrong answers rather than an error, and the
           only startup signal is a Degraded <code>module-{Name}</code> health check plus a log line
-          (<code>DependencyInjection.cs:224-231</code>, <code>ModuleLoader.cs:334-335,343-344</code>).</li>
-          <li><strong>The dependency graph is a hand-written declaration, not a derived fact.</strong> ADC Conference consumes
-          Engagement&#39;s <code>IBookmarkCountService</code> over gRPC without listing Engagement in <code>Dependencies</code>
-          (<code>ConferenceModule.cs:16-32</code> versus <code>Conference.Service/Program.cs:431</code>), and Store Identity
-          consumes the Sales and Catalog export services over gRPC while <code>IdentityModule</code> declares no
-          <code>Dependencies</code> at all (<code>MMCA.Store.Identity.API/IdentityModule.cs:16-47</code> versus
-          <code>MMCA.Store/Source/Services/MMCA.Store.Identity.Service/Program.cs:284,295</code>), so neither the
+          (<code>DependencyInjection.cs:229-236</code>, <code>ModuleLoader.cs:334-335,343-344</code>).</li>
+          <li><strong>The dependency graph is a hand-written declaration, not a derived fact.</strong> Five modules consume a
+          peer over gRPC without listing it in <code>Dependencies</code>. ADC Conference consumes Engagement&#39;s
+          <code>IBookmarkCountService</code> (<code>ConferenceModule.cs:16-32</code> versus <code>Conference.Service/Program.cs:431</code>).
+          ADC Engagement declares only <code>[&quot;Conference&quot;]</code> yet its host wires Notification&#39;s live-channel client
+          (<code>EngagementModule.cs:20</code> versus
+          <code>MMCA.ADC/Source/Services/MMCA.ADC.Engagement.Service/Program.cs:303</code>). ADC Notification declares
+          only <code>[&quot;Identity&quot;]</code>, and lists only Identity under <code>RemoteDependencies</code>, yet its host wires
+          Conference&#39;s event-live validation client (<code>NotificationModule.cs:21</code> versus
+          <code>MMCA.ADC/Source/Services/MMCA.ADC.Notification.Service/Program.cs:242</code>,
+          <code>MMCA.ADC/Source/Services/MMCA.ADC.Notification.Service/appsettings.json:31-34</code>). ADC
+          <code>IdentityModule</code> declares no <code>Dependencies</code> yet its host wires the Engagement, Notification and
+          Conference export clients (<code>MMCA.ADC.Identity.API/IdentityModule.cs:13-25</code> versus
+          <code>MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:342-344</code>). Store Identity consumes
+          the Sales and Catalog export services while its <code>IdentityModule</code> declares no <code>Dependencies</code> at all
+          (<code>MMCA.Store.Identity.API/IdentityModule.cs:16-47</code> versus
+          <code>MMCA.Store/Source/Services/MMCA.Store.Identity.Service/Program.cs:284,295</code>). Neither the
           topological sort nor the <code>RequiresDependencies</code> check knows about those edges. Nothing derives
           <code>Dependencies</code> from the interfaces a module actually resolves. What is pinned is the declaration
           against a written expectation: <code>ModuleConformanceTestsBase&lt;TModule&gt;</code> asserts <code>Name</code>, <code>Dependencies</code>,
@@ -654,11 +675,53 @@
           2026-10-01, 2026-10-06, 2026-10-07 and 2026-10-21 revisions are left as written and are superseded
           by these.</li>
           </ol>
+          <h2 id="revision-2026-10-28">Revision (2026-10-28)</h2>
+          <p>Re-verified against current source. The decision, the module inventory, the strictness rules, the
+          health-check behavior and the stub behavior are unchanged: <code>AddModuleHealthChecks</code> still publishes
+          one Healthy <code>module-{Name}</code> check per enabled module and one Degraded check per disabled module,
+          <code>SalesModule</code> still declares <code>[&quot;Catalog&quot;, &quot;Identity&quot;]</code> with <code>RequiresDependencies = true</code>, and the ADC
+          Identity host still names only the <code>IdentityModule</code> assembly. The record of undeclared gRPC edges
+          was incomplete, and the ADR-008 reading was half right.</p>
+          <ol>
+          <li>The Trade-offs list of undeclared cross-module gRPC edges names three more consumers beside ADC
+          Conference and Store Identity. ADC Engagement declares only <code>[&quot;Conference&quot;]</code>
+          (<code>MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.API/EngagementModule.cs:20</code>) yet its host
+          wires <code>AddNotificationLiveChannelClient</code>
+          (<code>MMCA.ADC/Source/Services/MMCA.ADC.Engagement.Service/Program.cs:303</code>). ADC Notification declares
+          only <code>[&quot;Identity&quot;]</code>
+          (<code>MMCA.ADC/Source/Modules/Notification/MMCA.ADC.Notification.API/NotificationModule.cs:21</code>) and
+          lists only Identity under <code>RemoteDependencies</code>
+          (<code>MMCA.ADC/Source/Services/MMCA.ADC.Notification.Service/appsettings.json:31-34</code>) yet its host
+          wires <code>AddConferenceEventLiveValidationClient</code>
+          (<code>MMCA.ADC/Source/Services/MMCA.ADC.Notification.Service/Program.cs:242</code>). ADC <code>IdentityModule</code>
+          declares no <code>Dependencies</code>
+          (<code>MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.API/IdentityModule.cs:13-25</code>) yet its host
+          wires the Engagement, Notification and Conference export clients
+          (<code>MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:342-344</code>). The 2026-10-26
+          revision&#39;s &quot;both undeclared gRPC edges&quot; is left as written and is superseded by this item. The
+          Decision&#39;s per-service configuration paragraph no longer presents ADC Conference as the only host
+          wiring an undeclared peer client: it names all four ADC hosts and the ADC Identity <code>Modules</code> block
+          (<code>MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/appsettings.json:30-33</code>).</li>
+          <li>ADR-008 treats only <code>ModuleLoader</code> as Context
+          (<code>Website/docs-src/adr/008-service-extraction-topology.md:30</code>); the <code>Disabled*</code> stubs appear in its
+          Decision, in the Strangler Fig extraction step (<code>:57-59</code>), and its &quot;one module enabled&quot; sentence is at
+          <code>:51</code>. The Context paragraph and the Related entry now say so.</li>
+          <li>Anchors re-verified against current source: <code>AddModuleHealthChecks</code>
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/DependencyInjection.cs:217-239</code>, the Degraded
+          loop at <code>:229-236</code>); <code>SalesModule</code>
+          (<code>MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.API/SalesModule.cs:24-99</code>, <code>RequiresDependencies</code>
+          at <code>:37</code>, the stub registration at <code>:46-47</code>); the always-open live windows in
+          <code>DisabledEventLiveValidationService</code>
+          (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Shared/Events/Live/DisabledEventLiveValidationService.cs:27,36-43</code>);
+          and the ADC Identity <code>AddModuleHost</code> call
+          (<code>MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:273-275</code>). The anchors in the
+          2026-10-07 and 2026-10-26 revisions are left as written and are superseded by these.</li>
+          </ol>
           <h2 id="related">Related</h2>
-          <p>ADR-008 (the extraction topology that consumes this model: &quot;a service is the monolith with one module
-          enabled&quot; is a statement about <code>ModuleLoader</code> plus the <code>Disabled*</code> stubs, cited there as pre-existing
-          context), ADR-006 (the database axis of the same split; a module&#39;s data source is orthogonal to its
-          composition), ADR-007 (the typed gRPC clients that replace a disabled module&#39;s stubs at the host
+          <p>ADR-008 (the extraction topology that consumes this model: &quot;Each service is the monolith with one
+          module enabled&quot; is a statement about <code>ModuleLoader</code>, cited there as pre-existing context, plus the
+          <code>Disabled*</code> stubs its Strangler Fig step relies on), ADR-006 (the database axis of the same split;
+          a module&#39;s data source is orthogonal to its composition), ADR-007 (the typed gRPC clients that replace a disabled module&#39;s stubs at the host
           level), ADR-014 (<code>AddApplicationDecorators()</code> must run after every module&#39;s handler scan, which is why
           module registration is a distinct, ordered startup step), ADR-015 (the module-isolation fitness
           functions that keep cross-module traffic on the <code>*.Shared</code> contracts this model registers,
@@ -684,6 +747,7 @@
             <li><a href="#revision-2026-10-19">Revision (2026-10-19)</a></li>
             <li><a href="#revision-2026-10-21">Revision (2026-10-21)</a></li>
             <li><a href="#revision-2026-10-26">Revision (2026-10-26)</a></li>
+            <li><a href="#revision-2026-10-28">Revision (2026-10-28)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

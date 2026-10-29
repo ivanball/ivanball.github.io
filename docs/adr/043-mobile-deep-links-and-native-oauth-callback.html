@@ -261,7 +261,7 @@
           (<code>Source/Presentation/MMCA.Common.UI.Maui/Capabilities/Auth/MauiExternalAuthBroker.cs:20</code>). The ADC
           consumer&#39;s deep-link wave has shipped: <code>MMCA.ADC.UI.Web</code> serves the two well-known association
           documents through the shared helper
-          (<code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs:302</code>), the Identity service allow-lists the
+          (<code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs:303</code>), the Identity service allow-lists the
           <code>atldevcon</code> scheme (<code>MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/appsettings.json:89-91</code>, the
           entry at <code>:90</code>), and
           the native heads register the callback: iOS carries both the custom-scheme URL type
@@ -310,7 +310,9 @@
           binary host spots in agreement and the gateway default-domain URLs also embedded in the MAUI
           binary, and two MMCA.ADC anchors are refreshed; see Revision below.
           Revised 2026-10-26: anchors refreshed after the <code>Program.cs</code> association block, <code>MainActivity</code>&#39;s
-          <code>PublishDeepLink</code> and the shared <code>DeepLinkDispatcher</code> grew; see Revision below.</p>
+          <code>PublishDeepLink</code> and the shared <code>DeepLinkDispatcher</code> grew; see Revision below.
+          Revised 2026-10-28: anchors refreshed after the <code>Program.cs</code> association block moved down one line;
+          see Revision below.</p>
           <h2 id="context">Context</h2>
           <p>Three mobile flows all need a URL to leave the web world and land inside the MAUI app:</p>
           <ol>
@@ -778,6 +780,23 @@
           class <code>:22</code>, <code>IsAppRelativeRoute</code> <code>:113</code>, <code>Publish</code> <code>:168</code> with the guard inside it at <code>:172</code>.
           Every live citation above is updated; the dated entries keep the values they recorded.</li>
           </ol>
+          <h2 id="revision-2026-10-28">Revision (2026-10-28)</h2>
+          <p>Re-verified against current source. The decision, the allowlist behavior, the path-scoped link sets
+          (the iOS <code>applinks</code> components still match the Android <code>DataPathPrefixes</code>), the served real Play App
+          Signing fingerprint and every <code>MainActivity</code> and <code>appsettings.json</code> anchor are unchanged; only the
+          MMCA.ADC <code>Program.cs</code> association block moved, down one line.</p>
+          <ol>
+          <li><strong>Anchors re-verified against current source:</strong> in ADC,
+          <code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs</code>: ADR-043 block comment <code>:296-301</code>,
+          <code>GetSection(&quot;AppAssociation&quot;)</code> <code>:302</code>, <code>MapAppAssociationEndpoints</code> <code>:303</code>, package-id comment
+          <code>:305-308</code>, <code>AndroidPackageName</code> <code>:309</code>, <code>AndroidCertFingerprints</code> <code>:310</code>, <code>AppleAppId</code> <code>:311</code>,
+          <code>AppleAppLinkComponents</code> <code>:312</code> (<code>/conference/*</code>, <code>/engage/*</code>, <code>/happening-now</code>, <code>/feedback/*</code>,
+          <code>/auth/oauth-complete*</code>). Still current: <code>Platforms/Android/MainActivity.cs</code> <code>DataPathPrefixes</code>
+          <code>:34</code>, <code>PublicWebHost</code> <code>:44</code>, route reduction <code>:94</code>, shape check <code>:108</code>, publish <code>:113</code>;
+          <code>MMCA.ADC.UI.Web/appsettings.json</code> <code>AppAssociation</code> <code>:90</code> with <code>AndroidCertFingerprints</code> <code>:92-94</code>;
+          <code>MMCA.ADC.Identity.Service/appsettings.json</code> <code>OAuth</code> <code>:89-91</code> with the <code>atldevcon</code> entry at <code>:90</code>.
+          Every live citation above is updated; the dated entries keep the values they recorded.</li>
+          </ol>
           
         <div class="doc-foot btn-row">
           <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
@@ -806,6 +825,7 @@
             <li><a href="#revision-2026-10-15">Revision (2026-10-15)</a></li>
             <li><a href="#revision-2026-10-21">Revision (2026-10-21)</a></li>
             <li><a href="#revision-2026-10-26">Revision (2026-10-26)</a></li>
+            <li><a href="#revision-2026-10-28">Revision (2026-10-28)</a></li>
             </ul>
           </nav>
         </aside>

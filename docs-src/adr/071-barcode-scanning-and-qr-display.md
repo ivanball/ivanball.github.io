@@ -10,7 +10,8 @@ collapse-dual-paths wave, so the deferred-resolution delegates are now the only 
 citations re-anchored and the ZXing pin updated. Revised 2026-10-21: the QRCoder pin is 1.8.1
 (bumped in v1.249.0), and the package and check-in page anchors are refreshed. Revised 2026-10-26:
 anchors refreshed after `Directory.Packages.props` and `CheckInScan.razor` moved; versions and
-behavior unchanged.
+behavior unchanged. Revised 2026-10-28: anchors refreshed for `QrErrorCorrectionLevel`,
+`IBarcodeScannerService` and `NullBarcodeScannerService`; behavior unchanged.
 
 ## Context
 ADC's badge check-in feature ([ADR-072](072-qr-badge-check-in-and-points.md)) needs two things that
@@ -49,15 +50,15 @@ scanning ships as an ADR-042 capability whose native half is opt-in per head.**
   broken image (`:69-72`), and the bitmap is memoized against the three inputs that affect it
   (`:45-59`), so a parent re-render does not re-encode.
 - **The error-correction level is a framework enum, not the generator's.**
-  `QrErrorCorrectionLevel` (`Components/Sharing/QrErrorCorrectionLevel.cs:9-21`: `Low`, `Medium` (default),
+  `QrErrorCorrectionLevel` (`Components/Sharing/QrErrorCorrectionLevel.cs:9-22`: `Low`, `Medium` (default),
   `Quartile`, `High`) is mapped onto QRCoder's `ECCLevel` inside the component (`QrCodeImage.razor:80-86`),
   so the package's public surface does not pin consumers to the generator that happens to back it today.
 - **Scanning is one contract on the ADR-042 pattern.** `IBarcodeScannerService`
-  (`Services/Capabilities/Media/IBarcodeScannerService.cs:11-20`) is two members: `bool IsSupported` and
+  (`Services/Capabilities/Media/IBarcodeScannerService.cs:12-22`) is two members: `bool IsSupported` and
   `Task<string?> ScanAsync(CancellationToken cancellationToken = default)`. The contract is that an
   implementation **never throws**: an unsupported head, a denied permission, a user-cancelled scan and a
-  cancelled token all return `null` (`:3-10`), and the decoded payload is documented as untrusted input.
-  `NullBarcodeScannerService` (`Services/Capabilities/Media/NullBarcodeScannerService.cs:9-16`) reports `IsSupported == false`
+  cancelled token all return `null` (`:3-11`), and the decoded payload is documented as untrusted input.
+  `NullBarcodeScannerService` (`Services/Capabilities/Media/NullBarcodeScannerService.cs:9-17`) reports `IsSupported == false`
   and returns `null`, TryAdd-registered by `AddDeviceCapabilityDefaults`
   (`Services/Capabilities/DependencyInjection.cs:70`).
 - **The native implementation is opt-in and deliberately NOT folded into `UseMauiDeviceCapabilities`.**
@@ -188,6 +189,16 @@ drifted.
    `@if (ScannerAvailable)` scan card) and `CheckInScan.razor:122-127` (the always-rendered manual
    fallback, outside any `@if`, ending in `AttendeeSearchPanel` at `:127`);
    `CheckInScan.razor.cs:46` (`ScannerAvailable => Scanner.IsSupported`, unmoved).
+
+## Revision (2026-10-28)
+Re-verified against current source. No decision, rationale or behavior changed; the enum values, the
+two-member scanner contract and the null fallback are as recorded, and only their citations drifted.
+1. Anchors re-verified against current source: `Components/Sharing/QrErrorCorrectionLevel.cs:9-22`
+   (`Low` `:12`, `Medium` `:15`, `Quartile` `:18`, `High` `:21`; `Medium` is the default set at
+   `QrCodeImage.razor:39`); `Services/Capabilities/Media/IBarcodeScannerService.cs:12-22`
+   (`IsSupported` `:15`, `ScanAsync` `:21`, never-throws contract in the doc comment at `:3-11`, the
+   untrusted-payload note at `:10`); `Services/Capabilities/Media/NullBarcodeScannerService.cs:9-17`
+   (`IsSupported => false` at `:12`, the `null` result at `:15-16`).
 
 ## Related
 [ADR-042](042-device-capability-abstraction.md) (the capability pattern this extends: contract in

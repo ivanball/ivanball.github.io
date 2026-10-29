@@ -8,6 +8,8 @@ Common's source-only PublicApiAnalyzers group is recorded, and the props, workfl
 anchors are re-pointed.
 Revised 2026-10-26: Meziantou moves to `3.0.317` in all four repos, Common's AWS LocalStack and
 Google Cloud emulator floors are recorded, and the props and workflow anchors are re-pointed.
+Revised 2026-10-28: anchors refreshed after a 32-line shift in Common's `ci.yml` moved the floor
+and coverage-gate lines, and the baseline comparison run is re-dated.
 
 ## Context
 Four repos (`MMCA.Common`, `MMCA.ADC`, `MMCA.Store`, `MMCA.Helpdesk`) share one framework, one set of
@@ -71,7 +73,7 @@ gates ([ADR-060](060-performance-regression-gate.md), [ADR-063](063-accessibilit
    `Tools/Scripts/compare-analyzer-config.ps1` (workspace root) reads all four files as lines
    (`:25`), finds the marker (`:19`, `:26`), keeps the lines above it (`:28`), compares each slice
    against Common's with `Compare-Object` (`:34`), and exits `1` when a line appears on one side only
-   (`:47`); it reported no such line on 2026-10-07. The check is line-set equality, not byte equality:
+   (`:47`); it reported no such line on 2026-10-28 (exit `0`). The check is line-set equality, not byte equality:
    reading by line drops line endings, and a default `Compare-Object` is case-insensitive and does not
    compare line order, so a CRLF/LF difference, a case-only change or a reordered block passes. The
    post-edit hook does not run
@@ -84,10 +86,10 @@ gates ([ADR-060](060-performance-regression-gate.md), [ADR-063](063-accessibilit
    (`MMCA.Store/.github/workflows/deploy.yml:338`), Helpdesk `1`
    (`MMCA.Helpdesk/.github/workflows/ci.yml:104`). The integration tiers carry their own (ADC `450` at
    `MMCA.ADC/.github/workflows/deploy.yml:731`, Store `250` at
-   `MMCA.Store/.github/workflows/deploy.yml:678`), as do Common's gallery E2E (`ci.yml:345`), Redis
-   (`:820`), per-engine PostgreSQL and SQL Server (`:860`, `:900`), AWS LocalStack (`:940`), Google
-   Cloud emulator (`:987`) and AppHost (`:1034`) jobs,
-   Common's Helpdesk canary (`ci.yml:580`, `40`)
+   `MMCA.Store/.github/workflows/deploy.yml:678`), as do Common's gallery E2E (`ci.yml:377`), Redis
+   (`:852`), per-engine PostgreSQL and SQL Server (`:892`, `:932`), AWS LocalStack (`:972`), Google
+   Cloud emulator (`:1019`) and AppHost (`:1066`) jobs,
+   Common's Helpdesk canary (`ci.yml:612`, `40`)
    and both consumers' cross-service jobs
    (`MMCA.ADC/.github/workflows/cross-service-tests.yml:110`, `:169`;
    `MMCA.Store/.github/workflows/cross-service-tests.yml:114`, `:167`). Adoption is not universal: the
@@ -98,8 +100,8 @@ gates ([ADR-060](060-performance-regression-gate.md), [ADR-063](063-accessibilit
    (`MMCA.ADC/.github/workflows/deploy.yml:556`, rationale at `:550-551`).
 7. **CI enforces a line-coverage floor on the unit tier, not the merged report.** Common gates the
    unit, architecture and bUnit tier with generated code excluded at `68.3` percent
-   (`MMCA.Common/.github/workflows/ci.yml:448-449`, comparison at `:462`), and says why the merged
-   report is not used: the gallery E2E tier dilutes it (`:448`). ADC gates its own code (filtered to
+   (`MMCA.Common/.github/workflows/ci.yml:483`, floor and comparison at `:494`), and says why the
+   merged report is not used: the gallery E2E tier dilutes it (`:480`). ADC gates its own code (filtered to
    `MMCA.ADC.*` minus the test, `*.Service` host and `*.Contracts` assemblies,
    `MMCA.ADC/.github/workflows/deploy.yml:405`) at `55.5` percent line coverage (`:407`, comparison at
    `:409`) and adds an Application-layer branch floor of `77.5` percent (filter `:434`, floor `:443`,
@@ -223,6 +225,23 @@ jobs not yet listed, and most props and workflow anchors.
    `deploy.yml:338`, `:368`, `:372-376`, `:395`, `:401`, `:407`, `:409`,
    `MMCA.Store/.github/workflows/e2e.yml:394-397`, Helpdesk `ci.yml:104`, and the cross-service
    floors.
+
+## Revision (2026-10-28)
+Re-verified against current source. The policy and every floor value are unchanged: count floors
+Common `2000` (`MMCA.Common/.github/workflows/ci.yml:163`, `release.yml:89`), gallery E2E `1`,
+Helpdesk canary `40`, Redis `15`, PostgreSQL `11`, SQL Server `3`, AWS LocalStack `14`, Google
+Cloud emulator `14`, AppHost `1`, and the Common unit-tier coverage floor `68.3`. What moved is the
+Common `ci.yml` anchors, which shifted by 32 lines.
+
+1. `Tools/Scripts/compare-analyzer-config.ps1` reported the shared baseline identical across the
+   four repos on 2026-10-28 (exit `0`); its anchors (`:19`, `:25`, `:26`, `:28`, `:34`, `:47`) and
+   the hook anchor (`.claude/hooks/post-edit-followups.sh:23-26`) hold. Decision 5 now records that
+   run in place of the 2026-10-07 one.
+2. Anchors re-verified against current source: Common floored jobs, gallery E2E
+   `MMCA.Common/.github/workflows/ci.yml:377`, Helpdesk canary `:612`, Redis `:852`, PostgreSQL
+   `:892`, SQL Server `:932`, AWS LocalStack `:972`, Google Cloud emulator `:1019`, AppHost `:1066`.
+   Common coverage gate: step `MMCA.Common/.github/workflows/ci.yml:483`, rationale `:477-482` with
+   the gallery E2E dilution clause at `:480`, floor and comparison `:494`.
 
 ## Related
 [ADR-015](015-architecture-fitness-functions.md) (fitness tests, the other executable-convention

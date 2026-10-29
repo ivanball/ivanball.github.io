@@ -19,6 +19,9 @@ are refreshed after the v1.250.0 release.
 Revised 2026-10-26: the Context and Decision item 3 now name PostgreSQL alongside SQL Server as a retrying engine
 under the same contract (a SQLite unit runs under a non-retrying strategy), and anchors are refreshed after the
 v1.261.0 release.
+Revised 2026-10-28: Store gains a fifth documented opt-out and a fourth direct caller (guest checkout), the
+`CheckOutHandler` trade-off now records that its pre-flight also maps delivery and quotes shipping and tax outside
+the transaction, and anchors are refreshed after the v1.265.1 release.
 
 ## Context
 Every transactional write in this workspace funnels through one method. `IUnitOfWork.ExecuteInTransactionAsync`
@@ -155,7 +158,7 @@ work, the commit phase is deliberately outside the retry, and a commit whose out
 
 11. **Recovery belongs to the caller, and today that means the ADR-017 idempotency filter.** The remarks say so
     (`:562-563`), and the exception is part of the frozen public surface
-    (`.../MMCA.Common.Infrastructure/PublicAPI.Shipped.txt:520-528`), which is what makes it a contract a caller can
+    (`.../MMCA.Common.Infrastructure/PublicAPI.Shipped.txt:522-530`), which is what makes it a contract a caller can
     bind to rather than an internal detail. No framework or consumer code catches it: across the four repos the type
     is referenced in code only by the two files that define it and by
     `.../MMCA.Common.Infrastructure.Tests/Persistence/DbContexts/DbContextFactoryCommitAmbiguityTests.cs`, whose six
@@ -163,7 +166,7 @@ work, the commit phase is deliberately outside the retry, and a commit whose out
     failure, the original failure surviving a rollback that throws, and the per-source report (`:73`, `:108`,
     `:132`, `:152`, `:171`, `:193`). The one consumer mention is prose:
     Store's `CheckOutHandler` remarks name it and hand recovery to the `[Idempotent]` filter
-    (`MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Application/ShoppingCarts/UseCases/CheckOut/CheckOutHandler.cs:108-115`).
+    (`MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Application/ShoppingCarts/UseCases/CheckOut/CheckOutHandler.cs:133-138`).
 
 12. **Adoption is deliberately narrow.** MMCA.ADC has six `ITransactional` commands, five in Conference
     (`LinkUserToSpeakerCommand.cs:13`, `UnlinkUserFromSpeakerCommand.cs:12`,
@@ -175,10 +178,11 @@ work, the commit phase is deliberately outside the retry, and a commit whose out
     throttle stamp on its own before the Sessionize call and then wraps the entity syncs and their save in an explicit
     transaction of its own, so it is a direct caller rather than a non-transactional path), MMCA.Store has three
     (`AddVariantCommand.cs:25`,
-    `ReorderProductImagesCommand.cs:24`, `UploadProductImageCommand.cs:27`) plus four commands whose XML doc records
+    `ReorderProductImagesCommand.cs:24`, `UploadProductImageCommand.cs:27`) plus five commands whose XML doc records
     a deliberate opt-out
     ("Deliberately NOT `ITransactional`": `VerifyPaymentCommand.cs:11`, `ProcessPaymentWebhookCommand.cs:9`,
-    `CheckOutCommand.cs:9`, `BulkSetInventoryCommand.cs:11`), and MMCA.Helpdesk has none. Direct callers are the
+    `CheckOutCommand.cs:10` and `BulkSetInventoryCommand.cs:11`; the fifth, `GuestCheckOutCommand.cs:8-9`, words it
+    "Deliberately not `ITransactional`, for the reason `CheckOutCommand` gives"), and MMCA.Helpdesk has none. Direct callers are the
     framework's own `EFRefreshSessionStore` rotation
     (`.../Infrastructure/Persistence/Auth/EFRefreshSessionStore.cs:187`), ADC's `AuthenticationService` for both
     registration and external login
@@ -187,7 +191,8 @@ work, the commit phase is deliberately outside the retry, and a commit whose out
     `DeleteEventHandler` (`DeleteSessionHandler.cs:47`, `DeleteEventHandler.cs:43`, which open the transaction
     themselves because the shared CRUD delete command is not `ITransactional`), ADC's `SessionScoringRunner`
     (`SessionScoringRunner.cs:167`, in a scope of its own), and Store's `CheckOutHandler`
-    (`MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Application/ShoppingCarts/UseCases/CheckOut/CheckOutHandler.cs:80`),
+    (`MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Application/ShoppingCarts/UseCases/CheckOut/CheckOutHandler.cs:104`),
+    `GuestCheckOutHandler` (`.../Orders/UseCases/GuestCheckout/GuestCheckOutHandler.cs:65`),
     `OrderCancelledSagaHandler` (`OrderCancelledSagaHandler.cs:55`) and `UserRegisteredHandler`
     (`UserRegisteredHandler.cs:65`).
 
@@ -219,13 +224,18 @@ work, the commit phase is deliberately outside the retry, and a commit whose out
   single transactional source, which is a property of today's deployments rather than a guarantee of the code.
 - **The retry contract is a trap for handler authors.** Anything computed outside the delegate but committed inside
   it is silently wrong on the second attempt, and the change-tracker reset makes the failure quiet rather than loud.
-  Store's `CheckOutHandler` documents exactly this: its class doc names the pre-flight that stays outside the
-  delegate (the non-tracking cart snapshot plus the two cross-service gRPC reads, Catalog prices and the customer's
-  display name, so their latency never holds database locks, `CheckOutHandler.cs:24-31`), the code does that
-  pre-flight before opening the transaction (`:54-78`), and the write-phase remarks explain why the whole
-  read-execute-write unit runs inside (`:99-107`) and why a commit failure is not retried (`:108-115`, citing this
-  record for the behavior MMCA.Common shipped in v1.135.0, `MMCA.Common/CHANGELOG.md:4525`, and that Store consumes at
-  v1.260.0, `MMCA.Store/Directory.Packages.props:11`). That is discipline, not enforcement: nothing checks that a
+  Store's `CheckOutHandler` documents exactly this: its class doc says the work kept outside the delegate is the
+  non-tracking cart snapshot plus the two cross-service gRPC reads (Catalog prices and the customer's display name),
+  so their latency never holds database locks (`CheckOutHandler.cs:29-32`). The code keeps more than that outside:
+  before opening the transaction it takes the snapshot, maps the delivery addresses (`:69-79`), runs the two gRPC
+  reads (`:86-92`) and quotes shipping and tax through `QuoteChargesAsync` (`:94-102`), all once per checkout
+  (`:56-102`). The tax quote reaches Stripe only when `Tax:Enabled` is on: while it is off, the default, and set in
+  no Store appsettings or bicep file, `StripeTaxCalculator` returns zero tax with no Stripe call
+  (`MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Infrastructure/Payments/Stripe/StripeTaxCalculator.cs:17-18`,
+  `:35-36`; section name `TaxSettings.cs:15`), so the network round trip the handler's comment names is opt-in. The write-phase remarks explain why the whole
+  read-execute-write unit runs inside (`:124-131`) and why a commit failure is not retried (`:133-138`, citing this
+  record for the behavior MMCA.Common shipped in v1.135.0, `MMCA.Common/CHANGELOG.md:4568`, and that Store consumes at
+  v1.265.1, `MMCA.Store/Directory.Packages.props:11`). That is discipline, not enforcement: nothing checks that a
   new handler keeps its commit dependencies inside the delegate.
 - **Cosmos participation is silent.** A Cosmos context in a transactional scope is skipped without a warning
   (`DbContextFactory.cs:892-893`), so a future host mixing engines gets partial atomicity with no signal at the call
@@ -338,6 +348,34 @@ anchors and the Store package pin moved.
    2026-10-21 revision are at `:260` and `:313`; Store consumes MMCA.Common v1.260.0
    (`MMCA.Store/Directory.Packages.props:11`, every `MMCA.Common.*` entry at the same version, on `:8-25`, `:27`, `:77` and `:114`). The
    anchors restated in the dated revisions above stay as written.
+
+## Revision (2026-10-28)
+Re-verified against current source. The re-entrant, retriable, commit-once, ambiguity and deferred-dispatch
+rules are unchanged, the type is still referenced in code only by `DbContextFactory.cs`,
+`TransactionCommitAmbiguousException.cs` and `DbContextFactoryCommitAmbiguityTests.cs`, and the ADC adoption
+count is unchanged; Store's guest checkout adds an opt-out and a direct caller, the `CheckOutHandler` pre-flight
+grew, and several anchors and the Store package pin moved.
+
+1. Decision item 12 counts five Store opt-outs, adding `GuestCheckOutCommand`, whose XML doc says it is
+   "Deliberately not `ITransactional`, for the reason `CheckOutCommand` gives"
+   (`MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Application/Orders/UseCases/GuestCheckout/GuestCheckOutCommand.cs:8-9`),
+   and lists `GuestCheckOutHandler` as a fourth Store direct caller (`GuestCheckOutHandler.cs:65`).
+2. The retry-contract trade-off no longer says the `CheckOutHandler` pre-flight is only the cart snapshot plus the
+   two gRPC reads. Before the transaction the handler also maps the delivery addresses
+   (`MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Application/ShoppingCarts/UseCases/CheckOut/CheckOutHandler.cs:69-79`)
+   and quotes shipping and tax through `QuoteChargesAsync` (`:94-102`), which calls Stripe Tax only when
+   `Tax:Enabled` is on; it is off by default and in every Store configuration file (`StripeTaxCalculator.cs:17-18`, `:35-36`).
+   Its class doc (`:29-32`) still names only the snapshot and the two reads, and the 2026-09-25 Status sentence
+   ("names all three pre-flight reads") was true of the code at that date.
+3. Anchors re-verified against current source: the nine `TransactionCommitAmbiguousException` entries are at
+   `.../MMCA.Common.Infrastructure/PublicAPI.Shipped.txt:522-530`; in `CheckOutHandler.cs` the
+   `ExecuteInTransactionAsync` call is at `:104`, the pre-flight code at `:56-102`, the write-phase remarks at
+   `:124-131` and the commit-failure remark at `:133-138`; `CheckOutCommand`'s opt-out line is at
+   `CheckOutCommand.cs:10`; `OrderCancelledSagaHandler.cs:55` and `UserRegisteredHandler.cs:65` hold; the v1.135.0
+   CHANGELOG heading is at `MMCA.Common/CHANGELOG.md:4568` (its `TransactionCommitAmbiguousException` entry at
+   `:4610`), the v1.215.0 heading is at `:992`, and the v1.247.0 heading and M229 entry are at `:303` and `:356`;
+   Store consumes MMCA.Common v1.265.1 (`MMCA.Store/Directory.Packages.props:11`, every `MMCA.Common.*` entry
+   at the same version). The anchors restated in the dated revisions above stay as written.
 
 ## Related
 [ADR-014](014-cqrs-decorator-pipeline.md) (the Transactional decorator that is the main caller, and whose

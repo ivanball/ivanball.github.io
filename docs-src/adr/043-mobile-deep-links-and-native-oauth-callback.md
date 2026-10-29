@@ -18,7 +18,7 @@ the OAuth custom-scheme returnUrl allowlist in `CompleteAsync`, the app-associat
 (`Source/Presentation/MMCA.Common.UI.Maui/Capabilities/Auth/MauiExternalAuthBroker.cs:20`). The ADC
 consumer's deep-link wave has shipped: `MMCA.ADC.UI.Web` serves the two well-known association
 documents through the shared helper
-(`MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs:302`), the Identity service allow-lists the
+(`MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs:303`), the Identity service allow-lists the
 `atldevcon` scheme (`MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/appsettings.json:89-91`, the
 entry at `:90`), and
 the native heads register the callback: iOS carries both the custom-scheme URL type
@@ -68,6 +68,8 @@ binary host spots in agreement and the gateway default-domain URLs also embedded
 binary, and two MMCA.ADC anchors are refreshed; see Revision below.
 Revised 2026-10-26: anchors refreshed after the `Program.cs` association block, `MainActivity`'s
 `PublishDeepLink` and the shared `DeepLinkDispatcher` grew; see Revision below.
+Revised 2026-10-28: anchors refreshed after the `Program.cs` association block moved down one line;
+see Revision below.
 ## Context
 Three mobile flows all need a URL to leave the web world and land inside the MAUI app:
 
@@ -538,4 +540,21 @@ MMCA.Common anchors moved.
    reduction `:94`, shape check `:108-111`, publish `:113`. In Common,
    `MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/Capabilities/Navigation/DeepLinkDispatcher.cs`:
    class `:22`, `IsAppRelativeRoute` `:113`, `Publish` `:168` with the guard inside it at `:172`.
+   Every live citation above is updated; the dated entries keep the values they recorded.
+
+## Revision (2026-10-28)
+Re-verified against current source. The decision, the allowlist behavior, the path-scoped link sets
+(the iOS `applinks` components still match the Android `DataPathPrefixes`), the served real Play App
+Signing fingerprint and every `MainActivity` and `appsettings.json` anchor are unchanged; only the
+MMCA.ADC `Program.cs` association block moved, down one line.
+
+1. **Anchors re-verified against current source:** in ADC,
+   `MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs`: ADR-043 block comment `:296-301`,
+   `GetSection("AppAssociation")` `:302`, `MapAppAssociationEndpoints` `:303`, package-id comment
+   `:305-308`, `AndroidPackageName` `:309`, `AndroidCertFingerprints` `:310`, `AppleAppId` `:311`,
+   `AppleAppLinkComponents` `:312` (`/conference/*`, `/engage/*`, `/happening-now`, `/feedback/*`,
+   `/auth/oauth-complete*`). Still current: `Platforms/Android/MainActivity.cs` `DataPathPrefixes`
+   `:34`, `PublicWebHost` `:44`, route reduction `:94`, shape check `:108`, publish `:113`;
+   `MMCA.ADC.UI.Web/appsettings.json` `AppAssociation` `:90` with `AndroidCertFingerprints` `:92-94`;
+   `MMCA.ADC.Identity.Service/appsettings.json` `OAuth` `:89-91` with the `atldevcon` entry at `:90`.
    Every live citation above is updated; the dated entries keep the values they recorded.

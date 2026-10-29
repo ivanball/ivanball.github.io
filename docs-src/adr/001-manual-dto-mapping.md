@@ -1,7 +1,7 @@
 # ADR-001: Manual DTO Mapping over AutoMapper
 
 ## Status
-Accepted. _Mechanism clarified 2026-06-26: the per-entity mappers are Riok.Mapperly source-generated (compile-time), not hand-written line by line. The decision to avoid runtime convention/reflection mapping (AutoMapper, Mapster) is unchanged._ _Mapper count refreshed 2026-08-23: 31 DTO mappers across Store + ADC._ _Revised 2026-09-11 (recount): 33 DTO mappers across Store + ADC (20 in ADC, 13 in Store)._ _Revised 2026-09-19 (recount): 35 DTO mappers across Store + ADC (22 in ADC, 13 in Store); ADC added `PartnerDTOMapper` and `SessionAssetDTOMapper`._ _Revised 2026-10-21: recount to 36 DTO mappers across Store + ADC (23 in ADC, 13 in Store); ADC added the hand-written `UserListDTOMapper`, the one mapper that is not Mapperly-generated._
+Accepted. _Mechanism clarified 2026-06-26: the per-entity mappers are Riok.Mapperly source-generated (compile-time), not hand-written line by line. The decision to avoid runtime convention/reflection mapping (AutoMapper, Mapster) is unchanged._ _Mapper count refreshed 2026-08-23: 31 DTO mappers across Store + ADC._ _Revised 2026-09-11 (recount): 33 DTO mappers across Store + ADC (20 in ADC, 13 in Store)._ _Revised 2026-09-19 (recount): 35 DTO mappers across Store + ADC (22 in ADC, 13 in Store); ADC added `PartnerDTOMapper` and `SessionAssetDTOMapper`._ _Revised 2026-10-21: recount to 36 DTO mappers across Store + ADC (23 in ADC, 13 in Store); ADC added the hand-written `UserListDTOMapper`, the one mapper that is not Mapperly-generated._ _Revised 2026-10-28: anchors refreshed after the `SpeakerDTOMapper` wrapper lines moved._
 
 ## Context
 Domain entities must be mapped to DTOs for API responses. The two common approaches are:
@@ -28,3 +28,16 @@ Re-verified against current source. The decision (explicit per-entity mappers, n
 1. ADC now has 23 `*DTOMapper` classes, up from 22. The new one, `UserListDTOMapper` (`MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Application/Users/DTOs/UserListDTOMapper.cs:14`), is a hand-written `sealed class` implementing `IEntityDTOMapper<User, UserListDTO, UserIdentifierType>` with no `[Mapper]` attribute; its `MapToDTO` (`:17`) projects the roster row field by field and its `MapToDTOs` (`:34`) re-declares the one-line projection. The other 22 ADC mappers carry `[Mapper]` (one class per file; `EventDTOMapper`'s second match is a `[MapperIgnoreTarget]` at `EventDTOMapper.cs:51`, not a second class).
 2. Store is unchanged at 13 `*DTOMapper` classes, all carrying `[Mapper]`. Total: 36 DTO mappers (23 ADC, 13 Store). The Decision, Rationale and Trade-offs now name the hand-written exception, and the Decision names both Mapperly mappers that wrap a private generated `MapToDTOGenerated` behind a hand-written public `MapToDTO`: `SpeakerDTOMapper` (`SpeakerDTOMapper.cs:43`, wrapping `:59`) and `EventDTOMapper` (`EventDTOMapper.cs:31`, wrapping `:52`). No Store mapper uses that shape.
 3. Anchors re-verified against current source: the hand-written class declaration at `MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Application/Users/DTOs/UserListDTOMapper.cs:14`, and the `[Mapper]` attribute lines of the two wrapper mappers at `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Events/DTOs/EventDTOMapper.cs:14` and `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Speakers/DTOs/SpeakerDTOMapper.cs:16` (their class declarations follow at `:15` and `:17`).
+
+## Revision (2026-10-28)
+Re-verified against current source. The decision, the mapper count (36: 23 ADC, 13 Store) and the
+wrapper shape are unchanged; only the `SpeakerDTOMapper` line anchors cited in the 2026-10-21
+revision moved; the public static `CanSeeEmail` read rule now precedes `MapToDTO` in that file.
+
+1. Anchors re-verified against current source: `SpeakerDTOMapper`'s hand-written public `MapToDTO`
+   at `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Speakers/DTOs/SpeakerDTOMapper.cs:45`,
+   wrapping the private generated `MapToDTOGenerated` at `:62`, with the redaction at `:52` (it
+   nulls `Email` and `LinkedUserId` unless `CanSeeEmail`, `:38`, admits the caller as Organizer).
+   `EventDTOMapper`'s public `MapToDTO` stays at
+   `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Events/DTOs/EventDTOMapper.cs:31`,
+   wrapping `:52`. The `[Mapper]` lines stay at `SpeakerDTOMapper.cs:16` and `EventDTOMapper.cs:14`.

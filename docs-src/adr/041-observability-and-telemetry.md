@@ -62,6 +62,7 @@ Revised 2026-10-21: `StartOutboxActivity` runs once per dispatched message (a me
 Revised 2026-10-24: OTLP is the only built-in exporter; Azure Monitor moved to the `AddAzureMonitorExporter()` call in MMCA.Common.Azure ([ADR-134](134-cloud-neutral-core-vendor-adapters.md)), and the Decision's exporter bullet is corrected in place. See Revision (2026-10-24) at the end.
 Revised 2026-10-25: a second vendor exporter, `AddGoogleCloudTelemetryExporter()` in MMCA.Common.Gcp, sends traces and logs to the Google Cloud Telemetry API; metrics go through the Google-built Collector, and the collector-free metrics path is recorded as a rejected alternative. See Revision (2026-10-25) at the end.
 Revised 2026-10-26: the meter chain carries eleven subscriptions (ten `MMCA.Common.*` plus `Polly`) now that `MMCA.Common.Persistence` and its `persistence.concurrency.conflict` counter are subscribed, superseding the ten-meter count of the 2026-09-19 entry, and the `Extensions.Telemetry.cs`, `OutboxProcessor.cs` and bicep anchors in the live sections are refreshed. See Revision (2026-10-26) at the end.
+Revised 2026-10-28: records alerting the earlier re-verifications omitted (ADC has carried the same 401/429 auth-failure alert as Store since 2026-10-19, and both apps carry a 403 forbidden-burst alert at severity 3, Store since 2026-09-07 and ADC since 2026-10-19), and the bicep, host `Program.cs` and `DbUpdateExceptionHandler` anchors the dated sections keep are given their current locations. See Revision (2026-10-28) at the end.
 
 ## Context
 The framework is a modular monolith whose modules extract into standalone services (ADR-008), so
@@ -892,3 +893,47 @@ bicep anchors after the 2026-10-24 bicep edits. The exporter anchors (`Extension
    `DbUpdateExceptionHandler` `LogError` `:32` and its 409 `:41`; the Application Insights tripwire
    check `MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Integrations/HostIntegrationTripwire.cs:63`-`:67`
    (its key constant `:20` holds).
+
+## Revision (2026-10-28)
+Re-verified against current source. The telemetry baseline, the CQRS and outbox instruments, the
+three metrics knobs, sampling, poll-span filtering, the exporters and the eleven meter subscriptions
+behave as the Decision and the Revision (2026-10-26) describe, and the bicep anchors in the Context
+and Decision hold. Nothing in the security alerting changed since those re-verifications: this
+revision records rules they omitted (Store's 403 rule, shipped 2026-09-07 with Store #133, and ADC's
+auth-failure and 403 rules, shipped 2026-10-19 with ADC #281), and gives current locations for the
+anchors the dated sections keep as written.
+
+1. **Both apps alert on authentication and authorization signals.** ADC carries the same
+   auth-failure rule as Store: `authFailureSpikeAlert`
+   (`MMCA.ADC/infra/main.bicep:797`, query `:813`, threshold 50 per 15 minutes `:807`-`:816`,
+   severity 2 `:804`) counts 401 or 429 on the `/Auth` route, matching Store's rule
+   (`MMCA.Store/infra/main.bicep:616`, query `:632`). Both apps also carry a `forbiddenBurstAlert`
+   (`MMCA.ADC/infra/main.bicep:836`, query `:852`; `MMCA.Store/infra/main.bicep:656`, query `:672`)
+   that counts 403 responses with no route predicate, threshold 20 per 15 minutes (ADC `:855`, Store
+   `:675`) at severity 3 (ADC `:843`, Store `:663`): an investigate signal for a replayed token or a
+   permission regression, not a page. The Revision (2026-09-07) statement that Store alerts on a
+   security signal stays as written; this item adds the ADC rules and the 403 rule it did not record.
+2. Anchors re-verified against current source. Current locations for anchors the dated sections
+   keep as written: in `MMCA.ADC/infra/main.bicep`, `logIngestionCapAlert` `:729` (query `:745`),
+   `sqlServerAuditing` `:1070`, `sqlAuditDiagnostics` `:1095`, `serviceBusDiagnostics` `:1370`,
+   `avatarBlobDiagnostics` `:1474`, `keyVaultDiagnostics` `:1712`, and the `DisableAspNetCoreMetrics`
+   setting `:326`-`:327` (the Revision (2026-10-01) `:298`-`:299` is now another comment); in
+   `MMCA.Store/infra/main.bicep`, `logIngestionQuotaAlert` `:702` (query `:718`),
+   `authFailureSpikeAlert` `:616` (query `:632`), the SLO 401/499 exclusions `:335` (failed requests)
+   and `:362` (failed dependencies), `sqlAuditDiagnostics` `:954`, `sqlAuditingSettings` `:968`,
+   `sqlThreatProtection` `:999`, `dataProtectionBlobDiagnostics` `:1287`, `keyVaultDiagnostics`
+   `:1469`, the 73% ASP.NET Core comment `:253`-`:256` (the Revision (2026-10-07) `:249` is now the
+   `Telemetry__DisableRuntimeMetrics` setting), the `DisableAspNetCoreMetrics` setting `:257`-`:258`
+   (the Revision (2026-10-01) `:253`-`:254` is now that comment), the security-signal rationale
+   block `:583`-`:615` (the Revision (2026-09-07) `:460`-`:475`), within it the 401-or-429
+   reasoning `:604`-`:608` (the Revision (2026-10-06) `:525`-`:529`), and the SQL auditing
+   rationale block from `:918` (the Revision (2026-09-07) `:798`-`:802`);
+   `AddCommonSerilog` in ADC Conference `Program.cs:103`, Engagement `:85`, Identity `:101`,
+   Notification `:88`, `MMCA.ADC.UI.Web` `:52`, Store Catalog `:73`, Identity `:78`, Sales `:89`,
+   `MMCA.Store.UI.Web` `:63`, each still before its `AddServiceDefaults()`; bootstrap factories at ADC
+   `:378`, `:219`, `:272`, `:201` and Store `:130`, `:125`, `:138`; `RunAsync` in ADC Conference
+   `Program.cs:489` and Store Catalog `:376`; the Gateways' `AddServiceDefaults` at ADC `:70` and
+   Store `:69`, still with no Serilog call; `DbUpdateExceptionHandler` `LogError` `:32`,
+   `RecordConflict` `:38`, 409 `:41`; the framework sampling comment
+   `Extensions.Telemetry.cs:133`-`:138` (the "when unsampled" text `:136`-`:137`), the
+   `ParentBasedSampler` `:140`, `ConfigureAspNetCoreMetrics` `:351` (called at `:241`).

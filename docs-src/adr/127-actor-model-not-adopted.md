@@ -12,6 +12,7 @@ that the ADC UI app holds four replicas under `conferenceMode` and the Notificat
 ceiling of two, and anchors were refreshed. Revised 2026-10-21: anchors refreshed after the vote
 handler, the live-channel drain and both apps' `main.bicep` scale blocks moved. Revised 2026-10-26:
 anchors refreshed after the output-cache pipeline step and both apps' `main.bicep` scale blocks moved.
+Revised 2026-10-28: anchors refreshed after both apps' `main.bicep` scale blocks moved.
 
 ## Context
 The actor model gives every logical entity its own single-threaded unit of execution holding its state
@@ -104,9 +105,9 @@ tiers, and live fan-out stays on the notification hub.
   ADC Identity, Conference, Engagement, Gateway and UI apps reach four while Notification stays at two;
   every app runs `minReplicas: 1` except the ADC Gateway, which runs two under `conferenceMode`, and
   the ADC UI, which then holds its ceiling of four:
-  `MMCA.ADC/infra/main.bicep:2106`, `:2259`, `:2394`, `:2580`, `:2732` and `:2883`,
+  `MMCA.ADC/infra/main.bicep:2103`, `:2256`, `:2391`, `:2577`, `:2729` and `:2880`,
   `conferenceFrontDoorMinReplicas` at `:191`, `conferenceScaledMaxReplicas` at `:192`,
-  `MMCA.Store/infra/main.bicep:1688`, `:1812`, `:1960`, `:2078` and `:2196`),
+  `MMCA.Store/infra/main.bicep:1689`, `:1813`, `:1961`, `:2079` and `:2197`),
   so an in-process writer guarantee is not a guarantee, and it would silently weaken a
   correctness property the concurrency token holds across the fleet.
 - **Adopting actors only for live polls.** The live path is the least durable state in the system and
@@ -201,6 +202,20 @@ Only anchors moved.
    `:2070`, `:2223`, `:2358`, `:2544`, `:2696` and `:2847`; and every Store scale block
    (`MMCA.Store/infra/main.bicep:1688`, `:1812`, `:1960`, `:2078` and `:2196`, all min 1 and max 2),
    replacing `:1682`, `:1806`, `:1954`, `:2072` and `:2190`.
+
+## Revision (2026-10-28)
+Re-verified against current source. No decision or rationale changed: every container app still
+declares at least `maxReplicas: 2`, and the replica floors and ceilings match the 2026-10-07 wording.
+Only anchors moved.
+1. Anchors re-verified against current source: the ADC scale blocks for Identity, Conference and
+   Engagement (`MMCA.ADC/infra/main.bicep:2103`, `:2256`, `:2391`, min 1 and max
+   `conferenceScaledMaxReplicas`), Notification (`:2577`, min 1 and max 2), Gateway (`:2729`, min
+   `conferenceFrontDoorMinReplicas`, max `conferenceScaledMaxReplicas` at `:2730`) and UI (`:2880`,
+   min `conferenceMode ? conferenceScaledMaxReplicas : conferenceFrontDoorMinReplicas`, max at
+   `:2881`), replacing `:2106`, `:2259`, `:2394`, `:2580`, `:2732` and `:2883`; and every Store scale
+   block (`MMCA.Store/infra/main.bicep:1689`, `:1813`, `:1961`, `:2079` and `:2197`, all min 1 and
+   max 2), replacing `:1688`, `:1812`, `:1960`, `:2078` and `:2196`. `conferenceFrontDoorMinReplicas`
+   (`MMCA.ADC/infra/main.bicep:191`) and `conferenceScaledMaxReplicas` (`:192`) still hold.
 
 ## Related
 [ADR-007](007-grpc-extraction.md), [ADR-008](008-service-extraction-topology.md) and

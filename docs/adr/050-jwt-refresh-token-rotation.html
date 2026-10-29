@@ -261,7 +261,7 @@
           type declares them; neither Domain analyzer ledger mentions them any more (the unshipped ledger holds
           only <code>#nullable enable</code>, <code>Source/Core/MMCA.Common.Domain/PublicAPI.Unshipped.txt:1</code>, and the shipped
           <code>IAuthUser</code> entries list only <code>PasswordHash</code> and <code>PasswordSalt</code>, <code>PublicAPI.Shipped.txt:16-18</code>), so the
-          removal record survives only in Common&#39;s changelog (<code>MMCA.Common/CHANGELOG.md:3580</code>). The only callable copies left are on a
+          removal record survives only in Common&#39;s changelog (<code>MMCA.Common/CHANGELOG.md:3623</code>). The only callable copies left are on a
           Common test double
           (<code>MMCA.Common/Tests/Core/MMCA.Common.Application.Tests/Users/UserUseCaseTestDoubles.cs:83,89</code>), which is
           not dead code: <code>DeleteUserHandlerBaseTests.cs:81</code> still calls <code>UpdateRefreshToken</code> on it. Beyond that,
@@ -281,7 +281,10 @@
           Revised 2026-10-21: anchors refreshed after the <code>AuthSessionIssuer</code>, <code>JwtSettings</code>, changelog and
           user-administration code moved; behavior and defaults are unchanged. Revised 2026-10-26: a token
           presented on a row already revoked as <code>ReuseDetected</code> now fails that request alone instead of
-          revoking the user&#39;s live sessions again (Common #612, v1.261.0); anchors refreshed.</p>
+          revoking the user&#39;s live sessions again (Common #612, v1.261.0); anchors refreshed. Revised
+          2026-10-28: a zero or negative <code>RefreshTokenExpirationDays</code> now fails host startup instead of
+          silently reverting to the seven-day default (Common v1.247.0), so the Trade-offs bullet and the
+          Decision&#39;s sliding-expiry bullet are corrected; the changelog removal anchor is refreshed.</p>
           <p>Note (2026-09-03): the body bullet on account deactivation and erasure described shipped code when this
           record was written (ADC revoked in <code>Delete()</code> and <code>Anonymize()</code>, Store in <code>Deactivate()</code> and
           <code>Anonymize()</code>), and stopped describing it on 2026-08-26, when the refresh-sessions sweep removed the
@@ -366,9 +369,11 @@
           stamped at <code>:367</code> when a session opens and <code>:409</code> on the rotation successor), so the window restarts
           from the moment of each successful rotation rather than staying pinned to the opening login. That
           property reads the value the token service derives from <code>JwtSettings.RefreshTokenExpirationDays</code>
-          (<code>JwtSettings.cs:73</code>, default 7 days) via <code>TokenService.RefreshTokenLifetime</code> (<code>TokenService.cs:165</code>),
-          guarding against a non-positive configured value by falling back to the BR-205 default of 7 days
-          (<code>AuthSessionIssuer.cs:60-61</code>; interface default <code>ITokenService.cs:40</code>). A client that refreshes
+          (<code>JwtSettings.cs:73</code>, default 7 days) via <code>TokenService.RefreshTokenLifetime</code> (<code>TokenService.cs:165</code>).
+          A zero or negative configured value fails host startup (<code>[Range(1, int.MaxValue)]</code>,
+          <code>JwtSettings.cs:72</code>), and the issuer still falls back to the BR-205 default of 7 days for a token
+          service that reports a non-positive lifetime (<code>AuthSessionIssuer.cs:60-61</code>; interface default
+          <code>ITokenService.cs:40</code>). A client that refreshes
           at least once inside each window therefore stays signed in indefinitely; re-login is required only after
           a full lifetime elapses with no successful refresh, or after the token is revoked.</li>
           <li><strong>Mismatch or expiry revokes the stored token.</strong> On refresh, if the presented token does not equal the
@@ -479,13 +484,19 @@
           chain that keeps refreshing never lapses on its own, so rotation (each refresh invalidates its
           predecessor) and reuse-detection revocation are the only backstops that end it. An absolute cap anchored
           to the opening login would bound that exposure but is deliberately not imposed here.</li>
-          <li><strong>A non-positive configured lifetime falls back silently.</strong> Since 2026-07-21 the refresh lifetime is
-          honored from configuration: <code>RefreshTokenLifetime</code> (<code>AuthSessionIssuer.cs:60-61</code>) applies the
-          value <code>TokenService</code> derives from <code>JwtSettings.RefreshTokenExpirationDays</code> (<code>TokenService.cs:165</code>;
-          <code>JwtSettings.cs:73</code>). The guard treats a non-positive configured value (a zero or negative
-          <code>RefreshTokenExpirationDays</code>, or a test double that overrides the member and reports <code>TimeSpan.Zero</code>;
-          the interface default at <code>ITokenService.cs:40</code> itself returns seven days) as absent and falls back to the BR-205 seven-day default rather than
-          failing startup, so a misconfiguration silently reverts to the baseline instead of surfacing an error.</li>
+          <li><strong>A non-positive configured lifetime fails startup; the issuer&#39;s fallback only covers a token
+          service.</strong> The refresh lifetime is honored from configuration: <code>RefreshTokenLifetime</code>
+          (<code>AuthSessionIssuer.cs:60-61</code>) applies the value <code>TokenService</code> derives from
+          <code>JwtSettings.RefreshTokenExpirationDays</code> (<code>TokenService.cs:165</code>; <code>JwtSettings.cs:73</code>). That setting
+          carries <code>[Range(1, int.MaxValue)]</code> (<code>JwtSettings.cs:72</code>) and the options are bound with
+          <code>ValidateDataAnnotations().ValidateOnStart()</code>
+          (<code>Source/Presentation/MMCA.Common.API/Startup/WebApplicationBuilderExtensions.Authentication.cs:135-138</code>),
+          so a zero or negative <code>RefreshTokenExpirationDays</code> fails host startup rather than reverting to a
+          default. The issuer&#39;s guard still treats a non-positive reported lifetime as absent and falls back
+          to the BR-205 seven-day default, which now matters only for a test double or custom
+          <code>ITokenService</code> that overrides the member and reports a non-positive lifetime (<code>TimeSpan.Zero</code> or
+          negative; the interface default at
+          <code>ITokenService.cs:40</code> itself returns seven days).</li>
           </ul>
           <h2 id="revision-2026-10-01">Revision (2026-10-01)</h2>
           <p>No decision or rationale changed. Three statements were corrected against current source. The removed
@@ -624,6 +635,26 @@
           <code>Deactivate()</code> <code>:229</code> and <code>Anonymize()</code> <code>:328</code>. The 2026-10-21 and earlier revisions keep the
           anchors they recorded.</li>
           </ol>
+          <h2 id="revision-2026-10-28">Revision (2026-10-28)</h2>
+          <p>Re-verified against current source. The decision, the superseded status, the rotation grace window,
+          the lifetime defaults (<code>JwtSettings.AccessTokenExpirationMinutes</code> 15, <code>RefreshTokenExpirationDays</code> 7)
+          and the issuer&#39;s fallback expression are unchanged; what moved is how a non-positive configured
+          refresh lifetime is handled, plus one changelog anchor.</p>
+          <ol>
+          <li><strong>A non-positive configured refresh lifetime fails startup.</strong> <code>RefreshTokenExpirationDays</code> carries
+          <code>[Range(1, int.MaxValue)]</code> (<code>Source/Core/MMCA.Common.Infrastructure/Auth/JwtSettings.cs:72</code>,
+          default <code>7</code> at <code>:73</code>), and <code>JwtSettings</code> is bound with <code>ValidateDataAnnotations().ValidateOnStart()</code>
+          (<code>Source/Presentation/MMCA.Common.API/Startup/WebApplicationBuilderExtensions.Authentication.cs:135-138</code>);
+          the change is recorded at <code>MMCA.Common/CHANGELOG.md:342</code> (v1.247.0). The fallback to seven days in
+          <code>AuthSessionIssuer.cs:60-61</code> remains, but now covers only a token service (a test double or custom
+          <code>ITokenService</code>) that reports a non-positive lifetime (<code>TimeSpan.Zero</code> or negative). The Trade-offs bullet that said a misconfiguration
+          silently reverts to the baseline, and the matching clause in the Decision&#39;s sliding-expiry bullet,
+          are corrected.</li>
+          <li>Anchors re-verified against current source: the removal record in Status is
+          <code>MMCA.Common/CHANGELOG.md:3623</code> (the BREAKING multi-device refresh sessions entry, which opens at
+          <code>:3622</code>; <code>:3580</code> is now unrelated text); <code>TokenService.cs:165</code> and <code>ITokenService.cs:40</code> hold. The
+          2026-10-26 and earlier revisions keep the anchors they recorded.</li>
+          </ol>
           <h2 id="related">Related</h2>
           <p>ADR-004 (the stateless RS256/JWKS access token this refresh flow reissues, and the algorithm pinning
           <code>GetPrincipalFromExpiredToken</code> relies on), ADR-032 (the password hashing that gates the login which opens
@@ -653,6 +684,7 @@
             <li><a href="#revision-2026-10-07">Revision (2026-10-07)</a></li>
             <li><a href="#revision-2026-10-21">Revision (2026-10-21)</a></li>
             <li><a href="#revision-2026-10-26">Revision (2026-10-26)</a></li>
+            <li><a href="#revision-2026-10-28">Revision (2026-10-28)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

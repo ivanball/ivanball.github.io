@@ -270,7 +270,9 @@
           count is re-measured (nineteen assertions across twelve classes, adding the role administration scans),
           the gallery no longer uses the pager exception, and the CI, deploy, theme and Helpdesk anchors are
           refreshed; no decision changed. Revised 2026-10-26: anchors refreshed after the CI and deploy workflow
-          edits that moved the Common <code>ui-e2e</code> and ADC/Store <code>deploy.yml</code> gate lines; no decision changed.</p>
+          edits that moved the Common <code>ui-e2e</code> and ADC/Store <code>deploy.yml</code> gate lines; no decision changed.
+          Revised 2026-10-28: anchors refreshed for the profile-page base scan and the Common <code>ui-e2e</code>
+          <code>E2E_BROWSER</code> assignment, which the body still cited at stale lines; no decision changed.</p>
           <h2 id="context">Context</h2>
           <p>Accessibility was documented before it was enforced. The narrative guide
           (<a href="../guides/common-ACCESSIBILITY.html">common-ACCESSIBILITY.md</a>, rubric section 21) named WCAG 2.1 AA
@@ -309,7 +311,7 @@
           the assertion, so a subclass gets a login-page, register-page, profile-page, forgot-password-page, and
           reset-password-page a11y test with no test code of its own:
           <code>.../Testing.E2E/Workflows/Identity/UserLoginTestsBase.cs:82</code>,
-          <code>UserRegistrationTestsBase.cs:99</code>, <code>ProfileManagementTestsBase.cs:191</code>, and
+          <code>UserRegistrationTestsBase.cs:99</code>, <code>ProfileManagementTestsBase.cs:204</code>, and
           <code>PasswordResetTestsBase.cs</code> (class at <code>:17</code>, the two scans asserting at <code>:88</code> and <code>:99</code>, added with the
           password-recovery flow of <a href="091-cache-backed-password-reset.html">ADR-091</a>) each call the assert with
           <code>AxeOptions.Wcag21Aa</code>.</li>
@@ -328,7 +330,7 @@
           <li><strong>Common gates it cross-browser as a required merge check.</strong> The <code>ui-e2e</code> job
           (<code>MMCA.Common/.github/workflows/ci.yml:223</code>) builds the out-of-slnx gallery plus E2E project and runs
           the axe scans across a <code>chromium, firefox, webkit</code> matrix (<code>:232</code>), one engine per leg via
-          <code>E2E_BROWSER</code> (<code>:344</code>), with <code>fail-fast: false</code> so each engine reports independently (<code>:230</code>). All
+          <code>E2E_BROWSER</code> (<code>:376</code>), with <code>fail-fast: false</code> so each engine reports independently (<code>:230</code>). All
           three contexts block merges (<code>MMCA.Common/CONTRIBUTING.md:63-64</code>, enumerated in the branch-protection
           payload at <code>:202-204</code>).</li>
           <li><strong>Both deployed apps gate the deploy on it.</strong> The <code>e2e-gate</code> jobs
@@ -530,6 +532,18 @@
           Store <code>:1132</code>); the <code>cross-browser-freshness</code> step (ADC <code>:925</code>, Store <code>:859</code>) with its rationale
           comment (ADC <code>:909-924</code>, Store <code>:851-858</code>).</li>
           </ol>
+          <h2 id="revision-2026-10-28">Revision (2026-10-28)</h2>
+          <p>Re-verified against current source. No decision or rationale changed: the four Identity bases still
+          assert <code>AxeOptions.Wcag21Aa</code>, and Common still runs the gallery scans across a <code>chromium, firefox, webkit</code> matrix with <code>fail-fast: false</code>. Two body anchors that earlier revisions never corrected are
+          re-pointed.</p>
+          <ol>
+          <li>Anchors re-verified against current source: the profile-page scan in
+          <code>MMCA.Common/Source/Hosting/MMCA.Common.Testing.E2E/Workflows/Identity/ProfileManagementTestsBase.cs:204</code>
+          (inside <code>ProfilePage_ShouldHaveNoAccessibilityViolations</code>, method at <code>:193</code>; the body cited <code>:191</code>),
+          and the Common <code>E2E_BROWSER</code> assignment (<code>MMCA.Common/.github/workflows/ci.yml:376</code>, inside the
+          <code>ui-e2e</code> job at <code>:223</code>, whose <code>fail-fast</code> <code>:230</code> and matrix <code>:232</code> are unchanged; the body cited
+          <code>:344</code>).</li>
+          </ol>
           <h2 id="related">Related</h2>
           <p>ADR-015 (architecture fitness functions: the structural tier this parallels at the browser tier, and the
           same invariant-over-discipline posture), ADR-058 (runtime conformance suites shipped as subclassable
@@ -558,6 +572,7 @@
             <li><a href="#revision-2026-10-07">Revision (2026-10-07)</a></li>
             <li><a href="#revision-2026-10-21">Revision (2026-10-21)</a></li>
             <li><a href="#revision-2026-10-26">Revision (2026-10-26)</a></li>
+            <li><a href="#revision-2026-10-28">Revision (2026-10-28)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

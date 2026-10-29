@@ -266,7 +266,7 @@
           preflight reaches the gateway while a forwarded request keeps the browser&#39;s <code>Origin</code> for the gateway&#39;s
           CORS middleware, the session cookie is also <code>Secure</code> on any HTTPS request in Development (MMCA.Common
           #588), and anchors are refreshed after MMCA.Common #587, #588, #590, #612 and the release notes through
-          v1.261.0.</p>
+          v1.261.0. Revised 2026-10-28: anchors refreshed after MMCA.Common #615 (first tagged v1.262.0).</p>
           <h2 id="context">Context</h2>
           <p>A Blazor WebAssembly client calls the API through the gateway, which is a different origin from the
           UI host, so the HttpOnly session cookies the UI host writes (ADR-022) never travel with those calls.
@@ -286,7 +286,7 @@
           the long-lived prize but still leaves a usable access token in script for its lifetime. The pieces A
           needs already existed: the cookie pair and its writer (<code>ISessionCookieStore</code>,
           <code>MMCA.Common/Source/Presentation/MMCA.Common.API/SessionCookies/ISessionCookieStore.cs:15</code>, HttpOnly,
-          Secure outside Development and on any HTTPS request in Development, <code>SessionCookieJar.cs:68</code>, with a
+          Secure outside Development and on any HTTPS request in Development, <code>SessionCookieJar.cs:69</code>, with a
           lifetime that defaults to <code>Jwt:RefreshTokenExpirationDays</code> when
           that section is bound and to 7 days otherwise,
           <code>MMCA.Common/Source/Presentation/MMCA.Common.API/SessionCookies/SessionCookieSettings.cs:31-38</code>,
@@ -679,6 +679,21 @@
           <code>:677-679</code>, <code>:679-683</code>, <code>:684-685</code> -&gt; <code>:906-907</code>, <code>:907-911</code>, <code>:912-913</code>. Anchors inside the
           dated revisions above stay as written. The other live anchors still hold.</li>
           </ol>
+          <h2 id="revision-2026-10-28">Revision (2026-10-28)</h2>
+          <p>Re-verified against current source. The gates, their order, the refresh outcomes, the session cookie
+          flags and lifetime, the proxy settings and the <code>UPGRADING.md</code> anchors are unchanged. MMCA.Common #615
+          (commit 0d40fff3, first tagged v1.262.0) rewrote the comment above the session cookie options, which
+          moved the <code>Secure</code> anchor by one line.</p>
+          <ol>
+          <li><strong><code>Secure</code> flag scope.</strong> The cookie drops <code>Secure</code> for any plain-http request in Development,
+          whatever the host name (<code>Secure = !environment.IsDevelopment() || context.Request.IsHttps</code>,
+          <code>MMCA.Common/Source/Presentation/MMCA.Common.API/SessionCookies/SessionCookieJar.cs:69</code>); the
+          2026-10-26 item 3 wording &quot;only a plain <code>http://localhost</code> run&quot; names the common case, not the rule.
+          The Context paragraph already states the rule.</li>
+          <li>Anchors re-verified against current source: <code>SessionCookieJar.cs:68</code> -&gt; <code>:69</code> (Context);
+          <code>SessionCookieJar.cs:35-47</code> still holds. Anchors inside the dated revisions above stay as written
+          (<code>RefreshSessionSettings.cs:98</code> is now <code>:99</code>). The other live anchors still hold.</li>
+          </ol>
           <h2 id="related">Related</h2>
           <p><a href="022-browser-session-cookie-auth.html">ADR-022</a> (the HttpOnly session cookie the proxy reads),
           <a href="051-client-auth-token-lifecycle.html">ADR-051</a> (client token lifecycle across render modes),
@@ -711,6 +726,7 @@
             <li><a href="#revision-2026-10-07">Revision (2026-10-07)</a></li>
             <li><a href="#revision-2026-10-21">Revision (2026-10-21)</a></li>
             <li><a href="#revision-2026-10-26">Revision (2026-10-26)</a></li>
+            <li><a href="#revision-2026-10-28">Revision (2026-10-28)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

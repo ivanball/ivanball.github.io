@@ -16,6 +16,7 @@ Revised 2026-10-06: inserts and deletes write one summary row, a store-generated
 Revised 2026-10-07: the key fix-up issues one filtered `UPDATE` per pending row rather than one statement covering all of them, `AuditTrailSettings` also carries `DataSource` (the engine the reader queries), and anchors are refreshed after the v1.233.0 release.
 Revised 2026-10-21: redaction also covers `[Sensitive]` properties, `IAuthUser` credentials and encrypted columns, the reverse `[Pii]` rule lives in the shared `PiiConventionTestsBase` that Store, ADC and Helpdesk subclass, a fixed-up key equal to the captured one skips its `UPDATE`, and anchors are refreshed.
 Revised 2026-10-26: the key fix-up writes the resolved key to the tracked trail row after each `UPDATE` and syncs its snapshot so that write is not saved again, and the reader and interceptor anchors are refreshed.
+Revised 2026-10-28: anchors refreshed after later ADC and Store `infra/main.bicep` changes moved the SQL-auditing anchors, and ADC's `User` `[IdValueGenerated]` anchor moved one line.
 ## Context
 The framework already answers "who touched this row last". Every `AuditableBaseEntity` carries
 `CreatedOn/By` and `LastModifiedOn/By`, stamped by `AuditSaveChangesInterceptor` on the way into
@@ -420,6 +421,30 @@ anchors.
    comparison reads); `AuditTrailReader.cs` settings captured
    `:45`, `DataSource` consumed `:67` (the earlier `:53` is a method parameter). The anchors in the
    dated revisions above, including the bicep ones, are left as recorded.
+
+## Revision (2026-10-28): current SQL-auditing and store-generated-key anchors
+Re-verified against current source. The capture mechanics, the row shape, the per-row key fix-up, the
+redaction rule, the opt-in gates, the Cosmos skip and both apps' SQL-auditing content are unchanged:
+Store still audits statements at the server through the batch group, and ADC still pairs an
+authentication-and-privilege server policy with object-scoped `UPDATE` and `DELETE` actions on the trail
+table in its three trail-carrying databases. Only anchors moved, and no earlier revision records the
+current bicep ones.
+
+1. Anchors re-verified against current source: ADC `MMCA.ADC/infra/main.bicep`: `sqlServerAuditing`
+   `:1070`, groups `:1076-1084` (entries `:1077-1083`, no statement group), server volume rationale
+   `:1061-1069`, trail-DML rationale `:1180-1207` (the "one UPDATE per row" note and when each action
+   fires at `:1199-1200`), `auditTrailDatabaseNames` `:1208` (`ADC_Identity`, `ADC_Conference`,
+   `ADC_Engagement` at `:1209-1211`), `auditTrailDiagnostics` `:1214` (category `:1222`),
+   `auditTrailDmlAuditing` `:1230`, `UPDATE` and `DELETE ON dbo.AuditTrailEntries BY public`
+   `:1238-1239`. Store `MMCA.Store/infra/main.bicep`: `sqlAuditingSettings` `:968`, groups `:977-981`
+   (`BATCH_COMPLETED_GROUP` `:978`, the two authentication groups `:979-980`, inline comment
+   `:974-976`), `sqlAuditDiagnostics` `:954` (category `SQLSecurityAuditEvents` `:961`), rationale
+   `:917-948` with the batch-group and no-per-table-filter cost note at `:942-948`;
+   `MMCA.Store/infra/foundation.bicep:57` (`dailyQuotaGb: 3`) is unchanged. ADC `[IdValueGenerated]`:
+   `MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Domain/Users/User.cs:34` (the 2026-10-06
+   revision's `:33` moved down one line); `Event.cs:23`, `CheckIn.cs:27` and `PointsEntry.cs:30` are
+   unchanged. The anchors in the dated revisions above, including the 2026-09-07 Store
+   `Governance/PiiConventionTests.cs` ones superseded by the 2026-10-21 revision, are left as recorded.
 
 ## Related
 [ADR-003](003-outbox-dual-dispatch.md) (the same-transaction write this copies wholesale, including the

@@ -283,7 +283,8 @@
           base), Helpdesk opts in, and the unresolved-tenant 400 still names the header; anchors refreshed.
           Revised 2026-10-26: the Decision now names all three facts of the optional <code>TenantResolutionTestsBase</code>
           (header opt-in through <code>AllowsHeaderResolution</code>, claim before header, health endpoints excluded), not
-          only the claim-before-header one; anchors refreshed.</p>
+          only the claim-before-header one; anchors refreshed.
+          Revised 2026-10-28: anchors refreshed after the releases since v1.243.0 moved its <code>CHANGELOG.md</code> entry.</p>
           <h2 id="context">Context</h2>
           <p>MMCA.Common already partitions data along two axes and neither of them is a tenant. ADR-006 partitions by
           <strong>source name</strong> (every entity resolves to a <code>DataSourceKey(Engine, Name)</code>, each module or service owning
@@ -724,6 +725,21 @@
           <code>BrokerMessageBus</code> stamps <code>MessageHeaders.TenantId</code> at <code>BrokerMessageBus.cs:92</code> (the constant still at
           <code>MessageHeaders.cs:25</code>).</li>
           </ol>
+          <h2 id="revision-2026-10-28">Revision (2026-10-28)</h2>
+          <p>Re-verified against current source. The isolation model and the resolution defaults are unchanged:
+          claim-only by default, header by explicit opt-in, and the optional <code>TenantResolutionTestsBase</code> holding
+          its three facts. Only the <code>CHANGELOG.md</code> anchors the two previous revisions cite have moved, as later
+          releases were prepended above the v1.243.0 entry.</p>
+          <ol>
+          <li>Anchors re-verified against current source. For the dated revisions, which keep their anchors as
+          written: the v1.243.0 release heading is at <code>MMCA.Common/CHANGELOG.md:423</code> (the Revision
+          (2026-10-26) cites <code>:380</code>); the <code>TenantResolutionTestsBase</code> three-facts entry is at <code>:428</code> (cited
+          there as <code>:385</code>); the change both revisions call the Breaking bullet is a <code>**Breaking:**</code> bullet
+          under <code>### Changed</code> (<code>:444</code>) at <code>:446</code>, its sub-bullet &quot;Tenant resolution reads only the claim
+          unless configured otherwise.&quot; at <code>:447</code> (cited as <code>:189</code> by the Revision (2026-10-21) and as <code>:404</code>
+          by the Revision (2026-10-26)). It is a labeled bullet under Changed, not a separate Breaking
+          section.</li>
+          </ol>
           
         <div class="doc-foot btn-row">
           <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
@@ -746,6 +762,7 @@
             <li><a href="#revision-2026-10-07">Revision (2026-10-07)</a></li>
             <li><a href="#revision-2026-10-21">Revision (2026-10-21)</a></li>
             <li><a href="#revision-2026-10-26">Revision (2026-10-26)</a></li>
+            <li><a href="#revision-2026-10-28">Revision (2026-10-28)</a></li>
             </ul>
           </nav>
         </aside>

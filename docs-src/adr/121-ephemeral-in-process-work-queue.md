@@ -7,6 +7,7 @@ Revised 2026-10-06: the scoring trigger's event-existence 404 and the handler's 
 Revised 2026-10-07: the live drain's bounded shutdown flush (complete the queue, then publish what remains within a 5-second budget) and its `WaitToReadAsync` loop.
 Revised 2026-10-21: anchors refreshed after the live drain, upvote handler and question submit handler moved.
 Revised 2026-10-26: anchors refreshed after the live poll open handler and question submit handler moved.
+Revised 2026-10-28: the moderation handler's queue writes (one unconditional event write plus a Pending-count write only for an approved or dismissed Pending question, not one write per branch), with the live poll close and moderation handler anchors refreshed.
 
 ## Context
 ADR-052 ran two different kinds of work through one mechanism: ephemeral broadcasts that must not
@@ -121,12 +122,14 @@ starts an untracked `Task` from a request, and nothing that must run lands here.
     over the shared `MutateEntityHandlerCore` at `:52`) holds no save of its own: the base saves at
     `:322`, logs at `:324` and then awaits the `OnMutatedAsync` post-save hook at `:325`, and the
     enqueue is the body of that hook. `CloseLivePollHandler` declares the base at
-    `.../LivePolls/UseCases/Close/CloseLivePollHandler.cs:24` and enqueues from the hook at `:73`
-    (queue write at `:94-95`); `OpenLivePollHandler` at
+    `.../LivePolls/UseCases/Close/CloseLivePollHandler.cs:24` and enqueues from the hook at `:71`
+    (queue write at `:92-93`); `OpenLivePollHandler` at
     `.../LivePolls/UseCases/Open/OpenLivePollHandler.cs:26` and `:87` (write at `:108-109`);
     `ModerateQuestionHandler` at `.../SessionQuestions/UseCases/Moderate/ModerateQuestionHandler.cs:28`
-    and `:89`, whose helper wraps its work in `BestEffort.ExecuteAsync` (`:138`) with one write per
-    branch (`:140`, `:154`).
+    and `:97`, whose helper (`:114`) builds the event name and payload outside the guard (`:126-144`)
+    and then wraps its work in `BestEffort.ExecuteAsync` (`:146`): the moderation event write is
+    unconditional (`:148`), and the Pending-count write (`:162`) follows only when a Pending question
+    was approved or dismissed (`:150`).
   - *One site keeps the ordering by hand, and the rule is stated in its own terms.*
     `SubmitQuestionHandler` implements `ICommandHandler<SubmitQuestionCommand, Result<SessionQuestionDTO>>`
     directly (`.../SessionQuestions/UseCases/Submit/SubmitQuestionHandler.cs:39`), so it owns its
@@ -298,6 +301,27 @@ call); only line numbers moved in `OpenLivePollHandler` and `SubmitQuestionHandl
    `CloseLivePollHandler.cs` (`:24`, hook enqueue call `:73` inside the override at `:68`, write
    `:94-95`), `ModerateQuestionHandler.cs` (`:28`, `:89`, `:138`, `:140`, `:154`), and the
    `MutateEntityHandlerBase` lines (`:339`, `:52`, `:322`, `:325`).
+
+## Revision (2026-10-28)
+Re-verified against current source. The decision, rationale and trade-offs are unchanged, and so
+is the post-commit enqueue in both shapes; what moved is `CloseLivePollHandler` and
+`ModerateQuestionHandler`, whose lines the 2026-10-26 revision listed as unchanged but which had
+already moved, and the Decision's description of the moderation helper's writes.
+1. The moderation helper does not write once per branch. It builds the `(eventName, payload)` pair
+   outside the best-effort guard
+   (`MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Application/SessionQuestions/UseCases/Moderate/ModerateQuestionHandler.cs:126-144`),
+   then inside `BestEffort.ExecuteAsync` (`:146`) writes the moderation event unconditionally
+   (`:148`) and the Pending-count follow-up only when a Pending question was approved or dismissed
+   (`:150`, write at `:162`). The Decision now says so.
+2. Anchors re-verified against current source: in
+   `MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Application/LivePolls/UseCases/Close/CloseLivePollHandler.cs`,
+   the hook's enqueue call (`:71`, inside the `OnMutatedAsync` override at `:66`, helper defined at
+   `:82`) and the queue write (`:92-93`); in `.../SessionQuestions/UseCases/Moderate/ModerateQuestionHandler.cs`,
+   the hook's enqueue call (`:97`, inside the override at `:93`), the helper (`:114`) and the lines
+   in item 1. Unchanged and confirmed: both base declarations (`CloseLivePollHandler.cs:24`,
+   `ModerateQuestionHandler.cs:28`) and the `MutateEntityHandlerBase` lines
+   (`MMCA.Common/Source/Core/MMCA.Common.Application/UseCases/Crud/MutateEntityHandlerBase.cs:339`,
+   `:52`, `:322`, `:324`, `:325`).
 
 ## Related
 [ADR-114](114-internal-commands-durable-job-queue.md) (the durable, leased, retrying queue that owns

@@ -253,7 +253,8 @@
           broadcast&#39;s two mutually exclusive enqueue branches are cited, and anchors are refreshed. Revised
           2026-10-26: adoption is fifteen call sites, adding the ADC Conference speaker-cache eviction and the
           framework&#39;s post-sign-in password rehash (a second explicit <code>CancellationToken.None</code> caller), and
-          anchors are refreshed.</p>
+          anchors are refreshed. Revised 2026-10-28: anchors refreshed after the ADC moderation handler, the
+          Store checkout preflight and the Store products controller moved.</p>
           <h2 id="context">Context</h2>
           <p>A command that has already committed often has follow-up work attached to it: evict the output-cache
           entries the write invalidated, broadcast the new state to a live channel, send the notification the
@@ -313,8 +314,8 @@
           (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Auth/AuthenticationServiceBase.cs:705</code>, the
           reasoning at <code>:664-671</code>); the ADC submit and moderation broadcasts take the parameter&#39;s default for
           the same reason (<code>.../SubmitQuestionHandler.cs:199-202</code>, the call closing at <code>:237</code>, and
-          <code>.../ModerateQuestionHandler.cs:157</code>), while the three ADC domain-event handlers pass their own
-          <code>cancellationToken</code> (<code>.../SessionQuestionUpvoteChangedHandler.cs:91</code>,
+          <code>.../ModerateQuestionHandler.cs:146</code>, the call closing at <code>:165</code> with no token argument), while
+          the three ADC domain-event handlers pass their own <code>cancellationToken</code> (<code>.../SessionQuestionUpvoteChangedHandler.cs:91</code>,
           <code>.../LivePollVoteChangedHandler.cs:83</code> and <code>.../SessionQuestionSubmittedPointsHandler.cs:102</code>), as
           does the ADC Conference integration-event handler (<code>.../UserDeletedSpeakerErasureHandler.cs:108</code>),
           and the hosted bookmark eviction processor passes its <code>stoppingToken</code>
@@ -339,7 +340,7 @@
           onto the live-channel publish queue rather than publishing inline, exactly once per submit: the
           approved branch at <code>:219-220</code> or the pending-count branch at <code>:234-235</code>),
           <code>session-question-moderation-broadcast</code> (<code>.../UseCases/Moderate/ModerateQuestionHandler.cs:31</code>, call at
-          <code>:138</code>) and <code>session-question-upvote-broadcast</code>
+          <code>:146</code>) and <code>session-question-upvote-broadcast</code>
           (<code>.../DomainEventHandlers/SessionQuestionUpvoteChangedHandler.cs:47</code>, call at <code>:54</code>); the poll-results
           broadcast <code>livepoll-results-broadcast</code>
           (<code>.../LivePolls/DomainEventHandlers/LivePollVoteChangedHandler.cs:44</code>, call at <code>:51</code>); and the
@@ -356,8 +357,8 @@
           after <code>SaveChangesAsync</code> at <code>:99</code>). The Store five are a checkout display label, <code>checkout-customer-name</code>, resolved by the
           checkout preflight outside the transaction so an unreachable Identity leaves the name null instead of
           failing an otherwise valid checkout
-          (<code>MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Application/ShoppingCarts/UseCases/CheckOut/CheckOutPreflight.cs:77-87</code>,
-          the operation name at <code>:78</code>, the outside-the-transaction reasoning at <code>:17-24</code>);
+          (<code>MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Application/ShoppingCarts/UseCases/CheckOut/CheckOutPreflight.cs:62-72</code>,
+          the operation name at <code>:63</code>, the outside-the-transaction reasoning at <code>:18-27</code>);
           three inventory label fetches sharing the operation name <code>inventory-catalog-labels</code>, so a Catalog service
           that drops out leaves rows with whatever labels they had
           (<code>.../Inventory/UseCases/Create/CreateInventoryItemHandler.cs:68</code>,
@@ -383,7 +384,7 @@
           (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Caching/OutputCacheEvictionExtensions.cs:34</code>,
           <code>:78-92</code>). Store Catalog reaches it from seven controllers, each passing fixed low-cardinality cache
           tags, and every one of them evicts <code>catalog:products</code> and <code>catalog:categories</code> together:
-          <code>Controllers/CategoriesController.cs:174</code>, <code>ProductsController.cs:190</code>, <code>ProductVariantsController.cs:212</code>,
+          <code>Controllers/CategoriesController.cs:174</code>, <code>ProductsController.cs:230</code>, <code>ProductVariantsController.cs:212</code>,
           <code>ProductImagesController.cs:219</code>, <code>ReviewsController.cs:329</code>, <code>ReviewModerationController.cs:166</code> and
           <code>ProductAttributesController.cs:154</code>.</p>
           <p>One swallow stays hand-rolled. The framework&#39;s own
@@ -565,6 +566,21 @@
           refused-invariant path, which is logged as <code>PasswordRehashRejected</code> without reaching the helper&#39;s
           swallow or counter (<code>AuthenticationServiceBase.cs:693-700</code>).</li>
           </ol>
+          <h2 id="revision-2026-10-28">Revision (2026-10-28)</h2>
+          <p>Re-verified against current source. No decision, rationale or adoption count changed; the moderation
+          broadcast still takes the token parameter&#39;s default, the checkout name lookup still leaves the name
+          null on an unreachable Identity, and all seven Store Catalog controllers still evict both catalog
+          tags. Only anchors moved.</p>
+          <ol>
+          <li>Anchors re-verified against current source: <code>ModerateQuestionHandler</code> (constant <code>:31</code>, call
+          <code>:146</code>, the call closing at <code>:165</code> with no token argument)
+          (<code>MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Application/SessionQuestions/UseCases/Moderate/ModerateQuestionHandler.cs</code>);
+          <code>CheckOutPreflight</code> (call <code>:62-72</code>, operation name <code>:63</code>, outside-the-transaction remarks
+          <code>:18-27</code>, the null-name fallback <code>:58-61</code>)
+          (<code>MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Application/ShoppingCarts/UseCases/CheckOut/CheckOutPreflight.cs</code>);
+          and <code>ProductsController.cs:230</code>
+          (<code>MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.API/Controllers/ProductsController.cs:230</code>).</li>
+          </ol>
           <h2 id="related">Related</h2>
           <p><a href="024-push-notifications.html">ADR-024</a> (push delivery failure is non-fatal and recorded rather than
           raised, one of the local leniencies this policy generalizes),
@@ -600,6 +616,7 @@
             <li><a href="#revision-2026-10-07">Revision (2026-10-07)</a></li>
             <li><a href="#revision-2026-10-21">Revision (2026-10-21)</a></li>
             <li><a href="#revision-2026-10-26">Revision (2026-10-26)</a></li>
+            <li><a href="#revision-2026-10-28">Revision (2026-10-28)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

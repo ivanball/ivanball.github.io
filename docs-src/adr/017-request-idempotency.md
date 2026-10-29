@@ -17,6 +17,10 @@ corrected (email confirmation, entity create and update, notifications and legal
 it too, not only the password-reset pair) and the shared admin lock/unlock POSTs are recorded as
 declared by each consumer override rather than by the base. Revised 2026-10-21: anchors refreshed
 after the shared auth, entity-create and user-admin controller declarations moved; no content change.
+Revised 2026-10-28: the 2026-08-18 statement that register is `[Idempotent]` is recorded as
+superseded since 2026-10-01 (every POST on `AuthControllerBase` and `OAuthControllerBase` is
+`[NonIdempotent]`; the shared auth `[Idempotent]` actions live in the password-reset and
+email-confirmation bases, so "both ways" holds across the shared auth bases rather than within one).
 
 ## Context
 Write endpoints (POST / PUT / PATCH) are exposed to **client retries and double-submits**: a flaky
@@ -294,6 +298,36 @@ override those two actions with `[NonIdempotent]`. Only anchors moved. That sect
    and `:111`. `NotificationsController` has a single `[Idempotent]`, on its POST
    (`.../Controllers/Notifications/NotificationsController.cs:43-44`); the separate `:30` anchor
    recorded earlier names no declaration and is dropped.
+
+## Revision (2026-10-28)
+Re-verified against current source. The Decision, Rationale and Trade-offs are unchanged, and the
+anchors recorded in the Revision (2026-10-21) still hold. What moved is how the Status reads: its
+2026-08-18 sentence ("the shared auth controllers declare their intent both ways") pointed at a
+register/token split inside `AuthControllerBase` that no longer exists, and the 2026-10-01 Status
+summary did not say so. The sentence stays true only read across the shared auth bases, and the Status
+now carries that reading in its 2026-10-28 clause. The earlier sections are left as written.
+
+1. **Register is `[NonIdempotent]`; "both ways" now holds across four of the shared auth bases,
+   not within one.**
+   Every POST on `AuthControllerBase` is `[NonIdempotent]`: login, register, refresh, revoke and the
+   per-session revoke
+   (`MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/AuthControllerBase.cs:69-70`,
+   `:93-94`, `:124-125`, `:152-153`, `:216-217`), as is the only POST on `OAuthControllerBase`, the
+   code exchange (`.../Controllers/OAuthControllerBase.cs:230-231`). The shared auth `[Idempotent]`
+   actions are forgot-password and reset-password
+   (`.../Controllers/PasswordResetAuthControllerBase.cs:75-76`, `:99-100`) and
+   send-email-confirmation and confirm-email
+   (`.../Controllers/EmailConfirmationControllerBase.cs:78-79`, `:106-107`). The fifth shared auth
+   base, `UserAccountAuthControllerBase`, declares no POST at all (its write verbs are the `[HttpPut]`
+   password and preferences actions at `.../Controllers/UserAccountAuthControllerBase.cs:87` and
+   `:113`), so it is outside the gate's scope. The Revision
+   (2026-08-18) claim that register is `[Idempotent]` has been superseded since the Revision
+   (2026-10-01).
+2. Anchors re-verified against current source: the auth anchors in item 1; OAuth `complete` is the
+   `[HttpGet]` at `OAuthControllerBase.cs:145`; in `IdempotencyFilter.cs` the buffering guard is at
+   `:122-123`, blank-to-null at `:170`, the 422 reuse title at `:327`, the `ETag` replay at `:391-392`
+   and the anonymous subject at `:541-542`; `idempotency.degraded` is at `IdempotencyMetrics.cs:46-47`
+   and the record's `ETag` at `IdempotencyRecord.cs:26`.
 
 ## Related
 ADR-003 (handler idempotency for outbox/event consumers, a distinct concern), ADR-013 (Result is the

@@ -244,7 +244,7 @@
           <p class="eyebrow doc-kicker">Architecture Decision Record</p>
           <h1 id="adr-001-manual-dto-mapping-over-automapper">ADR-001: Manual DTO Mapping over AutoMapper</h1>
           <h2 id="status">Status</h2>
-          <p>Accepted. <em>Mechanism clarified 2026-06-26: the per-entity mappers are Riok.Mapperly source-generated (compile-time), not hand-written line by line. The decision to avoid runtime convention/reflection mapping (AutoMapper, Mapster) is unchanged.</em> <em>Mapper count refreshed 2026-08-23: 31 DTO mappers across Store + ADC.</em> <em>Revised 2026-09-11 (recount): 33 DTO mappers across Store + ADC (20 in ADC, 13 in Store).</em> <em>Revised 2026-09-19 (recount): 35 DTO mappers across Store + ADC (22 in ADC, 13 in Store); ADC added <code>PartnerDTOMapper</code> and <code>SessionAssetDTOMapper</code>.</em> <em>Revised 2026-10-21: recount to 36 DTO mappers across Store + ADC (23 in ADC, 13 in Store); ADC added the hand-written <code>UserListDTOMapper</code>, the one mapper that is not Mapperly-generated.</em></p>
+          <p>Accepted. <em>Mechanism clarified 2026-06-26: the per-entity mappers are Riok.Mapperly source-generated (compile-time), not hand-written line by line. The decision to avoid runtime convention/reflection mapping (AutoMapper, Mapster) is unchanged.</em> <em>Mapper count refreshed 2026-08-23: 31 DTO mappers across Store + ADC.</em> <em>Revised 2026-09-11 (recount): 33 DTO mappers across Store + ADC (20 in ADC, 13 in Store).</em> <em>Revised 2026-09-19 (recount): 35 DTO mappers across Store + ADC (22 in ADC, 13 in Store); ADC added <code>PartnerDTOMapper</code> and <code>SessionAssetDTOMapper</code>.</em> <em>Revised 2026-10-21: recount to 36 DTO mappers across Store + ADC (23 in ADC, 13 in Store); ADC added the hand-written <code>UserListDTOMapper</code>, the one mapper that is not Mapperly-generated.</em> <em>Revised 2026-10-28: anchors refreshed after the <code>SpeakerDTOMapper</code> wrapper lines moved.</em></p>
           <h2 id="context">Context</h2>
           <p>Domain entities must be mapped to DTOs for API responses. The two common approaches are:</p>
           <ol>
@@ -273,6 +273,19 @@
           <li>Store is unchanged at 13 <code>*DTOMapper</code> classes, all carrying <code>[Mapper]</code>. Total: 36 DTO mappers (23 ADC, 13 Store). The Decision, Rationale and Trade-offs now name the hand-written exception, and the Decision names both Mapperly mappers that wrap a private generated <code>MapToDTOGenerated</code> behind a hand-written public <code>MapToDTO</code>: <code>SpeakerDTOMapper</code> (<code>SpeakerDTOMapper.cs:43</code>, wrapping <code>:59</code>) and <code>EventDTOMapper</code> (<code>EventDTOMapper.cs:31</code>, wrapping <code>:52</code>). No Store mapper uses that shape.</li>
           <li>Anchors re-verified against current source: the hand-written class declaration at <code>MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Application/Users/DTOs/UserListDTOMapper.cs:14</code>, and the <code>[Mapper]</code> attribute lines of the two wrapper mappers at <code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Events/DTOs/EventDTOMapper.cs:14</code> and <code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Speakers/DTOs/SpeakerDTOMapper.cs:16</code> (their class declarations follow at <code>:15</code> and <code>:17</code>).</li>
           </ol>
+          <h2 id="revision-2026-10-28">Revision (2026-10-28)</h2>
+          <p>Re-verified against current source. The decision, the mapper count (36: 23 ADC, 13 Store) and the
+          wrapper shape are unchanged; only the <code>SpeakerDTOMapper</code> line anchors cited in the 2026-10-21
+          revision moved; the public static <code>CanSeeEmail</code> read rule now precedes <code>MapToDTO</code> in that file.</p>
+          <ol>
+          <li>Anchors re-verified against current source: <code>SpeakerDTOMapper</code>&#39;s hand-written public <code>MapToDTO</code>
+          at <code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Speakers/DTOs/SpeakerDTOMapper.cs:45</code>,
+          wrapping the private generated <code>MapToDTOGenerated</code> at <code>:62</code>, with the redaction at <code>:52</code> (it
+          nulls <code>Email</code> and <code>LinkedUserId</code> unless <code>CanSeeEmail</code>, <code>:38</code>, admits the caller as Organizer).
+          <code>EventDTOMapper</code>&#39;s public <code>MapToDTO</code> stays at
+          <code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Events/DTOs/EventDTOMapper.cs:31</code>,
+          wrapping <code>:52</code>. The <code>[Mapper]</code> lines stay at <code>SpeakerDTOMapper.cs:16</code> and <code>EventDTOMapper.cs:14</code>.</li>
+          </ol>
           
         <div class="doc-foot btn-row">
           <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
@@ -289,6 +302,7 @@
             <li><a href="#rationale">Rationale</a></li>
             <li><a href="#trade-offs">Trade-offs</a></li>
             <li><a href="#revision-2026-10-21">Revision (2026-10-21)</a></li>
+            <li><a href="#revision-2026-10-28">Revision (2026-10-28)</a></li>
             </ul>
           </nav>
         </aside>

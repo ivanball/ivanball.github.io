@@ -10,7 +10,7 @@ three repos, both consumers own an AppHost smoke project, and each of them subcl
 one app's; the ADC bicep and workflow anchors are re-pinned to their current lines. Revised
 2026-10-01: the per-PR framework AppHost test job and the extra telemetry cuts are recorded. Revised
 2026-10-06: the ADC AppHost's broker is described as selectable (RabbitMQ or the Service Bus
-emulator) rather than RabbitMQ only. Revised 2026-10-07: the consumer AppHost smoke projects and their nightly job are removed, so the bounded exception is MMCA.Common's blocking framework tier alone (see Revision below). Revised 2026-10-07: anchors refreshed after the v1.233.0 release. Revised 2026-10-21: anchors refreshed after the Common `ci.yml` and the ADC and Store infrastructure templates moved. Revised 2026-10-26: the App Insights export path is named as MMCA.Common.Azure's `AddAzureMonitorExporter` rather than a bare `UseAzureMonitor` call, and live anchors are refreshed after the Common `ci.yml`, `Directory.Packages.props`, `Extensions.cs` and messaging registration and settings, the ADC AppHost, `e2e.yml`, `deploy.yml` and infrastructure template moved. Records two
+emulator) rather than RabbitMQ only. Revised 2026-10-07: the consumer AppHost smoke projects and their nightly job are removed, so the bounded exception is MMCA.Common's blocking framework tier alone (see Revision below). Revised 2026-10-07: anchors refreshed after the v1.233.0 release. Revised 2026-10-21: anchors refreshed after the Common `ci.yml` and the ADC and Store infrastructure templates moved. Revised 2026-10-26: the App Insights export path is named as MMCA.Common.Azure's `AddAzureMonitorExporter` rather than a bare `UseAzureMonitor` call, and live anchors are refreshed after the Common `ci.yml`, `Directory.Packages.props`, `Extensions.cs` and messaging registration and settings, the ADC AppHost, `e2e.yml`, `deploy.yml` and infrastructure template moved. Revised 2026-10-28: anchors refreshed after the Common `ci.yml`, the ADC and Store `AGENTS.md`, the integration-test rework plan and the ADC infrastructure template moved. Records two
 standing divergences from the default .NET Aspire path as
 decisions rather than as gaps. Both parts describe what the four repos already do, with the single
 bounded exception recorded in Decision 1, and the value of writing them down is that a reader (or a
@@ -46,8 +46,8 @@ like an unfinished adoption:
    sanctions. That package has its own per-PR test project over a sample AppHost, taking it by
    `ProjectReference` rather than a direct package reference
    (`MMCA.Common/Tests/Hosting/MMCA.Common.Testing.Aspire.AppHostTests/MMCA.Common.Testing.Aspire.AppHostTests.csproj:28`,
-   run by the blocking `apphost-testing` job at `MMCA.Common/.github/workflows/ci.yml:989`, the
-   blocking note at `:994-995`, the `MMCA_APPHOST_TESTS` opt-in at `:1031`). The package is
+   run by the blocking `apphost-testing` job at `MMCA.Common/.github/workflows/ci.yml:1021`, the
+   blocking note at `:1026-1027`, the `MMCA_APPHOST_TESTS` opt-in at `:1063`). The package is
    pinned in MMCA.Common only (`MMCA.Common/Directory.Packages.props:444`) and referenced by
    `MMCA.Common/Source/Hosting/MMCA.Common.Testing.Aspire/MMCA.Common.Testing.Aspire.csproj:20`,
    which owns the only `DistributedApplicationTestingBuilder.CreateAsync` call in the workspace
@@ -82,7 +82,7 @@ The tiers that exist keep their shape, and `DistributedApplicationTestingBuilder
 - **The deferral is already on the record and stays.** The rework plan that produced these tiers
   states it in one line: Aspire's testing builder is deferred to the Playwright E2E lane, as too
   heavy for the integration tier and overlapping E2E
-  (`Website/docs-src/guides/adc-IntegrationTestReworkPlan.md:52-53`).
+  (`Website/docs-src/guides/adc-IntegrationTestReworkPlan.md:63-64`).
 
 Two properties of the hosts make the choice load-bearing rather than a preference.
 
@@ -114,12 +114,12 @@ readiness budget and the opt-in gate live once in `MMCA.Common.Testing.Aspire`
 (`AppHostFixtureBase.cs:41`, the generic subclass a consumer names its AppHost through at
 `AppHostFixtureBase.Generic.cs:20`, the assertion base at `AppHostTestBase.cs:29`), and the tier runs
 per pull request in MMCA.Common over a sample AppHost, in the `apphost-testing` job, which is blocking
-but not a required merge check (`MMCA.Common/.github/workflows/ci.yml:989`, `:994-995`). It sets the
-framework's `MMCA_APPHOST_TESTS` opt-in (`:1031`); without it the fixture never boots an orchestrator
+but not a required merge check (`MMCA.Common/.github/workflows/ci.yml:1021`, `:1026-1027`). It sets
+the framework's `MMCA_APPHOST_TESTS` opt-in (`:1063`); without it the fixture never boots an orchestrator
 and every test skips with that reason, which is what a developer machine gets. Neither consumer
 carries an AppHost smoke project: each consumer's real AppHost composition is booted by its `e2e.yml`
-on every E2E run, including the deploy's chromium `e2e-gate` (`MMCA.ADC/AGENTS.md:77`,
-`MMCA.Store/AGENTS.md:76`, `MMCA.ADC/.github/workflows/e2e.yml:242`,
+on every E2E run, including the deploy's chromium `e2e-gate` (`MMCA.ADC/AGENTS.md:79`,
+`MMCA.Store/AGENTS.md:78`, `MMCA.ADC/.github/workflows/e2e.yml:242`,
 `MMCA.Store/.github/workflows/e2e.yml:252`).
 
 What stays out is the scope, not the assertion count: an app-model tier that starts carrying
@@ -158,7 +158,7 @@ extension of it.
 
 ## Rationale
 - **Test at the boundary that ships.** A service is deployed as its own container app
-  (`MMCA.ADC/infra/main.bicep:1861`, `:2114`, `:2267`, `:2402`), configured entirely through
+  (`MMCA.ADC/infra/main.bicep:1858`, `:2111`, `:2264`, `:2399`), configured entirely through
   environment variables. `WebApplicationFactory` plus an environment-variable override channel is a
   closer model of that than an app model the deployment does not use: production topology comes from
   Bicep (`MMCA.ADC/.github/workflows/deploy.yml:1449-1455`), not from the AppHost.
@@ -318,6 +318,21 @@ and are superseded by the live sections.
    (`MMCA.Store/infra/main.bicep:211`, `:222`, `:233`, `:244`, `:248`, `:257`, `:267`, `:278`, the
    `var` declarations), `MMCA.Store/.github/workflows/e2e.yml:252`, the ADC AppHost header, SQL,
    database and Redis lines, the health endpoints and the fixture lines hold as written.
+
+## Revision (2026-10-28)
+Re-verified against current source. No decision, rationale or trade-off changed: the
+`apphost-testing` job is still blocking (no `continue-on-error` in the file) and not a required
+merge check, neither consumer carries an AppHost smoke project, the rework plan still defers the
+testing builder to the Playwright E2E lane, and the four ADC services are still separate container
+apps. Only line anchors in the live sections moved. The anchors inside the 2026-10-01, 2026-10-06,
+2026-10-07, 2026-10-21 and 2026-10-26 revisions stay as written and are superseded by the live
+sections.
+1. Anchors re-verified against current source: the `apphost-testing` job, its blocking note and
+   its `MMCA_APPHOST_TESTS` opt-in (`MMCA.Common/.github/workflows/ci.yml:1021`, `:1026-1027`,
+   `:1063`); the no-AppHost-smoke-project notes (`MMCA.ADC/AGENTS.md:79`, `MMCA.Store/AGENTS.md:78`);
+   the rework-plan deferral (`Website/docs-src/guides/adc-IntegrationTestReworkPlan.md:63-64`); and
+   the four ADC container apps (`MMCA.ADC/infra/main.bicep:1858`, `:2111`, `:2264`, `:2399`). The
+   headless-hang note (`MMCA.ADC/AGENTS.md:13`) holds as written.
 
 ## Related
 [ADR-041](041-observability-and-telemetry.md) (the shared Aspire OpenTelemetry baseline and the

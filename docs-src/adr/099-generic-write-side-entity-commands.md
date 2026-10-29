@@ -23,6 +23,8 @@ override now runs on the shared mutate workflow with its provider call inside `M
 generic-path boundary is the generic update path, not the presence of a provider call. Revised
 2026-10-21: anchors refreshed after the controller base and the consumer DI registrations shifted.
 Revised 2026-10-26: anchors refreshed after #590 shifted the controller base delete action.
+Revised 2026-10-28: re-verified against current source; no decision, behavior, adoption or anchor
+changed.
 
 ## Context
 ADR-034 records the read side of the generic resource layer and stops one verb short. Its
@@ -464,3 +466,24 @@ moved in the controller base. Anchors inside the earlier Revisions are left as r
 1. Anchors re-verified against current source: the base controller's `[HttpPost]`
    (`MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/AggregateRootEntityControllerBase.cs:75`)
    and `[HttpDelete("{id}")]` (`:106`), re-pointed in Context.
+
+## Revision (2026-10-28)
+
+Re-verified against current source. No decision, behavior, adoption or line position changed: the
+generic create, update and delete commands, the two controller bases, the registration helpers and
+the consumer registrations are as recorded. Anchors inside the earlier Revisions are left as recorded.
+
+1. Anchors re-verified against current source, all unchanged: the base controller's `[HttpPost]`
+   and `[HttpDelete("{id}")]` (`AggregateRootEntityControllerBase.cs:75`, `:106`); the PUT base
+   (`CrudEntityControllerBase.cs:54`, `[HttpPut("{id}")]` `:88`, `[Idempotent]` `:89`,
+   `[SupportsIfMatch]` `:90`, `RequiredToken` `:103`, `SetConcurrencyETag` `:112`); the mutate
+   workflow (`MutateEntityHandlerBase.cs:277`, `:287`, `:300`, `:304`, `:320`, `:322`, DTO base
+   `:362`); `IEntityUpdateApplier` (`IEntityDTOMapper.cs:79`, `ApplyAsync` `:91`); the update command
+   (`UpdateEntityCommand.cs:48`, `:52`, `:65`) and handler (`UpdateEntityHandler.cs:48`, `:65`, `:68`,
+   `:76`, `:84-92`); `CreateEntityHandler.cs:28`; `AddEntityCrud` (`DependencyInjection.Crud.cs:74`,
+   `:80`, `:82-92`, `:94-96`); the validator bridge (`CommandRequestValidator.cs:30`,
+   `DependencyInjection.ModuleScanning.cs:119-135`); the marker-driven decorators
+   (`TransactionalCommandDecorator.cs:29-31`, `AuthorizationGate.cs:46`, `TimeoutCommandDecorator.cs:65`);
+   and the consumer registrations in ADC Conference (`DependencyInjection.cs:155-158`), Store Catalog
+   (`:101-104`, `:105`, `:112`, hand-written handlers at `:97-100`, `:107-111`) and Store Identity
+   (`:84-86`).

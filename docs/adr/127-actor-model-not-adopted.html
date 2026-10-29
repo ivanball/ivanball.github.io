@@ -254,7 +254,8 @@
           that the ADC UI app holds four replicas under <code>conferenceMode</code> and the Notification app stays at a
           ceiling of two, and anchors were refreshed. Revised 2026-10-21: anchors refreshed after the vote
           handler, the live-channel drain and both apps&#39; <code>main.bicep</code> scale blocks moved. Revised 2026-10-26:
-          anchors refreshed after the output-cache pipeline step and both apps&#39; <code>main.bicep</code> scale blocks moved.</p>
+          anchors refreshed after the output-cache pipeline step and both apps&#39; <code>main.bicep</code> scale blocks moved.
+          Revised 2026-10-28: anchors refreshed after both apps&#39; <code>main.bicep</code> scale blocks moved.</p>
           <h2 id="context">Context</h2>
           <p>The actor model gives every logical entity its own single-threaded unit of execution holding its state
           in memory and serializes all messages to that entity through it; a virtual-actor runtime makes the
@@ -344,9 +345,9 @@
           ADC Identity, Conference, Engagement, Gateway and UI apps reach four while Notification stays at two;
           every app runs <code>minReplicas: 1</code> except the ADC Gateway, which runs two under <code>conferenceMode</code>, and
           the ADC UI, which then holds its ceiling of four:
-          <code>MMCA.ADC/infra/main.bicep:2106</code>, <code>:2259</code>, <code>:2394</code>, <code>:2580</code>, <code>:2732</code> and <code>:2883</code>,
+          <code>MMCA.ADC/infra/main.bicep:2103</code>, <code>:2256</code>, <code>:2391</code>, <code>:2577</code>, <code>:2729</code> and <code>:2880</code>,
           <code>conferenceFrontDoorMinReplicas</code> at <code>:191</code>, <code>conferenceScaledMaxReplicas</code> at <code>:192</code>,
-          <code>MMCA.Store/infra/main.bicep:1688</code>, <code>:1812</code>, <code>:1960</code>, <code>:2078</code> and <code>:2196</code>),
+          <code>MMCA.Store/infra/main.bicep:1689</code>, <code>:1813</code>, <code>:1961</code>, <code>:2079</code> and <code>:2197</code>),
           so an in-process writer guarantee is not a guarantee, and it would silently weaken a
           correctness property the concurrency token holds across the fleet.</li>
           <li><strong>Adopting actors only for live polls.</strong> The live path is the least durable state in the system and
@@ -443,6 +444,21 @@
           (<code>MMCA.Store/infra/main.bicep:1688</code>, <code>:1812</code>, <code>:1960</code>, <code>:2078</code> and <code>:2196</code>, all min 1 and max 2),
           replacing <code>:1682</code>, <code>:1806</code>, <code>:1954</code>, <code>:2072</code> and <code>:2190</code>.</li>
           </ol>
+          <h2 id="revision-2026-10-28">Revision (2026-10-28)</h2>
+          <p>Re-verified against current source. No decision or rationale changed: every container app still
+          declares at least <code>maxReplicas: 2</code>, and the replica floors and ceilings match the 2026-10-07 wording.
+          Only anchors moved.</p>
+          <ol>
+          <li>Anchors re-verified against current source: the ADC scale blocks for Identity, Conference and
+          Engagement (<code>MMCA.ADC/infra/main.bicep:2103</code>, <code>:2256</code>, <code>:2391</code>, min 1 and max
+          <code>conferenceScaledMaxReplicas</code>), Notification (<code>:2577</code>, min 1 and max 2), Gateway (<code>:2729</code>, min
+          <code>conferenceFrontDoorMinReplicas</code>, max <code>conferenceScaledMaxReplicas</code> at <code>:2730</code>) and UI (<code>:2880</code>,
+          min <code>conferenceMode ? conferenceScaledMaxReplicas : conferenceFrontDoorMinReplicas</code>, max at
+          <code>:2881</code>), replacing <code>:2106</code>, <code>:2259</code>, <code>:2394</code>, <code>:2580</code>, <code>:2732</code> and <code>:2883</code>; and every Store scale
+          block (<code>MMCA.Store/infra/main.bicep:1689</code>, <code>:1813</code>, <code>:1961</code>, <code>:2079</code> and <code>:2197</code>, all min 1 and
+          max 2), replacing <code>:1688</code>, <code>:1812</code>, <code>:1960</code>, <code>:2078</code> and <code>:2196</code>. <code>conferenceFrontDoorMinReplicas</code>
+          (<code>MMCA.ADC/infra/main.bicep:191</code>) and <code>conferenceScaledMaxReplicas</code> (<code>:192</code>) still hold.</li>
+          </ol>
           <h2 id="related">Related</h2>
           <p><a href="007-grpc-extraction.html">ADR-007</a>, <a href="008-service-extraction-topology.html">ADR-008</a> and
           <a href="059-module-contract-and-composition.html">ADR-059</a> (the boundary a future silo would live behind),
@@ -475,6 +491,7 @@
             <li><a href="#revision-2026-10-07">Revision (2026-10-07)</a></li>
             <li><a href="#revision-2026-10-21">Revision (2026-10-21)</a></li>
             <li><a href="#revision-2026-10-26">Revision (2026-10-26)</a></li>
+            <li><a href="#revision-2026-10-28">Revision (2026-10-28)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

@@ -24,7 +24,8 @@ that the two publishing jobs run independently, so a release can land half-publi
 2026-10-21: anchors refreshed after the MAUI job's timeout comment grew by two lines, shifting
 every later `publish-maui` anchor in `release.yml` by +2. Revised 2026-10-26: anchors refreshed
 after the `ci.yml` canaries moved back to `:475-476` and `:693-694` and newly added packages
-extended the FACTS list and the solution file.
+extended the FACTS list and the solution file. Revised 2026-10-28: anchors refreshed after the
+`ci.yml` canaries moved to `:507-508` and `:725-726` in the 2026-10-26 `ci.yml` change.
 
 ## Context
 The `MMCA.Common.*` packages have shipped to GitHub Packages since the first release (the package
@@ -141,7 +142,7 @@ independent jobs, see Trade-offs).
   (`release.yml:207-208`). Both jobs also attest build provenance (`release.yml:97-100`, `:216-219`).
   The rest run on the merged pull request rather than on the tag, and the ancestry assertion is what
   makes them cover the tagged tree: its comment names the FACTS drift gate, the vulnerability audit,
-  the Helpdesk consumer canary (`ci.yml:475-476`), the package-consumption canary (`ci.yml:693-694`),
+  the Helpdesk consumer canary (`ci.yml:507-508`), the package-consumption canary (`ci.yml:725-726`),
   ui-e2e and the perf gate (`release.yml:31-35`).
 - **The two publishing jobs are independent, so a release can land half-published.** `publish`
   (`release.yml:11`) and `publish-maui` (`release.yml:146`) declare no `needs:` on each other, so
@@ -249,6 +250,22 @@ file each grew with newly added packages (among them `MMCA.Common.Aws` and `MMCA
    locked-mode restore (`:66`), the pack steps (`:92`, `:211`), the GitHub Packages pushes (`:120`,
    `:241`), the SHA-pinned `NuGet/login` lines (`:133`, `:249`), the nuget.org pushes (`:140`,
    `:257`) and the ancestry comment (`:31-35`).
+
+## Revision (2026-10-28)
+Re-verified against current source. The decision is unchanged: both jobs still push to GitHub
+Packages and then, behind the owner guard, log in through the SHA-pinned `NuGet/login` and push to
+nuget.org with `--skip-duplicate`, and the ancestry comment (`release.yml:31-35`) still names the
+Helpdesk consumer canary and the package-consumption canary. What moved is the two CI canaries in
+`ci.yml`, both 32 lines further down than the 2026-10-26 revision records; the anchors in that
+revision are left as written.
+
+1. Anchors re-verified against current source: the Helpdesk consumer canary
+   (`.github/workflows/ci.yml:507-508`, `consumer-source-build`) and the package-consumption canary
+   (`ci.yml:725-726`, `package-consumption`). The lines the 2026-10-26 revision cites are other
+   steps now: `ci.yml:475-476` is the tail of the coverage summary step, `ci.yml:693-694` is the
+   `sqlcmd` body of the migration-verify `query()` helper, and `ci.yml:422-423` is the hot-path
+   benchmark step of the `performance-smoke` job (`ci.yml:395`), not a coverage-job step (the
+   `coverage` job starts at `ci.yml:442`).
 
 ## Related
 ADR-016 (lockstep versioning: every package ships at one version, so both registries receive the

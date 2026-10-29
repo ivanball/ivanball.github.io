@@ -300,7 +300,10 @@
           Store specification-taking <code>CountAsync</code> caller the Revision (2026-10-01) recorded no longer exists;
           see the Revision (2026-10-21) at the end. Revised 2026-10-26: anchors refreshed after line shifts in
           <code>IRepository.cs</code>, the ADC <code>SessionsController.cs</code>, the MMCA.Store <code>UserRegisteredHandler.cs</code> and
-          <code>stage.ps1</code>; see the Revision (2026-10-26) at the end.</p>
+          <code>stage.ps1</code>; see the Revision (2026-10-26) at the end. Revised 2026-10-28: ADC&#39;s narrowing grew to
+          fifty-three sites across thirty-four files, MMCA.Store narrows a fifth holder and composes at five
+          fluent sites (ten consumer sites in all), and the specification-taking <code>CountAsync</code> has a MMCA.Store
+          caller again in the storefront product read; see the Revision (2026-10-28) at the end.</p>
           <h2 id="context">Context</h2>
           <p>Every read an application handler performs has to come from somewhere, and the shape of that contract
           decides whether the module can still be lifted into its own service later (ADR-007, ADR-008). The
@@ -400,10 +403,15 @@
           (<code>SessionsController.cs:135</code>), and one <code>.Not()</code> on the Identity user-list read, the first
           production caller of <code>Not</code>
           (<code>MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Application/Users/UserListEntityQueryService.cs:172</code>),
-          and two in MMCA.Store
+          and five in MMCA.Store: two review reads
           (<code>MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.API/Controllers/ReviewsController.cs:106</code>,
-          <code>MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.Application/Reviews/DomainEventHandlers/ProductReviewChangedHandler.cs:111</code>),
-          and the hand-built
+          <code>MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.Application/Reviews/DomainEventHandlers/ProductReviewChangedHandler.cs:111</code>)
+          and three <code>.And()</code> calls that fold optional <code>InlineSpecification</code> filters into the criteria of
+          the storefront product specification, a <code>QuerySpecification</code> that composes them inside its own
+          <code>BuildCriteria</code> and exposes the result as its <code>Criteria</code>
+          (<code>MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.Application/Products/UseCases/Storefront/StorefrontProductsSpecification.cs:72</code>,
+          <code>:78</code>, <code>:84</code>, with the class at <code>:27</code> and <code>BuildCriteria</code> at <code>:59</code>). That is ten consumer
+          composing call sites, and the hand-built
           <code>new AndSpecification&lt;...&gt;(a, b)</code> construction no longer appears in any consumer.</li>
           <li><strong>The specification enters the same query pipeline, not a parallel one.</strong> <code>IEntityQueryService</code>
           takes an optional <code>ISpecification&lt;TEntity, TIdentifierType&gt;</code> on every DTO or entity read: the two
@@ -438,8 +446,8 @@
           layer and bookmark aggregations and the Notification GDPR export
           (<code>MMCA.ADC/.../RawQueryableConventionTests.cs:33-49</code>); no Identity file remains on its list.</p>
           <p>The interface split is shipped and, since 2026-08-21, consumed. MMCA.ADC declares the narrow
-          interfaces at fifty read-only sites across thirty-one files, thirty of them Application files plus
-          one API controller local
+          interfaces at fifty-three read-only sites across thirty-four files, thirty-three of them Application
+          files plus one API controller local
           (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/Sessions/SessionSelectionController.cs:142</code>):
           helper parameters narrowed to
           <code>IEntityReader</code> where the helper only looks up or checks existence (for example
@@ -449,7 +457,7 @@
           <code>:186</code>),
           and locals typed to the querier where a visibility helper reads through the unit of work
           (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Common/PublicConferenceVisibility.cs:40</code>,
-          <code>:75</code>, <code>:126</code>, <code>:151</code>). MMCA.Store ships the same narrowing at four read-only holders: two
+          <code>:75</code>, <code>:126</code>, <code>:151</code>). MMCA.Store ships the same narrowing at five read-only holders: two
           by-id/existence service fields
           (<code>MMCA.Store/Source/Modules/Identity/MMCA.Store.Identity.Application/Customers/CustomerService.cs:14</code>,
           and <code>MMCA.Store/Source/Modules/Identity/MMCA.Store.Identity.Application/Users/AuthenticationService.cs:49</code>,
@@ -457,7 +465,11 @@
           a handler parameter narrowed to <code>IEntityReader</code>
           (<code>MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.Application/Categories/UseCases/AssignParentCategory/CategoryAssignParentUpdateHandler.cs:120</code>),
           and a querier parameter on the customer-provisioning handler&#39;s <code>LogCollisionAsync</code> helper
-          (<code>MMCA.Store/Source/Modules/Identity/MMCA.Store.Identity.Application/Users/DomainEventHandlers/UserRegisteredHandler.cs:130</code>);
+          (<code>MMCA.Store/Source/Modules/Identity/MMCA.Store.Identity.Application/Users/DomainEventHandlers/UserRegisteredHandler.cs:130</code>),
+          and a querier local in the storefront product read, which counts and lists through the same
+          <code>QuerySpecification</code>
+          (<code>MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.Application/Products/UseCases/Storefront/GetStorefrontProductsHandler.cs:46</code>,
+          assigned from <code>GetReadRepository</code> at <code>:47</code>);
           <code>ProductVariantService</code>
           (<code>MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.Application/Products/ProductVariantService.cs:21</code>)
           deliberately stays on <code>IReadRepository</code> because it calls members of both halves. MMCA.Helpdesk
@@ -918,6 +930,46 @@
           <code>CategoryAssignParentUpdateHandler.cs:120</code>, still hold); <code>stage.ps1</code> comments at <code>:670</code> and
           <code>:1436</code>. Anchors inside the earlier Revision sections are left as historical records.</li>
           </ol>
+          <h2 id="revision-2026-10-28">Revision (2026-10-28)</h2>
+          <p>Re-verified against current source. The decision, the read-interface split, the composition rules
+          and the fitness rule are unchanged; the consumer counts moved, and the &quot;every consumer count is
+          unchanged&quot; statement in the Revision (2026-10-26) no longer describes current source. The counts
+          below are the current ones.</p>
+          <ol>
+          <li><strong>ADC&#39;s narrowing is restated.</strong> <code>IEntityReader&lt;</code> / <code>IEntityQuerier&lt;</code> now appear fifty-three
+          times across thirty-four files under <code>MMCA.ADC/Source</code>: thirty-three Application files plus the
+          API controller local, still at <code>SessionSelectionController.cs:142</code>. The Decision paragraph is
+          restated; its example anchors
+          (<code>SessionRoomScheduling.cs:45</code>, <code>UserRegisteredHandler.cs:149</code>, <code>:186</code>,
+          <code>PublicConferenceVisibility.cs:40</code>, <code>:75</code>, <code>:126</code>, <code>:151</code>) still hold.</li>
+          <li><strong>MMCA.Store narrows a fifth holder.</strong> The storefront product read types its local to
+          <code>IEntityQuerier&lt;Product, ProductIdentifierType&gt;</code>
+          (<code>MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.Application/Products/UseCases/Storefront/GetStorefrontProductsHandler.cs:46</code>,
+          assigned from <code>GetReadRepository</code> at <code>:47</code>). The other four holders are where the Revision
+          (2026-10-26) left them. The Decision paragraph is restated to five.</li>
+          <li><strong>MMCA.Store composes at five fluent sites.</strong> Beyond the two review reads
+          (<code>ReviewsController.cs:106</code>, <code>ProductReviewChangedHandler.cs:111</code>), <code>StorefrontProductsSpecification</code>
+          (<code>StorefrontProductsSpecification.cs:27</code>, a <code>QuerySpecification</code>) folds optional
+          <code>InlineSpecification</code> filters into its criteria with <code>.And()</code> at <code>:72</code>, <code>:78</code> and <code>:84</code>, inside
+          <code>BuildCriteria</code> (<code>:59</code>), and assigns the composed <code>Criteria</code> to itself (<code>:46</code>, returned at <code>:88</code>),
+          so the composition stays criteria-only and the shaped specification is never an operand. ADC still
+          composes at five (<code>SessionsController.cs:135</code>, <code>SpeakersController.cs:187</code>,
+          <code>PublicConferenceVisibility.cs:149</code>, <code>UserListEntityQueryService.cs:111</code>, and the <code>.Not()</code> at
+          <code>:172</code>), so the consumers have ten composing call sites, and consumer Source (MMCA.ADC, MMCA.Store,
+          MMCA.Helpdesk) still holds no hand-built <code>AndSpecification</code>, <code>OrSpecification</code> or
+          <code>NotSpecification</code> construction. The Decision bullet is restated.</li>
+          <li><strong>The specification-taking <code>CountAsync</code> has a caller again.</strong> The Revision (2026-10-21) statement
+          that MMCA.Store Source has no <code>CountAsync</code> call no longer holds: the storefront product read calls
+          <code>products.CountAsync(specification, cancellationToken)</code> with the shaped <code>QuerySpecification</code>
+          (<code>GetStorefrontProductsHandler.cs:50</code>, ordering and paging ignored by contract as the comment at
+          <code>:49</code> says) and then the specification-first <code>ListAsync(specification, ...)</code> at <code>:53</code>. The
+          specification-taking <code>AnyAsync</code> callers are unchanged (<code>SubmitReviewHandler.cs:59</code>,
+          <code>GetReviewEligibilityHandler.cs:40</code>).</li>
+          <li>Anchors re-verified against current source: MMCA.Store <code>CustomerService.cs:14</code>,
+          <code>AuthenticationService.cs:49</code> (assigned at <code>:50</code>), <code>CategoryAssignParentUpdateHandler.cs:120</code>,
+          <code>UserRegisteredHandler.cs:130</code>; ADC <code>SessionSelectionController.cs:142</code>. Anchors inside the earlier
+          Revision sections are left as historical records.</li>
+          </ol>
           
         <div class="doc-foot btn-row">
           <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
@@ -941,6 +993,7 @@
             <li><a href="#revision-2026-10-06">Revision (2026-10-06)</a></li>
             <li><a href="#revision-2026-10-21">Revision (2026-10-21)</a></li>
             <li><a href="#revision-2026-10-26">Revision (2026-10-26)</a></li>
+            <li><a href="#revision-2026-10-28">Revision (2026-10-28)</a></li>
             </ul>
           </nav>
         </aside>

@@ -269,7 +269,11 @@
           <code>DbException</code> raised after the client disconnects (v1.241.0); anchors refreshed.
           Revised 2026-10-26: <code>TryGetValue</code> is an instance member of <code>Result&lt;T&gt;</code> (v1.252.0) and the page-side
           extension keeps only the overload that hands the errors back, which decides on a non-null success
-          value; the 409 handler&#39;s concurrency metric is recorded; anchors refreshed.</p>
+          value; the 409 handler&#39;s concurrency metric is recorded; anchors refreshed.
+          Revised 2026-10-28: the code-based localization lookup is scoped to the three code kinds it covers
+          (<code>Http.EmptyResponse</code> and <code>Http.MalformedResponse</code> render in English), the reader&#39;s own handling of
+          an unreadable body ahead of the executor is recorded, and the Result channel is no longer said to
+          carry <code>requestId</code>.</p>
           <h2 id="context">Context</h2>
           <p>Operations at every layer fail in <em>expected</em> ways: input is invalid, a domain invariant is broken, a
           requested entity is missing, a uniqueness conflict occurs, the caller lacks permission. There are two
@@ -462,7 +466,15 @@
           <code>Error.Unexpected</code> (<code>:133</code>, <code>:136</code>). Anything else is a genuine programming fault and keeps
           travelling as an exception (<code>:124-125</code>). The exception&#39;s own text goes on <code>Error.Source</code>, never on
           <code>Message</code>, because it is diagnostic detail that is neither localizable nor safe to render
-          (<code>:130-133</code>).</li>
+          (<code>:130-133</code>). The executor only sees the faults the wrapped operation lets escape: when that
+          operation reads through <code>ProblemDetailsResultReader</code>, the reader catches a body-read
+          <code>HttpRequestException</code> itself and falls back to the status-only result
+          (<code>ProblemDetailsResultReader.cs:338-347</code>), which for the typed <code>ReadAsync&lt;T&gt;</code> on a 2xx is a failure
+          coded <code>Http.EmptyResponse</code> (<code>:296</code>, <code>:303-310</code>; the valueless <code>ReadAsync</code> returns success on a 2xx
+          without reading the body, <code>:259-262</code>), and it catches a <code>JsonException</code> on a 2xx body as <code>Http.MalformedResponse</code>
+          (<code>:323-326</code>). That last failure carries the <code>JsonException</code> text on <code>Message</code>, not on <code>Source</code>
+          (<code>:325</code>), so the reader does not follow the executor&#39;s rule, and the page-side lookup below
+          renders that text as the message.</li>
           </ul>
           <p><strong><code>OperationCanceledException</code> is the one exception that still crosses the boundary, and that is the
           decision, not an omission.</strong> When the caller&#39;s own token is why the operation stopped, the
@@ -484,11 +496,17 @@
           404 into an empty state and a 401 into a redirect instead of an alert (<code>:294-298</code>, <code>:306</code>, <code>:314</code>).
           Messages are localized as resource keys <strong>with pass-through</strong>, so one call site handles both an API
           error the server already translated and a client-side error whose <code>Message</code> is a key (<code>:23-27</code>,
-          <code>Localize</code> at <code>:373-382</code>, ADR-027). The failures the client synthesized itself have no
+          <code>Localize</code> at <code>:373-382</code>, ADR-027). Three kinds of client-synthesized failure have no
           server-phrased message to pass through, so they are looked up by their error code instead: a
           bodiless <code>Http.{status}</code> (recognized through <code>ProblemDetailsResultReader.TryGetSynthesizedStatus</code>,
           <code>:326</code>), then the generic <code>Http.Status</code> format, plus <code>Http.TransportFailure</code> and <code>Http.Timeout</code>
-          (<code>:27-33</code>, <code>LocalizeError</code> at <code>:316-339</code>). Each code resolves through the localizer the page passed
+          (<code>:27-33</code>, <code>LocalizeError</code> at <code>:316-339</code>, the transport check at <code>:333</code>). The reader&#39;s other two
+          synthesized codes, <code>Http.EmptyResponse</code> and <code>Http.MalformedResponse</code>
+          (<code>ProblemDetailsResultReader.cs:71</code>, <code>:77</code>), are not in that lookup: they fall through to the
+          message pass-through (<code>ResultUiExtensions.cs:338</code>), and <code>SharedResource.resx</code> holds no key for
+          either (it carries <code>Http.Status</code>, the <code>Http.{status}</code> sentences, <code>Http.TransportFailure</code> and
+          <code>Http.Timeout</code>, <code>.../MMCA.Common.UI/Resources/SharedResource.resx:796</code>, <code>:832</code>, <code>:835</code>), so they
+          render their English message. Each code resolves through the localizer the page passed
           and then, when that localizer has no such key, through the framework&#39;s own <code>SharedResource</code> pair
           for the current UI culture, so a page passing its own <code>IStringLocalizer&lt;PageType&gt;</code> still shows the
           translated sentence; the English message is the last resort (<code>:30-33</code>, the two-step lookup at
@@ -552,9 +570,14 @@
           itself at <code>ErrorType.cs:5-8</code>).</li>
           <li><strong>Cheap and predictable.</strong> No throw/catch on the common &quot;won&#39;t do it&quot; path.</li>
           <li><strong>One wire contract for both channels.</strong> Whether a request ends in a <code>Result.Failure</code> mapped by
-          <code>HandleFailure()</code> or an escaped exception caught by the handler chain, the client receives the same
-          RFC 9457 ProblemDetails body (carrying the shared <code>requestId</code> extension), so consumers parse one error
-          shape regardless of which channel produced it.</li>
+          <code>HandleFailure()</code> or an escaped exception caught by the handler chain, the client receives an
+          RFC 9457 ProblemDetails body, so consumers parse one error shape regardless of which channel
+          produced it. The shared <code>requestId</code> extension is stamped by the <code>AddProblemDetails</code>
+          customization (<code>DependencyInjection.cs:156-158</code>); on a non-empty error list <code>HandleFailure</code> builds
+          its body directly and returns it through <code>StatusCode(...)</code> (<code>ApiControllerBase.cs:50-60</code>), and the shared conformance
+          base accepts either an <code>errors</code> list or a correlation id on that body
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Testing/Conformance/ProblemDetailsContractTestsBase.cs:77-81</code>),
+          so no test pins <code>requestId</code> on the Result channel.</li>
           <li><strong>The layer with the most expected failures had the least Result.</strong> A UI service call fails for
           every reason this record was written about: the input was rejected, the record is gone, the caller
           signed out. Converting the response back into an exception at the last hop meant the one layer
@@ -729,6 +752,35 @@
           its <code>CHANGELOG.md:93</code> and <code>:230</code> as written; the v1.247.0 and v1.241.0 entries now sit at
           <code>CHANGELOG.md:308</code> and <code>:445</code>.</li>
           </ol>
+          <h2 id="revision-2026-10-28">Revision (2026-10-28)</h2>
+          <p>Re-verified against current source. The decision, the ten categories, the severity ranking, the
+          exception-handler order, the executor&#39;s fault set and the code-based localization lookup are
+          unchanged; three live descriptions were broader than the code, and are narrowed.</p>
+          <ol>
+          <li>Corrected: the code-based lookup covers only a bodiless <code>Http.{status}</code> and the executor&#39;s
+          <code>Http.TransportFailure</code> / <code>Http.Timeout</code> (<code>ResultUiExtensions.cs:326</code>, <code>:333</code>, <code>:366-371</code>). The
+          reader&#39;s <code>Http.EmptyResponse</code> and <code>Http.MalformedResponse</code> (<code>ProblemDetailsResultReader.cs:71</code>,
+          <code>:77</code>) fall through to the message pass-through (<code>ResultUiExtensions.cs:338</code>) and have no
+          <code>SharedResource.resx</code> key (<code>SharedResource.resx:796</code>, <code>:832</code>, <code>:835</code>), so they render in English.</li>
+          <li>Added: when the wrapped operation reads through <code>ProblemDetailsResultReader</code>, the reader handles
+          a body-read <code>HttpRequestException</code> (<code>ProblemDetailsResultReader.cs:338-347</code>, an
+          <code>Http.EmptyResponse</code> on a 2xx for the typed <code>ReadAsync&lt;T&gt;</code> at <code>:303-310</code>; the valueless
+          <code>ReadAsync</code> does not read a 2xx body, <code>:259-262</code>) and a 2xx <code>JsonException</code> (<code>Http.MalformedResponse</code>,
+          <code>:323-326</code>) before the executor sees them, and that malformed-response failure carries the
+          exception text on <code>Message</code> (<code>:325</code>), unlike the executor, which puts it on <code>Source</code>
+          (<code>HttpResultExecutor.cs:130-133</code>).</li>
+          <li>Corrected: the Rationale no longer states that the Result channel carries <code>requestId</code>. The
+          extension is stamped by the <code>AddProblemDetails</code> customization (<code>DependencyInjection.cs:156-158</code>),
+          <code>HandleFailure</code> builds and returns its body directly on a non-empty error list
+          (<code>ApiControllerBase.cs:50-60</code>; the empty-list branch returns <code>Problem(...)</code>, <code>:39-45</code>), and the
+          conformance base accepts <code>errors</code> or a correlation id (<code>ProblemDetailsContractTestsBase.cs:77-81</code>).</li>
+          <li>Anchors re-verified against current source: <code>ResultUiExtensions.cs:27-33</code>, <code>:316-339</code>, <code>:326</code>,
+          <code>:333</code>, <code>:338</code>, <code>:366-371</code>; <code>ProblemDetailsResultReader.cs:71</code>, <code>:77</code>, <code>:303-310</code>, <code>:323-326</code>,
+          <code>:338-347</code>; <code>HttpResultExecutor.cs:127-128</code>, <code>:130-133</code>; <code>ApiControllerBase.cs:50-60</code>. The
+          2026-10-26 entry above keeps its <code>CHANGELOG.md</code> anchors as written; the one-argument
+          <code>ResultUiExtensions.TryGetValue</code> removal now sits at <code>MMCA.Common/CHANGELOG.md:244</code>, and the
+          v1.247.0 and v1.241.0 headings at <code>:303</code> and <code>:474</code>.</li>
+          </ol>
           <h2 id="related">Related</h2>
           <p><a href="007-grpc-extraction.html">ADR-007</a> (Result over the wire via gRPC, the second edge the shared severity
           ranking now serves),
@@ -759,6 +811,7 @@
             <li><a href="#revision-2026-10-07">Revision (2026-10-07)</a></li>
             <li><a href="#revision-2026-10-21">Revision (2026-10-21)</a></li>
             <li><a href="#revision-2026-10-26">Revision (2026-10-26)</a></li>
+            <li><a href="#revision-2026-10-28">Revision (2026-10-28)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

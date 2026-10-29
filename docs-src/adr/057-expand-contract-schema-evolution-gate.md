@@ -14,7 +14,9 @@ an in-place index rebuild is attributed to the MMCA.ADC override marker rather t
 CONTRIBUTING (which documents INCLUDE columns only), and anchors refreshed. Revised 2026-10-26: the
 guard in both repos now also flags `RenameColumn` and `RenameTable` (five operations, not three),
 which both CONTRIBUTING files do not yet document; the rollback is described as skipping any app
-whose newest revision is live; and anchors refreshed.
+whose newest revision is live; and anchors refreshed. Revised 2026-10-28: both CONTRIBUTING files
+now document all five guarded operations (the renames included), so the written rule no longer lags
+the guard; and the CONTRIBUTING anchors refreshed.
 
 ## Context
 ADR-030 decides **who** applies a migration: every service host runs `DatabaseInitStrategy = Migrate`
@@ -33,7 +35,7 @@ that activated fully rolls nothing back (`MMCA.Store/.github/workflows/deploy.ym
 rolled back, the copy reverts the **image** and nothing else:
 the new revision already migrated the database on boot, and no down-migration runs. The previous
 release therefore keeps serving traffic against the **new** schema, which is exactly the statement
-both repos' CONTRIBUTING makes (`MMCA.Store/CONTRIBUTING.md:58-61`, `MMCA.ADC/CONTRIBUTING.md:58-61`).
+both repos' CONTRIBUTING makes (`MMCA.Store/CONTRIBUTING.md:58-62`, `MMCA.ADC/CONTRIBUTING.md:58-63`).
 A `DropColumn` shipped alongside the code that stopped reading it makes the rollback path a broken
 release rather than a recovery.
 
@@ -50,10 +52,11 @@ Schema changes follow **expand/contract**, and a CI step enforces the contract h
 - **Expand now, contract later, as a written rule.** Adding nullable columns, new tables and new
   indexes is safe in any release; destructive operations belong to a LATER release, once no revision
   that reads the old shape can still be rolled back to. Both CONTRIBUTING files name the contract step
-  as `DropColumn` / `DropTable` / `DropIndex` only (`MMCA.Store/CONTRIBUTING.md:63-66`,
-  `MMCA.ADC/CONTRIBUTING.md:63-66`) and describe the guard with the same three operations
-  (`MMCA.Store/CONTRIBUTING.md:68-70`, `MMCA.ADC/CONTRIBUTING.md:68-70`), so the written rule lags
-  the five operations the guard below enforces.
+  as `DropColumn` / `DropTable` / `DropIndex` / `RenameColumn` / `RenameTable`
+  (`MMCA.Store/CONTRIBUTING.md:64-68`, `MMCA.ADC/CONTRIBUTING.md:65-68`) and describe the guard with
+  the same five operations (`MMCA.Store/CONTRIBUTING.md:70-74`, op list `:72`;
+  `MMCA.ADC/CONTRIBUTING.md:70-75`, op list `:72`), so the written rule matches what the guard below
+  enforces.
 - **A migration ADDED by a PR may not drop or rename without a marker.** The
   `Expand/contract migration guard (schema rollback safety)` step fails the build when a newly
   added migration's `Up()` matches
@@ -66,7 +69,7 @@ Schema changes follow **expand/contract**, and a CI step enforces the contract h
   `MMCA.ADC/.github/workflows/deploy.yml:239-240` and `:277`).
 - **The marker's documented format is one comment line:**
   `// EXPAND-CONTRACT-OVERRIDE: <why this drop is safe one release back>`
-  (`MMCA.Store/CONTRIBUTING.md:74-76`, `MMCA.ADC/CONTRIBUTING.md:74-76`). What the step actually
+  (`MMCA.Store/CONTRIBUTING.md:76-78`, `MMCA.ADC/CONTRIBUTING.md:77-79`). What the step actually
   enforces is looser: `grep -q 'EXPAND-CONTRACT-OVERRIDE'` over the `Up()` body
   (`MMCA.Store/.github/workflows/deploy.yml:476`, `MMCA.ADC/.github/workflows/deploy.yml:276`), so the
   token must appear inside `Up()`, but the `//` prefix, the colon and the reason text are convention,
@@ -101,7 +104,7 @@ Schema changes follow **expand/contract**, and a CI step enforces the contract h
   sets it true.
 - **The common legitimate override is an index rebuilt in place.** Adding INCLUDE columns emits a
   `DropIndex` immediately followed by a `CreateIndex` under the same name, which a one-release-back
-  revision reads as a superset of what it expects (`MMCA.Store/CONTRIBUTING.md:78-80`; MMCA.ADC's
+  revision reads as a superset of what it expects (`MMCA.Store/CONTRIBUTING.md:80-82`; MMCA.ADC's
   CONTRIBUTING has no such paragraph). Adding a filter also drops and recreates the index under the
   same name within one migration, though not necessarily as adjacent operations. No CONTRIBUTING
   documents that case; ADR-095 does, for the soft-delete unique-index filter
@@ -302,6 +305,25 @@ repos.
    both, `MMCA.Store/CONTRIBUTING.md:78-80`) still hold. The MMCA.ADC fail-closed anchor changed
    scope rather than shifting: it now runs from `set -euo pipefail` through the `exit 1` block
    (`:252-263`, previously recorded as `:253-266`).
+
+## Revision (2026-10-28)
+Re-verified against current source. The decision, the five-operation regex
+(`MMCA.Store/.github/workflows/deploy.yml:475`, `MMCA.ADC/.github/workflows/deploy.yml:275`), the
+`Up()`-only scan, the marker check, the fail-closed diff, the merge-check placement and the
+revision-only rollback are unchanged. What moved is the documentation in both CONTRIBUTING files.
+
+1. Both CONTRIBUTING files now name `RenameColumn` and `RenameTable` alongside the three drops, both
+   as the contract step (`MMCA.Store/CONTRIBUTING.md:67`, `MMCA.ADC/CONTRIBUTING.md:68`) and in the
+   guard description (`MMCA.Store/CONTRIBUTING.md:72`, `MMCA.ADC/CONTRIBUTING.md:72`), added on
+   2026-10-26 (MMCA.Store commit `013358fa`, PR #230; MMCA.ADC commit `73922be24`, PR #298). The
+   Decision's first bullet no longer records a gap between the written rule and the guard. The
+   2026-10-26 revision's item 2 and Status sentence stay as recorded on that date.
+2. Anchors re-verified against current source: the rollback statement `MMCA.Store/CONTRIBUTING.md:58-62`
+   and `MMCA.ADC/CONTRIBUTING.md:58-63` ("NEW schema" sits at `:62` in both; the sentence ends at Store `:62` and ADC `:63`),
+   the expand/contract bullets Store `:64-68`, ADC `:65-68`, the guard paragraph Store `:70-74`, ADC
+   `:70-75`, the marker block Store `:76-78`, ADC `:77-79`, and the in-place rebuild paragraph
+   `MMCA.Store/CONTRIBUTING.md:80-82` (MMCA.ADC's CONTRIBUTING still has no such paragraph; its schema
+   section ends at `:79`). The merge check `:37-38` in both still holds.
 
 ## Related
 ADR-030 (decides that each service self-applies its migrations at startup, which is precisely why a

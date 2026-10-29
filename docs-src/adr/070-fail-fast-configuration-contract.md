@@ -37,6 +37,9 @@ vendor sections off the chain in place of `NativePushSettings` and `FileStorageS
 citations re-anchored; the `NativePush:Enabled` tripwire also fails an incomplete push section, the SNS
 and FCM push settings bind only once push is enabled and complete, and registration-time `Get<T>()`
 reads never placed in the container are stated as outside the exception inventory.
+Revised 2026-10-28: Store's Sales module now binds eight validated sections, its Application layer names
+thirteen `IOptions` injections, and its Sales Infrastructure readers include `StripeTaxCalculator` and
+`PaymentReconciliationSettingsValidator`; source citations re-anchored.
 
 ## Context
 Every host in the workspace reads a dozen or more configuration sections: connection strings, SMTP,
@@ -64,9 +67,9 @@ value through `IOptions<T>` of the concrete settings class.**
   `AddOptions<T>().Bind(configuration.GetSection(T.SectionName)).ValidateDataAnnotations().ValidateOnStart()`
   is the required form (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:72-75`).
   `.BindConfiguration(T.SectionName)` is the accepted shorthand for the `Bind(GetSection(...))` step and
-  is what Store's Sales module uses for all six of the sections it binds
-  (`MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.API/SalesModule.cs:51-54`, `:56-59`, `:61-64`,
-  `:66-69`, `:76-79`, `:81-84`).
+  is what Store's Sales module uses for all eight of the sections it binds
+  (`MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.API/SalesModule.cs:52-55`, `:57-60`, `:62-65`,
+  `:67-70`, `:72-75`, `:77-80`, `:87-90`, `:92-95`).
   `ValidateOnStart()` is the load-bearing link: without it the annotations are evaluated lazily on first
   resolution, which is exactly the first-use failure the contract exists to prevent.
 - **The framework owns the base set.** Nineteen sections are bound this way in the Infrastructure package's
@@ -83,7 +86,7 @@ value through `IOptions<T>` of the concrete settings class.**
   private `AddInternalCommands` helper that `AddInfrastructure` calls (`:252`): `InternalCommandsSettings`
   (`DependencyInjection.Jobs.cs:148-152`, the helper starting at `:146`), and two more arrive through the
   `services.AddCaching(configuration)` call that `AddInfrastructure` itself makes (`:140`):
-  `CacheSettings` (`DependencyInjection.Caching.cs:43-46`) and `QueryCachePipelineSettings` (`:48-51`).
+  `CacheSettings` (`DependencyInjection.Caching.cs:44-47`) and `QueryCachePipelineSettings` (`:49-52`).
   Those twelve reach every host that registers the package, and so does a twentieth Infrastructure
   registration that binds no section: `AddInfrastructure` puts a `CloudAdapterTripwireOptions` marker on
   the chain (`DependencyInjection.cs:221`, its validator registered at `:222-223`, the reason at
@@ -99,7 +102,7 @@ value through `IOptions<T>` of the concrete settings class.**
   (`DependencyInjection.cs:299-302`, the method starting at `:297`), and `PushNotificationSettings` in `AddPushNotifications`
   (`DependencyInjection.Notifications.cs:40-43`, the method starting at `:38`). The two cache sections take the chain only when the
   caller passes configuration: `AddCaching` takes an optional `IConfiguration`
-  (`DependencyInjection.Caching.cs:26`) and, called without one, registers both unbound (`:55-56`), so
+  (`DependencyInjection.Caching.cs:27`) and, called without one, registers both unbound (`:56-57`), so
   `IOptions<T>` resolves to the compiled-in defaults instead of failing a caller that configures no cache
   section at all. Seventeen more registrations sit outside the Infrastructure package, fifteen of them
   binding a section: `IdempotencySettings`
@@ -198,8 +201,8 @@ value through `IOptions<T>` of the concrete settings class.**
   working default, not a misconfiguration.** `CacheKeyPrefixOptions` is bound with a bare `services.Configure`
   and no validation, because an absent section must leave cache keys exactly as callers write them (a
   single call inside `AddCaching`,
-  `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.Caching.cs:41`, the method
-  starting at `:26`).
+  `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.Caching.cs:42`, the method
+  starting at `:27`).
   `LayoutSettings` binds with `AddOptions().Bind()` and nothing after it for the same reason: it is
   optional footer copy (`MMCA.Common/Source/Presentation/MMCA.Common.UI/DependencyInjection.cs:49-50`),
   and four sections registered beside it bind exactly the same way, each with its reason in a comment
@@ -275,9 +278,10 @@ or per-request `IOptions<T>`: `OutboxProcessor`
 framework's `/client-config` minimal-API handler, which reads `IOptions<ApiSettings>`
 (`MMCA.Common/Source/Presentation/MMCA.Common.UI.Web/ClientConfig/ClientConfigEndpointExtensions.cs:53`)
 and which ADC's web host maps with `app.MapClientConfigEndpoint`
-(`MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs:271`). Consumer code reads its own sections the
+(`MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs:272`). Consumer code reads its own sections the
 same way: Store's Sales Infrastructure in `StripeClientFactory.cs:37`, `StripePaymentService.cs:63` (and
-`:67`), `StripeWebhookRegistrationService.cs:49`, `PaymentReconciliationService.cs:71-72`,
+`:67`), `StripeWebhookRegistrationService.cs:49`, `StripeTaxCalculator.cs:24`,
+`PaymentReconciliationService.cs:71-72`, `PaymentReconciliationSettingsValidator.cs:22`,
 `DenormalizationBackfillService.cs:40` and `OrderFulfilledBackfillService.cs:39`.
 
 The Application layer names the options pipeline too, and the framework supplies six of those
@@ -302,11 +306,11 @@ and the other five are:
 `SendEmailConfirmationHandler`
 (`.../Users/UseCases/SendEmailConfirmation/SendEmailConfirmationHandler.cs:31`), and in
 Engagement `PointsAwarder`
-(`MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Application/Points/Services/PointsAwarder.cs:31`),
+(`MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Application/Points/Services/PointsAwarder.cs:32`),
 `GetLeaderboardHandler` (`.../Points/UseCases/GetLeaderboard/GetLeaderboardHandler.cs:30`) and
 `RecordRoomCheckInHandler`, which takes two, `IOptions<CheckInSettings>` and `IOptions<PointsSettings>`
 (`.../CheckIns/UseCases/RecordRoomCheckIn/RecordRoomCheckInHandler.cs:47` and `:48`).
-Store adds ten, with the same shape: its Identity `AuthenticationService` takes the same single
+Store adds thirteen, with the same shape: its Identity `AuthenticationService` takes the same single
 injection
 (`MMCA.Store/Source/Modules/Identity/MMCA.Store.Identity.Application/Users/AuthenticationService.cs:32`),
 plus
@@ -318,6 +322,11 @@ plus
 `CheckOutDeadlineScheduler` (`.../ShoppingCarts/UseCases/CheckOut/CheckOutDeadlineScheduler.cs:27`),
 `ExpireUnpaidOrderInternalCommandHandler`
 (`.../Orders/InternalCommands/ExpireUnpaidOrderInternalCommandHandler.cs:35`),
+`OrderChargesCalculator`, which takes `IOptions<ShippingSettings>`
+(`.../Orders/Charges/OrderChargesCalculator.cs:25`), the two guest-order senders that take
+`IOptions<CheckoutRedirectSettings>`, `SendGuestOrderLinkInternalCommandHandler`
+(`.../Orders/InternalCommands/SendGuestOrderLinkInternalCommandHandler.cs:38`) and
+`GuestOrderPlacedNotifier` (`.../Orders/UseCases/GuestCheckout/GuestOrderPlacedNotifier.cs:30`),
 `OrderPaymentFailedSagaHandler`, which is the one site that resolves its
 `IOptions<UnpaidOrderExpirySettings>` from a scope rather than taking it in the constructor
 (`.../Orders/Saga/OrderPaymentFailedSagaHandler.cs:72`), and in Catalog three classes that take
@@ -448,7 +457,8 @@ between to fall out of step with it.
   leaves the settings type and has to be registered separately, so a host that binds the section without
   also registering the validator validates less than it appears to. Store uses both forms on its own
   sections: a separate `PaymentReconciliationSettingsValidator`, registered with `TryAddEnumerable`
-  beside its chain (`MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.API/SalesModule.cs:73-74`), and an
+  beside its chain (`MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.API/SalesModule.cs:84-85`, the
+  reason at `:82-83`), and an
   inline `.Validate(...)` delegate on the `StoreTimeZoneSettings` chain
   (`MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.API/CatalogModule.cs:43`).
 - **A bound value is a snapshot.** `IOptions<T>` captures the instance built at binding time and never
@@ -612,6 +622,36 @@ packages and added two startup tripwires.
    reason `:131-133`) and `CheckInSettings` (`:141-142`, reason `:138-140`);
    `AuthenticationServiceBase.cs:74`; `RecordRoomCheckInHandler.cs:47` and `:48`;
    `LoginProtectionService.cs:32`; ADC UI Web `MapClientConfigEndpoint` (`Program.cs:271`).
+
+## Revision (2026-10-28)
+Re-verified against current source. The decision, the rationale, the thirty-seven framework
+registrations (a grep still finds 39 `ValidateOnStart()` calls in 22 files under `MMCA.Common/Source`,
+the host-owned pair included), the fifteen framework exceptions, the eight custom validators and ADC's
+seven Application injections are unchanged; Store's Sales module grew two sections and its Application
+layer three injections.
+
+1. Store's Sales module now binds eight sections with `BindConfiguration`, each with
+   `ValidateDataAnnotations().ValidateOnStart()`: `StripeSettings`, `CheckoutRedirectSettings`,
+   `UnpaidOrderExpirySettings`, `ShippingSettings`, `TaxSettings`, `PaymentReconciliationSettings`,
+   `DenormalizationBackfillSettings` and `OrderFulfilledBackfillSettings`
+   (`MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.API/SalesModule.cs:52-55`, `:57-60`, `:62-65`,
+   `:67-70`, `:72-75`, `:77-80`, `:87-90`, `:92-95`).
+2. Store's Application layer names thirteen `IOptions` injections rather than ten. The three added are
+   `OrderChargesCalculator` (`IOptions<ShippingSettings>`,
+   `MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Application/Orders/Charges/OrderChargesCalculator.cs:25`),
+   `SendGuestOrderLinkInternalCommandHandler` (`IOptions<CheckoutRedirectSettings>`,
+   `.../Orders/InternalCommands/SendGuestOrderLinkInternalCommandHandler.cs:38`) and
+   `GuestOrderPlacedNotifier` (`IOptions<CheckoutRedirectSettings>`,
+   `.../Orders/UseCases/GuestCheckout/GuestOrderPlacedNotifier.cs:30`).
+3. Store's Sales Infrastructure list of `IOptions` readers now also names `StripeTaxCalculator`
+   (`IOptions<TaxSettings>`,
+   `MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Infrastructure/Payments/Stripe/StripeTaxCalculator.cs:24`)
+   and `PaymentReconciliationSettingsValidator`, which reads `IOptions<UnpaidOrderExpirySettings>`
+   (`.../Payments/Reconciliation/PaymentReconciliationSettingsValidator.cs:22`).
+4. Anchors re-verified against current source: the `PaymentReconciliationSettingsValidator`
+   registration (`SalesModule.cs:84-85`, the reason at `:82-83`); ADC UI Web `MapClientConfigEndpoint`
+   (`MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs:272`); ADC Engagement `PointsAwarder`
+   (`.../Points/Services/PointsAwarder.cs:32`).
 
 ## Related
 ADR-025 (startup warm-up and readiness gating: this contract decides what happens *before* a host reaches

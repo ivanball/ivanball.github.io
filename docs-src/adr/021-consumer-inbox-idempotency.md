@@ -37,6 +37,8 @@ Revised 2026-10-26: the unset inbox resolves ON for every non-`InProcess` transp
 provider name, so it covers the built-in PostgreSQL transport and any registered adapter, not only
 RabbitMQ and Azure Service Bus), ADR-135 is linked as the owner of the application-namespace
 decision, and anchors are refreshed.
+Revised 2026-10-28: anchors refreshed after the ADC Identity and ADC Engagement consumer
+registrations moved one line; no decision or inventory change.
 
 ## Context
 ADR-003 makes integration-event delivery **at-least-once**: the outbox guarantees a published event
@@ -114,12 +116,12 @@ because those per-service projects postdate the frozen combined-archive lineage 
 migration. Adoption inventory as of 2026-10-01: **five of the seven service hosts consume from the
 broker** and so use their inbox for real, three in ADC and two in Store. ADC Identity consumes
 `SpeakerLinkedToUser` and
-`SpeakerUnlinkedFromUser` (`MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:346-347`),
+`SpeakerUnlinkedFromUser` (`MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:347-348`),
 ADC Conference consumes `UserRegistered` and `UserDeleted`
 (`MMCA.ADC.Conference.Service/ConferenceBrokerConsumers.cs:34-35`) and chains a third broker consumer
 beside them, `RegisterOutputCacheEvictionConsumer()` (`MMCA.ADC.Conference.Service/ConferenceBrokerConsumers.cs:37`), and ADC
 Engagement consumes four events, `AttendeeCheckedIn`, `SessionFeedbackSubmitted`,
-`EventFeedbackSubmitted` and `UserDeleted` (`MMCA.ADC.Engagement.Service/Program.cs:305-308`), the
+`EventFeedbackSubmitted` and `UserDeleted` (`MMCA.ADC.Engagement.Service/Program.cs:306-309`), the
 first of which is ADC's first **self-consumption** over the broker: Engagement publishes
 `AttendeeCheckedIn` and consumes it back, which is precisely the shape a redelivery would double-count,
 so the inbox is load-bearing there rather than decorative. Store Sales consumes three events,
@@ -515,3 +517,15 @@ their original anchors and wording.
    and `:37`, and the seven `EnableInbox` appsettings lines. The `DependencyInjection.cs` and
    `MessageBusSettings.cs` anchors inside the Revisions (2026-08-18), (2026-08-26) and (2026-09-07)
    are historical: the messaging registration lives in `DependencyInjection.Messaging.cs`.
+
+## Revision (2026-10-28)
+Re-verified against current source. No decision changed: the inbox posture, the store selection and
+the consumer inventory are as the Revision (2026-10-26) records them (the same consumers on the same
+five of the seven service hosts). What moved is two live-section anchors in the Decision's adoption
+inventory; older Revision sections keep their original anchors.
+
+1. Anchors re-verified against current source: ADC Identity registers `SpeakerLinkedToUser` and
+   `SpeakerUnlinkedFromUser` at
+   `MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:347-348`; ADC Engagement registers
+   `AttendeeCheckedIn`, `SessionFeedbackSubmitted`, `EventFeedbackSubmitted` and `UserDeleted` (same
+   four events, same order) at `MMCA.ADC/Source/Services/MMCA.ADC.Engagement.Service/Program.cs:306-309`.

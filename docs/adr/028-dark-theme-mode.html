@@ -248,7 +248,8 @@
           Revised 2026-10-06: the first-paint flash is scoped to web heads and the MAUI first-frame mode source is recorded.
           Revised 2026-10-19: the MAUI host pre-paint script ships from MMCA.Common.UI (<code>theme-prepaint.js</code>, v1.246.0) and both MAUI heads load it.
           Revised 2026-10-21: the Android status-bar fallback is recorded as part of the shared <code>theme-prepaint.js</code> (Store&#39;s host page has no inline script), the per-consumer <code>MauiHostShellTests</code> theme host-page fitness tests are credited at their actual scope (only Store&#39;s checks the pre-paint script), and the <code>BrandColorTokenTests</code> coverage claim is stated as what it checks.
-          Revised 2026-10-26: startup initialization is recorded as <code>InitializeAtStartupAsync</code> behind a best-effort interop guard, with a known MAUI native value authoritative over the WebView cookie for the Blazor startup mode (not the host pre-paint), and the dark palette background check is credited as a literal rather than a <code>BrandColors</code> pin.</p>
+          Revised 2026-10-26: startup initialization is recorded as <code>InitializeAtStartupAsync</code> behind a best-effort interop guard, with a known MAUI native value authoritative over the WebView cookie for the Blazor startup mode (not the host pre-paint), and the dark palette background check is credited as a literal rather than a <code>BrandColors</code> pin.
+          Revised 2026-10-28: the opt-in <code>ColorModeStamp</code> document attribute (<code>Layout:StampColorModeOnDocument</code>) is recorded as a post-render step of the theme lifecycle, and the <code>MmcaThemeProviders</code> startup and interactivity-marker anchors are refreshed.</p>
           <h2 id="context">Context</h2>
           <p><code>MMCATheme</code> (<code>MMCA.Common.UI/Theme/MMCATheme.cs</code>) has always defined a complete, brand-tuned <code>PaletteDark</code>
           alongside <code>PaletteLight</code>, but <code>MudThemeProvider</code> was hard-wired to light: no <code>@ref</code>, no <code>IsDarkMode</code>
@@ -281,7 +282,7 @@
           </li>
           <li><p><strong>Theme is restored after first render (from the cookie/localStorage, or on MAUI from a known
           native value): the no-flash SSR bootstrap is outstanding.</strong> <code>MmcaThemeProviders.OnAfterRenderAsync(firstRender)</code> calls
-          <code>ThemeService.InitializeAtStartupAsync</code> (<code>MmcaThemeProviders.razor:67</code>), which on a web head (no
+          <code>ThemeService.InitializeAtStartupAsync</code> (<code>MmcaThemeProviders.razor:69</code>), which on a web head (no
           native value) runs <code>ThemeService.InitializeAsync</code> to read the persisted value via JS interop
           (<code>ThemeService.cs:61-62</code>); it deliberately does <strong>not</strong> run during SSR prerender, so the bound
           <code>IsDarkMode</code> is corrected just after hydration. The call is wrapped in <code>ThemeInterop.TryAsync</code>,
@@ -310,7 +311,7 @@
           cookie, then localStorage, then the OS scheme (<code>theme-prepaint.js:14-43</code>). The matching rules in
           Common&#39;s <code>app.css</code> (<code>MMCA.Common.UI/wwwroot/app.css:100-126</code>) paint the host surface in that mode
           until <code>MmcaThemeProviders</code> marks the page interactive (<code>data-mmca-interactive</code>,
-          <code>MmcaThemeProviders.razor:87-101</code>); every selector requires <code>data-mmca-theme</code>, so web heads, which
+          <code>MmcaThemeProviders.razor:90-104</code>); every selector requires <code>data-mmca-theme</code>, so web heads, which
           do not load the script, are untouched. Both MAUI heads load it as the first script in <code>&lt;head&gt;</code>
           (<code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI/wwwroot/index.html:8</code>,
           <code>MMCA.Store/Source/Hosts/UI/MMCA.Store.UI/wwwroot/index.html:13</code>), and neither head carries an
@@ -330,7 +331,19 @@
           accepts only the first two routes (<code>:56</code>) and does not check the script: ADC&#39;s host <code>app.css</code>
           keeps a <code>prefers-color-scheme</code> aware <code>html</code>/<code>body</code> fallback surface
           (<code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI/wwwroot/app.css:26-36</code>), so the test passes through that
-          rule and removing <code>theme-prepaint.js</code> from ADC&#39;s <code>index.html</code> would not fail it.</p>
+          rule and removing <code>theme-prepaint.js</code> from ADC&#39;s <code>index.html</code> would not fail it. After marking
+          the page interactive, <code>OnAfterRenderAsync</code> also calls the opt-in <code>ColorModeStamp.ApplyAsync</code>
+          (<code>MmcaThemeProviders.razor:76</code>, and again after every theme change at <code>:125</code>): with
+          <code>Layout:StampColorModeOnDocument</code> set (off by default, <code>LayoutSettings.cs:68</code>) it stamps
+          <code>&lt;html data-mmca-color-mode=&quot;light|dark&quot;&gt;</code> for an app&#39;s own stylesheet, best-effort through
+          <code>ThemeInterop.TryAsync</code> (<code>ColorModeStamp.cs:24-35</code>). It is deliberately a separate attribute
+          (<code>theme.js:83-84</code>, <code>:87</code>) from the pre-paint <code>data-mmca-theme</code> (stamped at
+          <code>theme-prepaint.js:42</code>) and runs only after an interactive render, so it does not close the
+          web-head first-paint flash. Both Store web heads opt in
+          (<code>MMCA.Store/Source/Hosts/UI/MMCA.Store.UI.Web/appsettings.json:27</code>,
+          <code>MMCA.Store.UI.Web.Client/wwwroot/appsettings.json:26</code>) and <code>store.css</code> keys its dark roles on
+          the attribute (<code>MMCA.Store.UI.Web/wwwroot/store.css:89-94</code>), so those roles share that
+          post-interactive timing; ADC and Helpdesk do not opt in.</p>
           </li>
           <li><p><strong>The toggle ships in the shared <code>MainLayout</code></strong>, next to the i18n culture switcher, in the app-bar
           <code>appbar-icon-actions</code> slot, so every consumer gets both controls without per-host wiring.</p>
@@ -472,6 +485,29 @@
           short of the method&#39;s close); <code>MmcaThemeProviders.razor:14</code>, <code>:36</code>, <code>:38</code>, <code>:50</code>, <code>:56</code>,
           <code>BrandColorTokenTests.cs:34-50</code>, <code>:52-92</code>, <code>:94-110</code> unchanged.</li>
           </ol>
+          <h2 id="revision-2026-10-28">Revision (2026-10-28)</h2>
+          <p>Re-verified against current source. The binding, the startup initialization path, the best-effort
+          interop guard, the web-head flash scope and the MAUI pre-paint are unchanged; what the ADR had not
+          recorded is one opt-in post-render step of the <code>MmcaThemeProviders</code> lifecycle.</p>
+          <ol>
+          <li>Decision 3: after <code>MarkInteractiveAsync</code>, <code>OnAfterRenderAsync</code> calls <code>ColorModeStamp.ApplyAsync</code>
+          (<code>MmcaThemeProviders.razor:76</code>), and <code>RerenderSafeAsync</code> calls it again after every theme change
+          (<code>:125</code>). It does nothing unless the render is interactive and
+          <code>LayoutSettings.StampColorModeOnDocument</code> is true (<code>ColorModeStamp.cs:24</code>; default false,
+          <code>LayoutSettings.cs:68</code>); when it is, it stamps <code>&lt;html data-mmca-color-mode=&quot;light|dark&quot;&gt;</code> through
+          <code>ThemeInterop.TryAsync</code> (<code>ColorModeStamp.cs:30-35</code>). The attribute is deliberately distinct
+          (<code>theme.js:83-84</code>, <code>:87</code>) from the pre-paint <code>data-mmca-theme</code> (<code>theme-prepaint.js:42</code>), and
+          because it runs only after an interactive render it does not close the web-head first-paint
+          flash. Both Store web heads opt in (<code>MMCA.Store.UI.Web/appsettings.json:27</code>,
+          <code>MMCA.Store.UI.Web.Client/wwwroot/appsettings.json:26</code>) and key their dark roles on it
+          (<code>store.css:89-94</code>), so those roles share that timing; ADC and Helpdesk do not opt in.</li>
+          <li>Anchors re-verified against current source: the <code>InitializeAtStartupAsync</code> call at
+          <code>MmcaThemeProviders.razor:69</code> (superseding <code>:67</code>, now a line inside the comment block at
+          <code>:63-68</code>) and
+          <code>MarkInteractiveAsync</code> at <code>MmcaThemeProviders.razor:90-104</code> (superseding <code>:87-101</code>, which began
+          inside the method&#39;s comment); <code>ThemeService.cs:61-62</code>, <code>:64-79</code> and <code>ThemeInterop.cs:19-30</code>
+          unchanged.</li>
+          </ol>
           <h2 id="related">Related</h2>
           <p><a href="027-multi-locale-i18n.html">ADR-027</a> (shares the cookie source-of-truth and the <code>User</code> preference migration,
           and is the model for the theme no-flash SSR bootstrap that is not yet wired),
@@ -500,6 +536,7 @@
             <li><a href="#revision-2026-10-19">Revision (2026-10-19)</a></li>
             <li><a href="#revision-2026-10-21">Revision (2026-10-21)</a></li>
             <li><a href="#revision-2026-10-26">Revision (2026-10-26)</a></li>
+            <li><a href="#revision-2026-10-28">Revision (2026-10-28)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

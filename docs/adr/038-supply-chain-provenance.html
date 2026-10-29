@@ -256,7 +256,8 @@
           Revised 2026-10-07: anchors refreshed after the v1.233.0 release, and the 2026-09-07 record of two <code>dotnet-coverage</code> installs is updated: the second install has since been removed, leaving the single pinned install in CI <code>build-and-test</code>.
           Revised 2026-10-21: the accept-list is no longer empty; it holds five ImageSharp 3.1.12 advisories, each with a reachability argument, and the consumer and SQLitePCLRaw anchors are refreshed.
           Revised 2026-10-25: the accept-list is empty again; the five ImageSharp 3.1.12 entries were removed in 1.258.0 when ImageSharp left the dependency graph, and the consumers deleted their mirrored entries in the same sweep (see the Revision below).
-          Revised 2026-10-26: the 2026-10-06 record that every <code>uses:</code> remains SHA-pinned is qualified to third-party actions (four <code>uses:</code> lines reference the repository&#39;s own composite actions by local path), and anchors are refreshed after the v1.261.0 release.</p>
+          Revised 2026-10-26: the 2026-10-06 record that every <code>uses:</code> remains SHA-pinned is qualified to third-party actions (four <code>uses:</code> lines reference the repository&#39;s own composite actions by local path), and anchors are refreshed after the v1.261.0 release.
+          Revised 2026-10-28: the first Trade-offs bullet now states that every released nupkg carries a build-provenance attestation while the SBOM is kept only as an unattested workflow artifact under the repository&#39;s artifact retention, and the CHANGELOG and SQLitePCLRaw anchors are refreshed.</p>
           <h2 id="context">Context</h2>
           <p>MMCA.Common is a published framework: on every <code>v*</code> tag (release.yml:3-5) it packs its NuGet packages
           and pushes them to both GitHub Packages (release.yml:119-120) and nuget.org through OIDC trusted
@@ -314,14 +315,14 @@
           handled case, not an error: the action reports <code>&lt;none&gt;</code> as the accepted set (action.yml:85), skips
           the filter (action.yml:87-89), and so fails on every vulnerable row (action.yml:90-91). The most
           recent accepted entries, five <code>SixLabors.ImageSharp</code> 3.1.12 advisories, were removed in 1.258.0
-          when image normalization stopped depending on ImageSharp (CHANGELOG.md:55); see the 2026-10-25
+          when image normalization stopped depending on ImageSharp (CHANGELOG.md:98); see the 2026-10-25
           Revision. The earlier SQLite
           advisory GHSA-2m69-gcr7-jv3q (CVE-2025-6965) was suppressed from 2026-06-19 while SQLitePCLRaw
           shipped no patched build. SQLitePCLRaw 2.1.12 (published 2026-07-14) delivered the patched build, so
           the suppression was removed on 2026-07-20 and replaced with a direct fix: a
           <code>SQLitePCLRaw.bundle_e_sqlite3</code> pin tracked in <code>Directory.Packages.props</code>, currently at version 3.0.5
           (Directory.Packages.props:59, rationale comment :54-58), referenced directly by
-          <code>MMCA.Common.Infrastructure</code> (MMCA.Common.Infrastructure.csproj:36-38) and by <code>MMCA.Common.Aspire</code>
+          <code>MMCA.Common.Infrastructure</code> (MMCA.Common.Infrastructure.csproj:40-42) and by <code>MMCA.Common.Aspire</code>
           (MMCA.Common.Aspire.csproj:54-58, for the copy <code>AspNetCore.HealthChecks.Sqlite</code> pulls in) so the
           patched version flows to consumers through the published package graph, the same pattern used for
           the MessagePack pin. This complements the build-time audit: <code>NuGetAudit</code> with <code>NuGetAuditMode=all</code>
@@ -361,14 +362,22 @@
           </ul>
           <h2 id="trade-offs">Trade-offs</h2>
           <ul>
-          <li><strong>The SBOM is generated and archived, not yet signed or attested</strong> (superseded 2026-09-22; see the Revision below). The gate proves a bill of
-          materials exists for each release (.github/actions/cyclonedx-sbom/action.yml:68-71); it does not add cryptographic attestation or
-          signature verification of the pushed packages. That is a possible follow-up, not a claim made here.</li>
+          <li><strong>The packages are attested; the SBOM is a workflow artifact, not attested.</strong> Both release jobs
+          attach a signed SLSA build-provenance attestation to every packed <code>.nupkg</code> through
+          <code>actions/attest-build-provenance</code> (release.yml:94-100, :213-219), but the attestation subject is
+          the packages only (<code>subject-path</code> at release.yml:100, :219). The SBOM gate proves a bill of
+          materials exists for each release (.github/actions/cyclonedx-sbom/action.yml:68-71) and hands its
+          path to the job (action.yml:72); a separate Upload SBOM step in each job then stores it as a
+          workflow artifact (release.yml:112-117 in <code>publish</code>, :230-235 in <code>publish-maui</code>). Neither upload
+          sets <code>retention-days</code> and no step attaches the BOM to a release, so the SBOM lasts only as long as
+          the repository&#39;s artifact retention keeps it, not as long as the packages it describes. The BOM
+          file carries no attestation of its own, and nothing in the pipeline forces a consumer to run
+          <code>gh attestation verify</code> before restoring a package.</li>
           <li><strong>Accept-list drift is possible.</strong> A <code>NuGetAuditSuppress</code> entry silences the audit for that id until
           someone removes it, and its accompanying rationale comment is a review reminder, not an automated
           expiry. The list is empty today (Directory.Build.props:33-36), so the cost is latent: it returns
           with the next entry, and the five ImageSharp entries that held it until 1.258.0 left only because
-          the package itself left the graph (CHANGELOG.md:55), not because anything prompted a revisit.</li>
+          the package itself left the graph (CHANGELOG.md:98), not because anything prompted a revisit.</li>
           <li><strong>Audit granularity is text-matched.</strong> The audit action matches vulnerable rows and <code>GHSA-*</code> ids by
           parsing tool output (.github/actions/nuget-vulnerability-audit/action.yml:82-91). It is deliberately simple and depends on the <code>dotnet list</code>
           output shape rather than a structured feed.</li>
@@ -595,6 +604,34 @@
           </ul>
           </li>
           </ol>
+          <h2 id="revision-2026-10-28">Revision (2026-10-28)</h2>
+          <p>Re-verified against current source. The four controls, the empty accept-list, the SBOM gate, the
+          fail-closed audit and the four first-party actions both consumers reference <code>@main</code> are unchanged.
+          What moved is one live Trade-offs bullet that still described the pre-2026-09-22 state in the present
+          tense, plus the CHANGELOG and SQLitePCLRaw anchors.</p>
+          <ol>
+          <li><strong>The first Trade-offs bullet describes attestation as it is.</strong> It said the SBOM is &quot;not yet
+          signed or attested&quot; and that the pipeline adds no cryptographic attestation, under an inline
+          superseded marker. Both release jobs attest every packed nupkg with
+          <code>actions/attest-build-provenance</code> (<code>MMCA.Common/.github/workflows/release.yml:94-100</code> in
+          <code>publish</code>, <code>:213-219</code> in <code>publish-maui</code>), with <code>subject-path</code> naming the packages only (<code>:100</code>,
+          <code>:219</code>). The bullet now says the packages are attested; the SBOM action only writes the BOM and
+          its <code>bom-path</code> output (<code>.github/actions/cyclonedx-sbom/action.yml:68-72</code>), and a separate Upload
+          SBOM step stores it as a workflow artifact (<code>release.yml:112-117</code> in <code>publish</code>, <code>:230-235</code> in
+          <code>publish-maui</code>) with no <code>retention-days</code> and no release-asset step, so it expires under the
+          repository&#39;s artifact retention and carries no attestation of its own; consumer-side
+          verification is not enforced by the pipeline.</li>
+          <li>Anchors re-verified against current source:<ul>
+          <li><code>MMCA.Common/CHANGELOG.md</code>: the 1.258.0 entry (SkiaSharp replaces ImageSharp, the
+          <code>NuGetAuditSuppress</code> entries go) is <code>:98</code> under header <code>:94</code>; the 1.259.0 entry (image
+          normalization leaves the framework) is <code>:92</code> under header <code>:88</code>. Decision 3 and Trade-offs now
+          cite <code>:98</code>; the 2026-10-25 and 2026-10-26 Revisions&#39; anchors are left as recorded.</li>
+          <li><code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/MMCA.Common.Infrastructure.csproj</code>:
+          security-pin comment <code>:40-41</code>, <code>SQLitePCLRaw.bundle_e_sqlite3</code> reference <code>:42</code>, cited in
+          Decision 3 as <code>:40-42</code>.</li>
+          </ul>
+          </li>
+          </ol>
           <h2 id="related">Related</h2>
           <p>ADR-016 (lockstep versioning + the MassTransit-v8 license pin; this record extends dependency
           governance from versioning and licensing into supply-chain provenance and integrity), ADR-015
@@ -626,6 +663,7 @@
             <li><a href="#revision-2026-10-21">Revision (2026-10-21)</a></li>
             <li><a href="#revision-2026-10-25-accept-list-empty-again">Revision (2026-10-25, accept-list empty again)</a></li>
             <li><a href="#revision-2026-10-26">Revision (2026-10-26)</a></li>
+            <li><a href="#revision-2026-10-28">Revision (2026-10-28)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

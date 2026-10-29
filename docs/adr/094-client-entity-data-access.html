@@ -260,7 +260,8 @@
           read services outside the hierarchy are recorded, and the <code>IsNotFound</code> anchor is corrected.
           Revised 2026-10-19: Store&#39;s two Sales lookup services now run their GETs through <code>IdempotentReadRetry</code>, so the helper has eleven call sites across both apps.
           Revised 2026-10-21: the retry policy is recorded with its transport-failure arm (a keyless POST or PATCH is resent only when it failed before it was sent), the <code>EntityServiceBase</code> count is twenty with the two <code>UserListService</code> types, the list-page base&#39;s opt-in virtualized fetch path is recorded, and anchors are refreshed.
-          Revised 2026-10-26: the client retry policy and the shared Aspire handler are recorded as refusing a 429 whose <code>Retry-After</code> exceeds <code>MaxRetryAfterWait</code> (a shorter one is waited out in place of the backoff), the list-page base&#39;s superseded-load handling, <code>EmptyConfirmed</code> flag and aliased page-filter keys are recorded, and anchors are refreshed.</p>
+          Revised 2026-10-26: the client retry policy and the shared Aspire handler are recorded as refusing a 429 whose <code>Retry-After</code> exceeds <code>MaxRetryAfterWait</code> (a shorter one is waited out in place of the backoff), the list-page base&#39;s superseded-load handling, <code>EmptyConfirmed</code> flag and aliased page-filter keys are recorded, and anchors are refreshed.
+          Revised 2026-10-28: Store&#39;s new <code>BestSellerService</code> and <code>CheckoutApiService</code> raise the <code>IdempotentReadRetry</code> call sites to twelve across nine files and the direct <code>AuthenticatedServiceBase</code> count to twenty-three, and Store anchors are refreshed; <code>CheckoutApiService</code> mints one key per guest action (three) and <code>CartStateService</code> one per add request, merged guest-cart lines included.</p>
           <h2 id="context">Context</h2>
           <p>ADR-034 decided the <strong>server</strong> half of entity data access: a generic controller base with a dynamic
           query contract, where filters arrive as <code>filters[Property].operator</code> / <code>filters[Property].value</code> query
@@ -430,17 +431,25 @@
           (<code>.../MMCA.Common.UI/Services/Auth/AuthDelegatingHandler.cs:52-58</code>), so these calls carry it
           whenever a user is signed in. Without the helper such a GET would get only the shared handler&#39;s
           single retry on a host that calls <code>AddServiceDefaults</code> (see Trade-offs), and one attempt on a head
-          that does not. Eleven call sites across eight files in the two apps use it. In ADC, seven across six
+          that does not. Twelve call sites across nine files in the two apps use it. In ADC, seven across six
           files: four lookup services
           (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/Services/Speakers/SpeakerLookupService.cs:96</code>,
           <code>.../Services/Events/EventLookupService.cs:102</code>,
           <code>.../Services/Categories/CategoryItemLookupService.cs:54</code>, and
           <code>MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.UI/Services/Lookups/SessionLookupService.cs:30,53</code>)
           plus <code>.../Services/SessionLive/LiveEventService.cs:56</code> and
-          <code>.../Services/HappeningNow/NowNextService.cs:26</code>. In Store, four across its two Sales lookup
-          services
+          <code>.../Services/HappeningNow/NowNextService.cs:26</code>. In Store, five across three files: four in its
+          two Sales lookup services
           (<code>MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.UI/Services/Lookups/CustomerLookupService.cs:32,84</code>
-          and <code>.../Services/Lookups/ProductVariantLookupService.cs:48,102</code>), which enrich the admin grids.
+          and <code>.../Services/Lookups/ProductVariantLookupService.cs:48,102</code>), which enrich the admin grids
+          (the variant lookup also serves the storefront through <code>BestSellerService</code>,
+          <code>.../Services/Storefront/BestSellerService.cs:25,52</code>, and the public guest order page,
+          <code>.../Pages/GuestOrders/GuestOrderDetail.razor.cs:40</code>), and one in <code>BestSellerService</code>
+          (<code>.../Services/Storefront/BestSellerService.cs:38</code>), which fills the storefront&#39;s Best Sellers
+          rows: the home page&#39;s
+          (<code>MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.UI/Pages/Home/StoreHome.razor.cs:38</code>) and
+          the catalog browse page&#39;s suggestions when a filtered search comes back empty
+          (<code>.../Pages/Catalog/CatalogBrowse.razor.cs:29,266</code>, <code>CatalogBrowse.Filters.razor.cs:124</code>).
           Helpdesk and the rest of Common do not call it.
           Writes are deliberately not offered: a write that needs retries goes through <code>EntityServiceBase</code>,
           whose creates carry an <code>Idempotency-Key</code>.</li>
@@ -463,7 +472,7 @@
           and <code>MMCA.Store/Tests/Architecture/MMCA.Store.Architecture.Tests/Ui/StateManagementConventionTests.cs:10</code>.
           MMCA.Helpdesk declares no subclass, so the rule is not enforced there.</li>
           </ul>
-          <p>Adoption inventory as of 2026-10-21. Most services sit under their aggregate folder; a module with a
+          <p>Adoption inventory as of 2026-10-28. Most services sit under their aggregate folder; a module with a
           single aggregate per service keeps them at the <code>Services/</code> root (both <code>UserListService</code> types and
           Store&#39;s <code>CustomerService</code>, <code>ProductService</code> and <code>CategoryService</code>).
           <strong>Twenty production services derive from <code>EntityServiceBase</code></strong>: eleven in ADC, ten of them in
@@ -476,30 +485,35 @@
           plus Identity&#39;s <code>UserListService</code>
           (<code>MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.UI/Services/UserListService.cs:21</code>), eight in
           Store
-          (<code>Catalog.UI/Services/ProductService.cs:27</code>, <code>CategoryService.cs:24</code> and
+          (<code>Catalog.UI/Services/ProductService.cs:28</code>, <code>CategoryService.cs:24</code> and
           <code>Reviews/ReviewService.cs:24</code>; <code>Sales.UI/Services/Orders/OrderService.cs:19</code>,
           <code>ShoppingCarts/ShoppingCartService.cs:18</code>, <code>Inventory/InventoryItemService.cs:20</code>;
           <code>Identity.UI/Services/CustomerService.cs:25</code> and <code>UserListService.cs:22</code>), and one inside
           the framework itself
           (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/Notifications/PushNotificationService.cs:20</code>).
           <strong>Four derive from <code>ChildEntityServiceBase</code></strong>, all in ADC Conference and all in one file
-          (<code>.../Services/Common/ChildEntityServices.cs:23,36,49,62</code>). <strong>Twenty-two more take
+          (<code>.../Services/Common/ChildEntityServices.cs:23,36,49,62</code>). <strong>Twenty-three more take
           <code>AuthenticatedServiceBase</code> directly</strong>: ten in ADC Engagement, five in ADC Conference (four files:
           <code>Services/Feedback/OrganizerFeedbackService.cs</code> declares two of them, at <code>:17</code> and <code>:72</code>, next to
           <code>Services/Speakers/SpeakerDashboardService.cs:16</code>,
           <code>Services/Sessions/Selection/SessionSelectionService.cs:16</code> and
           <code>Services/SessionAssets/SessionAssetService.cs:27</code>), ADC Identity&#39;s
-          <code>Services/UserService.cs:22</code>, four in the framework
+          <code>Services/UserService.cs:22</code> (base at <code>:23</code>), four in the framework
           (<code>Services/Notifications/NotificationInboxService.cs:34</code>,
           <code>Services/Legal/LegalAcceptanceUIService.cs:26</code>,
           <code>Services/Administration/UserAdminService.cs:30</code> and
-          <code>Services/Administration/RoleAdminService.cs:28</code>), and two in Store: <code>UserDataService</code>
-          (<code>MMCA.Store/Source/Modules/Identity/MMCA.Store.Identity.UI/Services/UserDataService.cs:20</code>) and
+          <code>Services/Administration/RoleAdminService.cs:28</code>), and three in Store: <code>UserDataService</code>
+          (<code>MMCA.Store/Source/Modules/Identity/MMCA.Store.Identity.UI/Services/UserDataService.cs:20</code>),
           <code>CartStateService</code>
-          (<code>MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.UI/Services/ShoppingCarts/CartStateService.cs:38</code>,
-          base at <code>:44</code>), which uses the inherited <code>RetryPolicy</code> (for example <code>:97</code>, <code>:144</code>, <code>:263</code>) and
-          <code>NewIdempotencyKey()</code> under the same rule: one key per user action, reused by every attempt (<code>:90</code>
-          per add-to-cart, <code>:256</code> per checkout, shared by both checkout steps).</p>
+          (<code>MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.UI/Services/ShoppingCarts/CartStateService.cs:46</code>,
+          base at <code>:55</code>), which uses the inherited <code>RetryPolicy</code> (for example <code>:150</code>, <code>:303</code>, <code>:589</code>) and
+          <code>NewIdempotencyKey()</code> under the same rule: one key per add request, reused by every attempt (<code>:582</code>
+          in <code>SendAddItemAsync</code>, <code>:576</code>, which runs once per user add at <code>:107</code> and once per line when
+          <code>MergeGuestCartAsync</code>, <code>:612-627</code>, merges a guest cart; <code>:296</code> per checkout, shared by the checkout
+          PUT at <code>:303</code> and the payment POST at <code>:341</code>), and <code>CheckoutApiService</code>
+          (<code>MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.UI/Services/Checkout/CheckoutApiService.cs:23</code>,
+          base at <code>:26</code>), which mints one key per guest action: order placement (<code>:61</code>), the guest Stripe
+          payment session (<code>:104</code>) and the guest order-link request (<code>:161</code>).</p>
           <h3 id="the-list-page-contract-datagridlistpagebasetdto">The list-page contract: <code>DataGridListPageBase&lt;TDto&gt;</code></h3>
           <p>The consumer side of that data-access contract is equally uniform, and is recorded here rather than
           separately because the two are used as a pair: a list page inherits the base and hands it a fetch
@@ -829,6 +843,39 @@
           (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI/Pages/Administration/UserAdminList.razor:4</code>) is
           recorded as a further inheritor.</li>
           </ol>
+          <h2 id="revision-2026-10-28">Revision (2026-10-28)</h2>
+          <p>Re-verified against current source. The client data-access contract, the retry policy, the
+          idempotency-key mint, the <code>EntityServiceBase</code> count (twenty) and the <code>ChildEntityServiceBase</code> count
+          (four) are unchanged; Store added two services that use the shared policy, so two adoption counts
+          moved, and Store anchors moved with them.</p>
+          <ol>
+          <li><code>IdempotentReadRetry</code> has twelve call sites across nine files, not eleven across eight: Store&#39;s
+          <code>BestSellerService</code>
+          (<code>MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.UI/Services/Storefront/BestSellerService.cs:38</code>)
+          reads the storefront&#39;s Best Sellers rows through it: the home page&#39;s
+          (<code>MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.UI/Pages/Home/StoreHome.razor.cs:38</code>) and
+          the catalog browse page&#39;s suggestions after an empty filtered search
+          (<code>.../Pages/Catalog/CatalogBrowse.razor.cs:29,266</code>, <code>CatalogBrowse.Filters.razor.cs:124</code>). Store
+          therefore has five in three files. The two lookup services enrich the admin grids, and the
+          variant lookup also serves <code>BestSellerService</code> (<code>BestSellerService.cs:25,52</code>) and the public
+          guest order page
+          (<code>MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.UI/Pages/GuestOrders/GuestOrderDetail.razor.cs:40</code>).
+          ADC is unchanged at seven in six.</li>
+          <li>Twenty-three services take <code>AuthenticatedServiceBase</code> directly, not twenty-two: Store&#39;s
+          <code>CheckoutApiService</code>
+          (<code>MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.UI/Services/Checkout/CheckoutApiService.cs:23</code>,
+          base at <code>:26</code>) joins <code>UserDataService</code> and <code>CartStateService</code>, and mints one idempotency key per
+          guest action: order placement (<code>:61</code>), the guest Stripe payment session (<code>:104</code>) and the guest
+          order-link request (<code>:161</code>).</li>
+          <li><code>CartStateService</code> mints one key per add request rather than per user action: the mint at <code>:582</code>
+          sits in <code>SendAddItemAsync</code> (<code>:576</code>), called once per user add (<code>:107</code>) and once per line when
+          <code>MergeGuestCartAsync</code> (<code>:612-627</code>) merges a guest cart on sign-in or checkout (<code>:273</code>, <code>:288</code>).</li>
+          <li>Anchors re-verified against current source: <code>CartStateService.cs</code> class <code>:46</code>, base <code>:55</code>,
+          <code>RetryPolicy</code> uses including <code>:150</code>, <code>:303</code>, <code>:341</code> and <code>:589</code>, keys <code>:296</code> (checkout) and <code>:582</code>
+          (add request); <code>ProductService.cs:28</code> (its <code>EntityServiceBase</code> base clause, matching the sibling
+          anchors); ADC Identity&#39;s <code>UserService.cs:22</code> now also names its base clause at <code>:23</code>; and the
+          inventory date is 2026-10-28.</li>
+          </ol>
           <h2 id="related">Related</h2>
           <p><a href="034-generic-entity-query-layer.html">ADR-034</a> (the server surface this contract calls, and the filter
           grammar the client constructs), <a href="017-request-idempotency.html">ADR-017</a> (the server-side filter whose
@@ -862,6 +909,7 @@
             <li><a href="#revision-2026-10-19">Revision (2026-10-19)</a></li>
             <li><a href="#revision-2026-10-21">Revision (2026-10-21)</a></li>
             <li><a href="#revision-2026-10-26">Revision (2026-10-26)</a></li>
+            <li><a href="#revision-2026-10-28">Revision (2026-10-28)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

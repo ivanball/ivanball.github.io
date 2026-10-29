@@ -34,11 +34,13 @@ Revised 2026-10-26: the overlay README now names `MMCA_CONTRACT_SNAPSHOT_OUT` ra
 the failure prints the live value, and the seed measurements were re-taken at MMCA.Helpdesk
 `5fd74de` (143 files, 12,571 lines, 57 pins) with the staging guard and README anchors re-pointed; the
 `mmca-command` row now lists the validator and the cache-invalidation test builder the slice ships.
+Revised 2026-10-28: the seed measurements were re-taken at MMCA.Helpdesk `c41fc93` (148 files,
+12,597 lines, 57 pins) and the required-check anchor was re-pointed.
 
 ## Context
 
 [Build by hand](../guides/common-BUILD-BY-HAND.md) is accurate and complete, and phases 1 through 6
-of it are transcription work (`common-BUILD-BY-HAND.md:98` through `:1255`). Its own instruction for
+of it are transcription work (`common-BUILD-BY-HAND.md:98` through `:1299`). Its own instruction for
 the load-bearing parts is "copy `MMCA.Helpdesk/Directory.Build.props`" (`:171`), "copy MMCA.ADC's
 `.editorconfig` verbatim" (`:116`), "copy the relevant rows from MMCA.ADC/Directory.Packages.props"
 (`:159`). That walkthrough was the whole of
@@ -47,10 +49,11 @@ is now the six-step `dotnet new install MMCA.Templates` path
 (`common-GETTING-STARTED.md:10-22`) and the by-hand transcription moved to its own guide.
 
 Measured against MMCA.Helpdesk, the deliberately minimal seed, a brand-new app on the framework
-starts by hand-creating **12 projects, 143 files, and 12,571 lines** before a line of its own
-business logic. The method, re-run on 2026-10-26 at MMCA.Helpdesk `5fd74de` and stated here so the
-figures can be reproduced rather than trusted: every tracked file under `Source/` and `Tests/` (136
-files, 11,497 lines), plus the seven root build files below (1,074 lines). Those
+starts by hand-creating **12 projects, 148 files, and 12,597 lines** before a line of its own
+business logic. The method, re-run on 2026-10-28 at MMCA.Helpdesk `c41fc93` and stated here so the
+figures can be reproduced rather than trusted: every tracked file under `Source/` and `Tests/` (141
+files: 137 text files carrying 11,523 lines, plus four PNG icons under the web host's
+`wwwroot/icons/` that count as files but not as lines), plus the seven root build files below (1,074 lines). Those
 seven are an 827-line `.editorconfig`, a 99-line `Directory.Packages.props` carrying 57 pins,
 a 77-line `Directory.Build.props`, a 7-line `Directory.Build.targets` that imports the local-source
 swap from MMCA.Common's `build/LocalSource/MMCA.Common.LocalSource.targets`
@@ -191,7 +194,7 @@ generating with `--database postgresql`, building and testing package-mode, then
 applying the first migration on a real server and asserting the schema it left behind. The smoke
 proves the template's SQL Server and SQLite shapes; the canary is the only path that proves a
 generated PostgreSQL app against the engine rather than against a compiler. Both jobs sit outside the
-required check, which is `build-and-test` (`MMCA.Helpdesk/AGENTS.md:104`); the canary also carries
+required check, which is `build-and-test` (`MMCA.Helpdesk/AGENTS.md:92`); the canary also carries
 `continue-on-error: true` (`ci.yml:155`), so a red canary reports without failing the run.
 
 ## Rationale
@@ -342,3 +345,25 @@ seed measurements and the guard and README anchors moved with the tree.
    note at `:121-124`, and the freeze section at `:126-146`; `IntegrationEventContractTests` at
    `ArchitectureTests.cs:99`; the `--minimum-expected-tests 1` runs at `smoke.ps1:361`, `:487`, `:910`
    and `.github/workflows/ci.yml:104`.
+
+## Revision (2026-10-28)
+
+Re-verified against current source. No decision or rationale changed: the 12 projects and the
+local-source import (`Directory.Build.targets:6`) are unchanged, the seven root build files keep
+the same line counts (only the `Directory.Packages.props` pin versions moved), and the
+required check is still `build-and-test` with `template-smoke` and the PostgreSQL canary advisory
+beside it. The seed measurements and the required-check anchor moved with the tree.
+
+1. The seed measurements were re-taken at MMCA.Helpdesk `c41fc93` with the same method: 141 files
+   under `Source/` and `Tests/` (137 text files with 11,523 lines, plus four binary PNG icons under
+   `MMCA.Helpdesk.UI.Web/wwwroot/icons/`, the first binary files in that tree, counted as files
+   and excluded from the line count), plus 1,074 lines across the seven root build files
+   (`.editorconfig` 827, `Directory.Packages.props` 99 with 57 `PackageVersion` entries,
+   `Directory.Build.props` 77, `Directory.Build.targets` 7, `global.json` 5, `nuget.config` 26,
+   `MMCA.Helpdesk.slnx` 33), for 148 files and 12,597 lines. The root build files carry the same
+   line counts as at `5fd74de`; `Directory.Packages.props` changed in place (the MMCA.Common
+   version bumps) without changing its line or pin count. The Context text now says so.
+2. Anchors re-verified against current source: the required-check sentence naming `build-and-test`
+   and its two advisory jobs at `MMCA.Helpdesk/AGENTS.md:92`, and the end of Phase 6 of the
+   by-hand guide at `common-BUILD-BY-HAND.md:1299` (Phase 7 opens at `:1300`), which the Context
+   range now ends on.

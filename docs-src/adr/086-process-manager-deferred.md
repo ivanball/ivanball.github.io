@@ -15,7 +15,9 @@ stands. Revised 2026-10-21: anchors refreshed after the 2026-10-07 change to
 `DependencyVersionTestsBase` moved the pin gate's lines; the deferral stands. Revised 2026-10-26:
 the MassTransit pin now covers five v8 packages at 8.5.12 across four broker providers (RabbitMQ and
 PostgreSQL built in, Azure Service Bus and Amazon SQS as adapters), so the EF saga repository would be
-a sixth pinned package; the deferral stands.
+a sixth pinned package; the deferral stands. Revised 2026-10-28: the unpaid-order deadline is now
+armed by `PlacedOrderFinalizer`, shared by customer and guest checkout, and a second independent
+`OrderCancelled` handler schedules the cancellation notice; the deferral stands.
 
 ## Context
 [ADR-054](054-saga-compensation-and-reconciliation.md) decided how this workspace achieves
@@ -44,7 +46,8 @@ argument. Two of them are still absent, and the third has since arrived on its o
   instance with several different waits, which is what would need either a sweep per wait or a
   coordinator that owns them all. See the Revision below.
 - **Compensation that must unwind in order.** ADR-054's compensating handlers are independent: cancel
-  restores stock, payment failure notifies the customer, and neither depends on the other having run.
+  restores stock, a separate cancel handler schedules the cancellation notice, payment failure
+  notifies the customer, and none depends on another having run.
   A four-step workflow that must undo steps 3, 2 and 1 in that order has an ordering requirement no
   set of independent handlers expresses.
 
@@ -311,6 +314,50 @@ corrected in place; the 2026-10-07 and 2026-10-21 Revisions are kept as written.
    `OutboxCleanupService.cs:49`. A per-repo content sweep of the four `Source` trees for
    `MassTransitStateMachine`, `SagaStateMachineInstance`, `ISaga`, `InMemorySagaRepository` and
    `MassTransit.EntityFrameworkCore` still returns no match.
+
+## Revision (2026-10-28)
+
+Re-verified against current source. The deferral, its trigger, the coordinator's shape, the v8
+licensing constraint and the absence evidence are unchanged. What moved is where MMCA.Store arms the
+unpaid-order deadline (now a component shared by both checkout flows) and the number of independent
+`OrderCancelled` handlers. The Context's compensation bullet is corrected in place; the earlier
+Revisions are kept as written.
+
+1. **The deadline is armed by a shared finalizer, for both checkout flows.** `CheckOutHandler` no
+   longer injects the scheduler: it injects `PlacedOrderFinalizer`
+   (`MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Application/ShoppingCarts/UseCases/CheckOut/CheckOutHandler.cs:47`)
+   and calls `FinalizeAsync` at `:210`, inside the `WriteAsync` delegate (`:148`) that
+   `ExecuteInTransactionAsync` runs (`:104`). `PlacedOrderFinalizer` injects
+   `CheckOutDeadlineScheduler` (`.../CheckOut/PlacedOrderFinalizer.cs:22`), saves an optional shipping
+   label (`:33-45`), then calls `deadlineScheduler.ArmAsync` (`:49`). Guest checkout injects the
+   same finalizer
+   (`MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Application/Orders/UseCases/GuestCheckout/GuestCheckOutHandler.cs:31`)
+   and calls it at `:122` inside its own `ExecuteInTransactionAsync` (`:65`), so both flows share one
+   arm path. The scheduling itself is still `CheckOutDeadlineScheduler.cs:55-58`. Guest checkout is
+   one synchronous handler whose state lives on `Order`, so it adds no workflow state outside an
+   aggregate and does not meet the trigger.
+2. **Two independent `OrderCancelled` handlers exist, not one.** Beside `OrderCancelledSagaHandler`,
+   which restores stock (`.../Orders/Saga/OrderCancelledSagaHandler.cs:13-17`, `RestoreAsync` at
+   `:64-160`, `IncrementAsync` at `:150`), `OrderCancelledHandler` schedules the cancellation notice
+   as an internal command (`.../Orders/DomainEventHandlers/OrderCancelledHandler.cs:36-41`, with
+   `runAt: null` at `:39`), and its own documentation states
+   that neither depends on the other (`:13-15`). The 2026-09-11 Revision's "the one independent
+   `OrderCancelled` handler" now reads as two; the conclusion it supports (no compensation that must
+   unwind in order) holds.
+3. **Still exactly one per-instance wait.** The only future-dated `IInternalCommandScheduler.ScheduleAsync`
+   calls in the four `Source` trees are the unpaid-order deadline and its re-arm
+   (`CheckOutDeadlineScheduler.cs:57` and `.../Orders/Saga/OrderPaymentFailedSagaHandler.cs:83`);
+   every other Store call passes `runAt: null`, MMCA.ADC's internal-command calls leave `runAt` at its
+   default, and MMCA.Helpdesk makes none. (MMCA.ADC's device-side session reminders call the
+   unrelated `ILocalNotificationService.ScheduleAsync` with a future time, at
+   `MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.UI/Services/HappeningNow/SessionReminderCoordinator.cs:315`;
+   that is a client notification, not a server-side workflow wait.) A per-repo content sweep of the
+   four `Source` trees for `MassTransitStateMachine`, `SagaStateMachineInstance`, `ISaga`,
+   `InMemorySagaRepository` and `MassTransit.EntityFrameworkCore` still returns no match.
+4. Anchors re-verified against current source: the arm call is `PlacedOrderFinalizer.cs:49`,
+   replacing `CheckOutHandler.cs:178-184,226-229` (2026-09-11), `:180` (2026-10-01, 2026-10-07,
+   2026-10-21) and `:178` with the scheduler at `:45` (2026-10-26); `CheckOutHandler.cs` now has 244
+   lines and `:226-229` falls inside an unrelated inventory fetch.
 
 ## Related
 [ADR-054](054-saga-compensation-and-reconciliation.md) (the accepted mechanism this record defers an

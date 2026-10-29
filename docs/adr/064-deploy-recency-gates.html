@@ -283,7 +283,8 @@
           the broker-step comments are restated (neither mentions an advisory job; they differ in two places),
           and every <code>deploy.yml</code> anchor is re-pointed.
           Revised 2026-10-26: anchors refreshed after a one-line <code>deploy.yml</code> insertion in both apps and a
-          five-line <code>e2e.yml</code> insertion in ADC moved them.</p>
+          five-line <code>e2e.yml</code> insertion in ADC moved them.
+          Revised 2026-10-28: anchors refreshed after both CONTRIBUTING files moved their push-only sentence.</p>
           <h2 id="context">Context</h2>
           <p>A production rollout in both deployed apps waits on a list of jobs in <code>deploy.needs</code>
           (<code>MMCA.ADC/.github/workflows/deploy.yml:1161</code>, <code>MMCA.Store/.github/workflows/deploy.yml:1099</code>). Most of
@@ -444,12 +445,12 @@
           <li><p><strong>Deploy-time only, and deliberately not a required merge check.</strong> Both repos document the
           <code>freshness</code> job (the four gates) as push-only, run after merge and never added to branch protection,
           since a job that never runs on a pull request would block every merge
-          (<code>MMCA.ADC/CONTRIBUTING.md:42-45,112-113</code>, <code>MMCA.Store/CONTRIBUTING.md:42-45,120-121</code>). In both
+          (<code>MMCA.ADC/CONTRIBUTING.md:42-45,115-116</code>, <code>MMCA.Store/CONTRIBUTING.md:42-45,122-123</code>). In both
           files the push-only half is the earlier passage and the &quot;do not require these jobs&quot; sentence is the
           later one. Both match the workflow: the earlier passage names the single <code>freshness</code> job and all
           four of its steps (<code>dr-freshness</code>, <code>load-freshness</code>, <code>cross-service-freshness</code> and
           <code>cross-browser-freshness</code>), and the later sentence lists <code>freshness</code> among the push-only jobs
-          (<code>MMCA.ADC/CONTRIBUTING.md:112</code>, <code>MMCA.Store/CONTRIBUTING.md:120</code>), which is the one job that runs
+          (<code>MMCA.ADC/CONTRIBUTING.md:115</code>, <code>MMCA.Store/CONTRIBUTING.md:122</code>), which is the one job that runs
           (<code>MMCA.ADC/.github/workflows/deploy.yml:833</code>, <code>MMCA.Store/.github/workflows/deploy.yml:777</code>).</p>
           </li>
           </ul>
@@ -727,6 +728,20 @@
           non-chromium crons are <code>MMCA.ADC/.github/workflows/e2e.yml:54-55</code> and their <code>continue-on-error</code>
           is <code>MMCA.ADC/.github/workflows/e2e.yml:152</code> (Store <code>:46-47</code> and <code>:149</code> unchanged).</li>
           </ol>
+          <h2 id="revision-2026-10-28">Revision (2026-10-28)</h2>
+          <p>Re-verified against current source. The four gates, their windows (<code>8</code>, <code>35</code>, <code>5</code>, <code>10</code>), scan
+          bounds (25 for the broker gate; 40 in ADC and 50 in Store for the cross-browser gate), job timeouts
+          (5 minutes in ADC, 10 in Store), the <code>deploy.needs</code> counts (8 in ADC, 7 in Store), the deploy
+          condition, every <code>deploy.yml</code>, <code>e2e.yml</code>, <code>cross-service-tests.yml</code> and freshness-gate action
+          anchor, and the break-glass contract are unchanged. Only the <code>CONTRIBUTING.md</code> anchors for the
+          &quot;do not require the push-only jobs&quot; sentence moved; its wording, which still lists <code>freshness</code>, is
+          unchanged.</p>
+          <ol>
+          <li>Anchors re-verified against current source: the push-only sentence is
+          <code>MMCA.ADC/CONTRIBUTING.md:115-116</code> (was <code>112-113</code>) and <code>MMCA.Store/CONTRIBUTING.md:122-123</code> (was
+          <code>120-121</code>); the earlier passage naming the <code>freshness</code> job and its four steps stays at
+          <code>MMCA.ADC/CONTRIBUTING.md:42-45</code> and <code>MMCA.Store/CONTRIBUTING.md:42-45</code>.</li>
+          </ol>
           <h2 id="related">Related</h2>
           <p>ADR-009 (states the recovery objectives and requires that a restore be drilled and recorded; this
           record decides that a deploy is blocked on how recently that drill, and the capacity and broker proofs
@@ -752,6 +767,7 @@
             <li><a href="#revision-2026-10-07">Revision (2026-10-07)</a></li>
             <li><a href="#revision-2026-10-21">Revision (2026-10-21)</a></li>
             <li><a href="#revision-2026-10-26">Revision (2026-10-26)</a></li>
+            <li><a href="#revision-2026-10-28">Revision (2026-10-28)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

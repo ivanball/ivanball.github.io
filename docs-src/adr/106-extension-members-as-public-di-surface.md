@@ -1,7 +1,7 @@
 # ADR-106: C# Extension Members as the Public DI Registration Surface
 
 ## Status
-Accepted (2026-09-01; counts re-measured 2026-10-01). Revised 2026-10-06: counts re-measured against current source, and ADC's broker selection is now credited to the framework rather than to an ADC block. Revised 2026-10-07: anchors refreshed after the v1.233.0 release. Revised 2026-10-19: the Helpdesk host examples re-pointed after the host moved to `AddMmcaApplicationPipeline`. Revised 2026-10-21: counts re-measured (42 DI blocks, 117 extension blocks, 300 baseline lines), the Trade-offs package count made precise (17 packages with a baselined extension surface), and anchors refreshed. Revised 2026-10-26: counts re-measured after the cloud adapter packages landed (46 DI blocks over sixteen packages, 127 extension blocks, 307 shipped baseline lines plus 17 unshipped, 20 packages with a baselined extension surface, 30 CA1708 suppressions), and anchors refreshed.
+Accepted (2026-09-01; counts re-measured 2026-10-01). Revised 2026-10-06: counts re-measured against current source, and ADC's broker selection is now credited to the framework rather than to an ADC block. Revised 2026-10-07: anchors refreshed after the v1.233.0 release. Revised 2026-10-19: the Helpdesk host examples re-pointed after the host moved to `AddMmcaApplicationPipeline`. Revised 2026-10-21: counts re-measured (42 DI blocks, 117 extension blocks, 300 baseline lines), the Trade-offs package count made precise (17 packages with a baselined extension surface), and anchors refreshed. Revised 2026-10-26: counts re-measured after the cloud adapter packages landed (46 DI blocks over sixteen packages, 127 extension blocks, 307 shipped baseline lines plus 17 unshipped, 20 packages with a baselined extension surface, 30 CA1708 suppressions), and anchors refreshed. Revised 2026-10-28: the v1.264.0 release promoted every unshipped extension line (326 shipped baseline lines in 20 files, none unshipped), a PWA endpoint block raised the framework count to 128 extension blocks in 107 files, and anchors refreshed.
 
 ## Context
 Every host in this workspace boots the same way: a `Program.cs` calls a short list of `Add*` methods
@@ -103,8 +103,8 @@ method is what keeps the choice reversible, and the public-API baselines record 
    (`Infrastructure/DependencyInjection.Messaging.cs:187`, `:240`, `:263`,
    `Infrastructure/DependencyInjection.Jobs.cs:145`).
 
-3. **The idiom reaches well past DI.** The same measurement finds 127 `extension` blocks across 106
-   files under `MMCA.Common/Source`, generic receivers included. Receivers include `WebApplicationBuilder`
+3. **The idiom reaches well past DI.** Re-measured on 2026-10-28, an anchored search finds 128
+   `extension` blocks across 107 files under `MMCA.Common/Source`, generic receivers included. Receivers include `WebApplicationBuilder`
    (`API/Startup/ModuleHostExtensions.cs:24`, `Aspire/Logging/SerilogHostExtensions.cs:29`),
    `WebApplication` (`API/Startup/WebApplicationExtensions.cs:38`), `IEndpointRouteBuilder`
    (`API/Startup/Endpoints/JwksEndpointExtensions.cs:22`,
@@ -148,10 +148,9 @@ method is what keeps the choice reversible, and the public-API baselines record 
    `MMCA.Common.Application.DependencyInjection.extension(...IServiceCollection!).AddApplication()`
    (`Application/PublicAPI.Shipped.txt:260`, container at `:259`) and as
    `static MMCA.Common.Application.DependencyInjection.AddApplication(this ...IServiceCollection! services)`
-   (`:1240`). Across the repo there are 307 `.extension` lines in 19 `PublicAPI.Shipped.txt` files
-   and 17 more in `PublicAPI.Unshipped.txt` files (Gcp 10, Aws 6, Infrastructure 1), surface added
-   since the last release and not yet promoted, so 20 packages carry a baselined extension surface
-   (Gcp's is unshipped only). Gateway's surface is shipped like
+   (`:1246`). Across the repo there are 326 `.extension` lines in 20 `PublicAPI.Shipped.txt` files
+   and none in any `PublicAPI.Unshipped.txt` file (each holds only `#nullable enable`), so 20
+   packages carry a baselined extension surface, all of it shipped. Gateway's surface is shipped like
    the rest: both shapes of `UseCommonForwardedHeaders` sit in `Gateway/PublicAPI.Shipped.txt:12` and
    `:98`, and its `PublicAPI.Unshipped.txt` is a single line.
 
@@ -198,7 +197,7 @@ method is what keeps the choice reversible, and the public-API baselines record 
     `public R M(...)` inside `extension(T x)` becomes `public static R M(this T x, ...)`, with the
     method names, parameters and return types unchanged. That is exactly the form the baselines
     already record on their `static ...(this ...)` lines
-    (`Application/PublicAPI.Shipped.txt:1240-1252`), so the public API a
+    (`Application/PublicAPI.Shipped.txt:1246-1258`), so the public API a
     consumer binds to would not move and no `Program.cs` line would change. The single exception is
     the extension property in Decision point 8, whose classic form is `get_IsIdValueGenerated(Type)`
     rather than a `this`-marked method.
@@ -216,7 +215,7 @@ method is what keeps the choice reversible, and the public-API baselines record 
   (`Directory.Build.props:26`) mean any change to an extension member, including one caused by a
   compiler change to the emitted shape, shows up as a text diff in `PublicAPI.Shipped.txt` before a
   package is published, which is the same protection ADR-015 gives every other member.
-- **Consistency across four repos beats a mixed idiom.** With 127 blocks in the framework and 41 more
+- **Consistency across four repos beats a mixed idiom.** With 128 blocks in the framework and 41 more
   across ADC, Store and Helpdesk, a partial adoption would mean a reader has to know which of two
   declaration styles a given `Add*` uses. The property is set once per repo in
   `Directory.Build.props` and the shape is uniform.
@@ -235,7 +234,7 @@ method is what keeps the choice reversible, and the public-API baselines record 
 - **Method to property inside a block is a binary break, and it does not look like one.** Both are
   members of the same block and the source edit is two words, but the emitted classic member changes
   from `Name(this T)` to `get_Name(T)` (`Domain/PublicAPI.Shipped.txt:115` beside `:298`, against
-  `Application/PublicAPI.Shipped.txt:260` beside `:1240`). RS0017 catches the removal at build time in
+  `Application/PublicAPI.Shipped.txt:260` beside `:1246`). RS0017 catches the removal at build time in
   MMCA.Common; a consumer that had already compiled against the old member does not get that warning.
 - **Analyzers do not fully understand the shape.** CA1708 is wrong on every block it flags (30
   type-level suppressions) and IDE0051 is wrong across the block boundary (nine more). Each
@@ -246,7 +245,7 @@ method is what keeps the choice reversible, and the public-API baselines record 
   (`Testing.Architecture/Rules/Domain/ArchitectureRules.DomainThrows.cs:8`, `:184-187`). Any future
   rule, source generator or documentation tool that walks methods in a framework assembly inherits
   the same requirement, and the failure mode is a false positive on a body no developer wrote.
-- **The public-API baselines are roughly doubled for this surface.** 307 shipped
+- **The public-API baselines are roughly doubled for this surface.** 326 shipped
   `.extension` lines sit alongside their `static ...(this ...)` counterparts, so a single new
   registration method costs two or three baseline lines instead of one, and a reviewer reading a
   baseline diff sees the same member twice.
@@ -393,6 +392,26 @@ public-API baselines now hold unshipped extension lines, and several anchors mov
    ending at `VerifyDecoratorPipeline`); `Domain/PublicAPI.Shipped.txt:115` and `:298`; the 10.0.104
    citation in Trade-offs at `Infrastructure/DependencyInjection.Messaging.cs:187`; and
    `dotnet-version: '10.0.x'` at `MMCA.Common/.github/workflows/ci.yml:101` plus twelve more.
+
+## Revision (2026-10-28)
+Re-verified against current source. No decision, rationale or trade-off changed: the DI surface is
+still written as `extension(T)` blocks under `LangVersion preview` and both emitted shapes are still
+baselined. The 46 `extension(IServiceCollection services)` blocks, the consumer total of 41 (ADC 20,
+Store 18, Helpdesk 3) and the CA1708 and IDE0051 counts are unchanged; the v1.264.0 release moved the
+baselines and added one framework block.
+1. The framework declares 128 `extension` blocks in 107 files under `MMCA.Common/Source` (anchored
+   search, generic receivers included). The new one is
+   `UI.Web/Pwa/ServiceWorkerEndpointExtensions.cs:32`, on `IEndpointRouteBuilder`, so the DI count
+   does not move; the Rationale reads 128 plus 41.
+2. The release promoted every unshipped baseline line: the baselines hold 326 `.extension` lines in 20
+   `PublicAPI.Shipped.txt` files (`API` 70 the largest; `Gcp` 10, `Aws` 9, `Azure` 10,
+   `Infrastructure` 30), and every `PublicAPI.Unshipped.txt` holds only `#nullable enable`
+   (`Gcp/PublicAPI.Unshipped.txt:1`). The 2026-10-26 entry's "17 unshipped" and "Gcp's is unshipped
+   only" no longer hold; the 20 packages with a baselined extension surface are now all shipped.
+   Gateway's shapes stay at `Gateway/PublicAPI.Shipped.txt:12` and `:98`.
+3. Anchors re-verified against current source: `Application/PublicAPI.Shipped.txt:260` (container at
+   `:259`) and the classic static `AddApplication` at `:1246`, so the classic block runs `:1246-1258`
+   ending at `VerifyDecoratorPipeline` (the 2026-10-26 entry's `:1240-1252` is superseded).
 
 ## Related
 [ADR-015](015-architecture-fitness-functions.md) (the RS0016/RS0017 baseline that freezes both

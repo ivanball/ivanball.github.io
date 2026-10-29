@@ -46,6 +46,7 @@ atomic or uses Redis `INCR`, so the interface caveat is retired; all seven servi
 output-cache base, the two adopters included; the role-claim types are matched case-sensitively and
 only role values case-insensitively; anchors refreshed.
 Revised 2026-10-26: anchors refreshed after the v1.261.0 release and consumer sweep.
+Revised 2026-10-28: anchors refreshed after the v1.265.1 release and consumer sweep.
 
 ## Context
 The framework needs caching in two distinct places. Inside the application pipeline, query results
@@ -73,7 +74,7 @@ Cache in two tiers, each with its own substrate.
   Caching decorators, `LoginProtectionService`) depends only on this interface, never on a concrete
   cache or on Redis.
 - **The backing store is chosen at startup, not in code (amended by ADR-077).** `AddCaching(configuration)`
-  (`MMCA.Common.Infrastructure/DependencyInjection.Caching.cs:26`, where the configuration parameter is
+  (`MMCA.Common.Infrastructure/DependencyInjection.Caching.cs:27`, where the configuration parameter is
   optional, called from `AddInfrastructure` at
   `MMCA.Common.Infrastructure/DependencyInjection.cs:140`)
   registers `DistributedCacheService` when a real `IDistributedCache` is present (one that is not the
@@ -84,17 +85,17 @@ Cache in two tiers, each with its own substrate.
   later" extension point as `InProcessMessageBus` vs `BrokerMessageBus` (ADR-003/006/008). Since
   ADR-077 a third implementation exists, `HybridCacheService` (L1 in-process plus L2 distributed), and
   it is the one substrate that is **not** auto-selected: a host opts into it explicitly with
-  `AddCommonHybridCache(...)` (`MMCA.Common.Infrastructure/DependencyInjection.Caching.cs:141`), which
+  `AddCommonHybridCache(...)` (`MMCA.Common.Infrastructure/DependencyInjection.Caching.cs:157`), which
   replaces the registration this call made. That call, unlike the Redis wrappers in Trade-offs below,
   has no guard of its own, so the framework pairs it with a guarded helper,
   `AddCommonHybridCacheWhenRedisConfigured(configuration, connectionName = "redis")`
-  (`MMCA.Common.Infrastructure/DependencyInjection.Caching.cs:202`), which calls it only when the named
-  connection string is non-empty (`:208-211`) and otherwise leaves the registration untouched. Every
+  (`MMCA.Common.Infrastructure/DependencyInjection.Caching.cs:218`), which calls it only when the named
+  connection string is non-empty (`:224-227`) and otherwise leaves the registration untouched. Every
   one of the seven ADC and Store services opts in through that helper: ADC Conference
   (`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:210`), Notification
   (`.../MMCA.ADC.Notification.Service/Program.cs:125`), Engagement
   (`.../MMCA.ADC.Engagement.Service/Program.cs:122`), Identity
-  (`.../MMCA.ADC.Identity.Service/Program.cs:145`), Store Catalog
+  (`.../MMCA.ADC.Identity.Service/Program.cs:146`), Store Catalog
   (`MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:114`), Sales
   (`.../MMCA.Store.Sales.Service/Program.cs:120`) and Identity
   (`.../MMCA.Store.Identity.Service/Program.cs:109`). So `HybridCacheService` is the live
@@ -117,7 +118,7 @@ Cache in two tiers, each with its own substrate.
   may also move the default without code: `CacheSettings.DefaultDuration`
   (`MMCA.Common.Infrastructure/Caching/CacheSettings.cs:32`, the `Cache:DefaultDuration` key) defaults
   to `CacheOptions.DefaultDuration`, is bound by `AddCaching` when it receives configuration
-  (`MMCA.Common.Infrastructure/DependencyInjection.Caching.cs:43-46`), and is what the cache services
+  (`MMCA.Common.Infrastructure/DependencyInjection.Caching.cs:44-47`), and is what the cache services
   apply to an entry whose caller supplies no expiration (for example
   `MMCA.Common.Infrastructure/Caching/DistributedCacheService.cs:72`). The same section carries an
   optional L1 ceiling for `HybridCacheService` (`CacheSettings.cs:42`) and the populate-lock timeout
@@ -279,7 +280,7 @@ switch on, and it is recorded here so a reader is not surprised by it in the UI 
   `MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:191`, Notification
   `MMCA.ADC/Source/Services/MMCA.ADC.Notification.Service/Program.cs:117`, Engagement
   `MMCA.ADC/Source/Services/MMCA.ADC.Engagement.Service/Program.cs:114`, Identity
-  `MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:137`; Store Catalog
+  `MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:138`; Store Catalog
   `MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:95`, Sales
   `MMCA.Store/Source/Services/MMCA.Store.Sales.Service/Program.cs:111`, Identity
   `MMCA.Store/Source/Services/MMCA.Store.Identity.Service/Program.cs:100`. Only
@@ -1069,3 +1070,31 @@ client tier are unchanged. Only anchors moved, in the seven service `Program.cs`
    subscription (2026-08-18, 2026-10-01, 2026-10-06), the eviction-consumer anchors (2026-08-18,
    2026-08-23, 2026-08-31) and the tenant vary-by stamp (2026-09-07) sit in historical revisions and
    are left as written there.
+
+## Revision (2026-10-28)
+Re-verified against current source. The two tiers, the substrate selection, the seven-service Redis
+and hybrid wiring (seven `AddRedisCaching` calls, seven `AddCommonHybridCacheWhenRedisConfigured`
+calls, two `AddRedisOutputCaching` calls), the guarded helper's behavior (it registers the hybrid
+substrate only when the named connection string is non-empty) and the client tier are unchanged.
+Only anchors moved, in `DependencyInjection.Caching.cs` and the ADC Identity `Program.cs`.
+
+1. **Anchors re-verified against current source:** `AddCaching` at
+   `MMCA.Common.Infrastructure/DependencyInjection.Caching.cs:27` (still called from `AddInfrastructure`
+   at `DependencyInjection.cs:140`), its `CacheSettings` options chain at `:44-47`,
+   `AddCommonHybridCache` at `:157` (the `RemoveAll<ICacheService>` replacement from `:183`), and
+   `AddCommonHybridCacheWhenRedisConfigured` at `:218` with its guard block at `:224-227`; ADC Identity's
+   hybrid opt-in at `MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:146` and its
+   `AddRedisCaching` call at `:138`. Re-checked and unchanged: the other six hybrid opt-ins (ADC
+   Conference `Program.cs:210`, Notification `:125`, Engagement `:122`, Store Catalog `:114`, Sales
+   `:120`, Store Identity `:109`), the other six `AddRedisCaching` calls (ADC Conference `:191`,
+   Notification `:117`, Engagement `:114`, Store Catalog `:95`, Sales `:111`, Store Identity `:100`)
+   and `AddRedisOutputCaching` at ADC Conference `:202` and Store Catalog `:105`. In historical
+   revisions, left as written there: the `MMCA.Common.OutputCache` meter subscription is now at
+   `MMCA.Common.Aspire/Extensions.Telemetry.cs:310`, still the sixth of what are now ten chained
+   `AddMeter` calls (`:305-314`); `RegisterOutputCacheEvictionConsumer` is at
+   `MMCA.Common.Infrastructure/Messaging/Consumers/IntegrationEventConsumerExtensions.cs:158` and
+   `RegisterUpcastedIntegrationEventConsumer<TEvent>` at `:123`; the tenant vary-by stamp reads
+   `ITenantContext.TenantId` at `MMCA.Common.API/Caching/PublicEndpointOutputCachePolicy.cs:107` and
+   writes the `t` key at `:110`; and `GetRoleValues` is at
+   `MMCA.Common.Shared/Auth/ClaimsPrincipalExtensions.cs:60` (Ordinal claim-type matches at `:65-67`),
+   `HasRole` at `:76` (`OrdinalIgnoreCase` at `:78`).

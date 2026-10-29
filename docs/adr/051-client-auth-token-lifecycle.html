@@ -265,7 +265,8 @@
           anchors refreshed. Revised 2026-10-26: both browser storage services raise <code>SessionEnded</code>
           (<code>ISessionAwareTokenStorage</code>) when a held session ends on the server and the auth-state provider
           signs the shell out on it (no MAUI equivalent), the WASM clients pre-hydrate the token through
-          <code>TokenHydrationWarmup</code>, and Decision anchors are refreshed.</p>
+          <code>TokenHydrationWarmup</code>, and Decision anchors are refreshed. Revised 2026-10-28: anchors refreshed
+          after the 2026-10-27 ADC and Store Server host <code>Program.cs</code> changes.</p>
           <h2 id="context">Context</h2>
           <p>ADR-022 and ADR-050 describe the two server halves of authentication: the Blazor host&#39;s
           HttpOnly session cookie that survives SSR prerender (ADR-022), and the Identity service&#39;s single
@@ -320,8 +321,8 @@
           (<code>SameOriginProxyTokenRefresher.cs:19-20</code>).</li>
           <li><strong>On a same-origin API proxy host the browser never holds a credential.</strong> Both consumer Server
           hosts call <code>AddCommonSameOriginApiProxy</code> and <code>MapCommonSameOriginApiProxy</code>
-          (<code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs:167</code>, <code>Program.cs:290</code>;
-          <code>MMCA.Store/Source/Hosts/UI/MMCA.Store.UI.Web/Program.cs:159</code>, <code>Program.cs:268</code>; ADR-131). That
+          (<code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs:168</code>, <code>Program.cs:291</code>;
+          <code>MMCA.Store/Source/Hosts/UI/MMCA.Store.UI.Web/Program.cs:160</code>, <code>Program.cs:269</code>; ADR-131). That
           call replaces the Server circuit&#39;s <code>ITokenRefresher</code> with <code>HandoffTokenRefresher</code> and its
           <code>ISessionCookieSync</code> with <code>HandoffSessionCookieSync</code>
           (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI.Web/SameOriginProxy/SameOriginApiProxyServiceExtensions.cs:83-84</code>).
@@ -506,11 +507,11 @@
           registers <code>ServerTokenStorageService</code> via <code>AddCommonServerTokenStorage</code>
           (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI.Web/DependencyInjection.cs:41</code>,
           <code>DependencyInjection.cs:50</code>) plus the same proxy refresher and auth-state provider
-          (<code>MMCA.Store/Source/Hosts/UI/MMCA.Store.UI.Web/Program.cs:148-149</code>, <code>Program.cs:161</code>;
-          <code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs:156-157</code>, <code>Program.cs:169</code>), and in both hosts
+          (<code>MMCA.Store/Source/Hosts/UI/MMCA.Store.UI.Web/Program.cs:149-150</code>, <code>Program.cs:162</code>;
+          <code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs:157-158</code>, <code>Program.cs:170</code>), and in both hosts
           the later <code>AddCommonSameOriginApiProxy</code> call overrides that refresher with <code>HandoffTokenRefresher</code>
-          (<code>MMCA.Store/Source/Hosts/UI/MMCA.Store.UI.Web/Program.cs:159</code>,
-          <code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs:167</code>; the auth-state provider registration
+          (<code>MMCA.Store/Source/Hosts/UI/MMCA.Store.UI.Web/Program.cs:160</code>,
+          <code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs:168</code>; the auth-state provider registration
           follows that call); the MAUI host
           registers the shared SecureStorage-backed pair via <code>AddCommonMauiTokenStorage</code> plus
           <code>DirectApiTokenRefresher</code> + <code>JwtAuthenticationStateProvider</code>
@@ -847,6 +848,22 @@
           <code>:268</code>. <code>SessionClaimsToken.cs:10</code> and <code>:17</code> and <code>SameOriginProxyTransformer.cs:60</code> stand as
           written.</li>
           </ol>
+          <h2 id="revision-2026-10-28">Revision (2026-10-28)</h2>
+          <p>Re-verified against current source. The head-specific trios, the same-origin proxy handoff and the
+          override order are unchanged: in both Server hosts <code>AddCommonSameOriginApiProxy</code> still follows the
+          <code>SameOriginProxyTokenRefresher</code> registration and precedes the auth-state provider, and the call still
+          replaces <code>ITokenRefresher</code> with <code>HandoffTokenRefresher</code> and <code>ISessionCookieSync</code> with
+          <code>HandoffSessionCookieSync</code>
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI.Web/SameOriginProxy/SameOriginApiProxyServiceExtensions.cs:83-84</code>).
+          Only the Server host <code>Program.cs</code> anchors moved, each by one line, and the Decision is re-pointed in
+          place. The dated Revisions above keep their anchors as written.</p>
+          <ol>
+          <li>Anchors re-verified against current source: <code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs:157</code>
+          (<code>AddCommonServerTokenStorage</code>), <code>:158</code> (<code>SameOriginProxyTokenRefresher</code>), <code>:168</code>
+          (<code>AddCommonSameOriginApiProxy</code>), <code>:170</code> (<code>JwtAuthenticationStateProvider</code>), <code>:291</code>
+          (<code>MapCommonSameOriginApiProxy</code>); <code>MMCA.Store/Source/Hosts/UI/MMCA.Store.UI.Web/Program.cs:149</code>,
+          <code>:150</code>, <code>:160</code>, <code>:162</code>, <code>:269</code> (same order).</li>
+          </ol>
           
         <div class="doc-foot btn-row">
           <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
@@ -871,6 +888,7 @@
             <li><a href="#revision-2026-10-07">Revision (2026-10-07)</a></li>
             <li><a href="#revision-2026-10-21">Revision (2026-10-21)</a></li>
             <li><a href="#revision-2026-10-26">Revision (2026-10-26)</a></li>
+            <li><a href="#revision-2026-10-28">Revision (2026-10-28)</a></li>
             </ul>
           </nav>
         </aside>

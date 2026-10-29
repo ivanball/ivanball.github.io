@@ -37,7 +37,10 @@ Context now records that `AuthDelegatingHandler` also leaves a request that alre
 `Authorization` header untouched (the header `AuthenticatedServiceBase` sets itself), and the
 Bicep scale-rule anchors, which had drifted into other resources, are refreshed with the rest (see
 the Revision (2026-10-21)). Revised 2026-10-26: anchors refreshed after the hosts, the shared UI
-service base and both Bicep templates grew (see the Revision (2026-10-26)).
+service base and both Bicep templates grew (see the Revision (2026-10-26)). Revised 2026-10-28:
+the Trade-offs now record that the framework wrapper's own XML doc also states the `TryAdd`
+store-precedence claim (still unverified by any test), and anchors are refreshed (see the
+Revision (2026-10-28)).
 
 ## Context
 
@@ -116,8 +119,9 @@ Use it when the payload is identical for every caller EXCEPT a privileged read a
 audience is two roles, `Organizer` and `ContentEditor`, who see unpublished rows per BR-108).
 Per-user payloads remain out of scope: bypass roles handle role-shaped variance, not
 identity-shaped variance. Membership is checked with the framework's wide `HasRole` extension
-(`MMCA.Common/Source/Core/MMCA.Common.Shared/Auth/ClaimsPrincipalExtensions.cs:75-77`, which reads
-`ClaimTypes.Role` plus bare `role`/`roles` claims and compares case-insensitively, `:59-67`), not
+(`MMCA.Common/Source/Core/MMCA.Common.Shared/Auth/ClaimsPrincipalExtensions.cs:76-78`, which reads
+`ClaimTypes.Role` plus bare `role`/`roles` claims, `:60-68`, and compares the role value
+case-insensitively, `:78`), not
 the BCL `ClaimsPrincipal.IsInRole`, which matches only the identity's own role claim type: against an identity provider
 that emits bare `role`/`roles` claims, `IsInRole` would miss the bypass while the permission
 handler granted the elevated payload, and that response would be stored under the shared public
@@ -161,8 +165,8 @@ version makes the next save throw `DbUpdateConcurrencyException` (`Program.cs:26
   bounded staleness window.** That acceptance did not survive contact with the deployed topology:
   ADC's Conference service and Store's Catalog service both run `minReplicas: 1` with an HTTP scale
   rule at 50 concurrent requests and a ceiling of at least two replicas (Store `maxReplicas: 2`,
-  `MMCA.Store/infra/main.bicep:1812`; ADC `conferenceScaledMaxReplicas`,
-  `MMCA.ADC/infra/main.bicep:2259`, which is 2 normally and 4 with `conferenceMode` on, `:192`), so
+  `MMCA.Store/infra/main.bicep:1813`; ADC `conferenceScaledMaxReplicas`,
+  `MMCA.ADC/infra/main.bicep:2256`, which is 2 normally and 4 with `conferenceMode` on, `:192`), so
   every `EvictByTagAsync` reached only the replica that handled the mutation and the others kept
   serving the pre-edit payload for the full 5-minute TTL.
 
@@ -189,11 +193,18 @@ version makes the next save throw `DbUpdateConcurrencyException` (`Program.cs:26
   connection string is blank (`:94`), so each host calls it unconditionally, top-level, before
   `AddOutputCache`
   (`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:202`,
-  `MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:105`), leaning on the framework
-  behavior their comments state: `AddOutputCache` registers its store with `TryAdd` (ADC
-  `Program.cs:198-199`, Store `Program.cs:102-103`), so an explicit Redis registration wins regardless
-  of call order (only the Store comment spells out that consequence). Read that as framework
-  behavior per those host comments; nothing in these repos verifies it.
+  `MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:105`), leaning on framework
+  behavior that the code comments state: `AddOutputCache` registers its store with `TryAdd` (ADC
+  `Program.cs:198-199`, Store `Program.cs:102-103`, and the wrapper's own XML doc,
+  `RedisCachingExtensions.cs:76-78`), so an explicit Redis registration wins regardless of call
+  order (the Store comment and the wrapper doc spell out that consequence; the ADC comment states
+  only the `TryAdd`). Read that as framework behavior per those comments; nothing in these repos
+  verifies it (the only tests that call the wrapper directly,
+  `MMCA.Common/Tests/Hosting/MMCA.Common.Aspire.Tests/Health/RedisReadinessSafetyTests.cs:65` and
+  `:94-100`, cover the health check and the no-op; the `WebApplicationFactory<Program>`
+  integration tests run it only indirectly, through the host's `Program.cs`; and no test asserts
+  which `IOutputCacheStore` wins, the test references to it being Moq mocks, for example
+  `MMCA.Common/Tests/Presentation/MMCA.Common.API.Tests/Caching/OutputCacheEvictionHandlerTests.cs:110`).
 
   A single-replica service may still use the in-memory store: with one replica there is no
   propagation problem to solve. The rule is about replica count, not about environment.
@@ -443,3 +454,33 @@ is still asserted only by the host comments; nothing in these repos verifies it.
    `RegisterOutputCacheEvictionConsumer` at `IntegrationEventConsumerExtensions.cs:158-160`;
    `MMCA.Store/infra/main.bicep` (Catalog scale rule `:1812` inside `catalogApp` `:1696`). The
    earlier Revision sections keep the anchors they were written with.
+
+## Revision (2026-10-28)
+
+Re-verified against current source. The decision, the strict apply-only-to-identity-independent
+contract, the tenant vary rule, the wide `HasRole` bypass check and its claim types, the ADC and
+Store scale-rule values (`minReplicas: 1`, 50 concurrent requests, Store `maxReplicas: 2`, ADC
+`conferenceScaledMaxReplicas` at 2 normally and 4 in conference mode) and the host `TryAdd` comments
+are unchanged. What moved: the Trade-offs attribution of the `TryAdd` store-precedence claim, and
+line anchors in the role helper and both Bicep templates.
+
+1. **The `TryAdd` store-precedence claim is not asserted only by the host comments.** The
+   framework wrapper's XML doc states it too, consequence included: `AddOutputCache` "registers its
+   store with `TryAdd`, so the explicit Redis store registered here wins either way"
+   (`MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Caching/RedisCachingExtensions.cs:76-78`). So the
+   Store host comment (`MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:102-103`)
+   is not the only one that spells out the consequence; the ADC comment
+   (`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:198-199`) still states only the
+   `TryAdd`. Nothing verifies it: the only tests that call `AddRedisOutputCaching()` directly
+   (`MMCA.Common/Tests/Hosting/MMCA.Common.Aspire.Tests/Health/RedisReadinessSafetyTests.cs:65`,
+   `:94-100`) cover the health check and the no-op with the connection string absent (the
+   whitespace-only branch of `RedisCachingExtensions.cs:94` is not exercised); the
+   `WebApplicationFactory<Program>` integration tests reach it only through the host's
+   `Program.cs`; and no test asserts which `IOutputCacheStore` is registered. Trade-offs updated.
+2. Anchors re-verified against current source: `ClaimsPrincipalExtensions.cs` (`HasRole` `:76-78`,
+   `GetRoleValues` `:60-68`, the three claim types `:65-67`); `MMCA.ADC/infra/main.bicep`
+   (`conferenceScaledMaxReplicas` `:192`, the Conference scale rule `:2256` inside `conferenceApp`
+   `:2111`); `MMCA.Store/infra/main.bicep` (Catalog scale rule `:1813` inside `catalogApp` `:1697`);
+   `RedisCachingExtensions.cs` (`AddRedisOutputCaching` `:91`, the blank-string no-op `:94`,
+   `AddStackExchangeRedisOutputCache` `:99`). The earlier Revision sections keep the anchors they
+   were written with.

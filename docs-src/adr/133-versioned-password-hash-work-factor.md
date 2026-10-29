@@ -3,19 +3,22 @@
 ## Status
 Accepted (2026-10-23). Supersedes [ADR-102](102-pbkdf2-only-password-hashing.md).
 The change is the MMCA.Common v1.252.0 entry of the framework changelog
-(`MMCA.Common/CHANGELOG.md:171`, `:181-183`, `:187`). ADR-102's single-path decision (one interface, one
+(`MMCA.Common/CHANGELOG.md:214`, `:224-226`, `:230`). ADR-102's single-path decision (one interface, one
 implementation, PBKDF2 only, constant-time compare, canonical-material guard) carries forward
 unchanged; what this record replaces is its fixed, unstored work factor and its header-less format.
 Revised 2026-10-26: anchors refreshed after the v1.252.0 changelog moved below later releases and
-ADR-102 gained its Superseded banner.
+ADR-102 gained its Superseded banner. Revised 2026-10-28: the shared password strength rule is
+recorded beside the work factor, the Context's reading of ADR-102 is narrowed to raising the
+constant, and anchors refreshed after later releases moved them.
 
 ## Context
 ADR-102 recorded PBKDF2-HMAC-SHA512 with a 32-byte salt, a 64-byte digest and a compile-time
 `Iterations = 600_000`, described as tracking OWASP guidance for that primitive
 (`102-pbkdf2-only-password-hashing.md:56-57`). Its own Trade-offs named the cost of that shape:
 verification recomputed with the same constant the write path used and no per-record count was
-stored, so changing the constant in either direction would stop every stored credential from
-verifying (`102-pbkdf2-only-password-hashing.md:155-163`), and the format carried no version marker
+stored, so raising the constant would stop every stored credential from verifying
+(`102-pbkdf2-only-password-hashing.md:155-163`; any other change to it breaks verification the same
+way), and the format carried no version marker
 (`:164-166`).
 
 Two facts made the constant worth changing. First, the figure was wrong for the primitive: 600,000
@@ -30,8 +33,8 @@ unknown address, or one with no stored credential, still burns one full derivati
 `:648-656`), and a known address with a wrong password runs the real verification (`:178`). Behind
 the venue NAT many attendees share one address, so ADC's per-IP auth limit had to be raised from its
 default of 30 per minute to 300 per minute in conference mode
-(`MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:162-172`,
-`MMCA.ADC/infra/main.bicep:2060`), which raises in step how
+(`MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:163-173`,
+`MMCA.ADC/infra/main.bicep:2049-2051`, `:2057`), which raises in step how
 much hashing one anonymous source can demand.
 
 Under ADR-102's format the constant could not move at all without breaking every stored password,
@@ -86,11 +89,11 @@ sign-in.
 - **The upgrade runs after a successful sign-in, best effort, on its own save.** `LoginAsync` calls
   `RehashPasswordIfNeededAsync` (`AuthenticationServiceBase.cs:237`) after the tokens are issued
   (`:230`); a wrong password returns at `:178-183` and never reaches it. The method returns unless
-  issuance succeeded and the user implements `IPasswordRehashableUser` (`:677-680`), then runs inside
-  `BestEffort.ExecuteAsync` under the operation name `password-rehash` (`:78`, `:682-683`) with
-  `CancellationToken.None` (`:705`). It checks `NeedsRehash` (`:687`), hashes the verified plaintext
-  (`:692`), applies it through `RehashPassword` (`:693`), logs and skips the save when the aggregate
-  refuses it (`:694-700`), and otherwise saves through the unit of work on its own (`:703`). A failure
+  issuance succeeded and the user implements `IPasswordRehashableUser` (`:678-681`), then runs inside
+  `BestEffort.ExecuteAsync` under the operation name `password-rehash` (`:78`, `:683-684`) with
+  `CancellationToken.None` (`:706`). It checks `NeedsRehash` (`:688`), hashes the verified plaintext
+  (`:693`), applies it through `RehashPassword` (`:694`), logs and skips the save when the aggregate
+  refuses it (`:695-702`), and otherwise saves through the unit of work on its own (`:704`). A failure
   there cannot fail a sign-in that already succeeded; it is logged and counted, and the record is
   upgraded on a later sign-in (`:665-670`). The logger is a virtual property defaulting to
   `NullLogger.Instance` (`:137`), and a failed rehash is counted on the `MMCA.Common.BestEffort` meter
@@ -114,6 +117,31 @@ sign-in.
   (`MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Infrastructure/Persistence/EntityConfiguration/UserConfiguration.cs:36-39`,
   `MMCA.Store/Source/Modules/Identity/MMCA.Store.Identity.Infrastructure/Persistence/EntityConfiguration/UserConfiguration.cs:29-32`),
   so a 69-byte value lands in the same column as a 64-byte one.
+- **One shared password strength definition, applied where a consumer opts in.** `PasswordComplexity`
+  (`MMCA.Common/Source/Core/MMCA.Common.Shared/Auth/PasswordComplexity.cs:18`) defines the bounds as 8
+  to 128 UTF-16 code units (`MinimumLength`, `:21`; `MaximumLength`, `:24`) and requires at least one
+  uppercase letter, one lowercase letter, one decimal digit and one character that is neither a
+  letter nor a digit, all Unicode-aware (`:27-43`). Its `Evaluate` checks the minimum length and the
+  four classes only (`:52-57`); the upper bound is a separate rule (`:46-48`). On the server,
+  `StrongPasswordRules`
+  (`MMCA.Common/Source/Core/MMCA.Common.Application/Validation/CommonValidationRules.cs:191`, rules
+  at `:196-201`) applies it, and it runs on Common's reset path
+  (`MMCA.Common/Source/Core/MMCA.Common.Application/Auth/Validation/ResetPasswordRequestValidator.cs:23`)
+  and on ADC's register and change-password requests
+  (`MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Application/Users/Validation/RegisterRequestValidator.cs:17`,
+  `ChangePasswordRequestValidator.cs:18`). On the UI, `PasswordComplexityAttribute`
+  (`MMCA.Common/Source/Presentation/MMCA.Common.UI/Pages/Auth/PasswordComplexityAttribute.cs:15`)
+  calls `Evaluate` (`:24`), and the 128 limit is a separate `[StringLength]`
+  (`MMCA.Common/Source/Presentation/MMCA.Common.UI/Pages/Auth/RegisterModel.cs:29-30`,
+  `ResetPasswordModel.cs:27-28`). The rule is opt-in per consumer, not a gate every hash passes:
+  Store's server validators check only a length of 8 to 128
+  (`MMCA.Store/Source/Modules/Identity/MMCA.Store.Identity.Application/Users/Validation/RegisterRequestValidator.cs:22-25`,
+  `ChangePasswordRequestValidator.cs:17-20`) while its UI serves the Common.UI pages
+  (`MMCA.Store/Source/Hosts/UI/MMCA.Store.UI.Web/Program.cs:289-290`), so a password such as
+  `aaaaaaaa` fails Store's form and passes its API. The sign-in rehash hashes the already-verified
+  plaintext with no strength check (`AuthenticationServiceBase.cs:693`), and the seeder hashes seed
+  passwords unvalidated
+  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/Seeding/IdentityModuleDbSeederBase.cs:136`).
 - **The format, the counts and the upgrade are pinned by tests.**
   `PasswordHasherSecurityTests` pins `210_000`, `600_000`, 32, 64, 69 and `0x01`
   (`MMCA.Common/Tests/Core/MMCA.Common.Infrastructure.Tests/Auth/PasswordHasherSecurityTests.cs:23-28`);
@@ -161,14 +189,14 @@ sign-in.
   timing failed logins can tell a legacy account from a missing one. Accepted because registration
   already reveals whether an address exists: `RegisterAsync` returns
   `AuthErrorCodes.EmailAlreadyExists` for a taken address (`AuthenticationServiceBase.cs:271-274`,
-  `:713-715`). The gap closes per account at its first sign-in; an account that never signs in keeps
+  `:714-716`). The gap closes per account at its first sign-in; an account that never signs in keeps
   the legacy hash, and nothing forces the upgrade.
 - **The upgrade is opt-in.** An app whose `User` does not implement `IPasswordRehashableUser` keeps
   its legacy hashes indefinitely (`IPasswordRehashableUser.cs:8-9`), as does any custom hasher that
   does not override `NeedsRehash` (`IPasswordHasher.cs:28`).
 - **The first sign-in after the change costs two derivations.** A legacy account verifies at 600,000
-  (`AuthenticationServiceBase.cs:178`) and is then hashed at 210,000 (`:692`), plus one extra save
-  (`:703`). Every later sign-in costs one derivation at 210,000.
+  (`AuthenticationServiceBase.cs:178`) and is then hashed at 210,000 (`:693`), plus one extra save
+  (`:704`). Every later sign-in costs one derivation at 210,000.
 - **New hashes resist offline guessing less than the old ones did.** A leaked table of current-format
   hashes costs an attacker 210,000 iterations per guess instead of 600,000. Accepted because that is
   the published figure for this primitive.
@@ -216,6 +244,35 @@ gained its Superseded banner.
    OWASP note are at `102-pbkdf2-only-password-hashing.md:56-57`, its explicit-version-marker advice
    at `:138-141`, the fixed-constant and invalidation Trade-offs at `:155-163` (invalidation alone at
    `:159-163`), and the no-version-marker Trade-off at `:164-166`.
+
+## Revision (2026-10-28)
+Re-verified against current source. The format, the counts, the bounds and the upgrade path are
+unchanged; the record now names the shared password strength definition and where it is applied,
+the Context's reading of ADR-102 is narrowed, and anchors moved.
+
+1. Decision gains a bullet for the shared strength definition: `PasswordComplexity`
+   (`MMCA.Common/Source/Core/MMCA.Common.Shared/Auth/PasswordComplexity.cs:18`) sets 8 to 128 code
+   units (`:21`, `:24`) and the four Unicode-aware character classes (`:27-43`, `:52-57`), and both
+   `StrongPasswordRules` (`MMCA.Common/Source/Core/MMCA.Common.Application/Validation/CommonValidationRules.cs:191`,
+   `:196-201`) and `PasswordComplexityAttribute`
+   (`MMCA.Common/Source/Presentation/MMCA.Common.UI/Pages/Auth/PasswordComplexityAttribute.cs:15`,
+   `:24`) use it. The server rule is opt-in: it runs on Common's reset path and on ADC's register
+   and change-password requests, not on Store's server validators, the sign-in rehash or the
+   seeder, so Store's form and API can disagree on the same input.
+2. Context no longer says ADR-102's Trade-offs covered a change "in either direction": ADR-102 names
+   only raising the constant (`102-pbkdf2-only-password-hashing.md:159-163`), so the record now says
+   that and adds, as its own observation, that any other change breaks verification the same way.
+3. Anchors re-verified against current source: the v1.252.0 entry is now
+   `MMCA.Common/CHANGELOG.md:214` (heading), `:224-226` (`NeedsRehash`, `IPasswordRehashableUser`, the
+   sign-in rehash) and `:230` (the versioned 69-byte format, 210,000 iterations, "Supersedes
+   ADR-102"); the ADC per-IP auth limit explanation is
+   `MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:163-172` with the
+   `AddCommonRateLimiting` call at `:173`; the conference-day reason for 30 -> 300/min is
+   `MMCA.ADC/infra/main.bicep:2049-2051` and `RateLimiting__AuthIpPermitLimit = 300` is set at
+   `:2057`; in `AuthenticationServiceBase.cs` the rehash guard is `:678-681`, `BestEffort.ExecuteAsync`
+   `:683-684`, `NeedsRehash` `:688`, `HashPassword` `:693`, `RehashPassword` `:694`, the refusal path
+   `:695-702`, the save `:704` and `CancellationToken.None` `:706`, and `EmailAlreadyExistsFailure` is
+   `:714-716`.
 
 ## Related
 [ADR-102](102-pbkdf2-only-password-hashing.md) (the superseded record: the single PBKDF2 path, the

@@ -19,6 +19,7 @@ Revised 2026-10-24: the Azure Blob implementation moved to MMCA.Common.Azure and
 Revised 2026-10-25: a Google Cloud Storage implementation ships in MMCA.Common.Gcp, so three adapters read the shared `FileStorage` section, each keyed on its own field; see Revision (2026-10-25).
 Revised 2026-10-25 (image processing): `IImageProcessor` and its SkiaSharp implementation are ADC's Identity module's, not framework types; MMCA.Common keeps `IFileStorageService` and the dependency-free upload guards, `ImageContentSniffer` among them; see Revision (2026-10-25, image processing moves to ADC).
 Revised 2026-10-26: anchors refreshed after MMCA.Common v1.261.0 (the GCS delete posture, the Consequences CHANGELOG cite and the revision-section anchors moved; no behavior changed); see Revision (2026-10-26).
+Revised 2026-10-28: the three adapters answer a transport failure with no service response as a `FileStorage.UploadFailed` / `FileStorage.DeleteFailed` Result rather than an exception (MMCA.Common v1.261.0), and the anchors are refreshed after v1.265.1; see Revision (2026-10-28).
 ## Context
 The MAUI capability program (ADR-042) brought MediaPicker/camera within reach, and ADC amended
 BR-116 to include user avatar photos. That needs binary blob storage (the databases store
@@ -51,6 +52,14 @@ directly against the Azure SDK inside a module, unusable by the next consumer an
     `Bucket` or the Azure `ContainerName` leaves it a no-op (`:38-40`). Its delete answers success
     for any HTTP 404 (`.../Storage/GcsFileStorageService.cs:94-99`); the filter does not tell a
     missing object from a missing bucket, so a delete against a missing bucket also reads as success.
+
+  All three adapters answer a service failure, and a transport failure that never produced a service
+  response (`HttpRequestException`, `IOException`, or a timeout the caller did not request), with a
+  `FileStorage.UploadFailed` / `FileStorage.DeleteFailed` Result rather than an exception; the
+  caller's own cancellation still propagates (`IsTransportFailure` at
+  `.../MMCA.Common.Gcp/Storage/GcsFileStorageService.cs:124-126`,
+  `.../MMCA.Common.Azure/Storage/AzureBlobFileStorageService.cs:107-109` and
+  `.../MMCA.Common.Aws/Storage/S3FileStorageService.cs:147-149`).
 
   The container or bucket is provisioned by infrastructure, never created by the app (the GCS
   identity needs only object create and delete, `GcpServiceCollectionExtensions.cs:42-44`).
@@ -106,7 +115,7 @@ directly against the Azure SDK inside a module, unusable by the next consumer an
   (Storage Blob Data Contributor) for the app identity - a bicep-level grant, not a secret.
 - Image decoding is an application dependency, not a framework one: `AddInfrastructure` registers
   no image processor and MMCA.Common.Infrastructure takes no image library
-  (`MMCA.Common/CHANGELOG.md:49`), and the framework's accepted-advisory list is empty
+  (`MMCA.Common/CHANGELOG.md:92`), and the framework's accepted-advisory list is empty
   (`MMCA.Common/Directory.Build.props:33`). ADC confines SkiaSharp's native libraries to the
   projects that run it: `MMCA.ADC.Identity.Infrastructure` takes the managed assembly only
   (`MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Infrastructure/MMCA.ADC.Identity.Infrastructure.csproj:10`),
@@ -400,3 +409,38 @@ Consequences CHANGELOG cite are re-pointed in place; the dated sections above ke
      check at `:101`. In `MMCA.Common/UPGRADING.md`: the v1.259.0 section at `:46`,
      `ImageContentSniffer` unchanged at `:67`, and the `ImageSharpPackageIds` removal at `:78` and
      `:85`.
+
+## Revision (2026-10-28)
+Re-verified against current source. The storage abstraction, the three adapters and the keys they
+read, the avatar contract, the GCS delete posture and the durable blob deletion are unchanged; one
+adapter behavior the 2026-10-26 revision missed is added to the Decision, and the 1.262.0 to
+1.265.1 sections at the top of CHANGELOG shifted every release cite below them.
+
+1. **Transport failures are Results.** MMCA.Common v1.261.0 (M261, `MMCA.Common/CHANGELOG.md:68`)
+   made the S3, Cloud Storage and Blob file stores answer a transport failure that never produced a
+   service response (`HttpRequestException`, `IOException`, or a timeout the caller did not request)
+   with the `FileStorage.UploadFailed` / `FileStorage.DeleteFailed` Result instead of letting the
+   exception escape as a 500, while the caller's own cancellation still propagates. Each service
+   carries the same `IsTransportFailure` predicate
+   (`MMCA.Common/Source/Hosting/MMCA.Common.Gcp/Storage/GcsFileStorageService.cs:124-126`, upload
+   and delete filters at `:76` and `:108`, codes at `:72`, `:80`, `:104`, `:112`;
+   `MMCA.Common/Source/Hosting/MMCA.Common.Azure/Storage/AzureBlobFileStorageService.cs:107-109`;
+   `MMCA.Common/Source/Hosting/MMCA.Common.Aws/Storage/S3FileStorageService.cs:147-149`). The
+   2026-10-26 Status sentence and revision lead, which say no behavior changed after v1.261.0, are
+   left as recorded and are corrected by this item.
+2. Anchors re-verified against current source:
+   - The GCS delete still answers success for a 404 in the `GoogleApiException` filter at
+     `GcsFileStorageService.cs:94-99` (`DeleteAsync` at `:87`, class at `:25`), where the Decision
+     cites it.
+   - The erasure path schedules the blob delete inside the transaction at
+     `MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Application/Users/UseCases/DeleteUser/DeleteUserHandler.cs:66-76`
+     (call at `:75`), through `ScheduleAvatarBlobDeletionAsync` (`:81-91`, `ScheduleAsync` at
+     `:83-85`), and a failed schedule fails the erasure (`:90`).
+   - The `aws-integration` job is at `MMCA.Common/.github/workflows/ci.yml:934` and the
+     `gcp-integration` job at `:974`; each says it is not a required check (`:945-946`, `:993`).
+   - Release cites in `MMCA.Common/CHANGELOG.md`: the v1.259.0 removal at `:92` (heading `:88`;
+     the Consequences cite is re-pointed in place), the v1.258.0 SkiaSharp swap at `:98` (heading
+     `:94`), the Gcp adapter and its `GcsBucket` gate at `:121-122`, `gcp-integration` not required
+     at `:128`, the v1.256.0 removal of the `FileStorage` startup check at `:144-150`, the S3
+     adapter entry at `:159` and `aws-integration` at `:164`. The `MMCA.Common/UPGRADING.md` cites of
+     2026-10-26 (`:46`, `:67`, `:78`, `:85`) still hold.

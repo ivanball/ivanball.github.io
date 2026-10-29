@@ -267,7 +267,8 @@
           source. Revised 2026-10-26: recorded the third anti-double-fetch mechanism (ADC&#39;s public event,
           session and speaker detail pages persist their prerendered DTO through <code>[PersistentState]</code>, so the
           session and speaker pages no longer skip the prerender fetch), noted that those prerender fetches carry
-          no prerender timeout, and re-anchored the citations to current source.</p>
+          no prerender timeout, and re-anchored the citations to current source. Revised 2026-10-28: anchors
+          refreshed against current source; no decision, count or adoption changed.</p>
           <h2 id="context">Context</h2>
           <p>Both web applications are Blazor Web Apps: a static server-rendered (SSR) prerender pass produces the
           first HTML, then an interactive runtime takes over, either a Blazor Server SignalR circuit or a
@@ -276,14 +277,14 @@
           authentication, localization, theming, data fetching, and the test suite.</p>
           <p>Four accepted ADRs already reason about that transition and each treats it as <strong>given context</strong> rather
           than deciding it: ADR-022 solves <code>[Authorize]</code> on fresh GETs by reading an HttpOnly cookie &quot;during SSR
-          prerender&quot; (<code>022-browser-session-cookie-auth.md:28-29</code>); ADR-027 states that its hard part is flowing one
+          prerender&quot; (<code>022-browser-session-cookie-auth.md:29-30</code>); ADR-027 states that its hard part is flowing one
           culture decision through &quot;a Blazor <code>InteractiveAuto</code> app (SSR prerender -&gt; InteractiveServer circuit -&gt;
           InteractiveWebAssembly client)&quot; (<code>027-multi-locale-i18n.md:13-16</code>); ADR-028 repeats the same three-phase
           premise for the theme and records that &quot;there is no free no-flash for InteractiveAuto&quot;
-          (<code>028-dark-theme-mode.md:14-17</code>, <code>028-dark-theme-mode.md:130</code>); ADR-051 builds the whole client token
+          (<code>028-dark-theme-mode.md:16-18</code>, <code>028-dark-theme-mode.md:143</code>); ADR-051 builds the whole client token
           lifecycle around three heads with three storage stories and ends with &quot;the UI code above them never
-          branches on render mode&quot; (<code>051-client-auth-token-lifecycle.md:34-43</code>,
-          <code>051-client-auth-token-lifecycle.md:56</code>). ADR-042 covers the MAUI head and never mentions render modes at
+          branches on render mode&quot; (<code>051-client-auth-token-lifecycle.md:35-44</code>,
+          <code>051-client-auth-token-lifecycle.md:57</code>). ADR-042 covers the MAUI head and never mentions render modes at
           all. So four decisions depend on a render-mode policy that no ADR states, and the policy itself is only
           discoverable by reading two <code>App.razor</code> files, two AppHosts, two CI workflows, and one framework base
           class. This ADR states it.</p>
@@ -294,8 +295,8 @@
           <ul>
           <li><strong>The mode is set once, at the root, on the shared router.</strong> Each app&#39;s <code>App.razor</code> applies the same
           mode expression to <code>HeadOutlet</code> and to <code>Routes</code>
-          (<code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Components/App.razor:41</code>, <code>App.razor:45</code>;
-          <code>MMCA.Store/Source/Hosts/UI/MMCA.Store.UI.Web/Components/App.razor:16</code>, <code>App.razor:20</code>), and <code>Routes</code>
+          (<code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Components/App.razor:45</code>, <code>App.razor:49</code>;
+          <code>MMCA.Store/Source/Hosts/UI/MMCA.Store.UI.Web/Components/App.razor:23</code>, <code>App.razor:27</code>), and <code>Routes</code>
           is the single framework-owned router shared by both apps
           (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI/Routes.razor:12-56</code>). <strong>No page or component in either app
           declares its own <code>@rendermode</code></strong>: across the repos this ADR governs (MMCA.ADC, MMCA.Store,
@@ -305,12 +306,12 @@
           shape; they are outside this ADR&#39;s scope and are not counted here.</li>
           <li><strong><code>InteractiveAuto</code> is the default for both web heads.</strong> Each <code>App.razor</code> resolves an <code>AppRenderMode</code>
           property that returns <code>InteractiveAuto</code> unless an E2E flag is set
-          (<code>MMCA.ADC/.../App.razor:66-77</code>, <code>MMCA.Store/.../App.razor:38-41</code>). Both hosts register both runtimes on
+          (<code>MMCA.ADC/.../App.razor:71-82</code>, <code>MMCA.Store/.../App.razor:46-49</code>). Both hosts register both runtimes on
           both sides of the pipeline: <code>AddInteractiveServerComponents()</code> + <code>AddInteractiveWebAssemblyComponents()</code>
           at service registration and <code>AddInteractiveServerRenderMode()</code> + <code>AddInteractiveWebAssemblyRenderMode()</code>
           on <code>MapRazorComponents&lt;App&gt;()</code>
-          (<code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs:77-79</code>, <code>Program.cs:333-335</code>;
-          <code>MMCA.Store/Source/Hosts/UI/MMCA.Store.UI.Web/Program.cs:83-85</code>, <code>Program.cs:282-284</code>).</li>
+          (<code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs:78-80</code>, <code>Program.cs:337-339</code>;
+          <code>MMCA.Store/Source/Hosts/UI/MMCA.Store.UI.Web/Program.cs:84-86</code>, <code>Program.cs:286-288</code>).</li>
           <li><strong>Prerendering stays enabled.</strong> No host anywhere in the workspace passes <code>prerender: false</code> or
           constructs a render mode with prerendering disabled; every render mode in use is the stock static
           instance. Prerender is what ADR-022&#39;s SSR cookie scheme exists to serve, so it is kept and its cost is
@@ -352,10 +353,10 @@
           <code>RendererInfo.IsInteractive</code> check in <code>OnParametersSetAsync</code> / <code>OnInitializedAsync</code> (an early return,
           or in <code>SpeakerDashboard</code> a ternary that returns a completed task) appears across both apps, with four
           different stated reasons. Most of them avoid the doubled reads under <code>InteractiveAuto</code>
-          (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/Pages/Speakers/SpeakerDashboard.razor.cs:90</code>,
+          (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/Pages/Speakers/SpeakerDashboard.razor.cs:95</code>,
           <code>MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.UI/Pages/SessionLive/SessionLive.razor.cs:81</code>,
           <code>.../Pages/SessionLive/PresenterView.razor.cs:67</code>;
-          <code>MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.UI/Pages/Catalog/CatalogProductDetail.razor.cs:57</code>,
+          <code>MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.UI/Pages/Catalog/CatalogProductDetail.razor.cs:75</code>,
           <code>MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.UI/Pages/ShoppingCarts/ShoppingCartDetail.razor.cs:60</code>).
           ADC&#39;s public session and speaker detail pages split the difference: the prerender branch fetches only
           the primary DTO and persists it (see the <code>[PersistentState]</code> bullet below), while the expensive
@@ -363,14 +364,14 @@
           (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/Pages/Public/Sessions/PublicSessionDetail.razor.cs:107-110</code>,
           <code>.../Pages/Public/Speakers/PublicSpeakerDetail.razor.cs:85-88</code>).
           Store&#39;s <code>OrderDetail</code> states the second reason: no auth token can be read at prerender time, so every
-          authenticated call would 401 (<code>.../Pages/Orders/OrderDetail.razor.cs:119-122</code>). The third is that a write or
+          authenticated call would 401 (<code>.../Pages/Orders/OrderDetail.razor.cs:129-132</code>). The third is that a write or
           a hub join must not run on a pass the interactive instance repeats: ADC&#39;s sponsor-visit and room check-in
           pages post from <code>OnParametersSetAsync</code> behind a compound guard that also skips the id it last posted, so
           each new scan of a sponsor or room posts once and a re-render of the same id posts nothing
           (<code>MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.UI/Pages/CheckIns/Sponsors/SponsorVisit.razor.cs:61-68</code>,
           <code>.../Pages/CheckIns/Rooms/RoomCheckIn.razor.cs:58-66</code>), and <code>HappeningNow</code> gates its SignalR join on the same
           flag, in <code>OnAfterRenderAsync</code> rather than an initialization method
-          (<code>.../Pages/HappeningNow/HappeningNow.razor.cs:132</code>). The fourth is that an un-timed call to a cold or
+          (<code>.../Pages/HappeningNow/HappeningNow.razor.cs:139</code>). The fourth is that an un-timed call to a cold or
           unreachable backend would block the prerender, and with it the page load and the post-login navigation:
           ADC&#39;s home page skips its event fetch and countdown timer at prerender for that reason
           (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/Pages/Home/ADCHome.razor.cs:145-150</code>).</li>
@@ -394,17 +395,17 @@
           <li><strong>One further page outside the grid family repeats the list-page pattern by hand.</strong> Store&#39;s <code>CatalogBrowse</code>
           persists its prerendered products, categories and filter tuple and rehydrates them when the interactive
           pass starts on the same filter combination
-          (<code>MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.UI/Pages/Catalog/CatalogBrowse.razor.cs:82-89</code>,
-          <code>CatalogBrowse.razor.cs:99-112</code>, <code>CatalogBrowse.razor.cs:135-150</code>, <code>CatalogBrowse.razor.cs:157-178</code>),
-          using the single-argument <code>RegisterOnPersisting</code> overload (<code>CatalogBrowse.razor.cs:101</code>) rather than the
+          (<code>MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.UI/Pages/Catalog/CatalogBrowse.razor.cs:82-90</code>,
+          <code>CatalogBrowse.razor.cs:99-125</code>, <code>CatalogBrowse.razor.cs:133-167</code>, <code>CatalogBrowse.razor.cs:169-181</code>),
+          using the single-argument <code>RegisterOnPersisting</code> overload (<code>CatalogBrowse.razor.cs:135</code>) rather than the
           explicit-render-mode form the base needs. It is a copy of the policy, not an instance of it.</li>
           <li><strong>Because any page may run in either runtime, both runtimes register the same services.</strong> Each WASM
           client <code>Program.cs</code> mirrors its server host&#39;s registrations (MudBlazor, <code>AddUIShared</code>, browser device
           capabilities, the auth trio, the same conditional per-module UI registrations)
           (<code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web.Client/Program.cs:33-76</code> against
-          <code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs:77-183</code>;
+          <code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs:78-184</code>;
           <code>MMCA.Store/Source/Hosts/UI/MMCA.Store.UI.Web.Client/Program.cs:31-64</code> against
-          <code>MMCA.Store/Source/Hosts/UI/MMCA.Store.UI.Web/Program.cs:83-172</code>), and each client bootstraps its thread
+          <code>MMCA.Store/Source/Hosts/UI/MMCA.Store.UI.Web/Program.cs:84-173</code>), and each client bootstraps its thread
           culture from the same cookie before running so hydration does not disagree with the prerender
           (<code>MMCA.ADC/.../MMCA.ADC.UI.Web.Client/Program.cs:83</code>,
           <code>MMCA.Store/.../MMCA.Store.UI.Web.Client/Program.cs:71</code>, ADR-027).</li>
@@ -417,8 +418,8 @@
           (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI.Web/Components/Pages/Error.razor:12-21</code>, <code>Error.razor:52-53</code>).</li>
           <li><strong><code>InteractiveServer</code> is pinned only under E2E configuration flags, never in production or local dev.</strong>
           <code>E2E:ForceServer</code> returns <code>InteractiveServer</code>; ADC additionally honors <code>E2E:ForceWebAssembly</code>, which
-          returns <code>InteractiveWebAssembly</code> and wins if both are set (<code>MMCA.ADC/.../App.razor:66-77</code>,
-          <code>MMCA.Store/.../App.razor:38-41</code>). Those config keys are injected only through the AppHosts, and only when
+          returns <code>InteractiveWebAssembly</code> and wins if both are set (<code>MMCA.ADC/.../App.razor:71-82</code>,
+          <code>MMCA.Store/.../App.razor:46-49</code>). Those config keys are injected only through the AppHosts, and only when
           the matching environment variable is present. ADC reads <code>E2E_FORCE_WASM</code> and sets
           <code>E2E__ForceWebAssembly</code> itself (<code>MMCA.ADC/Source/Hosting/MMCA.ADC.AppHost/Program.cs:421-425</code>); for
           <code>E2E__ForceServer</code> both AppHosts call the shared <code>WithE2eForceServer</code> extension, ADC passing
@@ -435,17 +436,17 @@
           live circuits.</li>
           <li><strong>Adoption is not uniform: two hosts are <code>InteractiveServer</code>-only and hardcode it.</strong> MMCA.Helpdesk pins
           the literal mode on <code>HeadOutlet</code> and <code>Routes</code>
-          (<code>MMCA.Helpdesk/Source/Hosts/UI/MMCA.Helpdesk.UI.Web/Components/App.razor:17</code>, <code>App.razor:21</code>) and
+          (<code>MMCA.Helpdesk/Source/Hosts/UI/MMCA.Helpdesk.UI.Web/Components/App.razor:23</code>, <code>App.razor:27</code>) and
           registers only the server render mode
-          (<code>MMCA.Helpdesk/Source/Hosts/UI/MMCA.Helpdesk.UI.Web/Program.cs:15-16</code>, <code>Program.cs:80-81</code>). It has <strong>no <code>.Client</code> project at
+          (<code>MMCA.Helpdesk/Source/Hosts/UI/MMCA.Helpdesk.UI.Web/Program.cs:16-17</code>, <code>Program.cs:84-85</code>). It has <strong>no <code>.Client</code> project at
           all</strong>, so <code>InteractiveAuto</code> is not available to it, and neither of its two ticket pages uses the shared
           list-page base: the list page renders a <code>MudTable</code> directly
           (<code>MMCA.Helpdesk/Source/Hosts/UI/MMCA.Helpdesk.UI.Web/Components/Pages/Tickets.razor:50-90</code>) and the
           detail page is a plain MudBlazor form, so none of the persistence machinery above applies there. The framework&#39;s own component gallery is likewise
           <code>InteractiveServer</code>-only (<code>MMCA.Common/Tests/Presentation/MMCA.Common.UI.Gallery/Components/App.razor:21</code>,
-          <code>App.razor:25</code>, <code>MMCA.Common/Tests/Presentation/MMCA.Common.UI.Gallery/GalleryHost.cs:53</code>, <code>GalleryHost.cs:134-135</code>). ADR-028
+          <code>App.razor:25</code>, <code>MMCA.Common/Tests/Presentation/MMCA.Common.UI.Gallery/GalleryHost.cs:53-54</code>, <code>GalleryHost.cs:138-139</code>). ADR-028
           already noted Helpdesk&#39;s status (&quot;As an <code>InteractiveServer</code>-only host it has no WASM boundary&quot;,
-          <code>028-dark-theme-mode.md:104</code>); this ADR makes it part of the record rather than an aside.</li>
+          <code>028-dark-theme-mode.md:117</code>); this ADR makes it part of the record rather than an aside.</li>
           </ul>
           <h2 id="rationale">Rationale</h2>
           <ul>
@@ -453,7 +454,7 @@
           Server circuit&#39;s immediate interactivity while the WASM bundle downloads in the background; return
           visits run client-side and stop consuming a server circuit. Because the mode is applied at the root
           router, no page has to opt in or know which runtime it is in, which is the same posture ADR-051 takes
-          for tokens (<code>051-client-auth-token-lifecycle.md:56</code>).</li>
+          for tokens (<code>051-client-auth-token-lifecycle.md:57</code>).</li>
           <li><strong>Keeping prerender is not negotiable, so the double fetch had to be fixed instead.</strong> Prerender is the
           entire reason ADR-022&#39;s SSR cookie scheme exists, and it is what makes public browse pages render
           without waiting on a runtime boot. Disabling it would have removed the duplicate fetch by removing the
@@ -482,7 +483,7 @@
           (<code>MMCA.Common.LayerEnforcement.targets:157-170</code>) forbids the shared UI package from touching Domain,
           Application, Infrastructure or API, so anything server-only needs a second package
           (<code>MMCA.Common.UI.Web</code>) and an explicit <code>AddAdditionalAssemblies</code> entry in every app host (the
-          component gallery adds only <code>MMCA.Common.UI</code>, <code>MMCA.Common/Tests/Presentation/MMCA.Common.UI.Gallery/GalleryHost.cs:136</code>).</li>
+          component gallery adds only <code>MMCA.Common.UI</code>, <code>MMCA.Common/Tests/Presentation/MMCA.Common.UI.Gallery/GalleryHost.cs:140</code>).</li>
           <li><strong>Service registration is duplicated per head and can drift.</strong> The WASM client and the server host
           register the same MudBlazor, <code>AddUIShared</code>, capability and per-module services in two separate
           <code>Program.cs</code> files; nothing checks that the two lists agree, so a service added to one and not the other
@@ -514,7 +515,7 @@
           (deliberately), and a fourth host could differ by accident.</li>
           <li><strong>A first-paint flash remains for anything restored after hydration.</strong> ADR-028&#39;s theme read runs in
           <code>OnAfterRenderAsync</code> and deliberately not during prerender, so <code>InteractiveAuto</code> still permits a brief
-          wrong-theme paint (<code>028-dark-theme-mode.md:41-47</code>, <code>028-dark-theme-mode.md:130</code>); the render-mode
+          wrong-theme paint (<code>028-dark-theme-mode.md:43-48</code>, <code>028-dark-theme-mode.md:143</code>); the render-mode
           choice does not close that gap, it defines it.</li>
           </ul>
           <h2 id="revision-2026-10-01">Revision (2026-10-01)</h2>
@@ -620,6 +621,24 @@
           (<code>022-browser-session-cookie-auth.md:28-29</code>), ADR-028 (<code>028-dark-theme-mode.md:104</code>, <code>:130</code>) and
           ADR-051 (<code>051-client-auth-token-lifecycle.md:34-43</code>, <code>:56</code>).</li>
           </ol>
+          <h2 id="revision-2026-10-28">Revision (2026-10-28)</h2>
+          <p>Re-verified against current source. The root render mode, the E2E pin (ADC&#39;s <code>E2E:ForceWebAssembly</code>
+          still wins over <code>E2E:ForceServer</code>), the list-page base, the four stated guard reasons, the
+          <code>[PersistentState]</code> pages, <code>CatalogBrowse</code>&#39;s hand-rolled single-argument <code>RegisterOnPersisting</code>, and
+          the Helpdesk and gallery <code>InteractiveServer</code>-only adoption are unchanged; only anchors moved.</p>
+          <ol>
+          <li>Anchors re-verified against current source: both web hosts&#39; <code>App.razor</code> (ADC <code>HeadOutlet</code> <code>:45</code>,
+          <code>Routes</code> <code>:49</code>, <code>AppRenderMode</code> <code>:71-82</code>; Store <code>:23</code>, <code>:27</code>, <code>:46-49</code>), both host <code>Program.cs</code>
+          registration and mapping chains (ADC <code>:78-80</code>, <code>:337-339</code>; Store <code>:84-86</code>, <code>:286-288</code>) and
+          WASM-mirror server ranges (ADC <code>:78-184</code>, ending at <code>AddNotificationUI</code>; Store <code>:84-173</code>, ending at
+          <code>AddIdentityUI</code>), the guards (<code>SpeakerDashboard.razor.cs:95</code>, <code>CatalogProductDetail.razor.cs:75</code>,
+          <code>OrderDetail.razor.cs:129-132</code>, <code>HappeningNow.razor.cs:139</code>), <code>CatalogBrowse.razor.cs</code> (<code>:82-90</code>,
+          <code>:99-125</code>, <code>:133-167</code>, <code>:169-181</code>, <code>RegisterOnPersisting</code> at <code>:135</code>), the Helpdesk host
+          (<code>App.razor:23</code>, <code>:27</code>; <code>Program.cs:16-17</code>, <code>:84-85</code>), the gallery host (<code>GalleryHost.cs:53-54</code>,
+          <code>:138-139</code>, <code>AddAdditionalAssemblies</code> at <code>:140</code>), and the cross-ADR quotes in ADR-022
+          (<code>022-browser-session-cookie-auth.md:29-30</code>), ADR-028 (<code>028-dark-theme-mode.md:16-18</code>, <code>:43-48</code>,
+          <code>:117</code>, <code>:143</code>) and ADR-051 (<code>051-client-auth-token-lifecycle.md:35-44</code>, <code>:57</code>).</li>
+          </ol>
           <h2 id="related">Related</h2>
           <p>ADR-022 (reads the HttpOnly session cookie during the SSR prerender pass this decision keeps enabled),
           ADR-027 (flows one culture through the SSR to Server to WASM sequence this decision establishes, and owns
@@ -648,6 +667,7 @@
             <li><a href="#revision-2026-10-07">Revision (2026-10-07)</a></li>
             <li><a href="#revision-2026-10-21">Revision (2026-10-21)</a></li>
             <li><a href="#revision-2026-10-26">Revision (2026-10-26)</a></li>
+            <li><a href="#revision-2026-10-28">Revision (2026-10-28)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

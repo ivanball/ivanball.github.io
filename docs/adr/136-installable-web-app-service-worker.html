@@ -6,21 +6,21 @@
   <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#0e151f" media="(prefers-color-scheme: dark)">
   <title>ADR-136: Installable Web App Through a Framework Service Worker That Never Caches a Page · MMCA · Ivan Ball-llovera</title>
-  <meta name="description" content="Accepted (2026-10-27).">
+  <meta name="description" content="Accepted (2026-10-27). Revised 2026-10-28: the session-cookie and CSP constraints are scoped to ADC and Store (Helpdesk renders InteractiveServer with…">
   <link rel="canonical" href="https://ivanball.github.io/docs/adr/136-installable-web-app-service-worker.html">
   <link rel="icon" href="../../assets/img/favicon.svg" type="image/svg+xml">
   <link rel="alternate" type="application/rss+xml" title="Ivan Ball-llovera: deep dives on enterprise .NET" href="https://ivanball.github.io/feed.xml">
   <meta property="og:type" content="article">
   <meta property="og:site_name" content="Ivan Ball-llovera">
   <meta property="og:title" content="ADR-136: Installable Web App Through a Framework Service Worker That Never Caches a Page">
-  <meta property="og:description" content="Accepted (2026-10-27).">
+  <meta property="og:description" content="Accepted (2026-10-27). Revised 2026-10-28: the session-cookie and CSP constraints are scoped to ADC and Store (Helpdesk renders InteractiveServer with…">
   <meta property="og:url" content="https://ivanball.github.io/docs/adr/136-installable-web-app-service-worker.html">
   <meta property="og:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <meta property="og:image:alt" content="Ivan Ball-llovera, Principal Software Architect">
   <meta property="og:locale" content="en_US">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="ADR-136: Installable Web App Through a Framework Service Worker That Never Caches a Page">
-  <meta name="twitter:description" content="Accepted (2026-10-27).">
+  <meta name="twitter:description" content="Accepted (2026-10-27). Revised 2026-10-28: the session-cookie and CSP constraints are scoped to ADC and Store (Helpdesk renders InteractiveServer with…">
   <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Platform","item":"https://ivanball.github.io/platform.html"},{"@type":"ListItem","position":2,"name":"Reference","item":"https://ivanball.github.io/docs/index.html"},{"@type":"ListItem","position":3,"name":"Architecture Decision Records","item":"https://ivanball.github.io/docs/adr/index.html"},{"@type":"ListItem","position":4,"name":"136 · Installable Web App Through a Framework Service Worker That Never Caches a Page","item":"https://ivanball.github.io/docs/adr/136-installable-web-app-service-worker.html"}]}</script>
   <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);if(localStorage.getItem('mmca-rail')==='hidden')document.documentElement.setAttribute('data-rail','hidden');if(localStorage.getItem('mmca-cites')==='shown')document.documentElement.setAttribute('data-cites','shown');}catch(e){}})();</script>
@@ -244,7 +244,10 @@
           <p class="eyebrow doc-kicker">Architecture Decision Record</p>
           <h1 id="adr-136-installable-web-app-through-a-framework-service-worker-that-never-caches-a-page">ADR-136: Installable Web App Through a Framework Service Worker That Never Caches a Page</h1>
           <h2 id="status">Status</h2>
-          <p>Accepted (2026-10-27).</p>
+          <p>Accepted (2026-10-27). Revised 2026-10-28: the session-cookie and CSP constraints are scoped to
+          ADC and Store (Helpdesk renders <code>InteractiveServer</code> with no session cookie and no CSP), navigations
+          are stated to pass through the worker with their cookie, the cache gate is described as the text
+          check it is, and the lock-file growth is measured.</p>
           <h2 id="context">Context</h2>
           <p>The Blazor Web hosts (ADC, Store and Helpdesk) can be added to a phone home screen or installed as a
           desktop app only if they ship a web app manifest and, for an offline page, a service worker. A
@@ -252,16 +255,24 @@
           on the desktop&quot; is the web app every consumer already runs.</p>
           <p>Three properties of the hosts constrain how a service worker may behave:</p>
           <ul>
-          <li><strong>Server-rendered pages carry the signed-in user&#39;s data.</strong> The hosts render with
-          <code>InteractiveAuto</code>, so every first page load is prerendered on the server under the HttpOnly session
-          cookie (<a href="022-browser-session-cookie-auth.html">ADR-022</a>;
-          <code>MMCA.Common/Source/Presentation/MMCA.Common.UI.Web/DependencyInjection.cs:26</code>). A worker that
-          cached navigations would hand one user&#39;s prerendered page to whoever opens the app next on that
-          device, and would keep showing a signed-out user their old pages.</li>
-          <li><strong>The CSP forbids inline script in production.</strong> <code>BlazorCspPolicyProvider</code> emits
+          <li><strong>Server-rendered pages carry the signed-in user&#39;s data.</strong> Every host prerenders its first page
+          load on the server. ADC and Store render with <code>InteractiveAuto</code> outside their E2E runs
+          (<code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Components/App.razor:80</code>,
+          <code>MMCA.Store/Source/Hosts/UI/MMCA.Store.UI.Web/Components/App.razor:49</code>) and prerender under the
+          HttpOnly session cookie (<a href="022-browser-session-cookie-auth.html">ADR-022</a>;
+          <code>MMCA.Common/Source/Presentation/MMCA.Common.UI.Web/DependencyInjection.cs:27</code>, registered at
+          <code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs:157</code> and
+          <code>MMCA.Store/Source/Hosts/UI/MMCA.Store.UI.Web/Program.cs:149</code>). Helpdesk renders
+          <code>InteractiveServer</code> (<code>MMCA.Helpdesk/Source/Hosts/UI/MMCA.Helpdesk.UI.Web/Components/App.razor:27</code>)
+          and registers no session cookie, but a generated app that adds sign-in inherits the same risk. A
+          worker that cached navigations would hand one user&#39;s prerendered page to whoever opens the app
+          next on that device, and would keep showing a signed-out user their old pages.</li>
+          <li><strong>The CSP forbids inline script in production on ADC and Store.</strong> <code>BlazorCspPolicyProvider</code> emits
           <code>default-src &#39;self&#39;</code> and <code>script-src &#39;self&#39; &#39;wasm-unsafe-eval&#39;</code>, adding <code>&#39;unsafe-inline&#39;</code> in
-          Development only (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI.Web/Security/BlazorCspPolicyProvider.cs:103</code>).
-          A same-origin manifest and worker fall under <code>default-src &#39;self&#39;</code>, but the registration call
+          Development only (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI.Web/Security/BlazorCspPolicyProvider.cs:103</code>),
+          and both hosts register it (<code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs:201</code>,
+          <code>MMCA.Store/Source/Hosts/UI/MMCA.Store.UI.Web/Program.cs:192</code>). Helpdesk registers no CSP. A
+          same-origin manifest and worker fall under <code>default-src &#39;self&#39;</code>, but the registration call
           cannot be an inline <code>&lt;script&gt;</code>.</li>
           <li><strong>A worker&#39;s scope is capped at its script&#39;s folder.</strong> A script shipped as a Razor class library
           static asset is served from <code>/_content/&lt;package&gt;/</code>, which could control only that folder, not the
@@ -278,14 +289,18 @@
           The script is an embedded resource, and the endpoint writes the package&#39;s informational version
           into it, so every framework release is a byte change the browser installs on its next update
           check.</li>
-          <li><strong>The worker handles GET navigations only</strong> and never caches a page or a response
-          (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI.Web/Pwa/service-worker.js:39</code>). Each navigation
-          goes to the network, with navigation preload enabled so routing it through the worker adds no
-          latency (<code>service-worker.js:30</code>). When the network fails, the worker answers with the offline
-          page it precached at install, <code>/_content/MMCA.Common.UI.Web/offline.html</code> (<code>service-worker.js:11</code>),
-          a self-contained page with no script. API calls, the Blazor circuit, <code>/hubs</code>, <code>_framework</code> files
-          and cookies never pass through it. Activation deletes every earlier version&#39;s offline cache
-          (<code>service-worker.js:24</code>).</li>
+          <li><strong>The worker handles GET navigations only</strong> and never caches a page or response other than the
+          precached offline page (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI.Web/Pwa/service-worker.js:39</code>,
+          <code>service-worker.js:16</code>). Each navigation goes to the network, with navigation preload enabled so
+          routing it through the worker adds no latency (<code>service-worker.js:30</code>). When the network fails,
+          the worker answers with the offline page it precached at install,
+          <code>/_content/MMCA.Common.UI.Web/offline.html</code> (<code>service-worker.js:11</code>), a self-contained page with
+          no script. API calls, Blazor circuit negotiation, <code>/hubs</code> and <code>_framework</code> files reach the
+          worker&#39;s fetch handler but are not handled: it returns without responding, so the browser
+          fetches them as usual (<code>service-worker.js:37-41</code>). A navigation request is handled, cookie
+          included, and is answered from the preload or forwarded by <code>fetch(request)</code>
+          (<code>service-worker.js:46</code>); the worker script cannot read the HttpOnly cookie. Activation deletes
+          every earlier version&#39;s offline cache (<code>service-worker.js:24</code>).</li>
           <li><strong><code>_content/MMCA.Common.UI.Web/pwa-register.js</code></strong> registers the worker with scope <code>/</code> after the
           page <code>load</code> event, in a secure context only
           (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI.Web/wwwroot/pwa-register.js:5</code>). It is a file,
@@ -306,8 +321,12 @@
           (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI.Web/Hardening/UiRateLimitingExtensions.cs:104</code>).</p>
           <p><strong>Gates.</strong> <code>ServiceWorkerEndpointTests</code> (MMCA.Common.UI.Web.Tests) pins the content type, the
           no-cache header, the version stamp, the retired worker and the anonymous endpoint metadata, and pins
-          on the script text that the worker handles GET navigations only and never puts a response in a
-          cache. The Gallery host maps the worker and loads the register script, so the whole UI E2E suite
+          on the script text that the worker handles GET navigations only and contains no <code>cache.put(</code> or
+          <code>cache.addAll(</code> call
+          (<code>MMCA.Common/Tests/Presentation/MMCA.Common.UI.Web.Tests/Pwa/ServiceWorkerEndpointTests.cs:45-47</code>).
+          That text check is narrower than the never-cache rule: a cache write of another shape (for example
+          <code>cache.add(</code> of a navigation) passes it, so review of <code>service-worker.js</code> holds the rest. The
+          Gallery host maps the worker and loads the register script, so the whole UI E2E suite
           (chromium, firefox, webkit) runs with it installed; <code>ServiceWorkerE2ETests</code> asserts registration at
           the site root on every engine and the offline page on Chromium.</p>
           <h2 id="rationale">Rationale</h2>
@@ -331,8 +350,10 @@
           while offline.</li>
           <li><strong>iOS keeps a home-screen web app&#39;s storage separate from Safari</strong>, so a visitor signs in once
           more after adding it to the home screen.</li>
-          <li><strong>The Gallery now references MMCA.Common.UI.Web</strong>, which roughly doubles the Gallery and E2E lock
-          files and adds build time to the <code>ui-e2e</code> jobs.</li>
+          <li><strong>The Gallery references MMCA.Common.UI.Web</strong>
+          (<code>MMCA.Common/Tests/Presentation/MMCA.Common.UI.Gallery/MMCA.Common.UI.Gallery.csproj:16</code>), which
+          grows the Gallery and E2E lock files (in the v1.264.0 release commit, which also carried dependency
+          bumps, from 194 to 1170 and from 882 to 2063 lines) and adds build time to the <code>ui-e2e</code> jobs.</li>
           </ul>
           <h2 id="alternatives-rejected">Alternatives rejected</h2>
           <ul>
@@ -363,6 +384,41 @@
           <li>To retire the worker in an emergency, set <code>Pwa:ServiceWorker:Enabled=false</code> on the UI host and
           restart it; installed clients pick up the retired worker on their next navigation.</li>
           </ul>
+          <h2 id="revision-2026-10-28">Revision (2026-10-28)</h2>
+          <p>Re-verified against current source. The mechanism is unchanged: the endpoint, the worker, the
+          register script, the kill switch and the host-owned identity read as written. What moved is the
+          scope of two Context constraints, two loose statements, and one measured trade-off.</p>
+          <ol>
+          <li><strong>Session cookie and render mode are ADC and Store properties.</strong> ADC and Store render
+          <code>InteractiveAuto</code> outside their E2E runs (<code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Components/App.razor:80</code>,
+          <code>MMCA.Store/Source/Hosts/UI/MMCA.Store.UI.Web/Components/App.razor:49</code>) and register the cookie
+          token storage (<code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs:157</code>,
+          <code>MMCA.Store/Source/Hosts/UI/MMCA.Store.UI.Web/Program.cs:149</code>). Helpdesk renders
+          <code>InteractiveServer</code> (<code>MMCA.Helpdesk/Source/Hosts/UI/MMCA.Helpdesk.UI.Web/Components/App.razor:27</code>,
+          <code>MMCA.Helpdesk/Source/Hosts/UI/MMCA.Helpdesk.UI.Web/Program.cs:85</code>) and registers no session
+          cookie. All three still prerender, so the never-cache rule applies to every host.</li>
+          <li><strong>The CSP constraint is an ADC and Store property.</strong> Both register <code>AddCommonBlazorCsp()</code>
+          (<code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs:201</code>,
+          <code>MMCA.Store/Source/Hosts/UI/MMCA.Store.UI.Web/Program.cs:192</code>); Helpdesk registers no CSP. The
+          policy text itself is unchanged
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI.Web/Security/BlazorCspPolicyProvider.cs:103</code>).</li>
+          <li><strong>Navigations pass through the worker with their cookie.</strong> Only non-navigation requests skip it
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI.Web/Pwa/service-worker.js:39</code>); a GET
+          navigation is answered from the preload or forwarded by <code>fetch(request)</code> (<code>service-worker.js:46</code>).
+          Decision item 2 no longer lists cookies among what never passes through.</li>
+          <li><strong>The cache gate is a text check.</strong> <code>ServiceWorkerEndpointTests</code> asserts the script contains no
+          <code>cache.put(</code> and no <code>cache.addAll(</code>
+          (<code>MMCA.Common/Tests/Presentation/MMCA.Common.UI.Web.Tests/Pwa/ServiceWorkerEndpointTests.cs:46-47</code>),
+          which is narrower than &quot;never puts a response in a cache&quot;; the Gates paragraph now says so.</li>
+          <li><strong>Lock-file growth measured.</strong> Across the v1.264.0 release commit the Gallery lock file went from
+          194 to 1170 lines and the E2E lock file from 882 to 2063 lines; that commit also bundled
+          dependency bumps, so not all of it comes from the
+          <code>MMCA.Common/Tests/Presentation/MMCA.Common.UI.Gallery/MMCA.Common.UI.Gallery.csproj:16</code>
+          reference. The Trade-offs bullet replaces &quot;roughly doubles&quot; with the measured figures.</li>
+          <li>Anchors re-verified against current source: <code>DependencyInjection.cs:26</code> -&gt; <code>:27</code> (the HttpOnly
+          session cookie remark); <code>service-worker.js:39</code>, <code>:30</code>, <code>:11</code>, <code>:24</code> and
+          <code>BlazorCspPolicyProvider.cs:103</code> unchanged.</li>
+          </ol>
           
         <div class="doc-foot btn-row">
           <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
@@ -380,6 +436,7 @@
             <li><a href="#trade-offs">Trade-offs</a></li>
             <li><a href="#alternatives-rejected">Alternatives rejected</a></li>
             <li><a href="#consequences">Consequences</a></li>
+            <li><a href="#revision-2026-10-28">Revision (2026-10-28)</a></li>
             </ul>
           </nav>
         </aside>

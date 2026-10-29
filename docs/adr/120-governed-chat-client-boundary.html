@@ -295,7 +295,8 @@
           (since v1.247.0), and the package pins and anchors are refreshed.</p>
           <p>Revised 2026-10-26: the Anthropic SDK pin is 13.3.0, ADC&#39;s section 16 score reads M4/I9 as the
           scorecard does, <code>ContentPolicyGuardrail</code> keeps item metadata like the PII policy and both guardrails keep
-          <code>CreatedAt</code> (since v1.261.0), the type-level fitness rule&#39;s namespace root is stated, and anchors are refreshed.</p>
+          <code>CreatedAt</code> (since v1.261.0), the type-level fitness rule&#39;s namespace root is stated, and anchors are refreshed.
+          Revised 2026-10-28: anchors refreshed after MMCA.Common v1.265.1.</p>
           <h2 id="context">Context</h2>
           <p>Rubric section 16, AI-Native Application Architecture, asks one question of a product feature that
           calls a language model: is that dependency governed like any other external system, meaning
@@ -488,14 +489,14 @@
           with no marker passes through by reference and a rebuilt text item keeps its
           <code>AdditionalProperties</code> and <code>Annotations</code> (<code>:337-341</code>), and both policies keep
           <code>ChatMessage.CreatedAt</code> on the message they rebuild (<code>:356</code>, <code>PiiRedactionGuardrail.cs:97</code>),
-          since v1.261.0 (<code>MMCA.Common/CHANGELOG.md:22</code>, L244). A configured pattern that does not compile fails the host at
+          since v1.261.0 (<code>MMCA.Common/CHANGELOG.md:65</code>, L244). A configured pattern that does not compile fails the host at
           startup rather than on a user&#39;s request (<code>ContentPolicySettings.cs:83</code>, <code>ValidateOnStart</code> at
           <code>Guardrails/GuardrailServiceCollectionExtensions.cs:67-70</code>), and
           <code>AddContentPolicyGuardrail(IConfiguration)</code> (<code>GuardrailServiceCollectionExtensions.cs:62</code>)
           registers one singleton under both interfaces (<code>:72-76</code>), so registering it satisfies
           <code>Ai:RequireGuardrail</code> exactly as the PII policy does. <code>PiiRedactionGuardrail</code> ships from
-          MMCA.Common v1.207.0 and <code>ContentPolicyGuardrail</code> from v1.208.0 (<code>MMCA.Common/CHANGELOG.md:1332</code>,
-          <code>:1286</code>).</p>
+          MMCA.Common v1.207.0 and <code>ContentPolicyGuardrail</code> from v1.208.0 (<code>MMCA.Common/CHANGELOG.md:1375</code>,
+          <code>:1329</code>).</p>
           </li>
           <li><p><strong>The configuration surface is one section, validated, and the switch is the registration.</strong>
           <code>AiSettings</code> (<code>MMCA.Common/Source/Core/MMCA.Common.AI/AiSettings.cs:22</code>) binds <code>Ai</code> (<code>:25</code>) and
@@ -798,6 +799,17 @@
           <code>MMCA.Common/UPGRADING.md</code> (<code>:1115-1164</code>, casing note at <code>:1145-1147</code>, defaults at
           <code>:1149-1160</code>). The earlier revisions keep their anchors as written.</li>
           </ol>
+          <h2 id="revision-2026-10-28">Revision (2026-10-28)</h2>
+          <p>Re-verified against current source. No decision, rationale or trade-off changed; the release
+          dating of both guardrails and of the v1.261.0 metadata fix is unchanged, and only their CHANGELOG
+          anchors moved as the v1.264.0, v1.265.0 and v1.265.1 blocks landed above them.</p>
+          <ol>
+          <li>Anchors re-verified against current source: in Decision item 7 the v1.261.0 entry that keeps
+          <code>ChatMessage.CreatedAt</code> on a rebuilt message (L244) is at <code>MMCA.Common/CHANGELOG.md:65</code> (the
+          <code>[1.261.0]</code> block starts at <code>:50</code>), the <code>PiiRedactionGuardrail</code> release entry at <code>:1375</code> (the
+          <code>[1.207.0]</code> block starts at <code>:1345</code>) and the <code>ContentPolicyGuardrail</code> release entry at <code>:1329</code>
+          (the <code>[1.208.0]</code> block starts at <code>:1324</code>). The earlier revisions keep their anchors as written.</li>
+          </ol>
           <h2 id="related">Related</h2>
           <p><a href="111-ai-session-scoring-governance.html">ADR-111</a> (the record this one extends: every scoring-specific
           rule, the prompt-change protocol, the golden and live evaluation tiers, the input and output
@@ -835,6 +847,7 @@
             <li><a href="#revision-2026-10-07">Revision (2026-10-07)</a></li>
             <li><a href="#revision-2026-10-21">Revision (2026-10-21)</a></li>
             <li><a href="#revision-2026-10-26">Revision (2026-10-26)</a></li>
+            <li><a href="#revision-2026-10-28">Revision (2026-10-28)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

@@ -18,6 +18,7 @@ read services outside the hierarchy are recorded, and the `IsNotFound` anchor is
 Revised 2026-10-19: Store's two Sales lookup services now run their GETs through `IdempotentReadRetry`, so the helper has eleven call sites across both apps.
 Revised 2026-10-21: the retry policy is recorded with its transport-failure arm (a keyless POST or PATCH is resent only when it failed before it was sent), the `EntityServiceBase` count is twenty with the two `UserListService` types, the list-page base's opt-in virtualized fetch path is recorded, and anchors are refreshed.
 Revised 2026-10-26: the client retry policy and the shared Aspire handler are recorded as refusing a 429 whose `Retry-After` exceeds `MaxRetryAfterWait` (a shorter one is waited out in place of the backoff), the list-page base's superseded-load handling, `EmptyConfirmed` flag and aliased page-filter keys are recorded, and anchors are refreshed.
+Revised 2026-10-28: Store's new `BestSellerService` and `CheckoutApiService` raise the `IdempotentReadRetry` call sites to twelve across nine files and the direct `AuthenticatedServiceBase` count to twenty-three, and Store anchors are refreshed; `CheckoutApiService` mints one key per guest action (three) and `CartStateService` one per add request, merged guest-cart lines included.
 
 ## Context
 ADR-034 decided the **server** half of entity data access: a generic controller base with a dynamic
@@ -192,17 +193,25 @@ Client-side entity data access goes through one hand-written base hierarchy in `
   (`.../MMCA.Common.UI/Services/Auth/AuthDelegatingHandler.cs:52-58`), so these calls carry it
   whenever a user is signed in. Without the helper such a GET would get only the shared handler's
   single retry on a host that calls `AddServiceDefaults` (see Trade-offs), and one attempt on a head
-  that does not. Eleven call sites across eight files in the two apps use it. In ADC, seven across six
+  that does not. Twelve call sites across nine files in the two apps use it. In ADC, seven across six
   files: four lookup services
   (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/Services/Speakers/SpeakerLookupService.cs:96`,
   `.../Services/Events/EventLookupService.cs:102`,
   `.../Services/Categories/CategoryItemLookupService.cs:54`, and
   `MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.UI/Services/Lookups/SessionLookupService.cs:30,53`)
   plus `.../Services/SessionLive/LiveEventService.cs:56` and
-  `.../Services/HappeningNow/NowNextService.cs:26`. In Store, four across its two Sales lookup
-  services
+  `.../Services/HappeningNow/NowNextService.cs:26`. In Store, five across three files: four in its
+  two Sales lookup services
   (`MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.UI/Services/Lookups/CustomerLookupService.cs:32,84`
-  and `.../Services/Lookups/ProductVariantLookupService.cs:48,102`), which enrich the admin grids.
+  and `.../Services/Lookups/ProductVariantLookupService.cs:48,102`), which enrich the admin grids
+  (the variant lookup also serves the storefront through `BestSellerService`,
+  `.../Services/Storefront/BestSellerService.cs:25,52`, and the public guest order page,
+  `.../Pages/GuestOrders/GuestOrderDetail.razor.cs:40`), and one in `BestSellerService`
+  (`.../Services/Storefront/BestSellerService.cs:38`), which fills the storefront's Best Sellers
+  rows: the home page's
+  (`MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.UI/Pages/Home/StoreHome.razor.cs:38`) and
+  the catalog browse page's suggestions when a filtered search comes back empty
+  (`.../Pages/Catalog/CatalogBrowse.razor.cs:29,266`, `CatalogBrowse.Filters.razor.cs:124`).
   Helpdesk and the rest of Common do not call it.
   Writes are deliberately not offered: a write that needs retries goes through `EntityServiceBase`,
   whose creates carry an `Idempotency-Key`.
@@ -225,7 +234,7 @@ Client-side entity data access goes through one hand-written base hierarchy in `
   and `MMCA.Store/Tests/Architecture/MMCA.Store.Architecture.Tests/Ui/StateManagementConventionTests.cs:10`.
   MMCA.Helpdesk declares no subclass, so the rule is not enforced there.
 
-Adoption inventory as of 2026-10-21. Most services sit under their aggregate folder; a module with a
+Adoption inventory as of 2026-10-28. Most services sit under their aggregate folder; a module with a
 single aggregate per service keeps them at the `Services/` root (both `UserListService` types and
 Store's `CustomerService`, `ProductService` and `CategoryService`).
 **Twenty production services derive from `EntityServiceBase`**: eleven in ADC, ten of them in
@@ -238,30 +247,35 @@ Conference
 plus Identity's `UserListService`
 (`MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.UI/Services/UserListService.cs:21`), eight in
 Store
-(`Catalog.UI/Services/ProductService.cs:27`, `CategoryService.cs:24` and
+(`Catalog.UI/Services/ProductService.cs:28`, `CategoryService.cs:24` and
 `Reviews/ReviewService.cs:24`; `Sales.UI/Services/Orders/OrderService.cs:19`,
 `ShoppingCarts/ShoppingCartService.cs:18`, `Inventory/InventoryItemService.cs:20`;
 `Identity.UI/Services/CustomerService.cs:25` and `UserListService.cs:22`), and one inside
 the framework itself
 (`MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/Notifications/PushNotificationService.cs:20`).
 **Four derive from `ChildEntityServiceBase`**, all in ADC Conference and all in one file
-(`.../Services/Common/ChildEntityServices.cs:23,36,49,62`). **Twenty-two more take
+(`.../Services/Common/ChildEntityServices.cs:23,36,49,62`). **Twenty-three more take
 `AuthenticatedServiceBase` directly**: ten in ADC Engagement, five in ADC Conference (four files:
 `Services/Feedback/OrganizerFeedbackService.cs` declares two of them, at `:17` and `:72`, next to
 `Services/Speakers/SpeakerDashboardService.cs:16`,
 `Services/Sessions/Selection/SessionSelectionService.cs:16` and
 `Services/SessionAssets/SessionAssetService.cs:27`), ADC Identity's
-`Services/UserService.cs:22`, four in the framework
+`Services/UserService.cs:22` (base at `:23`), four in the framework
 (`Services/Notifications/NotificationInboxService.cs:34`,
 `Services/Legal/LegalAcceptanceUIService.cs:26`,
 `Services/Administration/UserAdminService.cs:30` and
-`Services/Administration/RoleAdminService.cs:28`), and two in Store: `UserDataService`
-(`MMCA.Store/Source/Modules/Identity/MMCA.Store.Identity.UI/Services/UserDataService.cs:20`) and
+`Services/Administration/RoleAdminService.cs:28`), and three in Store: `UserDataService`
+(`MMCA.Store/Source/Modules/Identity/MMCA.Store.Identity.UI/Services/UserDataService.cs:20`),
 `CartStateService`
-(`MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.UI/Services/ShoppingCarts/CartStateService.cs:38`,
-base at `:44`), which uses the inherited `RetryPolicy` (for example `:97`, `:144`, `:263`) and
-`NewIdempotencyKey()` under the same rule: one key per user action, reused by every attempt (`:90`
-per add-to-cart, `:256` per checkout, shared by both checkout steps).
+(`MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.UI/Services/ShoppingCarts/CartStateService.cs:46`,
+base at `:55`), which uses the inherited `RetryPolicy` (for example `:150`, `:303`, `:589`) and
+`NewIdempotencyKey()` under the same rule: one key per add request, reused by every attempt (`:582`
+in `SendAddItemAsync`, `:576`, which runs once per user add at `:107` and once per line when
+`MergeGuestCartAsync`, `:612-627`, merges a guest cart; `:296` per checkout, shared by the checkout
+PUT at `:303` and the payment POST at `:341`), and `CheckoutApiService`
+(`MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.UI/Services/Checkout/CheckoutApiService.cs:23`,
+base at `:26`), which mints one key per guest action: order placement (`:61`), the guest Stripe
+payment session (`:104`) and the guest order-link request (`:161`).
 
 ### The list-page contract: `DataGridListPageBase<TDto>`
 
@@ -590,6 +604,38 @@ gained superseded-load handling, an `EmptyConfirmed` flag and filter aliasing, a
    Store), and the framework's own `UserAdminList<TUser>`
    (`MMCA.Common/Source/Presentation/MMCA.Common.UI/Pages/Administration/UserAdminList.razor:4`) is
    recorded as a further inheritor.
+
+## Revision (2026-10-28)
+Re-verified against current source. The client data-access contract, the retry policy, the
+idempotency-key mint, the `EntityServiceBase` count (twenty) and the `ChildEntityServiceBase` count
+(four) are unchanged; Store added two services that use the shared policy, so two adoption counts
+moved, and Store anchors moved with them.
+1. `IdempotentReadRetry` has twelve call sites across nine files, not eleven across eight: Store's
+   `BestSellerService`
+   (`MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.UI/Services/Storefront/BestSellerService.cs:38`)
+   reads the storefront's Best Sellers rows through it: the home page's
+   (`MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.UI/Pages/Home/StoreHome.razor.cs:38`) and
+   the catalog browse page's suggestions after an empty filtered search
+   (`.../Pages/Catalog/CatalogBrowse.razor.cs:29,266`, `CatalogBrowse.Filters.razor.cs:124`). Store
+   therefore has five in three files. The two lookup services enrich the admin grids, and the
+   variant lookup also serves `BestSellerService` (`BestSellerService.cs:25,52`) and the public
+   guest order page
+   (`MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.UI/Pages/GuestOrders/GuestOrderDetail.razor.cs:40`).
+   ADC is unchanged at seven in six.
+2. Twenty-three services take `AuthenticatedServiceBase` directly, not twenty-two: Store's
+   `CheckoutApiService`
+   (`MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.UI/Services/Checkout/CheckoutApiService.cs:23`,
+   base at `:26`) joins `UserDataService` and `CartStateService`, and mints one idempotency key per
+   guest action: order placement (`:61`), the guest Stripe payment session (`:104`) and the guest
+   order-link request (`:161`).
+3. `CartStateService` mints one key per add request rather than per user action: the mint at `:582`
+   sits in `SendAddItemAsync` (`:576`), called once per user add (`:107`) and once per line when
+   `MergeGuestCartAsync` (`:612-627`) merges a guest cart on sign-in or checkout (`:273`, `:288`).
+4. Anchors re-verified against current source: `CartStateService.cs` class `:46`, base `:55`,
+   `RetryPolicy` uses including `:150`, `:303`, `:341` and `:589`, keys `:296` (checkout) and `:582`
+   (add request); `ProductService.cs:28` (its `EntityServiceBase` base clause, matching the sibling
+   anchors); ADC Identity's `UserService.cs:22` now also names its base clause at `:23`; and the
+   inventory date is 2026-10-28.
 
 ## Related
 [ADR-034](034-generic-entity-query-layer.md) (the server surface this contract calls, and the filter

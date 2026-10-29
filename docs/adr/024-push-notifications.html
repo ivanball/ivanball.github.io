@@ -257,7 +257,8 @@
           Revised 2026-10-06: the dedup race is recorded as propagate-and-roll-back under the <code>ITransactional</code> send, not catch-and-requery.
           Revised 2026-10-07: the hub client connects WebSockets-only with negotiation skipped, in both connection modes, so a multi-replica hub needs no session affinity and there is no SSE or long-polling fallback.
           Revised 2026-10-21: the ADC Notification scale block is read correctly (its two preconditions make more than one replica safe, and <code>maxReplicas: 2</code> is right-sizing for measured load, not a backplane limit); anchors refreshed.
-          Revised 2026-10-26: the per-user hub connection cap is recorded as per replica, <code>AddPushNotifications</code> is recorded as also replacing the SignalR <code>IUserIdProvider</code>, the Store payment-failed saga handler is recorded as also re-arming the payment deadline when unpaid-order expiry is enabled (the default), ADR-135 is linked, and anchors refreshed.</p>
+          Revised 2026-10-26: the per-user hub connection cap is recorded as per replica, <code>AddPushNotifications</code> is recorded as also replacing the SignalR <code>IUserIdProvider</code>, the Store payment-failed saga handler is recorded as also re-arming the payment deadline when unpaid-order expiry is enabled (the default), ADR-135 is linked, and anchors refreshed.
+          Revised 2026-10-28: the Store guest order-received email is recorded as an inline best-effort send outside ADR-114 (so not every order email retries and dead-letters), the three further durable Store order-email call sites are named, and anchors refreshed.</p>
           <h2 id="context">Context</h2>
           <p>The framework needs to deliver user-facing notifications (an organizer broadcasting a schedule change,
           a per-user alert). Two delivery models each fail on their own. A pure real-time push over a WebSocket
@@ -430,7 +431,8 @@
           <code>SendPushNotificationHandler</code> fires after the inbox and SignalR legs, defaulting to <code>NullNativePushSender</code>),
           ADR-069 (the record of the Identity service running with no session affinity; the WebSockets-only,
           negotiate-free hub client gives the hub the same posture), ADR-114 (the durable internal-command
-          processor the Store order emails are scheduled through, which is where their retry and dead-letter posture comes from),
+          processor the Store order emails other than the inline guest order-received mail are scheduled
+          through, which is where their retry and dead-letter posture comes from),
           ADR-135 (One Application Namespace Isolates Shared
           Infrastructure Keyspaces: the record that owns the application-namespace decision behind the
           per-application backplane channel prefix).</p>
@@ -658,6 +660,49 @@
           <code>SendPushNotificationHandler.cs</code> and <code>NotificationHubService.cs</code> anchors were as recorded is
           superseded by this one.</li>
           </ol>
+          <h2 id="revision-2026-10-28">Revision (2026-10-28)</h2>
+          <p>Re-verified against current source. The two-channel model, the dedup and transactional posture, the
+          WebSockets-only hub client, the backplane, the ADC scale block and the email primitive are
+          unchanged; what moved is the set of Store order-email call sites, one of which does not go through
+          ADR-114, and several anchors.</p>
+          <ol>
+          <li><strong>Not every Store order email is an ADR-114 internal command.</strong> The guest order-received email
+          is sent inline by <code>GuestOrderPlacedNotifier</code>
+          (<code>MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Application/Orders/UseCases/GuestCheckout/GuestOrderPlacedNotifier.cs:28</code>,
+          <code>IEmailSender</code> at <code>:29</code>, the send at <code>:55</code>), called by <code>GuestCheckOutHandler</code> after the order
+          commits (<code>GuestCheckOutHandler.cs:73</code>). The remarks state why (<code>:15-27</code>): the mail carries the
+          guest&#39;s plaintext access token, of which only the hash is stored, so a command row would put the
+          token back at rest. Its failure policy is the password-reset one, not the durable one: a send
+          failure is caught, logged and swallowed (<code>:57-61</code>), with no retry, because the order is already
+          committed and the checkout response hands the guest the same token. The 2026-08-07 statement (and
+          the 2026-09-11 Status sentence) that the order emails get durability, retry and dead-lettering
+          from ADR-114 is read as covering every order email except this one, and the password-reset path is
+          not the only swallow-on-failure call site. The Related entry for ADR-114 is narrowed to match.</li>
+          <li><strong>The durable call sites are six, not three.</strong> Besides the three internal-command handlers the
+          2026-08-07 record names, the Sales module sends from
+          <code>MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Application/Orders/InternalCommands/LifecycleEmails/SendOrderCancelledEmailInternalCommandHandler.cs</code>
+          (<code>IEmailSender</code> at <code>:25</code>, send at <code>:58</code>, scheduled from <code>OrderCancelledHandler.cs:38</code>),
+          <code>LifecycleEmails/SendOrderDeliveredEmailInternalCommandHandler.cs</code> (<code>:23</code>, <code>:58</code>, scheduled from
+          <code>OrderDeliveredHandler.cs:33</code>) and <code>InternalCommands/SendGuestOrderLinkInternalCommandHandler.cs</code>
+          (<code>:36</code>, <code>:82</code>, scheduled from <code>RequestGuestOrderLinkHandler.cs:45</code>). All three keep the durable
+          shape: the SMTP call is not wrapped, so a transport fault fails the row and ADR-114 retries it.
+          The guest-link handler mints a fresh token per attempt and saves its hash only after a successful
+          send (<code>SendGuestOrderLinkInternalCommandHandler.cs:18-33</code>). With item 1 that is seven
+          <code>IEmailSender</code> call sites in Sales.</li>
+          <li>Anchors re-verified against current source. Current locations for facts in earlier Revisions
+          (those sections are left as recorded): <code>SendOrderPaidEmailInternalCommandHandler.cs</code> takes
+          <code>IEmailSender</code> at <code>:34</code>, sends at <code>:82</code> and builds the body at <code>:89</code>;
+          <code>SendOrderShippedEmailInternalCommandHandler.cs</code> takes it at <code>:28</code>, sends at <code>:66</code> and builds the
+          body at <code>:73</code>; <code>SendOrderPaymentFailedEmailInternalCommandHandler.cs</code> takes it at <code>:30</code> and sends
+          at <code>:72</code>; <code>SendEmailConfirmationHandlerBase.cs</code> takes it at <code>:44</code>; the scheduling sites
+          <code>OrderPaidHandler.cs:38</code>, <code>OrderShippedHandler.cs:34</code> and <code>OrderPaymentFailedSagaHandler.cs:35</code>
+          and <code>SmtpEmailSender.cs</code> (<code>:15</code>, client <code>:67</code>, send <code>:74</code>, factory <code>:97</code>) are as recorded. The ADC
+          Notification scale comment is at <code>MMCA.ADC/infra/main.bicep:2558-2576</code> (&quot;more than one replica
+          safe&quot; <code>:2561</code>, preconditions <code>:2562-2569</code>, cap back to 1 <code>:2570-2571</code>, the backplane-errors alert
+          <code>:2572-2573</code>, &quot;not a backplane limit&quot; <code>:2574</code>), with the scale rule (<code>maxReplicas: 2</code>) at <code>:2577</code>,
+          which is also the anchor for the 2026-10-26 item 1 replica count. The 2026-10-26 statement that
+          its list gave current locations is superseded by this one for the anchors above.</li>
+          </ol>
           
         <div class="doc-foot btn-row">
           <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
@@ -681,6 +726,7 @@
             <li><a href="#revision-2026-10-07">Revision (2026-10-07)</a></li>
             <li><a href="#revision-2026-10-21">Revision (2026-10-21)</a></li>
             <li><a href="#revision-2026-10-26">Revision (2026-10-26)</a></li>
+            <li><a href="#revision-2026-10-28">Revision (2026-10-28)</a></li>
             </ul>
           </nav>
         </aside>

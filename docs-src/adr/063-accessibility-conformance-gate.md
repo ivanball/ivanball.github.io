@@ -28,6 +28,8 @@ count is re-measured (nineteen assertions across twelve classes, adding the role
 the gallery no longer uses the pager exception, and the CI, deploy, theme and Helpdesk anchors are
 refreshed; no decision changed. Revised 2026-10-26: anchors refreshed after the CI and deploy workflow
 edits that moved the Common `ui-e2e` and ADC/Store `deploy.yml` gate lines; no decision changed.
+Revised 2026-10-28: anchors refreshed for the profile-page base scan and the Common `ui-e2e`
+`E2E_BROWSER` assignment, which the body still cited at stale lines; no decision changed.
 
 ## Context
 Accessibility was documented before it was enforced. The narrative guide
@@ -71,7 +73,7 @@ the package's own workflow bases, and wire it as a required merge check and a de
   the assertion, so a subclass gets a login-page, register-page, profile-page, forgot-password-page, and
   reset-password-page a11y test with no test code of its own:
   `.../Testing.E2E/Workflows/Identity/UserLoginTestsBase.cs:82`,
-  `UserRegistrationTestsBase.cs:99`, `ProfileManagementTestsBase.cs:191`, and
+  `UserRegistrationTestsBase.cs:99`, `ProfileManagementTestsBase.cs:204`, and
   `PasswordResetTestsBase.cs` (class at `:17`, the two scans asserting at `:88` and `:99`, added with the
   password-recovery flow of [ADR-091](091-cache-backed-password-reset.md)) each call the assert with
   `AxeOptions.Wcag21Aa`.
@@ -90,7 +92,7 @@ the package's own workflow bases, and wire it as a required merge check and a de
 - **Common gates it cross-browser as a required merge check.** The `ui-e2e` job
   (`MMCA.Common/.github/workflows/ci.yml:223`) builds the out-of-slnx gallery plus E2E project and runs
   the axe scans across a `chromium, firefox, webkit` matrix (`:232`), one engine per leg via
-  `E2E_BROWSER` (`:344`), with `fail-fast: false` so each engine reports independently (`:230`). All
+  `E2E_BROWSER` (`:376`), with `fail-fast: false` so each engine reports independently (`:230`). All
   three contexts block merges (`MMCA.Common/CONTRIBUTING.md:63-64`, enumerated in the branch-protection
   payload at `:202-204`).
 - **Both deployed apps gate the deploy on it.** The `e2e-gate` jobs
@@ -287,6 +289,18 @@ of the `freshness` job still gates it by recency. Only line anchors moved.
    `e2e-gate` (ADC `:1161`, Store `:1099`) and their `success`-or-`skipped` acceptance (ADC `:1198`,
    Store `:1132`); the `cross-browser-freshness` step (ADC `:925`, Store `:859`) with its rationale
    comment (ADC `:909-924`, Store `:851-858`).
+
+## Revision (2026-10-28)
+Re-verified against current source. No decision or rationale changed: the four Identity bases still
+assert `AxeOptions.Wcag21Aa`, and Common still runs the gallery scans across a `chromium, firefox,
+webkit` matrix with `fail-fast: false`. Two body anchors that earlier revisions never corrected are
+re-pointed.
+1. Anchors re-verified against current source: the profile-page scan in
+   `MMCA.Common/Source/Hosting/MMCA.Common.Testing.E2E/Workflows/Identity/ProfileManagementTestsBase.cs:204`
+   (inside `ProfilePage_ShouldHaveNoAccessibilityViolations`, method at `:193`; the body cited `:191`),
+   and the Common `E2E_BROWSER` assignment (`MMCA.Common/.github/workflows/ci.yml:376`, inside the
+   `ui-e2e` job at `:223`, whose `fail-fast` `:230` and matrix `:232` are unchanged; the body cited
+   `:344`).
 
 ## Related
 ADR-015 (architecture fitness functions: the structural tier this parallels at the browser tier, and the

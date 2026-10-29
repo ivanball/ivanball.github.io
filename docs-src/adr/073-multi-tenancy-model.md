@@ -42,6 +42,7 @@ base), Helpdesk opts in, and the unresolved-tenant 400 still names the header; a
 Revised 2026-10-26: the Decision now names all three facts of the optional `TenantResolutionTestsBase`
 (header opt-in through `AllowsHeaderResolution`, claim before header, health endpoints excluded), not
 only the claim-before-header one; anchors refreshed.
+Revised 2026-10-28: anchors refreshed after the releases since v1.243.0 moved its `CHANGELOG.md` entry.
 
 ## Context
 MMCA.Common already partitions data along two axes and neither of them is a tenant. ADR-006 partitions by
@@ -505,3 +506,18 @@ incomplete, and line numbers moved.
    `ConsumerOriginRestore.cs:55`, applied before the inbox at `IntegrationEventConsumer.cs:64-66`;
    `BrokerMessageBus` stamps `MessageHeaders.TenantId` at `BrokerMessageBus.cs:92` (the constant still at
    `MessageHeaders.cs:25`).
+
+## Revision (2026-10-28)
+Re-verified against current source. The isolation model and the resolution defaults are unchanged:
+claim-only by default, header by explicit opt-in, and the optional `TenantResolutionTestsBase` holding
+its three facts. Only the `CHANGELOG.md` anchors the two previous revisions cite have moved, as later
+releases were prepended above the v1.243.0 entry.
+
+1. Anchors re-verified against current source. For the dated revisions, which keep their anchors as
+   written: the v1.243.0 release heading is at `MMCA.Common/CHANGELOG.md:423` (the Revision
+   (2026-10-26) cites `:380`); the `TenantResolutionTestsBase` three-facts entry is at `:428` (cited
+   there as `:385`); the change both revisions call the Breaking bullet is a `**Breaking:**` bullet
+   under `### Changed` (`:444`) at `:446`, its sub-bullet "Tenant resolution reads only the claim
+   unless configured otherwise." at `:447` (cited as `:189` by the Revision (2026-10-21) and as `:404`
+   by the Revision (2026-10-26)). It is a labeled bullet under Changed, not a separate Breaking
+   section.

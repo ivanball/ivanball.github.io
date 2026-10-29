@@ -13,6 +13,7 @@ Revised 2026-10-06: the export is fail-closed since v1.218.0 (an unscoped deriva
 Revised 2026-10-07: anchors refreshed after the v1.233.0 release.
 Revised 2026-10-21: anchors refreshed after the v1.250.0 release.
 Revised 2026-10-26: the "CSV flattens" trade-off now says collection-valued fields are dropped (only nested values get a convention rendering), Related cites ADR-073 for the no-interface-member reasoning, and anchors are refreshed.
+Revised 2026-10-28: anchors refreshed after the v1.265.1 release.
 
 ## Context
 The request is "export what you filtered". The generic entity surface of
@@ -251,12 +252,12 @@ Helpdesk subclasses no `OpenApiContractTestsBase` and has no snapshots to move.
   null, which leaves the JSON reads unscoped and, since v1.218.0, makes the export refuse unless
   `AllowUnscopedExport` opts in; the specification is resolved once per
   request so one instance filters every page of the loop (`:269-270`). Store scopes through both shapes:
-  `OrdersController` overrides the synchronous hook (`Source/Modules/Sales/MMCA.Store.Sales.API/Controllers/OrdersController.cs:241-242`,
+  `OrdersController` overrides the synchronous hook (`Source/Modules/Sales/MMCA.Store.Sales.API/Controllers/OrdersController.cs:242-243`,
   its admin gate relaxed back to ownership scoping with only the fail-closed owner check left in its
-  `ExportAsync` override at `:220-232`), `ShoppingCartsController` the async one (`:200`, with its own
-  owner-check `ExportAsync` override at `:173-185`). Both return null for an administrator, so both also
-  opt that role in with `AllowUnscopedExport => OwnershipHelper.IsAdmin(...)` (`OrdersController.cs:249`,
-  `ShoppingCartsController.cs:209`); without it an admin export would be refused. ADC's Conference controllers express
+  `ExportAsync` override at `:221-233`), `ShoppingCartsController` the async one (`ShoppingCartsController.cs:202-204`,
+  with its own owner-check `ExportAsync` override at `:174-187`). Both return null for an administrator, so both also
+  opt that role in with `AllowUnscopedExport => OwnershipHelper.IsAdmin(...)` (`OrdersController.cs:250`,
+  `ShoppingCartsController.cs:211`); without it an admin export would be refused. ADC's Conference controllers express
   their read predicates as specifications through the same hooks (`EventsController.GetExportSpecification()`
   at `Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/Events/EventsController.cs:72-73`,
   `Controllers/Sessions/SessionQuestionAnswersController.cs:109`, and async overrides on
@@ -410,6 +411,22 @@ gates all hold as written. One trade-off and the Related list are corrected, and
    `GetReadSpecificationAsync` at `:75`, `AllowUnscopedExport` at `:93` and the `Forbid` gate at
    `:258-261`. The CHANGELOG anchors cited in the earlier revisions have moved again and stay as written
    there: v1.218.0 is now at `MMCA.Common/CHANGELOG.md:838` and v1.219.0 at `:808`.
+
+## Revision (2026-10-28)
+Re-verified against current source. No decision, default or rationale changed: Store's ownership
+scoping through both read hooks, the fail-closed owner checks on the two `ExportAsync` overrides and the
+administrator opt-in through `AllowUnscopedExport` hold as written. Only line anchors moved.
+
+1. Anchors re-verified against current source: in
+   `MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.API/Controllers/OrdersController.cs`,
+   `GetExportSpecification` at `:242-243`, the `ExportAsync` override at `:221-233` (its
+   `RequireResolvableOwner` gate at `:230`) and `AllowUnscopedExport` at `:250`; in
+   `ShoppingCartsController.cs` (same folder), `GetReadSpecificationAsync` at `:202-204`, the
+   `ExportAsync` override at `:174-187` and `AllowUnscopedExport` at `:211`. The Trade-offs text now
+   names `ShoppingCartsController.cs` on its async-hook anchor, which previously read as an
+   `OrdersController` line. The CHANGELOG anchors cited in the earlier revisions have moved again and
+   stay as written there: v1.218.0 is now at `MMCA.Common/CHANGELOG.md:881`, v1.219.0 at `:851`, and
+   the `Money`/`Currency`/compact-JSON cell-rendering entry at `:746`.
 
 ## Related
 [ADR-034](034-generic-entity-query-layer.md) (the generic entity surface and query contract this extends,

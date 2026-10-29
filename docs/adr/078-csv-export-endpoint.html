@@ -255,7 +255,8 @@
           Revised 2026-10-06: the export is fail-closed since v1.218.0 (an unscoped derivative must opt in through <code>AllowUnscopedExport</code> or get 403), and since v1.219.0 each page is rendered into memory and written to the response with awaited writes only.
           Revised 2026-10-07: anchors refreshed after the v1.233.0 release.
           Revised 2026-10-21: anchors refreshed after the v1.250.0 release.
-          Revised 2026-10-26: the &quot;CSV flattens&quot; trade-off now says collection-valued fields are dropped (only nested values get a convention rendering), Related cites ADR-073 for the no-interface-member reasoning, and anchors are refreshed.</p>
+          Revised 2026-10-26: the &quot;CSV flattens&quot; trade-off now says collection-valued fields are dropped (only nested values get a convention rendering), Related cites ADR-073 for the no-interface-member reasoning, and anchors are refreshed.
+          Revised 2026-10-28: anchors refreshed after the v1.265.1 release.</p>
           <h2 id="context">Context</h2>
           <p>The request is &quot;export what you filtered&quot;. The generic entity surface of
           <a href="034-generic-entity-query-layer.html">ADR-034</a> already accepts a full query vocabulary on the paged route
@@ -478,12 +479,12 @@
           null, which leaves the JSON reads unscoped and, since v1.218.0, makes the export refuse unless
           <code>AllowUnscopedExport</code> opts in; the specification is resolved once per
           request so one instance filters every page of the loop (<code>:269-270</code>). Store scopes through both shapes:
-          <code>OrdersController</code> overrides the synchronous hook (<code>Source/Modules/Sales/MMCA.Store.Sales.API/Controllers/OrdersController.cs:241-242</code>,
+          <code>OrdersController</code> overrides the synchronous hook (<code>Source/Modules/Sales/MMCA.Store.Sales.API/Controllers/OrdersController.cs:242-243</code>,
           its admin gate relaxed back to ownership scoping with only the fail-closed owner check left in its
-          <code>ExportAsync</code> override at <code>:220-232</code>), <code>ShoppingCartsController</code> the async one (<code>:200</code>, with its own
-          owner-check <code>ExportAsync</code> override at <code>:173-185</code>). Both return null for an administrator, so both also
-          opt that role in with <code>AllowUnscopedExport =&gt; OwnershipHelper.IsAdmin(...)</code> (<code>OrdersController.cs:249</code>,
-          <code>ShoppingCartsController.cs:209</code>); without it an admin export would be refused. ADC&#39;s Conference controllers express
+          <code>ExportAsync</code> override at <code>:221-233</code>), <code>ShoppingCartsController</code> the async one (<code>ShoppingCartsController.cs:202-204</code>,
+          with its own owner-check <code>ExportAsync</code> override at <code>:174-187</code>). Both return null for an administrator, so both also
+          opt that role in with <code>AllowUnscopedExport =&gt; OwnershipHelper.IsAdmin(...)</code> (<code>OrdersController.cs:250</code>,
+          <code>ShoppingCartsController.cs:211</code>); without it an admin export would be refused. ADC&#39;s Conference controllers express
           their read predicates as specifications through the same hooks (<code>EventsController.GetExportSpecification()</code>
           at <code>Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/Events/EventsController.cs:72-73</code>,
           <code>Controllers/Sessions/SessionQuestionAnswersController.cs:109</code>, and async overrides on
@@ -638,6 +639,22 @@
           <code>:258-261</code>. The CHANGELOG anchors cited in the earlier revisions have moved again and stay as written
           there: v1.218.0 is now at <code>MMCA.Common/CHANGELOG.md:838</code> and v1.219.0 at <code>:808</code>.</li>
           </ol>
+          <h2 id="revision-2026-10-28">Revision (2026-10-28)</h2>
+          <p>Re-verified against current source. No decision, default or rationale changed: Store&#39;s ownership
+          scoping through both read hooks, the fail-closed owner checks on the two <code>ExportAsync</code> overrides and the
+          administrator opt-in through <code>AllowUnscopedExport</code> hold as written. Only line anchors moved.</p>
+          <ol>
+          <li>Anchors re-verified against current source: in
+          <code>MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.API/Controllers/OrdersController.cs</code>,
+          <code>GetExportSpecification</code> at <code>:242-243</code>, the <code>ExportAsync</code> override at <code>:221-233</code> (its
+          <code>RequireResolvableOwner</code> gate at <code>:230</code>) and <code>AllowUnscopedExport</code> at <code>:250</code>; in
+          <code>ShoppingCartsController.cs</code> (same folder), <code>GetReadSpecificationAsync</code> at <code>:202-204</code>, the
+          <code>ExportAsync</code> override at <code>:174-187</code> and <code>AllowUnscopedExport</code> at <code>:211</code>. The Trade-offs text now
+          names <code>ShoppingCartsController.cs</code> on its async-hook anchor, which previously read as an
+          <code>OrdersController</code> line. The CHANGELOG anchors cited in the earlier revisions have moved again and
+          stay as written there: v1.218.0 is now at <code>MMCA.Common/CHANGELOG.md:881</code>, v1.219.0 at <code>:851</code>, and
+          the <code>Money</code>/<code>Currency</code>/compact-JSON cell-rendering entry at <code>:746</code>.</li>
+          </ol>
           <h2 id="related">Related</h2>
           <p><a href="034-generic-entity-query-layer.html">ADR-034</a> (the generic entity surface and query contract this extends,
           and the <code>MaxUnboundedResultLimit</code> ceiling that forced the page loop),
@@ -674,6 +691,7 @@
             <li><a href="#revision-2026-10-07">Revision (2026-10-07)</a></li>
             <li><a href="#revision-2026-10-21">Revision (2026-10-21)</a></li>
             <li><a href="#revision-2026-10-26">Revision (2026-10-26)</a></li>
+            <li><a href="#revision-2026-10-28">Revision (2026-10-28)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

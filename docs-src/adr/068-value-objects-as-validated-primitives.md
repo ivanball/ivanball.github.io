@@ -15,6 +15,7 @@ Revised 2026-10-06: a serialized `Money.Zero()` now JSON round-trips, because bo
 Revised 2026-10-19: the primitive Start/End exception names Store's discount window beside ADC's pairs, and the order rule is named per entity (Session uses its own strict-after rule).
 Revised 2026-10-21: `OwnsAddress` keeps the provider's Unicode default on its six columns (v1.247.0) and Store's `Customer.Address` maps through it alone, with no second `OwnsOne` override block; anchors refreshed.
 Revised 2026-10-26: anchors refreshed after the v1.248.0 through v1.261.0 releases.
+Revised 2026-10-28: Store's adoption now names `Order`'s four mapped `Money` values, the `Order` shipping and billing `Address` mappings and the primitive guest `Order.ContactEmail`, and the `Money` JSON constructor's missing-currency refusal (v1.261.0) is recorded; anchors refreshed.
 
 ## Context
 A domain model has two kinds of small type: the **identity** of a thing, and a **value** the thing
@@ -62,7 +63,7 @@ Model a domain value that carries an invariant as an **immutable record value ob
   `internal` (`Currency.cs:25`), but that does not make `Currency` sealed against unchecked values:
   `Currency.Code` (`Currency.cs:36`) and `Money.Amount`/`Money.Currency` (`Money.cs:32,36`) are public
   `init` accessors, shipped in the public API with the record clone method
-  (`Source/Core/MMCA.Common.Shared/PublicAPI.Shipped.txt:576,582,584,772,778`), so an external
+  (`Source/Core/MMCA.Common.Shared/PublicAPI.Shipped.txt:586,592,594,785,791`), so an external
   `with` expression (`Currency.Usd with { Code = "XYZ" }`, `Money.Zero() with { Amount = 5m }`)
   produces a currency `FromCode` never checked or a non-zero `None`-currency `Money` without going
   through `Create`. The JSON guard described under serialization below does not close this path,
@@ -89,11 +90,11 @@ Model a domain value that carries an invariant as an **immutable record value ob
   flattens `Money` into a `decimal(18,2)` amount column (precision pinned at `:78`) plus a
   three-character non-unicode ISO 4217 code column (`:76-88`) and sets the navigation's requiredness
   from one parameter (`:91`). Its sibling
-  `OwnsAddress` (`:133`, shipped in v1.192.0, `MMCA.Common/CHANGELOG.md:1998`) flattens `Address` into
+  `OwnsAddress` (`:133`, shipped in v1.192.0, `MMCA.Common/CHANGELOG.md:2041`) flattens `Address` into
   six columns whose lengths come from `AddressInvariants` and of which only `AddressLine1` is required
   (`:142-168`); they keep the provider's Unicode default (`nvarchar` on SQL Server), because `Address`
   accepts free text in any script (contract at `:114-118`; the forced non-unicode facet was removed
-  as a breaking change in v1.247.0, `MMCA.Common/CHANGELOG.md:285`). It names the columns from an
+  as a breaking change in v1.247.0, `MMCA.Common/CHANGELOG.md:328`). It names the columns from an
   optional prefix (`AddressLine1`, `AddressCity`, and so on by default, `:135`, joined at `:187-190`)
   and defaults the navigation to optional (`:136`, applied at `:170`). A single-string value
   maps through `HasConversion` instead, so the backing column stays a plain string column and adopting
@@ -124,7 +125,9 @@ Model a domain value that carries an invariant as an **immutable record value ob
   `CurrencyJsonConverter.cs:26-27`), so a serialized `Money.Zero()` round-trips. Because the
   `[JsonConstructor]` bypasses `Create`, `Money` implements `IJsonOnDeserialized` (`Money.cs:22,76-82`)
   and throws `JsonException` when a non-zero amount arrives with the sentinel (shipped in v1.232.0,
-  `MMCA.Common/CHANGELOG.md:589`). `DateRange` and `DateTimeRange` carry no serialization annotations.
+  `MMCA.Common/CHANGELOG.md:632`), and the `[JsonConstructor]` itself throws `JsonException` when the
+  currency is missing or `null` (`Money.cs:55-61`, shipped in v1.261.0, `MMCA.Common/CHANGELOG.md:60`),
+  so a malformed payload is a 400 rather than a 500 from an `ArgumentNullException`. `DateRange` and `DateTimeRange` carry no serialization annotations.
 - **gRPC is mapped by hand, not inferred.** `Money` crosses a service boundary as a purpose-built
   `MoneyV1` message with a **string** amount (proto has no decimal) and a currency code
   (`MMCA.Store/Source/Services/MMCA.Store.Catalog.Contracts/Protos/product_variants.proto:115,117,120`),
@@ -137,18 +140,33 @@ Model a domain value that carries an invariant as an **immutable record value ob
 - **Adoption is real but partial.** Store maps `ProductVariant.Price`
   (`MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.Domain/Products/ProductVariant.cs:30`) with
   `OwnsMoney` (`.../Catalog.Infrastructure/Persistence/EntityConfiguration/ProductVariantConfiguration.cs:40`),
-  and `Order.Total` (`MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Domain/Orders/Order.cs:58`) is
-  seeded with `Money.Zero()` in the private constructor (`:171`) and accumulated through `Money.Add`
-  (`:220`, assigned back at `:224`), mapped `required: false` (`OrderConfiguration.cs:39`) alongside
+  and `Order.Total` (`MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Domain/Orders/Order.cs:111`)
+  with its `Subtotal`, `ShippingCost` and `TaxAmount` siblings (`:114,117,120`) are all seeded with
+  `Money.Zero()` in the private constructor (`:236`, seeds at `:239-242`). Once the lines are added,
+  `CreateCore` re-seeds three of them: `Subtotal` becomes a copy of `Total`, and `ShippingCost` and
+  `TaxAmount` become zeros in the order's own currency (`Money.Zero(order.Total.Currency)`, not the
+  `Currency.None` sentinel; `:362-364`). `Total` accumulates through
+  `Money.Add` as lines are added (`:351`, assigned back at `:355`) and is recomposed at checkout as
+  subtotal plus shipping plus tax, again through `Money.Add` (`:505-517`). All four map `required: false`
+  (`OrderConfiguration.cs:103,108-110`) alongside
   `OrderLine.UnitPrice` (`OrderLineConfiguration.cs:28`) and `OrderLine.ListPrice`
   (`MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Domain/Orders/OrderLine.cs:42`, mapped at
-  `OrderLineConfiguration.cs:33`). Store Identity types `Customer.Address` as the
+  `OrderLineConfiguration.cs:33`). Store Sales also types `Order.ShippingAddress` and
+  `Order.BillingAddress` as the framework `Address` (`Order.cs:70,74`) and maps them through
+  `OwnsAddress` with the `Shipping` and `Billing` column prefixes (`OrderConfiguration.cs:38-39`; the
+  `ShippingLine1`, `BillingCity` and sibling columns arrive in migration
+  `Source/Hosting/MMCA.Store.Migrations.SqlServer.Sales/Migrations/20261025021650_AddGuestOrdersAndShippingLabels.cs`).
+  Store Identity types `Customer.Address` as the
   framework `Address`
   (`MMCA.Store/Source/Modules/Identity/MMCA.Store.Identity.Domain/Customers/Customer.cs:40`) and maps
   `Customer.Email` through `EmailValueConverter` (`CustomerConfiguration.cs:34`) with `Customer.Address`
   through the shipped `OwnsAddress` helper under its default prefix (`CustomerConfiguration.cs:42`),
-  as its only `Address` mapping, and
-  `User.Email` the same way as `Customer.Email` (`UserConfiguration.cs:25`).
+  as the customer's only `Address` mapping, and
+  `User.Email` the same way as `Customer.Email` (`UserConfiguration.cs:25`). Store keeps one primitive
+  email: the guest order's `Order.ContactEmail` is a `string?` (`Order.cs:59`) stored as a plain string
+  column (`OrderConfiguration.cs:28-30`) and checked by `OrderInvariants.EnsureContactEmailIsValid`
+  (`.../Sales.Domain/Orders/OrderInvariants.cs:168-179`), which calls `Email.Create` (`:173`) but keeps
+  the string.
   ADC types `User.Email` as `Email`
   (`MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Domain/Users/User.cs:53`, validated through
   `Email.Create` at `:235` and passed to the constructor at `:251`, with the same pair repeated on the
@@ -162,7 +180,8 @@ Model a domain value that carries an invariant as an **immutable record value ob
   through `Email.Create` on both the create and update paths (`:186-194`, `:264-272`) and assigned at
   `:144,292`, mapped at
   `.../Conference.Infrastructure/Persistence/EntityConfiguration/Events/EventConfiguration.cs:64-66`).
-  With that third site ADC's Domain carries no primitive email property left, matching Store. Two
+  With that third site ADC's Domain carries no primitive email property left (Store keeps the one
+  guest-order `ContactEmail` named above). Two
   details are worth recording because they look like leftovers and are not: the column is unchanged
   (`nvarchar(255)`, still nullable) so the conversion needed no migration, and
   `EventOrganizerContactEmailRules`
@@ -173,7 +192,7 @@ Model a domain value that carries an invariant as an **immutable record value ob
   `Email.Create`, and the length invariant still drives the column width. The DTO maps back out
   through `EventDTOMapper.NullableEmailToString`
   (`.../Conference.Application/Events/DTOs/EventDTOMapper.cs:55`), the twin of the speaker mapper's
-  (`.../Speakers/DTOs/SpeakerDTOMapper.cs:62`). `Money`, `Email` and `Address` are the
+  (`.../Speakers/DTOs/SpeakerDTOMapper.cs:65`). `Money`, `Email` and `Address` are the
   three that got adopted, with `Currency` riding along inside `Money`: no code under `MMCA.Store/Source`
   or `MMCA.ADC/Source` uses `PhoneNumber`, `DateRange` or `DateTimeRange`, and MMCA.Helpdesk adopts none
   of them at all.
@@ -240,7 +259,9 @@ Model a domain value that carries an invariant as an **immutable record value ob
   partial".
 - **Nothing gates that a domain value uses a value object.** The `Create`-returns-`Result` rule is
   fitness-enforced, but no rule says a new email field must be `Email` rather than `string`. MMCA.Helpdesk
-  is the visible consequence: the reference app models everything on primitives.
+  is the visible consequence: the reference app models everything on primitives. Store's
+  `Order.ContactEmail` (`Order.cs:59`) is a smaller instance: it is validated through `Email.Create`
+  (`OrderInvariants.cs:173`) yet stored and carried as a `string`.
 - **Read legs trust the column.** The non-nullable converters materialize through `.Value!`
   (`EmailValueConverter.cs:41`), which is sound for anything EF wrote and unsound for a value inserted
   by a manual script or data fix; the contract is documented rather than defended
@@ -338,6 +359,39 @@ through `:139`, `Multiply` at `:148`, `AddUnchecked` at `:155-162`, `Zero()` at 
 (inside `[1.232.0]`); ADC
 `MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Domain/Users/User.cs:53`, `Email.Create` at
 `:235` and `:285`, `new User(...)` at `:251` and `:296`, `CreateExternal` at `:277`.
+
+## Revision (2026-10-28)
+Re-verified against current source. No decision changed; the value-object set, the factory shape,
+the `Money` sugar and `with`-expression paths, the `Currency.None` sentinel handling, the shipped
+mapping helpers and every ADC adoption site hold. Store's adoption grew and one serialization guard
+was missing from the record.
+(1) Store's `Order` now carries four mapped `Money` values, not one: `Total`, `Subtotal`, `ShippingCost` and
+`TaxAmount`
+(`MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Domain/Orders/Order.cs:111,114,117,120`), all
+seeded with `Money.Zero()` in the private constructor (`:239-242`), with `CreateCore` then setting
+`Subtotal` to a copy of `Total` and `ShippingCost` and `TaxAmount` to currency-bearing zeros
+(`:362-364`), and mapped through `OwnsMoney` with `required: false`
+(`.../Sales.Infrastructure/Persistence/EntityConfiguration/OrderConfiguration.cs:103,108-110`);
+`Total` is recomposed at checkout through `Money.Add` (`Order.cs:505-517`). The adoption bullet now
+names all four.
+(2) `Order.ShippingAddress` and `Order.BillingAddress` are a second Store `Address` site
+(`Order.cs:70,74`), mapped through `OwnsAddress` with the `Shipping` and `Billing` prefixes
+(`OrderConfiguration.cs:38-39`, migration `20261025021650_AddGuestOrdersAndShippingLabels`). The
+"only `Address` mapping" wording now applies to `Customer` alone.
+(3) Store no longer matches ADC on primitive emails: the guest order's `Order.ContactEmail` is a
+`string?` (`Order.cs:59`, plain column at `OrderConfiguration.cs:28-30`), validated through
+`Email.Create` inside `OrderInvariants.EnsureContactEmailIsValid`
+(`.../Sales.Domain/Orders/OrderInvariants.cs:168-179`, `:173`). The adoption bullet and the
+"Nothing gates" trade-off now name it.
+(4) Since v1.261.0 the `Money` `[JsonConstructor]` throws `JsonException` for a missing or `null`
+currency (`MMCA.Common/Source/Core/MMCA.Common.Shared/ValueObjects/Financial/Money.cs:55-61`,
+`MMCA.Common/CHANGELOG.md:60`); the serialization bullet now records it beside the
+`IJsonOnDeserialized` guard.
+(5) Anchors re-verified against current source:
+`MMCA.Common/Source/Core/MMCA.Common.Shared/PublicAPI.Shipped.txt:586,592,594,785,791`;
+`MMCA.Common/CHANGELOG.md:2041` (inside `[1.192.0]`), `:328` (inside `[1.247.0]`) and `:632`
+(inside `[1.232.0]`); `Order.cs:236` (private constructor), `:351,355`;
+`.../Conference.Application/Speakers/DTOs/SpeakerDTOMapper.cs:65`.
 
 ## Related
 ADR-048 (the deliberate opposite call for identifiers: primitives behind aliases, wrapper structs

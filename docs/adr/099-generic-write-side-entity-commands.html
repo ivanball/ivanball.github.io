@@ -265,7 +265,9 @@
           override now runs on the shared mutate workflow with its provider call inside <code>MutateAsync</code>, so the
           generic-path boundary is the generic update path, not the presence of a provider call. Revised
           2026-10-21: anchors refreshed after the controller base and the consumer DI registrations shifted.
-          Revised 2026-10-26: anchors refreshed after #590 shifted the controller base delete action.</p>
+          Revised 2026-10-26: anchors refreshed after #590 shifted the controller base delete action.
+          Revised 2026-10-28: re-verified against current source; no decision, behavior, adoption or anchor
+          changed.</p>
           <h2 id="context">Context</h2>
           <p>ADR-034 records the read side of the generic resource layer and stops one verb short. Its
           <code>AggregateRootEntityControllerBase</code> ships <code>[HttpPost]</code> create and <code>[HttpDelete(&quot;{id}&quot;)]</code>
@@ -692,6 +694,26 @@
           (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/AggregateRootEntityControllerBase.cs:75</code>)
           and <code>[HttpDelete(&quot;{id}&quot;)]</code> (<code>:106</code>), re-pointed in Context.</li>
           </ol>
+          <h2 id="revision-2026-10-28">Revision (2026-10-28)</h2>
+          <p>Re-verified against current source. No decision, behavior, adoption or line position changed: the
+          generic create, update and delete commands, the two controller bases, the registration helpers and
+          the consumer registrations are as recorded. Anchors inside the earlier Revisions are left as recorded.</p>
+          <ol>
+          <li>Anchors re-verified against current source, all unchanged: the base controller&#39;s <code>[HttpPost]</code>
+          and <code>[HttpDelete(&quot;{id}&quot;)]</code> (<code>AggregateRootEntityControllerBase.cs:75</code>, <code>:106</code>); the PUT base
+          (<code>CrudEntityControllerBase.cs:54</code>, <code>[HttpPut(&quot;{id}&quot;)]</code> <code>:88</code>, <code>[Idempotent]</code> <code>:89</code>,
+          <code>[SupportsIfMatch]</code> <code>:90</code>, <code>RequiredToken</code> <code>:103</code>, <code>SetConcurrencyETag</code> <code>:112</code>); the mutate
+          workflow (<code>MutateEntityHandlerBase.cs:277</code>, <code>:287</code>, <code>:300</code>, <code>:304</code>, <code>:320</code>, <code>:322</code>, DTO base
+          <code>:362</code>); <code>IEntityUpdateApplier</code> (<code>IEntityDTOMapper.cs:79</code>, <code>ApplyAsync</code> <code>:91</code>); the update command
+          (<code>UpdateEntityCommand.cs:48</code>, <code>:52</code>, <code>:65</code>) and handler (<code>UpdateEntityHandler.cs:48</code>, <code>:65</code>, <code>:68</code>,
+          <code>:76</code>, <code>:84-92</code>); <code>CreateEntityHandler.cs:28</code>; <code>AddEntityCrud</code> (<code>DependencyInjection.Crud.cs:74</code>,
+          <code>:80</code>, <code>:82-92</code>, <code>:94-96</code>); the validator bridge (<code>CommandRequestValidator.cs:30</code>,
+          <code>DependencyInjection.ModuleScanning.cs:119-135</code>); the marker-driven decorators
+          (<code>TransactionalCommandDecorator.cs:29-31</code>, <code>AuthorizationGate.cs:46</code>, <code>TimeoutCommandDecorator.cs:65</code>);
+          and the consumer registrations in ADC Conference (<code>DependencyInjection.cs:155-158</code>), Store Catalog
+          (<code>:101-104</code>, <code>:105</code>, <code>:112</code>, hand-written handlers at <code>:97-100</code>, <code>:107-111</code>) and Store Identity
+          (<code>:84-86</code>).</li>
+          </ol>
           
         <div class="doc-foot btn-row">
           <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
@@ -713,6 +735,7 @@
             <li><a href="#revision-2026-10-06">Revision (2026-10-06)</a></li>
             <li><a href="#revision-2026-10-21">Revision (2026-10-21)</a></li>
             <li><a href="#revision-2026-10-26">Revision (2026-10-26)</a></li>
+            <li><a href="#revision-2026-10-28">Revision (2026-10-28)</a></li>
             </ul>
           </nav>
         </aside>

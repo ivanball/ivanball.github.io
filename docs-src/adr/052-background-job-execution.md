@@ -14,7 +14,12 @@ drain now loops `WaitToReadAsync` plus `TryRead` and, on shutdown, drains what i
 within a 5-second budget, logging what it abandons; the producer API is a void `Enqueue` rather
 than `TryEnqueue`; the session-scoring queue no longer exists in source; and the bookmark
 cache-eviction signal is a second, coalescing (`DropWrite`) instance. Revised 2026-10-26: anchors
-refreshed after the `SubmitQuestionHandler` and `OpenLivePollHandler` bodies shifted.
+refreshed after the `SubmitQuestionHandler` and `OpenLivePollHandler` bodies shifted. Revised
+2026-10-28: the revision at the end of the file records that the in-process-only, per-replica
+dedup, `Wait`-versus-`DropOldest` and scoring-serialization trade-offs describe the pre-supersede
+design (the Trade-offs text itself is left unmarked, as history), with session scoring recorded as
+a durable internal command under a per-event distributed claim and ADR-121 as the home of the live
+ephemeral-queue decision.
 
 ## Context
 Some requests trigger work that cannot run inside the request: an AI scoring pass over an event's
@@ -331,3 +336,44 @@ revisions above keep their anchors as written.
      `MutateEntityHandlerBase` at `:339` (DTO variant at `:362`), unchanged.
    - `SessionQuestionUpvoteChangedHandler.cs`: `IDomainEventHandler` at `:44`, `BestEffort` at
      `:54`, enqueue at `:87`, unchanged.
+
+## Revision (2026-10-28)
+Re-verified against current source. **The Decision, the Rationale and the post-commit rule are
+unchanged**, and so is the ephemeral half, which ADR-121 now owns. What this revision records is
+that four Trade-offs bullets above still read as live policy although they describe the design
+this ADR had before it was superseded; they are left in place, unmarked, as history rather than
+rewritten.
+
+1. **The scoring-related Trade-offs describe the pre-supersede design.** "In-process only" (which
+   names scoring as an in-process job an organizer re-triggers by clicking again, and sends
+   crash-surviving work to the outbox), "Dedup is per replica",
+   the `DropOldest`-on-expensive versus `Wait`-on-ephemeral comparison in "Backpressure is felt
+   differently by the two modes", and "That is wanted for scoring" in "A drain is a serialization
+   point" all assume the session-scoring queue and its `Wait` channel. Neither
+   `SessionScoringQueue`, `SessionScoringProcessor` nor any `BoundedChannelFullMode.Wait` channel
+   exists under `MMCA.ADC/Source`. Session scoring is a durable internal command (ADR-114),
+   `Conference.ScoreEventSessions.v1`
+   (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Sessions/UseCases/DecisionSupport/ScoreEventSessions/ScoreEventSessionsInternalCommand.cs:37-39`),
+   so it survives a restart without the outbox. Its handler takes a distributed claim per event with
+   `TryAcquireAsync`
+   (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Sessions/UseCases/DecisionSupport/ScoreEventSessions/ScoreEventSessionsInternalCommandHandler.cs:84`)
+   and skips a run whose claim is already held (`:89`, message at `:131-132`). The claim is
+   cross-replica only when an `IConnectionMultiplexer` is registered; without Redis
+   `IDistributedLock` falls back to the process-local `InProcessDistributedLock`
+   (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.Caching.cs:104-117`),
+   the same limit item 3 of the Revision (2026-09-19) records. The claim also excludes only passes
+   running at the same time: a duplicate queued behind a running pass still executes, and is cheap
+   only because it skips every session scored since the command's `RequestedAtUtc`
+   (`ScoreEventSessionsInternalCommandHandler.cs:37-40`, `:93`). No channel drain of this ADR
+   serializes scoring any more, but on each replica Common's `InternalCommandProcessor` runs a
+   claimed batch one row at a time
+   (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/InternalCommands/Processing/InternalCommandProcessor.cs:198-212`),
+   so a minutes-long pass still delays the internal commands behind it. The full modes in use for
+   this pattern are `DropOldest` (live channel) and `DropWrite` (bookmark eviction signal), and the
+   live ephemeral-queue decision is [ADR-121](121-ephemeral-in-process-work-queue.md). The
+   cross-reference to the "dedup is per replica" trade-off in item 3 of the Revision (2026-09-19)
+   stays as written, as the record of what was true then.
+2. Anchors re-verified against current source:
+   - `ScoreEventSessionsInternalCommandHandler.cs`: class at `:47`, `TryAcquireAsync` at `:84`,
+     `LogRunSkippedNotClaimed` call at `:89` and declaration at `:131-132`; the two anchors the
+     Revision (2026-10-21) recorded (`:84`, log message at `:132`) are unchanged.

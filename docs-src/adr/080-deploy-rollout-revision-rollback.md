@@ -22,6 +22,8 @@ Revised 2026-10-26: ADC's rollback loop now counts every app into the same four-
 summary as Store and no longer has a clean-revert message, so the indistinguishable-listing
 trade-off applies equally to both repos; anchors refreshed after the Store and ADC deploy workflow
 and `main.bicep` changes.
+Revised 2026-10-28: anchors refreshed after the Store Defender for SQL and ADC #297 `main.bicep`
+changes, and the ADR-057 and CONTRIBUTING citations now span their full quoted statements.
 
 ## Context
 Both production apps deploy to Azure Container Apps from a single `deploy.yml` job on push to `main`,
@@ -43,12 +45,12 @@ post-deploy check, a green workflow run and a dead production are the same colou
 Two existing records already reason from an answer that was never itself written down. ADR-057 states
 the premise outright: "production rollback is **revision-only**", the deploy reverts the image "and
 nothing else", and the previous release therefore keeps serving against the **new** schema
-(`Website/docs-src/adr/057-expand-contract-schema-evolution-gate.md:25-30`), which is the entire
+(`Website/docs-src/adr/057-expand-contract-schema-evolution-gate.md:28-37`), which is the entire
 justification for its expand/contract guard. ADR-030 depends on the same model from the other side:
 startup migration is the sole migrator, so a failed startup migration fails the new revision and
 "there is no automated down-migration"
 (`Website/docs-src/adr/030-startup-sole-migrator.md:115-117`). Both CONTRIBUTING files say the same
-thing to contributors (`MMCA.Store/CONTRIBUTING.md:58-61`, `MMCA.ADC/CONTRIBUTING.md:58-61`). This
+thing to contributors (`MMCA.Store/CONTRIBUTING.md:58-62`, `MMCA.ADC/CONTRIBUTING.md:58-62`). This
 ADR records the rollout and rollback model those documents assume.
 
 ## Decision
@@ -57,21 +59,21 @@ verification fails.
 
 - **Single-revision rollout.** Every container app runs `activeRevisionsMode: 'Single'`, so a deploy
   replaces the serving revision rather than splitting traffic across two: Store's identity, catalog,
-  sales, gateway and ui apps (`MMCA.Store/infra/main.bicep:1527,1709,1833,1985,2114`) and ADC's
+  sales, gateway and ui apps (`MMCA.Store/infra/main.bicep:1528,1710,1834,1986,2115`) and ADC's
   identity, conference, engagement, notification, gateway and ui apps
-  (`MMCA.ADC/infra/main.bicep:1874,2127,2280,2415,2605,2768`). There is no canary or blue/green stage
+  (`MMCA.ADC/infra/main.bicep:1871,2124,2277,2412,2602,2765`). There is no canary or blue/green stage
   and no traffic-splitting step.
 - **Readiness gating is the first line of defence.** Every app carries startup, liveness and
   readiness probes, so ACA holds user traffic on the old revision until the new one is ready
-  (`MMCA.Store/infra/main.bicep:1681-1684`, five apps at `:1681,1805,1953,2063,2188`;
-  `MMCA.ADC/infra/main.bicep:2078-2096`, six apps at `:2078,2231,2366,2533,2696,2850`). Every
+  (`MMCA.Store/infra/main.bicep:1682-1685`, five apps at `:1682,1806,1954,2064,2189`;
+  `MMCA.ADC/infra/main.bicep:2075-2093`, six apps at `:2075,2228,2363,2530,2693,2847`). Every
   backend and the UI take readiness on `/health/ready`, which is the ADR-025 warm-up gate doing
   rollout duty. The Gateway is the exception in both repos: its readiness probe is `/alive`, because
   its `/health/ready` fans out to every downstream and would let one failed downstream mark the only
   Gateway replica unready, a 30-second probe there would also send an HTTP request to every
   downstream service every 30 seconds and keep their idle replicas off the Container Apps idle rate,
   and the Gateway has no JwtBearer warm-up task to wait for
-  (`MMCA.Store/infra/main.bicep:2066-2073`, `MMCA.ADC/infra/main.bicep:2712-2721`).
+  (`MMCA.Store/infra/main.bicep:2067-2074`, `MMCA.ADC/infra/main.bicep:2709-2718`).
 - **A two-tier post-deploy smoke gate is the last gating step of the deploy job.** `Smoke test
   (rollback on failure)` verifies the freshly deployed fleet from outside Azure
   (`MMCA.Store/.github/workflows/deploy.yml:1370`, `MMCA.ADC/.github/workflows/deploy.yml:1494`):
@@ -400,6 +402,28 @@ recorded.
    `MMCA.ADC/infra/main.bicep:1874,2127,2280,2415,2605,2768`; probe blocks Store `:1681,1805,1953,2063,2188`,
    ADC `:2078,2231,2366,2533,2696,2850`; Gateway `/alive` readiness Store `:2066-2073`, ADC
    `:2712-2721`.
+
+## Revision (2026-10-28)
+
+**Re-verified against current source. No content correction: every container app in both repos
+still runs `activeRevisionsMode: 'Single'`, every backend and the UI still take readiness on
+`/health/ready`, and the Gateway still takes readiness on `/alive` for the fan-out, idle-rate and
+no-JwtBearer reasons the Decision bullet gives.** Both `main.bicep` files moved (Store by +1 line,
+ADC by -3 lines), so the `main.bicep` anchors in Decision are re-pointed here; the `deploy.yml`
+anchors still resolve. The 2026-10-26 revision's anchors stay as recorded.
+
+1. The ADR-057 citation for "revision-only", "nothing else" and "keeps serving traffic against the
+   **new** schema" now spans `057-expand-contract-schema-evolution-gate.md:28-37` ("revision-only"
+   at `:28`, "nothing else" at `:35`, "**new** schema" at `:37`), and both CONTRIBUTING citations
+   span `:58-62`, where the revision-only statement ends with "NEW schema" at `:62`
+   (`MMCA.Store/CONTRIBUTING.md:58-62`, `MMCA.ADC/CONTRIBUTING.md:58-62`).
+2. Anchors re-verified against current source: `activeRevisionsMode: 'Single'`
+   `MMCA.Store/infra/main.bicep:1528,1710,1834,1986,2115` and
+   `MMCA.ADC/infra/main.bicep:1871,2124,2277,2412,2602,2765`; probe blocks (the `probes: [` lines)
+   Store `:1682,1806,1954,2064,2189` (first block `:1682-1685`), ADC `:2075,2228,2363,2530,2693,2847`
+   (first block `:2075-2093`); backend and UI readiness `/health/ready` Store `:1685,1809,1957,2192`,
+   ADC `:2093,2246,2381,2548,2865`; Gateway `/alive` readiness rationale and probe Store
+   `:2067-2074`, ADC `:2709-2718`.
 
 ## Related
 [ADR-057](057-expand-contract-schema-evolution-gate.md) (built on this model: revision-only rollback

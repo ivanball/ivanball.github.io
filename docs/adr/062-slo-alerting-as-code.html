@@ -325,7 +325,8 @@
           re-anchored. No decision changed.
           Revised 2026-10-19: ADC gains the two security-signal rules Store already had (<code>auth-failure-spike</code>, <code>forbidden-burst</code>), its ingestion rule also matches <code>ApproachingQuota</code>, and its runbook gains the missing <code>signalr-backplane-errors</code> triage, so the ungated space is sixteen alerts (ADC nine, Store seven, <code>broker-error-queue</code> now on both) with triage for all sixteen; <code>RequireWorkbook</code> is recorded as on by default. No decision changed.
           Revised 2026-10-21: the runbook pairing is recorded as the whole-token heading match the base ships (an optional <code>-v&lt;digits&gt;</code> suffix, no <code>-p99</code>-style continuation), the stale &quot;opt-in, neither consumer turns it on&quot; workbook wording is corrected, and every Store <code>main.bicep</code>, ADC gateway/workbook/budget and base-file citation is re-anchored.
-          Revised 2026-10-26: ADC&#39;s ungated space grows to twelve alerts (<code>outbox-backlog-age</code>, <code>outbox-broker-circuit-open</code> and <code>live-broadcast-dropped</code> join its <code>scheduledQueryAlertSpecs</code> array), so the fleet&#39;s is nineteen, all with triage, while ADC&#39;s runbook preamble and Governance caveat still count nine; the one-gap asymmetry statement is corrected and the ADC and Store anchors are re-pointed.</p>
+          Revised 2026-10-26: ADC&#39;s ungated space grows to twelve alerts (<code>outbox-backlog-age</code>, <code>outbox-broker-circuit-open</code> and <code>live-broadcast-dropped</code> join its <code>scheduledQueryAlertSpecs</code> array), so the fleet&#39;s is nineteen, all with triage, while ADC&#39;s runbook preamble and Governance caveat still count nine; the one-gap asymmetry statement is corrected and the ADC and Store anchors are re-pointed.
+          Revised 2026-10-28: ADC&#39;s runbook preamble and Governance caveat now count twelve operational alerts, all with triage, so the 2026-10-26 &quot;still count nine&quot; statement and the second honour-system miss it recorded are withdrawn, and the ADC <code>OPERATIONS.md</code> triage and Governance anchors are re-pointed. No decision changed.</p>
           <h2 id="context">Context</h2>
           <p>ADR-041 standardized what the fleet <strong>emits</strong>: RED histograms off the CQRS pipeline, an outbox
           dead-letter counter, correlation ids, exporters, and the cost knobs that keep ingestion affordable.
@@ -573,23 +574,23 @@
           <code>store-alert-auth-failure-spike</code> (sev 2) at <code>:294</code>, <code>store-alert-forbidden-burst</code> (sev 3) at <code>:332</code>
           and <code>store-alert-log-ingestion-quota</code> (sev 2) at <code>:352</code>, and its preamble counts seven (<code>:141</code>).
           ADC&#39;s (<code>MMCA.ADC/infra/OPERATIONS.md:174</code>) sits after its six <code>###</code> SLO sections and holds all
-          twelve: <code>adc-prod-alert-outbox-dead-letter</code> (sev 2) at <code>:188</code>, <code>adc-prod-alert-broker-error-queue</code>
-          (sev 2) at <code>:231</code>, <code>adc-prod-alert-sql-dependency-failures</code> (sev 2) at <code>:278</code>,
-          <code>adc-prod-alert-revision-activation-failed</code> (sev 2) at <code>:304</code>,
-          <code>adc-prod-alert-signalr-backplane-errors</code> (sev 2) at <code>:334</code>, <code>adc-prod-alert-outbox-backlog-age</code>
-          (sev 2) at <code>:363</code>, <code>adc-prod-alert-outbox-broker-circuit-open</code> (sev 2) at <code>:384</code>,
-          <code>adc-prod-alert-live-broadcast-dropped</code> (sev 2) at <code>:399</code>,
-          <code>adc-prod-alert-log-ingestion-cap-reached</code> (sev 2) at <code>:417</code>, <code>adc-prod-alert-auth-failure-spike</code>
-          (sev 2) at <code>:453</code>, <code>adc-prod-alert-forbidden-burst</code> (sev 3) at <code>:495</code> and
-          <code>adc-prod-alert-gateway-availability</code> (sev 1) at <code>:517</code>, named with the full deployed names its SLO
-          headings already use. Its preamble, though, still counts nine, lists only five
-          <code>scheduledQueryAlertSpecs</code> entries and says all nine carry triage
-          (<code>MMCA.ADC/infra/OPERATIONS.md:176-184</code>), so the runbook&#39;s own count no longer matches the template.
+          twelve: <code>adc-prod-alert-outbox-dead-letter</code> (sev 2) at <code>:189</code>, <code>adc-prod-alert-broker-error-queue</code>
+          (sev 2) at <code>:232</code>, <code>adc-prod-alert-sql-dependency-failures</code> (sev 2) at <code>:279</code>,
+          <code>adc-prod-alert-revision-activation-failed</code> (sev 2) at <code>:305</code>,
+          <code>adc-prod-alert-signalr-backplane-errors</code> (sev 2) at <code>:335</code>, <code>adc-prod-alert-outbox-backlog-age</code>
+          (sev 2) at <code>:364</code>, <code>adc-prod-alert-outbox-broker-circuit-open</code> (sev 2) at <code>:385</code>,
+          <code>adc-prod-alert-live-broadcast-dropped</code> (sev 2) at <code>:400</code>,
+          <code>adc-prod-alert-log-ingestion-cap-reached</code> (sev 2) at <code>:418</code>, <code>adc-prod-alert-auth-failure-spike</code>
+          (sev 2) at <code>:454</code>, <code>adc-prod-alert-forbidden-burst</code> (sev 3) at <code>:496</code> and
+          <code>adc-prod-alert-gateway-availability</code> (sev 1) at <code>:518</code>, named with the full deployed names its SLO
+          headings already use. Its preamble counts twelve, lists all eight <code>scheduledQueryAlertSpecs</code> entries
+          plus the three standalone rules and the gateway metric alert, and says all twelve carry triage
+          (<code>MMCA.ADC/infra/OPERATIONS.md:176-185</code>), so the runbook&#39;s own count matches the template.
           The headings are <code>####</code> rather than <code>###</code> in both repos, because <code>RunbookHeadingRegex</code> is <code>^###\s+.*$</code>
           (<code>ObservabilityConventionTestsBase.cs:197-198</code>) and does not match a <code>####</code> line: an <code>###</code> heading
           naming a non-spec alert would read to <code>EveryRunbookAlertSection_MapsToAProvisionedAlert</code> as an orphan
           section and fail the build. Each runbook states that reasoning inline, above its own first <code>####</code>
-          heading (<code>MMCA.Store/infra/OPERATIONS.md:143-145</code>, <code>MMCA.ADC/infra/OPERATIONS.md:182-184</code>). So the
+          heading (<code>MMCA.Store/infra/OPERATIONS.md:143-145</code>, <code>MMCA.ADC/infra/OPERATIONS.md:182-185</code>). So the
           triage exists and is discoverable at 3am for all nineteen ungated alerts (Store seven of seven, ADC
           twelve of twelve), while the gate sees exactly six paired alerts on ADC and five on Store. The
           ungated space is not symmetric. Store does not port <code>sql-dependency-failures</code>, deliberately, because
@@ -656,19 +657,19 @@
           gateway-availability alerts are provisioned but ungated, so all nineteen can be added, renamed or
           re-tiered with no <strong>build</strong> consequence. That is not the same as no consequence. All nineteen have
           written triage today (Store <code>MMCA.Store/infra/OPERATIONS.md:147</code>, <code>:178</code>, <code>:246</code>, <code>:273</code>, <code>:294</code>,
-          <code>:332</code>, <code>:352</code>; ADC <code>MMCA.ADC/infra/OPERATIONS.md:188</code>, <code>:231</code>, <code>:278</code>, <code>:304</code>, <code>:334</code>, <code>:363</code>,
-          <code>:384</code>, <code>:399</code>, <code>:417</code>, <code>:453</code>, <code>:495</code>, <code>:517</code>), but the cost of the honour system has already been
+          <code>:332</code>, <code>:352</code>; ADC <code>MMCA.ADC/infra/OPERATIONS.md:189</code>, <code>:232</code>, <code>:279</code>, <code>:305</code>, <code>:335</code>, <code>:364</code>,
+          <code>:385</code>, <code>:400</code>, <code>:418</code>, <code>:454</code>, <code>:496</code>, <code>:518</code>), but the cost of the honour system has already been
           paid once: ADC&#39;s <code>signalr-backplane-errors</code> rule (<code>MMCA.ADC/infra/main.bicep:644</code>) shipped with no
           <code>####</code> section and nothing failed until the 2026-10-19 drift wave wrote one by hand. Because those
           sections are invisible to the gate by design, a new ungated alert with no section, or a re-tiered or
           renamed one whose section was not moved, fails nothing. Both runbooks record the honour-system
           caveat themselves, in their Governance sections (<code>MMCA.Store/infra/OPERATIONS.md:415</code>, gated count
-          and floor at <code>:419-420</code>, caveat at <code>:421-422</code>; <code>MMCA.ADC/infra/OPERATIONS.md:608</code>, gated count and
-          floor at <code>:612-613</code>, caveat at <code>:614-615</code>), and both state the gated count their template declares
-          (six on ADC, five on Store) and the floor their subclass sets. ADC&#39;s caveat, like its preamble, still
-          counts nine operational alerts with triage for all nine against the twelve its template declares, a
-          second honour-system miss and a prose one: nothing checks either sentence, because the gate matches
-          headings, not prose.</li>
+          and floor at <code>:419-420</code>, caveat at <code>:421-422</code>; <code>MMCA.ADC/infra/OPERATIONS.md:609</code>, gated count and
+          floor at <code>:613-614</code>, caveat at <code>:615-616</code>), and both state the gated count their template declares
+          (six on ADC, five on Store) and the floor their subclass sets. ADC&#39;s caveat, like its preamble,
+          counts the twelve operational alerts its template declares, all with triage. Nothing checks either
+          count sentence, because the gate matches headings, not prose: ADC&#39;s runbook carried a stale count of
+          nine until it was corrected by hand.</li>
           <li><strong>The template is not the inventory of the resource group.</strong> The superseded metric alerts are gone
           from both templates, but an incremental ARM deployment does not delete what it stops declaring, so
           their unsuffixed names stay occupied in the resource group, and the template says so
@@ -889,6 +890,29 @@
           <code>MMCA.Store/infra/OPERATIONS.md:147</code>, <code>:178</code>, <code>:246</code>, <code>:273</code>, <code>:294</code>, <code>:332</code>, <code>:352</code> and its
           Governance section at <code>:415</code>; ADC&#39;s Governance section is at <code>MMCA.ADC/infra/OPERATIONS.md:608</code>.</li>
           </ol>
+          <h2 id="revision-2026-10-28">Revision (2026-10-28)</h2>
+          <p>Re-verified against current source. The gate, its four facts, the spec counts (six on ADC, five on
+          Store), the floors, the nineteen ungated alerts (ADC twelve, Store seven), their triage and the
+          adoption boundary are unchanged. What moved is ADC&#39;s runbook count prose and the ADC <code>OPERATIONS.md</code>
+          anchors.</p>
+          <ol>
+          <li><strong>ADC&#39;s runbook count matches its template again.</strong> The preamble now says twelve signals, lists
+          all eight <code>scheduledQueryAlertSpecs</code> entries plus the log-ingestion cap, the auth-failure spike,
+          the 403 burst and the gateway metric alert, and says all twelve carry triage
+          (<code>MMCA.ADC/infra/OPERATIONS.md:176-185</code>); the Governance caveat says the same
+          (<code>:615-616</code>). The 2026-10-26 statement that both still count nine, and the second, prose,
+          honour-system miss it recorded, are withdrawn; the coverage-boundary paragraph and the ungated
+          trade-off are rewritten around the corrected count. The cost of the honour system stands as
+          recorded: nothing checks either count sentence, because the gate matches headings, not prose.</li>
+          <li>Anchors re-verified against current source: in <code>MMCA.ADC/infra/OPERATIONS.md</code>, every <code>####</code>
+          heading moved down by one (<code>:189</code>, <code>:232</code>, <code>:279</code>, <code>:305</code>, <code>:335</code>, <code>:364</code>, <code>:385</code>, <code>:400</code>, <code>:418</code>,
+          <code>:454</code>, <code>:496</code>, <code>:518</code>), the inline <code>####</code> reasoning spans <code>:182-185</code>, and the Governance section
+          is at <code>:609</code> (gated count and floor <code>:613-614</code>, caveat <code>:615-616</code>); the section heading (<code>:174</code>) and
+          the six <code>###</code> SLO sections (<code>:17</code>, <code>:33</code>, <code>:50</code>, <code>:71</code>, <code>:88</code>, <code>:136</code>) are unchanged. The floor of 6
+          still matches
+          <code>MMCA.ADC/Tests/Architecture/MMCA.ADC.Architecture.Tests/Governance/ObservabilityConventionTests.cs:14</code>.
+          The dated revisions above keep their original anchors as a historical record.</li>
+          </ol>
           <h2 id="related">Related</h2>
           <p>ADR-041 (the telemetry this alerts on top of: it defines emission, instrumentation and cost knobs and
           stops before thresholds, severities and runbooks), ADR-009 (recovery objectives and the drilled
@@ -918,6 +942,7 @@
             <li><a href="#revision-2026-10-19">Revision (2026-10-19)</a></li>
             <li><a href="#revision-2026-10-21">Revision (2026-10-21)</a></li>
             <li><a href="#revision-2026-10-26">Revision (2026-10-26)</a></li>
+            <li><a href="#revision-2026-10-28">Revision (2026-10-28)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

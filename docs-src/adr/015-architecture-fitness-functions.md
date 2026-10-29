@@ -32,7 +32,7 @@ structure the figures describe: one shared rule library of abstract `*TestsBase`
 per repo. Six citations that moved are re-anchored. See Revision (2026-09-11) at the end.
 Revised 2026-09-19: the public API gate covers two more projects than this record said, so the baseline
 file count, the header-only list and the unshipped declaration figure are corrected in the live text
-(eighteen baseline pairs then, twenty-one today, still one per published package except
+(eighteen baseline pairs then, twenty-one by 2026-10-01, still one per published package except
 `MMCA.Common.UI.Maui`). See Revision (2026-09-19) at the end.
 Revised 2026-10-01 (RS0026 / RS0027 move from off to error, with each already-shipped overload pair
 suppressed at its own declaration; see Revision below).
@@ -54,6 +54,9 @@ plus `AiDependencyIsolationTestsBase`, subclassed in all four repos) as an enfor
 public API gate covers 25 projects with 8,561 shipped declarations, the unshipped files hold 64 new
 declarations and 9 removals because no promotion has run at the v1.257.0 to v1.261.0 tags, and the
 cloud vendor target's match list and anchors are refreshed. See Revision (2026-10-26) at the end.
+Revised 2026-10-28: the release roll-over ran at v1.264.0, so every unshipped file is header-only
+again and the 25 shipped baselines hold 8,662 declarations (the `MMCA.Common.Gcp` surface now
+shipped); the `ui-e2e`, `CHANGELOG.md` and `AGENTS.md` anchors are refreshed. See Revision (2026-10-28) at the end.
 
 ## Context
 The codebase rests on invariants that are easy to state and easy to erode by accident: clean-
@@ -891,6 +894,42 @@ vendor target matches more than the 2026-10-24 entry lists, and several anchors 
    and `:31` (methods `:28`, `:32`), and the `AllowedVendorPrefixes` hook, empty by default, at `:24`
    (summary `:20-23`). The Azure, Aws and Gcp `CloudVendorRulesTests` anchors (`:22`, `:21`, `:28`)
    still resolve.
+
+## Revision (2026-10-28): the roll-over ran, re-counted baselines, moved anchors
+Re-verified against current source at v1.265.1 (`MMCA.Common/FACTS.md:14`) plus the two docs
+commits after the tag (`28fad5b2`, #629), which is where the `AGENTS.md` anchor below is read. The
+enforcement layers, the 25 baseline pairs, the `MMCA.Common.UI.Maui` exclusion and the
+`--minimum-expected-tests 2000` floor (`.github/workflows/ci.yml:163`) are as the 2026-10-26 entry
+describes. What moved is the public API baseline content (the release roll-over the 2026-10-26 entry
+found missing has since run, so its items 3 and 4 are dated readings) and the anchors listed in item 3.
+
+1. **Every unshipped file is header-only again.** The roll-over that `MMCA.Common/AGENTS.md:36`
+   prescribes (`build/publicapi/Promote-PublicApi.ps1` in the last commit before each tag) ran in the
+   `release: v1.264.0` commit (#620; `MMCA.Common/CHANGELOG.md:19`). All 25
+   `PublicAPI.Unshipped.txt` files now hold only the `#nullable enable` header, with no new
+   declarations and no `*REMOVED*` markers, so the item 4 citations of the 2026-10-26 entry
+   (`MMCA.Common.Infrastructure` `:2-9` and `:10-14`, `MMCA.Common.Testing.Architecture` `:2-3`,
+   `MMCA.Common.Application` `:2-3`) no longer point at content. The two releases since then stay
+   that way by a different route: the `v1.265.0` (#625) and `v1.265.1` (#627) squash commits each
+   add their one new declaration straight to a `PublicAPI.Shipped.txt` (`MMCA.Common.UI` and
+   `MMCA.Common.Testing.E2E`), with no unshipped stage in between.
+2. **The shipped baselines hold 8,662 declarations across 8,687 non-empty lines** in the 25
+   `PublicAPI.Shipped.txt` files, each carrying exactly one `#nullable enable` header (the 2026-10-26
+   entry read 8,561 across 8,586). `MMCA.Common.Gcp` now ships its surface
+   (`Source/Hosting/MMCA.Common.Gcp/PublicAPI.Shipped.txt`, 37 declarations after the header), so the
+   one header-only shipped file left is the `MMCA.Common` metapackage's
+   (`Source/MMCA.Common/PublicAPI.Shipped.txt:1`), which has no surface.
+3. **Anchors re-verified against current source:** the `ui-e2e` run with `--minimum-expected-tests 1`
+   is `ci.yml:377` (step name `:372`). Three `CHANGELOG.md` sections ([1.265.1] `:7`, [1.265.0]
+   `:13`, [1.264.0] `:19`) now sit at the top, so every `MMCA.Common/CHANGELOG.md` anchor in the
+   2026-10-26 entry reads 43 lines lower: `:26` is `:69`, `:67` is `:110`, `:78` is `:121`, `:86-88`
+   is `:129-131`, `:94` is `:137` (under [1.257.0] at `:112`), `:119` is `:162` (under [1.255.0] at
+   `:154`), and the v1.153.0 heading `:3878` is `:3921` with its "Three new build gates" bullet
+   `:3976-3982`. The `Promote-PublicApi.ps1` sentence is `MMCA.Common/AGENTS.md:36` after #629
+   (`:37` at the v1.264.0 through v1.265.1 tags). The Status block's 2026-09-19 sentence said
+   "twenty-one today"; it now reads "twenty-one by 2026-10-01", the audit that sentence was written
+   in and the first entry that counts 21, and the current pair count is the 25 in the 2026-10-26
+   entry.
 
 ## Related
 ADR-009 (resilience gate), ADR-010 (event-version gate), ADR-016 (MassTransit pin gate, and the

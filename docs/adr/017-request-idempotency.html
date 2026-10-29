@@ -259,7 +259,11 @@
           corrected (email confirmation, entity create and update, notifications and legal acceptance carry
           it too, not only the password-reset pair) and the shared admin lock/unlock POSTs are recorded as
           declared by each consumer override rather than by the base. Revised 2026-10-21: anchors refreshed
-          after the shared auth, entity-create and user-admin controller declarations moved; no content change.</p>
+          after the shared auth, entity-create and user-admin controller declarations moved; no content change.
+          Revised 2026-10-28: the 2026-08-18 statement that register is <code>[Idempotent]</code> is recorded as
+          superseded since 2026-10-01 (every POST on <code>AuthControllerBase</code> and <code>OAuthControllerBase</code> is
+          <code>[NonIdempotent]</code>; the shared auth <code>[Idempotent]</code> actions live in the password-reset and
+          email-confirmation bases, so &quot;both ways&quot; holds across the shared auth bases rather than within one).</p>
           <h2 id="context">Context</h2>
           <p>Write endpoints (POST / PUT / PATCH) are exposed to <strong>client retries and double-submits</strong>: a flaky
           network, an impatient user double-clicking, or a resilience pipeline re-issuing a request can cause the
@@ -531,6 +535,36 @@
           (<code>.../Controllers/Notifications/NotificationsController.cs:43-44</code>); the separate <code>:30</code> anchor
           recorded earlier names no declaration and is dropped.</li>
           </ol>
+          <h2 id="revision-2026-10-28">Revision (2026-10-28)</h2>
+          <p>Re-verified against current source. The Decision, Rationale and Trade-offs are unchanged, and the
+          anchors recorded in the Revision (2026-10-21) still hold. What moved is how the Status reads: its
+          2026-08-18 sentence (&quot;the shared auth controllers declare their intent both ways&quot;) pointed at a
+          register/token split inside <code>AuthControllerBase</code> that no longer exists, and the 2026-10-01 Status
+          summary did not say so. The sentence stays true only read across the shared auth bases, and the Status
+          now carries that reading in its 2026-10-28 clause. The earlier sections are left as written.</p>
+          <ol>
+          <li><strong>Register is <code>[NonIdempotent]</code>; &quot;both ways&quot; now holds across four of the shared auth bases,
+          not within one.</strong>
+          Every POST on <code>AuthControllerBase</code> is <code>[NonIdempotent]</code>: login, register, refresh, revoke and the
+          per-session revoke
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/AuthControllerBase.cs:69-70</code>,
+          <code>:93-94</code>, <code>:124-125</code>, <code>:152-153</code>, <code>:216-217</code>), as is the only POST on <code>OAuthControllerBase</code>, the
+          code exchange (<code>.../Controllers/OAuthControllerBase.cs:230-231</code>). The shared auth <code>[Idempotent]</code>
+          actions are forgot-password and reset-password
+          (<code>.../Controllers/PasswordResetAuthControllerBase.cs:75-76</code>, <code>:99-100</code>) and
+          send-email-confirmation and confirm-email
+          (<code>.../Controllers/EmailConfirmationControllerBase.cs:78-79</code>, <code>:106-107</code>). The fifth shared auth
+          base, <code>UserAccountAuthControllerBase</code>, declares no POST at all (its write verbs are the <code>[HttpPut]</code>
+          password and preferences actions at <code>.../Controllers/UserAccountAuthControllerBase.cs:87</code> and
+          <code>:113</code>), so it is outside the gate&#39;s scope. The Revision
+          (2026-08-18) claim that register is <code>[Idempotent]</code> has been superseded since the Revision
+          (2026-10-01).</li>
+          <li>Anchors re-verified against current source: the auth anchors in item 1; OAuth <code>complete</code> is the
+          <code>[HttpGet]</code> at <code>OAuthControllerBase.cs:145</code>; in <code>IdempotencyFilter.cs</code> the buffering guard is at
+          <code>:122-123</code>, blank-to-null at <code>:170</code>, the 422 reuse title at <code>:327</code>, the <code>ETag</code> replay at <code>:391-392</code>
+          and the anonymous subject at <code>:541-542</code>; <code>idempotency.degraded</code> is at <code>IdempotencyMetrics.cs:46-47</code>
+          and the record&#39;s <code>ETag</code> at <code>IdempotencyRecord.cs:26</code>.</li>
+          </ol>
           <h2 id="related">Related</h2>
           <p>ADR-003 (handler idempotency for outbox/event consumers, a distinct concern), ADR-013 (Result is the
           response the filter caches/replays), ADR-014 (the filter keeps the handler thin), ADR-009 (the resilience
@@ -562,6 +596,7 @@
             <li><a href="#revision-2026-10-06">Revision (2026-10-06)</a></li>
             <li><a href="#revision-2026-10-07">Revision (2026-10-07)</a></li>
             <li><a href="#revision-2026-10-21">Revision (2026-10-21)</a></li>
+            <li><a href="#revision-2026-10-28">Revision (2026-10-28)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

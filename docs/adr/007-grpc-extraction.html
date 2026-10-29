@@ -253,7 +253,8 @@
           Revised 2026-10-07: anchors refreshed after the v1.233.0 release.
           Revised 2026-10-21: ADC now marks seven <code>[ServiceContract]</code> interfaces, and the auth bullets record
           Store&#39;s one shared-secret exception (an HS256 service token on the Sales -&gt; Identity Customers edge).
-          Revised 2026-10-26: anchors refreshed after the v1.261.0 release.</p>
+          Revised 2026-10-26: anchors refreshed after the v1.261.0 release.
+          Revised 2026-10-28: anchors refreshed after the v1.265.1 release.</p>
           <h2 id="context">Context</h2>
           <p>Once modules became separate service processes, the in-process interface calls between them (e.g.
           Conference → Engagement&#39;s <code>IBookmarkCountService</code>, Engagement → Conference&#39;s
@@ -305,8 +306,8 @@
           <code>:109</code>). Under the AppHost the authority is wired by <code>WithJwksDiscovery(identity, gateway)</code>, whose
           gateway argument is optional (<code>MMCA.Common/Source/Hosting/MMCA.Common.Aspire.Hosting/Extensions.cs:322-324</code>);
           in production the bicep points the authority straight at Identity&#39;s internal cleartext URL with
-          <code>RequireHttpsMetadata=false</code>, not through the gateway (<code>MMCA.ADC/infra/main.bicep:2195</code>, <code>:2199</code>;
-          <code>MMCA.Store/infra/main.bicep:1781</code>, <code>:1786</code>). This holds for every user token. The one
+          <code>RequireHttpsMetadata=false</code>, not through the gateway (<code>MMCA.ADC/infra/main.bicep:2192</code>, <code>:2196</code>;
+          <code>MMCA.Store/infra/main.bicep:1782</code>, <code>:1787</code>). This holds for every user token. The one
           shared-secret exception is Store&#39;s Sales -&gt; Identity Customers edge: Identity registers
           <code>AddServiceTokenAuthentication</code>
           (<code>MMCA.Store/Source/Services/MMCA.Store.Identity.Service/Program.cs:179</code>), a second JwtBearer
@@ -453,6 +454,18 @@
           mixed profile to <code>MMCA.Store/Source/Services/MMCA.Store.Sales.Service/Program.cs:66-80</code>
           (<code>appsettings.json:13</code>, <code>:17</code> still hold for both).</li>
           </ol>
+          <h2 id="revision-2026-10-28">Revision (2026-10-28)</h2>
+          <p>Re-verified against current source. The decision and the production JWKS wiring are unchanged: both
+          bicep files still set the authority to <code>http://${identityApp.name}</code> with
+          <code>RequireHttpsMetadata=false</code>, and <code>AddTypedGrpcClient</code> still adds only
+          <code>JwtForwardingClientInterceptor</code>, so a service token goes out only through <code>WithServiceToken()</code>.
+          Only anchors moved.</p>
+          <ol>
+          <li>Anchors re-verified against current source: ADC JWKS authority and <code>RequireHttpsMetadata</code>
+          re-pointed to <code>MMCA.ADC/infra/main.bicep:2192</code>, <code>:2196</code> (repeating at <code>:2328</code>, <code>:2332</code> and
+          <code>:2482</code>, <code>:2486</code>); Store&#39;s to <code>MMCA.Store/infra/main.bicep:1782</code>, <code>:1787</code> (repeating at <code>:1918</code>,
+          <code>:1923</code>).</li>
+          </ol>
           
         <div class="doc-foot btn-row">
           <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
@@ -472,6 +485,7 @@
             <li><a href="#revision-2026-10-07">Revision (2026-10-07)</a></li>
             <li><a href="#revision-2026-10-21">Revision (2026-10-21)</a></li>
             <li><a href="#revision-2026-10-26">Revision (2026-10-26)</a></li>
+            <li><a href="#revision-2026-10-28">Revision (2026-10-28)</a></li>
             </ul>
           </nav>
         </aside>

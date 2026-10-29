@@ -17,6 +17,7 @@ the `IMessageBus` publish, which is the broker hop only in broker mode), and anc
 Revised 2026-10-24: `MassTransit.AmazonSQS` 8.5.11 joins the pinned set for the SQS adapter transport, the pin and its gate unchanged ([ADR-134](134-cloud-neutral-core-vendor-adapters.md)); the trial point and the surface inventory are corrected in place. See Revision (2026-10-24) at the end.
 Revised 2026-10-25: `MassTransit.SqlTransport.PostgreSQL` 8.5.11 (Apache-2.0) joins the pinned set for the built-in PostgreSQL transport and reaches every consumer of MMCA.Common.Infrastructure with Dapper; Decision 1 now records that the build gate covers three of MMCA.Common's five MassTransit entries. See Revision (2026-10-25) at the end.
 Revised 2026-10-26: every MassTransit entry is at the 8.5.12 v8 patch, the build gate now covers all five MMCA.Common entries, MMCA.Common's `using MassTransit` surface is recounted as fifteen files and the swap surface is restated to include the consumer service hosts' MassTransit-typed consumer registration, and the `Azure.Messaging.ServiceBus` pin is restated as also serving the Azure transport; anchors refreshed.
+Revised 2026-10-28: anchors refreshed after later MMCA.Common releases moved the CHANGELOG entries and an ADC Engagement host edit moved its consumer registration.
 
 ## Context
 MassTransit is the only message-broker library in this workspace, and it is pinned to 8.5.12 across
@@ -97,7 +98,7 @@ MassTransit: `AddBrokerMessaging` takes an `Action<IBusRegistrationConfigurator>
 (`.../Messaging/Consumers/IntegrationEventConsumerExtensions.cs:60-62`). Every consumer service host
 that runs broker consumers passes such a lambda (for example
 `MMCA.Store/Source/Services/MMCA.Store.Sales.Service/Program.cs:269-283`,
-`MMCA.ADC/Source/Services/MMCA.ADC.Engagement.Service/Program.cs:303-307`), ADC's Conference host
+`MMCA.ADC/Source/Services/MMCA.ADC.Engagement.Service/Program.cs:304-310`), ADC's Conference host
 names MassTransit directly
 (`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/ConferenceBrokerConsumers.cs:1`, `:32-37`),
 and each consumer's Service Bus emulator fixture does too
@@ -224,7 +225,7 @@ so the pin is a dated decision rather than an open-ended hold.**
   `PostgreSqlBrokerTransport` ships in MMCA.Common.Infrastructure because any PostgreSQL is the broker
   (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Messaging/Transports/PostgreSqlBrokerTransport.cs:10-14`,
   `:40`), so every consumer of that package restores `MassTransit.SqlTransport.PostgreSQL` and the
-  Dapper it brings (`MMCA.Common/CHANGELOG.md:86`, `MMCA.Common/Directory.Packages.props:134-135`)
+  Dapper it brings (`MMCA.Common/CHANGELOG.md:129`, `MMCA.Common/Directory.Packages.props:134-135`)
   whether or not it selects the transport.
 - **The emulator test tier is coupled to the choice.** `ServiceBusEmulatorFixtureBase` uses the
   MassTransit v8 custom-clients `Host()` overload, so a transport swap re-writes that fixture and
@@ -397,6 +398,23 @@ service hosts. The earlier revisions are left as written.
    inside the 2026-10-24 and 2026-10-25 revisions are left as written; the vendor-transport refusal
    now sits in target `EnforceCloudVendorBoundary` (`:130`, conditions at `:144-145`, error at
    `:151`).
+
+## Revision (2026-10-28)
+Re-verified against current source. The library choice, the v8 pin, the major-9 ceiling, the exit
+triggers, the replacement order and every fact are unchanged: all five MMCA.Common MassTransit
+entries are still at 8.5.12 (`MMCA.Common/Directory.Packages.props:125-127`, `:130`, `:136`) under
+the pin comment at `:120-124`, and the ADC Engagement host still passes a MassTransit-typed
+consumer-registration lambda. Only anchors moved. The anchors inside the 2026-10-26 and earlier
+revisions are left as written.
+
+1. Anchors re-verified against current source: the ADC Engagement host's `AddBrokerMessaging`
+   lambda at `MMCA.ADC/Source/Services/MMCA.ADC.Engagement.Service/Program.cs:304-310` (its four
+   `RegisterIntegrationEventConsumer` calls at `:306-309`), re-pointed in Context; the PostgreSQL
+   transport entry ("every consumer of MMCA.Common.Infrastructure now restores this package and
+   Dapper") at `MMCA.Common/CHANGELOG.md:129`, release 1.257.0, re-pointed in the Trade-offs bullet
+   (the companion `MMCA.Common/Directory.Packages.props:134-135` still holds); and the
+   `MassTransitPackageIds` widening the 2026-10-26 revision cites at `CHANGELOG.md:65` now at
+   `MMCA.Common/CHANGELOG.md:108`, still under release 1.258.0.
 
 ## Related
 [ADR-016](016-lockstep-versioning-masstransit-pin.md) (the lockstep release policy this pin is

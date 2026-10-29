@@ -36,12 +36,16 @@ Revised (2026-10-01): the restoration marker and the stock increase now commit i
 Revised 2026-10-07: anchors refreshed after the v1.233.0 release.
 Revised 2026-10-21: anchors refreshed after the Common and Store changes that moved `DbContextFactory`, `OutboxProcessor`, `appsettings.json` and `main.bicep` lines.
 Revised 2026-10-26: anchors refreshed after the Common and Store changes that moved `DomainEventSaveChangesInterceptor`, `OutboxProcessor`, `CheckOutHandler`, `appsettings.json`, `main.bicep`, `ProcessPaymentWebhookHandler` and `VerifyPaymentHandler` lines.
+Revised 2026-10-28: the checkout deadline is now armed through `PlacedOrderFinalizer`, shared by the customer and guest checkouts, rather than by `CheckOutHandler` calling `CheckOutDeadlineScheduler` directly; both expiry paths cancel with `OrderCancellationReason.PaymentExpired`, which rides `OrderCancelled` to pick the cancellation email; the Context names the guest checkout's transaction; `CheckOutHandler`, `Order`, `OrderConfiguration`, `SalesModule`, the Sales infrastructure registration and `UploadSessionAssetHandler` anchors are refreshed.
 
 ## Context
 Checkout spans a boundary no transaction covers. `CheckOutHandler` commits the order insert, the cart
 transition and the atomic conditional stock decrements in one local transaction
-(`MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Application/ShoppingCarts/UseCases/CheckOut/CheckOutHandler.cs:122-181`,
-run through `ExecuteInTransactionAsync` at `:80-82`),
+(`MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Application/ShoppingCarts/UseCases/CheckOut/CheckOutHandler.cs:148-213`,
+run through `ExecuteInTransactionAsync` at `:104-106`), and the guest checkout does the same for its
+order insert and stock decrements in its own transaction delegate
+(`.../Orders/UseCases/GuestCheckout/GuestCheckOutHandler.cs:79-125`, run through
+`ExecuteInTransactionAsync` at `:65-67`),
 but the money moves at Stripe and the confirmation arrives later, as a webhook, from outside the
 database. Two failure shapes follow directly:
 
@@ -100,9 +104,9 @@ saga-timeout backstop for steps that depend on an external system.
   deadline) are queue rows the scheduler persists. Compensation that does write therefore commits on its own, after the originating
   save, rather than joining the transaction it is compensating for.
 - **Idempotency is a persisted marker committed in the SAME transaction as the compensating
-  writes.** `Order.InventoryRestored` (`.../Domain/Orders/Order.cs:116-122`) is the marker;
+  writes.** `Order.InventoryRestored` (`.../Domain/Orders/Order.cs:190`) is the marker;
   `MarkInventoryRestored` refuses a second call and refuses a non-cancelled order
-  (`Order.cs:571-594`). The whole restoration runs as one `ExecuteInTransactionAsync` delegate
+  (`Order.cs:899-922`). The whole restoration runs as one `ExecuteInTransactionAsync` delegate
   (`OrderCancelledSagaHandler.cs:55-57`). The handler checks the marker first
   (`OrderCancelledSagaHandler.cs:84-88`) and validates the increases through a pure domain service
   (`.../Domain/Inventory/InventoryRestorationDomainService.cs:24-51`) against a non-tracking snapshot
@@ -143,12 +147,12 @@ saga-timeout backstop for steps that depend on an external system.
 - **A periodic sweep drives the transitions a lost webhook would have, and backstops the orders no
   webhook will ever speak for.** `PaymentReconciliationService`
   (`.../Infrastructure/Payments/Reconciliation/PaymentReconciliationService.cs:69`) is registered as a
-  hosted service by the Sales module's infrastructure (`.../Infrastructure/DependencyInjection.cs:42`)
+  hosted service by the Sales module's infrastructure (`.../Infrastructure/DependencyInjection.cs:50`)
   and runs two passes per cycle against one age cutoff
   (`PaymentReconciliationService.cs:120-131`). Both passes select the oldest matching orders, ordered,
   bounded and projected to ids entirely in SQL through one shared helper
   (`PaymentReconciliationService.cs:230-246`) over a dedicated filtered index
-  (`.../Persistence/EntityConfiguration/OrderConfiguration.cs:70-76`).
+  (`.../Persistence/EntityConfiguration/OrderConfiguration.cs:149-151`, `IX_Order_Status_Modified`).
   The reconciliation pass takes orders sitting in `PaymentInitiated` with a Stripe session
   (`PaymentReconciliationService.cs:152-157`), asks Stripe for the session's authoritative status, and
   applies the matching transition: a paid session that `PaymentProof` accepts as payment of this
@@ -161,7 +165,11 @@ saga-timeout backstop for steps that depend on an external system.
   checkout already committed and which nothing else can release. It calls no provider: it drives them
   to `Cancelled` through `MarkAsCancelled` (`PaymentReconciliationService.cs:274`), the terminal state
   `OrderCancelledSagaHandler` already listens on, so the compensation and its marker return the stock
-  exactly once. `Cancelled` rather than `PaymentFailed` because `PaymentFailed` is retryable, so such
+  exactly once. It passes `OrderCancellationReason.PaymentExpired`, which rides the `OrderCancelled`
+  event only (`.../Domain/Orders/Order.cs:879,887`, `.../Orders/DomainEvents/OrderCancelled.cs:16`)
+  and picks the payment-expired wording of the customer's cancellation email
+  (`.../LifecycleEmails/SendOrderCancelledEmailInternalCommandHandler.cs:54`); the stock restoration
+  does not depend on it. `Cancelled` rather than `PaymentFailed` because `PaymentFailed` is retryable, so such
   an order keeps its stock for the whole retry window and loses it only when the window passes without
   a retry (`PaymentReconciliationService.cs:43-49`). Expiry runs before reconciliation in the cycle so
   an order the reconciliation pass just moved into `PaymentFailed` is not cancelled in the same cycle
@@ -205,7 +213,7 @@ not a saga. The first: when a session-asset upload has put its bytes in storage 
 `UploadSessionAssetHandler` schedules the durable `Conference.DeleteSessionAssetBlob.v1` internal
 command to remove the orphaned blob
 (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/SessionAssets/UseCases/UploadFile/UploadSessionAssetHandler.cs:112-116`
-and `:126-133`, the schedule at `:178-195`, the command at
+and `:124-131`, the schedule at `:176-193`, the command at
 `.../SessionAssets/UseCases/DeleteSessionAssetBlob/DeleteSessionAssetBlobInternalCommand.cs:28-29`).
 The second is the avatar upload: when an avatar's bytes are in storage but the user row does not
 follow, `SetUserAvatarHandler` schedules the durable `DeleteAvatarBlob` internal command for the
@@ -480,6 +488,46 @@ the client-initiated check. Only line numbers moved.
    `ProcessPaymentWebhookHandler` (`MarkAsPaid` at `:106`, `MarkAsPaymentFailed` at `:169`) and
    `VerifyPaymentHandler` (`MarkAsPaid` at `:71`). The citations inside the dated Revisions above
    keep the line numbers of their dates.
+
+## Revision (2026-10-28)
+
+Re-verified against current source. No compensation, marker or redelivery behaviour changed: the
+checkout write phase is still one transaction delegate, the unpaid-order deadline is still armed
+inside it after the save, the stock restoration is untouched, and the sweep's settings validator
+still refuses to boot unless `StuckAgeMinutes` equals `UnpaidOrderExpiry:Minutes`. What moved is who
+arms the deadline, the reason both expiry paths now attach to the cancellation, and the line numbers.
+
+1. `CheckOutHandler` no longer calls `CheckOutDeadlineScheduler` itself. After the save its write
+   phase hands the new order to `PlacedOrderFinalizer.FinalizeAsync`
+   (`MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Application/ShoppingCarts/UseCases/CheckOut/CheckOutHandler.cs:210`),
+   which attaches the shipping label (a label that cannot be issued is a Warning, not a failed
+   checkout) and then calls `deadlineScheduler.ArmAsync`
+   (`.../CheckOut/PlacedOrderFinalizer.cs:29-50`, the call at `:49`; `ArmAsync` defined at
+   `CheckOutDeadlineScheduler.cs:47`). The guest checkout runs the same finalizer inside its own
+   transaction (`.../Orders/UseCases/GuestCheckout/GuestCheckOutHandler.cs:122`), so a guest order
+   also gets its deadline. The Revision (2026-09-11) statement that the transaction delegate calls
+   the scheduler directly no longer holds and is left there as the record of that date. The Context
+   now names the guest checkout's transaction beside the customer one
+   (`GuestCheckOutHandler.cs:79-125`, `ExecuteInTransactionAsync` at `:65-67`).
+2. Both expiry paths cancel with an explicit reason. The sweep's expiry pass calls
+   `order.MarkAsCancelled(OrderCancellationReason.PaymentExpired)`
+   (`PaymentReconciliationService.cs:274`), and so does the scheduled deadline
+   (`.../Orders/InternalCommands/ExpireUnpaidOrderInternalCommandHandler.cs:78`); any other caller
+   gets the default `Requested` (`Order.cs:879`). The reason is not stored: it travels on
+   `OrderCancelled` (`Order.cs:887`, `OrderCancelled.cs:16`) and selects the payment-expired email
+   (`SendOrderCancelledEmailInternalCommandHandler.cs:54`). `OrderCancelledSagaHandler` restores stock
+   the same way for either reason. The sweep bullet records it.
+3. Anchors re-verified against current source: `CheckOutHandler` (`WriteAsync` at `:148-213`,
+   `ExecuteInTransactionAsync` at `:104-106`), `Order` (`InventoryRestored` at `Order.cs:190`,
+   `MarkInventoryRestored` at `:899-922`), the hosted-service registration
+   (`.../Infrastructure/DependencyInjection.cs:50`), the sweep's filtered index
+   `IX_Order_Status_Modified` (`OrderConfiguration.cs:149-151`), `SalesModule`
+   (`UnpaidOrderExpirySettings` bound at `.../MMCA.Store.Sales.API/SalesModule.cs:62-65`,
+   `PaymentReconciliationSettings` at `:77-80`, `PaymentReconciliationSettingsValidator` registered
+   at `:84-85`, its equality check at `PaymentReconciliationSettingsValidator.cs:33`) and ADC's
+   `UploadSessionAssetHandler` (the orphan-cleanup calls at `:114` and `:129`, inside `:112-116`
+   and `:124-131`, `ScheduleOrphanCleanupAsync` at `:176-193`). The citations inside the dated
+   Revisions above keep the line numbers of their dates.
 
 ## Related
 ADR-003 (the outbox delivery and retry this leans on for compensation redelivery; this record says

@@ -1,7 +1,7 @@
 # ADR-125: Parameterized SQL Only, Enforced by a Fitness Gate
 
 ## Status
-Accepted (2026-09-19). Revised 2026-10-01: citations refreshed and MMCA.Helpdesk counted as the fourth subclassing repo. Revised 2026-10-06: the relational limit is now a conditional registration that fails at container validation, not a `NotSupportedException` on the first statement. Revised 2026-10-07: the Cosmos-default failure is an unresolved-service error raised at startup only where the container is validated on build (Development under the default builder) and otherwise on first resolution, and the CHANGELOG anchors are refreshed after the v1.233.0 release. Revised 2026-10-21: the source comments now state the same Development-build versus first-resolution timing the ADR does, the `SET IDENTITY_INSERT` exemption is described as the SQL Server explicit-key insert dialect with a best-effort toggle-off on the failure path, and anchors are refreshed after v1.250.0. Revised 2026-10-26: anchors refreshed after v1.261.0.
+Accepted (2026-09-19). Revised 2026-10-01: citations refreshed and MMCA.Helpdesk counted as the fourth subclassing repo. Revised 2026-10-06: the relational limit is now a conditional registration that fails at container validation, not a `NotSupportedException` on the first statement. Revised 2026-10-07: the Cosmos-default failure is an unresolved-service error raised at startup only where the container is validated on build (Development under the default builder) and otherwise on first resolution, and the CHANGELOG anchors are refreshed after the v1.233.0 release. Revised 2026-10-21: the source comments now state the same Development-build versus first-resolution timing the ADR does, the `SET IDENTITY_INSERT` exemption is described as the SQL Server explicit-key insert dialect with a best-effort toggle-off on the failure path, and anchors are refreshed after v1.250.0. Revised 2026-10-26: anchors refreshed after v1.261.0. Revised 2026-10-28: anchors refreshed after v1.265.1.
 
 ## Context
 The supported way to read data is the repository plus specification contract
@@ -25,9 +25,9 @@ Two call sites that look identical, opposite safety, and the difference is three
 The framework also runs on four engines ([ADR-018](018-polyglot-persistence.md)), and one of them has
 no SQL command surface at all, so "raw SQL" cannot be offered as a capability every host has. Before
 v1.192.0 the landing shape for a raw scalar read was four keyless `ValReturn<T>` entities mapped to no
-table and queried by nobody (`MMCA.Common/CHANGELOG.md:2053-2059`); the pair of additions this record
-covers shipped in v1.192.0 (`MMCA.Common/CHANGELOG.md:1938`, the interface at `:2008-2017` and the
-fitness base at `:2018-2021`).
+table and queried by nobody (`MMCA.Common/CHANGELOG.md:2096-2102`); the pair of additions this record
+covers shipped in v1.192.0 (`MMCA.Common/CHANGELOG.md:1981`, the interface at `:2051-2060` and the
+fitness base at `:2061-2064`).
 
 ## Decision
 Give raw SQL exactly one door whose signature makes the unsafe call uncompilable, and ban the four raw
@@ -273,6 +273,23 @@ and every CHANGELOG anchor shifted as the releases through v1.261.0 landed above
    without naming `TryToggleOffAsync`. The `DbContextFactory.cs` anchors (`:296`, `:389`, `:423`,
    `:439`, `:445`) still hold as cited. The earlier revisions and Status sentences keep their anchors
    as recorded on their dates.
+
+## Revision (2026-10-28)
+Re-verified against current source. The decision, the `FormattableString`-only contract, the
+conditional relational registration and its timing, the fitness base, the one-entry `AllowedFiles`
+ratchet and every consumer subclass are unchanged. Only CHANGELOG anchors moved, by 43 lines, as the
+releases through v1.265.1 (`MMCA.Common/CHANGELOG.md:7`) landed above v1.192.0; the entry text still
+matches what this record describes.
+
+1. Anchors re-verified against current source: `MMCA.Common/CHANGELOG.md` v1.192.0 header `:1981`,
+   `IRawSqlQueryExecutor` entry `:2051-2060` (still ending on the original `NotSupportedException`
+   sentence at `:2060`), `RawSqlConventionTestsBase` entry `:2061-2064`, `ValReturn<T>` removal
+   `:2096-2102` (its `IRawSqlQueryExecutor` mention at `:2099`); the v1.218.0 conditional registration
+   bullet is now `:888` (header `:881`); the v1.247.0 failure-path toggle-off entry is `:356` (header
+   `:303`, item M229). `DependencyInjection.cs` (`:111`, `:116`, `:426`, `:435`, `:437`),
+   `EFRawSqlQueryExecutor.cs` (`:29`, `:52`) and `DbContextFactory.cs` (`:296`, `:389`, `:423`,
+   `:439`, `:445`, `:463`) still hold as cited. The earlier revisions and Status sentences keep their
+   anchors as recorded on their dates.
 
 ## Related
 [ADR-055](055-repository-and-specification-contract.md) (the repository plus specification path this

@@ -255,7 +255,8 @@
           Revised 2026-10-07: the breaker scope now notes that monolith integration events pass through it via <code>InProcessMessageBus</code> (so failing in-process handlers can open it), the database posture names both relational engines and the Sqlite and Cosmos contexts that run on the provider default, the circuit-open log latch is stated per data source, and <code>OutboxProcessor.cs</code> anchors are refreshed.
           Revised 2026-10-21: the source comments now document that monolith integration events run inside the breaker (the Decision no longer calls the inline comment distributed-only), the circuit-open Warning text is corrected to &quot;Message bus circuit is open&quot;, the per-batch log latch is re-anchored in <code>DispatchRowsAsync</code>, and anchors are refreshed.
           Revised 2026-10-23: the east-west gRPC breaker values moved into <code>HttpResilienceDefaults</code> (<code>Grpc</code>-prefixed), so the database-breaker search re-anchors the gRPC defaults and handler citations there; the broker breaker is unchanged.
-          Revised 2026-10-26: redelivery now runs through four pluggable transports (RabbitMQ alone gates it on the flag; Azure Service Bus, Amazon SQS and PostgreSQL apply it unconditionally, SQS with its own 900-second-capped default), <code>RedeliveryIntervalsSeconds</code> defaults to <code>null</code> with the framework default held separately and <code>[0]</code> as the off switch, the fault consumer only Debug-logs faults produced by other assemblies (no Error log, no count), the fault Trade-off records the alerts and runbooks both applications now carry, and anchors are refreshed.</p>
+          Revised 2026-10-26: redelivery now runs through four pluggable transports (RabbitMQ alone gates it on the flag; Azure Service Bus, Amazon SQS and PostgreSQL apply it unconditionally, SQS with its own 900-second-capped default), <code>RedeliveryIntervalsSeconds</code> defaults to <code>null</code> with the framework default held separately and <code>[0]</code> as the off switch, the fault consumer only Debug-logs faults produced by other assemblies (no Error log, no count), the fault Trade-off records the alerts and runbooks both applications now carry, and anchors are refreshed.
+          Revised 2026-10-28: anchors refreshed after the MMCA.ADC <code>infra/OPERATIONS.md</code> runbook headings moved down one line.</p>
           <h2 id="context">Context</h2>
           <p>Delivery in this workspace has always been at-least-once with retries on both legs: the outbox
           retries a failed publish with jittered exponential backoff and eventually dead-letters
@@ -492,7 +493,7 @@
           is in the error queue and will stay there until someone acts. Both applications alert on the
           Error log line rather than on the counter (MMCA.ADC <code>infra/main.bicep:650</code>, MMCA.Store
           <code>infra/main.bicep:498</code>) and document the manual inspect, replay or discard procedure (MMCA.ADC
-          <code>infra/OPERATIONS.md:231</code>, MMCA.Store <code>infra/OPERATIONS.md:178</code>; see
+          <code>infra/OPERATIONS.md:232</code>, MMCA.Store <code>infra/OPERATIONS.md:178</code>; see
           <a href="062-slo-alerting-as-code.html">ADR-062</a>), but <code>broker.fault.count</code> itself drives no alert and no
           automated replay path is provided. The gap moved from invisible to visible-and-hand-actioned.</li>
           <li><strong>There is no host-wide way to turn fault consumers off.</strong> The opt-out is per event type at the
@@ -702,6 +703,18 @@
           from the breaker search; and PostgreSQL <code>CommandTimeout</code> at <code>PostgreSQLDbContext.cs:94</code> with
           <code>EnableRetryOnFailure</code> at <code>:102-105</code>.</li>
           </ol>
+          <h2 id="revision-2026-10-28">Revision (2026-10-28)</h2>
+          <p>Re-verified against current source. No decision changed: the fault consumer still observes and stops
+          there, both applications still alert on the fault log line and document a manual error-queue
+          procedure, and MMCA.ADC still alerts on the outbox broker breaker. What moved is one MMCA.ADC
+          runbook anchor cited in the live Trade-offs.</p>
+          <ol>
+          <li>Anchors re-verified against current source: the MMCA.ADC error-queue runbook heading is at
+          <code>infra/OPERATIONS.md:232</code> (the fault Trade-off is re-pointed from <code>:231</code>; the MMCA.Store heading
+          stays at <code>infra/OPERATIONS.md:178</code>), and the MMCA.ADC <code>adc-prod-alert-outbox-broker-circuit-open</code>
+          runbook heading is at <code>infra/OPERATIONS.md:385</code>, superseding the <code>:384</code> recorded in the
+          2026-10-26 Revision.</li>
+          </ol>
           <h2 id="related">Related</h2>
           <p><a href="003-outbox-dual-dispatch.html">ADR-003</a> (the outbox publish leg this breaker wraps, and the retry,
           jittered backoff and dead-lettering that <code>BrokenCircuitException</code> reuses unchanged),
@@ -742,6 +755,7 @@
             <li><a href="#revision-2026-10-19">Revision (2026-10-19)</a></li>
             <li><a href="#revision-2026-10-21">Revision (2026-10-21)</a></li>
             <li><a href="#revision-2026-10-26">Revision (2026-10-26)</a></li>
+            <li><a href="#revision-2026-10-28">Revision (2026-10-28)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

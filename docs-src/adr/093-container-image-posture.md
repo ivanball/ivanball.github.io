@@ -30,6 +30,7 @@ SBOM step is recorded as pull-request-only, the publish-property citation is cor
 Revised 2026-10-19: Store's unchanged-leg re-tag also refreshes `latest` against the ACR purge, so the open gap recorded on 2026-10-07 is closed and both consumers re-tag the same way.
 Revised 2026-10-21: anchors refreshed after the `deploy.yml` and `main.bicep` growth in both consumers; no decision or posture changed. See Revision (2026-10-21).
 Revised 2026-10-26: anchors refreshed after further `deploy.yml` growth in both consumers (+1), `main.bicep` growth (+36) and a one-line shift in the ADC Gateway Dockerfile; no decision or posture changed. See Revision (2026-10-26).
+Revised 2026-10-28: anchors refreshed after a three-line shift in the ADC `main.bicep` per-app sizing and port blocks; no decision or posture changed. See Revision (2026-10-28).
 ## Context
 Eleven Dockerfiles produce every deployable container in the two Azure-hosted applications: six in
 MMCA.ADC (four services, the Gateway, the Blazor web host) and five in MMCA.Store (three services,
@@ -122,10 +123,10 @@ Blazor web hosts do not (`.../MMCA.ADC.UI.Web/Dockerfile:55`,
 scale-out replicas skip first-request JIT (`.../MMCA.ADC.Conference.Service/Dockerfile:43-44`), and
 the containers those replicas land on are fractional-vCPU Container Apps. Outside conference mode
 all six ADC apps (identity, conference, engagement, notification, gateway, ui) run on 0.25 vCPU /
-0.5 GiB: notification declares it literally (`MMCA.ADC/infra/main.bicep:2450`), and the other five
-take it as the baseline branch of `conferenceScaledResources` (`:182`; conference `:2158`,
-engagement `:2301`, gateway `:2640`, ui `:2791`) or `conferenceIdentityResources` (`:186`;
-identity `:1903`). The `conferenceMode` parameter (`:157`) lifts those four to 0.5 vCPU / 1 GiB and
+0.5 GiB: notification declares it literally (`MMCA.ADC/infra/main.bicep:2447`), and the other five
+take it as the baseline branch of `conferenceScaledResources` (`:182`; conference `:2155`,
+engagement `:2298`, gateway `:2637`, ui `:2788`) or `conferenceIdentityResources` (`:186`;
+identity `:1900`). The `conferenceMode` parameter (`:157`) lifts those four to 0.5 vCPU / 1 GiB and
 Identity to 1.0 vCPU / 2 GiB for conference day (rationale `:174-186`). On that much CPU, JIT time
 is not noise.
 
@@ -134,10 +135,10 @@ is not noise.
 `USER $APP_UID` (added 2026-09-07, see the revision below) and `ENTRYPOINT ["dotnet", "<Host>.dll"]`
 (`.../MMCA.ADC.Conference.Service/Dockerfile:55-68`); the base stage exposes 8080 and 8081
 (`:6-7`). For Identity, Conference and Engagement, 8080 is the h2c ingress endpoint and 8081 the
-HTTP/1.1 health-probe listener (Identity `MMCA.ADC/infra/main.bicep:1877,1880,1919`, Conference
-`:2130,2133,2172`, Engagement `:2283,2286,2314`); only Notification serves h2c gRPC on 8081, the
+HTTP/1.1 health-probe listener (Identity `MMCA.ADC/infra/main.bicep:1874,1877,1916`, Conference
+`:2127,2130,2169`, Engagement `:2280,2283,2311`); only Notification serves h2c gRPC on 8081, the
 ADR-012 mixed profile, behind an `http` main ingress on 8080, with its probe listener on 8082
-(`MMCA.ADC/infra/main.bicep:2418,2420,2426-2432,2468`). No image installs a package, adds
+(`MMCA.ADC/infra/main.bicep:2415,2417,2423-2429,2465`). No image installs a package, adds
 a shell script, or runs a health-check command of its own: liveness is the Container Apps probe
 configured in Bicep.
 
@@ -514,3 +515,20 @@ the anchors they recorded on their dates.
    `:2283,2286,2314`, Notification `:2418,2420,2426-2432,2468`; ADC Gateway
    `Source/Hosts/MMCA.ADC.Gateway/Dockerfile:73` (`USER $APP_UID`; the other ten `USER` lines are
    unchanged).
+
+## Revision (2026-10-28)
+
+Re-verified against current source. No decision, runtime posture or rationale changed: the
+`conferenceMode` sizing (0.25 vCPU / 0.5 GiB baseline, notification literal, the two conditional
+resource variables) and the port topology (h2c ingress on 8080 with the HTTP/1.1 probe listener on
+8081 for Identity, Conference and Engagement; Notification's `http` main ingress on 8080, h2c gRPC
+on an additional 8081 port mapping and probe on 8082) all read as recorded. What moved is anchors
+only: every per-app and port anchor in `MMCA.ADC/infra/main.bicep` shifted up by three lines, while
+the `conferenceMode` block did not move. Decisions 3 and 4 are re-pointed in place. The earlier
+Revision sections keep the anchors they recorded on their dates.
+
+1. Anchors re-verified against current source: ADC `main.bicep` notification literal `:2447`,
+   conference `:2155`, engagement `:2298`, gateway `:2637`, ui `:2788`, identity `:1900`
+   (`conferenceMode` `:157`, `conferenceScaledResources` `:182`, `conferenceIdentityResources`
+   `:186` unchanged), Identity ports `:1874,1877,1916`, Conference `:2127,2130,2169`, Engagement
+   `:2280,2283,2311`, Notification `:2415,2417,2423-2429,2465`.

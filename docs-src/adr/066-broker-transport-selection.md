@@ -39,6 +39,7 @@ deploy workflows grew; no change in what they show.
 Revised 2026-10-24: `MessageBus:Provider` is a string resolved against registered `IBrokerTransport`s, Azure Service Bus and Amazon SQS are adapter transports, and a configured redelivery list now replaces the default ([ADR-134](134-cloud-neutral-core-vendor-adapters.md)); the Decision's provider, emulator and retry bullets are corrected in place. See Revision (2026-10-24) at the end.
 Revised 2026-10-25: `PostgreSql` is a third built-in provider, MassTransit v8's SQL transport on PostgreSQL and the broker option for Google Cloud, recorded as a new Decision bullet with a hand-written Pub/Sub transport as a rejected alternative; the Decision's `AddBrokerMessaging` anchors are re-verified. See Revision (2026-10-25) at the end.
 Revised 2026-10-26: anchors refreshed after later Common, AppHost, Bicep and deploy workflow edits moved them; the `CHANGELOG.md` citations now name their release heading. See Revision (2026-10-26) at the end.
+Revised 2026-10-28: anchors refreshed after later edits to both Bicep templates and `CHANGELOG.md` moved them; the Store per-app secret names are spelled out. See Revision (2026-10-28) at the end.
 ## Context
 ADR-003 decides that integration events leave an aggregate through the outbox and are published by
 `OutboxProcessor` via `IMessageBus`, and it settles the *dispatch* question ("in-process for the
@@ -110,13 +111,14 @@ carry a dedicated test tier for the transport that only production uses.
   nor its warm-up.
 - **Production is Azure Service Bus, injected by Bicep.** Each service container app receives
   `MessageBus__Provider=AzureServiceBus` plus a `MessageBus__ConnectionString` secret reference:
-  ADC at `MMCA.ADC/infra/main.bicep:1983-1984` (identity, `:1861`), `:2208-2209` (conference,
-  `:2114`), `:2352-2353` (engagement, `:2267`), `:2505-2506` (notification, `:2402`); Store at
-  `MMCA.Store/infra/main.bicep:1607-1608` (identity, `:1514`), `:1775-1776` (catalog, `:1696`),
-  `:1911-1912` (sales, `:1820`). Every service in both repos reads its own per-service secret: Store
-  names a distinct secret reference per app, while ADC keeps the plain name
-  `service-bus-connection-string` and resolves it to the Key Vault secret belonging to that one
-  service (`MMCA.ADC/infra/main.bicep:1772-1794`). The images are the same ones the AppHost runs locally; only the two environment variables
+  ADC at `MMCA.ADC/infra/main.bicep:1980-1981` (identity, `:1858`), `:2205-2206` (conference,
+  `:2111`), `:2349-2350` (engagement, `:2264`), `:2502-2503` (notification, `:2399`); Store at
+  `MMCA.Store/infra/main.bicep:1608-1609` (identity, `:1515`), `:1776-1777` (catalog, `:1697`),
+  `:1912-1913` (sales, `:1821`). Every service in both repos reads its own per-service secret: Store
+  names a distinct secret reference per app (`service-bus-connection-string-identity`, `-catalog`,
+  `-sales`), while ADC keeps the plain name `service-bus-connection-string` and resolves it to the
+  Key Vault secret belonging to that one service (`MMCA.ADC/infra/main.bicep:1772-1791`, rationale at
+  `:1769-1771`; each app's secret entry at `:1885`, `:2138`, `:2290`, `:2436`). The images are the same ones the AppHost runs locally; only the two environment variables
   differ.
 - **PostgreSQL is a built-in broker for any host whose database can carry one.**
   `MessageBus:Provider=PostgreSql` selects `PostgreSqlBrokerTransport`
@@ -126,7 +128,7 @@ carry a dedicated test tier for the transport that only production uses.
   queues, topics, subscriptions and scheduled messages in tables and functions of one PostgreSQL
   database, so any PostgreSQL is the broker (`PostgreSqlBrokerTransport.cs:10-14`), and it is the
   broker option for Google Cloud, which has no MassTransit v8 Pub/Sub transport
-  (`MMCA.Common/CHANGELOG.md:86`, under `[1.257.0]`). It reads the shared broker connection string and fails at
+  (`MMCA.Common/CHANGELOG.md:129`, under `[1.257.0]`). It reads the shared broker connection string and fails at
   registration without one (`PostgreSqlBrokerTransport.cs:113-119`). When an
   `INpgsqlDataSourceConfigurator` is registered the bus runs on the shared `NpgsqlDataSource` for that
   connection string, otherwise on the string itself (`:94-102`), so an IAM token provider reaches the
@@ -162,18 +164,18 @@ carry a dedicated test tier for the transport that only production uses.
   Aspire container does not ship.
 - **Service Bus Standard tier and `Manage` rights are forced by the topology MassTransit builds.**
   Both namespaces are `Standard`/`Standard` (`MMCA.ADC/infra/main.bicep:1273-1276`,
-  `MMCA.Store/infra/main.bicep:1082-1085`) because `UsingAzureServiceBus` configures a topic per
+  `MMCA.Store/infra/main.bicep:1083-1086`) because `UsingAzureServiceBus` configures a topic per
   message type plus a subscription per consumer, and Basic supports queues only
-  (`MMCA.ADC/infra/main.bicep:1264-1265`, `MMCA.Store/infra/main.bicep:1074-1076`). There is no shared
+  (`MMCA.ADC/infra/main.bicep:1264-1265`, `MMCA.Store/infra/main.bicep:1075-1077`). There is no shared
   client rule: each container app owns a namespace authorization rule of its own, and every one of
   them carries `Send` + `Listen` + **`Manage`**. ADC declares four (`identity-service`,
   `conference-service`, `engagement-service`, `notification-service` at
   `MMCA.ADC/infra/main.bicep:1313`, `:1325`, `:1337`, `:1349`, rights at `:1317-1321` and repeated
   identically on the other three); Store declares three (`catalog-app`, `sales-app`, `identity-app`
-  at `MMCA.Store/infra/main.bicep:1118`, `:1130`, `:1142`, rights at `:1122-1126`). `Manage` is on
+  at `MMCA.Store/infra/main.bicep:1119`, `:1131`, `:1143`, rights at `:1123-1127`). `Manage` is on
   all seven so `ConfigureEndpoints` can provision that topology at startup; without it the first
   publish fails with an Unauthorized topology error, which is why neither template drops it
-  (`MMCA.ADC/infra/main.bicep:1286-1298`, `MMCA.Store/infra/main.bicep:1108-1117`). Neither repo
+  (`MMCA.ADC/infra/main.bicep:1286-1298`, `MMCA.Store/infra/main.bicep:1109-1118`). Neither repo
   sources a connection string from `RootManageSharedAccessKey`, so a later move to managed identity
   can revoke these without touching the namespace root: each service reads its own
   `listKeys().primaryConnectionString` variable, four of them under a four-line rationale comment in
@@ -283,10 +285,10 @@ broker, so extraction later is an AppHost change rather than a code change.
 - **`Manage` rights are broad, and splitting the credential did not narrow them.** Every per-service
   rule can create and delete entities anywhere in the namespace, which is the price of letting
   `ConfigureEndpoints` build the topology instead of declaring every topic in Bicep
-  (`MMCA.ADC/infra/main.bicep:1313-1359`, `MMCA.Store/infra/main.bicep:1118-1152`). Both templates
+  (`MMCA.ADC/infra/main.bicep:1313-1359`, `MMCA.Store/infra/main.bicep:1119-1153`). Both templates
   record the residual next to the rules: a compromised container still holds namespace-wide
   `Send` + `Listen` + `Manage`, so per-service rules buy credential separation and revocability, not
-  privilege reduction (`MMCA.ADC/infra/main.bicep:1300-1312`, `MMCA.Store/infra/main.bicep:1108-1117`).
+  privilege reduction (`MMCA.ADC/infra/main.bicep:1300-1312`, `MMCA.Store/infra/main.bicep:1109-1118`).
 - **Provider selection is per host and silent when missing.** A service that never receives
   `MessageBus__Provider` keeps the in-process bus and publishes nothing to the broker, without an
   error (`DependencyInjection.Messaging.cs:57-59`); correctness depends on auditing the AppHost and the Bicep
@@ -304,7 +306,7 @@ broker, so extraction later is an AppHost change rather than a code change.
 ## Alternatives rejected
 - **A hand-written Google Cloud Pub/Sub transport** (weighed 2026-10-25). An `IBrokerTransport` in
   MMCA.Common.Gcp written directly against the Pub/Sub SDK, because MassTransit v8 ships no Pub/Sub
-  transport (`MMCA.Common/CHANGELOG.md:86`, under `[1.257.0]`). Rejected because it would hand-write consumer dispatch,
+  transport (`MMCA.Common/CHANGELOG.md:129`, under `[1.257.0]`). Rejected because it would hand-write consumer dispatch,
   retry, delayed redelivery and topology provisioning outside MassTransit for one cloud, the cost
   [ADR-118](118-message-transport-library-policy.md) assigns its raw-SDK floor option, while the
   built-in PostgreSQL transport already gives a Google Cloud host a broker on a PostgreSQL database
@@ -550,6 +552,37 @@ that later releases pushed down to unrelated bullets.
    `:828`, 5-day window `:841`, required jobs `:843-845` with same-run mode at `:846`,
    `deploy.needs` `:1099`, assert `:1129` (break-glass input still `:26`). The anchors inside earlier
    revisions are left as recorded.
+
+## Revision (2026-10-28)
+Re-verified against current source. Which broker runs where, the `MessageBus__Provider` plus
+`MessageBus__ConnectionString` pair on every service container app, the per-service broker secrets
+in both repos, the Standard-tier namespaces and the seven per-service rules with `Send` + `Listen` +
+`Manage` are unchanged. Only line anchors moved, and the production bullet now names Store's three
+per-app secret references.
+
+1. **Store per-app secret names spelled out.** Store's three apps reference
+   `service-bus-connection-string-identity`, `-catalog` and `-sales`
+   (`MMCA.Store/infra/main.bicep:1609`, `:1777`, `:1913`); ADC's four apps keep the plain
+   `service-bus-connection-string` and resolve it to `kvIdentityServiceBusConn`,
+   `kvConferenceServiceBusConn`, `kvEngagementServiceBusConn` and `kvNotificationServiceBusConn`
+   (`MMCA.ADC/infra/main.bicep:1885`, `:2138`, `:2290`, `:2436`). The ADC Key Vault secret range is
+   narrowed to the four broker secrets (`:1772-1791`, rationale `:1769-1771`); the former
+   `:1772-1794` ran into the unrelated notification hub secret at `:1792`.
+2. Anchors re-verified against current source: ADC Bicep container apps
+   `MMCA.ADC/infra/main.bicep:1858`, `:2111`, `:2264`, `:2399`, broker env pairs `:1980-1981`,
+   `:2205-2206`, `:2349-2350`, `:2502-2503` (Standard sku `:1273-1276`, Basic rationale
+   `:1264-1265`, rules `:1313`, `:1325`, `:1337`, `:1349`, rights `:1317-1321`, `Manage` rationale
+   `:1286-1298` and residual risk `:1300-1312` did not move); Store Bicep container apps
+   `MMCA.Store/infra/main.bicep:1515`, `:1697`, `:1821`, broker env pairs `:1608-1609`,
+   `:1776-1777`, `:1912-1913`, Standard sku `:1083-1086`, Basic rationale `:1075-1077`, rules
+   `:1119`, `:1131`, `:1143` (declarations `:1119-1153`, rights `:1123-1127`), `Manage` rationale and
+   residual `:1109-1118` (the `listKeys` comment `:158-162` and variables `:163-165` did not move);
+   the PostgreSQL broker and Pub/Sub absence bullet `MMCA.Common/CHANGELOG.md:129` under `[1.257.0]`
+   (heading `:112`). The 2026-10-24 revision's `AddBrokerTransport`, `ResolveBrokerTransport` and
+   `AddAmazonSqsTransport` anchors now read
+   `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.Messaging.cs:159`, `:188`
+   and `MMCA.Common/Source/Hosting/MMCA.Common.Aws/AwsServiceCollectionExtensions.cs:85`; they and the
+   other anchors inside earlier revisions are left as recorded.
 
 ## Related
 ADR-003 (the outbox that feeds `IMessageBus`; this ADR picks the transport underneath it), ADR-016

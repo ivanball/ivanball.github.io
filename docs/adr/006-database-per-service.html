@@ -261,7 +261,9 @@
           (abstract per-module <code>ModuleApplicationDbContext</code> DbSet holders exist);
           <code>infra/main.bicep</code> anchors refreshed.
           Revised 2026-10-26: per-module <code>ModuleApplicationDbContext</code> declarations are scoped to modules that
-          own their own aggregates (ADC Notification declares none); <code>infra/main.bicep</code> anchors refreshed.</p>
+          own their own aggregates (ADC Notification declares none); <code>infra/main.bicep</code> anchors refreshed.
+          Revised 2026-10-28: anchors refreshed after Helpdesk #199 moved the no-per-module-context rule to
+          <code>MMCA.Helpdesk/AGENTS.md:62</code>.</p>
           <h2 id="context">Context</h2>
           <p>When the modules were first extracted into independently-deployable services, all services in an
           app still pointed at a <strong>single shared SQL database</strong> with a single <code>OutboxMessages</code> table. That
@@ -280,7 +282,7 @@
           introduce a per-module concrete (runtime) DbContext class. Each module may declare an abstract
           <code>ModuleApplicationDbContext</code> that only lists its <code>DbSet</code>s (for example
           <code>MMCA.Helpdesk/Source/Modules/Tickets/MMCA.Helpdesk.Tickets.Infrastructure/Persistence/DbContexts/ModuleApplicationDbContext.cs:14</code>),
-          but nothing subclasses it at runtime (rule stated at <code>MMCA.Helpdesk/AGENTS.md:74</code>). Only modules
+          but nothing subclasses it at runtime (rule stated at <code>MMCA.Helpdesk/AGENTS.md:62</code>). Only modules
           that own their own aggregates declare one. ADC Notification still owns the <code>ADC_Notification</code>
           database, but its <code>PushNotification</code> and <code>UserNotification</code> entities live in MMCA.Common
           (<code>MMCA.ADC/Source/Services/MMCA.ADC.Notification.Service/Program.cs:269-270</code>), so its module
@@ -411,6 +413,23 @@
           <code>MMCA.ADC/infra/POST-CUTOVER-atldevcon-downgrade.md:103</code> and
           <code>MMCA.ADC/infra/DISASTER-RECOVERY.md:27</code> are unchanged.</li>
           </ol>
+          <h2 id="revision-2026-10-28">Revision (2026-10-28)</h2>
+          <p>Re-verified against current source. The decision is unchanged: one sealed context class per engine,
+          one instance per database, abstract per-module <code>ModuleApplicationDbContext</code> DbSet holders only in
+          modules that own their own aggregates, and four per-service <code>ADC_*</code> databases with PITR plus LTR as
+          the only restore path. Only the Helpdesk <code>AGENTS.md</code> anchor moved: Helpdesk #199 moved
+          template-engine traps out of that file, which shifted the rule up. The 2026-10-21 and 2026-10-26
+          revisions above keep the anchors they recorded (their <code>MMCA.Helpdesk/AGENTS.md:74</code> was correct when
+          written and is superseded by this revision).</p>
+          <ol>
+          <li>Anchors re-verified against current source: the no-per-module-context rule (&quot;one instance per
+          database, never a per-module context class (ADR-006)&quot;) at <code>MMCA.Helpdesk/AGENTS.md:62</code> (was
+          <code>:74</code>, which now holds the unrelated tenancy override-key bullet);
+          <code>MMCA.Helpdesk/Source/Modules/Tickets/MMCA.Helpdesk.Tickets.Infrastructure/Persistence/DbContexts/ModuleApplicationDbContext.cs:14</code>,
+          <code>MMCA.ADC/Source/Services/MMCA.ADC.Notification.Service/Program.cs:269-270</code>, the <code>AtlDevCon</code>
+          note at <code>MMCA.ADC/infra/main.bicep:1114</code> and the <code>serviceDatabaseLtr</code> policy at
+          <code>MMCA.ADC/infra/main.bicep:1166</code> are unchanged.</li>
+          </ol>
           
         <div class="doc-foot btn-row">
           <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
@@ -430,6 +449,7 @@
             <li><a href="#revision-2026-10-07">Revision (2026-10-07)</a></li>
             <li><a href="#revision-2026-10-21">Revision (2026-10-21)</a></li>
             <li><a href="#revision-2026-10-26">Revision (2026-10-26)</a></li>
+            <li><a href="#revision-2026-10-28">Revision (2026-10-28)</a></li>
             </ul>
           </nav>
         </aside>

@@ -259,7 +259,8 @@
           2026-10-21: the shared erasure base now also revokes and anonymizes the account&#39;s refresh sessions
           before the save, both middleware write-failure tests exercise a failed marker write, and anchors are
           refreshed. Revised 2026-10-26: anchors refreshed after line shifts in the pipeline builder, the
-          cache service, the shared erasure base and ADC&#39;s delete handler.</p>
+          cache service, the shared erasure base and ADC&#39;s delete handler. Revised 2026-10-28: anchors
+          refreshed after line shifts in ADC&#39;s delete handler and the cache registration.</p>
           <h2 id="context">Context</h2>
           <p>Soft-delete is the framework&#39;s default deletion model (ADR-005): <code>AuditableBaseEntity.Delete()</code> sets
           <code>IsDeleted = true</code> and EF global query filters hide the row, but the record survives for audit,
@@ -441,11 +442,12 @@
           </ul>
           <p>Both deployed apps therefore revoke at the same speed. MMCA.ADC&#39;s <code>DeleteUserHandler</code>
           (<code>MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Application/Users/UseCases/DeleteUser/DeleteUserHandler.cs</code>)
-          carries no marker code of its own (its remarks at <code>:27-30</code> defer to the base) and forwards the
-          <code>ICacheService</code> it takes (<code>:35</code>) to the base (<code>:39</code>). Its
+          carries no marker code of its own (its remarks at <code>:27-31</code> defer to the base) and forwards the
+          <code>ICacheService</code> it takes (<code>:36</code>) to the base (<code>:40</code>). Its
           <code>OnAfterSoftDeleteAsync</code> tail raises the cross-service <code>UserDeleted</code> integration event on the
-          aggregate (<code>:63</code>) and schedules the avatar blob delete as a durable internal command enrolled in the
-          erasure transaction (<code>:72-75</code>, <code>:80-90</code>; ADR-114) rather than queuing it post-commit; MMCA.Store&#39;s
+          aggregate (<code>:64</code>) and schedules the avatar blob delete as a durable internal command enrolled in the
+          erasure transaction (<code>:66-76</code>, the call at <code>:75</code>; <code>:81-91</code>; ADR-114) rather than queuing it
+          post-commit; MMCA.Store&#39;s
           handler (<code>MMCA.Store/Source/Modules/Identity/MMCA.Store.Identity.Application/Users/UseCases/DeleteUser/DeleteUserHandler.cs</code>)
           keeps its linked-<code>Customer</code> cascade and gains the marker behavior purely by forwarding the new
           <code>ICacheService</code> constructor parameter to the base. Neither app contains a marker write.</p>
@@ -511,7 +513,7 @@
           <li><strong>Cache-scope-dependent.</strong> The marker reaches every replica and service only when a distributed
           store backs the cache. The default <code>ICacheService</code> is <code>MemoryCacheService</code> when no non-memory
           <code>IDistributedCache</code> is registered
-          (<code>Source/Core/MMCA.Common.Infrastructure/DependencyInjection.Caching.cs:59-80</code>), and there
+          (<code>Source/Core/MMCA.Common.Infrastructure/DependencyInjection.Caching.cs:75-96</code>), and there
           <code>GetFromSharedStoreAsync</code> is a plain <code>GetAsync</code> (<code>ICacheService.cs:69-70</code>), so a marker written by
           the Identity host is not visible to another process, and a validator-less host on a memory-only
           cache never sees it.</li>
@@ -833,6 +835,20 @@
           <code>IRefreshSessionStore</code> <code>:78</code>, <code>OnAfterSoftDeleteAsync</code> <code>:137</code>, <code>Anonymize</code> <code>:144</code>,
           <code>RevokeAndAnonymizeAllAsync</code> <code>:155-157</code>, <code>SaveChangesAsync</code> <code>:159</code>.</li>
           </ol>
+          <h2 id="revision-2026-10-28">Revision (2026-10-28)</h2>
+          <p>Re-verified against current source. The middleware, its place between <code>RateLimiting</code> and
+          <code>Authorization</code>, the shared-store marker read, the fail-open policy, the marker write in the shared
+          erasure base, ADC&#39;s in-transaction avatar schedule and the memory-only default cache are unchanged.
+          Only anchors moved: ADC&#39;s delete handler gained a constructor parameter ahead of <code>ICacheService</code>.</p>
+          <ol>
+          <li><strong>Anchors re-verified against current source:</strong> ADC <code>DeleteUserHandler.cs</code> remarks marker
+          sentence <code>:27-31</code> (from <code>:27-30</code>; the sentence ends &quot;nothing here re-stamps the marker&quot; at
+          <code>:31</code>), <code>ICacheService</code> <code>:36</code> (from <code>:35</code>), base call <code>:40</code> (from <code>:39</code>), <code>UserDeleted</code> <code>:64</code>
+          (from <code>:63</code>), schedule block <code>:66-76</code> with the <code>ScheduleAvatarBlobDeletionAsync</code> call at <code>:75</code>
+          (from <code>:72-75</code>), <code>ScheduleAvatarBlobDeletionAsync</code> <code>:81-91</code> (from <code>:80-90</code>);
+          <code>DependencyInjection.Caching.cs</code> <code>ICacheService</code> factory <code>:75-96</code> (from <code>:59-80</code>), with the
+          non-memory <code>IDistributedCache</code> check at <code>:77-78</code> and the <code>MemoryCacheService</code> fallback at <code>:93</code>.</li>
+          </ol>
           
         <div class="doc-foot btn-row">
           <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
@@ -857,6 +873,7 @@
             <li><a href="#revision-2026-10-07">Revision (2026-10-07)</a></li>
             <li><a href="#revision-2026-10-21">Revision (2026-10-21)</a></li>
             <li><a href="#revision-2026-10-26">Revision (2026-10-26)</a></li>
+            <li><a href="#revision-2026-10-28">Revision (2026-10-28)</a></li>
             </ul>
           </nav>
         </aside>

@@ -16,7 +16,8 @@ validator query on every authenticated request and the 30-second window is gone.
 2026-10-21: the shared erasure base now also revokes and anonymizes the account's refresh sessions
 before the save, both middleware write-failure tests exercise a failed marker write, and anchors are
 refreshed. Revised 2026-10-26: anchors refreshed after line shifts in the pipeline builder, the
-cache service, the shared erasure base and ADC's delete handler.
+cache service, the shared erasure base and ADC's delete handler. Revised 2026-10-28: anchors
+refreshed after line shifts in ADC's delete handler and the cache registration.
 
 ## Context
 Soft-delete is the framework's default deletion model (ADR-005): `AuditableBaseEntity.Delete()` sets
@@ -204,11 +205,12 @@ so every app that derives from the base gets the identical revocation window wit
 
 Both deployed apps therefore revoke at the same speed. MMCA.ADC's `DeleteUserHandler`
 (`MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Application/Users/UseCases/DeleteUser/DeleteUserHandler.cs`)
-carries no marker code of its own (its remarks at `:27-30` defer to the base) and forwards the
-`ICacheService` it takes (`:35`) to the base (`:39`). Its
+carries no marker code of its own (its remarks at `:27-31` defer to the base) and forwards the
+`ICacheService` it takes (`:36`) to the base (`:40`). Its
 `OnAfterSoftDeleteAsync` tail raises the cross-service `UserDeleted` integration event on the
-aggregate (`:63`) and schedules the avatar blob delete as a durable internal command enrolled in the
-erasure transaction (`:72-75`, `:80-90`; ADR-114) rather than queuing it post-commit; MMCA.Store's
+aggregate (`:64`) and schedules the avatar blob delete as a durable internal command enrolled in the
+erasure transaction (`:66-76`, the call at `:75`; `:81-91`; ADR-114) rather than queuing it
+post-commit; MMCA.Store's
 handler (`MMCA.Store/Source/Modules/Identity/MMCA.Store.Identity.Application/Users/UseCases/DeleteUser/DeleteUserHandler.cs`)
 keeps its linked-`Customer` cascade and gains the marker behavior purely by forwarding the new
 `ICacheService` constructor parameter to the base. Neither app contains a marker write.
@@ -273,7 +275,7 @@ keeps its linked-`Customer` cascade and gains the marker behavior purely by forw
 - **Cache-scope-dependent.** The marker reaches every replica and service only when a distributed
   store backs the cache. The default `ICacheService` is `MemoryCacheService` when no non-memory
   `IDistributedCache` is registered
-  (`Source/Core/MMCA.Common.Infrastructure/DependencyInjection.Caching.cs:59-80`), and there
+  (`Source/Core/MMCA.Common.Infrastructure/DependencyInjection.Caching.cs:75-96`), and there
   `GetFromSharedStoreAsync` is a plain `GetAsync` (`ICacheService.cs:69-70`), so a marker written by
   the Identity host is not visible to another process, and a validator-less host on a memory-only
   cache never sees it.
@@ -596,3 +598,17 @@ erasure base and ADC's in-transaction avatar schedule are unchanged. Only anchor
    documentation `:66-72`, constructor `:74-79` with `ICacheService` `:76` and
    `IRefreshSessionStore` `:78`, `OnAfterSoftDeleteAsync` `:137`, `Anonymize` `:144`,
    `RevokeAndAnonymizeAllAsync` `:155-157`, `SaveChangesAsync` `:159`.
+
+## Revision (2026-10-28)
+Re-verified against current source. The middleware, its place between `RateLimiting` and
+`Authorization`, the shared-store marker read, the fail-open policy, the marker write in the shared
+erasure base, ADC's in-transaction avatar schedule and the memory-only default cache are unchanged.
+Only anchors moved: ADC's delete handler gained a constructor parameter ahead of `ICacheService`.
+
+1. **Anchors re-verified against current source:** ADC `DeleteUserHandler.cs` remarks marker
+   sentence `:27-31` (from `:27-30`; the sentence ends "nothing here re-stamps the marker" at
+   `:31`), `ICacheService` `:36` (from `:35`), base call `:40` (from `:39`), `UserDeleted` `:64`
+   (from `:63`), schedule block `:66-76` with the `ScheduleAvatarBlobDeletionAsync` call at `:75`
+   (from `:72-75`), `ScheduleAvatarBlobDeletionAsync` `:81-91` (from `:80-90`);
+   `DependencyInjection.Caching.cs` `ICacheService` factory `:75-96` (from `:59-80`), with the
+   non-memory `IDistributedCache` check at `:77-78` and the `MemoryCacheService` fallback at `:93`.

@@ -19,6 +19,8 @@ Revised 2026-10-21: anchors refreshed after later edits to both apps' `deploy.ym
 Helpdesk package pins.
 Revised 2026-10-26: anchors refreshed after later edits to both apps' `deploy.yml` files, ADC's
 `e2e.yml`, MMCA.Common's `ci.yml` and `FACTS.md`.
+Revised 2026-10-28: anchors refreshed after an apt-mirror step moved MMCA.Common's `ui-e2e` test
+step in `ci.yml`.
 
 ## Context
 Rubric section 23 asks for client-side performance that is measured rather than assumed, naming Core
@@ -220,8 +222,8 @@ accessibility.
 - **The green-run artifact is written but not kept.** Both workflows upload the diagnostics bundle
   only on failure (ADC `e2e.yml:390-396`, Store `:458-463`), and MMCA.Common's `ui-e2e` job sets no
   `WEB_VITALS_OUTPUT_DIR` at all (its test step sets only `E2E_HEADLESS` and `E2E_BROWSER`,
-  `ci.yml:342-344`) and uploads no Web Vitals artifact of its own (its one upload is Playwright
-  traces, on failure only, `ci.yml:347-353`), so the JSON
+  `ci.yml:374-376`) and uploads no Web Vitals artifact of its own (its one upload is Playwright
+  traces, on failure only, `ci.yml:379-385`), so the JSON
   lands beside the test binaries and is discarded with the runner. There is no time series: the
   sample line in the run log is the only surviving record of a green run.
 - **Nothing stops a ceiling being raised to silence a red gate.** As with ADR-060's baseline, the
@@ -317,6 +319,17 @@ anchors they were written with.
    `WEB_VITALS_OUTPUT_DIR` `:327`, `E2E_FORCE_SERVER` `:241`, failure-only upload `:390-396`;
    MMCA.Common `ci.yml` `ui-e2e` `:223`, matrix `:232`, test-step env `:342-344`, failure-only trace
    upload `:347-353`.
+
+## Revision (2026-10-28)
+Re-verified against current source. The decision, the budget, the measurement flow, the
+chromium-only ui-scoped `e2e-gate`, the failure-only diagnostics upload and MMCA.Common's lack of
+any `WEB_VITALS_OUTPUT_DIR` in its `ui-e2e` job are unchanged, as are both apps' recorded
+calibration maxima (ADC `WebVitalsTests.cs:22-24`, Store `:17-19`). Only line anchors in
+MMCA.Common's `ci.yml` moved, after an apt-mirror step was inserted ahead of the `ui-e2e` test step;
+the dated revisions above keep the anchors they were written with.
+1. Anchors re-verified against current source: MMCA.Common `ci.yml` `ui-e2e` `:223`, matrix `:232`,
+   test step `:372`, test-step env `:374-376` (`E2E_HEADLESS` `:375`, `E2E_BROWSER` `:376`),
+   failure-only trace upload `:379-385` (`if: failure()` `:380`).
 
 ## Related
 [ADR-063](063-accessibility-conformance-gate.md) (the structural sibling: the same package, the same

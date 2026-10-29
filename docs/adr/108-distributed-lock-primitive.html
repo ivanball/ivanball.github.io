@@ -261,13 +261,15 @@
           Revised 2026-10-21: anchors refreshed after the AddCaching, SubmitQuestionHandler, OutboxProcessor and ADC Bicep line shifts.
           Revised 2026-10-26: adoption is seven call sites, the seventh being the framework&#39;s two-factor
           time-step acceptance in <code>TwoFactorAuthenticator</code>; anchors refreshed for the question submit handler,
-          the outbox claim and the ADC Bicep declarations.</p>
+          the outbox claim and the ADC Bicep declarations.
+          Revised 2026-10-28: anchors refreshed after the <code>AddCaching</code> output-cache <code>InstanceName</code> block
+          (#615) and the ADC Bicep line shifts.</p>
           <h2 id="context">Context</h2>
           <p>Both deployed apps run more than one replica of every service. ADC&#39;s Conference container app
-          (<code>MMCA.ADC/infra/main.bicep:2114</code>) scales with <code>minReplicas: 1</code> and
-          <code>maxReplicas: conferenceScaledMaxReplicas</code> (scale at <code>:2259</code>), which is 2 by default and 4 in
-          conference mode (<code>:192</code>); Identity and Engagement scale the same way (<code>:2106</code>, <code>:2394</code>) and
-          Notification at a fixed <code>maxReplicas: 2</code> (<code>:2580</code>). Anything in the framework that
+          (<code>MMCA.ADC/infra/main.bicep:2111</code>) scales with <code>minReplicas: 1</code> and
+          <code>maxReplicas: conferenceScaledMaxReplicas</code> (scale at <code>:2256</code>), which is 2 by default and 4 in
+          conference mode (<code>:192</code>); Identity and Engagement scale the same way (<code>:2103</code>, <code>:2391</code>) and
+          Notification at a fixed <code>maxReplicas: 2</code> (<code>:2577</code>). Anything in the framework that
           relies on &quot;only one of these runs at a time&quot; therefore runs once per replica unless the exclusion
           lives somewhere all the replicas can see.</p>
           <p>The in-process tools do not reach that far. A <code>SemaphoreSlim</code>, or the striped <code>KeyedSemaphoreStripe</code>
@@ -352,10 +354,10 @@
           holds (<code>:18-25</code>).</p>
           </li>
           <li><p><strong>Registration rides with the cache, and is unconditional.</strong> <code>AddCaching</code>
-          (<code>Infrastructure/DependencyInjection.Caching.cs:26</code>, reached from <code>AddInfrastructure</code> at
-          <code>Infrastructure/DependencyInjection.cs:140</code>) <code>TryAddSingleton</code>s an <code>IDistributedLock</code> (<code>DependencyInjection.Caching.cs:88</code>):
-          <code>RedisDistributedLock</code> when an <code>IConnectionMultiplexer</code> resolves (<code>DependencyInjection.Caching.cs:91-96</code>),
-          <code>InProcessDistributedLock</code> otherwise (<code>DependencyInjection.Caching.cs:99-101</code>).
+          (<code>Infrastructure/DependencyInjection.Caching.cs:27</code>, reached from <code>AddInfrastructure</code> at
+          <code>Infrastructure/DependencyInjection.cs:140</code>) <code>TryAddSingleton</code>s an <code>IDistributedLock</code> (<code>DependencyInjection.Caching.cs:104</code>):
+          <code>RedisDistributedLock</code> when an <code>IConnectionMultiplexer</code> resolves (<code>DependencyInjection.Caching.cs:107-112</code>),
+          <code>InProcessDistributedLock</code> otherwise (<code>DependencyInjection.Caching.cs:115-117</code>).
           <code>TryAdd</code> means a host that registered its own implementation first keeps it. Both branches are
           asserted (<code>Infrastructure.Tests/DependencyInjectionTests.cs:81-83</code>, <code>:94-96</code>). In production the
           multiplexer comes from <code>AddRedisCaching</code>
@@ -496,8 +498,8 @@
           <code>adc</code> and the same <code>Cache:KeyPrefix</code> of <code>adc:</code>
           (<code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/appsettings.json:38</code>, <code>:45</code>, and the same in the
           Identity, Engagement and Notification service hosts) and share one Redis instance
-          (<code>MMCA.ADC/infra/main.bicep:1620</code>, injected per app as <code>ConnectionStrings__redis</code> at <code>:1945</code>,
-          <code>:2191</code>, <code>:2328</code>, <code>:2482</code>). Two ADC
+          (<code>MMCA.ADC/infra/main.bicep:1617</code>, injected per app as <code>ConnectionStrings__redis</code> at <code>:1942</code>,
+          <code>:2188</code>, <code>:2325</code>, <code>:2479</code>). Two ADC
           services choosing the same logical key would collide, and today only the callers&#39; key shapes
           prevent it.</li>
           <li><strong>409 is a real cost to a caller.</strong> The idempotency filter answers a duplicate whose original is
@@ -633,6 +635,24 @@
           </ul>
           </li>
           </ol>
+          <h2 id="revision-2026-10-28">Revision (2026-10-28)</h2>
+          <p>Re-verified against current source. The primitive, its contract, both implementations, the
+          registration, the seven call sites and the choose-between rule are unchanged; only anchors moved.</p>
+          <ol>
+          <li>Anchors re-verified against current source:<ul>
+          <li>Registration (point 8): <code>AddCaching</code> at <code>DependencyInjection.Caching.cs:27</code>, its
+          <code>TryAddSingleton&lt;IDistributedLock&gt;</code> at <code>:104</code>, the Redis branch at <code>:107-112</code> and the
+          in-process fallback at <code>:115-117</code>. They moved with the <code>RedisOutputCacheOptions</code> <code>InstanceName</code>
+          <code>PostConfigure</code> block now at <code>:66-73</code>. <code>AddInfrastructure</code> still reaches it at
+          <code>DependencyInjection.cs:140</code>.</li>
+          <li>ADC Bicep (Context, Trade-offs): the Conference app at <code>MMCA.ADC/infra/main.bicep:2111</code> with
+          its scale at <code>:2256</code>, the Identity and Engagement scale lines at <code>:2103</code> and <code>:2391</code>,
+          Notification&#39;s fixed <code>maxReplicas: 2</code> at <code>:2577</code>, the Redis resource at <code>:1617</code>, and the
+          per-app <code>ConnectionStrings__redis</code> injections at <code>:1942</code>, <code>:2188</code>, <code>:2325</code> and <code>:2479</code>;
+          <code>conferenceScaledMaxReplicas</code> stays at <code>:192</code>.</li>
+          </ul>
+          </li>
+          </ol>
           <h2 id="related">Related</h2>
           <p><a href="017-request-idempotency.html">ADR-017</a> (the HTTP idempotency filter, the first consumer, whose
           409-on-lock-miss this record explains), <a href="026-caching-strategy.html">ADR-026</a> (the cache registration
@@ -666,6 +686,7 @@
             <li><a href="#revision-2026-10-19">Revision (2026-10-19)</a></li>
             <li><a href="#revision-2026-10-21">Revision (2026-10-21)</a></li>
             <li><a href="#revision-2026-10-26">Revision (2026-10-26)</a></li>
+            <li><a href="#revision-2026-10-28">Revision (2026-10-28)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>
