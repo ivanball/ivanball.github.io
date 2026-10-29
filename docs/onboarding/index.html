@@ -132,7 +132,8 @@
         <li><a href="group-25-adc-host-composition.html">25. ADC Application Host, UI Shell &amp; Cross-Module Composition</a></li>
         <li><a href="group-26-device-capability-layer.html">26. Device Capability Abstraction Layer (Native Contracts, MAUI, Browser &amp; Fallback Adapters)</a></li>
         <li><a href="group-27-common-ai-integration.html">27. Common AI Integration</a></li>
-        <li><a href="group-28-testing-infrastructure.html">28. Testing &amp; Quality Infrastructure</a></li>
+        <li><a href="group-28-common-cloud-provider-adapters.html">28. Common Cloud Provider Adapters (AWS, Azure, GCP)</a></li>
+        <li><a href="group-29-testing-infrastructure.html">29. Testing &amp; Quality Infrastructure</a></li>
         <li><a href="devops-aspire.html">Aspire Orchestration and Containers</a></li>
         <li><a href="devops-cicd.html">CI/CD and Operations</a></li>
         <li><a href="devops-iac.html">Infrastructure as Code, ADC Azure Deployment</a></li>
@@ -207,9 +208,9 @@ Level(C) = 1 + max(Level(D)) over all first-party D that C depends on</code></pr
           <p>The type inventory and dependency graph are produced <strong>mechanically</strong> by a small Roslyn syntactic
           parser (<code>Tools/invtool/</code>), so the type list, namespaces, and <code>file:line</code> are exact and reproducible. Edges
           are resolved by <strong>namespace-aware name matching</strong>; ~96% bind by namespace visibility, the rest by a
-          globally-unique-name fallback (586 edges), and 38 references are dropped as ambiguous. The functional grouping is
+          globally-unique-name fallback (943 edges), and 119 references are dropped as ambiguous. The functional grouping is
           then applied mechanically (<code>Tools/invtool/classify.ps1</code> → <code>00-group-taxonomy.md</code>), so every one of the
-          <strong>5,787</strong> distinct type nodes maps to exactly one group with no silent drops. See the
+          <strong>6,078</strong> distinct type nodes maps to exactly one group with no silent drops. See the
           <a href="00-dependency-manifest.html#edge-resolution--accuracy">manifest&#39;s accuracy note</a> for residual caveats.</p>
           <hr>
           <h2 id="chapters">Chapters</h2>
@@ -227,11 +228,11 @@ Level(C) = 1 + max(Level(D)) over all first-party D that C depends on</code></pr
           </tr>
           <tr>
           <td><a href="00-inventory.html"><code>00-inventory.md</code></a></td>
-          <td>Phase 0, every in-scope type (5,787 distinct), mechanically extracted, with <code>file:line</code></td>
+          <td>Phase 0, every in-scope type (6,078 distinct), mechanically extracted, with <code>file:line</code></td>
           </tr>
           <tr>
           <td><a href="00-dependency-manifest.html"><code>00-dependency-manifest.md</code></a></td>
-          <td>Phase 1a, per-type first-party deps + computed Level; the 36 cycles</td>
+          <td>Phase 1a, per-type first-party deps + computed Level; the 54 cycles</td>
           </tr>
           <tr>
           <td><a href="00-group-taxonomy.html"><code>00-group-taxonomy.md</code></a></td>
@@ -257,7 +258,7 @@ Level(C) = 1 + max(Level(D)) over all first-party D that C depends on</code></pr
           <tr>
           <td>2</td>
           <td><a href="group-02-domain-building-blocks.html">Domain Building Blocks</a></td>
-          <td>37</td>
+          <td>39</td>
           <td>Entity/aggregate bases, value objects + invariants, domain markers, attributes, identifier aliases, <code>[Pii]</code> redaction, row-version concurrency marker</td>
           </tr>
           <tr>
@@ -281,20 +282,20 @@ Level(C) = 1 + max(Level(D)) over all first-party D that C depends on</code></pr
           <tr>
           <td>6</td>
           <td><a href="group-06-validation.html">Validation</a></td>
-          <td>22</td>
+          <td>26</td>
           <td>FluentValidation contracts + failure mapping that gate commands</td>
           </tr>
           <tr>
           <td>7</td>
           <td><a href="group-07-persistence-ef-core.html">Persistence &amp; EF Core</a></td>
-          <td>181</td>
+          <td>182</td>
           <td><code>SQLServerDbContext</code> over abstract <code>ApplicationDbContext</code>, interceptors (incl. the deferred-dispatch record), repositories, engine-aware entity config, data-source routing, the per-engine <code>IDataSourceEngine</code> strategy behind the <code>DataSourceEngines</code> registry (<a href="https://ivanball.github.io/docs/adr/130-per-engine-data-source-strategy.html" target="_blank" rel="noopener">ADR-130</a>), conventions (incl. the soft-delete unique-index convention), factories, and the persistence/audit-trail/connection-string/data-source/tenancy settings classes (regrouped here from the module-system chapter on 2026-09-05)</td>
           </tr>
           <tr>
           <td>8</td>
           <td><a href="group-08-auth.html">Authentication &amp; Authorization</a></td>
-          <td>174</td>
-          <td>JWT/JWKS dual-fetch, the shared <code>AuthenticationServiceBase&lt;TUser&gt;</code> login workflow (<code>IAuthUser</code>) with refresh-session issue, rotation and reuse detection in <code>AuthSessionIssuer</code>, current-user/claims, password hashing + the shared <code>PasswordComplexity</code> rules, cookie sessions + the <code>ISessionCookieStore</code> family behind the same-origin proxy, role policies + the permission-based authorization mechanism (registry, <code>[HasPermission]</code>), the <code>RoleValue</code> base, the external-auth-broker contract (<a href="https://ivanball.github.io/docs/adr/042-device-capability-abstraction.html" target="_blank" rel="noopener">ADR-042</a>/043), the JWT/JWKS settings (<code>JwtSettings</code>, <code>JwksSettings</code>, <code>JwtSigningAlgorithm</code>)</td>
+          <td>176</td>
+          <td>JWT/JWKS dual-fetch, the shared <code>AuthenticationServiceBase&lt;TUser&gt;</code> login workflow (<code>IAuthUser</code>) with refresh-session issue, rotation and reuse detection in <code>AuthSessionIssuer</code>, current-user/claims, versioned password hashing with rehash on sign-in (<a href="https://ivanball.github.io/docs/adr/133-versioned-password-hash-work-factor.html" target="_blank" rel="noopener">ADR-133</a>) + the shared <code>PasswordComplexity</code> rules, cookie sessions + the <code>ISessionCookieStore</code> family behind the same-origin proxy, role policies + the permission-based authorization mechanism (registry, <code>[HasPermission]</code>), the <code>RoleValue</code> base, the external-auth-broker contract (<a href="https://ivanball.github.io/docs/adr/042-device-capability-abstraction.html" target="_blank" rel="noopener">ADR-042</a>/043), the JWT/JWKS settings (<code>JwtSettings</code>, <code>JwksSettings</code>, <code>JwtSigningAlgorithm</code>)</td>
           </tr>
           <tr>
           <td>9</td>
@@ -306,7 +307,7 @@ Level(C) = 1 + max(Level(D)) over all first-party D that C depends on</code></pr
           <td>10</td>
           <td><a href="group-10-notifications.html">Notifications (Push + In-App Inbox + Email)</a></td>
           <td>59</td>
-          <td>Push (SignalR), in-app inbox, email, recipient providers, the <a href="https://ivanball.github.io/docs/adr/039-live-channel-push.html" target="_blank" rel="noopener">ADR-039</a> hub-channel live publisher, <a href="https://ivanball.github.io/docs/adr/044-native-push-delivery.html" target="_blank" rel="noopener">ADR-044</a> native OS-level push (Azure Notification Hubs, shipped inert), ADC Notification module + its cross-service gRPC live-channel plumbing + extractable-host Kestrel config</td>
+          <td>Push (SignalR), in-app inbox, email, recipient providers, the <a href="https://ivanball.github.io/docs/adr/039-live-channel-push.html" target="_blank" rel="noopener">ADR-039</a> hub-channel live publisher, <a href="https://ivanball.github.io/docs/adr/044-native-push-delivery.html" target="_blank" rel="noopener">ADR-044</a> native OS-level push (shipped inert; the vendor senders live in chapter 28), ADC Notification module + its cross-service gRPC live-channel plumbing + extractable-host Kestrel config</td>
           </tr>
           <tr>
           <td>11</td>
@@ -317,7 +318,7 @@ Level(C) = 1 + max(Level(D)) over all first-party D that C depends on</code></pr
           <tr>
           <td>12</td>
           <td><a href="group-12-api-hosting-mapping.html">API Hosting, Middleware, Idempotency &amp; DTO/Contract Mapping</a></td>
-          <td>94</td>
+          <td>95</td>
           <td>Controller bases (incl. OAuth + service-info + API versioning, <a href="https://ivanball.github.io/docs/adr/046-http-api-versioning.html" target="_blank" rel="noopener">ADR-046</a>), middleware (incl. soft-deleted-user revocation, <a href="https://ivanball.github.io/docs/adr/047-soft-deleted-user-session-revocation.html" target="_blank" rel="noopener">ADR-047</a>), startup, model binders, JSON converters, feature mgmt, idempotency, mapping, edge error localization (i18n), authenticated output caching (<a href="https://ivanball.github.io/docs/adr/040-authenticated-output-caching-for-public-reads.html" target="_blank" rel="noopener">ADR-040</a>), app-association/deep-link endpoints (<a href="https://ivanball.github.io/docs/adr/043-mobile-deep-links-and-native-oauth-callback.html" target="_blank" rel="noopener">ADR-043</a>)</td>
           </tr>
           <tr>
@@ -329,19 +330,19 @@ Level(C) = 1 + max(Level(D)) over all first-party D that C depends on</code></pr
           <tr>
           <td>14</td>
           <td><a href="group-14-module-system-composition.html">Module System, Composition &amp; Configuration</a></td>
-          <td>92</td>
-          <td><code>IModule</code> + Kahn-ordered loader, DI composition roots, data-source attributes, options-binding plumbing (the per-subsystem settings classes live with their subsystems since 2026-09-05), plus the host-level infrastructure services: managed file storage + image processing (<a href="https://ivanball.github.io/docs/adr/045-managed-file-storage-and-avatars.html" target="_blank" rel="noopener">ADR-045</a>), native-push sender + device registrar (<a href="https://ivanball.github.io/docs/adr/044-native-push-delivery.html" target="_blank" rel="noopener">ADR-044</a>), <code>TenantContext</code>, the upcasting/fault integration-event consumers and <code>PeriodicBackgroundService</code></td>
+          <td>95</td>
+          <td><code>IModule</code> + Kahn-ordered loader, DI composition roots, data-source attributes, options-binding plumbing (the per-subsystem settings classes live with their subsystems since 2026-09-05), the <code>ApplicationNamespace</code> keyspace resolver (<a href="https://ivanball.github.io/docs/adr/135-application-namespace-keyspace-isolation.html" target="_blank" rel="noopener">ADR-135</a>), plus the host-level infrastructure services: the provider-neutral file storage (<a href="https://ivanball.github.io/docs/adr/045-managed-file-storage-and-avatars.html" target="_blank" rel="noopener">ADR-045</a>) and native-push (<a href="https://ivanball.github.io/docs/adr/044-native-push-delivery.html" target="_blank" rel="noopener">ADR-044</a>) registrations and their inert defaults (the vendor implementations live in chapter 28), <code>TenantContext</code>, the upcasting/fault integration-event consumers and <code>PeriodicBackgroundService</code></td>
           </tr>
           <tr>
           <td>15</td>
           <td><a href="group-15-common-ui-framework.html">Common UI Framework</a></td>
-          <td>202</td>
-          <td>Reusable MudBlazor building blocks: data-grid list page base, theme, common pages/services, the Blazor Server UI-host hardening kit (circuit limits + UI rate limiting), i18n culture bootstrap + day/dark <code>ThemeService</code>, user-preference readers/writers, pseudo-localization gate, OAuth UI settings + token storage (Web/WASM), hub-channel subscriptions (<a href="https://ivanball.github.io/docs/adr/039-live-channel-push.html" target="_blank" rel="noopener">ADR-039</a>), the shared <code>DetailPageBase</code>, the email-confirmation page + UI service and the client-config endpoint (extracted from ADC in v1.211.0), the same-origin API proxy + session handoff in MMCA.Common.UI.Web (<a href="https://ivanball.github.io/docs/adr/131-same-origin-api-proxy.html" target="_blank" rel="noopener">ADR-131</a>)</td>
+          <td>207</td>
+          <td>Reusable MudBlazor building blocks: data-grid list page base, theme, common pages/services, the Blazor Server UI-host hardening kit (circuit limits + UI rate limiting), i18n culture bootstrap + day/dark <code>ThemeService</code>, user-preference readers/writers, pseudo-localization gate, OAuth UI settings + token storage (Web/WASM), hub-channel subscriptions (<a href="https://ivanball.github.io/docs/adr/039-live-channel-push.html" target="_blank" rel="noopener">ADR-039</a>), the shared <code>DetailPageBase</code>, the email-confirmation page + UI service and the client-config endpoint (extracted from ADC in v1.211.0), the same-origin API proxy + session handoff in MMCA.Common.UI.Web (<a href="https://ivanball.github.io/docs/adr/131-same-origin-api-proxy.html" target="_blank" rel="noopener">ADR-131</a>), the installable-web-app service worker (<a href="https://ivanball.github.io/docs/adr/136-installable-web-app-service-worker.html" target="_blank" rel="noopener">ADR-136</a>)</td>
           </tr>
           <tr>
           <td>16</td>
           <td><a href="group-16-aspire-orchestration.html">Aspire Orchestration &amp; Service Defaults</a></td>
-          <td>64</td>
+          <td>69</td>
           <td>AppHost wiring, ServiceDefaults, warmup, telemetry, security helpers, the shared <code>HttpResilienceDefaults</code> Polly source of truth, the shared <code>HealthCheckTags</code> liveness/readiness vocabulary</td>
           </tr>
           <tr>
@@ -389,7 +390,7 @@ Level(C) = 1 + max(Level(D)) over all first-party D that C depends on</code></pr
           <tr>
           <td>24</td>
           <td><a href="group-24-identity-module.html">ADC Identity Module (Users, Profiles, GDPR Export/Erasure)</a></td>
-          <td>117</td>
+          <td>119</td>
           <td>The Identity bounded context end-to-end (incl. <code>IdentityPermissions</code>, user culture/theme preferences, the <a href="https://ivanball.github.io/docs/adr/045-managed-file-storage-and-avatars.html" target="_blank" rel="noopener">ADR-045</a> user-avatar photo slice end to end, the external-login email verifier + extractable-host Kestrel config; <code>AuthenticationService</code> now extends Common&#39;s shared base)</td>
           </tr>
           <tr>
@@ -407,13 +408,19 @@ Level(C) = 1 + max(Level(D)) over all first-party D that C depends on</code></pr
           <tr>
           <td>27</td>
           <td><a href="group-27-common-ai-integration.html">Common AI Integration</a></td>
-          <td>32</td>
+          <td>33</td>
           <td>The optional, provider-agnostic <code>MMCA.Common.AI</code> package plus its Anthropic adapter: the provider settings + validator + factory contract, one composition entry point that builds the delegating-client pipeline, the bounding and usage-metering chat clients over <code>IChatClient</code>, the token-estimator contract, the usage meter, the IChatGuardrail verdict contract + its GuardrailChatClient decorator, the shipped content-policy guardrail, the chat tool policy, request redaction, the golden-replay evaluation base, and the hashed, versioned prompt contract (<a href="https://ivanball.github.io/docs/adr/120-governed-chat-client-boundary.html" target="_blank" rel="noopener">ADR-120</a>)</td>
           </tr>
           <tr>
           <td>28</td>
-          <td><a href="group-28-testing-infrastructure.html">Testing &amp; Quality Infrastructure</a></td>
-          <td>3,364</td>
+          <td><a href="group-28-common-cloud-provider-adapters.html">Common Cloud Provider Adapters (AWS, Azure, GCP)</a></td>
+          <td>67</td>
+          <td>The opt-in vendor adapter packages <code>MMCA.Common.Azure</code>, <code>MMCA.Common.Aws</code> and <code>MMCA.Common.Gcp</code> behind the cloud-neutral core (<a href="https://ivanball.github.io/docs/adr/134-cloud-neutral-core-vendor-adapters.html" target="_blank" rel="noopener">ADR-134</a>): broker transports (Service Bus, SQS/SNS), native push (Notification Hubs, SNS, FCM), file storage (Blob, S3, GCS), secrets as configuration (Key Vault, Secrets Manager, Secret Manager), database IAM auth (RDS, Cloud SQL), the DataProtection key ring and telemetry exporters, one registration call per capability</td>
+          </tr>
+          <tr>
+          <td>29</td>
+          <td><a href="group-29-testing-infrastructure.html">Testing &amp; Quality Infrastructure</a></td>
+          <td>3,562</td>
           <td>All test projects + reusable Testing/Testing.E2E/Testing.UI/<strong>Testing.Architecture</strong> bases (incl. the handler + decorator-pipeline test bases, the shared production-host/graceful-shutdown bases, the observability-convention fitness base, and the Gallery auth stubs) + architecture-fitness tests + Gallery + the BenchmarkDotNet perf-smoke suite + the weekly <code>MMCA.Common.LoadTests</code> load tier</td>
           </tr>
           </tbody></table></div>

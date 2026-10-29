@@ -14,7 +14,9 @@ six address-field rules ([`AddressLine1Rules<T>`](#addressline1rulest-addresslin
 [`AddressLine2Rules<T>`](#addressline1rulest-addressline2rulest-cityrulest-countryrulest), [`CityRules<T>`](#addressline1rulest-addressline2rulest-cityrulest-countryrulest),
 [`StateRules<T>`](#staterulest), [`ZipCodeRules<T>`](#zipcoderulest),
 [`CountryRules<T>`](#addressline1rulest-addressline2rulest-cityrulest-countryrulest)) and the [`AddressValidator`](#addressvalidator) that assembles
-them; (2) the shared helper that gives every one of those rules an optional machine-readable code,
+them, with an opt-in United States variant, [`UsAddressValidator`](#usaddressvalidator), built from
+three more rules ([`UsCityRules<T>`](#uscityrulest), [`UsStateRules<T>`](#usstaterulest),
+[`UsZipCodeRules<T>`](#uszipcoderulest)); (2) the shared helper that gives every one of those rules an optional machine-readable code,
 [`OptionalErrorCodeExtensions`](#optionalerrorcodeextensions); (3) one **convention validator**,
 [`CommandRequestValidator<TCommand, TRequest>`](#commandrequestvalidatortcommand-trequest), that
 bridges a command to its request's validators; and (4) one **failure-mapping extension**,
@@ -172,6 +174,32 @@ composite with `SetValidator(new AddressValidator())`
 `MMCA.Store/Source/Modules/Identity/MMCA.Store.Identity.Application/Customers/UseCases/ChangeAddress/CustomerChangeAddressRequestValidator.cs:18`),
 while a DTO that flattens address fields without an `Address` wrapper can include the individual
 rule sets instead (`AddressValidationRules.cs:9-11`).
+
+**The US address variant: stricter rules layered on, never swapped in.**
+[`UsAddressValidator`](#usaddressvalidator)
+(`MMCA.Common/Source/Core/MMCA.Common.Application/Validation/UsAddressValidationRules.cs:15`) is a
+second `AbstractValidator<Address>` for apps that take United States addresses. It first
+`Include`s the plain [`AddressValidator`](#addressvalidator), so every length bound above still
+applies, then adds three US-only rule sets against the same value object
+(`UsAddressValidationRules.cs:19-22`). [`UsCityRules<T>`](#uscityrulest) makes the city required
+(`UsAddressValidationRules.cs:28`, `:31-33`). [`UsStateRules<T>`](#usstaterulest)
+(`UsAddressValidationRules.cs:38`) requires the state and then checks it with
+`Must(UsPostalRegions.IsKnownCode)` (`UsAddressValidationRules.cs:43-45`), and
+[`UsZipCodeRules<T>`](#uszipcoderulest) (`UsAddressValidationRules.cs:50`) requires the ZIP code and
+then checks `Must(UsPostalRegions.IsValidZipCode)` (`UsAddressValidationRules.cs:55-57`). Both run
+under `Cascade(CascadeMode.Stop)`, so an empty value reports only "You must enter a ..." and never a
+second format message. The two predicates live on
+[`UsPostalRegions`](group-02-domain-building-blocks.md#uspostalregions) in `MMCA.Common.Shared`
+(`MMCA.Common/Source/Core/MMCA.Common.Shared/ValueObjects/Contact/UsPostalRegions.cs:12`), deliberately,
+so a UI's state picker and the server validator accept exactly the same codes
+(`UsPostalRegions.cs:6-11`): the 50 states, DC, five territories and three military regions, matched
+case-insensitively with surrounding spaces ignored (`UsPostalRegions.cs:34-35`, `:43`), and a ZIP of
+5 digits or ZIP+4 through a generated, culture-invariant regex with a 100 ms match timeout
+(`UsPostalRegions.cs:66-70`). The country is not checked: the caller decides which addresses are US
+ones, and the plain [`AddressValidator`](#addressvalidator) is left unchanged
+(`UsAddressValidationRules.cs:12-13`). Unlike `AddressValidator`, it has no consumer in ADC, Store, or
+Helpdesk today; a module opts in by attaching it with `SetValidator(new UsAddressValidator())`
+exactly as the address validators above do.
 
 **Convention over configuration: the request-to-command bridge.** Most commands wrap a request record
 and implement [`ICommandWithRequest<out TRequest>`](group-05-cqrs-pipeline.md#icommandwithrequestout-trequest)
@@ -416,9 +444,50 @@ contract the gate emits, and by the architecture fitness tests that keep the lay
   Whichever validator wins, it is invoked by
   [`ValidatingCommandDecorator<TCommand, TResult>`](group-05-cqrs-pipeline.md#validatingcommanddecoratortcommand-tresult)
   before the handler runs. Behavior is pinned by `CommonValidationRulesTests` in
-  [group-27](group-28-testing-infrastructure.md#per-project-test-rollup), which exercises both the
+  [group-27](group-29-testing-infrastructure.md#per-project-test-rollup), which exercises both the
   message and the optional-code path for each fragment
   (`MMCA.Common/Tests/Core/MMCA.Common.Application.Tests/Validation/CommonValidationRulesTests.cs:468-566`).
+
+### UsCityRules<T>
+
+> MMCA.Common.Application · `MMCA.Common.Application.Validation` · `MMCA.Common/Source/Core/MMCA.Common.Application/Validation/UsAddressValidationRules.cs:28` · Level 0 · class (sealed, `AbstractValidator<T>` subclass)
+
+- **What it is**: a one-rule FluentValidation fragment that makes a United States address's city
+  required. It is the first of the three US-specific fragments that
+  [`UsAddressValidator`](#usaddressvalidator) layers on top of the length-only
+  [`AddressValidator`](#addressvalidator).
+
+- **Depends on**: FluentValidation's `AbstractValidator<T>` (NuGet, primer §3) and
+  `System.Linq.Expressions.Expression<Func<T, string?>>` (BCL, `UsAddressValidationRules.cs:1-2`).
+  No first-party dependency, which is why it sits at Level 0 while its two siblings
+  [`UsStateRules<T>`](#usstaterulest) and [`UsZipCodeRules<T>`](#uszipcoderulest) sit at Level 2.
+
+- **Concept introduced**: none new. It is the fragment-composition idiom taught at
+  [`RequiredStringRules<T>`](#requiredstringrulest-optionalstringrulest-emailrulest-positiveintrulest-positivedecimalrulest-nonnegativeintrulest-requiredidrulest-tid-optionalpositiveidrulest-tid-passwordrulest-strongpasswordrulest)
+  applied to an opt-in policy. What is worth noting is the *opt-in* shape: the class remarks on
+  `UsAddressValidator` (`UsAddressValidationRules.cs:7-13`) state that the US rules are added for apps
+  that take US addresses, that the plain `AddressValidator` is unchanged, and that the country is not
+  checked (the caller decides which addresses are US ones). `[Rubric §24, Forms, Validation & UX
+  Safety]` assesses whether field rules are defined once and reused; the US requirements live in one
+  file instead of being restated by each app that ships an address form.
+
+- **Walkthrough**: the sole constructor (`:31-33`) takes only a nullable string selector and is a
+  single expression body: `RuleFor(selector).NotEmpty().WithMessage("You must enter a City")`. Unlike
+  the `CommonValidationRules.cs` fragments it takes no `fieldName`, no length and no `errorCode`
+  parameter, so it does not route through
+  [`OptionalErrorCodeExtensions`](#optionalerrorcodeextensions) and its failure carries
+  FluentValidation's default error code. The length ceiling on the city is not repeated here: it comes
+  from `AddressValidator`, which `UsAddressValidator` includes first (`:19`).
+
+- **Why it's built this way**: keeping the US requirement a separate fragment rather than a flag on
+  `AddressValidator` leaves the international-friendly validator untouched for every existing caller,
+  while a US form can include exactly the one rule it needs against its own `T`.
+
+- **Where it's used**: inside the framework, only by `UsAddressValidator`, which binds it to
+  [`Address`](group-02-domain-building-blocks.md#address) as `Include(new UsCityRules<Address>(p => p.City))`
+  (`UsAddressValidationRules.cs:20`). No other usage site exists in `MMCA.Common/Source`. Behavior is
+  pinned through the composite validator by `UsAddressValidationRulesTests`
+  (`MMCA.Common/Tests/Core/MMCA.Common.Application.Tests/Validation/UsAddressValidationRulesTests.cs:14`).
 
 ### CommandRequestValidator<TCommand, TRequest>
 
@@ -483,7 +552,150 @@ contract the gate emits, and by the architecture fitness tests that keep the lay
   in turn (`:73`), accumulating failures through
   [`ValidationFailureExtensions.ToErrors`](#validationfailureextensions) (`:82`). Covered by
   `CommandRequestValidatorTests` in
-  [group-27](group-28-testing-infrastructure.md#per-project-test-rollup).
+  [group-27](group-29-testing-infrastructure.md#per-project-test-rollup).
+
+### UsStateRules<T>
+
+> MMCA.Common.Application · `MMCA.Common.Application.Validation` · `MMCA.Common/Source/Core/MMCA.Common.Application/Validation/UsAddressValidationRules.cs:38` · Level 2 · class (sealed, `AbstractValidator<T>` subclass)
+
+- **What it is**: a FluentValidation fragment that requires a US address's state and accepts only a
+  USPS region code: the 50 states, DC, the five inhabited territories and the three military regions.
+  A sibling of [`UsCityRules<T>`](#uscityrulest), which teaches the shared shape.
+
+- **Depends on**: [`UsPostalRegions`](group-02-domain-building-blocks.md#uspostalregions) from
+  `MMCA.Common.Shared.ValueObjects.Contact` (`using` at `UsAddressValidationRules.cs:3`), whose
+  `IsKnownCode` is the predicate; that Shared dependency is what lifts it to Level 2. Plus
+  FluentValidation's `AbstractValidator<T>`, `CascadeMode` and `Must`.
+
+- **Concept introduced**: none new; see [`UsCityRules<T>`](#uscityrulest) for the opt-in US fragment
+  pattern. `[Rubric §24, Forms, Validation & UX Safety]`: the accepted code list is one Shared
+  definition, and the `UsPostalRegions` remarks
+  (`MMCA.Common/Source/Core/MMCA.Common.Shared/ValueObjects/Contact/UsPostalRegions.cs:6-11`) state it
+  lives in Shared so a UI's state picker and the server's validation accept exactly the same codes.
+
+- **Walkthrough**: the constructor (`:41-45`) is one expression body over a nullable string selector.
+  `Cascade(CascadeMode.Stop)` (`:43`) stops the chain at the first failure, so an empty state reports
+  only "You must enter a State" (`:44`) rather than also failing the code check. The second rule is
+  `Must(UsPostalRegions.IsKnownCode)` (`:45`) with the message "State must be a two-letter US state,
+  territory or military region code". `IsKnownCode` trims the value and matches it case-insensitively
+  against a `FrozenSet<string>` of the codes (`UsPostalRegions.cs:34-35`, `:43`), so `" ga "` passes
+  while the full name `"Georgia"` does not. Like its siblings it takes no `errorCode` parameter.
+
+- **Why it's built this way**: validating against the same frozen set a picker renders from means a
+  client cannot offer a value the server then rejects, and the code list changes in one file.
+
+- **Where it's used**: only by [`UsAddressValidator`](#usaddressvalidator), as
+  `Include(new UsStateRules<Address>(p => p.State))` (`UsAddressValidationRules.cs:21`); no other usage
+  site in `MMCA.Common/Source`. Pinned through the composite by `UsAddressValidationRulesTests`
+  (`MMCA.Common/Tests/Core/MMCA.Common.Application.Tests/Validation/UsAddressValidationRulesTests.cs:14`).
+
+### UsZipCodeRules<T>
+
+> MMCA.Common.Application · `MMCA.Common.Application.Validation` · `MMCA.Common/Source/Core/MMCA.Common.Application/Validation/UsAddressValidationRules.cs:50` · Level 2 · class (sealed, `AbstractValidator<T>` subclass)
+
+- **What it is**: a FluentValidation fragment that requires a US address's ZIP code and accepts only
+  five digits or ZIP+4 (`12345` or `12345-6789`). A sibling of [`UsCityRules<T>`](#uscityrulest) and
+  [`UsStateRules<T>`](#usstaterulest).
+
+- **Depends on**: [`UsPostalRegions`](group-02-domain-building-blocks.md#uspostalregions), whose
+  `IsValidZipCode` is the predicate (hence Level 2), plus FluentValidation's `AbstractValidator<T>`,
+  `CascadeMode` and `Must`.
+
+- **Concept introduced**: none new; see [`UsCityRules<T>`](#uscityrulest).
+
+- **Walkthrough**: the constructor (`:53-57`) mirrors `UsStateRules<T>`: `Cascade(CascadeMode.Stop)`
+  (`:55`), then `NotEmpty()` with "You must enter a Zip Code" (`:56`), then
+  `Must(UsPostalRegions.IsValidZipCode)` with "Zip Code must be 5 digits or ZIP+4 (12345-6789)"
+  (`:57`). `IsValidZipCode` trims the value and matches it against a `[GeneratedRegex]`
+  `^\d{5}(-\d{4})?$` declared `CultureInvariant | ExplicitCapture` with a 100 ms match timeout
+  (`UsPostalRegions.cs:66-70`). No `errorCode` parameter.
+
+- **Why it's built this way**: the pattern lives beside the region codes in Shared rather than inline
+  in the rule, so the format check is one definition any layer can call.
+
+- **Where it's used**: only by [`UsAddressValidator`](#usaddressvalidator), as
+  `Include(new UsZipCodeRules<Address>(p => p.ZipCode))` (`UsAddressValidationRules.cs:22`); no other
+  usage site in `MMCA.Common/Source`. Pinned through the composite by `UsAddressValidationRulesTests`
+  (`MMCA.Common/Tests/Core/MMCA.Common.Application.Tests/Validation/UsAddressValidationRulesTests.cs:14`).
+
+### StateRules<T>
+> MMCA.Common.Application · `MMCA.Common.Application.Validation` · `MMCA.Common/Source/Core/MMCA.Common.Application/Validation/AddressValidationRules.cs:62` · Level 4 · class (sealed)
+
+- **What it is**: a one-rule FluentValidation fragment for the optional `State` field of a postal
+  address. It is generic over the parent type `T` and takes a selector expression, so it can be
+  included by any validator whose model carries a state / province / region string, not only by a
+  validator for the [`Address`](group-02-domain-building-blocks.md#address) value object.
+- **Depends on**: FluentValidation's `AbstractValidator<T>` (NuGet, [primer §3](00-primer.md#3-the-external-stack-bcl--nuget-external-level-0)),
+  `System.Linq.Expressions.Expression<Func<T, string?>>` (BCL), and
+  [`AddressInvariants`](group-02-domain-building-blocks.md#addressinvariants) for the length ceiling
+  (`MMCA.Common.Shared.ValueObjects`, imported at
+  `MMCA.Common/Source/Core/MMCA.Common.Application/Validation/AddressValidationRules.cs:4`). It sits at
+  Level 4 purely because of that constant reference: structurally it is the same fragment shape as the
+  Level-0 [`OptionalStringRules<T>`](#requiredstringrulest-optionalstringrulest-emailrulest-positiveintrulest-positivedecimalrulest-nonnegativeintrulest-requiredidrulest-tid-optionalpositiveidrulest-tid-passwordrulest-strongpasswordrulest).
+- **Concept**: the reusable rule-fragment idiom introduced by
+  [`RequiredStringRules<T>`](#requiredstringrulest-optionalstringrulest-emailrulest-positiveintrulest-positivedecimalrulest-nonnegativeintrulest-requiredidrulest-tid-optionalpositiveidrulest-tid-passwordrulest-strongpasswordrulest) and the other
+  `MMCA.Common/Source/Core/MMCA.Common.Application/Validation/CommonValidationRules.cs` fragments,
+  specialised to one address field. `[Rubric §1, SOLID]` assesses whether each unit has one reason to
+  change; this class has exactly one, the state field's contract, and the number that expresses that
+  contract lives in a single shared constant rather than being retyped at each call site.
+  `[Rubric §24, Forms, Validation & UX Safety]` assesses whether validation is defined once and reused
+  across create and update paths instead of copy-pasted; including this fragment is how a request
+  validator gets the state rule without restating it.
+- **Walkthrough**: the whole class is a constructor with an expression body
+  (`AddressValidationRules.cs:65-67`). It takes `Expression<Func<T, string?>> selector` and calls
+  `RuleFor(selector).MaximumLength(AddressInvariants.StateMaxLength)`. The selector is **nullable**
+  (`string?`), which encodes the fact that state is optional on
+  [`Address`](group-02-domain-building-blocks.md#address)
+  (`MMCA.Common/Source/Core/MMCA.Common.Shared/ValueObjects/Contact/Address.cs:32` declares `State` as
+  `string?`): there is no `NotEmpty()` in the chain, so `null` and `""` both pass and only an
+  over-length value fails. The message is built with
+  `string.Create(CultureInfo.InvariantCulture, $"State cannot be longer than {AddressInvariants.StateMaxLength} characters")`
+  (`:67`), so the number a user sees is the same constant the rule enforces, and the interpolation is
+  culture-invariant rather than dependent on the ambient culture of the validating thread. The current
+  value of that constant is `100`
+  (`MMCA.Common/Source/Core/MMCA.Common.Shared/ValueObjects/Contact/AddressInvariants.cs:21`).
+- **Why it's built this way**: `AddressInvariants` is described in its own doc comment as the single
+  place the max lengths are shared with "EF entity configurations and FluentValidation validators"
+  (`AddressInvariants.cs:5-7`). Binding the fragment to the constant rather than to a literal is what
+  keeps the request-level rule, the domain invariant, and the column width from drifting apart.
+- **Where it's used**: composed into [`AddressValidator`](#addressvalidator) at
+  `AddressValidationRules.cs:20`, and available for direct `Include(...)` by any module request
+  validator whose DTO carries loose address fields. It is exercised directly by
+  [`AddressValidationRulesTests`](group-29-testing-infrastructure.md#per-project-test-rollup)
+  (`MMCA.Common/Tests/Core/MMCA.Common.Application.Tests/Validation/AddressValidationRulesTests.cs:98`),
+  which builds `new StateRules<TestAddressModel>(p => p.State)` against a model type unrelated to
+  `Address` and is therefore a live demonstration that the fragment is genuinely parent-agnostic.
+- **Caveats / not-in-source**: the rule is length-only. There is no format, enumeration, or
+  country-aware check on the state value anywhere in this class.
+
+### ZipCodeRules<T>
+> MMCA.Common.Application · `MMCA.Common.Application.Validation` · `MMCA.Common/Source/Core/MMCA.Common.Application/Validation/AddressValidationRules.cs:72` · Level 4 · class (sealed)
+
+- **What it is**: the same one-rule fragment shape as [`StateRules<T>`](#staterulest), bound to the
+  optional `ZipCode` field and its own length constant.
+- **Depends on**: FluentValidation's `AbstractValidator<T>`, a nullable selector expression, and
+  [`AddressInvariants`](group-02-domain-building-blocks.md#addressinvariants).
+- **Concept**: no new concept. See [`StateRules<T>`](#staterulest) for the fragment idiom and the
+  `[Rubric §24, Forms, Validation & UX Safety]` treatment; this section records only what differs.
+- **Walkthrough**: the constructor body (`AddressValidationRules.cs:75-77`) is
+  `RuleFor(selector).MaximumLength(AddressInvariants.ZipCodeMaxLength)` with the message
+  "Zip Code cannot be longer than {n} characters", again built through
+  `string.Create(CultureInfo.InvariantCulture, ...)`. `ZipCodeMaxLength` is `20`
+  (`MMCA.Common/Source/Core/MMCA.Common.Shared/ValueObjects/Contact/AddressInvariants.cs:24`), the tightest of
+  the six address constants, and the field is nullable on the value object
+  (`MMCA.Common/Source/Core/MMCA.Common.Shared/ValueObjects/Contact/Address.cs:36`), so an absent postal code
+  is valid.
+- **Why it's built this way**: postal-code formats differ by country, so the framework-level rule
+  deliberately bounds length only and leaves any national format rule to the module that knows the
+  country context. Twenty characters is wide enough for the punctuated formats used outside the United
+  States while still bounding the string for storage and for the EF column width that shares the
+  constant.
+- **Where it's used**: included by [`AddressValidator`](#addressvalidator) at
+  `AddressValidationRules.cs:21`, and covered in isolation by
+  [`AddressValidationRulesTests`](group-29-testing-infrastructure.md#per-project-test-rollup)
+  (`MMCA.Common/Tests/Core/MMCA.Common.Application.Tests/Validation/AddressValidationRulesTests.cs:114`),
+  which asserts a failure at `ZipCodeMaxLength + 1` characters rather than at a hard-coded 21, so the
+  test moves with the constant.
 
 ### AddressLine1Rules<T>, AddressLine2Rules<T>, CityRules<T>, CountryRules<T>
 
@@ -552,7 +764,7 @@ contract the gate emits, and by the architecture fitness tests that keep the lay
   [`AddressValidator`](#addressvalidator), which includes each of them bound to the corresponding
   `Address` property (`AddressValidationRules.cs:17-19`, `:22`). They are covered directly by
   `AddressValidationRulesTests` in
-  [group-27](group-28-testing-infrastructure.md#per-project-test-rollup)
+  [group-27](group-29-testing-infrastructure.md#per-project-test-rollup)
   (`MMCA.Common/Tests/Core/MMCA.Common.Application.Tests/Validation/AddressValidationRulesTests.cs:19`,
   `:55`, `:82`, `:130`).
 
@@ -561,85 +773,6 @@ contract the gate emits, and by the architecture fitness tests that keep the lay
   (`AddressValidationRules.cs:31-32`, `:42-43`, `:52-53`, `:82-83`). No ADC or Store validator
   currently includes them directly; the reuse-outside-`Address` scenario the class doc describes is
   supported by the design but has no consumer in the source today.
-
-### StateRules<T>
-> MMCA.Common.Application · `MMCA.Common.Application.Validation` · `MMCA.Common/Source/Core/MMCA.Common.Application/Validation/AddressValidationRules.cs:62` · Level 4 · class (sealed)
-
-- **What it is**: a one-rule FluentValidation fragment for the optional `State` field of a postal
-  address. It is generic over the parent type `T` and takes a selector expression, so it can be
-  included by any validator whose model carries a state / province / region string, not only by a
-  validator for the [`Address`](group-02-domain-building-blocks.md#address) value object.
-- **Depends on**: FluentValidation's `AbstractValidator<T>` (NuGet, [primer §3](00-primer.md#3-the-external-stack-bcl--nuget-external-level-0)),
-  `System.Linq.Expressions.Expression<Func<T, string?>>` (BCL), and
-  [`AddressInvariants`](group-02-domain-building-blocks.md#addressinvariants) for the length ceiling
-  (`MMCA.Common.Shared.ValueObjects`, imported at
-  `MMCA.Common/Source/Core/MMCA.Common.Application/Validation/AddressValidationRules.cs:4`). It sits at
-  Level 4 purely because of that constant reference: structurally it is the same fragment shape as the
-  Level-0 [`OptionalStringRules<T>`](#requiredstringrulest-optionalstringrulest-emailrulest-positiveintrulest-positivedecimalrulest-nonnegativeintrulest-requiredidrulest-tid-optionalpositiveidrulest-tid-passwordrulest-strongpasswordrulest).
-- **Concept**: the reusable rule-fragment idiom introduced by
-  [`RequiredStringRules<T>`](#requiredstringrulest-optionalstringrulest-emailrulest-positiveintrulest-positivedecimalrulest-nonnegativeintrulest-requiredidrulest-tid-optionalpositiveidrulest-tid-passwordrulest-strongpasswordrulest) and the other
-  `MMCA.Common/Source/Core/MMCA.Common.Application/Validation/CommonValidationRules.cs` fragments,
-  specialised to one address field. `[Rubric §1, SOLID]` assesses whether each unit has one reason to
-  change; this class has exactly one, the state field's contract, and the number that expresses that
-  contract lives in a single shared constant rather than being retyped at each call site.
-  `[Rubric §24, Forms, Validation & UX Safety]` assesses whether validation is defined once and reused
-  across create and update paths instead of copy-pasted; including this fragment is how a request
-  validator gets the state rule without restating it.
-- **Walkthrough**: the whole class is a constructor with an expression body
-  (`AddressValidationRules.cs:65-67`). It takes `Expression<Func<T, string?>> selector` and calls
-  `RuleFor(selector).MaximumLength(AddressInvariants.StateMaxLength)`. The selector is **nullable**
-  (`string?`), which encodes the fact that state is optional on
-  [`Address`](group-02-domain-building-blocks.md#address)
-  (`MMCA.Common/Source/Core/MMCA.Common.Shared/ValueObjects/Contact/Address.cs:32` declares `State` as
-  `string?`): there is no `NotEmpty()` in the chain, so `null` and `""` both pass and only an
-  over-length value fails. The message is built with
-  `string.Create(CultureInfo.InvariantCulture, $"State cannot be longer than {AddressInvariants.StateMaxLength} characters")`
-  (`:67`), so the number a user sees is the same constant the rule enforces, and the interpolation is
-  culture-invariant rather than dependent on the ambient culture of the validating thread. The current
-  value of that constant is `100`
-  (`MMCA.Common/Source/Core/MMCA.Common.Shared/ValueObjects/Contact/AddressInvariants.cs:21`).
-- **Why it's built this way**: `AddressInvariants` is described in its own doc comment as the single
-  place the max lengths are shared with "EF entity configurations and FluentValidation validators"
-  (`AddressInvariants.cs:5-7`). Binding the fragment to the constant rather than to a literal is what
-  keeps the request-level rule, the domain invariant, and the column width from drifting apart.
-- **Where it's used**: composed into [`AddressValidator`](#addressvalidator) at
-  `AddressValidationRules.cs:20`, and available for direct `Include(...)` by any module request
-  validator whose DTO carries loose address fields. It is exercised directly by
-  [`AddressValidationRulesTests`](group-28-testing-infrastructure.md#per-project-test-rollup)
-  (`MMCA.Common/Tests/Core/MMCA.Common.Application.Tests/Validation/AddressValidationRulesTests.cs:98`),
-  which builds `new StateRules<TestAddressModel>(p => p.State)` against a model type unrelated to
-  `Address` and is therefore a live demonstration that the fragment is genuinely parent-agnostic.
-- **Caveats / not-in-source**: the rule is length-only. There is no format, enumeration, or
-  country-aware check on the state value anywhere in this class.
-
-### ZipCodeRules<T>
-> MMCA.Common.Application · `MMCA.Common.Application.Validation` · `MMCA.Common/Source/Core/MMCA.Common.Application/Validation/AddressValidationRules.cs:72` · Level 4 · class (sealed)
-
-- **What it is**: the same one-rule fragment shape as [`StateRules<T>`](#staterulest), bound to the
-  optional `ZipCode` field and its own length constant.
-- **Depends on**: FluentValidation's `AbstractValidator<T>`, a nullable selector expression, and
-  [`AddressInvariants`](group-02-domain-building-blocks.md#addressinvariants).
-- **Concept**: no new concept. See [`StateRules<T>`](#staterulest) for the fragment idiom and the
-  `[Rubric §24, Forms, Validation & UX Safety]` treatment; this section records only what differs.
-- **Walkthrough**: the constructor body (`AddressValidationRules.cs:75-77`) is
-  `RuleFor(selector).MaximumLength(AddressInvariants.ZipCodeMaxLength)` with the message
-  "Zip Code cannot be longer than {n} characters", again built through
-  `string.Create(CultureInfo.InvariantCulture, ...)`. `ZipCodeMaxLength` is `20`
-  (`MMCA.Common/Source/Core/MMCA.Common.Shared/ValueObjects/Contact/AddressInvariants.cs:24`), the tightest of
-  the six address constants, and the field is nullable on the value object
-  (`MMCA.Common/Source/Core/MMCA.Common.Shared/ValueObjects/Contact/Address.cs:36`), so an absent postal code
-  is valid.
-- **Why it's built this way**: postal-code formats differ by country, so the framework-level rule
-  deliberately bounds length only and leaves any national format rule to the module that knows the
-  country context. Twenty characters is wide enough for the punctuated formats used outside the United
-  States while still bounding the string for storage and for the EF column width that shares the
-  constant.
-- **Where it's used**: included by [`AddressValidator`](#addressvalidator) at
-  `AddressValidationRules.cs:21`, and covered in isolation by
-  [`AddressValidationRulesTests`](group-28-testing-infrastructure.md#per-project-test-rollup)
-  (`MMCA.Common/Tests/Core/MMCA.Common.Application.Tests/Validation/AddressValidationRulesTests.cs:114`),
-  which asserts a failure at `ZipCodeMaxLength + 1` characters rather than at a hard-coded 21, so the
-  test moves with the constant.
 
 ### AddressValidator
 > MMCA.Common.Application · `MMCA.Common.Application.Validation` · `MMCA.Common/Source/Core/MMCA.Common.Application/Validation/AddressValidationRules.cs:13` · Level 5 · class (sealed)
@@ -666,7 +799,7 @@ contract the gate emits, and by the architecture fitness tests that keep the lay
   the class doc calls out explicitly at `AddressValidationRules.cs:8-12`).
   `[Rubric §14, Testability]`: because each field's rule is a separate type, a test can construct one
   fragment over a throwaway model, which is what
-  [`AddressValidationRulesTests`](group-28-testing-infrastructure.md#per-project-test-rollup) does
+  [`AddressValidationRulesTests`](group-29-testing-infrastructure.md#per-project-test-rollup) does
   before also exercising the assembled composite
   (`MMCA.Common/Tests/Core/MMCA.Common.Application.Tests/Validation/AddressValidationRulesTests.cs:10`
   holds the shared `AddressValidator` instance; `:144` is the all-fields-valid case).
@@ -791,13 +924,60 @@ contract the gate emits, and by the architecture fitness tests that keep the lay
   and [`EventSponsorshipPacketUrlRules<T>`](group-18-conference-application.md#eventsponsorshippacketurlrulest)
   (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Events/Validation/EventValidationRules.cs:143`).
   Each wrapper supplies its own module max-length constant. Direct coverage lives in
-  [`CommonValidationRulesTests`](group-28-testing-infrastructure.md#per-project-test-rollup)
+  [`CommonValidationRulesTests`](group-29-testing-infrastructure.md#per-project-test-rollup)
   (`MMCA.Common/Tests/Core/MMCA.Common.Application.Tests/Validation/CommonValidationRulesTests.cs:593`
   for the passing shapes, `:580` for rejected schemes, `:592` for the length bound, and `:604` for the
   supplied-error-code path).
 - **Caveats / not-in-source**: the rule constrains the scheme only. It does not check that the host
   resolves, that the URL is reachable, or that the target is safe to embed, and it places no
   restriction on host, port, or path.
+
+### UsAddressValidator
+> MMCA.Common.Application · `MMCA.Common.Application.Validation` · `MMCA.Common/Source/Core/MMCA.Common.Application/Validation/UsAddressValidationRules.cs:15` · Level 6 · class (sealed)
+
+- **What it is**: an opt-in, stricter `AbstractValidator<Address>` for apps that take United States
+  addresses. It keeps every rule of the general [`AddressValidator`](#addressvalidator) and adds that
+  city, state and ZIP code are required, that the state is a USPS region code, and that the ZIP code is
+  5 digits or ZIP+4.
+- **Depends on**: [`Address`](group-02-domain-building-blocks.md#address) (imported at
+  `UsAddressValidationRules.cs:3`), [`AddressValidator`](#addressvalidator), the three US fragments
+  declared in the same file, [`UsCityRules<T>`](#uscityrulest), [`UsStateRules<T>`](#usstaterulest) and
+  [`UsZipCodeRules<T>`](#uszipcoderulest), and, through the last two,
+  [`UsPostalRegions`](group-02-domain-building-blocks.md#uspostalregions). External: FluentValidation.
+- **Concept**: no new concept. It is the same composition-by-`Include` idiom
+  [`AddressValidator`](#addressvalidator) introduces, applied one level up: a composite that includes
+  another composite and then layers field fragments on top. `[Rubric §1, SOLID]` assesses whether a
+  type is open for extension without modification; the class doc states the design directly
+  ("The plain `AddressValidator` is unchanged", `UsAddressValidationRules.cs:13`), so US strictness
+  is added as a second validator rather than by changing the general one that non-US apps rely on.
+  `[Rubric §24, Forms, Validation & UX Safety]`: the state and ZIP fragments use
+  `Cascade(CascadeMode.Stop)` (`UsAddressValidationRules.cs:43`, `:55`), so an empty field reports
+  only that it is required rather than also a format error.
+- **Walkthrough**: the constructor (`UsAddressValidationRules.cs:17-23`) runs four `Include` calls in
+  order: `Include(new AddressValidator())` (`:19`) brings in all six length rules plus the
+  address-line-1 `NotEmpty()`; then `UsCityRules<Address>(p => p.City)` (`:20`, a `NotEmpty()` with
+  "You must enter a City", `:32-33`); `UsStateRules<Address>(p => p.State)` (`:21`, `NotEmpty()` then
+  `Must(UsPostalRegions.IsKnownCode)`, `:42-45`); and `UsZipCodeRules<Address>(p => p.ZipCode)`
+  (`:22`, `NotEmpty()` then `Must(UsPostalRegions.IsValidZipCode)`, `:54-57`). The state check is a
+  case-insensitive, trimmed set lookup
+  (`MMCA.Common/Source/Core/MMCA.Common.Shared/ValueObjects/Contact/UsPostalRegions.cs:35`, `:43`)
+  over the 50 states, DC, five territories and three military regions (`UsPostalRegions.cs:6-9`); the
+  ZIP check is the source-generated pattern `^\d{5}(-\d{4})?$` with a 100 ms match timeout
+  (`UsPostalRegions.cs:66-70`), applied to the trimmed value.
+- **Why it's built this way**: `UsPostalRegions` lives in Shared so that a UI state picker and this
+  server-side validator accept exactly the same codes (`UsPostalRegions.cs:9-10`). Keeping the general
+  validator lenient and making the US one a separate opt-in leaves city, state and ZIP optional for
+  apps that are not US-only.
+- **Where it's used**: no ADC or Store validator references it in the current source; its only
+  consumer is
+  [`UsAddressValidationRulesTests`](group-29-testing-infrastructure.md#per-project-test-rollup)
+  (`MMCA.Common/Tests/Core/MMCA.Common.Application.Tests/Validation/UsAddressValidationRulesTests.cs:14`),
+  which covers a complete address, territory, military and lower-case codes (`:20-25`), the
+  required-only messages for empty fields (`:28-35`), an unknown state (`:38-43`), malformed ZIP
+  codes (`:45-54`), and that the plain `AddressValidator` still accepts an address with no city,
+  state or ZIP (`:57-59`).
+- **Caveats / not-in-source**: the validator does not check the `Country` field; the class doc leaves
+  the decision of which addresses are US ones to the caller (`UsAddressValidationRules.cs:12-13`).
 
 ### ValidationFailureExtensions
 
@@ -861,10 +1041,10 @@ contract the gate emits, and by the architecture fitness tests that keep the lay
   every broken rule in one response instead of one per round trip. The remaining three call sites are in
   [`AuthenticationServiceBase<TUser>`](group-08-auth.md#authenticationservicebasetuser), which validates
   its request before touching the user store and passes the method name as `source`:
-  `nameof(LoginAsync)` (`MMCA.Common.Application/Auth/AuthenticationServiceBase.cs:132`),
+  `nameof(LoginAsync)` (`MMCA.Common.Application/Auth/AuthenticationServiceBase.cs:149`),
   `nameof(RegisterAsync)` (`:193`), and `nameof(RefreshTokenAsync)` (`:273`), each wrapping the result in
   `Result.Failure<AuthenticationResponse>(...)`. Covered by
-  [`ValidationFailureExtensionsTests`](group-28-testing-infrastructure.md#per-project-test-rollup).
+  [`ValidationFailureExtensionsTests`](group-29-testing-infrastructure.md#per-project-test-rollup).
 
 - **Caveats / not-in-source**: the failure's `ErrorCode` is FluentValidation's per-rule code (for example
   `"NotEmptyValidator"`) unless a validator overrides it with `.WithErrorCode(...)`; this extension passes
@@ -960,7 +1140,7 @@ contract the gate emits, and by the architecture fitness tests that keep the lay
   [`GetMyPointsHandler`](group-22-engagement-module.md#getmypointshandler)
   (`.../Points/UseCases/GetMyPoints/GetMyPointsHandler.cs:40`) passing `"Points.Forbidden"`. All of them
   take the defaults, so every one reports `"Access denied."` with `ErrorType.Forbidden`. Behavior is pinned
-  by [`CurrentUserServiceExtensionsTests`](group-28-testing-infrastructure.md#per-project-test-rollup),
+  by [`CurrentUserServiceExtensionsTests`](group-29-testing-infrastructure.md#per-project-test-rollup),
   which asserts the success value, the default forbidden failure, the fully-overridden failure, the
   `ArgumentNullException` on a null service, and that `AccessDeniedMessage` still equals `"Access denied."`
   (`MMCA.Common/Tests/Core/MMCA.Common.Application.Tests/Extensions/CurrentUserServiceExtensionsTests.cs:16-72`).

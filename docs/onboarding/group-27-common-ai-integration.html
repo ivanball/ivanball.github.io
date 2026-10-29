@@ -132,7 +132,8 @@
         <li><a href="group-25-adc-host-composition.html">25. ADC Application Host, UI Shell &amp; Cross-Module Composition</a></li>
         <li><a href="group-26-device-capability-layer.html">26. Device Capability Abstraction Layer (Native Contracts, MAUI, Browser &amp; Fallback Adapters)</a></li>
         <li><a href="group-27-common-ai-integration.html" aria-current="page">27. Common AI Integration</a></li>
-        <li><a href="group-28-testing-infrastructure.html">28. Testing &amp; Quality Infrastructure</a></li>
+        <li><a href="group-28-common-cloud-provider-adapters.html">28. Common Cloud Provider Adapters (AWS, Azure, GCP)</a></li>
+        <li><a href="group-29-testing-infrastructure.html">29. Testing &amp; Quality Infrastructure</a></li>
         <li><a href="devops-aspire.html">Aspire Orchestration and Containers</a></li>
         <li><a href="devops-cicd.html">CI/CD and Operations</a></li>
         <li><a href="devops-iac.html">Infrastructure as Code, ADC Azure Deployment</a></li>
@@ -157,10 +158,10 @@
           plus a latency histogram on one framework-wide meter, all tagged by prompt name, version and
           provider, with the same prompt identity stamped on the trace). <em>Which exact prompt produced this
           answer?</em> (a versioned contract whose SHA-256 hash is what an evaluation gate records against). The
-          32 types answering those questions ship in four packages. The core <code>MMCA.Common.AI</code> holds the
+          33 types answering those questions ship in four packages. The core <code>MMCA.Common.AI</code> holds the
           settings, the composition entry point, four delegating clients (bounds, guardrails, metering, prompt
           tagging), the guardrail, redactor and tool-policy contracts with the two content policies the
-          framework does ship, the provider-factory contract and its startup validator, a meter and the prompt
+          framework does ship (and the internal helper they share), the provider-factory contract and its startup validator, a meter and the prompt
           contract. Two adapter packages, <code>MMCA.Common.AI.Anthropic</code> and <code>MMCA.Common.AI.OpenAI</code>, each add one
           provider factory and one registration method. <code>MMCA.Common.AI.Testing</code> is the offline evaluation
           harness a consumer&#39;s test project subclasses. The decision record is
@@ -326,12 +327,18 @@
           tool marked consequential must also be confirmed by the caller for this request<span class="cite"><span> (<code>:259-262</code>)</span></span>, and the
           confirmation never overrides a policy that denied it<span class="cite"><span> (<code>:256-258</code>)</span></span>. Both markers are plain string keys
           on the property bags Microsoft.Extensions.AI already carries, published by the static
-          <a href="#chattoolpolicy">ChatToolPolicy</a><span class="cite"><span> (<code>ChatToolPolicy.cs:24</code>)</span></span>: <code>mmca.tool.consequential</code> on the tool<span class="cite"><span>
-          (<code>:29</code>)</span></span> and <code>mmca.tool.confirmed</code> on the options<span class="cite"><span> (<code>:40</code>)</span></span>, so any tool factory and any caller can
-          participate without referencing this package<span class="cite"><span> (<code>:10-14</code>)</span></span>. The distinction they encode is reading
-          versus writing: a lookup can be offered on a policy decided once, while a tool that sends, moves money
-          or deletes is a decision a human makes per request<span class="cite"><span> (<code>:17-21</code>)</span></span>. <code>[Rubric section 11, Security]</code> and
-          <code>[Rubric section 16]</code>.</p>
+          <a href="#chattoolpolicy">ChatToolPolicy</a><span class="cite"><span>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.AI/Guardrails/ChatToolPolicy.cs:24</code>)</span></span>: <code>mmca.tool.consequential</code>
+          on the tool<span class="cite"><span> (<code>:30</code>)</span></span> and <code>mmca.tool.confirmed</code> on the options<span class="cite"><span> (<code>:43</code>)</span></span>, so any tool factory and any
+          caller can participate without referencing this package<span class="cite"><span> (<code>:11-14</code>)</span></span>. The distinction they encode is
+          reading versus writing: a lookup can be offered on a policy decided once, while a tool that sends,
+          moves money or deletes is a decision a human makes per request<span class="cite"><span> (<code>:18-22</code>)</span></span>. The marker reader fails
+          closed too: only a definite false (a <code>bool</code>, a parseable string or a JSON <code>false</code>) reads as harmless,
+          and a marker in any shape it does not recognise reads as consequential (<code>IsConsequential</code>,
+          <span class="cite"><span><code>:51-70</code></span></span>). The confirmation reader accepts a single string, a string sequence, or the <code>JsonElement</code>
+          string or array that options bound from JSON carry (<code>ReadConfirmedTools</code>, <span class="cite"><span><code>:78-108</code></span></span>), so a tool
+          confirmed over the wire is not silently stripped as unconfirmed<span class="cite"><span> (<code>:91-93</code>)</span></span>.
+          <code>[Rubric section 11, Security]</code> and <code>[Rubric section 16]</code>.</p>
           <p>The input-size bound is the one with a caveat baked into its own doc comment.
           <code>EnforceInputBudget</code><span class="cite"><span> (<code>BoundedChatClient.cs:287-302</code>)</span></span> runs only when <code>PerCallInputTokenBudget</code> is set,
           estimates the request, and throws an <code>InvalidOperationException</code> naming the setting when the estimate
@@ -415,15 +422,29 @@
           (<code>MMCA.Common/Source/Core/MMCA.Common.AI/Guardrails/PiiRedactionGuardrail.cs:40</code>)</span></span> is the stated
           exception to &quot;extension points and no policy&quot;: an email address or a phone number is never evidence
           for anything a model is asked, so sending one is pure exposure and the judgement does not vary between
-          applications or jurisdictions<span class="cite"><span> (<code>:11-16</code>)</span></span>. It implements both contracts. As a redactor it rewrites
-          every text content of every message, replacing matches of a source-generated email pattern and a
-          deliberately narrow North American phone pattern (each with a one-second match timeout, <span class="cite"><span><code>:70-80</code></span></span>)
-          with <code>[redacted-email]</code> and <code>[redacted-phone]</code><span class="cite"><span> (<code>:41-42</code>)</span></span>, and passes images, function calls and
-          provider-specific content through untouched<span class="cite"><span> (<code>:95-99</code>)</span></span>. As a guardrail it allows everything<span class="cite"><span>
-          (<code>:58-68</code>)</span></span>, which is exactly enough to satisfy <code>RequireGuardrail</code> without pretending to be a content
-          policy<span class="cite"><span> (<code>:18-22</code>)</span></span>. Names are not redacted and <code>ChatOptions.Instructions</code> is left alone, because a
-          speaker&#39;s name is the published record and the instructions are the application&#39;s own text<span class="cite"><span>
-          (<code>:28-29</code>, <code>:34-37</code>)</span></span>.</p>
+          applications or jurisdictions<span class="cite"><span> (<code>:11-17</code>)</span></span>. It implements both contracts. As a redactor it rewrites the
+          text every message carries, replacing matches of a source-generated email pattern and a deliberately
+          narrow North American phone pattern (each with a one-second match timeout, <span class="cite"><span><code>:71-81</code></span></span>) with
+          <code>[redacted-email]</code> and <code>[redacted-phone]</code><span class="cite"><span> (<code>:42-43</code>)</span></span>. That text is message text, reasoning text, a
+          tool result and a tool call&#39;s arguments, whether they arrive as CLR strings or as <code>JsonElement</code>
+          values (<code>RedactContent</code>, <span class="cite"><span><code>:123-157</code></span></span>, rationale at <span class="cite"><span><code>:103-107</code></span></span>), because a tool&#39;s output is exactly
+          where contact details turn up. JSON is rebuilt value by value so property names and numbers are
+          copied verbatim and a ten-digit timestamp never becomes a phone placeholder<span class="cite"><span> (<code>:195-244</code>)</span></span>. An item with
+          nothing to redact passes through by reference; a rebuilt one keeps its metadata through
+          <a href="#contentmetadata">ContentMetadata</a> but deliberately drops <code>RawRepresentation</code>, which still holds the
+          unredacted text and which the OpenAI adapters would send verbatim<span class="cite"><span> (<code>:108-116</code>)</span></span>. A reasoning block
+          carrying <code>ProtectedData</code> is never rebuilt, because an edited signed block is rejected when the
+          conversation is sent back<span class="cite"><span> (<code>:117-121</code>, <code>:125</code>)</span></span>, and images and provider-specific content pass
+          through untouched<span class="cite"><span> (<code>:152-156</code>)</span></span>. As a guardrail it allows everything<span class="cite"><span> (<code>:59-69</code>)</span></span>, which is exactly
+          enough to satisfy <code>RequireGuardrail</code> without pretending to be a content policy<span class="cite"><span> (<code>:19-24</code>)</span></span>. Names are
+          not redacted and <code>ChatOptions.Instructions</code> is left alone, because a speaker&#39;s name is the published
+          record and the instructions are the application&#39;s own text<span class="cite"><span> (<code>:29-30</code>, <code>:34-38</code>)</span></span>.</p>
+          <p><a href="#contentmetadata">ContentMetadata</a><span class="cite"><span>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.AI/Guardrails/ContentMetadata.cs:9</code>)</span></span> is the one internal helper
+          both shipped policies share so the two cannot drift<span class="cite"><span> (<code>:5-8</code>)</span></span>. Its single method, <code>WithMetadataOf</code><span class="cite"><span>
+          (<code>:22</code>)</span></span>, copies <code>AdditionalProperties</code> and <code>Annotations</code> from the item being replaced onto its rebuilt
+          copy<span class="cite"><span> (<code>:25-26</code>)</span></span> and pointedly does not copy <code>RawRepresentation</code><span class="cite"><span> (<code>:13-16</code>)</span></span>: carrying the provider&#39;s
+          original object across would let the adapter undo the redaction it was just given.</p>
           <p><a href="#contentpolicyguardrail">ContentPolicyGuardrail</a><span class="cite"><span>
           (<code>MMCA.Common/Source/Core/MMCA.Common.AI/Guardrails/ContentPolicyGuardrail.cs:64</code>)</span></span> is the configurable
           one, and it too implements both halves. On the request side it looks for prompt-injection markers in
@@ -436,11 +457,14 @@
           default<span class="cite"><span> (<code>:23</code>)</span></span>, <code>Block</code><span class="cite"><span> (<code>:29</code>)</span></span> or <code>Off</code><span class="cite"><span> (<code>:35</code>)</span></span>. The two active modes are one behavior split across
           the pipeline&#39;s fixed order<span class="cite"><span> (<code>ContentPolicyGuardrail.cs:25-32</code>)</span></span>: <code>Redact</code> rewrites the marker away
           before any guardrail runs, so the request inspection allows; <code>Block</code> makes the redactor a pass-through<span class="cite"><span>
-          (<code>:119-124</code>)</span></span> so the inspection sees what the caller actually supplied and refuses naming the marker&#39;s
-          label<span class="cite"><span> (<code>:150-160</code>)</span></span>. On the response side a configured pattern blocks the buffered answer<span class="cite"><span> (<code>:164-172</code>)</span></span>
-          and each streamed fragment<span class="cite"><span> (<code>:181-189</code>)</span></span>, with the reason naming the pattern&#39;s index and never the text
-          it matched<span class="cite"><span> (<code>:278-283</code>)</span></span>; a pattern spanning two updates is missed on the streaming path, so a host that
-          needs whole-answer certainty uses the buffered one<span class="cite"><span> (<code>:176-179</code>)</span></span>.
+          (<code>:122-127</code>)</span></span> so the inspection sees what the caller actually supplied and refuses naming the marker&#39;s
+          label<span class="cite"><span> (<code>:153-163</code>)</span></span>. A rewritten user message is a new instance, a content item with no marker is the
+          same instance it came in as, and a rebuilt text item keeps its metadata through
+          <a href="#contentmetadata">ContentMetadata</a> exactly as the PII policy does<span class="cite"><span> (<code>:111-116</code>, <code>:339-341</code>)</span></span>. On the
+          response side a configured pattern blocks the buffered answer<span class="cite"><span> (<code>:167-175</code>)</span></span> and each streamed fragment<span class="cite"><span>
+          (<code>:184-192</code>)</span></span>, with the reason naming the pattern&#39;s index and never the text it matched<span class="cite"><span> (<code>:281-286</code>)</span></span>;
+          a pattern spanning two updates is missed on the streaming path, so a host that needs whole-answer
+          certainty uses the buffered one<span class="cite"><span> (<code>:180-182</code>)</span></span>.
           <a href="#contentpolicysettings">ContentPolicySettings</a><span class="cite"><span>
           (<code>MMCA.Common/Source/Core/MMCA.Common.AI/Guardrails/ContentPolicySettings.cs:23</code>)</span></span> binds from its own
           <code>Ai:ContentPolicy</code> section<span class="cite"><span> (<code>:26</code>)</span></span> so a host that never adopts the policy has nothing to configure<span class="cite"><span>
@@ -533,14 +557,14 @@
           <h2 id="where-it-runs-today-and-how-it-is-tested">Where it runs today, and how it is tested</h2>
           <p>Exactly one feature in the workspace calls a model: ADC&#39;s organizer-facing session scoring. The
           Conference service host reads one secret, <code>Ai:ApiKey</code>, and derives <code>Ai:Enabled</code> from its presence<span class="cite"><span>
-          (<code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:131-136</code>)</span></span>; the infrastructure
+          (<code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:137-142</code>)</span></span>; the infrastructure
           template writes the Key Vault secret into the container app under that same key and local
-          development keeps it in user secrets<span class="cite"><span> (<code>Program.cs:125-127</code>)</span></span>, so a host with no key starts with
+          development keeps it in user secrets<span class="cite"><span> (<code>Program.cs:131-133</code>)</span></span>, so a host with no key starts with
           scoring unavailable rather than failing validation. It then registers the Anthropic adapter with
-          <code>AddAnthropicAiProvider()</code><span class="cite"><span> (<code>Program.cs:141</code>)</span></span>, its guardrails with <code>AddConferenceAiGuardrails</code><span class="cite"><span>
-          (<code>Program.cs:152</code>)</span></span> and the governed client with <code>AddMmcaChatClient(builder.Configuration)</code><span class="cite"><span>
-          (<code>Program.cs:154</code>)</span></span>, in that order because the last call reads the guardrail descriptors, and
-          subscribes the framework meter and activity source by literal name<span class="cite"><span> (<code>Program.cs:173-174</code>)</span></span>.
+          <code>AddAnthropicAiProvider()</code><span class="cite"><span> (<code>Program.cs:147</code>)</span></span>, its guardrails with <code>AddConferenceAiGuardrails</code><span class="cite"><span>
+          (<code>Program.cs:158</code>)</span></span> and the governed client with <code>AddMmcaChatClient(builder.Configuration)</code><span class="cite"><span>
+          (<code>Program.cs:160</code>)</span></span>, in that order because the last call reads the guardrail descriptors, and
+          subscribes the framework meter and activity source by literal name<span class="cite"><span> (<code>Program.cs:179-180</code>)</span></span>.
           <code>AddConferenceAiGuardrails</code><span class="cite"><span>
           (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Infrastructure/DependencyInjection.cs:85</code>)</span></span>
           composes both framework policies, <code>AddPiiRedactionGuardrail()</code> and <code>AddContentPolicyGuardrail</code><span class="cite"><span>
@@ -585,7 +609,7 @@
           (<a href="#aisettings">AiSettings</a>, <a href="#promptcontract">PromptContract</a>, <a href="#guardrailverdict">GuardrailVerdict</a>,
           <a href="#iaitokenestimator">IAiTokenEstimator</a>, <a href="#ichatrequestredactor">IChatRequestRedactor</a>,
           <a href="#toolauthorization">ToolAuthorization</a>, <a href="#chattoolpolicy">ChatToolPolicy</a>,
-          <a href="#contentpolicyinjectionmode">ContentPolicyInjectionMode</a>, <a href="#aiusagemeter">AiUsageMeter</a> and the
+          <a href="#contentmetadata">ContentMetadata</a>, <a href="#contentpolicyinjectionmode">ContentPolicyInjectionMode</a>, <a href="#aiusagemeter">AiUsageMeter</a> and the
           three replay types) first, then the Level 1 types (<a href="#ichatguardrail">IChatGuardrail</a>,
           <a href="#ichattoolpolicy">IChatToolPolicy</a>, <a href="#iaiproviderfactory">IAiProviderFactory</a>,
           <a href="#chatguardrailexception">ChatGuardrailException</a>,
@@ -1182,30 +1206,64 @@
           <li><strong>Concept introduced, per-request confirmation via <code>AdditionalProperties</code>.</strong> <code>[Rubric §16, AI-Native Application Architecture]</code> (assesses tool-calling safety patterns): a confirmation is carried as a
           key in <code>ChatOptions.AdditionalProperties</code>, never as a typed property, so it composes with any
           <code>ChatOptions</code> without a wrapper type. <code>[Rubric §11, Security]</code>: the confirmation is scoped to ONE
-          request by design (<span class="cite"><span><code>ChatToolPolicy.cs:37-40</code></span></span> remark), because a confirmation that outlived the
+          request by design (<span class="cite"><span><code>ChatToolPolicy.cs:39-42</code></span></span> remark), because a confirmation that outlived the
           request it was given for would be a standing grant, exactly what a confirmation step exists to avoid.
           The consequential marker, by contrast, fails closed: it is the whole write-safety gate, so only a
-          definite false reads as harmless<span class="cite"><span> (<code>ChatToolPolicy.cs:56-59</code>)</span></span>.</li>
+          definite false reads as harmless<span class="cite"><span> (<code>ChatToolPolicy.cs:58-61</code>)</span></span>.</li>
           <li><strong>Walkthrough</strong>: <code>ConsequentialPropertyKey = &quot;mmca.tool.consequential&quot;</code><span class="cite"><span> (<code>ChatToolPolicy.cs:30</code>)</span></span>
           marks an <code>AITool</code> as doing something that cannot be undone by not reading the answer.
-          <code>ConfirmedToolsPropertyKey = &quot;mmca.tool.confirmed&quot;</code><span class="cite"><span> (<code>ChatToolPolicy.cs:41</code>)</span></span> holds the confirmed
-          names for the current request. <code>IsConsequential</code><span class="cite"><span> (<code>ChatToolPolicy.cs:49-68</code>)</span></span> reads the tool&#39;s
+          <code>ConfirmedToolsPropertyKey = &quot;mmca.tool.confirmed&quot;</code><span class="cite"><span> (<code>ChatToolPolicy.cs:43</code>)</span></span> holds the confirmed
+          names for the current request. <code>IsConsequential</code><span class="cite"><span> (<code>ChatToolPolicy.cs:51-70</code>)</span></span> reads the tool&#39;s
           <code>AdditionalProperties</code>: a missing key is <code>false</code>; a <code>bool</code> value is used as-is; a <code>string</code> value
-          goes through the private <code>ParsedOrConsequential</code><span class="cite"><span> (<code>ChatToolPolicy.cs:70-71</code>)</span></span>, which returns <code>false</code>
+          goes through the private <code>ParsedOrConsequential</code><span class="cite"><span> (<code>ChatToolPolicy.cs:72-73</code>)</span></span>, which returns <code>false</code>
           only for text that parses as <code>false</code> and <code>true</code> for anything else, unparseable text included
           (configuration hands a boolean over as text, and a tool declared consequential in a settings file
           must not read as harmless because of that); a <code>JsonElement</code> of kind <code>False</code> is <code>false</code>, a
           <code>JsonElement</code> of kind <code>String</code> goes through the same <code>ParsedOrConsequential</code> (a JSON-bound bag
           hands values over as <code>JsonElement</code>); and a marker present in any other shape reads as <code>true</code><span class="cite"><span>
-          (<code>ChatToolPolicy.cs:60-67</code>)</span></span>. <code>ReadConfirmedTools</code><span class="cite"><span> (<code>ChatToolPolicy.cs:76-97</code>)</span></span> reads the confirmed names off
-          <code>ChatOptions.AdditionalProperties</code>, accepting a single <code>string</code>, an <code>IEnumerable&lt;string&gt;</code>, or a
-          non-generic <code>IEnumerable</code> (a JSON array bound as <code>object[]</code>), converting each element with
-          <code>Convert.ToString</code> and dropping empties; anything else returns none.</li>
+          (<code>ChatToolPolicy.cs:62-69</code>)</span></span>. <code>ReadConfirmedTools</code><span class="cite"><span> (<code>ChatToolPolicy.cs:78-109</code>)</span></span> reads the confirmed names off
+          <code>ChatOptions.AdditionalProperties</code>, accepting a single <code>string</code>, an <code>IEnumerable&lt;string&gt;</code>, a
+          <code>JsonElement</code> of kind <code>String</code> (one name) or of kind <code>Array</code> (its string items, non-string items
+          and empty names dropped)<span class="cite"><span> (<code>ChatToolPolicy.cs:94-99</code>)</span></span>, or a non-generic <code>IEnumerable</code> (a JSON array
+          bound as <code>object[]</code>), converting each element with <code>Convert.ToString</code> and dropping empties;
+          anything else returns none. The two <code>JsonElement</code> arms exist because options carried over the wire
+          bind their bag values as <code>JsonElement</code>, a struct that is neither a string nor a sequence, so without
+          them a confirmed tool would read as unconfirmed and be stripped<span class="cite"><span> (<code>ChatToolPolicy.cs:91-93</code>)</span></span>.</li>
           <li><strong>Why it&#39;s built this way</strong>: see
           <a href="https://ivanball.github.io/docs/adr/120-governed-chat-client-boundary.html" target="_blank" rel="noopener"><code>ADR-120</code></a> for the
           guardrail boundary this policy plugs into.</li>
           <li><strong>Where it&#39;s used</strong>: <a href="#boundedchatclient"><code>BoundedChatClient</code></a> calls both methods when filtering
           tools through the registered <a href="#ichattoolpolicy"><code>IChatToolPolicy</code></a> instances.</li>
+          </ul>
+          <hr>
+          <h3 id="contentmetadata">ContentMetadata</h3>
+          <blockquote>
+          <p>MMCA.Common.AI.Guardrails · <code>MMCA.Common.AI.Guardrails</code> · <span class="cite"><span><code>MMCA.Common/Source/Core/MMCA.Common.AI/Guardrails/ContentMetadata.cs:9</code></span></span> · Level 0 · class</p>
+          </blockquote>
+          <ul>
+          <li><strong>What it is</strong>: an <code>internal static</code> helper holding the one rule both rewriting guardrails follow
+          when they rebuild a content item to change its text: which metadata the rebuilt copy keeps<span class="cite"><span>
+          (<code>ContentMetadata.cs:5-8</code>)</span></span>. It is shared by <a href="#piiredactionguardrail"><code>PiiRedactionGuardrail</code></a> and
+          <a href="#contentpolicyguardrail"><code>ContentPolicyGuardrail</code></a> &quot;so the two cannot drift&quot;.</li>
+          <li><strong>Depends on</strong>: <code>Microsoft.Extensions.AI</code> (<code>AIContent</code>).</li>
+          <li><strong>Concept introduced, metadata fidelity without the raw representation.</strong> <code>[Rubric §11, Security]</code>
+          (data exposure: whether a control can be undone downstream): a redacting rebuild keeps what
+          describes the item but drops what still carries the original text, because a copied
+          <code>RawRepresentation</code> would hand the unredacted provider object back to the adapter.</li>
+          <li><strong>Walkthrough</strong>: <code>WithMetadataOf&lt;TContent&gt;(AIContent source, TContent rebuilt)</code>
+          (<span class="cite"><span><code>ContentMetadata.cs:22-28</code></span></span>, constrained <code>where TContent : AIContent</code>) copies
+          <code>AdditionalProperties</code> and <code>Annotations</code> from <code>source</code> onto <code>rebuilt</code> and returns <code>rebuilt</code>, so a
+          caller can wrap the constructor call inline. It deliberately does NOT copy <code>RawRepresentation</code><span class="cite"><span>
+          (<code>ContentMetadata.cs:11-17</code>)</span></span>: the provider&#39;s original object still holds the unredacted text, and
+          the OpenAI adapters send a raw representation verbatim in place of the item, which would undo the
+          redaction. Type-specific members (a tool call&#39;s <code>InformationalOnly</code>, a tool result&#39;s <code>Exception</code>)
+          are not its concern; the caller sets those on the rebuilt item.</li>
+          <li><strong>Why it&#39;s built this way</strong>: one helper instead of two private copies keeps the redaction
+          guarantee identical across both guardrails. See
+          <a href="https://ivanball.github.io/docs/adr/120-governed-chat-client-boundary.html" target="_blank" rel="noopener"><code>ADR-120</code></a>.</li>
+          <li><strong>Where it&#39;s used</strong>: <code>PiiRedactionGuardrail.RedactContent</code> (<span class="cite"><span><code>PiiRedactionGuardrail.cs:127-150</code></span></span>,
+          text, reasoning, tool-result and tool-call arms) and <code>ContentPolicyGuardrail.RedactMessage</code>
+          (<span class="cite"><span><code>ContentPolicyGuardrail.cs:341</code></span></span>, rebuilt text items).</li>
           </ul>
           <hr>
           <h3 id="contentpolicyinjectionmode">ContentPolicyInjectionMode</h3>
@@ -1434,8 +1492,9 @@
           entry.</li>
           <li><strong>Depends on</strong>: <a href="#contentpolicysettings"><code>ContentPolicySettings</code></a> (bound options),
           <a href="#contentpolicyinjectionmode"><code>ContentPolicyInjectionMode</code></a>, <code>IChatGuardrail</code>/
-          <a href="#ichatrequestredactor"><code>IChatRequestRedactor</code></a>/<code>GuardrailVerdict</code>, <code>System.Text.RegularExpressions</code>
-          (<code>[GeneratedRegex]</code> source generator).</li>
+          <a href="#ichatrequestredactor"><code>IChatRequestRedactor</code></a>/<code>GuardrailVerdict</code>,
+          <a href="#contentmetadata"><code>ContentMetadata</code></a>, <code>System.Text.RegularExpressions</code> (<code>[GeneratedRegex]</code> source
+          generator).</li>
           <li><strong>Concept introduced, one type composing redaction AND blocking.</strong> <code>[Rubric §11, Security]</code>
           (prompt-injection defense: explains what it protects and where it stops): only
           <code>ChatRole.User</code> content is inspected or rewritten, and the streaming inspection path
@@ -1454,19 +1513,28 @@
           generated-regex timeout. The constructor<span class="cite"><span> (<code>ContentPolicyGuardrail.cs:100-107</code>)</span></span> compiles every
           configured pattern ONCE, at resolve time; a pattern that does not compile has already failed
           <code>ContentPolicySettings.Validate</code> at startup, so this constructor is not where a typo is discovered.
-          <code>Redact</code><span class="cite"><span> (<code>ContentPolicyGuardrail.cs:115-135</code>)</span></span> rewrites only when <code>InjectionMode</code> is <code>Redact</code>: Block
+          <code>Redact</code><span class="cite"><span> (<code>ContentPolicyGuardrail.cs:118-138</code>)</span></span> rewrites only when <code>InjectionMode</code> is <code>Redact</code>: Block
           mode must inspect what the caller supplied, so rewriting there would hide the marker from the check
-          that is supposed to refuse it; Off mode does neither. <code>InspectRequestAsync</code><span class="cite"><span>
-          (<code>ContentPolicyGuardrail.cs:143-161</code>)</span></span> allows in every mode except <code>Block</code>, because in <code>Redact</code> mode
+          that is supposed to refuse it; Off mode does neither. Non-user messages pass through as the same
+          instance, and a rewritten user message is a NEW instance, so a caller holding its own conversation
+          history still holds exactly what it built (<span class="cite"><span><code>ContentPolicyGuardrail.cs:110-117</code></span></span> remark).
+          <code>InspectRequestAsync</code><span class="cite"><span>
+          (<code>ContentPolicyGuardrail.cs:146-164</code>)</span></span> allows in every mode except <code>Block</code>, because in <code>Redact</code> mode
           the redactor has already run and there is nothing left to refuse. <code>InspectResponseAsync</code>/
-          <code>InspectStreamedUpdateAsync</code><span class="cite"><span> (<code>ContentPolicyGuardrail.cs:164-189</code>)</span></span> both funnel through
+          <code>InspectStreamedUpdateAsync</code><span class="cite"><span> (<code>ContentPolicyGuardrail.cs:167-192</code>)</span></span> both funnel through
           <code>InspectAnswerText</code>, which matches against <code>BlockedResponsePatterns</code> and returns a block reason
           naming the pattern&#39;s INDEX, never the matched text: the reason reaches the caller, and the point of
           the rule was that the text should not. <code>RedactMessage</code>/<code>RedactText</code><span class="cite"><span>
-          (<code>ContentPolicyGuardrail.cs:328-366</code>)</span></span> rewrite only <code>TextContent</code>, passing images, function calls,
+          (<code>ContentPolicyGuardrail.cs:331-373</code>)</span></span> rewrite only <code>TextContent</code>, passing images, function calls,
           and provider-specific content through untouched: a guardrail that silently dropped content it does
-          not understand would be a far worse failure than leaving it alone. <code>RedactText</code><span class="cite"><span>
-          (<code>ContentPolicyGuardrail.cs:354</code>)</span></span> replaces each marker with a <code>MatchEvaluator</code> that returns the
+          not understand would be a far worse failure than leaving it alone. Inside a rewritten message, a
+          text item with no marker is kept as the same instance, and a rebuilt text item keeps its
+          <code>AdditionalProperties</code> and <code>Annotations</code> through the shared
+          <a href="#contentmetadata"><code>ContentMetadata.WithMetadataOf</code></a><span class="cite"><span> (<code>ContentPolicyGuardrail.cs:338-341</code>)</span></span>, the
+          same helper <a href="#piiredactionguardrail"><code>PiiRedactionGuardrail</code></a> uses; the rebuilt message keeps
+          <code>AuthorName</code>, <code>MessageId</code>, <code>CreatedAt</code> and <code>AdditionalProperties</code><span class="cite"><span>
+          (<code>ContentPolicyGuardrail.cs:352-358</code>)</span></span>. <code>RedactText</code><span class="cite"><span>
+          (<code>ContentPolicyGuardrail.cs:361</code>)</span></span> replaces each marker with a <code>MatchEvaluator</code> that returns the
           placeholder, not the replacement-string overload: the placeholder is literal text, and as a
           replacement pattern <code>$&amp;</code> or <code>$0</code> would put the matched marker straight back.</li>
           <li><strong>Why it&#39;s built this way</strong>: matches the ADR-120 governed pipeline&#39;s split between redaction (silent,
@@ -1524,7 +1592,7 @@
           numbers from the text carried by outgoing messages, tool calls and tool results included. The guardrail half is a pass-through (always <code>Allow</code>): this type
           only redacts, it never blocks.</li>
           <li><strong>Depends on</strong>: <a href="#ichatrequestredactor"><code>IChatRequestRedactor</code></a>/<code>IChatGuardrail</code>/<code>GuardrailVerdict</code>,
-          <code>System.Text.RegularExpressions</code>.</li>
+          <a href="#contentmetadata"><code>ContentMetadata</code></a>, <code>System.Text.RegularExpressions</code>, <code>System.Text.Json</code>.</li>
           <li><strong>Concept introduced, configuration-free, unconditional redaction.</strong> Contrasts with
           <a href="#contentpolicyguardrail"><code>ContentPolicyGuardrail</code></a>: <code>PiiRedactionGuardrail</code> has no configurable
           options and applies to every outgoing message unconditionally.</li>
@@ -1534,30 +1602,31 @@
           guarded by negative lookaround so it does not clip a longer digit run). <code>Redact</code><span class="cite"><span>
           (<code>PiiRedactionGuardrail.cs:46-57</code>)</span></span> rewrites EVERY message, not only <code>ChatRole.User</code> (unlike
           <code>ContentPolicyGuardrail</code>), via the private <code>RedactMessage</code><span class="cite"><span>
-          (<code>PiiRedactionGuardrail.cs:83-99</code>)</span></span>, which rebuilds each message (keeping role, <code>AuthorName</code>,
-          <code>MessageId</code> and <code>AdditionalProperties</code>) and hands every content item to <code>RedactContent</code><span class="cite"><span>
-          (<code>PiiRedactionGuardrail.cs:122-156</code>)</span></span>. That switch rebuilds an item only when it actually holds
+          (<code>PiiRedactionGuardrail.cs:83-100</code>)</span></span>, which rebuilds each message (keeping role, <code>AuthorName</code>,
+          <code>MessageId</code>, <code>CreatedAt</code> and <code>AdditionalProperties</code>, <span class="cite"><span><code>PiiRedactionGuardrail.cs:93-99</code></span></span>) and hands every content item to <code>RedactContent</code><span class="cite"><span>
+          (<code>PiiRedactionGuardrail.cs:123-157</code>)</span></span>. That switch rebuilds an item only when it actually holds
           contact details: non-empty <code>TextContent</code> and <code>TextReasoningContent</code>, a <code>FunctionResultContent</code>
           whose result is a <code>JsonElement</code> or a <code>string</code>, and a <code>FunctionCallContent</code> with an argument value
           that is a <code>string</code> or a <code>JsonElement</code> (routed through <code>RedactArgument</code>,
-          <span class="cite"><span><code>PiiRedactionGuardrail.cs:170-175</code></span></span>; other argument values kept as-is). The &quot;holds contact
+          <span class="cite"><span><code>PiiRedactionGuardrail.cs:159-164</code></span></span>; other argument values kept as-is). The &quot;holds contact
           details&quot; test is <code>HasContactDetails</code>/<code>ArgumentHasContactDetails</code>/<code>JsonHasContactDetails</code><span class="cite"><span>
-          (<code>PiiRedactionGuardrail.cs:177-201</code>)</span></span>, which compares <code>RedactText</code> output with the input; an item
+          (<code>PiiRedactionGuardrail.cs:166-190</code>)</span></span>, which compares <code>RedactText</code> output with the input; an item
           with nothing to redact passes through by reference. A rebuilt item keeps its metadata through
-          <code>WithMetadataOf</code> (<span class="cite"><span><code>PiiRedactionGuardrail.cs:162-168</code></span></span>: <code>AdditionalProperties</code> and <code>Annotations</code>,
-          plus a tool call&#39;s <code>InformationalOnly</code> and <code>Exception</code> and a tool result&#39;s <code>Exception</code>), but NOT
+          the shared <a href="#contentmetadata"><code>ContentMetadata.WithMetadataOf</code></a> (<code>AdditionalProperties</code> and
+          <code>Annotations</code>), plus a tool call&#39;s <code>InformationalOnly</code> and <code>Exception</code> and a tool result&#39;s
+          <code>Exception</code>, set in the rebuilding arms themselves<span class="cite"><span> (<code>PiiRedactionGuardrail.cs:133-150</code>)</span></span>, but NOT
           <code>RawRepresentation</code>: the provider&#39;s original object still holds the unredacted text, and the
           OpenAI adapters send a raw representation verbatim in place of the item, which would undo the
-          redaction<span class="cite"><span> (<code>PiiRedactionGuardrail.cs:101-121</code>)</span></span>. A <code>TextReasoningContent</code> carrying <code>ProtectedData</code>
-          is never rebuilt<span class="cite"><span> (<code>PiiRedactionGuardrail.cs:124</code>)</span></span>: that data is the provider&#39;s signature over
+          redaction<span class="cite"><span> (<code>PiiRedactionGuardrail.cs:102-122</code>)</span></span>. A <code>TextReasoningContent</code> carrying <code>ProtectedData</code>
+          is never rebuilt<span class="cite"><span> (<code>PiiRedactionGuardrail.cs:125</code>)</span></span>: that data is the provider&#39;s signature over
           the text (Anthropic&#39;s thinking signature), and an edited signed block is rejected when the
           conversation is sent back.
           Both shapes matter because Microsoft.Extensions.AI&#39;s function-invoking client marshals a tool&#39;s
           return value and the model&#39;s arguments into <code>JsonElement</code>, and a tool&#39;s output is exactly where
           contact details turn up (a customer lookup, a directory search). Plain text goes through
-          <code>RedactText</code><span class="cite"><span> (<code>PiiRedactionGuardrail.cs:203-204</code>)</span></span>, which replaces email matches then phone
-          matches. A <code>JsonElement</code> goes through <code>RedactJson</code><span class="cite"><span> (<code>PiiRedactionGuardrail.cs:211-221</code>)</span></span> and the
-          recursive <code>WriteRedacted</code><span class="cite"><span> (<code>PiiRedactionGuardrail.cs:223-255</code>)</span></span>, which rebuilds the document with
+          <code>RedactText</code><span class="cite"><span> (<code>PiiRedactionGuardrail.cs:192-193</code>)</span></span>, which replaces email matches then phone
+          matches. A <code>JsonElement</code> goes through <code>RedactJson</code><span class="cite"><span> (<code>PiiRedactionGuardrail.cs:200-210</code>)</span></span> and the
+          recursive <code>WriteRedacted</code><span class="cite"><span> (<code>PiiRedactionGuardrail.cs:212-244</code>)</span></span>, which rebuilds the document with
           a <code>Utf8JsonWriter</code>, redacting only string VALUES and copying property names, numbers, booleans and
           nulls verbatim: running the patterns over the raw JSON text would turn a bare 10-digit number (a
           Unix timestamp) into a phone placeholder and break the document. Binary and other non-text
@@ -1791,7 +1860,7 @@
           <code>MMCA.Common.AI.OpenAI</code>&#39;s own tests.</li>
           </ul>
           <hr>
-          <p><a href="group-26-device-capability-layer.html">⬅ Device Capability Abstraction Layer (Native Contracts, MAUI, Browser &amp; Fallback Adapters)</a>  •  <a href="index.html">Index</a>  •  <a href="group-28-testing-infrastructure.html">Testing &amp; Quality Infrastructure ➡</a></p>
+          <p><a href="group-26-device-capability-layer.html">⬅ Device Capability Abstraction Layer (Native Contracts, MAUI, Browser &amp; Fallback Adapters)</a>  •  <a href="index.html">Index</a>  •  <a href="group-28-common-cloud-provider-adapters.html">Common Cloud Provider Adapters (AWS, Azure, GCP) ➡</a></p>
           
         <div class="doc-foot btn-row">
           <a class="btn btn--ghost" href="../../docs/onboarding/index.html">← Back to Onboarding Guide</a>

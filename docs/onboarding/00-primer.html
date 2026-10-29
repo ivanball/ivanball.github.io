@@ -132,7 +132,8 @@
         <li><a href="group-25-adc-host-composition.html">25. ADC Application Host, UI Shell &amp; Cross-Module Composition</a></li>
         <li><a href="group-26-device-capability-layer.html">26. Device Capability Abstraction Layer (Native Contracts, MAUI, Browser &amp; Fallback Adapters)</a></li>
         <li><a href="group-27-common-ai-integration.html">27. Common AI Integration</a></li>
-        <li><a href="group-28-testing-infrastructure.html">28. Testing &amp; Quality Infrastructure</a></li>
+        <li><a href="group-28-common-cloud-provider-adapters.html">28. Common Cloud Provider Adapters (AWS, Azure, GCP)</a></li>
+        <li><a href="group-29-testing-infrastructure.html">29. Testing &amp; Quality Infrastructure</a></li>
         <li><a href="devops-aspire.html">Aspire Orchestration and Containers</a></li>
         <li><a href="devops-cicd.html">CI/CD and Operations</a></li>
         <li><a href="devops-iac.html">Infrastructure as Code, ADC Azure Deployment</a></li>
@@ -447,7 +448,7 @@ Shared            (Result pattern, errors, DTOs, value objects)</code></pre>
           <tr>
           <td>015</td>
           <td>Architecture fitness functions: compile-time layer guard + shared NetArchTest rule library</td>
-          <td><a href="group-28-testing-infrastructure.html">g28</a></td>
+          <td><a href="group-29-testing-infrastructure.html">g29</a></td>
           </tr>
           <tr>
           <td>016</td>
@@ -662,7 +663,7 @@ Shared            (Result pattern, errors, DTOs, value objects)</code></pre>
           <tr>
           <td>058</td>
           <td>Runtime conformance suites shipped in <code>MMCA.Common.Testing</code>: seven abstract behavioral bases (problem details, OpenAPI, <code>/ServiceInfo</code> versioning, security headers, graceful shutdown, decorator order, gateway hardening) that a host subclasses and that run against a really booted host, picking up where ADR-015&#39;s structural fitness tests stop</td>
-          <td><a href="group-28-testing-infrastructure.html">g28</a></td>
+          <td><a href="group-29-testing-infrastructure.html">g29</a></td>
           </tr>
           <tr>
           <td>059</td>
@@ -682,12 +683,12 @@ Shared            (Result pattern, errors, DTOs, value objects)</code></pre>
           <tr>
           <td>062</td>
           <td>SLO alerting as code: <code>sloAlertSpecs</code> in each consumer&#39;s Bicep materializes KQL scheduled query rules (401/499 and hub traffic excluded) on one action group, and a framework test base pairs every alert with a severity-correct <code>OPERATIONS.md</code> triage section, failing the build in either direction</td>
-          <td><a href="devops-iac.html">devops-iac</a>/<a href="group-28-testing-infrastructure.html">g28</a></td>
+          <td><a href="devops-iac.html">devops-iac</a>/<a href="group-29-testing-infrastructure.html">g29</a></td>
           </tr>
           <tr>
           <td>063</td>
           <td>WCAG 2.1 AA as a shipped test contract: <code>AxeOptions.Wcag21Aa</code> pins the four WCAG tag sets and excludes axe&#39;s advisory rules, a violation throws instead of reporting, and the scan is a cross-browser required merge check in Common plus a chromium deploy gate in both apps</td>
-          <td><a href="group-28-testing-infrastructure.html">g28</a>/<a href="devops-cicd.html">devops-cicd</a></td>
+          <td><a href="group-29-testing-infrastructure.html">g29</a>/<a href="devops-cicd.html">devops-cicd</a></td>
           </tr>
           <tr>
           <td>064</td>
@@ -832,7 +833,7 @@ Shared            (Result pattern, errors, DTOs, value objects)</code></pre>
           <tr>
           <td>092</td>
           <td>Core Web Vitals budget as a shipped test contract and deploy gate: <code>WebVitalsCollector</code> installs <code>PerformanceObserver</code> hooks as a Playwright init script, <code>WebVitalsBudget</code> defaults to the good band (LCP 2500, FCP 1800, TTFB 800 ms, CLS 0.1, INP 500), a breach throws naming the page, and both apps&#39; assertions ride the chromium <code>e2e-gate</code></td>
-          <td><a href="group-28-testing-infrastructure.html">g28</a>/<a href="devops-cicd.html">devops-cicd</a></td>
+          <td><a href="group-29-testing-infrastructure.html">g29</a>/<a href="devops-cicd.html">devops-cicd</a></td>
           </tr>
           <tr>
           <td>093</td>
@@ -862,7 +863,7 @@ Shared            (Result pattern, errors, DTOs, value objects)</code></pre>
           <tr>
           <td>098</td>
           <td>Aspire for orchestration, not for testing or production dashboards: each AppHost composes the local stack and every host calls <code>AddServiceDefaults</code>/<code>MapDefaultEndpoints</code>, but integration testing stays <code>WebApplicationFactory</code> + Testcontainers (<code>SqlServerIntegrationTestFixtureBase&lt;TEntryPoint&gt;</code> per service, <code>CrossServiceFixtureBase</code> for the three-host tier) and <code>DistributedApplicationTestingBuilder</code> stays out; production observability is Application Insights, not the Aspire dashboard</td>
-          <td><a href="devops-testing.html">devops-testing</a>/<a href="group-28-testing-infrastructure.html">g28</a>/<a href="devops-aspire.html">devops-aspire</a></td>
+          <td><a href="devops-testing.html">devops-testing</a>/<a href="group-29-testing-infrastructure.html">g29</a>/<a href="devops-aspire.html">devops-aspire</a></td>
           </tr>
           <tr>
           <td>099</td>
@@ -881,13 +882,13 @@ Shared            (Result pattern, errors, DTOs, value objects)</code></pre>
           </tr>
           <tr>
           <td>102</td>
-          <td>PBKDF2-only password hashing (supersedes 032): one <code>IPasswordHasher</code>, one <code>PasswordHasher</code> implementation registered with <code>TryAddSingleton</code> (stateless, three private constants), PBKDF2-HMAC-SHA512 with a 32-byte salt, 64-byte digest, 600,000 iterations and a <code>FixedTimeEquals</code> compare; <code>VerifyPassword</code> has no branch, so the legacy HMAC salt-length selection and every <code>HMACSHA512</code> usage are gone from <code>Source/</code> in all four repos</td>
+          <td><del>PBKDF2-only password hashing (supersedes 032): one <code>PasswordHasher</code>, PBKDF2-HMAC-SHA512 at a fixed 600,000 iterations, no legacy branch</del> <strong>superseded by <a href="https://ivanball.github.io/docs/adr/133-versioned-password-hash-work-factor.html" target="_blank" rel="noopener">ADR-133</a></strong> (versioned hash that records its own work factor)</td>
           <td><a href="group-08-auth.html">g08</a></td>
           </tr>
           <tr>
           <td>103</td>
           <td>bUnit component-test tier as a package: <code>MMCA.Common.Testing.UI</code> ships <code>BunitComponentTestBase</code>, which fixes once the choices every consumer UI test tree would otherwise re-derive (bUnit v2 on the xUnit v3 / Microsoft Testing Platform line, <code>BunitContext</code> and <code>Render&lt;T&gt;</code> isolated behind <code>RenderUnderTest</code>/<code>RenderAs</code>, the MudBlazor service set and the JS-interop stubs), so a move off that bUnit line changes one file</td>
-          <td><a href="group-28-testing-infrastructure.html">g28</a></td>
+          <td><a href="group-29-testing-infrastructure.html">g29</a></td>
           </tr>
           <tr>
           <td>104</td>
@@ -897,7 +898,7 @@ Shared            (Result pattern, errors, DTOs, value objects)</code></pre>
           <tr>
           <td>105</td>
           <td>Data residency as a build gate: <code>DataResidencyTestsBase</code> (one <code>[Fact]</code>, rubric section 30) parses the region where a repo actually provisions PII-bearing storage from that repo&#39;s own infrastructure source of truth (ADC from the <code>SQL_LOCATION_OVERRIDE</code> default in <code>deploy.yml</code>, Store from its DR runbook) and fails the build unless <code>PRIVACY.md</code> states it, with a per-repo denylist that blocks a stale or copied region claim</td>
-          <td><a href="group-28-testing-infrastructure.html">g28</a>/<a href="devops-cicd.html">devops-cicd</a></td>
+          <td><a href="group-29-testing-infrastructure.html">g29</a>/<a href="devops-cicd.html">devops-cicd</a></td>
           </tr>
           <tr>
           <td>106</td>
@@ -917,7 +918,7 @@ Shared            (Result pattern, errors, DTOs, value objects)</code></pre>
           <tr>
           <td>109</td>
           <td>Feature-by-folder as an enforced convention: the aggregate names the first folder level in Domain/Application/Shared, a technical root then the aggregate in UI/API/Infrastructure, at most twelve direct code files per folder, namespaces follow folders, and a layout change ships as a breaking release with a migration map (<code>FolderWidthTestsBase</code> enforces the cap in every repo)</td>
-          <td><a href="group-28-testing-infrastructure.html">g28</a></td>
+          <td><a href="group-29-testing-infrastructure.html">g29</a></td>
           </tr>
           <tr>
           <td>110</td>
@@ -957,12 +958,12 @@ Shared            (Result pattern, errors, DTOs, value objects)</code></pre>
           <tr>
           <td>117</td>
           <td>AppHost integration testing as a shipped package: <code>MMCA.Common.Testing.Aspire</code> gives a consumer&#39;s smoke tier <code>AppHostFixtureBase&lt;TAppHost&gt;</code> (one collection fixture, per-resource readiness waits) and a named skip when a precondition is missing, so the composition itself is asserted rather than only type-checked</td>
-          <td><a href="group-28-testing-infrastructure.html">g28</a>/<a href="group-16-aspire-orchestration.html">g16</a>/<a href="devops-testing.html">devops-testing</a></td>
+          <td><a href="group-29-testing-infrastructure.html">g29</a>/<a href="group-16-aspire-orchestration.html">g16</a>/<a href="devops-testing.html">devops-testing</a></td>
           </tr>
           <tr>
           <td>118</td>
           <td>Message transport library policy: MassTransit stays pinned at v8 behind <code>IMessageBus</code> (<code>DependencyVersionTestsBase</code> gates the major), the outbox and inbox stay custom precisely because that keeps a transport swap cheap, and the exit triggers and replacement order are recorded so the pin is a dated decision</td>
-          <td><a href="group-04-events-outbox.html">g04</a>/<a href="group-28-testing-infrastructure.html">g28</a></td>
+          <td><a href="group-04-events-outbox.html">g04</a>/<a href="group-29-testing-infrastructure.html">g29</a></td>
           </tr>
           <tr>
           <td>119</td>
@@ -997,7 +998,7 @@ Shared            (Result pattern, errors, DTOs, value objects)</code></pre>
           <tr>
           <td>125</td>
           <td>Parameterized SQL only: hand-written SQL has exactly one door, <code>IRawSqlQueryExecutor</code>, whose two entry points accept <code>FormattableString</code> and nothing else (a concatenated statement does not compile), <code>EFRawSqlQueryExecutor</code> names the relational-only limit, and <code>RawSqlConventionTestsBase</code> bans the four <code>*Raw</code> EF members in module code as a fitness gate</td>
-          <td><a href="group-07-persistence-ef-core.html">g07</a>/<a href="group-28-testing-infrastructure.html">g28</a></td>
+          <td><a href="group-07-persistence-ef-core.html">g07</a>/<a href="group-29-testing-infrastructure.html">g29</a></td>
           </tr>
           <tr>
           <td>126</td>
@@ -1012,17 +1013,17 @@ Shared            (Result pattern, errors, DTOs, value objects)</code></pre>
           <tr>
           <td>128</td>
           <td>Time as an input: Domain and Application code never reads the ambient clock (<code>DateTime.UtcNow</code>, <code>Now</code>, <code>Today</code>, <code>DateTimeOffset.UtcNow</code>, <code>Now</code>); handlers inject <code>TimeProvider</code> and pass the instant into the domain, <code>BaseDomainEvent.DateOccurred</code> is the single exemption, and an IL-scanning fitness base (<code>ClockReadTestsBase</code>) enforces it</td>
-          <td><a href="group-28-testing-infrastructure.html">g28</a></td>
+          <td><a href="group-29-testing-infrastructure.html">g29</a></td>
           </tr>
           <tr>
           <td>129</td>
           <td>The tactical aggregate contract: entities are sealed classes over <code>BaseEntity</code> / <code>AuditableBaseEntity</code> / <code>AuditableAggregateRootEntity</code>, built only through a <code>Create</code> returning <code>Result&lt;T&gt;</code>, with private setters, child access through the root and invariants in static <code>*Invariants</code> classes; <code>EntityConventionTestsBase</code> gates construction, encapsulation and placement</td>
-          <td><a href="group-28-testing-infrastructure.html">g28</a></td>
+          <td><a href="group-29-testing-infrastructure.html">g29</a></td>
           </tr>
           <tr>
           <td>130</td>
           <td>Per-engine data source strategy: one internal <code>IDataSourceEngine</code> per engine (SQL Server, PostgreSQL, SQLite, Cosmos DB) behind the static <code>DataSourceEngines.For(DataSource)</code> registry, so call sites read engine facts instead of branching on the <code>DataSource</code> enum, with <code>DataSourceBranchingFitnessTests</code> as the gate</td>
-          <td><a href="group-07-persistence-ef-core.html">g07</a>/<a href="group-28-testing-infrastructure.html">g28</a></td>
+          <td><a href="group-07-persistence-ef-core.html">g07</a>/<a href="group-29-testing-infrastructure.html">g29</a></td>
           </tr>
           <tr>
           <td>131</td>
@@ -1033,6 +1034,26 @@ Shared            (Result pattern, errors, DTOs, value objects)</code></pre>
           <td>132</td>
           <td>Build strictness: all four repos treat compiler and code-analysis warnings as errors, run the five analyzer packages from root props with every analyzer diagnostic defaulting to error severity through the shared <code>.editorconfig</code> baseline, and give each CI test run a <code>--minimum-expected-tests</code> floor so a silently skipped tier fails instead of passing empty</td>
           <td><a href="devops-cicd.html">devops-cicd</a>/<a href="devops-testing.html">devops-testing</a></td>
+          </tr>
+          <tr>
+          <td>133</td>
+          <td>Versioned password hash work factor (supersedes 102): <code>PasswordHasher</code> writes a 69-byte hash (a <code>0x01</code> version byte, a 4-byte big-endian iteration count, then the 64-byte PBKDF2-HMAC-SHA512 digest) at 210,000 iterations; a bare 64-byte legacy hash still verifies at 600,000, and <code>NeedsRehash</code> lets a successful sign-in upgrade any hash not at the current format and count</td>
+          <td><a href="group-08-auth.html">g08</a></td>
+          </tr>
+          <tr>
+          <td>134</td>
+          <td>Cloud-neutral core with vendor adapter packages: the core packages reference no cloud SDK; <code>MMCA.Common.Azure</code>, <code>MMCA.Common.Aws</code> and <code>MMCA.Common.Gcp</code> (plus <code>MMCA.Common.Testing.Azure</code>) each implement the provider-neutral abstractions behind one opt-in registration call per capability, a no-op until its configuration key is set</td>
+          <td><a href="group-28-common-cloud-provider-adapters.html">g28</a>/<a href="group-14-module-system-composition.html">g14</a></td>
+          </tr>
+          <tr>
+          <td>135</td>
+          <td>One application namespace isolates shared infrastructure keyspaces: <code>ApplicationNamespace.Resolve</code> (<code>Application:Namespace</code>, else the host application name, else <code>app</code>, sanitized and never empty) prefixes the distributed cache and lock keys, rate-limit counters, the Redis output-cache store, the SignalR backplane and broker endpoint names, so isolation is the default</td>
+          <td><a href="group-14-module-system-composition.html">g14</a>/<a href="group-09-caching.html">g09</a></td>
+          </tr>
+          <tr>
+          <td>136</td>
+          <td>Installable web app through a framework service worker that never caches a page: <code>app.MapCommonServiceWorker()</code> serves a version-stamped <code>/service-worker.js</code> that handles GET navigations only, network first with navigation preload, and falls back to a precached script-free offline page; the framework ships the mechanism and each host supplies its own app identity</td>
+          <td><a href="group-15-common-ui-framework.html">g15</a></td>
           </tr>
           </tbody></table></div>
           <p>The canonical index for the full set can be found at <a href="https://ivanball.github.io/docs/adr/" target="_blank" rel="noopener">https://ivanball.github.io/docs/adr/</a>.</p>

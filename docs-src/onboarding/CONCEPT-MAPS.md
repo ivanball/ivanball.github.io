@@ -1,8 +1,8 @@
 # MMCA Concept & Pattern Maps
 
 Mermaid diagrams distilled from the [Onboarding guide](00-index.md) (primer, group taxonomy,
-dependency manifest, and the 28 group chapters). Each diagram captures a *relationship* between the
-concepts the guide teaches: the layering, the 28 functional groups, the cross-cutting patterns, and
+dependency manifest, and the 29 group chapters). Each diagram captures a *relationship* between the
+concepts the guide teaches: the layering, the 29 functional groups, the cross-cutting patterns, and
 the ADRs (see `Website/docs-src/adr/README.md` for the canonical range) / rubric categories that explain the "why".
 
 Diagrams are grounded in:
@@ -11,9 +11,9 @@ Diagrams are grounded in:
 
 ---
 
-## 1. System context, two codebases + the 22 packages
+## 1. System context, two codebases + the 26 packages
 
-`MMCA.Common` is a framework published as twenty-two NuGet packages in lockstep, to nuget.org **and**
+`MMCA.Common` is a framework published as twenty-six NuGet packages in lockstep, to nuget.org **and**
 GitHub Packages from one tag ([ADR-053](https://ivanball.github.io/docs/adr/053-dual-registry-package-publishing.html));
 `MMCA.ADC` and `MMCA.Store` consume them. `MMCA.Common/FACTS.md` owns the count and the list (link
 there, do not recount). The framework depends on neither consumer (that one-way arrow is why the
@@ -26,8 +26,13 @@ first-party project reference at all
 ([ADR-088](https://ivanball.github.io/docs/adr/088-gateway-edge-responsibilities.html)). `UI.Maui`
 is the one MAUI-TFM package: it lives outside `MMCA.Common.slnx` and is built and packed by
 dedicated windows CI jobs
-([ADR-042](https://ivanball.github.io/docs/adr/042-device-capability-abstraction.html)). Two more
-families stand apart from the layer chain. The four AI packages form the governed language-model
+([ADR-042](https://ivanball.github.io/docs/adr/042-device-capability-abstraction.html)). Three more
+families stand apart from the layer chain. The three cloud adapter packages, `MMCA.Common.Aws`,
+`MMCA.Common.Azure` and `MMCA.Common.Gcp`, carry every vendor SDK so the core packages reference
+none; each references `MMCA.Common.Infrastructure` and `MMCA.Common.Aspire`, and
+`MMCA.Common.Testing.Azure` is their test-side companion
+([ADR-134](https://ivanball.github.io/docs/adr/134-cloud-neutral-core-vendor-adapters.html), taught as
+its own chapter group). The four AI packages form the governed language-model
 boundary ([ADR-120](https://ivanball.github.io/docs/adr/120-governed-chat-client-boundary.html), taught
 as its own chapter group): `MMCA.Common.AI` is the governed client, `MMCA.Common.AI.Anthropic` and
 `MMCA.Common.AI.OpenAI` are provider adapters (one `IAiProviderFactory` each), and
@@ -37,7 +42,7 @@ MMCA.Common project reference. `MMCA.Common.Testing.Aspire` ships the AppHost in
 
 ```mermaid
 flowchart TD
-    subgraph COMMON["MMCA.Common: framework, 22 NuGet packages (lockstep versioned)"]
+    subgraph COMMON["MMCA.Common: framework, 26 NuGet packages (lockstep versioned)"]
         direction TB
         subgraph CORE["Core (4)"]
             SH["Shared"]
@@ -57,12 +62,18 @@ flowchart TD
             ASPH["Aspire.Hosting"]
             GWPK["Gateway<br/>(YARP edge kit, ADR-088)"]
         end
-        subgraph TEST["Testing (5)"]
+        subgraph TEST["Testing (6)"]
             T1["Testing"]
             T2["Testing.E2E"]
             T3["Testing.UI"]
             T4["Testing.Architecture"]
             T5["Testing.Aspire<br/>(AppHost test base, ADR-117)"]
+            T6["Testing.Azure<br/>(Azure test fixtures, ADR-134)"]
+        end
+        subgraph CLOUD["Cloud adapters (3), ADR-134"]
+            AWS["Aws"]
+            AZ["Azure"]
+            GCP["Gcp"]
         end
         subgraph AIFAM["AI boundary (4), ADR-120"]
             AIPK["AI<br/>(governed chat client)"]
@@ -81,7 +92,7 @@ flowchart TD
 
     classDef fw fill:#e8f0fe,stroke:#4285f4,color:#111
     classDef con fill:#e6f4ea,stroke:#34a853,color:#111
-    class SH,DOM,APP,INF,API,GRPC,UI,UIW,UIM,ASPIRE,ASPH,GWPK,T1,T2,T3,T4,T5,AIPK,AIA,AIO,AIT,META fw
+    class SH,DOM,APP,INF,API,GRPC,UI,UIW,UIM,ASPIRE,ASPH,GWPK,T1,T2,T3,T4,T5,T6,AWS,AZ,GCP,AIPK,AIA,AIO,AIT,META fw
     class ADC,STORE con
 ```
 
@@ -95,7 +106,10 @@ Grpc because it is pure transport, and `Aspire` in fact references only `Shared`
 references `UI` (and `Shared` through it) only; and `UI.Web`, the Blazor Web host bridge, sits above
 `UI`, `API` and `Aspire`, with transitive project references disabled so the guard can tell a
 deliberate direct reference from an inherited one. `Gateway` sits outside the rule set entirely: it
-carries no guard target and no first-party project reference at all (YARP only). Enforced twice: the
+carries no guard target and no first-party project reference at all (YARP only). The cloud adapter
+packages (`Aws`, `Azure`, `Gcp`) sit above `Infrastructure` and `Aspire` and are the only place a
+vendor SDK may appear
+([ADR-134](https://ivanball.github.io/docs/adr/134-cloud-neutral-core-vendor-adapters.html)). Enforced twice: the
 compile-time MSBuild layer guard in
 `Source/Build/MMCA.Common.LayerEnforcement.targets`, which carries a target per guarded project
 (Shared, Domain, Application, Infrastructure, UI, UI.Maui, UI.Web) and fails the build on a
@@ -115,6 +129,7 @@ flowchart TD
     UIMA["UI.Maui (MAUI heads, ADR-042)"]
     UIWB["UI.Web (Blazor Web host bridge)"]
     GWL["Gateway (YARP edge kit:<br/>no first-party reference, ADR-088)"]
+    CLDL["Cloud adapters: Aws / Azure / Gcp<br/>(the only vendor SDKs, ADR-134)"]
 
     APIL --> INFL --> APPL --> DOML --> SHRL
     UIL -.->|"Shared only"| SHRL
@@ -124,6 +139,8 @@ flowchart TD
     UIWB --> UIL
     UIWB --> APIL
     UIWB --> ASPL
+    CLDL --> INFL
+    CLDL --> ASPL
 
     ENF["Enforced 2x: compile-time layer guard + NetArchTest fitness (ADR-015)"]
     ENF -.-> APIL
@@ -132,18 +149,19 @@ flowchart TD
     classDef exc fill:#fce8e6,stroke:#ea4335,color:#111
     classDef note fill:#f1f3f4,stroke:#9aa0a6,color:#333
     class APIL,INFL,APPL,DOML,SHRL layer
-    class UIL,GRPCL,ASPL,UIMA,UIWB,GWL exc
+    class UIL,GRPCL,ASPL,UIMA,UIWB,GWL,CLDL exc
     class ENF note
 ```
 
 ---
 
-## 3. The 28 functional groups, dependency / build order
+## 3. The 29 functional groups, dependency / build order
 
-The primary axis of the guide: every type lives in exactly one of 28 chapter groups, ordered roughly
+The primary axis of the guide: every type lives in exactly one of 29 chapter groups, ordered roughly
 **topologically**. Foundational, widely-depended-on concerns first (Result → domain blocks →
 querying → events → CQRS → …), then the ASP.NET/UI/Aspire edges, then the ADC business modules, then
-the late-added Common device-capability layer, the Common AI integration and the test infrastructure.
+the late-added Common device-capability layer, the Common AI integration, the Common cloud provider
+adapters and the test infrastructure.
 Arrows show the dominant "builds on" direction (charters + levels).
 
 ```mermaid
@@ -180,7 +198,8 @@ flowchart TD
 
     G26["G26 Device Capability Layer<br/>(MMCA.Common, appended after the modules)"]
     G27["G27 Common AI Integration<br/>(MMCA.Common, self-contained: no first-party group deps)"]
-    G28["G28 Testing &amp; Quality Infrastructure"]
+    G28["G28 Common Cloud Provider Adapters<br/>(MMCA.Common.Aws / .Azure / .Gcp, ADR-134)"]
+    G29["G29 Testing &amp; Quality Infrastructure"]
 
     %% framework backbone
     G01 --> G02 --> G03
@@ -234,18 +253,25 @@ flowchart TD
     G21 --> G25
     G26 --> G25
 
-    %% everything is tested
-    ADCMOD --> G28
+    %% vendor adapters implement the provider-neutral Common abstractions
+    G07 --> G28
+    G10 --> G28
+    G14 --> G28
     G16 --> G28
-    G26 --> G28
-    G27 --> G28
+
+    %% everything is tested
+    ADCMOD --> G29
+    G16 --> G29
+    G26 --> G29
+    G27 --> G29
+    G28 --> G29
 
     classDef fw fill:#e8f0fe,stroke:#4285f4,color:#111
     classDef adc fill:#e6f4ea,stroke:#34a853,color:#111
     classDef test fill:#f3e8fd,stroke:#a142f4,color:#111
-    class G01,G02,G03,G04,G05,G06,G07,G08,G09,G10,G11,G12,G13,G14,G15,G16,G26,G27 fw
+    class G01,G02,G03,G04,G05,G06,G07,G08,G09,G10,G11,G12,G13,G14,G15,G16,G26,G27,G28 fw
     class G17,G18,G19,G20,G21,G22,G23,G24,G25 adc
-    class G28 test
+    class G29 test
 ```
 
 ---
@@ -535,7 +561,7 @@ flowchart TD
         JWT["JWT bearer validation"]
         JWKS["JWKS discovery + fallback fetch (ADR-004)"]
         COOKIE["HttpOnly session cookie + non-validating SSR scheme (ADR-022);<br/>ISessionCookieStore writes them server-side for the proxy (ADR-131)"]
-        HASH["PBKDF2-HMAC-SHA512, 32-byte salt, 600k iters:<br/>one algorithm, no legacy branch (ADR-102)"]
+        HASH["PBKDF2-HMAC-SHA512, versioned hash carrying its own<br/>work factor: 210k iters for new hashes, outdated<br/>records rehashed after sign-in (ADR-133)"]
         LOGIN["ILoginProtectionService: lockout + per-IP cap (ADR-029)"]
         EXT["External OAuth: Google / GitHub behind a short-lived<br/>ExternalLogin cookie + single-use code (ADR-036/043)"]
         ROT["AuthenticationServiceBase decides who is signed in;<br/>IAuthSessionIssuer: 15-min access token +<br/>one refresh session per device, SHA-256 at rest,<br/>rotated with reuse detection (ADR-097);<br/>ITokenRefresher per head (ADR-051)"]
@@ -735,8 +761,8 @@ flowchart LR
 
 Every accepted ADR in `Website/docs-src/adr/`, clustered by the concern it governs. That directory's
 [`README.md`](https://ivanball.github.io/docs/adr/) is the canonical index and owns the count and
-range; this map only regroups it. (Four are struck through there: 011 superseded by 027, 032 by
-102, 050 by 097, and 052 by 121. They stay on this map because the records they replaced still
+range; this map only regroups it. (Five are struck through there: 011 superseded by 027, 032 by
+102, 050 by 097, 052 by 121, and 102 by 133. They stay on this map because the records they replaced still
 explain the shape of the code that followed.)
 
 ```mermaid
@@ -795,7 +821,8 @@ mindmap
       020 Permission-based authz
       022 Session-cookie auth
       029 Brute-force protection
-      102 PBKDF2-only password hashing
+      133 Versioned password hash work factor
+      102 PBKDF2-only password hashing superseded by 133
       032 Password hashing superseded by 102
       033 Resource-ownership authz
       019 Rate limiting
@@ -921,13 +948,14 @@ navigation.
 flowchart TD
     PRIMER["Primer: cross-cutting concepts, stack, conventions, rubric (taught once)"]
 
-    subgraph AXIS1["Primary axis: functional groups (G01→G28)"]
+    subgraph AXIS1["Primary axis: functional groups (G01-G29)"]
         FW["Framework groups G01-G16 (MMCA.Common)"]
         ADCG["ADC module groups G17-G25"]
         CAPG["Device capability layer G26 (MMCA.Common, appended late)"]
         AIG["Common AI integration G27 (MMCA.Common, appended late)"]
-        TESTG["Testing G28"]
-        FW --> ADCG --> CAPG --> AIG --> TESTG
+        CLDG["Common cloud provider adapters G28 (MMCA.Common, appended late)"]
+        TESTG["Testing G29"]
+        FW --> ADCG --> CAPG --> AIG --> CLDG --> TESTG
     end
 
     AXIS2["Secondary axis: dependency Level within each group<br/>(meet a type only after its first-party deps)"]
@@ -941,7 +969,7 @@ flowchart TD
     AXIS1 --> DEVOPS
 
     classDef m fill:#e8f0fe,stroke:#4285f4,color:#111
-    class PRIMER,FW,ADCG,CAPG,AIG,TESTG,AXIS2,LENS,DEVOPS m
+    class PRIMER,FW,ADCG,CAPG,AIG,CLDG,TESTG,AXIS2,LENS,DEVOPS m
 ```
 
 ---
@@ -953,9 +981,11 @@ flowchart TD
   functional cohesion outranks strict layering, so a few minor edges are omitted for readability.
 - **GNN here is the chapter number** (`group-NN-*.md`), the numbering the index and the reading paths
   use. [`00-group-taxonomy.md`](00-group-taxonomy.md) still carries the original classification ids
-  for the chapters inserted later (its G26 is the live layer, chapter 23; its G27 is the device
-  capability layer, chapter 26; its G28 is Common AI integration, chapter 27; its G25 is testing,
-  chapter 28), so match that table by chapter filename rather than by its id.
+  for the chapters inserted later (its G26 is the live layer, chapter 23; its G23 and G24 are
+  Identity and the ADC host, chapters 24 and 25; its G27 is the device capability layer, chapter 26;
+  its G28 is Common AI integration, chapter 27; its G29 is the Common cloud provider adapters,
+  chapter 28; its G25 is testing, chapter 29), so match that table by chapter filename rather than by
+  its id.
 - Pattern diagrams (§4-§12) reflect the mechanisms as taught in the corresponding `group-NN-*.md`
   chapters and the ADRs named in [`00-primer.md`](00-primer.md).
 - The 36 dependency cycles (SCCs) listed in the manifest are kept whole inside a single group
