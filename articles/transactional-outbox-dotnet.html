@@ -95,7 +95,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 53 articles</summary>
+        <summary>All 54 articles</summary>
         <nav class="doc-nav" aria-label="The MMCA.Common series">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -151,7 +151,8 @@
         <li><a href="governed-llm-boundary.html">50 · The governed LLM boundary</a></li>
         <li><a href="durable-internal-commands.html">51 · Four ways to do work later</a></li>
         <li><a href="identity-completions.html">52 · Finishing identity</a></li>
-        <li><a href="series-index.html">53 · The series index</a></li>
+        <li><a href="cloud-neutral-vendor-adapters.html">53 · One framework, three clouds</a></li>
+        <li><a href="series-index.html">54 · The series index</a></li>
           </ol>
         </nav>
       </details>
@@ -355,11 +356,14 @@ AddDomainEvent(<span class="hljs-keyword">new</span> InventoryAdjusted(Id, oldAv
           you extract the module. The outbox is what makes that switch safe: the same durable record is drained
           to an in-process handler today and to a broker tomorrow. This is the dual-dispatch design recorded in
           <strong>ADR-003</strong>.</p>
-          <p>Which transport you get is a separate decision, and <strong>ADR-066</strong> records it: <code>MessageBusProvider</code>
-          has exactly three values (<code>InProcess</code>, <code>RabbitMq</code>, <code>AzureServiceBus</code>), chosen at the deployment edge
-          (the Aspire AppHost locally, Bicep environment variables in production) rather than anywhere in
-          application code, and both broker branches are configured from one settings object with the same
-          exponential retry, so the two products stay substitutable. It also records the honest residual: the
+          <p>Which transport you get is a separate decision, and <strong>ADR-066</strong> records it: <code>MessageBus:Provider</code>
+          is a string with three built-in values (<code>InProcess</code>, <code>RabbitMq</code>, <code>PostgreSql</code>), and any other value
+          names a transport an adapter package registers (<code>AzureServiceBus</code> from MMCA.Common.Azure, <code>AmazonSqs</code>
+          from MMCA.Common.Aws; see <a href="cloud-neutral-vendor-adapters.html">Cloud-neutral core, vendor adapters</a>).
+          The value is chosen at the deployment edge (the Aspire AppHost locally, Bicep environment variables
+          in production) rather than anywhere in application code, and every broker transport takes its retry,
+          redelivery and backpressure from one shared policy (<code>BrokerTransportPolicies</code>) over one settings
+          object, so the products stay substitutable. It also records the honest residual: the
           production-only Azure Service Bus binding is exercised by a dedicated emulator test tier that runs on
           the weekday nightly and gates deployment in both ADC and Store, so a Service-Bus-only regression
           blocks the next deploy, though not the merge that introduced it.</p>
@@ -368,8 +372,8 @@ AddDomainEvent(<span class="hljs-keyword">new</span> InventoryAdjusted(Id, oldAv
 <span class="hljs-comment">// BrokerMessageBus     -&gt; extracted service, MassTransit broker (RabbitMQ dev / Azure Service Bus prod)</span></code></pre>
           <p>Whether there is an outbox at all is resolved from that same mode. <code>MessageBus:EnableOutbox</code> is a
           <code>bool?</code> that defaults to unset, and <code>MessageBusSettings.IsOutboxEnabled</code> reads
-          <code>EnableOutbox ?? Provider != MessageBusProvider.InProcess</code>, character for character the rule
-          <code>IsInboxEnabled</code> uses two properties above it. <code>AddInfrastructure</code> resolves that posture once, at
+          <code>EnableOutbox ?? !MessageBusProviders.IsInProcess(Provider)</code>, character for character the rule
+          <code>IsInboxEnabled</code> uses two properties above it (a blank provider counts as <code>InProcess</code>). <code>AddInfrastructure</code> resolves that posture once, at
           registration: on the enabled path it registers <code>OutboxProcessor</code> and <code>OutboxCleanupService</code>, and on
           the disabled path it registers neither and adds <code>OutboxDisabledNoticeService</code>, which logs one startup
           line naming exactly what is not running. The one combination that cannot work is refused rather than
@@ -380,8 +384,9 @@ AddDomainEvent(<span class="hljs-keyword">new</span> InventoryAdjusted(Id, oldAv
           default: a monolith that wants at-least-once delivery across a crash, and an in-process test host
           that asserts on outbox rows or on a retried handler, both have to say so explicitly.</p>
           <pre class="doc-pre" tabindex="0" data-lang="JSON"><code class="language-jsonc hljs"><span class="hljs-comment">// Unset is the default, and the transport decides:</span>
-<span class="hljs-comment">//   InProcess                  -&gt; outbox OFF, events dispatch synchronously, no rows, no services</span>
-<span class="hljs-comment">//   RabbitMq / AzureServiceBus -&gt; outbox ON, and an explicit false throws at registration</span>
+<span class="hljs-comment">//   InProcess        -&gt; outbox OFF, events dispatch synchronously, no rows, no processor</span>
+<span class="hljs-comment">//                       (one startup notice says so)</span>
+<span class="hljs-comment">//   any broker value -&gt; outbox ON, and an explicit false throws at registration</span>
 <span class="hljs-punctuation">{</span>
   <span class="hljs-attr">&quot;MessageBus&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">{</span>
     <span class="hljs-attr">&quot;Provider&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-string">&quot;InProcess&quot;</span><span class="hljs-punctuation">,</span>
@@ -400,11 +405,13 @@ AddDomainEvent(<span class="hljs-keyword">new</span> InventoryAdjusted(Id, oldAv
           only. An event that left the outbox successfully and then failed every consume attempt produced no
           counter and no log line in any of our meters.</p>
           <p><code>FaultIntegrationEventConsumer&lt;TEvent&gt;</code> closes that. It consumes <code>Fault&lt;TEvent&gt;</code>, the message
-          MassTransit publishes when a consumer&#39;s retries are exhausted, and it does exactly two things: it writes
+          MassTransit publishes when a consumer&#39;s retries are exhausted. That fault goes to a topic every service consuming the event subscribes to, so the consumer first asks whether this host
+          produced it: it compares the fault&#39;s <code>Host.Assembly</code> with its own, and a fault from another service
+          gets one Debug line and nothing else. For a fault of its own it does exactly two things: it writes
           one Error log line naming the event type and the faulted message id (the broker&#39;s own message id when
           MassTransit captured one, the fault id otherwise, since one of the two is always what an operator pastes
-          into a queue browser), and it increments <code>broker.fault.count</code>, tagged by event type, on a meter named
-          <code>MMCA.Common.Broker</code>. It never throws and never replays the failed message, deliberately: a fault
+          into a queue browser), and it increments <code>broker.fault.count</code>, tagged by event type and faulting
+          assembly, on a meter named <code>MMCA.Common.Broker</code>. It never throws and never replays the failed message, deliberately: a fault
           consumer that tried to recover would be a third retry policy hiding behind the two that already exist.
           Registration is automatic, because <code>RegisterIntegrationEventConsumer&lt;TEvent&gt;</code> adds it by default, so
           opting out is a visible <code>false</code> at one call site rather than a setting that silently disarms every

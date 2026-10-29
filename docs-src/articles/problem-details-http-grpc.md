@@ -47,7 +47,7 @@ extra requirement: it has to be transport-agnostic. The same logical failure (a 
 forbidden, a conflict) has to look the same to a caller whether the answer came from an in-process
 object, an HTTP hop, or a gRPC hop. If it does not, extraction is a breaking change for every consumer.
 
-## The MMCA answer: one mapping table, reused on both transports
+## The MMCA answer: one mapping decision, one frozen table per transport
 
 MMCA.Common's whole error story starts from one decision recorded across the codebase: expected
 failures are *values*, not exceptions. Handlers return `Result<T>` carrying an `Error` list, each error
@@ -95,8 +95,8 @@ rejected", and a `BadHttpRequestException` keeps the status the server set, typi
 oversize body or 400 otherwise) and turns everything else into a 500. Together they guarantee one
 invariant: every error an action returns or throws leaves the API as an RFC 9457
 Problem Details with a sensible status. The invariant covers the MVC pipeline, not the middleware in
-front of it: the rate limiter rejects with a bare 429 (it sets a rejection status and writes no body),
-and an unmatched route is a bare 404, because the framework does not call `UseStatusCodePages`.
+front of it: the rate limiter rejects with a 429 that carries a `Retry-After` header whenever the
+limiter knows when its window resets, but writes no body, and an unmatched route is a bare 404, because the framework does not call `UseStatusCodePages`.
 
 There is also a guard against the most insidious bug in this space: a controller that calls
 `Ok(result)` on a *failed* `Result`. Without a guard that serializes as a misleading `200 OK` carrying
@@ -132,7 +132,9 @@ it would have seen in-process.
 
 That status-mapping symmetry is the point. The `ErrorType -> status` decision is made once per transport in a frozen
 table, the translation is a pipeline concern written once in an interceptor, and a `NotFound` is a 404
-over HTTP and a `NotFound` `RpcException` over gRPC because both tables agree. The same holds for a
+over HTTP and a `NotFound` `RpcException` over gRPC because both tables agree. They are two tables,
+not one shared object: the gRPC table documents itself as a mirror of `ErrorHttpMapping`, and the only
+code the two transports share is the `ErrorTypeSeverity` ranking that picks the winning error. The same holds for a
 temporary refusal: `TooManyRequests` is a 429 over HTTP and `ResourceExhausted` over gRPC.
 
 ## The rest of the §9 contract
@@ -195,7 +197,8 @@ contract. The first two are the honest notes below.
   repos run the rule on every build.
 
 So the enforcement story reads cleanly in three parts. The error *mapping* is enforced where it is
-defined (a frozen table reused on both transports, plus the 200-with-error-body filter). The contract
+defined (one frozen table per transport, the gRPC one mirroring the HTTP one, plus the
+200-with-error-body filter). The contract
 *shape* is enforced by a baseline a build diffs. The contract *purity* invariant is enforced by a
 dedicated fitness rule, alongside the layer and transport rules (ADR-015) that guard the same boundary
 from the layer side. The remaining implementation point is the four gaps named above: a purity rule no
@@ -226,8 +229,9 @@ The pattern ports to any stack with more than one client or more than one transp
 ---
 
 **What we covered:** why per-endpoint error handling produces inconsistent contracts that do not
-survive a transport change, how MMCA.Common maps `ErrorType` to status through a single frozen table
-reused by `ApiControllerBase.HandleFailure` over HTTP and `GrpcResultExceptionInterceptor` over gRPC,
+survive a transport change, how MMCA.Common maps `ErrorType` to status through one frozen table per
+transport (`ErrorHttpMapping` behind `ApiControllerBase.HandleFailure` over HTTP, its mirror behind
+`GrpcResultExceptionInterceptor` over gRPC) ranked by one shared severity order,
 how a guard closes the 200-with-error-body trap, and how §9 keeps that contract honest (a committed
 OpenAPI baseline the framework's own build diffs, consumer hosts snapshotting their concrete surface,
 and a dedicated `[ServiceContract]` purity rule that bites on the interfaces the consumers mark).
@@ -241,6 +245,20 @@ included), or `dotnet add package MMCA.Common.API` and try it.*
 - The full 34-category scorecard, §9 included, lives in `Website/docs-src/governance/common-ArchitectureScorecard.md` in the docs site.
 
 *Tags: .NET, C Sharp, Software Architecture, gRPC, API Design*
+
+*Notes (2026-10-29 refresh against MMCA.Common v1.265.1; the anchors this run touched were re-read, the
+rest carried from the 2026-10-22 pass). The body no longer says one table is reused on both transports:
+HTTP maps through `ErrorHttpMapping.ErrorTypeToStatusCode`
+(`MMCA.Common/Source/Presentation/MMCA.Common.API/Middleware/ErrorHttpMapping.cs:20-32`, `internal`), gRPC
+through its own private `FrozenDictionary<ErrorType, StatusCode>`
+(`MMCA.Common/Source/Presentation/MMCA.Common.Grpc/ResultGrpcExtensions.cs:37-50`, doc "Mirrors" at
+`:34-35`), and only `ErrorTypeSeverity` (`.../MMCA.Common.Shared/Abstractions/ErrorTypeSeverity.cs:38-50`,
+`MostSevere` `:71`) is shared; heading, the enforcement summary and "What we covered" now say one table
+per transport. The rate-limiter sentence gains the `Retry-After` header (`...RateLimiting.cs:424`,
+status `:420`). Re-anchored in the 2026-10-08 and 2026-10-02 entries: `AGENTS.md` "Microservices
+Extraction Boundaries" `:126` to `:129` (headings `:1` to `:164`), the second `UseStatusCodePages`
+comment hit, and the stale `sync-medium-fences.ps1` reference dropped (no such script exists under
+`Tools/Scripts/`).*
 
 *Notes (2026-10-22 refresh against MMCA.Common v1.250.0; every anchor in this ledger re-verified this
 run, and the drifted ones corrected in place). `GlobalExceptionHandler` is still the last handler but
@@ -257,12 +275,13 @@ catch at `:205` returning `ex.ToResult<T>()` at `:210`. Every other anchor below
 cited. Header blockquote grounding files all exist as named.*
 
 *Notes (2026-10-08 refresh against MMCA.Common v1.233.0; this run's changes, each anchor re-read).
-Header blockquote drops "Result pattern": `MMCA.Common/AGENTS.md` has no such section (headings `:5`
-to `:159`; "Microservices Extraction Boundaries" at `:126`). The Problem Details invariant is scoped to
-the MVC pipeline: the API rate limiter sets `RejectionStatusCode` 429 with no `OnRejected` writer
-(`MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/WebApplicationBuilderExtensions.RateLimiting.cs:399`),
-and no `UseStatusCodePages` call exists under `MMCA.Common/Source` (the one hit is a doc comment in
-`.../Authorization/Fallback/FallbackAuthorizationHandler.cs:19`). The disabled-feature 404 carries
+Header blockquote drops "Result pattern": `MMCA.Common/AGENTS.md` has no such section (headings `:1`
+to `:164`; "Microservices Extraction Boundaries" at `:129`). The Problem Details invariant is scoped to
+the MVC pipeline: the API rate limiter sets `RejectionStatusCode` 429
+(`MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/WebApplicationBuilderExtensions.RateLimiting.cs:420`)
+and an `OnRejected` that writes only a `Retry-After` header (`:424`, `WithRetryAfterHeader` at `:29`),
+and no `UseStatusCodePages` call exists under `MMCA.Common/Source` (the two hits are comments in
+`.../Authorization/Fallback/FallbackAuthorizationHandler.cs:19` and `.../MMCA.Common.UI/Pages/NotFound.razor:9`). The disabled-feature 404 carries
 Title "Feature not available" and its Detail
 (`.../MMCA.Common.API/FeatureManagement/DisabledFeatureHandler.cs:22-23`), so it is distinguishable from an
 unknown route; the "indistinguishable" wording was dropped. The scorecard row
@@ -337,9 +356,9 @@ startup throw `:67`, `AllowAnonymous` `:74`); `MapCommonScalarUi()` at `:89`. Ba
 (per the 2026-10-02 audit, `:32` and `:81`; not re-read this run). Scorecard: the "API & Contract
 Design" row is `Website/docs-src/governance/common-ArchitectureScorecard.md:73` (weight 2, Maturity 4,
 Implementation 9, weighted 8/18); row 7 is at `:71` and the table header at `:63`. Header blockquote
-now cites `MMCA.Common/AGENTS.md` ("Microservices Extraction Boundaries" at `:126`), since
+now cites `MMCA.Common/AGENTS.md` ("Microservices Extraction Boundaries" at `:129`), since
 `MMCA.Common/CLAUDE.md` only imports it. The fence gained the `TooManyRequests` row and ranking tier this
-run; `Tools/Scripts/sync-medium-fences.ps1 -Verify` was not re-run by the author.*
+run.*
 
 *Notes (history): 2026-08-22 refresh (MMCA.Common PR #271, squash `8a6c603`) rewrote "Trade-offs,
 honestly", takeaway 5 and "What we covered" after the OpenAPI baseline gate and the `[ServiceContract]`

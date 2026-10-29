@@ -95,7 +95,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 53 articles</summary>
+        <summary>All 54 articles</summary>
         <nav class="doc-nav" aria-label="The MMCA.Common series">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -151,7 +151,8 @@
         <li><a href="governed-llm-boundary.html">50 · The governed LLM boundary</a></li>
         <li><a href="durable-internal-commands.html">51 · Four ways to do work later</a></li>
         <li><a href="identity-completions.html">52 · Finishing identity</a></li>
-        <li><a href="series-index.html">53 · The series index</a></li>
+        <li><a href="cloud-neutral-vendor-adapters.html">53 · One framework, three clouds</a></li>
+        <li><a href="series-index.html">54 · The series index</a></li>
           </ol>
         </nav>
       </details>
@@ -162,7 +163,7 @@
           <p class="article-meta"><time datetime="2026-07-11T00:13:54Z">July 11, 2026</time> <span aria-hidden="true">·</span> Ivan Ball-llovera <span aria-hidden="true">·</span> <a href="https://medium.com/@ivanball76/ef-core-include-chains-are-a-trap-navigation-populators-decouple-eager-loading-c378fa4497ac" target="_blank" rel="noopener">Also on Medium ↗</a></p>
           <figure class="article-hero"><img src="../assets/img/articles/article-12.webp" srcset="../assets/img/articles/article-12.webp 800w, ../assets/img/articles/article-12-1600.webp 1600w" sizes="(max-width: 900px) 100vw, 900px" alt="" width="800" height="420" decoding="async"></figure>
           <p class="article-subtitle"><code>Include(x).Include(y).ThenInclude(z)</code> couples your read model to one physical database.
-          Here is the eager-loading boundary that batch-loads related data and survives service extraction.</p>
+          Here is the eager-loading boundary that batch-loads related data and survives a database split.</p>
           <hr>
           <p>You write a query handler, you need the related rows, and EF Core hands you the obvious tool:</p>
           <pre class="doc-pre" tabindex="0" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-keyword">var</span> events = <span class="hljs-keyword">await</span> _db.Events
@@ -239,26 +240,37 @@
           <code>FKNavigationDescriptor</code> for references), and <code>DeclarativeNavigationPopulator&lt;TEntity&gt;</code> drives a list of
           them. A real consumer in ADC&#39;s Conference module, <code>EventNavigationPopulator</code>, is just a subclass
           constructed with three <code>ChildNavigationDescriptor</code>s for <code>Rooms</code>, <code>EventSpeakers</code>, and
-          <code>EventQuestionAnswers</code>. No imperative loading code at all. Adding a new cross-source navigation is &quot;add
-          one descriptor,&quot; not &quot;write a new class.&quot;</p>
+          <code>EventQuestionAnswers</code>. No imperative loading code at all. Once an entity has a declarative populator,
+          adding a new cross-source navigation to it is &quot;add one descriptor,&quot; not &quot;write a new loader.&quot; The
+          descriptor list is a constructor argument that DI cannot supply on its own, so an entity still on
+          <code>NullNavigationPopulator</code> first gets its own small subclass plus the registration that replaces the
+          Null Object (ADC&#39;s Engagement module registers <code>LivePollNavigationPopulator</code> for <code>LivePoll</code> this way).</p>
           <h2 id="the-boundary-that-survives-extraction">The boundary that survives extraction</h2>
-          <p>Here is why this is not over-engineering. When you split a module out and a relationship&#39;s two ends move
-          to different physical sources, the EF model&#39;s <code>CrossDataSourceDegradeConvention</code> drops the FK constraint
+          <p>Here is why this is not over-engineering. When you split a module&#39;s data out and a relationship&#39;s two
+          ends move to different physical sources, the EF model&#39;s <code>CrossDataSourceDegradeConvention</code> drops the FK constraint
           and the navigations from the model (the scalar FK columns and a compensating index survive; the foreign
           entity type is removed). Independently, <code>NavigationMetadataProvider</code> reads the same entity-to-source
           registry and starts reporting that navigation as <code>Unsupported</code>, so the query pipeline routes it to the
           populator path. The populator loads it once it carries a descriptor for that navigation: a declarative
           populator only loads the unsupported navigations it declares, and an entity still on
-          <code>NullNavigationPopulator</code> returns the navigation unloaded, so extraction means adding that one
-          descriptor, not rewriting the query.</p>
+          <code>NullNavigationPopulator</code> returns the navigation unloaded, so the split means adding that one
+          descriptor (and, for a Null Object entity, the declarative subclass that carries it), not rewriting the
+          query.</p>
           <p>The application code that issued the query never changes. The read handler still asks for events with
-          their rooms and speakers. Before extraction, EF JOINs them. After extraction, the populator batch-loads
-          them across the source boundary. Cross-source consistency is the outbox&#39;s job; cross-source eager
+          their rooms and speakers. With both ends in one database, EF JOINs them. With the ends split, the
+          populator batch-loads them across the source boundary. Cross-source consistency is the outbox&#39;s job; cross-source eager
           loading is the populator&#39;s job. Neither is a JOIN, and neither requires you to rewrite the query.</p>
+          <p>The boundary has a precise reach. The populator reads the child rows through
+          <code>IUnitOfWork.GetReadRepository</code>, which opens a context for the child entity&#39;s own data source, so it
+          covers any host that can reach both databases. Once a module moves into its own process (each ADC
+          service host declares exactly one database), a cross-module read crosses the process boundary through a
+          gRPC adapter instead, not through a populator.</p>
           <p>This is the same line that runs through the whole framework: the transport choice (one database or two)
           lives at the edge, and your business logic does not know which it got.</p>
           <h2 id="trade-offs-honestly">Trade-offs, honestly</h2>
-          <p>ADR-002 names the rough edges rather than hiding them.</p>
+          <p>ADR-002 names the first two rough edges; the reflection cost is documented in
+          <a href="../docs/onboarding/group-11-navigation-populators.html">11. Navigation Metadata &amp; Populators (EF-decoupled eager loading)</a>, and the last is the deliberate scope of
+          the design.</p>
           <ul>
           <li><strong>Extra abstraction for the single-database case.</strong> For a pure single-SQL-Server host where <code>Include</code>
           always works, the populator is a layer you do not strictly need. It is mitigated by being free at
@@ -295,7 +307,8 @@
           <p><strong>What we covered:</strong> why <code>Include</code> chains couple your read model to one physical database and break
           across data sources, how MMCA.Common classifies navigations as supported or unsupported and routes the
           unsupported ones through <code>INavigationPopulator</code> batch loading, and why that same boundary lets a
-          cross-source relationship degrade automatically when a module is extracted, with no query rewrite.</p>
+          cross-source relationship degrade automatically when a module&#39;s data moves to its own source, with no
+          query rewrite.</p>
           <p><strong>Next in the series:</strong> optimistic concurrency, where a database-managed RowVersion round-trips from the
           row into the DTO and back through the client so two concurrent edits surface as a 409 instead of a silent
           lost update.</p>

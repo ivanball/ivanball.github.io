@@ -95,7 +95,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 53 articles</summary>
+        <summary>All 54 articles</summary>
         <nav class="doc-nav" aria-label="The MMCA.Common series">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -151,7 +151,8 @@
         <li><a href="governed-llm-boundary.html">50 · The governed LLM boundary</a></li>
         <li><a href="durable-internal-commands.html">51 · Four ways to do work later</a></li>
         <li><a href="identity-completions.html">52 · Finishing identity</a></li>
-        <li><a href="series-index.html">53 · The series index</a></li>
+        <li><a href="cloud-neutral-vendor-adapters.html">53 · One framework, three clouds</a></li>
+        <li><a href="series-index.html">54 · The series index</a></li>
           </ol>
         </nav>
       </details>
@@ -198,7 +199,7 @@
           every app needs and what only an image-handling app needs. The framework ships the storage port and a
           dependency-free magic-byte validator; the re-encode is the application&#39;s own processor. The port carries
           more than avatars: ADR-045&#39;s avatar-only scope statement is superseded by ADR-123
-          (<code>045-managed-file-storage-and-avatars.md:11</code>, <code>:133-134</code>), which publishes speaker session materials
+          (<code>045-managed-file-storage-and-avatars.md:11</code>, <code>:142-144</code>), which publishes speaker session materials
           through the same <code>IFileStorageService</code>.</p>
           <p><strong><code>IFileStorageService</code></strong> (<code>IFileStorageService.cs:15</code>) is the storage boundary: <code>UploadAsync</code> takes a
           blob name, a stream, and a content type and returns the public <code>Uri</code> as a <code>Result&lt;Uri&gt;</code> (<code>:26</code>). A second
@@ -213,9 +214,14 @@
           A host that never wires storage does not crash mysteriously; its upload endpoints degrade with an honest
           message. A host that wants real storage calls a vendor adapter: <code>AddAzureBlobFileStorage(configuration)</code>
           from MMCA.Common.Azure (<code>AzureServiceCollectionExtensions.cs:41</code>) swaps in <code>AzureBlobFileStorageService</code>
-          (<code>AzureBlobFileStorageService.cs:15</code>) when the <code>FileStorage</code> section is complete, and MMCA.Common.Aws and
+          (<code>AzureBlobFileStorageService.cs:20</code>) when the <code>FileStorage</code> section is complete, and MMCA.Common.Aws and
           MMCA.Common.Gcp offer S3 and Google Cloud Storage adapters over the same port
-          (<code>NullFileStorageService.cs:10-12</code>).</p>
+          (<code>NullFileStorageService.cs:10-12</code>). The core references no cloud SDK; storage is one adapter call, the
+          same shape every vendor capability takes under ADR-134 (<a href="cloud-neutral-vendor-adapters.html">cloud-neutral vendor
+          adapters</a>). Storage deliberately has no startup tripwire: a
+          <code>FileStorage</code> section is routinely shared configuration that a host storing no files sees too, so a host
+          that lost its adapter call is caught by the Null default instead, which fails every upload with
+          <code>FileStorage.NotConfigured</code> (<code>CloudAdapterTripwire.cs:22-26</code>).</p>
           <p>That registration is defensive on purpose. An incomplete section is a no-op that leaves the Null default
           in place (<code>AzureServiceCollectionExtensions.cs:49-52</code>, <code>:56-59</code>), so hosts register it
           unconditionally. Production sets <code>ServiceUri</code> and authenticates with <code>DefaultAzureCredential</code> (<code>:64</code>);
@@ -226,7 +232,7 @@
           <p>But storage is the boring half. The security boundary is the image processor, and the framework
           deliberately does not ship one: its own registration comment says image normalization is the
           application&#39;s concern, because decoding needs a native image library that every consumer of the
-          package would otherwise carry (<code>DependencyInjection.cs:355-360</code>).</p>
+          package would otherwise carry (<code>DependencyInjection.cs:356-360</code>).</p>
           <h3 id="the-re-encode-is-the-boundary">The re-encode is the boundary</h3>
           <p>In MMCA.ADC the processor belongs to the Identity module. <code>IImageProcessor</code>
           (<code>MMCA.ADC.Identity.Application/Users/IImageProcessor.cs:11</code>) has one method,
@@ -329,7 +335,7 @@
           <code>avatars/{userId}-{random8}.jpg</code>. Replacing, removing or erasing an avatar schedules a durable
           <code>DeleteAvatarBlobInternalCommand</code> (ADR-114) rather than deleting the blob inline. The URL lives on the
           user entity as <code>[Pii]</code>: nulled on anonymize with the blob delete scheduled in the same transaction, and
-          included in the GDPR data export (<code>045-managed-file-storage-and-avatars.md:87-94</code>). That last part is why
+          included in the GDPR data export (<code>045-managed-file-storage-and-avatars.md:97-104</code>). That last part is why
           this article carries a §30 (data privacy) tie alongside the §8 (data access) and §11 (security) ones: the
           avatar is treated as personal data from the moment it lands to the moment it is erased.</p>
           <h3 id="one-capability-two-client-affordances">One capability, two client affordances</h3>
@@ -354,9 +360,9 @@
           staleness is bounded by cache TTLs and self-heals; there is no cache-busting dance to get right.</li>
           <li><strong>Avatar blob deletion is eventual, not synchronous.</strong> A replaced or deleted avatar has its blob
           deleted at least once, through the internal-command processor and within its retry budget
-          (<code>045-managed-file-storage-and-avatars.md:100-102</code>). Only erasure schedules inside its own transaction;
+          (<code>045-managed-file-storage-and-avatars.md:111-113</code>). Only erasure schedules inside its own transaction;
           replace and remove schedule after the save commits, so a host death in between, or a failed schedule,
-          leaves an orphaned blob that is only logged for manual removal (<code>:184-186</code>,
+          leaves an orphaned blob that is only logged for manual removal (<code>:191-196</code>,
           <code>SetUserAvatarHandler.cs:162-165</code>).</li>
           <li><strong><code>DefaultAzureCredential</code> needs a data-plane role, not a secret.</strong> In production the storage account
           requires a <code>Storage Blob Data Contributor</code> grant for the app identity. That is a bicep-level infrastructure
@@ -380,7 +386,7 @@
           </ul>
           <p>Be precise about status: the framework legs are implemented and shipped in MMCA.Common, and two MMCA.ADC
           services wire them end to end. The Identity service calls <code>AddAzureBlobFileStorage(builder.Configuration)</code>
-          at startup for avatars (<code>MMCA.ADC.Identity.Service/Program.cs:260</code>) and the Conference service calls it for
+          at startup for avatars (<code>MMCA.ADC.Identity.Service/Program.cs:261</code>) and the Conference service calls it for
           speaker session assets (<code>MMCA.ADC.Conference.Service/Program.cs:367</code>). On the Identity side,
           <code>SetUserAvatarHandler</code> normalizes through the module&#39;s own processor (<code>SetUserAvatarHandler.cs:29</code>,
           <code>:103</code>) and is the only request-path handler that calls <code>IFileStorageService</code>, for the upload
@@ -388,7 +394,7 @@
           <code>DeleteAvatarBlobInternalCommand</code> scheduled through <code>IInternalCommandScheduler</code>: the replaced blob once
           the new URL is saved (<code>SetUserAvatarHandler.cs:158-160</code>), the freshly uploaded blob when the save fails
           and leaves no row pointing at it (<code>:78-88</code>, <code>:187</code>), a removed avatar
-          (<code>RemoveUserAvatarHandler.cs:20,75</code>) and an erased user (<code>DeleteUserHandler.cs:34,83</code>). The deletion
+          (<code>RemoveUserAvatarHandler.cs:20,75</code>) and an erased user (<code>DeleteUserHandler.cs:35,84</code>). The deletion
           runs in <code>DeleteAvatarBlobInternalCommandHandler</code> (<code>DeleteAvatarBlobInternalCommandHandler.cs:17-23</code>),
           which only names the blob kind for its log lines and inherits the work from Common&#39;s
           <code>DeleteBlobInternalCommandHandlerBase</code> (<code>DeleteBlobInternalCommandHandlerBase.cs:28</code>): the port call

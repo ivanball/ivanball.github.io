@@ -104,6 +104,11 @@ binder, the side effect, the predicate) is skipped when the result is already a 
 `MapAsync`, `TapAsync` and `MatchAsync` onto a pending `Task<Result<T>>`, so an asynchronous pipeline
 composes end to end without an `await` and a temporary local between every step.
 
+When a step needs the value itself rather than a delegate, `Result<T>` also offers
+**`TryGetValue(out T value)`**, shaped like `Dictionary.TryGetValue`. It decides on `IsFailure`, and its
+`[MaybeNullWhen(false)]` annotation lets the compiler track the check, so the value needs no `!` in the
+success branch, and deleting or reordering the check breaks the build instead of letting a null escape.
+
 The non-generic base carries four combinators of its own, and **`Result.Combine(params ReadOnlySpan<Result>)`**
 is the one that earns its keep: the aggregate-all-failures combinator. It runs several invariant checks and
 returns *all* their errors at once rather than failing on the first. This is the workhorse of domain factory
@@ -149,14 +154,13 @@ protected async Task<Result<TEntityDTO>> CreateCoreAsync(
     CancellationToken cancellationToken)
 {
     var prepared = await PrepareAsync(attemptUnitOfWork, command, cancellationToken).ConfigureAwait(false);
-    if (prepared.IsFailure)
+    if (!prepared.TryGetValue(out var request))
         return Result.Failure<TEntityDTO>(prepared.Errors);
 
-    var result = await requestMapper.CreateEntityAsync(prepared.Value!, cancellationToken).ConfigureAwait(false);
-    if (result.IsFailure)
+    var result = await requestMapper.CreateEntityAsync(request, cancellationToken).ConfigureAwait(false);
+    if (!result.TryGetValue(out var entity))
         return Result.Failure<TEntityDTO>(result.Errors);
 
-    var entity = result.Value!;
     var repository = attemptUnitOfWork.GetRepository<TEntity, TIdentifierType>();
 
     await PersistAsync(attemptUnitOfWork, repository, entity, cancellationToken).ConfigureAwait(false);
@@ -182,7 +186,8 @@ status lookup. `ApiControllerBase.HandleFailure()` is the normal path: a control
 status from the *most severe* error present through `ErrorHttpMapping` and renders an RFC 9457
 ProblemDetails body carrying *all* the errors. `UnhandledResultFailureFilter` is the safety net: a global
 filter that catches an action which accidentally returns a failed `Result` as a 200 body and rewrites it
-into the identical ProblemDetails shape via the same mapping. A third caller, the `If-Match` concurrency
+into the same ProblemDetails structure (the same status and the same `errors` extension, under its own
+title) via the same mapping. A third caller, the `If-Match` concurrency
 attribute, reuses the same class for the errors projection alone. Because the dictionary lives in one
 place, the controller base and the filter can never drift apart.
 
@@ -291,48 +296,49 @@ pattern, or `dotnet add package MMCA.Common.API` and try it.*
 
 *Tags: .NET, C Sharp, Software Architecture, Programming, Error Handling*
 
-*Notes: re-verified 2026-10-22 against MMCA.Common at v1.250.0 (`MMCA.Common/FACTS.md:4,14`). Type and behavior names, all read this
+*Notes: re-verified 2026-10-29 against MMCA.Common at v1.265.1 (`MMCA.Common/FACTS.md:4,14`). Type and behavior names, all read this
 run: `ErrorType` (ten members: Validation, Invariant, NotFound, Conflict, Unauthorized, Forbidden,
 UnprocessableEntity, Failure, Unexpected, TooManyRequests; `Source/Core/MMCA.Common.Shared/Abstractions/ErrorType.cs:10-49`,
 `Unexpected` at `:36-41`, `TooManyRequests` (HTTP 429, appended last so earlier numeric values do not move) at `:43-48`);
 `Error` with ten factory methods, one per member (`.../Abstractions/Error.cs`: `Validation` `:37`, `Invariant` `:46`,
 `NotFoundError` `:55`, `Conflict` `:64`, `Unauthorized` `:73`, `Forbidden` `:82`, `UnprocessableEntity` `:91`,
 `TooManyRequests` `:103`, `Failure` `:112`, `Unexpected` `:126`); and `Result`/`Result<T>`
-(`.../Abstractions/Result.cs`, 366 lines). Construction: the value-bearing constructors are `internal` (`:211`,
-`:217`); the static factories are `Success` `:62`/`:68` and `Failure` `:74`/`:83`/`:94`/`:101`; the implicit
+(`.../Abstractions/Result.cs`, 387 lines). Construction: the value-bearing constructors are `internal` (`:232`,
+`:238`); the static factories are `Success` `:62`/`:68` and `Failure` `:74`/`:83`/`:94`/`:101`; the implicit
 conversions `Error` to `Result` (`:43`, via `FromError` `:49`, which calls `Failure`), `Error` to `Result<T>`
-(`:233`, calls `Failure<T>`) and `T` to `Result<T>` (`:249`, calls `Success`) all delegate to those factories, so
+(`:254`, calls `Failure<T>`) and `T` to `Result<T>` (`:270`, calls `Success`) all delegate to those factories, so
 the "never half-built" invariant holds without the factories being the only spelling. Combinators: on
-`Result<T>`, `Match` `:260`, `Map` `:276`, `BindAsync` `:289`, `Bind` `:302`, `Tap` `:314`, `Ensure` `:334`,
-`MatchAsync` `:355`; on the non-generic `Result`, four combinators: `Combine` `:124`, `Match` `:155`, `OnFailure`
+`Result<T>`, `Match` `:281`, `Map` `:297`, `BindAsync` `:310`, `Bind` `:323`, `Tap` `:335`, `Ensure` `:355`,
+`MatchAsync` `:376`, plus the non-delegate unwrap `TryGetValue([MaybeNullWhen(false)] out T value)` at
+`:218-228` (decides on `IsFailure` at `:220`; its doc comment `:209-217`); on the non-generic `Result`, four combinators: `Combine` `:124`, `Match` `:155`, `OnFailure`
 `:169`, `Bind` `:187` (the class also declares the factories, conversions and state properties, hence
-"combinators", not "members"). Short-circuit: the success-side delegate is skipped on failure in `Map` (`:279`),
-`BindAsync` (`:292`), `Bind` (`:305`), `Tap` (`:318`) and `Ensure` (`:339-342`); `Match` and `MatchAsync` call
-`onFailure` on the failure track (`:265-266`, `:362-363`), and the non-generic `OnFailure` runs its action only on
+"combinators", not "members"). Short-circuit: the success-side delegate is skipped on failure in `Map` (`:300`),
+`BindAsync` (`:313`), `Bind` (`:326`), `Tap` (`:339`) and `Ensure` (`:360-363`); `Match` and `MatchAsync` call
+`onFailure` on the failure track (`:286-287`, `:383-384`), and the non-generic `OnFailure` runs its action only on
 failure (`:169-176`). `ResultExtensions` (`.../Abstractions/ResultExtensions.cs:14`) lifts the same shapes
 onto a pending `Task<Result<T>>`: `BindAsync` `:24`/`:43`, `MapAsync` `:62`, `TapAsync` `:81`, `MatchAsync`
-`:106`. ADR-013 names the four exception costs (`Website/docs-src/adr/013-result-pattern.md:32-35`), documents
-the combinator surface (`:57-80`) and carries `TooManyRequests` in its category list (`:43-44`), its 429 and
-`ResourceExhausted` mapping (`:52-53`) and its ranking (`:97-99`), with its Trade-offs section at `:314`; the article still cites source for the
+`:106`. ADR-013 names the four exception costs (`Website/docs-src/adr/013-result-pattern.md:39-42`), documents
+the combinator surface, `TryGetValue` included (`:64-90`, `TryGetValue` at `:75-78`), and carries `TooManyRequests` in its category list (`:50-51`), its 429 and
+`ResourceExhausted` mapping (`:59-60`) and its ranking (`:107-109`), with its Trade-offs section at `:347`; the article still cites source for the
 category list, the status table and the ranking so the anchors track the code. Controller actions do not return
 `Result`: they return `Task<ActionResult<...>>` or `Task<IActionResult>`
 (`Source/Presentation/MMCA.Common.API/Controllers/EntityControllerBase.cs:110`, `:158`, `:257`, `:320`, `:361`;
 `CrudEntityControllerBase.cs:98`) and route a failed `Result` through `HandleFailure`; the UI service methods
 return `Result`/`Result<T>` (`Source/Presentation/MMCA.Common.UI/Services/Api/EntityServiceBase.cs:68`, `:86`,
 `:143`, `:162`, `:188`). Production call sites: `.Map(...)` at `EntityServiceBase.cs:82` and `:139`. Unit coverage
-(`Tests/Core/MMCA.Common.Shared.Tests/Abstractions/ResultTests.cs`): `Map` `:119`/`:128`, `BindAsync`
-`:146`/`:156`/`:166`, `Match` `:184`/`:196`, `Bind` `:325`/`:334`, `Tap` `:352`/`:364`, `Ensure`
-`:377`/`:387`/`:396`, `MatchAsync` `:415`/`:425`, the non-generic `Match`/`OnFailure`/`Bind` at `:255-308`,
-implicit conversions at `:209-246`. The domain-factory snippet is condensed from ADC's `Speaker.Create`
+(`Tests/Core/MMCA.Common.Shared.Tests/Abstractions/ResultTests.cs`): `TryGetValue` `:119`/`:130`/`:141`, `Map` `:153`/`:162`, `BindAsync`
+`:180`/`:190`/`:200`, `Match` `:218`/`:230`, `Bind` `:359`/`:368`, `Tap` `:386`/`:398`, `Ensure`
+`:411`/`:421`/`:430`, `MatchAsync` `:449`/`:459`, the non-generic `Match`/`OnFailure`/`Bind` at `:289-342`,
+implicit conversions at `:243-280`. The domain-factory snippet is condensed from ADC's `Speaker.Create`
 (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Speakers/Speaker.cs:126`: `Email.Create` at
 `:144` with an early return at `:146`, `Result.Combine` over the three `SpeakerInvariants` checks at `:150`, the
 `SpeakerChanged` domain event at `:180`, `Result.Success` at `:182`); parameters after `email`, the constructor
 arguments, the id selection and the social-link initializers are elided as comments. The application-handler
 snippet is the shared create pipeline `CreateCoreAsync`
-(`Source/Core/MMCA.Common.Application/UseCases/Crud/CreateEntityHandlerBase.cs:77-103`: guard-and-propagate at
-`:84-86` and `:91-92`, repository at `:95`, `LogCreated` `:99`, `OnCreatedAsync` `:100`, `Result.Success` at
-`:102`), condensed for print (the `ArgumentNullException` guard at `:82` and the `prepared.Value!` request local
-at `:88` are elided, the latter inlined into the mapper call). Its ADC leaf `CreateSpeakerHandler`
+(`Source/Core/MMCA.Common.Application/UseCases/Crud/CreateEntityHandlerBase.cs:77-100`: guard-and-propagate through `TryGetValue` at
+`:85-86` and `:89-90`, mapper call on the unwrapped `request` at `:88`, repository at `:92`, `LogCreated` `:96`,
+`OnCreatedAsync` `:97`, `Result.Success` at `:99`), condensed for print (the `ArgumentNullException` guard at
+`:82` is elided). Its ADC leaf `CreateSpeakerHandler`
 (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Speakers/UseCases/Create/CreateSpeakerHandler.cs:15-28`)
 is a primary-constructor sealed partial class deriving from
 `CreateEntityHandlerBase<SpeakerCreateRequest, Speaker, SpeakerIdentifierType, SpeakerDTO>` (`:20-21`) whose
@@ -363,11 +369,12 @@ Invariant/Validation/Failure sharing 10), ties keeping the earliest error (stric
 Two consumers call the status lookup: `ApiControllerBase.HandleFailure`
 (`Source/Presentation/MMCA.Common.API/Controllers/ApiControllerBase.cs:35`, status resolved at `:48`, errors
 extension at `:58`) and `UnhandledResultFailureFilter` (`.../Middleware/UnhandledResultFailureFilter.cs:36`,
-errors extension at `:47`); a third caller, `SupportsIfMatchAttribute`
-(`.../Concurrency/SupportsIfMatchAttribute.cs:217`), reuses `BuildErrorsExtension` alone. The `ApiControllerBase` doc comment states
+ProblemDetails built at `:39`, its own title "Unhandled result failure" at `:42` where the controller base
+writes "Operation failed" at `ApiControllerBase.cs:53`, errors extension at `:47`); a third caller, `SupportsIfMatchAttribute`
+(`.../Concurrency/SupportsIfMatchAttribute.cs:219`), reuses `BuildErrorsExtension` alone. The `ApiControllerBase` doc comment states
 the same ranking, `TooManyRequests` (429) included (`ApiControllerBase.cs:25-30`, `:27`). gRPC: `GrpcResultExceptionInterceptor`
 (`Source/Presentation/MMCA.Common.Grpc/Interceptors/GrpcResultExceptionInterceptor.cs:19`); `TooManyRequests`
-maps to `StatusCode.ResourceExhausted` at `.../ResultGrpcExtensions.cs:49`, inside the gRPC edge's own
+maps to `StatusCode.ResourceExhausted` at `Source/Presentation/MMCA.Common.Grpc/ResultGrpcExtensions.cs:49`, inside the gRPC edge's own
 `FrozenDictionary` (`:37-50`, its doc comment at `:35` naming `ErrorHttpMapping.ErrorTypeToStatusCode` as the table it
 mirrors), which picks its status through the same `ErrorTypeSeverity.MostSevere` (`:124`); the reverse
 status-to-`ErrorType` table read on the client is `StatusCodeToErrorType`
@@ -385,10 +392,10 @@ Messaging & Integration Architecture row (`:74`) carries no Result or error-hand
 the header line. The article grounds section 1 independently: the three-type split (`ErrorType`/`Error`/`Result`) is an
 SRP separation (criterion at `ArchitectureEvaluationCriteria.md:127`), and the combinator surface stays
 role-narrow, with the valueless shapes kept on the non-generic `Result` (ISP criterion at `:130`). The header
-grounding cites `MMCA.Common/AGENTS.md:102` (Entity Model, heading `:100`: `Create(...)` factories returning `Result<T>`,
+grounding cites `MMCA.Common/AGENTS.md:105` (Entity Model, heading `:103`: `Create(...)` factories returning `Result<T>`,
 invariants composed with `Result.Combine()`), because `MMCA.Common/CLAUDE.md` is a stub importing it. Change
 history: the 2026-09-19 pass (v1.205.0) called `ErrorType` nine-valued; `TooManyRequests` landed in v1.219.0
-(`MMCA.Common/CHANGELOG.md:593`, entries at `:597` and `:605`) with its factory, 429 mapping, rank 45 and gRPC `ResourceExhausted`, and
+(`MMCA.Common/CHANGELOG.md:851`, entries at `:855` and `:863`) with its factory, 429 mapping, rank 45 and gRPC `ResourceExhausted`, and
 this pass adds it to every list, re-anchors `Error.cs`, `ErrorHttpMapping.cs`, `ErrorTypeSeverity.cs` and the
 scorecard rows (shifted 16 lines up), replaces the invented `Speaker.Create(string name, Email email, ...)`
 snippet (which passed an `Email` to `EmailInvariants.EnsureEmailIsValid(string, string)`, `EmailInvariants.cs:23`)
@@ -414,6 +421,15 @@ anchors re-read for `DependencyInjection.cs` (149/143-148/154-158 to 154/148-153
 (116/134/136/140/170/172 to 126/144/146/150/180/182), ADR-013 (29-32/54-77/40-41/49-50/94-96 to
 32-35/57-80/43-44/52-53/97-99), `AGENTS.md` (101 to 102) and `CHANGELOG.md` (280/284/292 to 593/597/605);
 the rubric SRP (`:127`) and ISP (`:130`) anchors, `EmailInvariants.cs:23` and `Specification.cs:52` re-read
-unchanged.*
+unchanged. 2026-10-29 pass (v1.265.1): `Result<T>.TryGetValue` landed in v1.252.0 (`MMCA.Common/CHANGELOG.md:214`,
+entry `:218`; `Result.cs:218-228`), so the surface section adds a `TryGetValue` paragraph beside the seven
+combinators (still seven delegate-taking ones) and the pipeline snippet unwraps with it instead of `.Value!`
+(`CreateEntityHandlerBase.cs:85-90`); the filter sentence narrows "identical ProblemDetails shape" to the same
+structure under its own title (`UnhandledResultFailureFilter.cs:42` vs `ApiControllerBase.cs:53`); the elided
+`ResultGrpcExtensions.cs` path is spelled out (it sits beside `Interceptors/`, not in it); anchors re-read for
+`Result.cs` (366 to 387 lines, generic members +21), `CreateEntityHandlerBase.cs` (77-103 to 77-100),
+`ResultTests.cs` (shifted by the `TryGetValue` tests), ADR-013 (32-35/57-80/43-44/52-53/97-99/314 to
+39-42/64-90/50-51/59-60/107-109/347), `AGENTS.md` (100/102 to 103/105), `CHANGELOG.md` (593/597/605 to
+851/855/863) and `SupportsIfMatchAttribute.cs` (217 to 219).*
 
 - Full series index: https://ivanball.github.io/writing.html

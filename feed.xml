@@ -6,7 +6,7 @@
     <atom:link href="https://ivanball.github.io/feed.xml" rel="self" type="application/rss+xml"/>
     <description>A long-form series turning a production .NET framework's architecture decisions into teachable patterns: the Result railway, the transactional outbox, database-per-service, JWKS auth, fitness functions, and more.</description>
     <language>en-us</language>
-    <lastBuildDate>Thu, 24 Sep 2026 12:00:00 GMT</lastBuildDate>
+    <lastBuildDate>Thu, 29 Oct 2026 12:00:00 GMT</lastBuildDate>
     <managingEditor>noreply@ivanball.github.io (Ivan Ball-llovera)</managingEditor>
     <item>
       <title>The series index</title>
@@ -15,6 +15,15 @@
       <pubDate>Thu, 20 Aug 2026 12:18:00 GMT</pubDate>
       <description>The full series index and recommended reading order.</description>
       <category>Proof &amp; getting started</category>
+    </item>
+    <item>
+      <title>One framework, three clouds</title>
+      <link>https://ivanball.github.io/articles/cloud-neutral-vendor-adapters.html</link>
+      <guid isPermaLink="true">https://ivanball.github.io/articles/cloud-neutral-vendor-adapters.html</guid>
+      <pubDate>Thu, 29 Oct 2026 12:00:00 GMT</pubDate>
+      <description>A core that references no cloud SDK, one Azure, AWS or Google adapter package with one call per capability, an open broker string, and startup tripwires that name the forgotten adapter call.</description>
+      <category>Run &amp; extract</category>
+      <category>ADR 134</category>
     </item>
     <item>
       <title>Finishing identity</title>
@@ -160,6 +169,7 @@
       <pubDate>Thu, 06 Aug 2026 11:47:02 GMT</pubDate>
       <description>A shared Blazor and MudBlazor UI layer with accessibility enforced by axe in CI.</description>
       <category>Proof &amp; getting started</category>
+      <category>ADR 136</category>
     </item>
     <item>
       <title>Soft-delete vs the right to erasure</title>
@@ -327,6 +337,7 @@
       <category>Auth &amp; the edge</category>
       <category>ADR 026</category>
       <category>ADR 040</category>
+      <category>ADR 135</category>
     </item>
     <item>
       <title>Idempotency in one attribute</title>
@@ -345,7 +356,7 @@
       <pubDate>Wed, 15 Jul 2026 12:22:21 GMT</pubDate>
       <description>The non-negotiables of password storage in .NET, done correctly and tested.</description>
       <category>Auth &amp; the edge</category>
-      <category>ADR 102</category>
+      <category>ADR 133</category>
     </item>
     <item>
       <title>JWKS cross-service auth</title>

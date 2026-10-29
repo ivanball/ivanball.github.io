@@ -40,7 +40,7 @@ sweeping attributes across controllers and hoping the test suite catches the one
 What you want instead is for an endpoint to declare the **capability** it requires (a fine-grained,
 named permission like `conference:sessions:manage`) and for the question of *which roles confer that
 capability* to live in exactly one place. Then adding a content editor with a strict subset of the
-organizer's powers is a single grant edit, not an endpoint hunt. The route keeps saying what it does;
+organizer's powers is a single grant edit, not an endpoint hunt, at every layer that checks capabilities. The route keeps saying what it does;
 only the grant table changes.
 
 That is RBAC with one level of indirection: roles still exist, but endpoints depend on permissions, and
@@ -61,8 +61,11 @@ capability? The implementation, `PermissionRegistry`, holds an immutable
 compared case-insensitively (`OrdinalIgnoreCase`); permission values are compared ordinally. The same
 class is also the host's `IPermissionCatalog`, exposing the closed set of roles and permissions the code
 compiled in, so an administration screen enumerates the compiled map itself rather than a hand-kept second
-list. It is the one place that knows the role-to-capability mapping, so no endpoint's authorization
-attribute names a role. (Endpoint code may still read a role for a business rule rather than a gate: ADC's
+list. It is the one place that knows the role-to-capability mapping, so no API endpoint's authorization
+attribute names a role: no controller in either app carries `[Authorize(Roles = ...)]`. The routable
+Blazor pages are a separate layer that the registry does not govern: ADC's 37 admin pages carry
+`[Authorize(Roles = RoleNames.Organizer)]` and Store's admin pages `[Authorize(Roles = RoleNames.Admin)]`.
+(Endpoint code may still read a role for a business rule rather than a gate: ADC's
 live-poll, question and bookmark controllers pass an organizer flag from `IsInRole(RoleNames.Organizer)`
 to their handlers for the organizer bypass.)
 
@@ -83,8 +86,9 @@ public static void Apply(PermissionRegistryBuilder permissions)
     permissions.Grant(RoleNames.Organizer, [.. ConferencePermissions.All]);
 
     // Content editors get ONLY the catalog-curation subset: no event structure, rooms,
-    // questions, or session selection. The distinction role checks cannot express lives
-    // in this one grant, not scattered across per-endpoint [Authorize(Roles = ...)] lists.
+    // questions, session selection, or speaker-account linking. The distinction role checks
+    // cannot express lives in this one grant, not scattered across per-endpoint
+    // [Authorize(Roles = ...)] lists.
     permissions.Grant(RoleNames.ContentEditor, [.. ConferencePermissions.ContentManagement]);
 }
 ```
@@ -120,8 +124,10 @@ is the single definition of "the token itself grants this", and both gates call 
 `TokenService` writes that claim at sign-in: every access token carries one `permission` claim for each
 permission the minting host's registry grants the account's role. Both apps' Identity hosts apply every
 module's grant map before minting (`AddTokenPermissionGrants()`), so a service that does not own a
-module's grant map, the CQRS gate in that service, and the Blazor navigation all read the capability from
-the token rather than from a registry they do not hold.
+module's grant map and the CQRS gate in that service both read the capability from the token rather than
+from a registry they do not hold. The Blazor navigation reads it for one entry: the framework's
+push-notifications link is gated on `notifications:manage`, while the apps' own admin entries gate on a
+role (`Organizer` in ADC, `Admin` in Store).
 
 **The same registry gates use cases, not just routes.** A command or query that implements
 `IRequiresPermission` is checked by `AuthorizationGate.Evaluate` inside the CQRS decorator pipeline,
@@ -174,6 +180,11 @@ the §11 review is explicit about the edges.
 - **Opt-in per endpoint.** A route that carries a plain `[Authorize]` states no capability and gets none
   of the benefit. This is the same audit-the-inventory caveat that soft-delete erasure and the
   `[Idempotent]` attribute carry: the mechanism is only as complete as your coverage of it.
+- **It governs the API, not the pages.** In ADC the content-editor grant holds at the API: a
+  `ContentEditor` may call the session, speaker, category, sponsor, partner and activity endpoints. The
+  matching admin pages and their navigation entries are Organizer-only by role, and no page names
+  `ContentEditor`, so in the shipped UI a content editor has no admin screen for that work. Opening one
+  is a page-attribute and nav-entry edit, which is exactly the sweep the API layer avoids.
 - **Compiled grants are fixed at startup.** The registry is built once on first resolve, so an
   `AddPermissions(...)` call after it has materialized is not seen, which is the price of the immutable
   frozen map. Grants an operator can edit without a deploy are a separate layer on top of this one, and
@@ -204,8 +215,8 @@ The pattern is portable to any policy-based authorization stack:
    ship and confers nothing until a module actually grants a capability.
 
 The takeaway: **an endpoint should declare the capability it needs, and the mapping from roles to
-capabilities should live in exactly one editable place. Then the role you did not foresee is a one-line
-grant, not a sweep across every `[Authorize]` you ever wrote.**
+capabilities should live in exactly one editable place. Then, wherever the gate checks a capability, the
+role you did not foresee is a one-line grant, not a sweep across every `[Authorize]` you ever wrote.**
 
 ---
 
@@ -227,8 +238,36 @@ pattern, or `dotnet add package MMCA.Common.API` and try it.*
 
 *Tags: .NET, C Sharp, Software Architecture, Security, Authorization*
 
-*Notes: re-verified against source 2026-10-22 (MMCA.Common v1.250.0, `FACTS.md:14`; findings from the
-2026-10-22 `/update-medium` audit). Changes in this pass: the Engagement clause said
+*Notes: re-verified against source 2026-10-29 (MMCA.Common v1.265.1, `MMCA.Common/FACTS.md:14`; findings
+from the 2026-10-29 `/update-medium` audit). Changes in this pass: (1) the token paragraph credited "the
+Blazor navigation" with reading the capability; only the framework push-notifications entry does
+(`RequiredPermission: NotificationPermissions.Manage`,
+`MMCA.Common/Source/Presentation/MMCA.Common.UI/Notifications/NotificationUIModule.cs:20`), while ADC's
+admin entries pass `RoleNames.Organizer` as the positional required role
+(`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/ConferenceUIModule.cs:32-41`, e.g. `:33`;
+`MMCA.ADC.Identity.UI/IdentityUIModule.cs:22`; `EngagementUIModule.cs:27-31`) and Store's pass
+`RoleNames.Admin`; the ADC source comment at
+`MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Authorization/TokenPermissionGrants.cs:19-20` still
+says navigation entries state a capability (source-comment drift, not edited here). (2) "no endpoint's
+authorization attribute names a role" narrowed to API endpoints: Grep finds no `[Authorize(Roles|Policy =`
+in any ADC or Store `.cs` outside two doc comments (`ConferencePermissionGrants.cs:36`, Store
+`RoleNames.cs:15`), but 37 ADC `.razor` pages carry `[Authorize(Roles = RoleNames.Organizer)]` (e.g.
+`MMCA.ADC.Conference.UI/Pages/Sessions/SessionList.razor:2`) and Store admin pages carry
+`[Authorize(Roles = RoleNames.Admin)]` (e.g. `MMCA.Store.Catalog.UI/Pages/Products/ProductList.razor:4`).
+(3) The content-editor story is scoped to the API layer and a trade-off bullet states the UI asymmetry: the
+grant is at `ConferencePermissionGrants.cs:48`, the catalog pages are Organizer-only, and no `.razor` page
+names `ContentEditor` (Grep; the only UI hits are role pickers at `UserList.razor.cs:35` and
+`UserDetail.razor.cs:32`). Whether that asymmetry is deliberate is not determinable from source. (4) The
+code-block comment adds speaker-account linking to the content-editor exclusions, matching
+`ConferencePermissions.cs:76-77`; the block remains an excerpt (it omits the `ArgumentNullException.ThrowIfNull`
+at `ConferencePermissionGrants.cs:45`). Anchors moved: ADC `MMCA.ADC.Identity.Service/Program.cs`
+`AddTokenPermissionGrants` `:288`, `AddStoredPermissionGrants` `:295`; Store
+`MMCA.Store.Identity.Service/Program.cs` `:227` and `:234`; ADR-020 token-claim-optional line `:71`,
+`engagement:live:manage` live-poll line `:92`; `ClaimsPrincipalExtensions.cs` `GetRoleValues` `:60-68`,
+`HasRole` `:76-78`, `HasPermissionClaim` `:95-98`. `common-ArchitectureScorecard.md:75` still says "13
+unit tests" and "compatible with the named role policies" (scorecard drift, not edited here). Prior pass:
+re-verified against source 2026-10-22 (MMCA.Common v1.250.0, `FACTS.md:14`; findings from the
+2026-10-22 `/update-medium` audit). Changes in that pass: the Engagement clause said
 `engagement:live:manage` gates "the conference-day live-poll management endpoints"; it gates one
 endpoint, the organizer's event-wide poll list `GET /livepolls?eventId=`
 (`MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.API/Controllers/LivePollsController.cs:164-166`),

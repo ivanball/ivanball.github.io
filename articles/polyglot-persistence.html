@@ -95,7 +95,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 53 articles</summary>
+        <summary>All 54 articles</summary>
         <nav class="doc-nav" aria-label="The MMCA.Common series">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -151,7 +151,8 @@
         <li><a href="governed-llm-boundary.html">50 · The governed LLM boundary</a></li>
         <li><a href="durable-internal-commands.html">51 · Four ways to do work later</a></li>
         <li><a href="identity-completions.html">52 · Finishing identity</a></li>
-        <li><a href="series-index.html">53 · The series index</a></li>
+        <li><a href="cloud-neutral-vendor-adapters.html">53 · One framework, three clouds</a></li>
+        <li><a href="series-index.html">54 · The series index</a></li>
           </ol>
         </nav>
       </details>
@@ -180,8 +181,8 @@
           plain class. What decides whether it is stored in SQL Server, PostgreSQL, Cosmos DB, or SQLite is a
           single <code>[UseDataSource(&lt;engine&gt;)]</code> attribute on its EntityConfiguration, carried for you by one of four
           thin base classes. Moving an entity between engines is a one-token change in that configuration, plus
-          the target engine&#39;s connection string and one AppHost line, and the entity itself never has to know it
-          happened.</p>
+          the target engine&#39;s connection string and its AppHost wiring, and the entity itself never has to know
+          it happened.</p>
           <h2 id="two-axes-not-one">Two axes, not one</h2>
           <p>This is the companion to the database-per-service article (Article 10), and the two are deliberately
           orthogonal. It helps to name the axes.</p>
@@ -234,13 +235,17 @@
           is <code>ValueGeneratedNever()</code>, so an entity that supplies its own ids keeps them on every engine.</p>
           <p>The registry is static on purpose: model-building code (this configuration base, the EF conventions,
           the soft-delete SQL builder) runs where no DI container is reachable, and the engine set is a closed
-          enum only the framework extends. Adding a fifth engine touches a short, fixed list: a new <code>DataSource</code>
-          enum member, its sealed context class, the provider marker interface the engine-aware base
-          implements, one strategy class, and one line in the registry. No call site changes.
-          What keeps it that way is a source-scanning fitness test, <code>DataSourceBranchingFitnessTests</code>, which
-          fails the test run on any reference to a concrete engine value outside the strategies and a short,
-          reasoned allow-list, and also fails when an allow-list entry goes stale. A new <code>switch</code> over the
-          engine cannot quietly reappear in a call site.</p>
+          enum only the framework extends. Adding a fifth engine is a bounded list rather than a one-liner: a
+          new <code>DataSource</code> enum member, its sealed context class, the provider marker interface the engine-aware
+          base implements, one strategy class, and one line in the registry, plus the engine&#39;s connection-string
+          properties on the settings classes the strategy reads (top-level, per-source and per-tenant). A few
+          places also name every engine&#39;s connection-string key directly: the startup validator that refuses a
+          host with no database, the Aspire health-check registration, and the per-engine AppHost helpers.
+          What keeps the engine <em>value</em> from spreading is a source-scanning fitness test,
+          <code>DataSourceBranchingFitnessTests</code>, which fails the test run on any reference to a concrete engine
+          value or engine context type outside the strategies and a short, reasoned allow-list, and also fails
+          when an allow-list entry goes stale. A new <code>switch</code> over the engine cannot quietly reappear in a call
+          site; a branch on a connection-string key name is outside what it scans.</p>
           <p>On top of the engine-aware base sit four <strong>thin shims</strong>: <code>EntityTypeConfigurationSQLServer</code>,
           <code>EntityTypeConfigurationPostgreSQL</code>, <code>EntityTypeConfigurationCosmos</code>, and
           <code>EntityTypeConfigurationSqlite</code>. None of them has a body. Each is the attribute plus a
@@ -259,9 +264,11 @@
           class from <code>EntityTypeConfigurationSQLServer&lt;Session, ...&gt;</code> to
           <code>EntityTypeConfigurationCosmos&lt;Session, ...&gt;</code>. Or, equivalently, you derive from the engine-aware base
           directly and put <code>[UseDataSource(DataSource.CosmosDB)]</code> on the class. That is the change in code. The
-          host has to configure the target engine as well: a Cosmos connection string and one AppHost helper
-          line sit alongside the base-class change. Without them the resolver serves the entity from the engine
-          the host does configure (the nuance below), so the token alone does not move the storage.</p>
+          host has to configure the target engine as well: a Cosmos connection string, and in the AppHost a
+          Cosmos database resource handed to the <code>WithCosmosDataSource</code> helper, sit alongside the base-class
+          change (production infrastructure for the account comes on top). Without them the resolver serves
+          the entity from the engine the host does configure (the nuance below), so the token alone does not
+          move the storage.</p>
           <pre class="doc-pre" tabindex="0" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-comment">// Before: relational</span>
 <span class="hljs-keyword">public</span> <span class="hljs-keyword">sealed</span> <span class="hljs-keyword">class</span> <span class="hljs-title">SessionConfiguration</span>
     : <span class="hljs-title">EntityTypeConfigurationSQLServer</span>&lt;<span class="hljs-title">Session</span>, <span class="hljs-title">SessionIdentifierType</span>&gt;
@@ -301,7 +308,11 @@
           configuration running in a PostgreSQL-only host, say) is served from the engine it does configure,
           rather than handed an empty connection string. <code>EntityTypeConfiguration</code> exposes that answer as
           <code>EffectiveEngine</code>, so any hand-written SQL in a configuration body, such as an index filter, targets
-          the engine actually being built.</p>
+          the engine actually being built. The key and table mapping, by contrast, still follows the
+          <em>declared</em> engine. Between SQL Server and PostgreSQL that is invisible, since they share one mapping;
+          a Cosmos-declared configuration served from a relational host keeps its container mapping and
+          client-side key generator, so substitution is a convenience for the relational pair rather than a
+          Cosmos fallback.</p>
           <h2 id="when-a-relationship-crosses-an-engine-boundary">When a relationship crosses an engine boundary</h2>
           <p>A document store cannot enforce a foreign key into a SQL table. So the moment <code>Session</code> moves to
           Cosmos while the <code>Event</code> it references stays in SQL Server, the relationship between them spans two
@@ -422,7 +433,7 @@ s =&gt; s.Event.IsPublished</code></pre>
           <li><strong>Give each engine one strategy object</strong> that answers every engine question (mapping, capabilities,
           dialect), looked up by the engine value, so call sites read engine facts instead of branching on
           the engine. A new engine then adds its own strategy class and one registry line (plus whatever
-          per-engine types the ORM itself demands, such as a context class) instead of an edit at every call
+          per-engine types the ORM itself demands, such as a context class, and its configuration keys) instead of an edit at every call
           site, and a text-scan test can keep new branches from creeping back into call sites.</li>
           <li><strong>Degrade cross-engine relationships automatically</strong> at model-build time: drop the impossible
           constraint, keep the scalar FK column, and make it a no-op when everything is on one engine.</li>

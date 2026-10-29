@@ -95,7 +95,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 53 articles</summary>
+        <summary>All 54 articles</summary>
         <nav class="doc-nav" aria-label="The MMCA.Common series">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -151,7 +151,8 @@
         <li><a href="governed-llm-boundary.html">50 · The governed LLM boundary</a></li>
         <li><a href="durable-internal-commands.html">51 · Four ways to do work later</a></li>
         <li><a href="identity-completions.html">52 · Finishing identity</a></li>
-        <li><a href="series-index.html">53 · The series index</a></li>
+        <li><a href="cloud-neutral-vendor-adapters.html">53 · One framework, three clouds</a></li>
+        <li><a href="series-index.html">54 · The series index</a></li>
           </ol>
         </nav>
       </details>
@@ -188,9 +189,10 @@
           <li><strong>Application</strong> defines the ports (<code>IPushNotificationSender</code>, <code>INativePushSender</code>,
           <code>IPushDeviceRegistrar</code>, <code>IEmailSender</code>, <code>INotificationRecipientProvider</code>) and the CQRS slices that
           orchestrate them.</li>
-          <li><strong>Infrastructure</strong> supplies the adapters (<code>SignalRPushNotificationSender</code>,
-          <code>AzureNotificationHubNativePushSender</code>, <code>AzureNotificationHubDeviceRegistrar</code>, <code>SmtpEmailSender</code>,
-          <code>NotificationHub</code>) plus their no-op fallbacks.</li>
+          <li><strong>Infrastructure</strong> supplies the adapters (<code>SignalRPushNotificationSender</code>, <code>SmtpEmailSender</code>,
+          <code>NotificationHub</code>) plus the no-op fallbacks, including the inert native push pair. The real native
+          push implementations ship in the vendor adapter packages (<code>AzureNotificationHubNativePushSender</code> and
+          <code>AzureNotificationHubDeviceRegistrar</code> in MMCA.Common.Azure, with AWS and Google siblings).</li>
           <li><strong>API</strong> exposes three REST controllers, split by who is allowed to call them.</li>
           </ul>
           <p>Four loosely coupled channels share one set of application ports: an in-app inbox (durable per-user
@@ -235,7 +237,7 @@
           <code>INativePushSender.SendToUsersAsync</code> inside its own non-fatal try/catch, reaching devices the hub
           cannot (app backgrounded or killed). This leg is fire-and-forget: a failure is logged via
           <code>LogNativePushFailed</code> and does not touch the audit status the SignalR leg already decided. The
-          default <code>NullNativePushSender</code> keeps it a no-op until a notification hub is configured.</li>
+          default <code>NullNativePushSender</code> keeps it a no-op until a delivery adapter is registered and configured.</li>
           <li><strong>Save and return the DTO.</strong> The handler saves the observed status a third time, then maps the
           saved aggregate and returns <code>201 Created</code>.</li>
           </ol>
@@ -366,24 +368,34 @@
           <p>The SignalR leg stops at the edge of a connected client. A phone with the app backgrounded, killed, or
           offline hears nothing until the next launch, and conference announcements (&quot;lunch is served&quot;, &quot;room
           change&quot;) are exactly the messages that must reach pockets, not open tabs. ADR-044 adds a third leg to
-          the send for that: OS-level native push through Firebase Cloud Messaging (Android) and APNs (iOS), fanned out
-          by Azure Notification Hubs.</p>
+          the send for that: OS-level native push to Firebase Cloud Messaging (Android) and APNs (iOS) devices,
+          fanned out by one of three delivery adapters: Azure Notification Hubs, AWS SNS mobile push, or Google
+          FCM HTTP v1. ADC uses the Azure one.</p>
           <p>It follows the same abstraction discipline as the SignalR channel, with two new Application ports.
           <code>INativePushSender</code> does the user-targeted send, and <code>IPushDeviceRegistrar</code> upserts and deletes the
           per-device installations that sends target. Infrastructure <code>TryAdd</code>s inert defaults
-          (<code>NullNativePushSender</code> and <code>NullPushDeviceRegistrar</code>), and <code>AddNativePushNotifications(configuration)</code>
-          swaps in the Azure Notification Hubs implementations (<code>AzureNotificationHubNativePushSender</code> and
-          <code>AzureNotificationHubDeviceRegistrar</code>) only when the <code>NativePush</code> configuration section is enabled and
-          complete. Hosts call it unconditionally, so a deployment flips the channel on by configuration alone, and
-          a build without push credentials is wired but inert end to end. Installations are tagged <code>user:{id}</code>, so
-          a send targets a user (never a raw token) and reaches every device that user registered.</p>
+          (<code>NullNativePushSender</code> and <code>NullPushDeviceRegistrar</code>), and each adapter package carries one
+          registration call that swaps in its implementations only when <code>NativePush:Enabled</code> is true and its own
+          section is complete. For Azure that call is <code>AddAzureNotificationHubsPush(configuration)</code> from
+          MMCA.Common.Azure, which registers <code>AzureNotificationHubNativePushSender</code> and
+          <code>AzureNotificationHubDeviceRegistrar</code> once <code>ConnectionString</code> and <code>HubName</code> are present; the siblings are
+          <code>AddAmazonSnsPush</code> (MMCA.Common.Aws) and <code>AddFirebaseCloudMessagingPush</code> (MMCA.Common.Gcp), and
+          <a href="cloud-neutral-vendor-adapters.html">the adapter pattern has its own article</a>. Hosts call the adapter
+          unconditionally, so a deployment flips the channel on by configuration alone, and a build without push
+          credentials is wired but inert end to end. The reverse mistake fails loudly: a host that sets
+          <code>NativePush:Enabled</code> while <code>INativePushSender</code> is still the no-op stops at startup with a message naming
+          the three calls. Installations are tagged <code>user:{id}</code>, so a send targets a user (never a raw token) and
+          reaches every device that user registered.</p>
           <p>The registration surface is <code>DevicesController</code>, the third REST controller. Any authenticated user
           manages their own device installations: <code>PUT /Notifications/Devices</code> upserts (called after sign-in and
           on token rotation), <code>DELETE /Notifications/Devices/{installationId}</code> removes one (called before
           sign-out) and is idempotent. Ownership is stamped server-side from the current user, and installation
           ids are client-generated GUIDs, so they are not enumerable. Because the id comes from the client, both
-          verbs check it against the owner. A PUT naming an installation that belongs to another user&#39;s device
-          answers 409 Conflict, and the client mints a new installation id and retries. A DELETE reads the
+          verbs check it against the owner. Installation ids are per device, so a second user signing in on the
+          same phone presents an id the previous user owns: when the PUT also carries that installation&#39;s current
+          push channel, the caller holds the device and the installation is handed over and re-tagged, so the
+          previous owner&#39;s pushes stop. A PUT naming another user&#39;s installation without its push channel answers
+          409 Conflict, and the client mints a new installation id and retries. A DELETE reads the
           installation&#39;s owner tag first, and an id that does not exist or belongs to another user answers 204
           without deleting anything, so the response cannot be used to probe for other users&#39; installation ids.</p>
           <h2 id="the-in-app-inbox-pure-cqrs-readwrite-scoped-to-the-caller">The in-app inbox: pure CQRS read/write, scoped to the caller</h2>
@@ -469,9 +481,10 @@
           Redis backplane wired. Forget the <code>redis</code> connection string in a multi-replica deployment and pushes
           reach only the users connected to the replica that handled the send.</li>
           <li><strong>Native push is inert until provisioned, and fire-and-forget once live.</strong> The native leg stays a
-          no-op until a notification hub with platform credentials (a Firebase service account, an APNs key) is
-          provisioned and the <code>NativePush</code> section is enabled. Once live it does no per-device delivery
-          tracking: the hub&#39;s telemetry is the observability surface, and the inbox remains the recovery path.</li>
+          no-op until the host calls a delivery adapter, the provider behind it holds the platform credentials
+          (on Azure, a notification hub carrying a Firebase service account and an APNs key), and the
+          <code>NativePush</code> section is enabled. Once live it does no per-device delivery tracking: the provider&#39;s
+          telemetry is the observability surface, and the inbox remains the recovery path.</li>
           <li><strong>It is one example, not a notification platform.</strong> This is a reference vertical slice, not a
           full-featured notification product. There is no retry queue for failed real-time delivery, no template
           engine, no per-channel user preferences. The slice is shaped to teach the pattern and to be extended,

@@ -95,7 +95,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 53 articles</summary>
+        <summary>All 54 articles</summary>
         <nav class="doc-nav" aria-label="The MMCA.Common series">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -151,7 +151,8 @@
         <li><a href="governed-llm-boundary.html">50 · The governed LLM boundary</a></li>
         <li><a href="durable-internal-commands.html">51 · Four ways to do work later</a></li>
         <li><a href="identity-completions.html">52 · Finishing identity</a></li>
-        <li><a href="series-index.html">53 · The series index</a></li>
+        <li><a href="cloud-neutral-vendor-adapters.html">53 · One framework, three clouds</a></li>
+        <li><a href="series-index.html">54 · The series index</a></li>
           </ol>
         </nav>
       </details>
@@ -204,8 +205,12 @@
           <p>The second leak is event delivery. There is one abstraction, <code>IMessageBus</code>, defined in the
           Application layer, with two implementations in Infrastructure: <code>InProcessMessageBus</code> (delivery is a
           method call, used in the monolith) and <code>BrokerMessageBus</code> (delivery is over a MassTransit broker,
-          RabbitMQ locally and Azure Service Bus in production, used once a module is its own service).
-          <code>MessageBusSettings</code> selects the mode. Your handler code does not change when you flip it.</p>
+          used once a module is its own service). <code>MessageBusSettings.Provider</code>, a plain string, selects the
+          mode: <code>InProcess</code>, <code>RabbitMq</code> and <code>PostgreSql</code> are built in, and any other value names a broker
+          transport an adapter package registers (<code>AzureServiceBus</code> from <code>MMCA.Common.Azure</code>, <code>AmazonSqs</code> from
+          <code>MMCA.Common.Aws</code>; the adapter pattern has <a href="cloud-neutral-vendor-adapters.html">its own article</a>).
+          ADC runs RabbitMQ locally and Azure Service Bus in production. Your handler code does not change when
+          you flip it.</p>
           <p>The rule that keeps this honest is that <strong>Application, Domain, and Shared must never reference
           MassTransit directly.</strong> That is not a code-review comment. It is a fitness test,
           <code>MicroserviceExtractionTests</code>, that fails the build if a transport type leaks into the core. The

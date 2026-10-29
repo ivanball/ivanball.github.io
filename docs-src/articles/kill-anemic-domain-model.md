@@ -339,8 +339,18 @@ or `dotnet add package MMCA.Common.API` and try it.*
 
 *Tags: .NET, C Sharp, Software Architecture, Programming, Domain-Driven Design*
 
-*Notes: re-verified 2026-10-22 against MMCA.Common v1.250.0 (`MMCA.Common/FACTS.md:14`); paths
+*Notes: re-verified 2026-10-29 against MMCA.Common v1.265.1 (`MMCA.Common/FACTS.md:14`); paths
 under `Source/` are relative to `MMCA.Common/`.
+**2026-10-29 run (v1.265.1):** body prose unchanged; every body claim still holds. Anchors re-based in
+place: `AddStronglyTypedIds` (`DependencyInjection.cs:401`, registry `:405`, converter registration
+`:408`, singleton `:410`, were `:382/:386/:389`), `Money` (`:56`, `:91`, were `:53`, `:85`),
+`RestoreChild` and `DeleteChildren` (`AuditableAggregateRootEntity.cs:212`, `:273`, were `:214`,
+`:275`), the domain-event interceptor's `Entries<IAggregateRoot>()` (`:244`, was `:242`),
+`ArchitectureRules.InvariantClassesAreStatic` (declaration `:79`, summary `:78`), and Helpdesk
+`Ticket` (`Result.Combine` `:117`, was `:118`; `GetChildOrNotFound` `:143`, was `:144`).
+Re-checked and unchanged: the other aggregate-root members (`:24`, `:34`, `:37`, `:60`, `:87`, `:105`,
+`:158`), `AuditSaveChangesInterceptor.cs:69`, `NamingConventionTestsBase.cs:31`, and `Ticket.cs`
+`:26`, `:52`, `:66`, `:68`.
 **2026-10-22 run (v1.250.0):** two body sentences corrected. Store's `CustomerConfiguration` no
 longer carries a second `OwnsOne` over `Address` (the unicode-facet parenthetical is gone), and
 MMCA.Common runs `EntityConventionTestsBase` itself over a `FrameworkModuleArchitectureMap`, so the
@@ -380,9 +390,9 @@ holds a private `_domainEvents` list (`:16`), a read-only `DomainEvents` view (`
 protected helpers: `SetItems` (`:60`), the overridable `ValidateSetItems` (`:87`),
 `GetChildOrNotFound<TChild, TChildId>` (`:105`, returning `Result.Failure` over `Error.NotFound` at
 `:115-118`; `Error.NotFound` is `Error.cs:23`), `RemoveChildOrNotFound` (`:158`), `RestoreChild`
-(`:214`) and `DeleteChildren` (`:275`). Only roots carry events: the domain-event interceptor walks
+(`:212`) and `DeleteChildren` (`:273`). Only roots carry events: the domain-event interceptor walks
 `ChangeTracker.Entries<IAggregateRoot>()`
-(`Source/Core/MMCA.Common.Infrastructure/Persistence/Interceptors/DomainEventSaveChangesInterceptor.cs:242`).
+(`Source/Core/MMCA.Common.Infrastructure/Persistence/Interceptors/DomainEventSaveChangesInterceptor.cs:244`).
 **Audit stamping:** `AuditSaveChangesInterceptor(TimeProvider)`
 (`Source/Core/MMCA.Common.Infrastructure/Persistence/Interceptors/AuditSaveChangesInterceptor.cs:38`,
 `SavingChangesAsync` at `:41`, `StampAuditFields` at `:63` walking
@@ -399,7 +409,7 @@ from one source file. Its calls match shipped signatures: `Result.Combine(params
 (`Source/Core/MMCA.Common.Domain/Invariants/CommonInvariants.cs:63-64`).
 **Value objects:** `public abstract record ValueObject;`
 (`Source/Core/MMCA.Common.Shared/ValueObjects/ValueObject.cs:8`); private ctor plus
-`Result<T>`-returning `Create` on `Money` (`Financial/Money.cs:53`, `:85`), `Email`
+`Result<T>`-returning `Create` on `Money` (`Financial/Money.cs:56`, `:91`), `Email`
 (`Contact/Email.cs:23`, `:30`), `Address` (`Contact/Address.cs:43`, `:69`) and `DateRange`
 (`Time/DateRange.cs:17`, `:30`).
 **Invariants reuse:** both reuse sites for
@@ -454,8 +464,8 @@ default implementations just below), the `StronglyTypedId` static helper (`Stron
 `.RegisterAll` (`:119`), `StronglyTypedIdRegistry` (`StronglyTypedIdRegistry.cs:22`),
 `StronglyTypedIdMappings<TSelf, TValue>` with `ToValue`/`ToIdentifier`
 (`StronglyTypedIdMappings.cs:36,43,48`), the opt-in call `AddStronglyTypedIds`
-(`Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:382`, registry at `:386`, converter
-registration at `:389`), `StronglyTypedIdModelConfiguration.Apply`
+(`Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:401`, registry at `:405`, converter
+registration at `:408`, registry singleton at `:410`), `StronglyTypedIdModelConfiguration.Apply`
 (`Source/Core/MMCA.Common.Infrastructure/Persistence/Conventions/StronglyTypedIdModelConfiguration.cs:21,29`),
 and `StronglyTypedIdValueConverter<TSelf, TValue>` / `NullableStronglyTypedIdValueConverter<TSelf, TValue>` /
 `StronglyTypedIdValueComparer<TSelf>`
@@ -493,15 +503,15 @@ one module so the module-scoped rules run over the Notifications family (`PushNo
 (`AggregateConventionTests.cs:9`, `CommonArchitectureMap` at `:11`), whose constructor fact calls the
 whole-Domain rule (`AggregateConventionTestsBase.cs:21`; `ArchitectureRules.Entities.cs:90-100`).
 Child-access members are the protected helpers already anchored above (`AuditableAggregateRootEntity.cs:60`,
-`:105`, `:158`, `:214`, `:275`); ADR-129 records that no fitness rule requires them
+`:105`, `:158`, `:212`, `:273`); ADR-129 records that no fitness rule requires them
 (`129-tactical-aggregate-contract.md:78`).
 `Result.Combine` (`Result.cs:124`) collects every failed input's errors into one failure (`:131-144`).
 The static-`*Invariants` rule is `ArchitectureRules.InvariantClassesAreStatic`
-(`Source/Hosting/MMCA.Common.Testing.Architecture/Rules/Governance/ArchitectureRules.Naming.cs:78-79`),
+(`Source/Hosting/MMCA.Common.Testing.Architecture/Rules/Governance/ArchitectureRules.Naming.cs:79`, summary `:78`),
 run as `InvariantClasses_ShouldBe_Static` (`Bases/Governance/NamingConventionTestsBase.cs:31`).
 Reference shape: Helpdesk `Ticket`
 (`MMCA.Helpdesk/Source/Modules/Tickets/MMCA.Helpdesk.Tickets.Domain/Tickets/Ticket.cs:26` sealed over
 the aggregate base, private constructor `:52`, `Create` returning `Result<Ticket>` `:66`,
-`Result.Combine` over `TicketInvariants` `:68` and `:118`, `GetChildOrNotFound` `:144`).*
+`Result.Combine` over `TicketInvariants` `:68` and `:117`, `GetChildOrNotFound` `:143`).*
 
 - Full series index: https://ivanball.github.io/writing.html

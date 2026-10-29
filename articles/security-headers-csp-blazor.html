@@ -95,7 +95,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 53 articles</summary>
+        <summary>All 54 articles</summary>
         <nav class="doc-nav" aria-label="The MMCA.Common series">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -151,7 +151,8 @@
         <li><a href="governed-llm-boundary.html">50 · The governed LLM boundary</a></li>
         <li><a href="durable-internal-commands.html">51 · Four ways to do work later</a></li>
         <li><a href="identity-completions.html">52 · Finishing identity</a></li>
-        <li><a href="series-index.html">53 · The series index</a></li>
+        <li><a href="cloud-neutral-vendor-adapters.html">53 · One framework, three clouds</a></li>
+        <li><a href="series-index.html">54 · The series index</a></li>
           </ol>
         </nav>
       </details>
@@ -218,7 +219,7 @@
           <code>Response.OnStarting</code> callback (<code>:197-212</code>, callback <code>:205-211</code>), because the Razor Components endpoint writes
           its own weaker <code>Cache-Control</code> while it renders and the callback is what settles the value last. A reset token
           or an OAuth authorization code sitting in the URL therefore never travels onward in a <code>Referer</code> header, and the
-          rendered page never lingers in a browser or proxy cache (ADR-023:130-141, :258-269).</p>
+          rendered page never lingers in a browser or proxy cache (ADR-023:132-143, :260-271).</p>
           <p>The interesting part is the CSP. Instead of stamping a string, the middleware asks an <code>ICspPolicyProvider</code>
           (<code>SecurityHeaders.cs:86</code>) for a <code>CspPolicy(string Value, bool Enforce)</code> (<code>:78</code>). When <code>Enforce</code> is true it
           writes <code>Content-Security-Policy</code> (<code>:235</code>); when false it writes <code>Content-Security-Policy-Report-Only</code>
@@ -229,7 +230,7 @@
           stashed raw in <code>HttpContext.Items</code> under <code>CspNonce.ItemKey</code> (<code>:127</code>) before the rest of the pipeline runs, and
           spliced into the header as <code>&#39;nonce-&lt;value&gt;&#39;</code> (<code>:226-231</code>). A page reads it back with
           <code>CspNonce.Get(HttpContext)</code> (<code>:124-139</code>, <code>Get</code> at <code>:134</code>) and stamps it onto its own script and style tags,
-          which is the supported route off <code>&#39;unsafe-inline&#39;</code> (documented on the setting, <code>:64-65</code>; ADR-023:51-53). A
+          which is the supported route off <code>&#39;unsafe-inline&#39;</code> (documented on the setting, <code>:64-65</code>; ADR-023:53-55). A
           policy without the token generates nothing and stores nothing.</p>
           <pre class="doc-pre" tabindex="0" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-comment">// SecurityHeadersMiddleware.InvokeAsync, condensed from SecurityHeaders.cs:185-244</span>
 <span class="hljs-keyword">var</span> headers = context.Response.Headers;
@@ -283,7 +284,7 @@ headers[<span class="hljs-string">&quot;Permissions-Policy&quot;</span>] = _sett
           <code>style-src</code> at exactly the strength Blazor (<code>&#39;wasm-unsafe-eval&#39;</code>) and MudBlazor (<code>&#39;unsafe-inline&#39;</code> styles)
           require (<code>:53-66</code>). An HTML host that never registers its own provider gets a functional policy instead of
           one silently missing both directives, and the JSON, WebSocket, and static-page responses an API or gateway
-          serves are unaffected either way (ADR-023:54-61).</p>
+          serves are unaffected either way (ADR-023:56-63).</p>
           <h2 id="the-blazor-policy-built-at-runtime">The Blazor policy, built at runtime</h2>
           <p>An HTML host opts into the origin-pinned policy by registering its own provider. Both apps register one
           shared <code>BlazorCspPolicyProvider</code>
@@ -296,7 +297,7 @@ headers[<span class="hljs-string">&quot;Permissions-Policy&quot;</span>] = _sett
           single-service resolve returns the last registration, a plain <code>AddSingleton</code> provider registered afterwards
           still wins. Calling <code>AddCommonBlazorCsp()</code> before <code>AddCommonSecurityHeaders(...)</code> is the documented
           convention (<code>SecurityHeaders.cs:265-266</code> and the interface summary at <code>:83-84</code>, <code>DependencyInjection.cs:56-58</code>;
-          ADR-023:106-115), not the thing that makes the Blazor provider win.</p>
+          ADR-023:108-117), not the thing that makes the Blazor provider win.</p>
           <p>The provider builds the full policy once, at construction (<code>BlazorCspPolicyProvider.cs:33-42</code>), and returns
           the cached result for every request (<code>:45</code>). <code>BuildPolicy</code> (<code>:103-113</code>) assembles what a Blazor + MudBlazor
           page actually needs: <code>default-src &#39;self&#39;</code>, <code>script-src &#39;self&#39; &#39;wasm-unsafe-eval&#39;</code> (the WASM runtime),
@@ -304,14 +305,14 @@ headers[<span class="hljs-string">&quot;Permissions-Policy&quot;</span>] = _sett
           images are low XSS-risk, so images stay open while the directives that matter for exfiltration stay locked),
           <code>font-src &#39;self&#39;</code>, plus <code>base-uri</code>, <code>form-action</code>, and <code>frame-ancestors &#39;none&#39;</code>. The list carries no
           <code>object-src</code>, so objects fall back to <code>default-src &#39;self&#39;</code> rather than the static baseline&#39;s explicit
-          <code>object-src &#39;none&#39;</code> (ADR-023:189-193): on that one directive the Blazor policy is looser than the default it
+          <code>object-src &#39;none&#39;</code> (ADR-023:191-195): on that one directive the Blazor policy is looser than the default it
           replaces.</p>
           <p>One directive in that list is opt-in. <code>BuildFrameSrc</code> (<code>:85-97</code>) emits <code>frame-src &#39;self&#39; &lt;origins&gt;</code> only when
           <code>BlazorCspSettings.FrameSources</code> lists at least one origin, canonicalized and de-duplicated before the splice
           (<code>:92-96</code>, spliced into the policy at <code>:110</code>); with the default empty list there is no <code>frame-src</code> at all and
           frames fall back to <code>default-src &#39;self&#39;</code> (class doc <code>:21-23</code>; <code>:82</code>). Entries are validated at boot rather
           than trusted, so a wildcard or a stray semicolon fails startup with a message naming it instead of landing
-          verbatim in a security response header (ADR-023:201-213). ADC&#39;s Blazor host configures it for the embedded
+          verbatim in a security response header (ADR-023:203-215). ADC&#39;s Blazor host configures it for the embedded
           Google Maps venue maps on its public event page (<code>MMCA.ADC.UI.Web/appsettings.json:79-85</code>, comment <code>:75-78</code>).
           <code>frame-ancestors &#39;none&#39;</code> is never relaxed by that path (<code>:21-24</code>).</p>
           <p>The hard directive is <code>connect-src</code>, because it is per-deployment. <code>BuildCsp</code> (<code>:49</code>) reads the API origin
@@ -322,7 +323,7 @@ headers[<span class="hljs-string">&quot;Permissions-Policy&quot;</span>] = _sett
           because Visual Studio&#39;s Browser Link and Hot Reload inject an inline bootstrap script as well as opening a
           WebSocket on a port that changes every run (<code>:70-73</code>). Only the first of those is localhost-scoped, and
           neither reaches a non-Development host, because the flag is <code>IWebHostEnvironment.IsDevelopment()</code> read once at
-          construction (<code>:41</code>; ADR-023:194-200).</p>
+          construction (<code>:41</code>; ADR-023:196-202).</p>
           <p>The detail worth stealing is the failure path. If the origin cannot be parsed, or on Linux parses as a
           <code>file://</code> URI instead of http(s), the provider does not guess and it does not stop enforcing. It narrows
           <code>connect-src</code> to <code>&#39;self&#39;</code>, the strictest value it can be sure of, leaves the rest of the policy exactly as it
@@ -330,9 +331,9 @@ headers[<span class="hljs-string">&quot;Permissions-Policy&quot;</span>] = _sett
           endpoint is wrong still serves its pages, and every API call and SignalR hub connection the browser makes to
           the gateway directly is blocked loudly in the browser console, because the alternative is a
           permissive Report-Only header that protects nothing and that nobody notices (<code>:16-20</code>, <code>:60-61</code>;
-          ADR-023:94-97). A security response header that quietly stops being enforced is the worse failure mode.</p>
+          ADR-023:96-99). A security response header that quietly stops being enforced is the worse failure mode.</p>
           <p>Both apps also opt into the same-origin API proxy (ADR-131): <code>AddCommonSameOriginApiProxy</code> (ADC UI
-          <code>Program.cs:161</code>, Store UI <code>Program.cs:153</code>) paired with <code>MapCommonSameOriginApiProxy</code> (<code>:284</code>, <code>:262</code>).
+          <code>Program.cs:168</code>, Store UI <code>Program.cs:160</code>) paired with <code>MapCommonSameOriginApiProxy</code> (<code>:291</code>, <code>:269</code>).
           With it, <code>/client-config</code> switches the WebAssembly client&#39;s API client and notification hub to the proxy on
           the UI host&#39;s own origin (<code>MMCA.Common.UI.Web/SameOriginProxy/SameOriginApiProxyServiceExtensions.cs:13-16</code>,
           <code>:24-25</code>), so the browser&#39;s API and hub traffic is same-origin and admitted by the <code>&#39;self&#39;</code> entry that leads
@@ -363,38 +364,39 @@ headers[<span class="hljs-string">&quot;Permissions-Policy&quot;</span>] = _sett
           <p>This is not a library that exists and waits to be used. Store and ADC each wire it at both client-facing
           edges. The Gateway hosts call <code>AddCommonSecurityHeaders(builder.Configuration)</code> and <code>UseCommonSecurityHeaders()</code>
           with the strict static baseline, exactly right for a YARP proxy: ADC&#39;s Gateway serves JSON, the SignalR hub&#39;s
-          WebSockets, and a static privacy page (<code>Program.cs:120,170</code>, privacy page <code>:182-193</code>), and Store&#39;s serves only
-          JSON and forwarded responses, with no static-file or privacy page by design (<code>Program.cs:71,159</code>, <code>:18-20</code>).
+          WebSockets, and three anonymous static pages, the privacy policy, the terms of use, and the account-deletion
+          page its Google Play listing requires (<code>Program.cs:126,176</code>, static pages <code>:188-211</code>), and Store&#39;s serves only
+          JSON and forwarded responses, with no static-file or privacy page by design (<code>Program.cs:80,169</code>, <code>:18-20</code>).
           The Blazor UI hosts register <code>AddCommonBlazorCsp()</code> first, then the same plain <code>AddCommonSecurityHeaders(builder.Configuration)</code> with no
-          configure delegate, then <code>UseCommonSecurityHeaders()</code> (ADC UI <code>Program.cs:194,195,216</code>; Store UI
-          <code>Program.cs:185,186,204</code>). Each UI origin emits its own HSTS on purpose, because an HSTS pin is per-origin and
+          configure delegate, then <code>UseCommonSecurityHeaders()</code> (ADC UI <code>Program.cs:201,202,223</code>; Store UI
+          <code>Program.cs:192,193,211</code>). Each UI origin emits its own HSTS on purpose, because an HSTS pin is per-origin and
           the Gateway&#39;s header says nothing about the sibling hostname a user actually types (ADC UI
-          <code>Program.cs:188-193</code>; Store UI <code>Program.cs:178-184</code>). The built-in <code>app.UseHsts()</code> stays uncalled on both,
+          <code>Program.cs:195-200</code>; Store UI <code>Program.cs:185-191</code>). The built-in <code>app.UseHsts()</code> stays uncalled on both,
           since it would run later in the pipeline and overwrite the shared one-year value with its own weaker default
-          (ADC UI <code>Program.cs:212-215</code>; Store UI <code>Program.cs:215-219</code>).</p>
+          (ADC UI <code>Program.cs:219-222</code>; Store UI <code>Program.cs:222-226</code>).</p>
           <p>The cross-origin posture at that same edge is a separate decision with its own record: two policies, an
           allow-listed one for service hosts and a deliberately broader one for gateways (ADR-082,
           <code>Website/docs-src/adr/082-two-tier-cors-posture.md:31-33</code>), which names ADR-023 as its edge sibling (<code>:27-29</code>).
           The middleware carries a unit test, <code>SecurityHeadersMiddlewareTests</code> in <code>MMCA.Common.Aspire.Tests</code>, and all
           four edges carry their own <code>SecurityHeadersTests</code>: each app&#39;s Gateway, and each app&#39;s UI host, where a
-          Production-pinned host factory is what lets the test see the per-origin HSTS described above (ADR-023:155-172).</p>
+          Production-pinned host factory is what lets the test see the per-origin HSTS described above (ADR-023:157-174).</p>
           <h2 id="trade-offs-honestly">Trade-offs, honestly</h2>
           <ul>
           <li><strong>The baseline is complete, not maximal.</strong> A default that works for a Blazor and MudBlazor host is a default
           that carries <code>style-src &#39;unsafe-inline&#39;</code> (<code>SecurityHeaders.cs:67-69</code>), so inline styles are not blocked out
           of the box, and an API or gateway host that serves no HTML inherits a script and style allowance it does not
           need. Tightening past that is an explicit act: configure the <code>&quot;SecurityHeaders&quot;</code> section, register your own
-          provider, or move to the <code>{nonce}</code> placeholder (ADR-023:100-105).</li>
+          provider, or move to the <code>{nonce}</code> placeholder (ADR-023:102-107).</li>
           <li><strong>Registration order matters only for <code>TryAdd</code>.</strong> The static default uses <code>TryAddSingleton</code>
           (<code>SecurityHeaders.cs:288</code>) and <code>AddCommonBlazorCsp</code> uses plain <code>AddSingleton</code> (<code>DependencyInjection.cs:77</code>),
           so the Blazor provider wins in either order. The trap is narrower: a custom provider added after
-          <code>AddCommonSecurityHeaders</code> with <code>TryAdd</code> silently keeps the static default (ADR-023:106-115). Both apps
+          <code>AddCommonSecurityHeaders</code> with <code>TryAdd</code> silently keeps the static default (ADR-023:108-117). Both apps
           register in the documented order, but nothing forces it.</li>
           <li><strong>Failing closed moves the pain onto a running app.</strong> A Blazor host whose <code>ApiSettings</code> endpoint is wrong
           still serves pages, but the enforced <code>connect-src &#39;self&#39;</code> blocks every cross-origin API call and SignalR
           connection a client makes to the gateway directly (<code>BlazorCspPolicyProvider.cs:62</code>). That loud signal is the
           point, and the cost is that the configuration mistake lands on the users of that deployment rather than in
-          a passive report (ADR-023:121-125).</li>
+          a passive report (ADR-023:123-127).</li>
           <li><strong>One shared Blazor provider constrains divergence.</strong> <code>BlazorCspPolicyProvider</code> lives once in
           <code>MMCA.Common.UI.Web</code> over the shared <code>ApiSettings</code>, so a host that needs genuinely different CSP logic
           cannot tweak an app-local copy. It has to supply its own <code>ICspPolicyProvider</code> instead, registered before

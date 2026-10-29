@@ -132,12 +132,15 @@ and returns a `Result` failure immediately. The registration validator shown ear
 route into the same bridge: registration is an authentication-service call, not a command, so
 `AuthenticationServiceBase.RegisterAsync` runs the validator itself and calls `ToErrors(nameof(RegisterAsync))`.
 The source names the method instead of a command, and the errors are the same `ErrorType.Validation` kind.
+ADC's `AuthenticationService` wraps that base call in `UnitOfWork.ExecuteInTransactionAsync`, so on this
+path the validator runs inside the transaction scope, as the first statement and before any write.
 
 Two properties of that flow matter to a caller:
 
-- **Validation runs before the transaction opens.** The `ValidatingCommandDecorator` sits *before* the
-  transactional decorator in the pipeline. An invalid command short-circuits before any database
-  transaction is opened. You never pay for a transaction on input that was never going to be persisted.
+- **A command's validation runs before the transaction opens.** The `ValidatingCommandDecorator` sits
+  *before* the transactional decorator in the command pipeline. An invalid command short-circuits before
+  any database transaction is opened, so you never pay for a transaction on input that was never going to
+  be persisted. (The registration call above is not a command and does not get this ordering.)
 - **A validation failure is a 400, not a 500.** The `ErrorType.Validation` tag is what the API edge's
   failure mapper turns into `400 Bad Request` with per-property messages, identical at the boundary
   regardless of which validator raised it. A bad request is a client error, and the status code says so.
@@ -183,9 +186,10 @@ and consistent, so the domain factory is free to focus on the rules only it can 
   `RuleFor(x => x.Title).NotEmpty().MaximumLength(200)`. The payoff is reuse, but a newcomer meets a small
   generic puzzle (what is `T`, what does the selector bind) before the first `Include` reads naturally.
 - **Composition is opt-in, so adoption is uneven.** Nothing forces a validator to include a fragment.
-  Store's registration validator hand-writes its email and password chains with literal lengths (and its
-  password chain carries no complexity regexes), and Common's own login and forgot-password validators
-  hand-write their email rule. The kit removes the reason to copy; it does not detect a copy.
+  Store's registration validator hand-writes its email, password and name chains instead of including
+  the fragments. Its password chain reads the same `PasswordComplexity` lengths and four regexes the
+  fragment uses, each with its own error code, but its email and name caps are literal 100s. Common's own
+  login and forgot-password validators hand-write their email rule. The kit removes the reason to copy; it does not detect a copy.
 - **This layer is structural only.** A fragment validates shape, never cross-entity or stateful rules.
   That is correct (those belong in the domain factory), but it means the validator is not the whole
   story, and a reviewer must check both altitudes to know a command is fully guarded.
@@ -224,7 +228,8 @@ how MMCA.Common's reusable rule fragments (`RequiredStringRules<T>`, `EmailRules
 `StrongPasswordRules<T>`, the address fragments and `AddressValidator`) compose via `Include(...)` instead
 of copy-paste, how `CommandRequestValidator<TCommand, TRequest>` plus `ICommandWithRequest` validate a
 command for free from its request validator, and how `ValidationFailureExtensions.ToErrors` turns a
-failure into an `ErrorType.Validation` `Result` that the API edge maps to 400 before any transaction opens.
+failure into an `ErrorType.Validation` `Result` that the API edge maps to 400, with a command's validation
+running before any transaction opens.
 
 **Next in the series:** the transactional outbox, the reliability backbone that persists a domain
 event in the same transaction as the data it describes and publishes it afterwards, at least once, so a
@@ -236,7 +241,7 @@ guide, or `dotnet add package MMCA.Common.Application` and try it.*
 
 *Tags: .NET, C Sharp, Validation, Software Architecture, FluentValidation*
 
-*Notes: source-verified 2026-10-22 against MMCA.Common v1.250.0 (`MMCA.Common/FACTS.md:14`), paths
+*Notes: source-verified 2026-10-29 against MMCA.Common v1.265.1 (`MMCA.Common/FACTS.md:14`), paths
 relative to `MMCA.Common/Source/Core/MMCA.Common.Application/` unless prefixed. Rule fragments, all
 eleven, in `Validation/CommonValidationRules.cs`: `RequiredStringRules<T>` (:42), `OptionalStringRules<T>`
 (:54), `EmailRules<T>` (:65), `AbsoluteUrlRules<T>` (:86), `PositiveIntRules<T>` (:101),
@@ -257,8 +262,11 @@ RegisterRequestValidator.cs:12-25` (includes :16-19); its caps come from
 users: ADC `SpeakerValidationRules.cs:46`, `EventValidationRules.cs:123` (inside
 `EventOrganizerContactEmailRules<T>`, :115);
 `StrongPasswordRules` also in ADC `ChangePasswordRequestValidator.cs:18`. Uneven adoption: Store
-`MMCA.Store.Identity.Application/Users/Validation/RegisterRequestValidator.cs:17-20` (email, literal 100)
-and :22-25 (password, 8/128, no `Matches`), composing only `AddressValidator` (:35-37); Common
+`MMCA.Store.Identity.Application/Users/Validation/RegisterRequestValidator.cs:21-24` (email, literal 100),
+:26-33 (password: `MinimumLength(PasswordComplexity.MinimumLength)`, `MaximumLength(PasswordComplexity.
+MaximumLength)` and four `Matches(PasswordComplexity.Uppercase/Lowercase/Digit/SpecialCharacter)`, each
+with its own `WithErrorCode`) and :35-41 (first and last name, literal 100), composing only
+`AddressValidator` (:43-45); Common
 `Auth/Validation/LoginRequestValidator.cs:15` and `ForgotPasswordRequestValidator.cs:14` hand-write
 `RuleFor(x => x.Email)`. Address family: `Validation/AddressValidationRules.cs`, `AddressValidator` :13
 with six `Include` calls :17-22, fragments :31-88 reading `AddressInvariants`
@@ -289,16 +297,23 @@ target)` (`MMCA.Common.Shared/Abstractions/Error.cs:37-38`). `ValidatingCommandD
 failure without calling the inner handler (:86-94); its comment that a validator may reach the database
 through a scoped repository is at :70-72. Registration path: ADC
 `MMCA.ADC.Identity.API/Controllers/AuthController.cs:66` calls `AuthenticationService.RegisterAsync`
-(`MMCA.ADC.Identity.Application/Users/AuthenticationService.cs:81`, delegating to the base at :87), and
-`Auth/AuthenticationServiceBase.cs:227` validates via `validators.Register` then calls
-`ToErrors(nameof(RegisterAsync))` at :230, outside the command decorator. Decorator order: `DependencyInjection.cs:134` Transactional
+(`MMCA.ADC.Identity.Application/Users/AuthenticationService.cs:81`, delegating to the base at :87 inside
+`UnitOfWork.ExecuteInTransactionAsync` at :86, `MMCA.Common.Infrastructure/Persistence/UnitOfWork.cs:91-94`),
+and `Auth/AuthenticationServiceBase.cs` `RegisterAsync` (:243) validates via `validators.Register` at :249
+as its first statement, then calls `ToErrors(nameof(RegisterAsync))` at :252, outside the command
+decorator and inside that transaction scope. Decorator order: `DependencyInjection.cs:134` Transactional
 (innermost), :135 Timeout, :136 Validating. `ErrorType.Validation` -> 400 at
 `MMCA.Common/Source/Presentation/MMCA.Common.API/Middleware/ErrorHttpMapping.cs:22`. FluentValidation 12:
 `MMCA.Common/Directory.Packages.props:30` (`FluentValidation.DependencyInjectionExtensions` 12.2.0). Next-in-series
 outbox wording: at-least-once delivery documented on `MMCA.Common.Infrastructure/Persistence/Outbox/
 Processing/OutboxProcessor.cs:35` (class :58). There
 is no dedicated ADR for validation; it is governed by the CQRS-decorator ADRs (ADR-014) and the layering
-fitness tests. Change history (2026-10-22, v1.250.0): every anchor re-verified and holding except as
+fitness tests. Change history (2026-10-29, v1.265.1): stamp refreshed; Store's registration password
+chain re-described (it reads `PasswordComplexity` lengths and the four regexes, Store `RegisterRequestValidator.cs:26-33`)
+and its anchors re-based (:17-20 to :21-24, :22-25 to :26-33, :35-37 to :43-45); `AuthenticationServiceBase`
+anchors re-based (:227 to :249, :230 to :252); "validation runs before the transaction opens" scoped to
+the command pipeline, since ADC's registration runs its validator inside `ExecuteInTransactionAsync`
+(`AuthenticationService.cs:86-87`). Change history (2026-10-22, v1.250.0): every anchor re-verified and holding except as
 noted; stamp refreshed; FluentValidation pin 12.1.1 to 12.2.0; the escape-hatch example corrected from
 `AddEntityUpdate` alone to the closed-generic callers `AddEntityCrud` and `AddEntityUpdateVerb` (three
 callers, not one); "address limits the domain uses" reworded to validator plus EF column width, since

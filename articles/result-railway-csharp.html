@@ -95,7 +95,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 53 articles</summary>
+        <summary>All 54 articles</summary>
         <nav class="doc-nav" aria-label="The MMCA.Common series">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -151,7 +151,8 @@
         <li><a href="governed-llm-boundary.html">50 · The governed LLM boundary</a></li>
         <li><a href="durable-internal-commands.html">51 · Four ways to do work later</a></li>
         <li><a href="identity-completions.html">52 · Finishing identity</a></li>
-        <li><a href="series-index.html">53 · The series index</a></li>
+        <li><a href="cloud-neutral-vendor-adapters.html">53 · One framework, three clouds</a></li>
+        <li><a href="series-index.html">54 · The series index</a></li>
           </ol>
         </nav>
       </details>
@@ -241,6 +242,10 @@
           <code>Match</code> and <code>MatchAsync</code> run a delegate on the failure track, their <code>onFailure</code> branch. A separate <code>ResultExtensions</code> class lifts <code>BindAsync</code>,
           <code>MapAsync</code>, <code>TapAsync</code> and <code>MatchAsync</code> onto a pending <code>Task&lt;Result&lt;T&gt;&gt;</code>, so an asynchronous pipeline
           composes end to end without an <code>await</code> and a temporary local between every step.</p>
+          <p>When a step needs the value itself rather than a delegate, <code>Result&lt;T&gt;</code> also offers
+          <strong><code>TryGetValue(out T value)</code></strong>, shaped like <code>Dictionary.TryGetValue</code>. It decides on <code>IsFailure</code>, and its
+          <code>[MaybeNullWhen(false)]</code> annotation lets the compiler track the check, so the value needs no <code>!</code> in the
+          success branch, and deleting or reordering the check breaks the build instead of letting a null escape.</p>
           <p>The non-generic base carries four combinators of its own, and <strong><code>Result.Combine(params ReadOnlySpan&lt;Result&gt;)</code></strong>
           is the one that earns its keep: the aggregate-all-failures combinator. It runs several invariant checks and
           returns <em>all</em> their errors at once rather than failing on the first. This is the workhorse of domain factory
@@ -284,14 +289,13 @@
     CancellationToken cancellationToken)
 {
     <span class="hljs-keyword">var</span> prepared = <span class="hljs-keyword">await</span> PrepareAsync(attemptUnitOfWork, command, cancellationToken).ConfigureAwait(<span class="hljs-literal">false</span>);
-    <span class="hljs-keyword">if</span> (prepared.IsFailure)
+    <span class="hljs-keyword">if</span> (!prepared.TryGetValue(<span class="hljs-keyword">out</span> <span class="hljs-keyword">var</span> request))
         <span class="hljs-keyword">return</span> Result.Failure&lt;TEntityDTO&gt;(prepared.Errors);
 
-    <span class="hljs-keyword">var</span> result = <span class="hljs-keyword">await</span> requestMapper.CreateEntityAsync(prepared.Value!, cancellationToken).ConfigureAwait(<span class="hljs-literal">false</span>);
-    <span class="hljs-keyword">if</span> (result.IsFailure)
+    <span class="hljs-keyword">var</span> result = <span class="hljs-keyword">await</span> requestMapper.CreateEntityAsync(request, cancellationToken).ConfigureAwait(<span class="hljs-literal">false</span>);
+    <span class="hljs-keyword">if</span> (!result.TryGetValue(<span class="hljs-keyword">out</span> <span class="hljs-keyword">var</span> entity))
         <span class="hljs-keyword">return</span> Result.Failure&lt;TEntityDTO&gt;(result.Errors);
 
-    <span class="hljs-keyword">var</span> entity = result.Value!;
     <span class="hljs-keyword">var</span> repository = attemptUnitOfWork.GetRepository&lt;TEntity, TIdentifierType&gt;();
 
     <span class="hljs-keyword">await</span> PersistAsync(attemptUnitOfWork, repository, entity, cancellationToken).ConfigureAwait(<span class="hljs-literal">false</span>);
@@ -313,7 +317,8 @@
           status from the <em>most severe</em> error present through <code>ErrorHttpMapping</code> and renders an RFC 9457
           ProblemDetails body carrying <em>all</em> the errors. <code>UnhandledResultFailureFilter</code> is the safety net: a global
           filter that catches an action which accidentally returns a failed <code>Result</code> as a 200 body and rewrites it
-          into the identical ProblemDetails shape via the same mapping. A third caller, the <code>If-Match</code> concurrency
+          into the same ProblemDetails structure (the same status and the same <code>errors</code> extension, under its own
+          title) via the same mapping. A third caller, the <code>If-Match</code> concurrency
           attribute, reuses the same class for the errors projection alone. Because the dictionary lives in one
           place, the controller base and the filter can never drift apart.</p>
           <p>The gRPC layer does the equivalent over the wire (<code>GrpcResultExceptionInterceptor</code>, ADR-007), so a remote

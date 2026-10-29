@@ -97,7 +97,7 @@ three things you would otherwise hand-roll:
    metrics cover ASP.NET Core, `HttpClient`, and the .NET runtime unless a host turns those cost knobs
    off (Step 6); tracing instruments ASP.NET Core and `HttpClient` and subscribes
    four activity sources: the application's own, `MMCA.Common.Outbox`,
-   `MMCA.Common.InternalCommands`, and `MMCA.Common.AI`. It also registers nine MMCA-specific meters
+   `MMCA.Common.InternalCommands`, and `MMCA.Common.AI`. It also registers ten MMCA-specific meters
    by literal name: `MMCA.Common.Outbox` (a dead-letter counter, a processed counter, a dispatch-lag
    histogram, a pending-depth gauge, and an oldest-pending-age gauge), `MMCA.Common.Cqrs` (RED
    histograms for command and query handlers, query cache hit and miss counters, and the
@@ -108,6 +108,7 @@ three things you would otherwise hand-roll:
    inert in a host that stays on the in-process bus), `MMCA.Common.OutputCache` (the output-cache
    eviction consumer's failed tag evictions), `MMCA.Common.BestEffort` (the swallowed failures of
    best-effort side effects), `MMCA.Common.InternalCommands` (the durable internal-command runner),
+   `MMCA.Common.Persistence` (the optimistic-concurrency conflict counter, tagged by entity type),
    and `MMCA.Common.AI` (the optional AI package's token spend and call duration, inert until a host
    adds that package and enables `Ai:Enabled`). Polly's own `Polly` meter is subscribed alongside
    them, so retries, timeouts, and circuit transitions leave the process instead of looking like
@@ -271,7 +272,7 @@ dashboards, just not in the trace bill. Four metric knobs sit next to it:
 `Telemetry:DisableAspNetCoreMetrics`, `Telemetry:DisableHttpClientMetrics` and
 `Telemetry:DisableRuntimeMetrics` each drop a whole meter family through a View (the ASP.NET Core one
 matches every meter under the `Microsoft.AspNetCore.` prefix; a View, rather than simply skipping the
-instrumentation, because the Azure Monitor distro adds those meters itself, which makes the toggle
+instrumentation, because a vendor distro such as Azure Monitor adds those meters itself, which makes the toggle
 authoritative instead of advisory), and `Telemetry:EnablePollyDurationMetrics` runs the other way:
 Polly's two duration histograms stay dropped unless a host opts in, while its retry and circuit-breaker
 event counter always ships.
@@ -279,11 +280,15 @@ event counter always ships.
 That filtering only matters because of where the telemetry actually flows, and the framework decides
 that by environment, not by code. `AddServiceDefaults()` enables the OTLP exporter when
 `OTEL_EXPORTER_OTLP_ENDPOINT` is set, which is exactly the variable the Aspire dashboard injects into
-every process, so the dashboard on your laptop lights up with no configuration. It enables Azure Monitor
-(through `UseAzureMonitor`) when `APPLICATIONINSIGHTS_CONNECTION_STRING` is set, which the cloud
-deployment supplies, so production ships to workspace-based Application Insights instead. Both can run at
-once, each shipping its own copy, so the same pipeline feeds the local dashboard and the cloud with no
-code change between them.
+every process, so the dashboard on your laptop lights up with no configuration. OTLP is the one built-in,
+vendor-neutral exporter (`Extensions.Telemetry.cs:152-172`). A vendor exporter is an adapter package's
+single call made after `AddServiceDefaults()`: `AddAzureMonitorExporter()` from `MMCA.Common.Azure`
+enables Azure Monitor (through `UseAzureMonitor`) when `APPLICATIONINSIGHTS_CONNECTION_STRING` is set,
+which the cloud deployment supplies, so production ships to workspace-based Application Insights
+(`AzureMonitorExporterExtensions.cs:42`, `:63`), and it refuses to run ahead of the service defaults,
+whose filter processors must sit before its batch processor (`:51`). Both exporters can run at once, each
+shipping its own copy, so the same pipeline feeds the local dashboard and the cloud with no code change
+between them ([how the adapters work](cloud-neutral-vendor-adapters.md)).
 
 A dashboard is only as readable as the trail through it, and one id ties that trail together.
 `CorrelationIdMiddleware` reads an `X-Correlation-ID` header off each request, cut to 64 characters (the
@@ -405,7 +410,8 @@ A single-command stack is a force multiplier, but it has edges worth naming:
 - **Telemetry meters are registered by literal name.** Because the Aspire package has no project
   reference to the assemblies that define `MMCA.Common.Outbox`, `MMCA.Common.Cqrs`,
   `MMCA.Common.Idempotency`, `MMCA.Common.Scheduler`, `MMCA.Common.Broker`, `MMCA.Common.OutputCache`,
-  `MMCA.Common.BestEffort`, `MMCA.Common.InternalCommands`, and `MMCA.Common.AI` (nor to Polly's own
+  `MMCA.Common.BestEffort`, `MMCA.Common.InternalCommands`, `MMCA.Common.Persistence`, and
+  `MMCA.Common.AI` (nor to Polly's own
   assemblies for the `Polly` meter), those source and meter names are duplicated string literals.
   Rename a source in one place and you must rename it in the other; the code comments flag this.
 - **Nothing gates the fail-fast chain.** No fitness test asserts that a new `AddOptions<T>` call carries
@@ -441,8 +447,9 @@ resilience at 30s/60s/90s); what `MapDefaultEndpoints()` exposes (`/health`, `/a
 discovery through the `MMCA.Common.Aspire.Hosting` helpers; how `OutboxPollFilterProcessor` and the
 probe-telemetry filter keep idle poll spans and health-probe traffic out of telemetry while
 `Telemetry:TracesSampleRatio` and the four metric knobs cap ingestion cost with fail-safe defaults;
-how `CorrelationIdMiddleware` ties a request's logs to its trace and the dual OTLP
-plus Azure Monitor exporters feed the local dashboard and workspace-based Application Insights; how
+how `CorrelationIdMiddleware` ties a request's logs to its trace and the built-in OTLP exporter plus
+the adapter-registered Azure Monitor exporter feed the local dashboard and workspace-based Application
+Insights; how
 `AddCommonSecurityHeaders` plus `UseCommonSecurityHeaders` and a tuned `SocketsHttpHandler` harden
 responses and reuse connections from the same shared baseline; and how the fail-fast configuration
 contract binds the framework's settings sections with `ValidateOnStart()` so a misconfigured host
@@ -458,21 +465,26 @@ the AppHost wiring you just met.
 
 *Tags: .NET, C Sharp, Microservices, DevOps, Observability*
 
-*Notes: re-verified against source on 2026-10-22 (MMCA.Common v1.250.0); every anchor below is re-stamped
-to that tree unless marked as carried from an earlier pass. Paths are under `MMCA.Common/Source/` unless
-stated. Baseline: `AddServiceDefaults` (`Hosting/MMCA.Common.Aspire/Extensions.cs:30`); `ConfigureOpenTelemetry`
-(`Extensions.Telemetry.cs:71`) with formatted message + scopes (`:75-76`), metrics via `ConfigureMetrics`
-(called `:80`, defined `:244`), which first calls `ConfigureAspNetCoreMetrics` (`:246`, defined `:353`):
-`Telemetry:DisableAspNetCoreMetrics` (`:355`) drops every `Microsoft.AspNetCore.` meter through a View
-(`:360-363`), else `AddAspNetCoreInstrumentation` (`:367`). `Telemetry:DisableHttpClientMetrics` (`:255`,
-View `:267-271`) and `Telemetry:DisableRuntimeMetrics` (`:282`, View `:287-290`) gate the other two families.
-Nine MMCA meters by literal name at `:308-316`; Polly's meter at `:323` (`PollyMeterName = "Polly"`, `:31`),
-duration histograms dropped by the View at `:333-341` unless `Telemetry:EnablePollyDurationMetrics` (`:25`).
-Four trace sources at `:83-86` (`AiTelemetryName = "MMCA.Common.AI"`, `:44`). `OutboxPollFilterProcessor`
-added at `:122`, `ProbeTelemetryFilterProcessor` at `:129`, `FilterProbeTelemetryConfigKey` at `:19`;
-sampler `ParentBasedSampler(TraceIdRatioBasedSampler)` at `:138-139`, ratio parsed by `TryGetTraceSampleRatio`
-(`:186`); exporters read `OTEL_EXPORTER_OTLP_ENDPOINT` (`:163`) and `APPLICATIONINSIGHTS_CONNECTION_STRING`
-(`:171`). The poll filter (`Hosting/MMCA.Common.Aspire/Telemetry/OutboxPollFilterProcessor.cs`) matches
+*Notes: re-verified against source on 2026-10-29 (MMCA.Common v1.265.1, `MMCA.Common/FACTS.md:14`); every
+anchor below is re-stamped to that tree unless marked as carried from an earlier pass or confirmed by the
+2026-10-29 audit. Paths are under `MMCA.Common/Source/` unless stated. Baseline: `AddServiceDefaults`
+(`Hosting/MMCA.Common.Aspire/Extensions.cs:33`); `ConfigureOpenTelemetry` (`Extensions.Telemetry.cs:70`)
+with formatted message + scopes (`:74-75`), metrics via `ConfigureMetrics` (called `:79`, defined `:239`),
+which first calls `ConfigureAspNetCoreMetrics` (`:241`, defined `:351`): `Telemetry:DisableAspNetCoreMetrics`
+(`:353`) drops every `Microsoft.AspNetCore.` meter through a View (from `:358`), else
+`AddAspNetCoreInstrumentation` (`:365`). `Telemetry:DisableHttpClientMetrics` (`:250`, View from `:263`) and
+`Telemetry:DisableRuntimeMetrics` (`:278`, View from `:283`) gate the other two families. Ten MMCA meters by
+literal name at `:305-314` (`MMCA.Common.Persistence` at `:313`, defined by
+`Presentation/MMCA.Common.API/Concurrency/ConcurrencyConflictMetrics.cs:27` with its `ConflictCounter` at
+`:37`); Polly's meter at `:321` (`PollyMeterName = "Polly"`, `:30`), duration histograms dropped by the View
+from `:333` unless `Telemetry:EnablePollyDurationMetrics` (`:24`). Four trace sources at `:82-85`
+(`AiTelemetryName = "MMCA.Common.AI"`, `:43`). `OutboxPollFilterProcessor` added at `:123`,
+`ProbeTelemetryFilterProcessor` at `:130`, `FilterProbeTelemetryConfigKey` at `:18`; sampler
+`ParentBasedSampler(TraceIdRatioBasedSampler)` at `:139-140`, ratio parsed by `TryGetTraceSampleRatio`
+(`:181`); the one built-in exporter is OTLP, read from `OTEL_EXPORTER_OTLP_ENDPOINT` (`:166`, method and doc
+`:152-172`); Azure Monitor is `AddAzureMonitorExporter()`
+(`Hosting/MMCA.Common.Azure/AzureMonitorExporterExtensions.cs:42`, `ConnectionStringKey =
+"APPLICATIONINSIGHTS_CONNECTION_STRING"` `:18`, order guard `:51`, `UseAzureMonitor()` `:63`). The poll filter (`Hosting/MMCA.Common.Aspire/Telemetry/OutboxPollFilterProcessor.cs`) matches
 `OutboxPoll` on `MMCA.Common.Outbox` and `InternalCommandPoll` on `MMCA.Common.InternalCommands` (constants
 `:26-29`, predicate `:60-64`) and clears `Recorded` at `:49`; the doc comment (`:9-15`) names the per-message
 `OutboxProcess` and per-command `InternalCommandExecute` survivors. Outbox meter, five instruments:
@@ -480,10 +492,11 @@ sampler `ParentBasedSampler(TraceIdRatioBasedSampler)` at `:138-139`, ratio pars
 (`Core/MMCA.Common.Infrastructure/Persistence/Outbox/Processing/OutboxMetrics.cs:41,47,57,75,98`). CQRS meter:
 `CommandDuration`, `QueryDuration`, `QueryCacheHits`, `QueryCacheMisses`, `AuthorizationDenied`, `TimeoutExpired`
 (`Core/MMCA.Common.Application/UseCases/Decorators/CqrsMetrics.cs:29,35,41,47,53,59`). Resilience:
-`AddStandardResilienceHandler` at `Extensions.cs:49`; values in
-`Core/MMCA.Common.Shared/Resilience/HttpResilienceDefaults.cs:13,16,19` (30s / 60s / 90s) and
-`MaxRetryAttempts = 1` at `:30`; `SocketsHttpHandler` at `Extensions.cs:78-86`; warm-up gate added by
-`AddWarmupReadiness()` (called `:34`, defined `:101`) with `OpenIdConnectMetadataWarmupTask` registered at `:106`.
+`AddStandardResilienceHandler` at `Extensions.cs:60`; values in
+`Core/MMCA.Common.Shared/Resilience/HttpResilienceDefaults.cs:16,19,22` (30s / 60s / 90s) and
+`MaxRetryAttempts = 1` at `:33`; `SocketsHttpHandler` at `Extensions.cs:99-107` (tuning comment from `:88`);
+warm-up gate added by `AddWarmupReadiness()` (called `:37`, defined `:122`) with
+`OpenIdConnectMetadataWarmupTask` registered at `:127`.
 Health: `MapDefaultEndpoints` (`Extensions.Health.cs:123`), `/health` cached (`:134`), `/alive` on the `Live`
 tag uncached (`:138-140`, "self" check tagged `Live` at `:28`), `/health/ready` cached with the `Live`/`Optional`
 exclusion (`:154-156`). Step 4 vocabulary, sixteen helper names across seventeen methods:
@@ -491,7 +504,7 @@ exclusion (`:154-156`). Step 4 vocabulary, sixteen helper names across seventeen
 `AddMessageBroker` (`:172`, `AddRabbitMQ(name).WithManagementPlugin()` at `:176`), `AddServiceBusEmulatorBroker`
 (`:213`), `WithBroker` (`:264`, `:292`), `WithJwksDiscovery` (`:321`), `WithE2eRsaKeys` (`:365`),
 `WithE2eRegistrationThrottleLift` (`:404`), `WithE2eForceServer` (`:441`, called by ADC's AppHost at
-`Program.cs:432`), `WithE2eGatewayRateLimitLift` (`:487`), `WithSQLServerDataSource` (`:530`),
+`Program.cs:433`), `WithE2eGatewayRateLimitLift` (`:487`), `WithSQLServerDataSource` (`:530`),
 `WithPostgreSQLDataSource` (`:560`), `WithCosmosDataSource` (`:589`), `WithSqliteDataSource` (`:614`),
 `WithH2cHealthCheck` (`H2cHealthCheckExtensions.cs:110`, behavior per its doc comment `:80-109`), plus
 `AddSelectedBroker` (`BrokerSelection.cs:57`: emulator branch `:64-67`, persistent RabbitMQ `:70-71`) and
@@ -506,11 +519,11 @@ appears in Step 1: `WithManagementPlugin()` is called with no port (`Extensions.
 adds none (`BrokerSelection.cs:70-71`); only an ADC comment states 15672. ADC AppHost
 (`MMCA.ADC/Source/Hosting/MMCA.ADC.AppHost/Program.cs`): 15672 comment `:48-50`, broker wiring comment `:59-67`,
 RabbitMQ-vs-Service-Bus divergence comment `:69-91`, selection `builder.AddSelectedBroker("ADC_BROKER", sqlServer)`
-`:97` (comment `:93-96`), MailDev `:105`; every service chain calls `WithSelectedBroker(withBroker)` (`:128`,
-`:157`, `:200`, `:228`); the Step 4 source chain is `:195-210` (the snippet omits its
-`Seeding__IncludeSampleConferenceData` variable, `:206`); the Step 5 gRPC snippet shows the edges at `:264`,
-`:266`, `:269` (the AppHost declares further edges at `:287`, `:293`, `:301`); gateway 6001 pin `:364`; JWKS
-`:373-375`; UI 6002 pin `:406` (comment `:387`). Store's AppHost project is
+`:98` (comment `:94-97`), MailDev `:106`; every service chain calls `WithSelectedBroker(withBroker)` (`:129`,
+`:158`, `:201`, `:229`); the Step 4 source chain is `:196-211` (the snippet omits its
+`Seeding__IncludeSampleConferenceData` variable, `:207`); the Step 5 gRPC snippet shows the edges at `:265`,
+`:267`, `:270` (the AppHost declares further edges at `:288`, `:294`, `:302`); gateway 6001 pin `:365`; JWKS
+`:374-376`; UI 6002 pin `:407` (comment `:388`). Store's AppHost project is
 `MMCA.Store/Source/Hosting/MMCA.Store.AppHost/MMCA.Store.AppHost.csproj`.
 Correlation: `Presentation/MMCA.Common.API/Middleware/CorrelationIdMiddleware.cs` header `:23`, `MaxLength = 64`
 `:26`, read-or-fall-back `:40-43` (a blank header counts as absent), `Sanitize` keeps a value only when every
@@ -520,11 +533,11 @@ echo `:46-50`. Security headers (`Hosting/MMCA.Common.Aspire/Security/SecurityHe
 `:277` (ADR-070 comment `:274-275`), section bound only when a configuration is passed (`:278-281`),
 `StaticCspPolicyProvider` registered `:288`, `UseCommonSecurityHeaders` `:296` inserting the middleware `:299`;
 `CspPolicy` record `:78`. Step 8 (ADR-070): canonical chain `Core/MMCA.Common.Infrastructure/DependencyInjection.cs:72-75`.
-Thirty-two sections carry `ValidateDataAnnotations().ValidateOnStart()` (count from a Grep of all 37
-`ValidateOnStart()` hits under `Source/`, minus the two sections without data annotations, the service-token
+Thirty-two sections carry `ValidateDataAnnotations().ValidateOnStart()` (count from a Grep of all 39
+`ValidateOnStart()` hits under `Source/`, minus the two startup tripwires, the two sections without data annotations, the service-token
 default-scheme guard, and the two module-host chains). Infrastructure (19):
-`DependencyInjection.cs:75,101,147,152,157,163,171,195,200,287`, `.Caching.cs:46,51`, `.Jobs.cs:42,113,152`,
-`.Auth.cs:45,73,144`, `.Notifications.cs:46`. Others (13): `Presentation/MMCA.Common.API/DependencyInjection.cs:80`
+`DependencyInjection.cs:75,101,147,152,157,163,171,195,200,302`, `.Caching.cs:47,52`, `.Jobs.cs:42,113,152`,
+`.Auth.cs:45,73,144`, `.Notifications.cs:43`. Others (13): `Presentation/MMCA.Common.API/DependencyInjection.cs:80`
 (idempotency), `API/Startup/WebApplicationBuilderExtensions.Authentication.cs:135-138` (JWT),
 `WebApplicationBuilderExtensions.RateLimiting.cs:378`, `Presentation/MMCA.Common.UI/DependencyInjection.cs:43-46`
 (ApiSettings), `UI.Web/Hardening/UiRateLimitingExtensions.cs:180-183` and `BlazorCircuitLimitExtensions.cs:55-58`
@@ -553,10 +566,22 @@ data-annotation link either), `HybridCacheOptions` (no section of its own: `Conf
 `:52-53`, `:57-58`, `:62-63`). `JwtSettings` rules (`Core/MMCA.Common.Infrastructure/Auth/JwtSettings.cs`):
 `[Required]` at `:53` and `:57`, `Validate` at `:79` (HS256 32-character secret `:81`, RS256 private key `:88`).
 "Nothing gates the chain" was re-run this pass: no `ValidateOnStart` or `AddOptions` hit in
-`Hosting/MMCA.Common.Testing.Architecture`, and the `ValidateOnStart` hits under `MMCA.Common/Tests/` are six
+`Hosting/MMCA.Common.Testing.Architecture`, and the `ValidateOnStart` hits under `MMCA.Common/Tests/` are eight
 behavior-test files, none of them a governance test. ADR cells unchanged (ADR-023 / 025 / 041 / 070), range
-001-132 per `Website/docs-src/adr/README.md:6`. The headless-launch caveat is a known operational note, not a
+001-136 per `Website/docs-src/adr/README.md:6`. The headless-launch caveat is a known operational note, not a
 code limitation, and is not determinable from source.
+The two hits added since 2026-10-22 are the startup tripwires, `ValidateOnStart` with no data annotations
+and no settings section: `CloudAdapterTripwireOptions` (`Core/MMCA.Common.Infrastructure/DependencyInjection.cs:221`)
+and `HostIntegrationTripwireOptions` (`Hosting/MMCA.Common.Aspire/Extensions.cs:44`); the two new test files
+are `CloudAdapterTripwireTests` and `HostIntegrationTripwireTests`.
+Changed 2026-10-29: meters nine to ten (`MMCA.Common.Persistence`, the concurrency-conflict counter, added to
+Step 2 and the literal-name trade-off); the exporter paragraph and the closing summary say OTLP is the one
+built-in exporter and Azure Monitor comes from the `MMCA.Common.Azure` adapter's `AddAzureMonitorExporter()`
+(ADR-134), replacing the claim that `AddServiceDefaults()` itself enables Azure Monitor; `ValidateOnStart()`
+hits 37 to 39 (the two tripwires; the 32 validated sections are unchanged); behavior-test files 6 to 8; ADR
+range 001-132 to 001-136; anchors re-stamped (`Extensions.cs` and `Extensions.Telemetry.cs` members,
+`HttpResilienceDefaults`, Infrastructure `:287` to `:302`, `.Caching.cs` `:46`/`:51` to `:47`/`:52`,
+`.Notifications.cs` `:46` to `:43`, and every ADC AppHost anchor from the broker selection on moved one line).
 Changed 2026-10-22: Step 4 helper count 15/16 to 16/17 (`WithE2eForceServer`, Common #569 per the audit); Step 8
 validated sections 31 to 32, with the gRPC service-token settings added to the list (Common #563/#565 per the
 audit), and `ValidateOnStart()` hits 35 to 37 (the second new hit is the default-scheme guard); the correlation

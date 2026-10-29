@@ -95,7 +95,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 53 articles</summary>
+        <summary>All 54 articles</summary>
         <nav class="doc-nav" aria-label="The MMCA.Common series">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -151,7 +151,8 @@
         <li><a href="governed-llm-boundary.html">50 · The governed LLM boundary</a></li>
         <li><a href="durable-internal-commands.html">51 · Four ways to do work later</a></li>
         <li><a href="identity-completions.html">52 · Finishing identity</a></li>
-        <li><a href="series-index.html">53 · The series index</a></li>
+        <li><a href="cloud-neutral-vendor-adapters.html">53 · One framework, three clouds</a></li>
+        <li><a href="series-index.html">54 · The series index</a></li>
           </ol>
         </nav>
       </details>
@@ -303,7 +304,7 @@
           default scheme. Only an endpoint under the <code>InternalCaller</code> policy accepts it, and that policy takes an
           authenticated caller from either scheme, so a user token on the same call is validated by the user
           scheme against the issuer&#39;s JWKS exactly as described above. Store is the one adopter: its Sales service sends the token on its Customers client, and
-          its Identity service validates it (<code>MMCA.Store.Identity.Service/Program.cs:173</code>); ADC uses neither half.</p>
+          its Identity service validates it (<code>MMCA.Store.Identity.Service/Program.cs:179</code>); ADC uses neither half.</p>
           <h2 id="trade-offs-honestly">Trade-offs, honestly</h2>
           <p>The JWKS layer is the right model, but it is not free, and the rough edges are worth naming.</p>
           <ul>

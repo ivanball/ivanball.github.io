@@ -95,7 +95,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 53 articles</summary>
+        <summary>All 54 articles</summary>
         <nav class="doc-nav" aria-label="The MMCA.Common series">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -151,7 +151,8 @@
         <li><a href="governed-llm-boundary.html">50 · The governed LLM boundary</a></li>
         <li><a href="durable-internal-commands.html">51 · Four ways to do work later</a></li>
         <li><a href="identity-completions.html">52 · Finishing identity</a></li>
-        <li><a href="series-index.html">53 · The series index</a></li>
+        <li><a href="cloud-neutral-vendor-adapters.html">53 · One framework, three clouds</a></li>
+        <li><a href="series-index.html">54 · The series index</a></li>
           </ol>
         </nav>
       </details>
@@ -169,11 +170,14 @@
           <hr>
           <p>Checkout is the easy part. In MMCA.Store&#39;s Sales module it is genuinely atomic: the order insert, the cart
           transition, and the conditional stock decrements all commit inside one explicit local transaction
-          (<code>ExecuteInTransactionAsync</code> at <code>CheckOutHandler.cs:80-82</code> over the <code>WriteAsync</code> delegate <code>:122-183</code>,
-          insert <code>:163</code>, decrements <code>:169</code>, save <code>:174</code>), and a failed decrement returns a failed <code>Result</code> that rolls
-          the whole thing back. One database, one transaction, no drama. The same delegate also arms the order&#39;s own
-          unpaid-payment deadline as a scheduled row (<code>:180</code>), so the deadline commits with the order or rolls back
-          with it (comment <code>:176-179</code>).</p>
+          (<code>ExecuteInTransactionAsync</code> at <code>CheckOutHandler.cs:106-108</code> over the <code>WriteAsync</code> delegate <code>:150-215</code>,
+          insert <code>:195</code>, decrements <code>:201-204</code>, save <code>:206</code>), and a failed decrement returns a failed <code>Result</code> that
+          rolls the whole thing back. One database, one transaction, no drama. The same delegate then hands the
+          saved order to <code>PlacedOrderFinalizer.FinalizeAsync</code> (<code>:212</code>, comment <code>:208-211</code>), which attaches the
+          shipping label and arms the order&#39;s own unpaid-payment deadline as a scheduled row
+          (<code>PlacedOrderFinalizer.cs:29-50</code>, <code>ArmAsync</code> at <code>:49</code>) on the same enlisted context, so the deadline
+          commits with the order or rolls back with it. Guest checkout runs the same finalizer inside its own
+          transaction (<code>GuestCheckOutHandler.cs:122</code>).</p>
           <p>Then the money moves at Stripe, and the confirmation comes back later, as a webhook, from outside your
           database entirely. And two things go wrong that no transaction can fix:</p>
           <ol>
@@ -200,14 +204,15 @@
           <p>And it is the question the neighbouring records leave open on purpose. ADR-003 gets an event out of the
           process at least once. ADR-021 stops a broker redelivery from being applied twice at the consume edge.
           ADR-006 decides database-per-service and records &quot;no cross-database transactions, no two-phase commit&quot; only
-          as a <strong>cost it accepts</strong>, without saying how that cost gets paid (<code>ADR-054:52-56</code>). None of them says what a
+          as a <strong>cost it accepts</strong>, without saying how that cost gets paid (<code>ADR-054:57-61</code>). None of them says what a
           multi-step workflow does when step two fails or step three never reports back.</p>
           <h2 id="the-mmca-answer-compensation-is-a-handler-not-a-branch-in-the-command">The MMCA answer: compensation is a handler, not a branch in the command</h2>
           <p>The command handler does one thing, and it does not even own the plumbing for that.
           <code>CancelOrderHandler</code> derives from <code>MutateEntityHandlerBase&lt;CancelOrderCommand, Order, OrderIdentifierType&gt;</code>
           (<code>CancelOrderHandler.cs:27-31</code>), so the load, the rowversion stamp and the save belong to the base class. The
-          handler contributes three overrides: the id to load (<code>:39</code>), the client&#39;s last-seen rowversion so a
-          stale-view cancellation fails with a conflict (ADR-035, <code>:46</code>), and the mutation itself (<code>:60-81</code>). It does
+          handler contributes four overrides: the id to load (<code>:39</code>), the client&#39;s last-seen rowversion so a
+          stale-view cancellation fails with a conflict (ADR-035, <code>:46</code>), the mutation itself (<code>:60-81</code>), and the
+          success log line (<code>LogMutated</code>, <code>:143-144</code>). It does
           not touch inventory, and its own remarks say so (<code>:49-59</code>).</p>
           <p>The mutation first refuses a stale token itself (<code>OrderConcurrency.EnsureCurrent</code>, <code>:68-72</code>), so the
           customer&#39;s live session is never expired on behalf of a stale view (remarks <code>:54-58</code>). Then it takes two
@@ -223,9 +228,11 @@
           handler <strong>refuses the cancellation</strong> with <code>OrderCancellationErrorCodes.PaymentAlreadyCompleted</code>
           (<code>:124-132</code>). Every other outcome (already expired, session gone, provider unreachable) is non-fatal: it is
           logged and the cancellation proceeds (<code>:119-122</code>, <code>:134-137</code>).</p>
-          <p><code>Order.MarkAsCancelled()</code> (<code>Order.cs:551</code>) asks the current state object whether the transition is legal
-          and, on success, records a domain event (<code>Order.cs:559</code>). <code>OrderCancelled</code> is a plain <code>BaseDomainEvent</code>
-          (<code>OrderCancelled.cs:6-9</code>), not an integration event, so it dispatches in-process after the save.</p>
+          <p><code>Order.MarkAsCancelled(OrderCancellationReason reason = Requested)</code> (<code>Order.cs:879</code>) asks the current
+          state object whether the transition is legal and, on success, records a domain event carrying that reason
+          (<code>Order.cs:887</code>). <code>OrderCancelled</code> is a plain <code>BaseDomainEvent</code> (<code>OrderCancelled.cs:13-17</code>, with
+          <code>OrderId</code>, <code>CustomerId</code> and a <code>Reason</code> that defaults to <code>Requested</code>), not an integration event, so it
+          dispatches in-process after the save.</p>
           <p>Restoring the stock is a separate class: <code>OrderCancelledSagaHandler : IDomainEventHandler&lt;OrderCancelled&gt;</code>
           (<code>OrderCancelledSagaHandler.cs:40-42</code>). Notifying the customer of a failed payment is another one,
           <code>OrderPaymentFailedSagaHandler</code> (<code>OrderPaymentFailedSagaHandler.cs:22-24</code>). This is the choreographed
@@ -246,9 +253,9 @@
           idempotent, the second run inflates inventory, and you have turned a reliability mechanism into a data-corruption
           mechanism.</p>
           <p>MMCA.Store makes it idempotent with a persisted marker on the aggregate. <code>Order.InventoryRestored</code>
-          (<code>Order.cs:122</code>, documented <code>:116-121</code>) is a boolean with a private setter, and <code>MarkInventoryRestored()</code>
-          (<code>Order.cs:571-594</code>) is a guarded transition like any other: it refuses on a non-cancelled order
-          (<code>:573-580</code>) and refuses a second call (<code>:582-589</code>), both as <code>Result.Failure</code> with named invariant codes.</p>
+          (<code>Order.cs:190</code>, documented <code>:184-189</code>) is a boolean with a private setter, and <code>MarkInventoryRestored()</code>
+          (<code>Order.cs:899-922</code>) is a guarded transition like any other: it refuses on a non-cancelled order
+          (<code>:901-908</code>) and refuses a second call (<code>:910-917</code>), both as <code>Result.Failure</code> with named invariant codes.</p>
           <p>The handler runs the whole restoration as one <code>ExecuteInTransactionAsync</code> delegate
           (<code>OrderCancelledSagaHandler.cs:55-57</code>, the delegate <code>RestoreAsync</code> at <code>:64-160</code>), and inside it does five
           things in order:</p>
@@ -281,7 +288,7 @@
           soft-deleted, not removed, and the stock a cancelled order is returning still belongs to that row: without
           <code>ignoreQueryFilters</code>, the row is invisible to the handler and the returned quantity is silently dropped
           (the comment saying so is at <code>:99-102</code>).</p>
-          <p>This is why ADR-054 says the marker is <strong>strictly stronger than the ADR-021 inbox</strong> (<code>ADR-054:226-229</code>).
+          <p>This is why ADR-054 says the marker is <strong>strictly stronger than the ADR-021 inbox</strong> (<code>ADR-054:235-238</code>).
           The inbox records a message id after the handlers have succeeded, which leaves a narrow crash window
           between the handler&#39;s commit and the inbox write. A marker committed <em>with</em> the writes has no such window.
           The two are complementary rather than competing: the inbox dedups broker redeliveries between services, the
@@ -364,10 +371,13 @@
           <p>A compensating handler needs no retry loop of its own, because it already sits on one. The catch is that
           the loop only ever sees exceptions.</p>
           <p>When in-process dispatch throws, the domain-event interceptor logs the failure and signals the outbox rather
-          than swallowing the work. <code>FlushStateAsync</code> (<code>DomainEventSaveChangesInterceptor.cs:369</code>) dispatches the
-          save&#39;s local events (<code>:373-374</code>) and only then marks their outbox entries processed (<code>:378</code>), so a throwing
+          than swallowing the work. <code>FlushStateAsync</code> (<code>DomainEventSaveChangesInterceptor.cs:371</code>) dispatches the
+          save&#39;s local events (<code>:375-381</code>) and only then marks their outbox entries processed (<code>:385</code>), so a throwing
           handler never reaches the mark, and the catch below it logs, releases the lease the local rows were
-          inserted under, and signals the processor (<code>:383-394</code>). The <code>OutboxProcessor</code> re-dispatches the pure
+          inserted under, and signals the processor (<code>:390-401</code>). That is the path for a save whose events are backed
+          by outbox rows, the one this article follows; a save with no backing row (outbox off, or a non-relational
+          engine) goes through <code>DispatchUnbackedAsync</code> instead (<code>:409-431</code>), which logs each event&#39;s failure and moves
+          on, so nothing redelivers there. The <code>OutboxProcessor</code> re-dispatches the pure
           domain event on a later cycle (<code>OutboxProcessor.DispatchMessagesAsync</code>, <code>OutboxProcessor.cs:493</code>, called
           from the cycle at <code>:247</code>, the dispatcher call at <code>:792</code>) with the bounded retries, backoff, and dead-lettering ADR-003 already defines. So
           a handler that wants to be re-run has to throw. Inventing local retries would just duplicate a policy that
@@ -382,10 +392,10 @@
           was not persisted (messages <code>:174-178</code>) and return a failed <code>Result</code>. The transaction rolls back, marker
           included (<code>DbContextFactory.cs:641-648</code>), so nothing partial reaches the database. But <code>HandleAsync</code> discards
           that <code>Result</code> (<code>OrderCancelledSagaHandler.cs:55</code>), so the dispatcher sees a handler that completed, and the
-          interceptor goes on to mark the event&#39;s outbox row processed (<code>DomainEventSaveChangesInterceptor.cs:373-378</code>).
+          interceptor goes on to mark the event&#39;s outbox row processed (<code>DomainEventSaveChangesInterceptor.cs:375-385</code>).
           Nothing redelivers it. The comment above the call says a later delivery can still restore (<code>:53-54</code>); for
           these three cases no later delivery arrives, and ADR-054 records exactly that gap as its own trade-off
-          (<code>ADR-054:266-277</code>, restated in its 2026-10-01 Revision <code>:380-383</code>).</p>
+          (<code>ADR-054:275-286</code>, restated in its 2026-10-01 Revision <code>:388-392</code>).</p>
           <p>Nothing else picks it up either. The reconciliation sweep below selects <code>PaymentInitiated</code> orders with a
           session (<code>PaymentReconciliationService.cs:153-155</code>) and <code>PendingPayment</code> or <code>PaymentFailed</code> orders
           (<code>:200-201</code>); an order left in this state is <code>Cancelled</code> with <code>InventoryRestored</code> still false, which matches
@@ -459,7 +469,7 @@
           endpoint, so 100% of deliveries were rejected and nothing surfaced it (<code>:105-110</code>).</p>
           <p>The provider-side half is that the endpoint registers itself. <code>StripeWebhookRegistrationService</code> is a
           <code>BackgroundService</code> (<code>:47-54</code>) registered by the Sales module in the same method that registers the
-          reconciliation sweep below (<code>Sales.Infrastructure/DependencyInjection.cs:39</code>, sweep at <code>:42</code>). It skips
+          reconciliation sweep below (<code>Sales.Infrastructure/DependencyInjection.cs:47</code>, sweep at <code>:50</code>). It skips
           entirely when no <code>WebhookBaseUrl</code> is set, which is the local path where the Stripe CLI forwards instead, and
           warns and skips with no <code>SecretKey</code> (<code>:94-104</code>); it subscribes exactly three event types (<code>:78-83</code>); and it
           stamps every endpoint it creates with the description prefix <code>Auto-registered by MMCA</code> (<code>:63</code>). That prefix
@@ -468,7 +478,7 @@
           whose URL has moved or whose status is no longer <code>enabled</code> (<code>:280-290</code>). The disabled-but-still-present
           duplicate that predicate
           collapses is a real incident, not a hypothetical: a second endpoint got created at the same URL with a
-          brand-new signing secret, invalidating the configured one (<code>ADR-084:34-35</code>).</p>
+          brand-new signing secret, invalidating the configured one (<code>ADR-084:36-39</code>).</p>
           <p>The secret is the honest awkward part. Stripe reveals a signing secret only at creation time (<code>:235</code>), so
           the minted value is written to a shared <code>IStripeWebhookSecretStore</code> the moment it exists (<code>:242</code>), and every
           replica reads that store before it decides anything (<code>AdoptSharedSecretAsync</code> <code>:254-263</code>, the read at
@@ -481,21 +491,21 @@
           the store once more and leaves Stripe alone (<code>:152</code>). The secret is also held in a volatile-backed singleton
           (<code>StripeWebhookSecretProvider.cs:17-27</code>, assigned at <code>StripeWebhookRegistrationService.cs:243</code>), and
           verification accepts a signature that is valid against <strong>either</strong> candidate secret: the runtime one first,
-          then the configured <code>Stripe:WebhookSecret</code> (<code>StripePaymentService.cs:324-330</code>). The remarks above it say
-          why (<code>:311-317</code>): after an operator rolls the secret in Stripe and updates configuration, the shared value
+          then the configured <code>Stripe:WebhookSecret</code> (<code>StripePaymentService.cs:334-342</code>). The remarks above it say
+          why (<code>:322-330</code>): after an operator rolls the secret in Stripe and updates configuration, the shared value
           is stale while the configured one is current, and accepting a second secret this deployment already trusts
           widens nothing. The secret itself is never written to a log or a console stream (class documentation
           <code>StripeWebhookRegistrationService.cs:22-25</code>, comment <code>:240-241</code>): the <code>Critical</code> creation line names only
           the endpoint id (<code>:245</code>, declared at <code>:368-369</code>), and an operator reveals that endpoint&#39;s secret in the
           Stripe Dashboard to persist it in <code>Stripe:WebhookSecret</code>. ADR-084 files the automated minting as a
-          trade-off, not a feature (<code>ADR-084:211-215</code>), along with the fact that a configured secret is trusted and
-          never validated, because the provider will not re-reveal it (<code>ADR-084:250-254</code>).</p>
+          trade-off, not a feature (<code>ADR-084:214-218</code>), along with the fact that a configured secret is trusted and
+          never validated, because the provider will not re-reveal it (<code>ADR-084:253-257</code>).</p>
           <h2 id="the-backstop-a-periodic-sweep-against-the-provider">The backstop: a periodic sweep against the provider</h2>
           <p>Compensation answers &quot;step two failed.&quot; It does not answer &quot;step three never reported back.&quot; A webhook
           that is never delivered, or that arrives and is rejected because the signing secret is stale, produces no
           event to compensate, so no handler ever runs.</p>
           <p><code>PaymentReconciliationService</code> (<code>PaymentReconciliationService.cs:69-75</code>) is that backstop, registered as a
-          hosted service by the Sales module&#39;s infrastructure (<code>DependencyInjection.cs:42</code>). Backstop is the exact
+          hosted service by the Sales module&#39;s infrastructure (<code>DependencyInjection.cs:50</code>). Backstop is the exact
           word the class documentation uses, and it is careful about it (<code>:51-61</code>): every order arms its own
           <code>Sales.ExpireUnpaidOrder</code> deadline at checkout and re-arms it whenever a payment attempt fails, so the
           scheduled row is the primary path for an unpaid order and the sweep covers what a scheduled row cannot, a
@@ -515,7 +525,7 @@
           internally visible <code>ReconcileOnceAsync</code> so one cycle is testable without the timer. It is the base class&#39;s
           only subclass outside MMCA.Common. Inside the framework the same base carries four of Common&#39;s own periodic
           jobs (outbox cleanup, internal-command cleanup, refresh-session cleanup and the permission-grant refresh,
-          <code>ADR-054:193-197</code>), plus the test double in the base class&#39;s own unit tests
+          <code>ADR-054:202-206</code>), plus the test double in the base class&#39;s own unit tests
           (<code>PeriodicBackgroundServiceTests.cs:104</code>).</p>
           <p>One cycle (<code>ReconcileOnceAsync</code>, <code>PaymentReconciliationService.cs:120</code>) computes a single cutoff (<code>:123</code>)
           and runs two passes against it, expiry first (<code>:129</code>) and Stripe reconciliation second (<code>:130</code>). The
@@ -527,7 +537,7 @@
           the cutoff (<code>:199-201</code>) and makes no provider call, because there is nothing to call about: a
           <code>PendingPayment</code> order has no session id (remarks <code>:185-189</code>). Checkout has already committed that stock, so
           an order nobody ever pays holds inventory nothing else can release. Each one is driven to <code>Cancelled</code>
-          through the same <code>MarkAsCancelled()</code> guarded transition (<code>ExpireOrderAsync</code> <code>:252</code>, the call at <code>:274</code>),
+          through the same <code>MarkAsCancelled</code> guarded transition, with <code>OrderCancellationReason.PaymentExpired</code> (<code>ExpireOrderAsync</code> <code>:252</code>, the call at <code>:274</code>),
           which is the point: <code>Cancelled</code> is the one terminal state the <code>OrderCancelled</code> compensation already listens
           on, so the release runs exactly once per order however many times a sweep, a webhook or an outbox
           redelivery revisit it. <code>PaymentFailed</code> is deliberately <strong>not</strong> the release state, because it is explicitly
@@ -538,7 +548,7 @@
           changed before the cutoff (<code>:152-157</code>).</p>
           <p><strong>Both passes bound the work in SQL, not in memory.</strong> One shared helper, <code>QueryStrandedOrderIdsAsync</code>
           (<code>:230-246</code>), takes each pass&#39;s predicate, orders oldest-first, takes the batch size and projects to ids,
-          all server-side (<code>:240-243</code>), over a dedicated filtered index <code>IX_Order_Status_Modified</code> on <code>(Status, LastModifiedOn, CreatedOn)</code> (<code>OrderConfiguration.cs:74-76</code>). The comment above the reconciliation predicate
+          all server-side (<code>:240-243</code>), over a dedicated filtered index <code>IX_Order_Status_Modified</code> on <code>(Status, LastModifiedOn, CreatedOn)</code> (<code>OrderConfiguration.cs:149-151</code>). The comment above the reconciliation predicate
           explains the rule (<code>:146-151</code>): materializing every stuck order and taking the batch in memory would make
           the batch size a Stripe-call budget rather than a query bound, and the exact failure this sweep exists to
           handle (a prolonged webhook outage) is the one that strands a large backlog.</p>
@@ -552,8 +562,8 @@
           (<code>IsProvenPayment</code>, <code>:380-400</code>); expired to <code>MarkAsPaymentFailed</code>; anything else to nothing at all, left for
           a later cycle. A paid session the proof refuses changes nothing and is logged at <code>Warning</code> with what an
           operator needs to reconcile it by hand (<code>:392-399</code>). Those are the identical <code>Result</code>-returning methods
-          called by the webhook handler (<code>ProcessPaymentWebhookHandler.cs:110,175</code>) and by the client-initiated check
-          (<code>VerifyPaymentHandler.cs:72</code>). The sweep gets no private path into the aggregate, so it cannot reach a
+          called by the webhook handler (<code>ProcessPaymentWebhookHandler.cs:106,169</code>) and by the client-initiated check
+          (<code>VerifyPaymentHandler.cs:71</code>). The sweep gets no private path into the aggregate, so it cannot reach a
           state the webhook could not.</p>
           <p><strong>And it loses races on purpose.</strong> If a webhook transitions the order between the sweep&#39;s load and its save,
           the save throws <code>DbUpdateConcurrencyException</code>, which is logged and skipped, not retried (<code>:330-340</code>, the
@@ -561,13 +571,13 @@
           <p>The whole thing is configuration-gated by <code>PaymentReconciliationSettings</code>
           (<code>PaymentReconciliationSettings.cs:24-53</code>): <code>Enabled</code> defaults true (<code>:30</code>), a 10-minute poll interval
           (<code>:34</code>), a 30-minute stuck age (<code>:48</code>), and a 50-order batch (<code>:52</code>), carried as those exact values in the
-          Sales service&#39;s <code>appsettings.json:105-110</code>, directly below the <code>UnpaidOrderExpiry</code> section that sets the
-          per-order deadline (<code>:101-104</code>). The settings documentation asks for the stuck age to stay above normal
+          Sales service&#39;s <code>appsettings.json:104-109</code>, directly below the <code>UnpaidOrderExpiry</code> section that sets the
+          per-order deadline (<code>:100-103</code>). The settings documentation asks for the stuck age to stay above normal
           webhook latency (<code>PaymentReconciliationSettings.cs:37-39</code>), so the sweep never races a healthy delivery, and
           to equal <code>UnpaidOrderExpiry:Minutes</code> (<code>:19-21</code>), so the two mechanisms agree on one window. The second is
           enforced, not just asked for: <code>PaymentReconciliationSettingsValidator</code> refuses to start the host when the
           two differ (<code>PaymentReconciliationSettingsValidator.cs:33-37</code>, registered at
-          <code>MMCA.Store.Sales.API/SalesModule.cs:74</code>).</p>
+          <code>MMCA.Store.Sales.API/SalesModule.cs:84-85</code>).</p>
           <p>Both mechanisms are covered by tests that assert the behavior, not the wiring. Thirteen cases cover the saga
           handler in <code>OrderCancelledSagaHandlerTests.cs</code>, including a redelivered event that must not restore stock
           twice (<code>:45</code>), the lookup that has to ignore the soft-delete filter (<code>:123</code>), the missing-inventory case that
@@ -587,30 +597,30 @@
           <ul>
           <li><strong>Adoption is one module, and the record says so.</strong> This pattern lives in MMCA.Store&#39;s Sales module only:
           the two saga handlers and the one reconciliation sweep above. MMCA.ADC and MMCA.Helpdesk have no
-          compensating saga handler and no reconciliation sweep (<code>ADR-054:201-202</code>); the nearest things in ADC are
+          compensating saga handler and no reconciliation sweep (<code>ADR-054:210-211</code>); the nearest things in ADC are
           two compensating steps, the session-asset and avatar upload handlers that each schedule the delete of an
           orphaned blob, which ADR-054 points to ADR-123 and ADR-045 for rather than counting as a saga
-          (<code>ADR-054:202-216</code>). The record exists
+          (<code>ADR-054:211-225</code>). The record exists
           because the mechanism is the framework&#39;s stated answer to cross-boundary consistency, not because it is
           broadly adopted. Read this article as one worked implementation, not a fleet-wide convention.</li>
           <li><strong>A returned failure is abandoned, not retried.</strong> An invariant rejection, a refused marker or a failed
           increment rolls the restoration back, logs a <code>Warning</code> and returns; the handler discards that <code>Result</code>, so
           the outbox row is marked processed and no redelivery or sweep revisits the order
-          (<code>OrderCancelledSagaHandler.cs:55,109-115,130-135,148-155</code>, <code>ADR-054:266-277</code>). The stock stays held
+          (<code>OrderCancelledSagaHandler.cs:55,109-115,130-135,148-155</code>, <code>ADR-054:275-286</code>). The stock stays held
           against a cancelled order until someone acts on the log line. If that is not the outcome you want for a
           given failure, it has to throw.</li>
           <li><strong>There is no orchestrator, and that is a written deferral rather than a silence.</strong> Choreography is
           correct for this workflow because <code>Order.Status</code> plus <code>Order.InventoryRestored</code> already <em>are</em> the saga
           state, and <strong>ADR-086</strong> records what would replace it when that stops being true: a MassTransit v8 saga
           state machine, durable per-instance correlation state in the owning service&#39;s own database, and
-          per-instance deadlines instead of a fixed-interval sweep (<code>ADR-086:70-100</code>). The technology is already
-          pinned, because MassTransit is held at v8 (v9 requires a commercial license, <code>:102-113</code>). The trigger is
+          per-instance deadlines instead of a fixed-interval sweep (<code>ADR-086:76-106</code>). The technology is already
+          pinned, because MassTransit is held at v8 (v9 requires a commercial license, <code>:108-122</code>). The trigger is
           specific: a workflow with three or more steps across two or more services, state that does not fit one
-          aggregate, and at least one per-instance deadline (<code>:115-120</code>). Its own Revision records that one of
+          aggregate, and at least one per-instance deadline (<code>:124-129</code>). Its own Revision records that one of
           those three properties is already satisfied without a coordinator: the per-instance unpaid-order deadline
-          exists as a scheduled internal-command row rather than as state-machine state (<code>:8-10</code>, <code>:165-202</code>). The
+          exists as a scheduled internal-command row rather than as state-machine state (<code>:8-10</code>, <code>:174-210</code>). The
           deferral stands, it ships no coordinator, and even after one exists the sweep stays underneath it for the
-          external system that never replies (<code>:95-100</code>, <code>:160-163</code>).</li>
+          external system that never replies (<code>:101-106</code>, <code>:169-172</code>).</li>
           <li><strong>Inconsistency is bounded, not eliminated.</strong> Between the cancellation commit and the compensation
           commit, stock is held against a cancelled order. An unpaid order loses its stock at its own scheduled
           deadline; when that row is missing, the bound is the sweep&#39;s stuck age plus one poll interval instead, 30
@@ -626,15 +636,15 @@
           marker commit in one transaction, so withholding the marker would re-apply every <strong>matched</strong> increase on
           the next redelivery, and because the lookup already ignores the soft-delete filter, an unmatched variant
           means the row never existed at all. The warning is the record, not a repair, and ADR-054&#39;s own trade-off
-          bullet states it the same way (<code>ADR-054:254-265</code>).</li>
+          bullet states it the same way (<code>ADR-054:263-274</code>).</li>
           <li><strong>Redelivery re-runs every handler of the event, not the failed one.</strong> The dispatcher iterates handlers
           sequentially with no per-handler isolation (<code>DomainEventDispatcher.cs:76-85</code>), so one throwing handler also
           skips the handlers after it, and a redelivery re-runs the ones that already succeeded. The mark-processed
-          step covers the save&#39;s whole local batch (<code>DomainEventSaveChangesInterceptor.cs:369-394</code>), so what comes
+          step covers the save&#39;s whole local batch (<code>DomainEventSaveChangesInterceptor.cs:371-401</code>), so what comes
           back is every event that save raised, not just the failed one. Every handler on a shared event must be
           idempotent or must keep its failure to itself.</li>
           <li><strong>The sweep is not replica-leased.</strong> The outbox processor claims rows with a lease before working them
-          (ADR-003); the sweep takes no such claim, so at the configured <code>maxReplicas: 2</code> (<code>main.bicep:1956</code>) two
+          (ADR-003); the sweep takes no such claim, so at the configured <code>maxReplicas: 2</code> (<code>main.bicep:1961</code>) two
           replicas can pick the same stuck order and each spend a Stripe status call. Correctness holds through the
           concurrency token; the duplicated external call does not deduplicate.</li>
           <li><strong>The webhook ingress trades visibility for endpoint survival.</strong> A post-acceptance failure returns 200,
@@ -642,7 +652,7 @@
           (<code>PaymentsController.cs:115</code>) or through the sweep above. The endpoint is also anonymous,
           internet-reachable and exempt from both gateway rate limiters, with signature verification as its only
           authentication, so a hostile caller can generate <code>Critical</code> log volume one rejected request at a time
-          (<code>ADR-084:262-274</code>).</li>
+          (<code>ADR-084:265-277</code>).</li>
           <li><strong>Every compensating action needs its own marker.</strong> There is no generic mechanism here. A second
           compensating action means a second persisted marker or a naturally idempotent operation, decided by the
           author of that handler.</li>

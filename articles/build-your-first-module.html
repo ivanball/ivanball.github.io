@@ -95,7 +95,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 53 articles</summary>
+        <summary>All 54 articles</summary>
         <nav class="doc-nav" aria-label="The MMCA.Common series">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -151,7 +151,8 @@
         <li><a href="governed-llm-boundary.html">50 · The governed LLM boundary</a></li>
         <li><a href="durable-internal-commands.html">51 · Four ways to do work later</a></li>
         <li><a href="identity-completions.html">52 · Finishing identity</a></li>
-        <li><a href="series-index.html">53 · The series index</a></li>
+        <li><a href="cloud-neutral-vendor-adapters.html">53 · One framework, three clouds</a></li>
+        <li><a href="series-index.html">54 · The series index</a></li>
           </ol>
         </nav>
       </details>
@@ -173,7 +174,7 @@
           that declares its own dependencies so the host can assemble everything in the right order.</p>
           <p>The framework ships a <code>dotnet new</code> pack, so you type none of that plumbing (ADR-065). Hand-rolling it
           costs a day before you write a line of business logic, and ADR-065 measures that starting cost against
-          the framework&#39;s reference app: 12 projects, 139 files, and 12,157 lines of plumbing, an 827-line
+          the framework&#39;s reference app: 12 projects, 148 files, and 12,597 lines of plumbing, an 827-line
           <code>.editorconfig</code> and the 99-line <code>Directory.Packages.props</code> that carries every package pin (57 of them
           in the seed today) among them, several of those lines load-bearing in ways nothing tells you about
           until much later.</p>
@@ -192,7 +193,10 @@
           </ul>
           <p>No credentials and no private feed: the packages are on nuget.org.</p>
           <p>The example types below are <strong>representative</strong> of the module shape, not copied verbatim from a specific
-          file. They follow the documented base classes and conventions exactly.</p>
+          file. They use the documented base classes and markers, with two simplifications kept for
+          readability: Step 1 checks its invariants inline, where the framework&#39;s modules compose static
+          invariant classes with <code>Result.Combine</code>, and Step 2 names its event after the action, where the
+          framework convention is one <code>{Aggregate}Changed</code> event per aggregate carrying the entity state.</p>
           <h2 id="step-0-scaffold-the-solution">Step 0: scaffold the solution</h2>
           <pre class="doc-pre" tabindex="0" data-lang="PowerShell"><code class="language-powershell hljs">dotnet new install MMCA.Templates
 dotnet new mmca<span class="hljs-literal">-app</span> <span class="hljs-literal">-n</span> Contoso.Support <span class="hljs-literal">--module</span> Orders <span class="hljs-literal">--aggregate</span> Order
@@ -220,10 +224,12 @@ dotnet test  <span class="hljs-literal">--solution</span> Contoso.Support.slnx  
           the same story one level down, on the identifier-alias file whose two aliases re-sort when <code>--child</code>
           renames them. <code>IDE0021</code> is the shape flags rather than the renames: the aggregate&#39;s private constructor
           assigns one property per optional axis, so <code>--no-status --no-description --no-owner</code> together leave it
-          with a single statement, which the baseline then wants as an expression body. It is one-time, and the
-          generated README carries the exact commands (one <code>dotnet format analyzers</code> run restores the two
-          ordering rules; <code>IDE0021</code> is not fixable that way, so you fold the constructor by hand and delete the
-          line).</p>
+          with a single statement, which the baseline then wants as an expression body. The generated README
+          carries the exact commands (one <code>dotnet format analyzers</code> run restores the two ordering rules;
+          <code>IDE0021</code> is not fixable that way, so you fold the constructor by hand and delete the line). Every
+          <code>mmca-command</code> and <code>mmca-query</code> slice you scaffold later arrives with the same ordering skew, so either
+          re-run that format command after each scaffold or keep the delta until you stop scaffolding, then
+          delete it.</p>
           <p>Your integration-event wire contract is not on that list: it arrives already frozen. The generated
           <code>IntegrationEventContractTests</code> holds your own event, under the names you scaffolded with, and passes
           on the first run. When you add or reshape an event on purpose, you version it and update
@@ -310,32 +316,43 @@ dotnet test  <span class="hljs-literal">--solution</span> Contoso.Support.slnx  
           <p>A write is a <em>use case</em>: a small command object handed to a handler that does exactly one thing. The
           handler implements <code>ICommandHandler&lt;TCommand, TResult&gt;</code>, which is a single method,
           <code>Task&lt;TResult&gt; HandleAsync(TCommand, CancellationToken)</code>, returning <code>Result</code> or <code>Result&lt;T&gt;</code>.</p>
-          <p>Keep the handler thin. It loads the aggregate, calls a business method, and saves. Everything
-          cross-cutting (logging, caching, transactions) is added by the pipeline, not by the handler.</p>
+          <p>Keep the handler thin. It creates or loads the aggregate, calls a business method, stages the change
+          in a repository it gets from the unit of work, and saves. Everything cross-cutting (logging, caching,
+          transactions) is added by the pipeline, not by the handler.</p>
           <pre class="doc-pre" tabindex="0" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-comment">// Application layer (representative)</span>
 <span class="hljs-comment">// The command is a plain record; the result type is declared on the handler below.</span>
 <span class="hljs-function"><span class="hljs-keyword">public</span> <span class="hljs-keyword">sealed</span> <span class="hljs-keyword">record</span> <span class="hljs-title">CreateCouponCommand</span>(<span class="hljs-params"><span class="hljs-built_in">string</span> Code, <span class="hljs-built_in">decimal</span> PercentOff</span>)
     : ITransactional</span>;   <span class="hljs-comment">// ITransactional opts into a DB transaction</span>
 
-<span class="hljs-function"><span class="hljs-keyword">public</span> <span class="hljs-keyword">sealed</span> <span class="hljs-keyword">class</span> <span class="hljs-title">CreateCouponHandler</span>(<span class="hljs-params">ICouponRepository repository</span>)
+<span class="hljs-function"><span class="hljs-keyword">public</span> <span class="hljs-keyword">sealed</span> <span class="hljs-keyword">class</span> <span class="hljs-title">CreateCouponHandler</span>(<span class="hljs-params">IUnitOfWork unitOfWork</span>)
     : ICommandHandler&lt;CreateCouponCommand, Result&lt;CouponIdentifierType&gt;&gt;</span>
 {
     <span class="hljs-keyword">public</span> <span class="hljs-keyword">async</span> Task&lt;Result&lt;CouponIdentifierType&gt;&gt; HandleAsync(
         CreateCouponCommand command, CancellationToken cancellationToken)
     {
         <span class="hljs-keyword">var</span> couponResult = Coupon.Create(command.Code, command.PercentOff);
-        <span class="hljs-keyword">if</span> (couponResult.IsFailure)
+        <span class="hljs-keyword">if</span> (!couponResult.TryGetValue(<span class="hljs-keyword">out</span> <span class="hljs-keyword">var</span> coupon))
         {
             <span class="hljs-keyword">return</span> Result.Failure&lt;CouponIdentifierType&gt;(couponResult.Errors);
         }
 
-        <span class="hljs-keyword">await</span> repository.AddAsync(couponResult.Value, cancellationToken);
-        <span class="hljs-keyword">return</span> Result.Success(couponResult.Value.Id);
+        <span class="hljs-keyword">var</span> repository = unitOfWork.GetRepository&lt;Coupon, CouponIdentifierType&gt;();
+        <span class="hljs-keyword">await</span> repository.AddAsync(coupon, cancellationToken);      <span class="hljs-comment">// stages; never flushes</span>
+        <span class="hljs-keyword">await</span> unitOfWork.SaveChangesAsync(cancellationToken);      <span class="hljs-comment">// writes, and fills the DB-generated Id</span>
+        <span class="hljs-keyword">return</span> Result.Success(coupon.Id);
     }
 }</code></pre>
+          <p><code>TryGetValue</code> is the framework&#39;s preferred read of a <code>Result&lt;T&gt;</code>: the compiler tracks the check, so
+          <code>coupon</code> needs no <code>!</code>, where reading <code>Value</code> (a <code>T?</code>) would raise a nullable warning, which
+          <code>TreatWarningsAsErrors</code> turns into a build break. The repository only stages changes; persisting is the
+          unit of work&#39;s job, which is why the framework&#39;s own create path is the same <code>AddAsync</code> then
+          <code>SaveChangesAsync</code> pair.</p>
           <p>The marker interface <code>ITransactional</code> is the whole transaction opt-in. It is an empty interface; the
           type <em>is</em> the message. When the command implements it, the <code>TransactionalCommandDecorator</code> wraps the
-          handler in <code>IUnitOfWork.ExecuteInTransactionAsync</code> and rolls back on an exception. A handler that does
+          handler in <code>IUnitOfWork.ExecuteInTransactionAsync</code> and rolls back on an exception. The commit does not
+          save the handler&#39;s work, so the handler still calls <code>SaveChangesAsync</code> before it returns: a change
+          still tracked at commit throws an <code>InvalidOperationException</code> and rolls the unit back rather than being
+          silently discarded. A handler that does
           not need a transaction (a single <code>SaveChanges</code> whose atomicity the outbox already guarantees) simply
           does not implement the marker. There is a sibling marker, <code>ICacheInvalidating</code>, that exposes a
           <code>CachePrefix</code> to evict on success the same way.</p>
@@ -448,8 +465,9 @@ Queries:  FeatureGate -&gt; Authorization -&gt; Logging -&gt; Caching -&gt; Vali
           implement <code>IRequiresPermission</code> are checked against the permission registry for the current user&#39;s
           roles (and those that implement <code>IRequiresMfa</code> against the <code>mfa</code> claim), and a denial short-circuits
           with a <code>Forbidden</code> error, so a denied query never reads from or populates the cache.</li>
-          <li><strong>Logging</strong> records the full pipeline duration via <code>ICorrelationContext</code>, for every handler, with no
-          per-handler code.</li>
+          <li><strong>Logging</strong> logs every command and query with its duration and the correlation id it reads from
+          <code>ICorrelationContext</code>, with no per-handler code. It times only what runs inside it (Caching down to
+          the handler), so FeatureGate and Authorization fall outside the recorded duration.</li>
           <li><strong>Caching</strong> runs for queries that implement <code>IQueryCacheable</code> (supplying <code>CacheKey</code> + <code>CacheDuration</code>),
           and invalidates for commands that implement <code>ICacheInvalidating</code> (on success, outside the transaction
           boundary).</li>
@@ -479,20 +497,30 @@ Queries:  FeatureGate -&gt; Authorization -&gt; Logging -&gt; Caching -&gt; Vali
 
 dotnet new mmca<span class="hljs-literal">-query</span> <span class="hljs-literal">-n</span> GetOrderByNumber <span class="hljs-literal">--app</span> Contoso.Support <span class="hljs-literal">--module</span> Orders `
   <span class="hljs-literal">--aggregate</span> Order</code></pre>
-          <p>Handlers are convention-scanned, so there is nothing to register. Two things still need you: add the
-          <code>--domain-method</code> guarded method to your aggregate before the command slice compiles, and keep the
-          query&#39;s <code>CacheKey</code> inside your module&#39;s <code>*CacheKeys.Prefix</code>. The caching decorator matches cacheable
-          reads to invalidating commands <strong>by string prefix</strong>, so a key that drifts out of it goes stale silently.</p>
-          <p>A whole second module, across all five layers plus its test and migrations projects:</p>
-          <pre class="doc-pre" tabindex="0" data-lang="PowerShell"><code class="language-powershell hljs">dotnet new mmca<span class="hljs-literal">-module</span> <span class="hljs-literal">-n</span> Billing <span class="hljs-literal">--app</span> Contoso.Support <span class="hljs-literal">--aggregate</span> Invoice</code></pre>
+          <p>Handlers are convention-scanned, so there is nothing to register. Three things still need you: add the
+          <code>--domain-method</code> guarded method to your aggregate before the command slice compiles, map each slice
+          in your module&#39;s controller (a write injects its handler directly; reads usually come from
+          <code>EntityControllerBase</code>, so a new query needs its own action), and keep the query&#39;s <code>CacheKey</code> inside
+          your module&#39;s <code>*CacheKeys.Prefix</code>. The caching decorator matches cacheable reads to invalidating
+          commands <strong>by string prefix</strong>, so a key that drifts out of it goes stale silently.</p>
+          <p>A whole second module, across all five layers plus its test and migrations projects, is one command
+          from the root of a solution <code>mmca-app</code> generated:</p>
+          <pre class="doc-pre" tabindex="0" data-lang="PowerShell"><code class="language-powershell hljs">pwsh build/<span class="hljs-built_in">add-module</span>.ps1 <span class="hljs-literal">-Name</span> Billing <span class="hljs-literal">-Aggregate</span> Invoice</code></pre>
           <p>Here is the boundary where generated code stops and you start. <code>dotnet new</code> cannot patch files that
-          already exist, so <code>mmca-module</code> <strong>prints seven numbered wire-ups it cannot perform</strong>, and until they
-          are done the module is invisible to the host and to the fitness rules. If your solution came from
-          <code>mmca-app</code>, you do not type any of them: that solution ships its own <code>build/add-module.ps1</code>, and the
-          printed text opens by telling you to run it instead, because it invokes the template and then performs
-          all seven itself, plus one edit the list does not name: it appends the new module&#39;s event to the
-          frozen <code>ExpectedContract</code>, so your next test run stays green. The list is the fallback for a hand-built
-          solution, and the best description of what the script is doing on your behalf:</p>
+          already exist, so the <code>mmca-module</code> template on its own <strong>prints seven numbered wire-ups it cannot
+          perform</strong>, and until they are done the module is invisible to the host and to the fitness rules. The
+          script is why an <code>mmca-app</code> solution types none of them: it invokes the template, then performs all
+          seven itself, plus the first migration and one edit the list does not name: it appends the new
+          module&#39;s event to the frozen <code>ExpectedContract</code>, so your next test run stays green. Run the template
+          first by mistake and its printed text opens by telling you to undo that run (delete
+          <code>Source/Modules/&lt;Module&gt;</code>, <code>Tests/Modules/&lt;Module&gt;</code> and the module&#39;s migrations project) and use the
+          script instead, because the script refuses a name that already exists under <code>Source/Modules</code>. Two
+          things the script leaves to you: the Blazor UI pages (the UI host still shows only the first module)
+          and the new module&#39;s page-level localization resources.</p>
+          <p>On a hand-built solution the template is the path:</p>
+          <pre class="doc-pre" tabindex="0" data-lang="PowerShell"><code class="language-powershell hljs">dotnet new mmca<span class="hljs-literal">-module</span> <span class="hljs-literal">-n</span> Billing <span class="hljs-literal">--app</span> Contoso.Support <span class="hljs-literal">--aggregate</span> Invoice</code></pre>
+          <p>Its printed list is the fallback for that solution, and the best description of what the script is
+          doing on your behalf:</p>
           <ol>
           <li><strong>Solution.</strong> Add the eight new projects (five layer projects, both test projects, and the
           migrations project) to the <code>.slnx</code>.</li>

@@ -95,7 +95,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 53 articles</summary>
+        <summary>All 54 articles</summary>
         <nav class="doc-nav" aria-label="The MMCA.Common series">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -151,7 +151,8 @@
         <li><a href="governed-llm-boundary.html">50 · The governed LLM boundary</a></li>
         <li><a href="durable-internal-commands.html">51 · Four ways to do work later</a></li>
         <li><a href="identity-completions.html">52 · Finishing identity</a></li>
-        <li><a href="series-index.html">53 · The series index</a></li>
+        <li><a href="cloud-neutral-vendor-adapters.html">53 · One framework, three clouds</a></li>
+        <li><a href="series-index.html">54 · The series index</a></li>
           </ol>
         </nav>
       </details>
@@ -234,7 +235,7 @@
           <p>The framework ships the wiring for that migration, not only the rule (ADR-090, accepted 2026-08-21). An
           upcaster is one typed class, <code>IEventUpcaster&lt;TSource, TTarget&gt;</code>, registered by the module that owns the
           contract:</p>
-          <pre class="doc-pre" tabindex="0" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-comment">// Module DI: one line per retired contract.</span>
+          <pre class="doc-pre" tabindex="0" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-comment">// Module DI: one line per retired contract (hypothetical V2 shown).</span>
 services.AddEventUpcaster&lt;ProductVariantChanged, ProductVariantChangedV2, ProductVariantChangedUpcaster&gt;();
 
 <span class="hljs-comment">// Broker hosts also bind the retired queue, inside AddBrokerMessaging&#x27;s consumer callback:</span>
@@ -309,7 +310,7 @@ x.RegisterUpcastedIntegrationEventConsumer&lt;ProductVariantChanged&gt;(); <span
           through a rename or a namespace or assembly move, and only a type with no declared identity that is
           deleted early leaves its rows unresolvable. The shared convention base also makes that identity
           mandatory: a fact on <code>EventConventionTestsBase</code> fails the build for any integration event without
-          an <code>[EventName]</code>, in every tree that runs the current rule set.</li>
+          an <code>[EventName]</code>, in Common and in every consumer tree.</li>
           <li><strong>The convention test covers a real event in MMCA.Common, but the framework&#39;s own coverage is one
           event wide.</strong> Common ships exactly one concrete integration event, the sealed record
           <code>OutputCacheEvictionRequested</code>, and <code>CommonArchitectureMap</code> registers the Domain assembly it lives

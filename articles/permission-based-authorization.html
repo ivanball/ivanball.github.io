@@ -95,7 +95,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 53 articles</summary>
+        <summary>All 54 articles</summary>
         <nav class="doc-nav" aria-label="The MMCA.Common series">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -151,7 +151,8 @@
         <li><a href="governed-llm-boundary.html">50 · The governed LLM boundary</a></li>
         <li><a href="durable-internal-commands.html">51 · Four ways to do work later</a></li>
         <li><a href="identity-completions.html">52 · Finishing identity</a></li>
-        <li><a href="series-index.html">53 · The series index</a></li>
+        <li><a href="cloud-neutral-vendor-adapters.html">53 · One framework, three clouds</a></li>
+        <li><a href="series-index.html">54 · The series index</a></li>
           </ol>
         </nav>
       </details>
@@ -188,7 +189,7 @@
           <p>What you want instead is for an endpoint to declare the <strong>capability</strong> it requires (a fine-grained,
           named permission like <code>conference:sessions:manage</code>) and for the question of <em>which roles confer that
           capability</em> to live in exactly one place. Then adding a content editor with a strict subset of the
-          organizer&#39;s powers is a single grant edit, not an endpoint hunt. The route keeps saying what it does;
+          organizer&#39;s powers is a single grant edit, not an endpoint hunt, at every layer that checks capabilities. The route keeps saying what it does;
           only the grant table changes.</p>
           <p>That is RBAC with one level of indirection: roles still exist, but endpoints depend on permissions, and
           a registry maps the two. Permissions are the one authorization model MMCA.Common ships: an endpoint states
@@ -205,8 +206,11 @@
           compared case-insensitively (<code>OrdinalIgnoreCase</code>); permission values are compared ordinally. The same
           class is also the host&#39;s <code>IPermissionCatalog</code>, exposing the closed set of roles and permissions the code
           compiled in, so an administration screen enumerates the compiled map itself rather than a hand-kept second
-          list. It is the one place that knows the role-to-capability mapping, so no endpoint&#39;s authorization
-          attribute names a role. (Endpoint code may still read a role for a business rule rather than a gate: ADC&#39;s
+          list. It is the one place that knows the role-to-capability mapping, so no API endpoint&#39;s authorization
+          attribute names a role: no controller in either app carries <code>[Authorize(Roles = ...)]</code>. The routable
+          Blazor pages are a separate layer that the registry does not govern: ADC&#39;s 37 admin pages carry
+          <code>[Authorize(Roles = RoleNames.Organizer)]</code> and Store&#39;s admin pages <code>[Authorize(Roles = RoleNames.Admin)]</code>.
+          (Endpoint code may still read a role for a business rule rather than a gate: ADC&#39;s
           live-poll, question and bookmark controllers pass an organizer flag from <code>IsInRole(RoleNames.Organizer)</code>
           to their handlers for the organizer bypass.)</p>
           <p><strong>Modules declare grants additively.</strong> <code>AddPermissions(...)</code> accumulates into a shared
@@ -224,8 +228,9 @@ services.AddPermissions(ConferencePermissionGrants.Apply);
     permissions.Grant(RoleNames.Organizer, [.. ConferencePermissions.All]);
 
     <span class="hljs-comment">// Content editors get ONLY the catalog-curation subset: no event structure, rooms,</span>
-    <span class="hljs-comment">// questions, or session selection. The distinction role checks cannot express lives</span>
-    <span class="hljs-comment">// in this one grant, not scattered across per-endpoint [Authorize(Roles = ...)] lists.</span>
+    <span class="hljs-comment">// questions, session selection, or speaker-account linking. The distinction role checks</span>
+    <span class="hljs-comment">// cannot express lives in this one grant, not scattered across per-endpoint</span>
+    <span class="hljs-comment">// [Authorize(Roles = ...)] lists.</span>
     permissions.Grant(RoleNames.ContentEditor, [.. ConferencePermissions.ContentManagement]);
 }</code></pre>
           <p><strong>Endpoints require a capability, not a role.</strong> <code>[HasPermission(&quot;conference:sessions:manage&quot;)]</code> (a
@@ -254,8 +259,10 @@ services.AddPermissions(ConferencePermissionGrants.Apply);
           <code>TokenService</code> writes that claim at sign-in: every access token carries one <code>permission</code> claim for each
           permission the minting host&#39;s registry grants the account&#39;s role. Both apps&#39; Identity hosts apply every
           module&#39;s grant map before minting (<code>AddTokenPermissionGrants()</code>), so a service that does not own a
-          module&#39;s grant map, the CQRS gate in that service, and the Blazor navigation all read the capability from
-          the token rather than from a registry they do not hold.</p>
+          module&#39;s grant map and the CQRS gate in that service both read the capability from the token rather than
+          from a registry they do not hold. The Blazor navigation reads it for one entry: the framework&#39;s
+          push-notifications link is gated on <code>notifications:manage</code>, while the apps&#39; own admin entries gate on a
+          role (<code>Organizer</code> in ADC, <code>Admin</code> in Store).</p>
           <p><strong>The same registry gates use cases, not just routes.</strong> A command or query that implements
           <code>IRequiresPermission</code> is checked by <code>AuthorizationGate.Evaluate</code> inside the CQRS decorator pipeline,
           against that same registry and that same claim read, returning a <code>Forbidden</code> error rather than throwing.
@@ -302,6 +309,11 @@ services.AddPermissions(ConferencePermissionGrants.Apply);
           <li><strong>Opt-in per endpoint.</strong> A route that carries a plain <code>[Authorize]</code> states no capability and gets none
           of the benefit. This is the same audit-the-inventory caveat that soft-delete erasure and the
           <code>[Idempotent]</code> attribute carry: the mechanism is only as complete as your coverage of it.</li>
+          <li><strong>It governs the API, not the pages.</strong> In ADC the content-editor grant holds at the API: a
+          <code>ContentEditor</code> may call the session, speaker, category, sponsor, partner and activity endpoints. The
+          matching admin pages and their navigation entries are Organizer-only by role, and no page names
+          <code>ContentEditor</code>, so in the shipped UI a content editor has no admin screen for that work. Opening one
+          is a page-attribute and nav-entry edit, which is exactly the sweep the API layer avoids.</li>
           <li><strong>Compiled grants are fixed at startup.</strong> The registry is built once on first resolve, so an
           <code>AddPermissions(...)</code> call after it has materialized is not seen, which is the price of the immutable
           frozen map. Grants an operator can edit without a deploy are a separate layer on top of this one, and
@@ -330,8 +342,8 @@ services.AddPermissions(ConferencePermissionGrants.Apply);
           ship and confers nothing until a module actually grants a capability.</li>
           </ol>
           <p>The takeaway: <strong>an endpoint should declare the capability it needs, and the mapping from roles to
-          capabilities should live in exactly one editable place. Then the role you did not foresee is a one-line
-          grant, not a sweep across every <code>[Authorize]</code> you ever wrote.</strong></p>
+          capabilities should live in exactly one editable place. Then, wherever the gate checks a capability, the
+          role you did not foresee is a one-line grant, not a sweep across every <code>[Authorize]</code> you ever wrote.</strong></p>
           <hr>
           <p><strong>What we covered:</strong> why role-name checks couple every endpoint to the org chart and cannot express a
           narrow role like a content editor, how MMCA.Common&#39;s permission layer (an <code>IPermissionRegistry</code> of

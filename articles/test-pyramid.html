@@ -95,7 +95,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 53 articles</summary>
+        <summary>All 54 articles</summary>
         <nav class="doc-nav" aria-label="The MMCA.Common series">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -151,7 +151,8 @@
         <li><a href="governed-llm-boundary.html">50 · The governed LLM boundary</a></li>
         <li><a href="durable-internal-commands.html">51 · Four ways to do work later</a></li>
         <li><a href="identity-completions.html">52 · Finishing identity</a></li>
-        <li><a href="series-index.html">53 · The series index</a></li>
+        <li><a href="cloud-neutral-vendor-adapters.html">53 · One framework, three clouds</a></li>
+        <li><a href="series-index.html">54 · The series index</a></li>
           </ol>
         </nav>
       </details>
@@ -171,10 +172,10 @@
           takes twenty minutes, fails intermittently for reasons nobody can reproduce, and developers stop running
           it locally because the inner loop is too painful. The tests that were supposed to give you confidence
           instead give you a reason to avoid them.</p>
-          <p>MMCA.Common deliberately builds the right shape. <strong>About 7,100 <code>[Fact]</code>/<code>[Theory]</code> attributes, more than
+          <p>MMCA.Common deliberately builds the right shape. <strong>About 7,600 <code>[Fact]</code>/<code>[Theory]</code> attributes, more than
           half of them in the Core tests,</strong> form a correct, non-inverted pyramid, with a wide base that runs in
           milliseconds and needs no database and no Docker. Expanded into theory data rows, the CI unit run
-          executes 8,386 tests (the <code>build-and-test</code> job of CI run 39625216950). That suite, and the architecture
+          executes 9,122 tests (the <code>build-and-test</code> job of CI run 40870473851). That suite, and the architecture
           behind it, is the single most-cited evidence in the framework&#39;s testability score: category 14 stands
           at <strong>maturity 4 / implementation 9</strong>, carried by the enforced coverage floor and the size of the suite
           behind it.</p>
@@ -226,7 +227,7 @@
           fastest tier of all, pure reflection, and they catch a class of regression that no functional test
           would.</p>
           <h2 id="shipped-test-packages-consumers-do-not-re-invent-the-harness">Shipped test packages: consumers do not re-invent the harness</h2>
-          <p>Six of the framework&#39;s twenty-two published NuGet packages are test <em>infrastructure</em>, not test code, and this is
+          <p>Seven of the framework&#39;s twenty-six published NuGet packages are test <em>infrastructure</em>, not test code, and this is
           how the pyramid stays consistent across three codebases instead of being rebuilt three times:</p>
           <ul>
           <li><code>MMCA.Common.Testing</code>, the integration base: <code>IntegrationTestBase&lt;TFixture&gt;</code> supplies a configured
@@ -250,6 +251,9 @@
           data-source assertions.</li>
           <li><code>MMCA.Common.Testing.Architecture</code>, the fitness-rule library: the architecture rules defined once and
           consumed by each repo&#39;s thin test suite.</li>
+          <li><code>MMCA.Common.Testing.Azure</code>, the Service Bus broker-parity base: <code>ServiceBusEmulatorFixtureBase</code> starts
+          one warm, image-pinned Azure Service Bus emulator per test collection and owns the one MassTransit bus
+          every test publishes through, with both startup phases wall-clock bounded so a hang names its phase.</li>
           <li><code>MMCA.Common.AI.Testing</code>, the AI test harness: <code>ReplayChatClient</code>, <code>GoldenReplayTestsBase</code> and
           <code>PromptContractPinTestsBase</code>, keyed on a <code>PromptContract</code>&#39;s normalized SHA-256 hash.</li>
           </ul>
@@ -436,18 +440,18 @@
           (<code>-- --filter-class &quot;*FooTests*&quot;</code> or <code>-- --filter-method &quot;*Pattern*&quot;</code>). One sharp edge worth knowing: every test
           project must contain at least one test or MTP exits with code 8. The unit run also floors at
           <code>--minimum-expected-tests 2000</code>, so a discovery or filter regression that leaves only a handful of
-          tests discovered fails the job instead of passing green. Against the 8,386 tests that run executes
-          (CI run 39625216950), the floor is coarse: a regression that drops a few thousand tests still clears it.</p>
+          tests discovered fails the job instead of passing green. Against the 9,122 tests that run executes
+          (CI run 40870473851), the floor is coarse: a regression that drops a few thousand tests still clears it.</p>
           <p>And the suite is a real gate, not a suggestion. CI collects coverage via <code>dotnet-coverage</code> (which wraps
           the MTP run and returns its exit code, so a test failure still fails the build) and <strong>enforces a
           coverage floor</strong>: the unit tier must stay at or above <strong>68.3%</strong> line coverage as a regression backstop,
           gated on the unit tier alone rather than a gallery-diluted merged report. The unit tier measures
-          <strong>88.1%</strong> (the <code>coverage</code> job of CI run 39625216950), so the floor sits about 20 points below the
+          <strong>87.0%</strong> (the <code>coverage</code> job of CI run 40870473851), so the floor sits about 19 points below the
           suite it guards.</p>
           <h2 id="trade-offs-honestly">Trade-offs, honestly</h2>
           <p>The shape is right, but the scorecard names real gaps and one is squarely in the testing story.</p>
           <ul>
-          <li><strong>The UI tier&#39;s visual check is markup-deep, not pixel-deep.</strong> The framework ships 31 reusable
+          <li><strong>The UI tier&#39;s visual check is markup-deep, not pixel-deep.</strong> The framework ships 32 reusable
           Blazor components in <code>MMCA.Common.UI</code>, some with real branching logic (<code>MobileCardList</code>,
           <code>MobileInfiniteScrollList</code>), and the pyramid carries a fast base layer <em>for the UI</em> under them: the
           <code>MMCA.Common.Testing.UI</code> bUnit base backs their component tests, a real-browser render-smoke gate
@@ -463,12 +467,15 @@
           deliberately latent, with no production entity on them. The trade buys a fast, Docker-free inner loop
           at the cost of needing the consumer apps and CI to cover the SQL-Server-specific paths.</li>
           <li><strong>The honest limits are mutation testing and the container tiers, not coverage.</strong> The unit tier holds a <strong>68.3%</strong> line-coverage
-          floor, enforced in CI, against a measured 88.1%. What holds category 14 below the top band starts with mutation testing: there is none
+          floor, enforced in CI, against a measured 87.0%. What holds category 14 below the top band starts with mutation testing: there is none
           on the Core tier, so a green suite proves the lines run, not that every assertion would catch a
-          mutant. Three structural gaps sit beside it: the integration tier (Redis, PostgreSQL, package
-          consumption, Bicep) runs on pull requests but is not a merge gate, the AppHost tier blocks the run
-          (a red fails it) without being a required merge check, and messaging never meets a real broker in the framework&#39;s own CI. Those are real limits,
-          stated plainly.</li>
+          mutant. Three structural gaps sit beside it: the integration tier (Redis, PostgreSQL, SQL Server, the
+          AWS LocalStack and Google Cloud emulator jobs, package consumption, Bicep) runs on pull requests but is
+          not a merge gate, the AppHost tier blocks the run (a red fails it) without being a required merge
+          check, and real-broker coverage is partial: only the built-in PostgreSql transport (against a real
+          PostgreSQL) and the SQS/SNS transport (against LocalStack) meet a live endpoint, both inside those
+          non-required jobs, while RabbitMQ and Azure Service Bus never meet one in the framework&#39;s own CI. Those
+          are real limits, stated plainly.</li>
           </ul>
           <p>None of these argue against the pyramid. They are the cost of keeping the base fast and honest about
           what each tier actually proves.</p>
@@ -494,7 +501,7 @@
           <p><strong>What we covered:</strong> why the pyramid&#39;s shape matters more than its count, the fast no-Docker base
           (pure unit tests plus <code>FakeTimeProvider</code>), the real-SQLite middle tier with two databases in
           <code>MultiSourceSqliteIntegrationTests</code>, the thin bUnit/Playwright cap and the orthogonal fitness-test tier,
-          the six shipped test packages that let consumers reuse the harness, the seven runtime conformance bases
+          the seven shipped test packages that let consumers reuse the harness, the seven runtime conformance bases
           that prove a really-booted host wired the framework&#39;s contracts (ADR-058) and their partial adoption, the
           AppHost tier that compiles a claim about the composition itself (ADR-117), WCAG 2.1 AA shipped as a named
           axe target with one recorded exception (ADR-063), the xUnit v3 / MTP runner and the CI coverage floor, and

@@ -95,7 +95,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 53 articles</summary>
+        <summary>All 54 articles</summary>
         <nav class="doc-nav" aria-label="The MMCA.Common series">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -151,7 +151,8 @@
         <li><a href="governed-llm-boundary.html">50 · The governed LLM boundary</a></li>
         <li><a href="durable-internal-commands.html">51 · Four ways to do work later</a></li>
         <li><a href="identity-completions.html">52 · Finishing identity</a></li>
-        <li><a href="series-index.html">53 · The series index</a></li>
+        <li><a href="cloud-neutral-vendor-adapters.html">53 · One framework, three clouds</a></li>
+        <li><a href="series-index.html">54 · The series index</a></li>
           </ol>
         </nav>
       </details>
@@ -223,10 +224,12 @@ EncryptedStringConverter.MarkForReEncryption(dbContext.Entry(entity));
           <p>Four properties of that converter are worth naming precisely, because they are the whole design.</p>
           <p><strong>It is authenticated, not merely confidential.</strong> Both directions use <code>AesGcm</code>, AES-256 in Galois/Counter
           Mode, which binds a 128-bit authentication tag to the ciphertext. Encryption gives you confidentiality;
-          the tag gives you integrity for free. A value that has been tampered with, truncated, or corrupted fails
-          the tag check inside <code>AesGcm.Decrypt</code> and throws rather than silently returning garbage plaintext. The
-          converter also rejects, up front, any stored value too short to even hold a key version, a nonce and a
-          tag, throwing a <code>CryptographicException</code> before it ever calls into the primitive.</p>
+          the tag gives you integrity for free. A value that has been tampered with or corrupted, but still decodes
+          as Base64 and names a registered key version, fails the tag check inside <code>AesGcm.Decrypt</code> and throws
+          rather than silently returning garbage plaintext. The converter also rejects, up front, any stored value
+          too short to even hold a key version, a nonce and a tag, and any value whose version byte has no
+          registered key, throwing a <code>CryptographicException</code> before it ever calls into the primitive (a value that
+          is not Base64 at all fails earlier still, at decoding).</p>
           <p><strong>Every key is exactly 256 bits, and the converter refuses anything else.</strong> There are two constructors.
           The single-key one takes a raw <code>byte[]</code>, null-checks it with <code>ArgumentNullException.ThrowIfNull</code>, and
           throws <code>ArgumentException</code> unless the key is exactly 32 bytes (256 bits); it is sugar for a one-entry
@@ -268,8 +271,11 @@ EncryptedStringConverter.MarkForReEncryption(dbContext.Entry(entity));
           or empty column stays as-is rather than becoming a block of ciphertext for the empty string.</p>
           <p>Where do the keys come from? Not from the framework. The converter takes raw key material as a
           constructor argument, one <code>byte[]</code> or a whole ring, and stops there: no DI registration, no options type,
-          no key-provider abstraction in Infrastructure, and no automatic refresh, since the ring is frozen at
-          construction and adding a version means constructing a new converter. The adopting entity configuration
+          no key provider for this converter, and no automatic refresh, since the ring is frozen at construction and
+          adding a version means constructing a new converter. The framework&#39;s other key material does not reach it
+          either: the JWKS signing-key provider and the Data Protection key ring (which a cloud adapter can protect
+          with a Key Vault or KMS key, see <a href="cloud-neutral-vendor-adapters.html">cloud-neutral vendor adapters</a>) supply
+          none of its keys. The adopting entity configuration
           supplies the keys, and the converter&#39;s own XML documentation is explicit that they belong in Azure Key
           Vault, user-secrets, or an environment variable, and never hardcoded. That lines up with rubric §11&#39;s
           secrets criterion (in a vault or managed identity, never in source or plain config), and it keeps the
@@ -339,8 +345,9 @@ EncryptedStringConverter.MarkForReEncryption(dbContext.Entry(entity));
           is no equality filter, index seek, sort, or join on an encrypted column. Encrypt the columns you read by
           key, not the ones you search by value.</li>
           <li><strong>Key management is still entirely yours; the ring is a mechanism, not a service.</strong> The converter holds
-          whatever key material you hand it, frozen at construction. There is no key-provider abstraction, no Key
-          Vault integration, no automatic refresh, and no envelope encryption over a key-encryption key. Losing a
+          whatever key material you hand it, frozen at construction. There is no key provider for it, no Key
+          Vault integration for its keys (the Azure adapter&#39;s Key Vault step protects the Data Protection key
+          ring, not this ring), no automatic refresh, and no envelope encryption over a key-encryption key. Losing a
           key still makes every row written under that version permanently unrecoverable; the ring makes that
           failure mode more granular, not less likely.</li>
           <li><strong>Rotation is enabled, not automated.</strong> The versioned envelope makes a zero-downtime rotation possible,

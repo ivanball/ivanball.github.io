@@ -207,7 +207,7 @@ ADR-005 closes that too: `OutboxCleanupService` purges processed outbox rows old
 `Outbox:RetentionDays` (default 7, set 0 to disable) across every relational data source. A row whose
 retries are exhausted is never marked processed, so the same service sweeps those dead-lettered rows
 on their own window, `Outbox:DeadLetterRetentionDays`, which falls back to `RetentionDays` when left
-at 0; a payload that never delivered is not retained forever either. Bounded retention without
+at 0 and runs from the row's last failed attempt; a payload that never delivered is not retained forever either. Bounded retention without
 changing delivery semantics. It is worth flagging as a deliberate **behavior change**:
 consumers upgrading the framework start purging processed outbox rows older than seven days unless they
 opt out, which is the kind of thing that belongs in a CHANGELOG and an ADR rather than a surprise in
@@ -282,8 +282,9 @@ app fills in the two genuinely app-specific parts. ADC projects its own account 
 `UserDataExportSubjectDTO`, deliberately excluding credentials (password hash and salt, refresh token,
 external-provider key), since a data export that ships a password hash has turned a privacy feature
 into a breach. The cross-service personal data arrives beside it as sections: ADC registers one
-`IUserDataExportSection` per peer, Engagement and Notification, and over a process boundary those
-contracts are the same gRPC adapters everything else uses.
+`IUserDataExportSection` per peer, in the order they appear in the export (Engagement, Notification,
+then Conference, which carries the session and event feedback answers the user wrote), and over a
+process boundary those contracts are the same gRPC adapters everything else uses.
 
 The interesting decision is what happens when a peer is down:
 
@@ -392,8 +393,19 @@ decision, or read the §30 scorecard entry, the most honest one on the board.*
 
 *Notes (verified 2026-07-28, corrected 2026-08-07, re-verified 2026-09-19, refreshed 2026-10-02 at
 framework v1.221.0, refreshed 2026-10-08 at framework v1.233.0, re-verified 2026-10-22 at framework
-v1.250.0 (`MMCA.Common/FACTS.md:14`)). Every anchor below was reopened in source on 2026-10-22 unless
-marked (audit), meaning it was last read by an earlier run and not reopened this pass.
+v1.250.0, refreshed 2026-10-29 at framework v1.265.1 (`MMCA.Common/FACTS.md:14`)). Every anchor below
+was reopened in source on 2026-10-22 unless marked (audit), meaning it was last read by an earlier run
+and not reopened since; the anchors named in the 2026-10-29 entry were reopened on 2026-10-29.
+2026-10-29 REFRESH (Common v1.265.1): FIX: ADC registers three export sections, not two. A
+`ConferenceUserDataExportSection` (`MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Application/Users/UseCases/ExportUserData/ConferenceUserDataExportSection.cs:19`,
+doc `:9-11`: feedback answers read through `IUserConferenceExportService`, in-process in Conference and
+a gRPC adapter elsewhere, no catch) joined Engagement and Notification, registered in that order at
+`MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Application/DependencyInjection.cs:63-65` (order
+comment `:60-61`); `ExportUserDataHandler.cs:19` says "ADC registers three". FIX: the dead-letter
+window keys on `LockedUntil ?? OccurredOn` (`OutboxCleanupService.cs:163`), so the body says it runs
+from the last failed attempt. ADC `User` gained `IPasswordRehashableUser` and every `User.cs` anchor
+moved; `DeleteUserHandler.cs` grew a line; doc anchors moved (all re-anchored below). Scorecard and
+section 30 unchanged.
 2026-10-22 REFRESH (Common v1.250.0): `DeleteUserHandlerBase` now revokes and anonymizes refresh
 sessions itself. FIX: the body said outstanding refresh sessions "need no separate revocation"; the
 handler calls `RefreshSessionRevocation.RevokeAndAnonymizeAllAsync` at `:155-157`, after
@@ -408,21 +420,21 @@ DOMAIN: `public virtual Result Delete()` at `MMCA.Common/Source/Core/MMCA.Common
 guard `:69-75` returning `Error.AlreadyDeleted` (`:72`), `IsDeleted = true` at `:77`. The body calls
 `Delete()` "guarded", not idempotent, because a second call fails. The "entities are never
 hard-deleted" invariant is documented at `Website/docs-src/onboarding/00-primer.md:193` and
-`group-02-domain-building-blocks.md:607`. `IAnonymizable` is `Domain/Interfaces/IAnonymizable.cs:22-31`
+`group-02-domain-building-blocks.md:629`. `IAnonymizable` is `Domain/Interfaces/IAnonymizable.cs:22-31`
 (31 lines), `Result Anonymize()` at `:30`, idempotency contract in its doc at `:26-28`, the
 `EncryptedStringConverter` mention in its doc at `:17-18`. ADC `User`:
-`MMCA.ADC/.../Identity.Domain/Users/User.cs:34-35` declares six interfaces (`IPasswordChangeableUser`,
-`IUserPreferences`, `IErasableUser`, `IEmailConfirmableUser`, `ILegalAcceptingUser`, `IAuditedEntity`),
-`IErasableUser` extending `IAnonymizable` (`MMCA.Common/Source/Core/MMCA.Common.Domain/Auth/IErasableUser.cs:30`);
-14 `[Pii]` attributes at `:51` `Email`, `:55` `FirstName`, `:59` `LastName`, `:81`-`:105` the seven
+`MMCA.ADC/.../Identity.Domain/Users/User.cs:35-36` declares seven interfaces (`IPasswordChangeableUser`,
+`IPasswordRehashableUser`, `IUserPreferences`, `IErasableUser`, `IEmailConfirmableUser`, `ILegalAcceptingUser`, `IAuditedEntity`),
+`IErasableUser` extending `IAnonymizable` (`MMCA.Common/Source/Core/MMCA.Common.Domain/Auth/IErasableUser.cs:30`, audit);
+14 `[Pii]` attributes at `:52` `Email`, `:56` `FirstName`, `:60` `LastName`, `:82`-`:106` the seven
 `Device*` fields (`DeviceId`, `DeviceFormFactor`, `DevicePlatform`, `DeviceModel`,
-`DeviceManufacturer`, `DeviceName`, `DeviceType`), `:109` `LoginProvider`, `:113` `ProviderKey`,
-`:127` `AvatarUrl` (property `:129`), `:180` the computed `FullName` (`:181`, from the two names);
-`Anonymize()` `:519-560`, placeholder email `:524`, idempotent early return `:530-534`, overwrites
-`:536-550` (names, credentials, all seven device fields, both provider fields), `AvatarUrl = null`
-`:550`, `IsEmailConfirmed = false` `:554`, consent evidence (`AcceptedTermsVersion`,
-`TermsAcceptedOn`) deliberately kept `:556-558`; every stored `[Pii]` member is overwritten.
-`public new Result Delete()` `:497` calling `base.Delete()` `:499` and raising `UserDeleted` `:502`; no
+`DeviceManufacturer`, `DeviceName`, `DeviceType`), `:110` `LoginProvider`, `:114` `ProviderKey`,
+`:128` `AvatarUrl` (property `:130`), `:181` the computed `FullName` (`:182`, from the two names);
+`Anonymize()` `:545-586`, placeholder email `:550`, idempotent early return `:556-560`, overwrites
+`:562-576` (names, credentials, all seven device fields, both provider fields), `AvatarUrl = null`
+`:576`, `IsEmailConfirmed = false` `:580`, consent evidence (`AcceptedTermsVersion`,
+`TermsAcceptedOn`) deliberately kept `:582-584`; every stored `[Pii]` member is overwritten.
+`public new Result Delete()` `:523` calling `base.Delete()` `:525` and raising `UserDeleted` `:528`; no
 `RefreshToken` member.
 ERASURE WORKFLOW: `Source/Core/MMCA.Common.Application/Users/UseCases/DeleteUser/DeleteUserHandlerBase.cs`,
 aggregate lookup `:112-117`, refresh-session note `:119-122`, `erasable.Delete()` `:130`,
@@ -433,14 +445,14 @@ aggregate lookup `:112-117`, refresh-session note `:119-122`, `erasable.Delete()
 host without the account-status query accepts the token until it expires. The `afterCommit` doc at
 `:200-206` says the marker is written after the save and, under an `ITransactional` command, before
 the commit, so the body says "as it saves" rather than "after commit". ADC: `DeleteUserHandler.cs`
-(91 lines) declared `:32`, overrides `OnAfterSoftDeleteAsync` `:47`, raises `UserDeleted` on the
-aggregate inside the erasure transaction `:63` (rationale `:61-62`), avatar-blob scheduling call
-`:74`, `ScheduleAvatarBlobDeletionAsync` `:80`, internal command scheduled `:83`, failure mapping
-`:89`, class remarks `:24-30`; `DeleteUserCommand.cs:22` implements `ICacheInvalidating,
+(92 lines) declared `:33`, overrides `OnAfterSoftDeleteAsync` `:48`, raises `UserDeleted` on the
+aggregate inside the erasure transaction `:64`, avatar-blob scheduling call
+`:75`, `ScheduleAvatarBlobDeletionAsync` `:81`, internal command scheduled `:84`, failure mapping
+`:90`, class remarks from `:21` (`UserDeleted` integration event `:24`, ordering `:30`); `DeleteUserCommand.cs:22` implements `ICacheInvalidating,
 ITransactional, IUserOwnedRequest`, the `ITransactional` rationale from `:9`.
 NEW SECTION (2026-10-02, user-approved fold-in), "The row that still holds its slot", grounded in
 ADR-095 (`Website/docs-src/adr/095-soft-delete-unique-indexes.md`, Accepted 2026-08-23, revised
-2026-08-26, 2026-10-01, 2026-10-06, 2026-10-07 and 2026-10-21) and in source:
+2026-08-26, 2026-10-01, 2026-10-06, 2026-10-07, 2026-10-21 and 2026-10-28, status `:4-11`) and in source:
 `Source/Core/MMCA.Common.Infrastructure/Persistence/Conventions/SoftDeleteUniqueIndexConvention.cs:34`
 declares `SoftDeleteUniqueIndexConvention(DataSource engine) : IModelFinalizingConvention`; the
 speaker-email example is its remarks at `:11-17`; non-owned `IAuditableEntity` scope `:46-47`;
@@ -451,21 +463,23 @@ check `:43-44`. Registered once at
 per-engine predicate (`= false` on PostgreSQL, `= 0` elsewhere) is documented at
 `Persistence/SoftDeleteFilterSql.cs:31-32` (ADR-095's 2026-10-06 revision records that each engine's
 `IDataSourceEngine.BuildSoftDeleteFilter` supplies it). The undelete-collision and invisible-filter
-costs are ADR-095's Trade-offs section (from `:137`). This article cites source, not the ADR's anchors.
+costs are ADR-095's Trade-offs section (from `:139`). This article cites source, not the ADR's anchors.
 RESTRICT BY DEFAULT: `RestrictDeleteByDefaultConvention.cs:42`, annotation `MMCA:DeleteBehaviorSource`
 `:48`, `Explicit` `:51`, `Convention` `:54`, `Ownership` `:57`, `ProcessModelFinalizing` `:60`,
 rationale `:15-20`, left-alone `:22-28`, Cosmos no-op `:35-39`; registered at
 `ApplicationDbContext.cs:400` (the code block's first line, verbatim).
 `Source/Hosting/MMCA.Common.Testing.Architecture/Bases/Domain/DeleteBehaviorConventionTestsBase.cs:21`.
-ADR-119 Accepted 2026-09-11, revised 2026-09-19 and 2026-10-21 (anchor refresh).
+ADR-119 Accepted 2026-09-11, revised 2026-09-19 and 2026-10-21 in its status block (`:7-11`), with
+revision sections dated 2026-10-01 (`:155`), 2026-10-06 (`:171`), 2026-10-21 (`:184`) and 2026-10-26 (`:197`).
 OUTBOX: `OutboxCleanupService` declared at
 `Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/Administration/OutboxCleanupService.cs:42`,
 disabled when `RetentionDays <= 0` (`:72`), processed purge `:104-105`, dead-letter sweep
-`SweepDeadLettersAsync` `:145` (doc `:133-143`: rows with retries exhausted keep `ProcessedOn` null,
-window keyed on `OccurredOn`), fallback to `RetentionDays` `:150-152`, predicate `:157-159`;
+`SweepDeadLettersAsync` `:149` (doc `:133-147`: rows with retries exhausted keep `ProcessedOn` null,
+window keyed on `LockedUntil`, stamped on every failed attempt, falling back to `OccurredOn`),
+fallback to `RetentionDays` `:154-156`, predicate `:160-163` (`(m.LockedUntil ?? m.OccurredOn) < deadLetterCutoff` at `:163`);
 `Outbox:RetentionDays` default 7, 0 disables, `OutboxSettings.cs:66`; `DeadLetterRetentionDays`
-(default 0, falls back) `:112`, doc `:105-110`. The body paraphrases
-`Website/docs-src/adr/003-outbox-dual-dispatch.md:64` ("The outbox table grows until processed
+(default 0, falls back) `:114`, doc `:105-112`. The body paraphrases
+`Website/docs-src/adr/003-outbox-dual-dispatch.md:71` ("The outbox table grows until processed
 entries are cleaned up") without quotation marks.
 PII: `Source/Hosting/MMCA.Common.Testing.Architecture/Bases/Governance/PiiConventionTestsBase.cs:34`
 `EntitiesWithPiiProperties_ShouldImplement_IAnonymizable`; `Domain/Privacy/PiiRedactor.cs` is 145
@@ -480,10 +494,10 @@ redactor remains an opt-in call-site utility, not an auto-wired destructuring po
 version byte passed as associated data `:42-43` (code `:227-231`, decrypt `:261`), stored envelope
 `:68`, `NonceSize = 12` `:82`, `TagSize = 16` `:85`, `DefaultKeyVersion` `:91`; zero references in
 `MMCA.ADC/Source` or `MMCA.Store/Source`; ADR-037 Decision item 10 ("Unit-tested but not yet
-adopted") at `:131`.
+adopted") at `:133`.
 SCORECARD: section 30 row `Website/docs-src/governance/common-ArchitectureScorecard.md:94`,
 `| 30 | Compliance, Privacy & Governance | 2 | 3 | 8 | 6/16 |`, values unchanged. Indices as stamped
-at `:5` (evidence 2026-10-22 at v1.250.0): Maturity `:9` 319/328 = 97.3% (was 96.6%, 317/328, at
+at `:5` (evidence 2026-10-29 at v1.265.1; 2026-10-22 at v1.250.0 last run): Maturity `:9` 319/328 = 97.3% (was 96.6%, 317/328, at
 the 2026-10-07 evidence), Implementation `:10` 700/820 = 85.4% (was 86.0%, 705/820); N/A bullet
 `:104` reads "none." with Sigma-weight 82; section 16 row `:80` is M4/I9. Section 30 itself did not
 move. The original single-axis 1-out-of-4 snapshot (audit): MMCA.Common git history at commit
@@ -521,7 +535,7 @@ EXPORT: `MMCA.Common/Source/Core/MMCA.Common.Shared/Privacy/UserDataExportDTO.cs
 whose `:190` calls the base's private `ExportSectionUnavailable` `LoggerMessage` (Warning, declared
 `:201-202`). "Cancellation is not degradation." at `:35`. ADC `ExportUserDataHandler.cs` (91 lines,
 was 78): declared `:31`, `HasExportPrivilege` `:39`, `BuildSubjectSnapshotAsync` `:42`, no catch;
-`NotificationUserDataExportSection` declared `:18`, doc `:7-16`.
+`NotificationUserDataExportSection` declared `:18`, doc `:7-16`; `ConferenceUserDataExportSection` declared `:19`.
 `MMCA.ADC.Engagement.Contracts/UserEngagementExportServiceGrpcAdapter.cs` declares the class at `:19`.
 HEADER: ADR cell and Status unchanged this pass; scorecard anchor `:94` and `00-primer.md:193`
 confirmed. Group G23 is the ADC Identity module (published as `group-24-identity-module.md`, which

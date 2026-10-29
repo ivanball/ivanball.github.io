@@ -95,7 +95,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 53 articles</summary>
+        <summary>All 54 articles</summary>
         <nav class="doc-nav" aria-label="The MMCA.Common series">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -151,7 +151,8 @@
         <li><a href="governed-llm-boundary.html">50 · The governed LLM boundary</a></li>
         <li><a href="durable-internal-commands.html">51 · Four ways to do work later</a></li>
         <li><a href="identity-completions.html">52 · Finishing identity</a></li>
-        <li><a href="series-index.html">53 · The series index</a></li>
+        <li><a href="cloud-neutral-vendor-adapters.html">53 · One framework, three clouds</a></li>
+        <li><a href="series-index.html">54 · The series index</a></li>
           </ol>
         </nav>
       </details>
@@ -253,7 +254,9 @@
           its capabilities. SQL Server declares <code>StoreGenerated</code>, so the property is configured with <code>IsRowVersion</code>
           (server-generated). PostgreSQL and SQLite declare <code>ClientStamped</code>: the property falls back to
           <code>IsConcurrencyToken</code> over the same <code>byte[]</code>, and <code>AuditSaveChangesInterceptor</code> writes a fresh value on
-          every insert and every update, so the next stale writer&#39;s <code>WHERE</code> clause misses. Cosmos declares <code>None</code>,
+          every insert and every update, so the next stale writer&#39;s <code>WHERE</code> clause misses. The set-based
+          <code>ExecuteUpdateAsync</code> path never reaches that interceptor, so <code>EFRepository</code> adds the fresh value to the
+          set-based update itself unless the caller already sets the column. Cosmos declares <code>None</code>,
           and its context never calls <code>ConfigureConcurrencyTokens</code>. One configuration, every auditable table on a
           relational engine, no per-entity boilerplate.</p>
           <h2 id="from-exception-to-a-status-at-the-edge">From exception to a status at the edge</h2>
@@ -269,6 +272,12 @@
           <code>DbUpdateException</code> thrown on the same action is not caught there and still reaches the client as the
           generic 409. Either way the caller gets a status it can act on: reload, show the fresh values, let the
           human decide.</p>
+          <p>Both of those places count what they answer. The filter and <code>DbUpdateExceptionHandler</code> each record the
+          conflict through <code>ConcurrencyConflictMetrics</code>, a <code>persistence.concurrency.conflict</code> counter on the
+          <code>MMCA.Common.Persistence</code> meter tagged with the conflicting entity type, and a given exception reaches
+          exactly one of them, so each conflict is counted once. Only the concurrency kind is counted: a unique or
+          foreign-key failure is a different problem and would hide the contention signal. No alert ships on it; a
+          sustained rate on one entity type points at contended rows, which is a design question.</p>
           <h2 id="the-transport-a-weak-etag-out-a-required-if-match-back">The transport: a weak ETag out, a required If-Match back</h2>
           <p>The same <code>RowVersion</code>, the same <code>SetOriginalRowVersion</code> extension point, the same comparison inside the
           UPDATE. The header is where the token lives on the wire, which means anything that speaks HTTP can
@@ -306,14 +315,16 @@ PUT /orders/42/pay
 <span class="hljs-attribute">If-Match</span><span class="hljs-punctuation">: </span>W/&quot;AAAAAAAAB9E=&quot;
 412 Precondition Failed</code></pre>
           <p>The generic <code>UpdateAsync</code> on <code>CrudEntityControllerBase</code> carries the attribute, so every CRUD <code>PUT</code>
-          inherits the precondition without anyone remembering it. Beyond that it is applied by hand, on 41 actions
-          across 23 controllers today: 25 across eleven controllers in Store (in Sales, two in <code>OrdersController</code>,
-          three in <code>OrderFulfillmentController</code> and two in <code>InventoryItemsController</code>; in Catalog, four each in
+          inherits the precondition without anyone remembering it. Beyond that it is applied by hand, on 45 actions
+          across 25 controllers in the three consumer apps today: 26 across twelve controllers in Store (in Sales,
+          two in <code>OrdersController</code>, one in <code>GuestOrdersController</code>, three in <code>OrderFulfillmentController</code> and two
+          in <code>InventoryItemsController</code>; in Catalog, four each in
           <code>ProductAttributesController</code> and <code>ProductVariantsController</code>, two each in <code>CategoriesController</code> and
           <code>ReviewModerationController</code>, and one each in <code>ProductsController</code>, <code>ProductImagesController</code> and
           <code>ReviewsController</code>; in Identity, three in <code>CustomersController</code>) and 16 across twelve in ADC (three in
           Engagement&#39;s <code>SessionQuestionsController</code>, two in its <code>LivePollsController</code>, two in Conference&#39;s
-          <code>EventLifecycleController</code>, and one each in nine more Conference controllers). Nothing here decides
+          <code>EventLifecycleController</code>, and one each in nine more Conference controllers), and three in Helpdesk&#39;s
+          <code>TicketsController</code>. Nothing here decides
           conditional GET. The tag exists to be stated back on the next write, and there is no <code>If-None-Match</code>
           handling and no 304 path.</p>
           <h2 id="the-invariant-one-source-for-the-precondition">The invariant: one source for the precondition</h2>
@@ -323,12 +334,16 @@ PUT /orders/42/pay
           <code>IConcurrencyAware</code>, because a token in the body would give the same check a second, competing source.
           <code>ConcurrencyConventionTestsBase</code> exposes it as a single <code>[Fact]</code>,
           <code>UpdateRequests_ShouldNotImplement_IConcurrencyAware</code>, and all three consumers subclass it: ADC, Store
-          and Helpdesk each supply their own <code>IArchitectureMap</code>. A module with no mutable aggregate is legitimately
-          vacuous, and so is MMCA.Common&#39;s own subclass: the rule reads only module Application assemblies, and the
-          framework&#39;s map declares none. This is
-          invariant-over-discipline (ADR-015), and it is the type-level half of the rule; the 428 is the caller-level
-          half, so on a guarded action neither a request model nor a client can quietly reintroduce
-          last-write-wins. Which actions are guarded is a separate question that no rule answers: the attribute is
+          and Helpdesk each supply their own <code>IArchitectureMap</code>. The rule only has something to check where a
+          mapped module Application assembly declares an <code>*UpdateRequest</code> type. ADC&#39;s Conference Application layer
+          declares nine, so ADC&#39;s run is the one that exercises it. Store declares none, and Helpdesk&#39;s one,
+          <code>TicketUpdateRequest</code>, lives in the Tickets Shared assembly, which its map registers as a Shared layer,
+          so both runs pass vacuously. So does MMCA.Common&#39;s own subclass: the framework&#39;s map declares no module
+          Application assemblies. This is invariant-over-discipline (ADR-015), and it is the type-level half of the
+          rule, narrow by construction: it matches the name suffix plus the interface, so a request named
+          otherwise, or one carrying a plain token property without implementing <code>IConcurrencyAware</code>, passes it.
+          The 428 is the caller-level half, and that half holds on every guarded action: a client cannot skip the
+          precondition. Which actions are guarded is a separate question that no rule answers: the attribute is
           opt-in per action, and an unguarded write is still last-write-wins.</p>
           <p>Both apps have adopted the pattern end to end. In ADC, <code>UpdateSessionHandler</code> overrides <code>RowVersion</code> to
           report the token that arrived on <code>UpdateSessionCommand</code>, <code>SessionDTO</code> implements <code>IConcurrencyAware</code>, and
@@ -342,7 +357,10 @@ PUT /orders/42/pay
           compare is an early refusal, not the guard: the <code>WHERE</code>-clause check still runs on the save. A stale
           token caught early is an <code>Error.Conflict</code> with code <code>Order.Concurrency.Stale</code>, which the filter relabels
           to 412, so the <code>/orders/42/pay</code> exchange above answers 412 under that code rather than
-          <code>Concurrency.PreconditionFailed</code>. Both apps run one database per service (ADR-006), and every table mapped
+          <code>Concurrency.PreconditionFailed</code>. The guest cancel route, <code>GuestOrdersController.CancelAsync</code>, runs the
+          same <code>CancelOrderHandler</code> but answers every handler failure as a 404, so there an early stale refusal is
+          a 404; only a thrown <code>DbUpdateConcurrencyException</code> still becomes a 412 through the filter. Both apps run
+          one database per service (ADR-006), and every table mapped
           from an auditable entity carries the <code>RowVersion</code> column from the migration that creates it: Store&#39;s
           Catalog <code>InitialCreate</code> adds it to the aggregate tables (its inbox and outbox tables carry none), and the
           later <code>AddProductReviews</code> migration adds it with the review tables.</p>
@@ -371,7 +389,7 @@ PUT /orders/42/pay
           human) is the caller&#39;s decision, not the framework&#39;s.</li>
           <li><strong>Cross-engine asymmetry.</strong> SQL Server gets a server-generated <code>rowversion</code>; PostgreSQL and SQLite get
           an application-managed <code>IsConcurrencyToken</code> over the same <code>byte[]</code>, re-stamped by the audit interceptor
-          on every insert and update. Cosmos gets no framework concurrency token at all: its engine declares
+          on every insert and update and by <code>EFRepository</code> on a set-based <code>ExecuteUpdateAsync</code>. Cosmos gets no framework concurrency token at all: its engine declares
           <code>RowVersionStrategy.None</code> and its context skips <code>ConfigureConcurrencyTokens</code>, so <code>[SupportsIfMatch]</code>
           over a Cosmos-mapped entity stamps an original value on a property EF does not compare.</li>
           <li><strong>A child-level precondition costs a second field.</strong> <code>If-Match</code> names exactly one version, and that slot
@@ -423,7 +441,8 @@ PUT /orders/42/pay
           <code>If-Match</code> on a guarded action so a write with no precondition is a <code>428 Precondition Required</code>, plants it
           as EF&#39;s original value via <code>SetOriginalRowVersion</code> (and touches the root so the comparison always runs) to
           detect the conflict atomically inside the UPDATE, answers that conflict with <code>412 Precondition Failed</code> at
-          the edge, and keeps the token out of every request body with a build-wide fitness function.</p>
+          the edge, and backs the header-only rule with a naming-convention fitness function over <code>*UpdateRequest</code>
+          types.</p>
           <p><strong>Next in the series:</strong> self-ordering modules, discovered and Kahn-sorted so a dependency is always
           registered before the modules that need it.</p>
           <p><em>MMCA.Common is Apache-2.0 licensed and open source. Star the repo, read ADR-035 for the decision record, or

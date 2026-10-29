@@ -1,10 +1,10 @@
 # The MMCA series: every pattern, one place
 
-> Series: MMCA.Common · Article #53 (index / hub) · Pillar P6 · Rubric: all ·
-> Status: grounded in the 53 slug-named article files in this folder (each article's own H1 and
-> `Article #N` header) and `Website/assets/data/articles.js` (one row per article, `n` 1 to 53).
+> Series: MMCA.Common · Article #54 (index / hub) · Pillar P6 · Rubric: all ·
+> Status: grounded in the 54 slug-named article files in this folder (each article's own H1 and
+> `Article #N` header) and `Website/assets/data/articles.js` (one row per article, `n` 1 to 54).
 > No em dashes. Every entry links to the article's site page, the canonical copy; articles 1 to 49 and
-> this index also have a Medium copy, while articles 50, 51 and 52 are published on the site only.
+> this index also have a Medium copy, while articles 50 to 53 are published on the site only.
 
 **Subtitle:** A single map of the whole series. Start at the top if MMCA.Common is new to you, or jump
 straight to the pattern you came for.
@@ -18,7 +18,7 @@ mode each pattern fixes, the real type and ADR behind the MMCA.Common implementa
 trade-offs, and how to apply the idea even if you never install the package.
 
 Each article stands on its own if you land on it from a search. This page is the index that ties them
-together: 45 deep-dives, four tutorials, two opinion pieces and one case study, plus this map, 53
+together: 46 deep-dives, four tutorials, two opinion pieces and one case study, plus this map, 54
 articles in all. The groups below run roughly from "why this
 exists" to "how to build with it," so reading top to bottom is a reasonable curriculum, but every link
 is also a fine place to start.
@@ -65,10 +65,11 @@ The concerns that sit across every module: authentication between services, auth
 permission, and by row ownership), password storage, safe retries, caching, error contracts,
 notifications, DTO mapping, browser session auth, the generic REST surface, defending the edge,
 encrypting PII columns at rest, the hardened response headers every host stamps, and the optional
-second factor, email-confirmation gate and stored permission grants that complete the identity story.
+second factor, email-confirmation gate, stored permission grants, Terms of Service acceptance and
+password reset that complete the identity story.
 
 - 16 · [Cross-service auth without a shared secret: JWKS discovery](jwks-cross-service-auth.md)
-- 17 · [Password hashing done right: PBKDF2-SHA512, 600k iterations, timing-safe](password-hashing.md)
+- 17 · [Password hashing done right: PBKDF2-SHA512, a versioned work factor, timing-safe](password-hashing.md)
 - 18 · [Idempotency in one attribute: safe retries for HTTP APIs](idempotency-attribute.md)
 - 19 · [The self-invalidating cache that lives in the pipeline, not your handlers](self-invalidating-cache.md)
 - 20 · [Problem Details across HTTP and gRPC (RFC 9457)](problem-details-http-grpc.md)
@@ -89,15 +90,17 @@ second factor, email-confirmation gate and stored permission grants that complet
 ## Run, extract, and harden
 
 Bring the whole stack up with one command, then cut a module out into its own service, make the
-running system survive failure, see what it is doing in production, and put bounds, guardrails and
-token metering around the model call. Read these in order: Aspire first, then extraction, then
-resilience, then observability, then the governed LLM boundary.
+running system survive failure, see what it is doing in production, put bounds, guardrails and
+token metering around the model call, and keep the core free of any one cloud's SDK behind a vendor
+adapter package per cloud. Read these in order: Aspire first, then extraction, then resilience, then
+observability, then the governed LLM boundary, then the cloud-neutral core.
 
 - 31 · [Aspire: one command brings up the whole distributed app](aspire-one-command.md)
 - 32 · [Extracting a module to a gRPC service, live](extract-module-to-grpc-service.md)
 - 33 · [Retries are not a recovery plan: resilience handlers, RTO/RPO, and a restore you actually drilled](resilience-recovery-objectives.md)
 - 48 · [Observability by Default: OpenTelemetry and Azure Monitor in MMCA](observability-opentelemetry.md)
 - 50 · [The LLM Is a Dependency: A Bounded, Guarded, Metered Boundary for Chat Completions](governed-llm-boundary.md)
+- 53 · [One Framework, Three Clouds: A Cloud-Neutral Core With Vendor Adapter Packages](cloud-neutral-vendor-adapters.md)
 
 ## Proof, front end, and getting started
 
@@ -128,8 +131,8 @@ you are here to solve a specific problem, the core-patterns and cross-cutting gr
 you want to build, start at 39: it scaffolds the whole solution in one command, then explains what you
 were handed. Then 40, to make the conventions fail the build.
 
-*Previous: Article 52, "Finishing Identity: Second Factor, Email Confirmation and Stored Permission
-Grants." This index is article 53 of 53, the last one in the series, so it has no next.*
+*Previous: Article 53, "One Framework, Three Clouds: A Cloud-Neutral Core With Vendor Adapter
+Packages." This index is article 54 of 54, the last one in the series, so it has no next.*
 
 ---
 
@@ -141,43 +144,49 @@ then monthly evergreen.*
 
 *Tags: .NET, Software Architecture, C Sharp, Microservices, Programming*
 
-*Notes: re-verified 2026-10-22 against MMCA.Common v1.250.0 (`MMCA.Common/FACTS.md:4,14`; 132 accepted
-ADRs 001-132, `Website/docs-src/adr/README.md:6`; no new article this run, so the series stays at 53).
-Changed this run: the Article 35 entry's link text now reproduces the retitled H1 ("8,000 fast tests",
-`test-pyramid.md:1`); the other 51 entries already matched their H1s, Article 27 included
-(`jwt-refresh-token-rotation.md:1`). Articles 15, 16 and 52 each gained a section this run (the ADR-083
-CRUD lifecycle event, the opt-in gRPC service token, the ADR-091 single-use password reset token); the
-group descriptions above stay accurate without them, so they are unchanged. The intro's Format split
-still matches `README.md` (45 deep-dive rows, four tutorials at `README.md:41,42,49,50`, two opinion
-pieces at `:11,13`, one case study at `:51`, and this index at `:63`). This hub states no scorecard
-index, package count or fitness-method count, so the FACTS and scorecard figures need no edit here. The
-2026-10-08 refresh ran at framework v1.233.0 with 132 ADRs (ADR-132 covered inside Article 34) and
-aligned the intro's Format split with `README.md`; the 2026-10-02 refresh ran at framework v1.221.0
-with 131 ADRs (ADR-131 folded into Article 25). Evidence
-read this run: the folder holds 53 slug-named article files plus `README.md` and `_ledger.md` (the
-build-skipped maintenance notes; no `Article-NN-*` files; the number lives only in each
-file's line-3 `Article #N` header), and a scripted pass compared all 52 list entries against their
-targets: every link resolves to an existing slug, every link text equals the target's line-1 H1 verbatim,
-and every list number equals the target's `Article #N`. `Website/assets/data/articles.js` has 53 rows
-ending at n:53 (`articles.js:92`, this index: date 2026-08-20, Medium url set); rows n:1 to n:49 carry a
-Medium url (n:49 at `articles.js:88`), and rows n:50, n:51 and n:52 (`articles.js:89`, `:90`, `:91`)
-carry the site date 2026-09-24 and an empty Medium url, so the header now says those three are
-site-only rather than unpublished, and the earlier "listed without a link" wording is gone (all 52
-entries link to their site page). `README.md:7` heads "The series (53 articles)". Body facts re-checked:
-Apache-2.0 (`MMCA.Common/Directory.Build.props:71`), .NET 10 (`Directory.Build.props:3`), repo URL
-(`Directory.Build.props:72`), the 34-category rubric (last category at
-`Website/docs-src/governance/ArchitectureEvaluationCriteria.md:890`), `dotnet new mmca-app`
-(`MMCA.Helpdesk/.template.config/template.json:7`), `MMCA.Common.API` (`MMCA.Common/FACTS.md:29`), the
-three `Website/docs-src/governance/*-ArchitectureScorecard.md` files and `Website/writing.html` exist.
-Article 35's link text carries the 8,000-test figure only because it reproduces that article's H1
-(`test-pyramid.md:1`); this hub asserts no test count of its own. Article 35 owns the figure: 8,386
-tests executed by the `build-and-test` job of Common's CI run 39625216950 (`test-pyramid.md:28`);
-FACTS.md carries no total test count and defers test totals to the scorecard (`FACTS.md:10,11`). The
-Common scorecard's Testability row still reads about 2,254 `[Fact]`/`[Theory]`
-(`Website/docs-src/governance/common-ArchitectureScorecard.md:78`), which disagrees with Article 35;
-reconciling it belongs to the scorecard, not this hub. `Personal/Medium/` (including
-`Medium-Campaign-Plan.md`) is retired (`Personal/Medium/README.md:3`), so this hub no longer measures
-its order against that calendar. History: the 2026-09-19 refresh grew the series from 50 to 53 and moved
+*Notes: re-verified 2026-10-29 against MMCA.Common v1.265.1 (`MMCA.Common/FACTS.md:4,14`; 136 accepted
+ADRs 001-136, `Website/docs-src/adr/README.md:6`). Changed this run: the series grew from 53 to 54 and
+this hub moved from 53 to 54. The cloud-neutral core with vendor adapter packages
+(`cloud-neutral-vendor-adapters.md`, ADR-134, group G29, header at `cloud-neutral-vendor-adapters.md:3`),
+Article 53, joined "Run, extract, and harden" after the governed LLM boundary, because it builds on
+that group's hosting, extraction and observability articles (`articles.js:92` files it under
+`cat: "run"`); it is an append, so no earlier article renumbered. The header, the intro's counts, that
+group's description and the footer follow from it. The Article 17 entry's link text reproduces its
+retitled H1 (`password-hashing.md:1`), and the Auth group description now also names the Terms of
+Service acceptance and password-reset sections that Article 52 carries. The intro's Format split
+matches `README.md` (46 deep-dive rows, four tutorials at `README.md:41,42,49,50`, two opinion pieces
+at `:11,13`, one case study at `:51`, and this index at `:64`). This hub states no scorecard index,
+package count or fitness-method count, so the FACTS and scorecard figures need no edit here. The
+2026-10-22 refresh ran at framework v1.250.0 with 132 ADRs, re-set the Article 35 link text to its
+retitled H1, and left the group descriptions unchanged when Articles 15, 16 and 52 each gained a
+section (the ADR-083 CRUD lifecycle event, the opt-in gRPC service token, the ADR-091 single-use
+password reset token). The 2026-10-08 refresh ran at framework v1.233.0 with 132 ADRs (ADR-132
+covered inside Article 34) and aligned the intro's Format split with `README.md`; the 2026-10-02
+refresh ran at framework v1.221.0 with 131 ADRs (ADR-131 folded into Article 25). Evidence read this
+run: the folder holds 54 slug-named article files plus `README.md` and `_ledger.md` (the
+build-skipped maintenance notes; no `Article-NN-*` files; the number lives only in each file's line-3
+`Article #N` header), and a scripted pass compared all 53 list entries against their targets: every
+link resolves to an existing slug, every link text equals the target's line-1 H1 verbatim, and every
+list number equals the target's `Article #N`. `Website/assets/data/articles.js` has 54 rows ending at
+n:54 (`articles.js:93`, this index: date 2026-08-20, Medium url set); rows n:1 to n:49 carry a Medium
+url (n:49 at `articles.js:88`), rows n:50, n:51 and n:52 (`:89`, `:90`, `:91`) carry the site date
+2026-09-24 and an empty Medium url, and row n:53 (`:92`) carries the site date 2026-10-29 and no
+Medium url, so the header names those four as site-only. `README.md:7` heads "The series (54
+articles)". Body facts re-checked: Apache-2.0 (`MMCA.Common/Directory.Build.props:54`), .NET 10
+(`Directory.Build.props:3`), repo URL (`Directory.Build.props:55`), the 34-category rubric (last
+category at `Website/docs-src/governance/ArchitectureEvaluationCriteria.md:890`), `dotnet new
+mmca-app` (`MMCA.Helpdesk/.template.config/template.json:7`), `MMCA.Common.API`
+(`MMCA.Common/FACTS.md:29`), the three `Website/docs-src/governance/*-ArchitectureScorecard.md` files
+and `Website/writing.html` exist. Article 35's link text carries the 8,000-test figure only because it
+reproduces that article's H1 (`test-pyramid.md:1`); this hub asserts no test count of its own.
+Article 35 owns the figure: 9,122 tests executed by the `build-and-test` job of Common's CI run
+40870473851 (`test-pyramid.md:28`); FACTS.md carries no total test count and defers test totals to
+the scorecard (`FACTS.md:10,11`). The Common scorecard's Testability row still reads about 2,254
+`[Fact]`/`[Theory]` (`Website/docs-src/governance/common-ArchitectureScorecard.md:78`), which
+disagrees with Article 35; reconciling it belongs to the scorecard, not this hub. `Personal/Medium/`
+(including `Medium-Campaign-Plan.md`) is retired (`Personal/Medium/README.md:3`), so this hub no
+longer measures its order against that calendar. History: the 2026-09-19 refresh grew the series
+from 50 to 53 and moved
 this hub from 50 to 53: the governed LLM boundary (`governed-llm-boundary.md`) joined "Run, extract, and
 harden", durable internal commands (`durable-internal-commands.md`) joined "Core patterns", and the
 identity completions (`identity-completions.md`) joined "Auth, the API edge, and cross-cutting"; all

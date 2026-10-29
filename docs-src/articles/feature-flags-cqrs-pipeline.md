@@ -132,8 +132,9 @@ in one place. See the Notes ledger for the exact files and lines.)
 Two things make this more than a toy. First, the provider is real: `AddAPI` registers
 `services.AddFeatureManagement().WithTargeting<CurrentUserTargetingContextAccessor>()` plus the
 disabled-response handler (`MMCA.Common.API/DependencyInjection.cs:104-107`), which brings the built-in
-Percentage, TimeWindow, and Targeting filters with a per-user audience already supplied, so "roll this
-out to 10 percent" is a config change, not a code change. Second, flag
+Percentage, TimeWindow, and Targeting filters, with the Targeting filter's per-user audience already
+supplied, so "roll this out to 10 percent of users" is a config change (a Targeting rollout with a
+`DefaultRolloutPercentage`), not a code change. Second, flag
 names are module constants, not magic strings scattered through handlers: `SalesFeatures.PaymentVerification`
 = `"Sales.PaymentVerification"` (`SalesFeatures.cs:23`), `ConferenceFeatures.SessionizeIntegration` =
 `"Conference.SessionizeIntegration"` (`ConferenceFeatures.cs:23`), `NotificationFeatures.PushNotifications`
@@ -193,21 +194,25 @@ that a feature is unavailable, not report a locked door.
   constant with no attribute, and `TemporaryFeatureFlagsAreNotPastRemoveBy` (`:70`) fails the day a
   temporary flag passes its date, naming the flag, the date and the owner. Both are exposed as facts on
   `FeatureFlagLifecycleTestsBase` (`:10`, the two facts at `:20-25`). The limits are real: like every
-  fitness base, the gate exists only where a repo subclasses it, so a repo that has not still carries its
-  flag debt uncounted (ADR-031), and a `Permanent` flag is deliberately outside the expiry check, so the
+  fitness base, the gate exists only where a repo subclasses it (all four repos do: Common and ADC and
+  Store each in a `FeatureFlagLifecycleTests` class, Helpdesk in `ArchitectureTests.cs:210`, ADR-031), so
+  adoption stays a per-repo choice, and a `Permanent` flag is deliberately outside the expiry check, so the
   judgement about whether a capability toggle has outlived its branch is still a human one.
-- **Rollout bucketing is per user, but only as stable as the claim behind it.** Percentage and
-  Targeting filters evaluate locally, so consistent assignment needs a targeting context, and the
-  framework supplies one: `CurrentUserTargetingContextAccessor`
+- **Rollout bucketing is per user only through the Targeting filter, and only as stable as the claim
+  behind it.** Filters evaluate locally in each process, so consistent assignment needs a targeting
+  context, and the framework supplies one: `CurrentUserTargetingContextAccessor`
   (`CurrentUserTargetingContextAccessor.cs:54-55`) implements `ITargetingContextAccessor` and is wired by
   `AddFeatureManagement().WithTargeting<CurrentUserTargetingContextAccessor>()`
-  (`MMCA.Common.API/DependencyInjection.cs:105-106`), so every host that goes through `AddAPI` buckets a
-  given user the same way on every replica (ADR-031). The residual caveat is that the stickiness is only
-  as stable as the identifier behind it: the accessor sets `UserId` from `FindUserIdValue()`
+  (`MMCA.Common.API/DependencyInjection.cs:105-106`), so in every host that goes through `AddAPI` a
+  Targeting-filter rollout gives a given user the same answer on every replica. The built-in Percentage
+  filter never reads that context: it activates on a random percentage at each evaluation, so a
+  Percentage-filter flag can flip between requests for the same user, and a rollout that must be sticky
+  uses Targeting with a `DefaultRolloutPercentage` (ADR-031). The residual caveat is that the stickiness
+  is only as stable as the identifier behind it: the accessor sets `UserId` from `FindUserIdValue()`
   (`CurrentUserTargetingContextAccessor.cs:86`), which reads the JWT `sub` claim
   (`AuthClaimTypes.Subject`, `AuthClaimTypes.cs:34`) and falls back to the mapped
-  `ClaimTypes.NameIdentifier` (`ClaimsPrincipalExtensions.cs:26-28`) and then to `Identity.Name`. A filter
-  configured with no targeting audience gains no stickiness from the accessor at all.
+  `ClaimTypes.NameIdentifier` (`ClaimsPrincipalExtensions.cs:26-28`) and then to `Identity.Name`. An
+  anonymous caller gets an empty context (`:67-74`), so it matches no named user or group.
 - **It is opt-in, and the pipeline side is adopted narrowly.** Three use cases implement
   `IFeatureGated` across both apps, all of them commands: ADC's `RefreshFromSessionizeCommand`
   (`RefreshFromSessionizeCommand.cs:15`) and `ScoreEventSessionsInternalCommand`
@@ -269,8 +274,24 @@ pattern (ADR-031), or `dotnet add package MMCA.Common.Application` and gate your
 
 *Tags: .NET, C Sharp, Software Architecture, CQRS, Feature Flags*
 
-*Notes: verified names and behaviors from THIS run (2026-10-22, MMCA.Common v1.250.0; prior runs
-2026-10-08 at v1.233.0 and 2026-10-02 at v1.221.0). 2026-10-22 entry (v1.250.0): every anchor below was
+*Notes: verified names and behaviors from THIS run (2026-10-29, MMCA.Common v1.265.1; prior runs
+2026-10-22 at v1.250.0, 2026-10-08 at v1.233.0 and 2026-10-02 at v1.221.0). 2026-10-29 entry (v1.265.1):
+ADR-031's Revision (2026-10-26) (`Website/docs-src/adr/031-feature-flag-management.md:242-277`) restates
+the targeting trade-off, so two body passages were corrected. The `AddAPI` paragraph and the rollout
+trade-off previously credited the Percentage filter with per-user stickiness; only the Targeting filter
+reads the context (accessor XML doc `CurrentUserTargetingContextAccessor.cs:8-14`, ADR-031 `:91-102`),
+the Percentage filter is random per evaluation, and a sticky rollout uses Targeting with
+`DefaultRolloutPercentage` (the `Microsoft.FeatureManagement` 4.8.0 package source, pinned at
+`MMCA.Common/Directory.Packages.props:32`, was not read; the claim rests on ADR-031). The anonymous
+empty-context sentence (`:67-74`) replaces the previous "no targeting audience" sentence. The flag-debt
+bullet previously said a repo that has not subclassed the gate carries its debt uncounted, which reads
+as if one had not; all four repos subclass `FeatureFlagLifecycleTestsBase`
+(`MMCA.Common/Tests/Architecture/MMCA.Common.Architecture.Tests/Governance/FeatureFlagLifecycleTests.cs:13`,
+`MMCA.ADC/Tests/Architecture/MMCA.ADC.Architecture.Tests/Governance/FeatureFlagLifecycleTests.cs:9`,
+`MMCA.Store/Tests/Architecture/MMCA.Store.Architecture.Tests/Governance/FeatureFlagLifecycleTests.cs:9`,
+`MMCA.Helpdesk/Tests/Architecture/MMCA.Helpdesk.Architecture.Tests/ArchitectureTests.cs:210`). The
+`AddAPI` registration (`DependencyInjection.cs:104-107`, comment `:94-96`) and the accessor anchors
+(`:54-55`, `:86`) were re-read and hold. ADR-031 anchors refreshed (see below). 2026-10-22 entry (v1.250.0): every anchor below was
 re-read against current source this run and holds unchanged, except the ADR-031 anchors, which all moved
 down one line after its 2026-10-21 Status line (see below). Two body corrections: (1) the scoring-command
 sentence previously said a flag-off failure completes the queued row rather than retrying it, citing the
@@ -365,15 +386,18 @@ Flag lifecycle: `[FeatureFlag]`
 and `TemporaryFeatureFlagsAreNotPastRemoveBy` (`:70`), exposed as facts on `FeatureFlagLifecycleTestsBase`
 (`.../Bases/Governance/FeatureFlagLifecycleTestsBase.cs:10`, facts `:20-25`, `protected virtual Today` `:18`).
 Conventions and trade-offs from `Website/docs-src/adr/031-feature-flag-management.md`, re-anchored in the
-2026-10-22 run: the `404` convention with bodies that each state a feature is unavailable (Decision bullet
-`:52-58`), two enforcement points agree only by convention with no fitness rule (`:77-79`), flag debt with
-the expiry check shipped and adopted per repo (`:80-83`), missing key resolves to disabled and is fail-safe
-(`:84-86`). The Status lists six revisions (2026-08-18 `:4-6`, 2026-08-31 `:6-8`, 2026-09-11 `:10-14`,
-2026-10-01 `:16-18`, 2026-10-06 `:20-22`, 2026-10-21 `:22-23`, the last an anchor refresh with its section at
-`:215-227`). Revision (2026-10-01) (`:177-191`) corrects the anonymous-404 reading; Revision (2026-10-06)
-(`:193-213`) removes the flag name from the CQRS message and drove the 2026-10-08 run's rewrite. The
-flag-debt trade-off follows the Revision (2026-09-11) (`:134-175`), and the targeting caveat follows the
-narrowing paragraph of the Revision (2026-08-18) (`:122-125`).
+2026-10-29 run: the `404` convention with bodies that each state a feature is unavailable (Decision bullet
+`:55-61`), two enforcement points agree only by convention with no fitness rule (`:80-82`), flag debt with
+the expiry check shipped and adopted in all four repos (`:83-87`), missing key resolves to disabled and is
+fail-safe (`:88-90`), only the Targeting filter is sticky per user (`:91-102`). The Status lists seven
+revisions (2026-08-18 `:4-6`, 2026-08-31 `:6-8`, 2026-09-11 `:10-14`, 2026-10-01 `:16-18`, 2026-10-06
+`:20-22`, 2026-10-21 `:22-23`, 2026-10-26 `:23-26`; the 2026-10-21 section is at `:228-240`, the
+2026-10-26 section at `:242-277`). Revision (2026-10-01) (`:190-204`) corrects the anonymous-404 reading;
+Revision (2026-10-06) (`:206-226`) removes the flag name from the CQRS message and drove the 2026-10-08
+run's rewrite. The flag-debt trade-off follows the Revision (2026-09-11) (`:147-188`) and the Revision
+(2026-10-26) item 2; the targeting caveat follows the Trade-offs entry `:91-102` and the Revision
+(2026-10-26) item 1, which narrows the Revision (2026-08-18) (section `:104`, narrowing paragraph
+`:135-138`) to the Targeting filter.
 The targeting identifier is the JWT `sub` claim (`AuthClaimTypes.Subject`,
 `MMCA.Common/Source/Core/MMCA.Common.Shared/Auth/AuthClaimTypes.cs:34`) read through `FindUserIdValue()`
 (`ClaimsPrincipalExtensions.cs:26-28`, falling back to the mapped `ClaimTypes.NameIdentifier`), used at

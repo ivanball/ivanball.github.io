@@ -95,7 +95,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 53 articles</summary>
+        <summary>All 54 articles</summary>
         <nav class="doc-nav" aria-label="The MMCA.Common series">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -151,7 +151,8 @@
         <li><a href="governed-llm-boundary.html">50 · The governed LLM boundary</a></li>
         <li><a href="durable-internal-commands.html">51 · Four ways to do work later</a></li>
         <li><a href="identity-completions.html">52 · Finishing identity</a></li>
-        <li><a href="series-index.html">53 · The series index</a></li>
+        <li><a href="cloud-neutral-vendor-adapters.html">53 · One framework, three clouds</a></li>
+        <li><a href="series-index.html">54 · The series index</a></li>
           </ol>
         </nav>
       </details>
@@ -192,7 +193,7 @@
           extra requirement: it has to be transport-agnostic. The same logical failure (a not-found, a
           forbidden, a conflict) has to look the same to a caller whether the answer came from an in-process
           object, an HTTP hop, or a gRPC hop. If it does not, extraction is a breaking change for every consumer.</p>
-          <h2 id="the-mmca-answer-one-mapping-table-reused-on-both-transports">The MMCA answer: one mapping table, reused on both transports</h2>
+          <h2 id="the-mmca-answer-one-mapping-decision-one-frozen-table-per-transport">The MMCA answer: one mapping decision, one frozen table per transport</h2>
           <p>MMCA.Common&#39;s whole error story starts from one decision recorded across the codebase: expected
           failures are <em>values</em>, not exceptions. Handlers return <code>Result&lt;T&gt;</code> carrying an <code>Error</code> list, each error
           typed by an <code>ErrorType</code>. The edge&#39;s only job is to translate that value into the right wire shape.</p>
@@ -234,8 +235,8 @@
           oversize body or 400 otherwise) and turns everything else into a 500. Together they guarantee one
           invariant: every error an action returns or throws leaves the API as an RFC 9457
           Problem Details with a sensible status. The invariant covers the MVC pipeline, not the middleware in
-          front of it: the rate limiter rejects with a bare 429 (it sets a rejection status and writes no body),
-          and an unmatched route is a bare 404, because the framework does not call <code>UseStatusCodePages</code>.</p>
+          front of it: the rate limiter rejects with a 429 that carries a <code>Retry-After</code> header whenever the
+          limiter knows when its window resets, but writes no body, and an unmatched route is a bare 404, because the framework does not call <code>UseStatusCodePages</code>.</p>
           <p>There is also a guard against the most insidious bug in this space: a controller that calls
           <code>Ok(result)</code> on a <em>failed</em> <code>Result</code>. Without a guard that serializes as a misleading <code>200 OK</code> carrying
           an error body. <code>UnhandledResultFailureFilter</code> is an always-run result filter, registered globally, that
@@ -267,7 +268,9 @@
           it would have seen in-process.</p>
           <p>That status-mapping symmetry is the point. The <code>ErrorType -&gt; status</code> decision is made once per transport in a frozen
           table, the translation is a pipeline concern written once in an interceptor, and a <code>NotFound</code> is a 404
-          over HTTP and a <code>NotFound</code> <code>RpcException</code> over gRPC because both tables agree. The same holds for a
+          over HTTP and a <code>NotFound</code> <code>RpcException</code> over gRPC because both tables agree. They are two tables,
+          not one shared object: the gRPC table documents itself as a mirror of <code>ErrorHttpMapping</code>, and the only
+          code the two transports share is the <code>ErrorTypeSeverity</code> ranking that picks the winning error. The same holds for a
           temporary refusal: <code>TooManyRequests</code> is a 429 over HTTP and <code>ResourceExhausted</code> over gRPC.</p>
           <h2 id="the-rest-of-the-9-contract">The rest of the §9 contract</h2>
           <p>The same edge standardizes the things that drift if left to each endpoint:</p>
@@ -327,7 +330,8 @@
           repos run the rule on every build.</li>
           </ul>
           <p>So the enforcement story reads cleanly in three parts. The error <em>mapping</em> is enforced where it is
-          defined (a frozen table reused on both transports, plus the 200-with-error-body filter). The contract
+          defined (one frozen table per transport, the gRPC one mirroring the HTTP one, plus the
+          200-with-error-body filter). The contract
           <em>shape</em> is enforced by a baseline a build diffs. The contract <em>purity</em> invariant is enforced by a
           dedicated fitness rule, alongside the layer and transport rules (ADR-015) that guard the same boundary
           from the layer side. The remaining implementation point is the four gaps named above: a purity rule no
@@ -355,8 +359,9 @@
           </ol>
           <hr>
           <p><strong>What we covered:</strong> why per-endpoint error handling produces inconsistent contracts that do not
-          survive a transport change, how MMCA.Common maps <code>ErrorType</code> to status through a single frozen table
-          reused by <code>ApiControllerBase.HandleFailure</code> over HTTP and <code>GrpcResultExceptionInterceptor</code> over gRPC,
+          survive a transport change, how MMCA.Common maps <code>ErrorType</code> to status through one frozen table per
+          transport (<code>ErrorHttpMapping</code> behind <code>ApiControllerBase.HandleFailure</code> over HTTP, its mirror behind
+          <code>GrpcResultExceptionInterceptor</code> over gRPC) ranked by one shared severity order,
           how a guard closes the 200-with-error-body trap, and how §9 keeps that contract honest (a committed
           OpenAPI baseline the framework&#39;s own build diffs, consumer hosts snapshotting their concrete surface,
           and a dedicated <code>[ServiceContract]</code> purity rule that bites on the interfaces the consumers mark).</p>
@@ -383,7 +388,7 @@
             <p class="doc-toc-title">On this page</p>
             <ul>
             <li><a href="#why-it-matters">Why it matters</a></li>
-            <li><a href="#the-mmca-answer-one-mapping-table-reused-on-both-transports">The MMCA answer: one mapping table, reused on both transports</a></li>
+            <li><a href="#the-mmca-answer-one-mapping-decision-one-frozen-table-per-transport">The MMCA answer: one mapping decision, one frozen table per transport</a></li>
             <li><a href="#the-rest-of-the-9-contract">The rest of the §9 contract</a></li>
             <li><a href="#trade-offs-honestly">Trade-offs, honestly</a></li>
             <li><a href="#apply-this-even-without-mmca">Apply this even without MMCA</a></li>

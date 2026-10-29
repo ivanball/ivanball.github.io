@@ -95,7 +95,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 53 articles</summary>
+        <summary>All 54 articles</summary>
         <nav class="doc-nav" aria-label="The MMCA.Common series">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -151,7 +151,8 @@
         <li><a href="governed-llm-boundary.html">50 · The governed LLM boundary</a></li>
         <li><a href="durable-internal-commands.html">51 · Four ways to do work later</a></li>
         <li><a href="identity-completions.html">52 · Finishing identity</a></li>
-        <li><a href="series-index.html">53 · The series index</a></li>
+        <li><a href="cloud-neutral-vendor-adapters.html">53 · One framework, three clouds</a></li>
+        <li><a href="series-index.html">54 · The series index</a></li>
           </ol>
         </nav>
       </details>
@@ -162,8 +163,8 @@
           <p class="article-meta"><time datetime="2026-07-12T16:36:58Z">July 12, 2026</time> <span aria-hidden="true">·</span> Ivan Ball-llovera <span aria-hidden="true">·</span> <a href="https://medium.com/@ivanball76/self-ordering-modules-discovered-kahn-ordered-and-extractable-2ce7283a26b5" target="_blank" rel="noopener">Also on Medium ↗</a></p>
           <figure class="article-hero"><img src="../assets/img/articles/article-14.webp" srcset="../assets/img/articles/article-14.webp 800w, ../assets/img/articles/article-14-1600.webp 1600w" sizes="(max-width: 900px) 100vw, 900px" alt="" width="800" height="420" decoding="async"></figure>
           <p class="article-subtitle">A module declares its name and its dependencies. The framework discovers every module,
-          sorts them with Kahn&#39;s algorithm, and registers them in an order where a dependency always exists
-          before the code that wraps it. The same code boots as a monolith or as a fleet of services.</p>
+          sorts them with Kahn&#39;s algorithm, and registers them in an order where a dependency always registers
+          before the modules that need it. The same code boots as a monolith or as a fleet of services.</p>
           <hr>
           <p>Most &quot;modular&quot; .NET codebases have a <code>Program.cs</code> that looks like this:</p>
           <pre class="doc-pre" tabindex="0" data-lang="C#"><code class="language-csharp hljs">services.AddIdentityModule();
@@ -220,7 +221,9 @@ services.AddNotificationModule(); <span class="hljs-comment">// needs Identity</
           </ol>
           <p>The output is an ordering where every module appears after all of its dependencies. Because the loader
           registers modules in that order, a dependency&#39;s DI registrations always exist before any dependent
-          registers, which is exactly the precondition the decorator pipeline needs.</p>
+          registers. The decorator precondition is a separate, coarser guarantee: every module&#39;s handlers, in
+          whatever order, must be registered before the decorators run at all, and that comes from where
+          discovery sits in the application pipeline (below), not from the sort.</p>
           <p>There is a built-in correctness check that the hand-ordered list could never give you: if fewer modules
           come out of the sort than went in, the leftovers form a <strong>dependency cycle</strong>, and the loader throws with
           the offending module names. A circular dependency between modules becomes a loud, named startup failure
@@ -233,7 +236,7 @@ services.AddNotificationModule(); <span class="hljs-comment">// needs Identity</
           rest. And every step emits a structured <code>[LoggerMessage]</code>-generated log line, so the startup log tells
           you precisely which modules loaded, in what order, and how long each took. When something is wrong, you
           read it, you do not guess it.</p>
-          <pre class="doc-pre" tabindex="0" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-comment">// In each host&#x27;s Program.cs. AddModuleHost binds and validates ApplicationSettings and</span>
+          <pre class="doc-pre" tabindex="0" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-comment">// In each ADC and Store service host&#x27;s Program.cs. AddModuleHost binds and validates ApplicationSettings and</span>
 <span class="hljs-comment">// ModulesSettings, builds the ModuleLoader and registers it as a singleton. It deliberately does</span>
 <span class="hljs-comment">// not run discovery itself.</span>
 <span class="hljs-keyword">using</span> <span class="hljs-keyword">var</span> loggerFactory = SerilogHostExtensions.CreateBootstrapLoggerFactory();
@@ -246,11 +249,14 @@ services.AddNotificationModule(); <span class="hljs-comment">// needs Identity</
 services.AddMmcaApplicationPipeline(pipeline =&gt; pipeline
     .Register(moduleHost.RegisterModules));</code></pre>
           <p>A subtlety worth stating because it is easy to assume otherwise: discovery is <strong>not</strong> something
-          <code>AddApplication()</code> does for you, and the host does not call <code>DiscoverAndRegister</code> by hand either.
-          <code>AddModuleHost</code> captures the configuration, the bound settings, the environment name and the module
-          assemblies, and hands back a <code>ModuleHostContext</code> whose <code>RegisterModules</code> method is the delegate that
-          calls <code>DiscoverAndRegister</code> with all six of them. Registering that delegate as a pipeline step is what
-          puts the modules in the right place in the sequence. The loader stays a singleton, which is how it also
+          <code>AddApplication()</code> does for you, and an ADC or Store service host does not call <code>DiscoverAndRegister</code>
+          by hand either. <code>AddModuleHost</code> captures the configuration, the bound settings, the environment name and
+          the module assemblies, and hands back a <code>ModuleHostContext</code> whose <code>RegisterModules</code> method is the
+          delegate that calls <code>DiscoverAndRegister</code> with those five values plus the <code>IServiceCollection</code> the
+          pipeline passes in. Registering that delegate as a pipeline step is what puts the modules in the right
+          place in the sequence. Helpdesk&#39;s monolith host composes the same step by hand: it builds its own
+          <code>ModuleLoader</code>, registers it as a singleton, and calls <code>DiscoverAndRegister</code> inside a pipeline
+          <code>Register</code> step, so discovery still runs before the decorators. The loader stays a singleton, which is how it also
           drives startup seeding through <code>SeedAllAsync</code> (which invokes each enabled module&#39;s
           <code>IModuleSeeder.SeedAsync</code> once a real <code>IServiceProvider</code> exists, for example to seed a default admin
           user).</p>
@@ -364,8 +370,8 @@ services.AddMmcaApplicationPipeline(pipeline =&gt; pipeline
           <p>The pattern ports cleanly to any DI container:</p>
           <ol>
           <li>Give each module a <strong>name and a declared dependency list</strong>, not a hard-coded registration position.</li>
-          <li><strong>Topologically sort</strong> before you register. Kahn&#39;s algorithm is about fifteen lines; the payoff is
-          that a cycle becomes a named exception instead of a subtle bug.</li>
+          <li><strong>Topologically sort</strong> before you register. Kahn&#39;s algorithm is short (<code>ModuleLoader</code>&#39;s sort is about fifty lines,
+          comments and braces included); the payoff is that a cycle becomes a named exception instead of a subtle bug.</li>
           <li>Register decorators or pipeline behaviors <strong>after</strong> the things they wrap, and make that ordering a
           consequence of the sort rather than a comment. Better still, make the sequence one call that closes
           itself, so a late registration throws instead of running unwrapped.</li>

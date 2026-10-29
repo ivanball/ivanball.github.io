@@ -11,7 +11,7 @@
 > `Website/docs-src/adr/125-parameterized-sql-only.md`,
 > `Website/docs-src/adr/128-time-as-an-input.md`,
 > `Website/docs-src/adr/132-build-strictness-analyzer-policy.md`, and
-> `Website/docs-src/onboarding/group-28-testing-infrastructure.md`. No em dashes.
+> `Website/docs-src/onboarding/group-29-testing-infrastructure.md`. No em dashes.
 
 **Subtitle:** The inward-dependency rule everyone agrees on is the one everyone eventually breaks. Here
 is how MMCA.Common enforces it twice, defines the rules once, and makes them identical across four
@@ -86,8 +86,8 @@ does not fail the build is a comment nobody has to act on (ADR-132).
 to `latest` with `AnalysisMode` `All` (`:11-12`), and turns on `EnforceCodeStyleInBuild` (`:14`), so the
 IDE-only style rules run in the command-line build too. Five third-party analyzer packages, Meziantou,
 Microsoft.VisualStudio.Threading, Roslynator, SonarAnalyzer and StyleCop, ride into every project except
-a Docker Compose `.dcproj` (`:130-150`), with their versions pinned through Central Package Management
-(`MMCA.Common/Directory.Packages.props:233`, `:239-242`). The shared `.editorconfig` then sets
+a Docker Compose `.dcproj` (`:113-134`), with their versions pinned through Central Package Management
+(`MMCA.Common/Directory.Packages.props:281`, `:287-290`). The shared `.editorconfig` then sets
 `dotnet_analyzer_diagnostic.severity = error` (`MMCA.Common/.editorconfig:312`): every diagnostic
 starts as an error, and a rule that does not apply here is turned off by name with its reason beside
 it, so the exception list is something a reviewer can read rather than something implied by silence.
@@ -103,8 +103,8 @@ a four-repo change.
 **An empty run is a failure.** A green test step proves only that the tests which ran passed, and a
 broken filter or a discovery failure can turn a suite into zero tests and still report success. So the
 solution-wide unit runs carry `--minimum-expected-tests`: 2000 in MMCA.Common, against a suite that executes
-8,386 tests in CI (`MMCA.Common/.github/workflows/ci.yml:163`), 5000 in MMCA.ADC
-(`MMCA.ADC/.github/workflows/deploy.yml:366`) and 2650 in MMCA.Store
+9,122 tests in CI (`MMCA.Common/.github/workflows/ci.yml:163`), 5000 in MMCA.ADC
+(`MMCA.ADC/.github/workflows/deploy.yml:367`) and 2650 in MMCA.Store
 (`MMCA.Store/.github/workflows/deploy.yml:338`). That is the same vacuity guard the form-count floor
 below applies to a single gate, applied to the whole run. The line-coverage floor that sits beside it
 belongs to the test pyramid and is covered in Article 35
@@ -120,12 +120,12 @@ Here is the part that makes the fitness functions scale across more than one rep
 three slightly-different copies.
 
 The rule *bodies* do not live in the test project. They live once, in a shipped NuGet package:
-`MMCA.Common.Testing.Architecture` (package 18 of the twenty-two the framework publishes, with
+`MMCA.Common.Testing.Architecture` (package 21 of the twenty-six the framework publishes, with
 `FACTS.md` the canonical count). That
 package defines:
 
 - `ArchitectureRules`, the reusable rule library that expresses the actual assertions.
-- A set of 63 abstract `*TestsBase` classes holding 159 test methods (for example
+- A set of 64 abstract `*TestsBase` classes holding 160 test methods (for example
   `LayerDependencyTestsBase`, `DomainPurityTestsBase`, `MicroserviceExtractionTestsBase`,
   `PiiConventionTestsBase`, `FolderWidthTestsBase`, `DataResidencyTestsBase`,
   `RawSqlConventionTestsBase`, `ClockReadTestsBase`).
@@ -420,7 +420,7 @@ disagrees with the severity count fails for the same reason (`:145`).
 
 Adoption is the shape the rest of this tier already uses. MMCA.ADC and MMCA.Store each embed their
 real `infra/main.bicep` and `infra/OPERATIONS.md` as manifest resources
-(`MMCA.ADC/Tests/Architecture/MMCA.ADC.Architecture.Tests/MMCA.ADC.Architecture.Tests.csproj:17-22`)
+(`MMCA.ADC/Tests/Architecture/MMCA.ADC.Architecture.Tests/MMCA.ADC.Architecture.Tests.csproj:25-30`)
 and declare a subclass whose only body is a raised floor matching the specs that repo provisions:
 MMCA.Store's `protected override int MinimumAlertSpecs => 5;`
 (`MMCA.Store/Tests/Architecture/MMCA.Store.Architecture.Tests/Governance/ObservabilityConventionTests.cs:13`),
@@ -437,9 +437,9 @@ two consumers inherit the default, so the workbook fact runs for both. MMCA.Help
 inapplicable gate rather than an unadopted one. The honest limits are two. This is a text gate over
 infrastructure-as-code: it proves the two files agree, not that the deployment ran or that the query
 behind an alert measures what it claims. And it pairs only the SLO alerts declared between the parse
-anchors. MMCA.ADC provisions nine further operational alerts and MMCA.Store seven (dead-lettered
+anchors. MMCA.ADC provisions twelve further operational alerts and MMCA.Store seven (dead-lettered
 outbox messages, a failed revision activation, the gateway availability probe among them) after that
-loop closes, and the gate neither requires nor forbids a runbook section for any of those sixteen; each
+loop closes, and the gate neither requires nor forbids a runbook section for any of those nineteen; each
 has written triage today, kept by review rather than by the build (ADR-062). The alerting mechanism itself sits with the
 telemetry it watches, in Article 48.
 
@@ -564,7 +564,7 @@ severity-correct runbook section, how the same idea extends to cost through a co
 that gates allocations absolutely and latency only as a ratio, and the honest limit that you only
 enforce what you write a rule for.
 
-**Next in the series:** the test pyramid behind these fitness functions, more than 8,000 fast tests with
+**Next in the series:** the test pyramid behind these fitness functions, more than 9,000 fast tests with
 no Docker and no database.
 
 *MMCA.Common is Apache-2.0 licensed and open source. Star the repo, read the Architecture section
@@ -576,7 +576,27 @@ something.*
 
 *Tags: Software Architecture, .NET, C Sharp, Testing, Clean Architecture*
 
-*Notes: 2026-10-22 pass against MMCA.Common v1.250.0 (re-verified 2026-10-22). Every anchor below was re-opened
+*Notes: 2026-10-29 pass against MMCA.Common v1.265.1 (re-verified 2026-10-29; `MMCA.Common/FACTS.md:14`, was
+v1.250.0). Body corrections, all re-read: fitness counts 160 methods across 64 abstract `*TestsBase` classes
+(`MMCA.Common/FACTS.md:89`; Common's own build executes 479, `:92`); `MMCA.Common.Testing.Architecture` is
+package 21 (`:42`) of 26 published (`:19`); the analyzer `ItemGroup` excluding `.dcproj` is
+`MMCA.Common/Directory.Build.props:113-134` (was `:130-150`) and the CPM pins are
+`MMCA.Common/Directory.Packages.props:281` (Meziantou) and `:287-290` (Threading, Roslynator, Sonar, StyleCop)
+(were `:233`/`:239-242`); ADC's `--minimum-expected-tests 5000` is at `MMCA.ADC/.github/workflows/deploy.yml:367`
+(was `:366`; step name `:351`); ADC embeds `infra/main.bicep` and `infra/OPERATIONS.md` at
+`MMCA.ADC/Tests/Architecture/MMCA.ADC.Architecture.Tests/MMCA.ADC.Architecture.Tests.csproj:25-30` (comment
+`:22-24`; `:17-21` is the brand-token CSS resource); ungated operational alerts are twelve on ADC and seven on
+Store, nineteen in all (`Website/docs-src/adr/062-slo-alerting-as-code.md:85`, `:296`); the G25 chapter file is
+`group-29-testing-infrastructure.md` (`Website/docs-src/onboarding/00-group-taxonomy.md:84`), `group-28` now
+being the cloud provider adapters chapter. `FormsConventionTestsBase` required markers sit at `:72-75` (now
+four, adding `_isDirty`) and the floor assertion at `:244-245` (class `:27` and `MinimumCreateForms` `:53`
+unchanged). Common scorecard evidence is stamped 2026-10-29 at v1.265.1
+(`Website/docs-src/governance/common-ArchitectureScorecard.md:5`), indices unchanged. The executed-test
+figure moves 8,386 to 9,122 and "more than 8,000" to "more than 9,000" (the `build-and-test` job of CI run
+40870473851, 2026-10-29: 9,122 executed, 9,122 succeeded, 0 skipped, the figure Article 35 cites); the floor
+2000 is still `MMCA.Common/.github/workflows/ci.yml:163`. Anchors not named in this entry are as
+of the 2026-10-22 pass that follows, which is superseded wherever this entry moves one.
+2026-10-22 pass against MMCA.Common v1.250.0 (re-verified 2026-10-22). Every anchor below was re-opened
 this pass and is given at the line it holds today; the 2026-10-08 (v1.233.0) and 2026-10-02 (v1.221.0) passes are
 superseded wherever an anchor moved. Counts come from the CI-gated `MMCA.Common/FACTS.md` ("As of: 2026-10-21
 (framework v1.250.0)" at `:4`, "Current: v1.250.0" at `:14`): 159 test methods across 63 abstract `*TestsBase`

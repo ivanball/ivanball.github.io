@@ -95,7 +95,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 53 articles</summary>
+        <summary>All 54 articles</summary>
         <nav class="doc-nav" aria-label="The MMCA.Common series">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -151,7 +151,8 @@
         <li><a href="governed-llm-boundary.html">50 · The governed LLM boundary</a></li>
         <li><a href="durable-internal-commands.html">51 · Four ways to do work later</a></li>
         <li><a href="identity-completions.html">52 · Finishing identity</a></li>
-        <li><a href="series-index.html">53 · The series index</a></li>
+        <li><a href="cloud-neutral-vendor-adapters.html">53 · One framework, three clouds</a></li>
+        <li><a href="series-index.html">54 · The series index</a></li>
           </ol>
         </nav>
       </details>
@@ -256,8 +257,10 @@ services.AddEngagementBookmarkCountClient();   <span class="hljs-comment">// shi
           credential unless its client opts into the framework&#39;s service token with <code>WithServiceToken()</code>
           (covered in <a href="jwks-cross-service-auth.html">Cross-service auth without a shared secret: JWKS discovery</a>).</li>
           <li><code>AddStandardResilienceHandler()</code> gives every gRPC client a Polly retry, timeout, and
-          circuit-breaker pipeline whose values come from <code>GrpcResilienceDefaults</code>. The timeouts and the retry
-          budget are the HTTP clients&#39; own. The retry fires only on a failure to reach the peer before the
+          circuit-breaker pipeline whose values come from the <code>Grpc</code>-prefixed members of
+          <code>HttpResilienceDefaults</code>. The timeouts are the east-west path&#39;s own (8 seconds per attempt, 20 in
+          total, against the HTTP clients&#39; 30 and 90), while the retry budget of one is shared with the HTTP
+          clients. The retry fires only on a failure to reach the peer before the
           request was sent (an <code>HttpRequestException</code> whose <code>HttpRequestError</code> is name resolution, the TCP
           connect, or the TLS handshake), because every gRPC call is a POST and replaying one that reached the
           handler could run it twice; an <code>HttpRequestException</code> raised after the request frames were written is
@@ -330,7 +333,7 @@ engagementService.WithReference(conferenceService).WaitFor(conferenceService);</
           <h2 id="step-7-route-through-the-yarp-gateway">Step 7: route through the YARP gateway</h2>
           <p>Clients never address a service directly. A single YARP reverse-proxy gateway owns the
           route-to-service map and is the only entry point. It has no DbContext and no controllers; it is CORS,
-          static files, the route table, and the edge concerns in step 8. You add the service&#39;s routes to the
+          security headers, static files, the route table, and the edge concerns in step 8, among others. You add the service&#39;s routes to the
           gateway&#39;s table and reference it for discovery, and in the local AppHost you wire JWKS discovery so
           the new service resolves keys through that same gateway:</p>
           <pre class="doc-pre" tabindex="0" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-keyword">var</span> gateway = builder.AddProject&lt;Projects.MMCA_App_Gateway&gt;(<span class="hljs-string">&quot;gateway&quot;</span>)
@@ -350,7 +353,9 @@ engagementService.WithJwksDiscovery(identityService, gateway);  <span class="hlj
           that makes the client IP the caller&#39;s rather than the ingress&#39;s, ships in <code>MMCA.Common.Gateway</code>
           alongside <code>AddMmcaGateway</code>, the shared YARP forwarder profile both gateways chain onto
           <code>AddReverseProxy</code>. The package placement is a constraint, not a preference: a YARP host has no
-          controllers, so it references those two framework packages and nothing else from the framework, and
+          controllers, so it references those two framework packages plus <code>MMCA.Common.Azure</code> (for Key Vault
+          configuration and Azure Monitor export, see
+          <a href="cloud-neutral-vendor-adapters.html">the cloud adapters article</a>) and nothing else from the framework, and
           it cannot reach the service-tier <code>CorrelationIdMiddleware</code> or <code>AddCommonRateLimiting</code> that live in
           <code>MMCA.Common.API</code>.</p>
           <pre class="doc-pre" tabindex="0" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-comment">// Gateway Program.cs</span>

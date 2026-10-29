@@ -175,7 +175,7 @@ A rubric is a tool, not an oracle, and it has sharp edges worth naming.
 - **Some categories are genuinely N/A.** Be willing to exclude rather than fudge. But excluding should
   be a documented decision, not a convenient dodge for a category you would rather not face.
 - **A snapshot ages.** A scorecard is true only for the commit it was read against, and the thing being
-  scored keeps moving: twenty-two published packages, lock files, an SBOM-gated release, a
+  scored keeps moving: twenty-six published packages, lock files, an SBOM-gated release, a
   `DependencyVersionTests` guard for the MassTransit pin, and the ADR-005 erasure extension point all
   postdate the first committed pass. Each re-verification re-scores it on both axes and stamps the
   version and commit it read. The honest framing is "scored, published, then fixed, then re-scored":
@@ -219,13 +219,13 @@ gaps and all, and then score one of your own systems against the rubric.*
 
 *Tags: Software Architecture, .NET, Engineering Management, Code Quality, Technical Leadership*
 
-*Notes (2026-10-22 refresh, framework v1.250.0): the two-axis indices (Maturity 97.3% = 319/328, Implementation
+*Notes (2026-10-29 refresh, framework v1.265.1): the two-axis indices (Maturity 97.3% = 319/328, Implementation
 85.4% = 700/820), the all-34-categories-scored / no-N/A status and the per-category scores are taken from the
 canonical two-axis scorecard, `Website/docs-src/governance/common-ArchitectureScorecard.md` (`:9` Maturity index,
 `:10` Implementation index, `:104` "N/A (excluded from denominators): none", sigma-weight 82). Scorecard evidence
-stamp: 2026-10-22 at v1.250.0, git HEAD `51c321fe`, clean tree (`:5`); the framework is v1.250.0 per
+stamp: 2026-10-29 at v1.265.1, git HEAD `8658c6cf`, clean tree (`:5`); the framework is v1.265.1 per
 `MMCA.Common/FACTS.md:4,14`, so the scorecard and FACTS agree on the version, and the article claims only that each re-verification
-stamps the version and commit it read. Twenty-two published packages (`FACTS.md:19`). Category row N sits at
+stamps the version and commit it read. Twenty-six published packages (`FACTS.md:19`). Category row N sits at
 scorecard line 64+N (`:65` to `:98`). Section 16 AI-Native Application Architecture is Maturity 4 / Implementation
 9 on weight 2 (`:80`), scored because `MMCA.Common.AI` ships a model-calling feature (`:104`). The Maturity-3
 categories are section 1 SOLID (`:65`: SRP, DIP and the throw half of LSP are enforced automatically via
@@ -244,20 +244,21 @@ WCAG AA contrast values are at `Source/Presentation/MMCA.Common.UI/Theme/MMCAThe
 (`PrimaryDarken`, `PrimaryContrastText`, `Error`, `ErrorContrastText`), locked by the
 `ui-e2e` job (`.github/workflows/ci.yml:223`, `browser: [chromium, firefox, webkit]` matrix at `:232`, all three
 required per `:233-235`). Section 14 Testability rests on a CI line-coverage floor of 68.3% (the `Enforce coverage
-floor (unit/arch/bUnit tier, generated code excluded)` step at `ci.yml:398`, `m="68.3"` at `:409`, 70.3% measured
-per `:396`). Section 9 API & Contract Design is Maturity 4 / Implementation 9 (`:73`), section 10 Messaging &
+floor (unit/arch/bUnit tier, generated code excluded)` step at `ci.yml:483`, `m="68.3"` at `:494`, 70.3% measured
+per `:481`). Section 9 API & Contract Design is Maturity 4 / Implementation 9 (`:73`), section 10 Messaging &
 Integration Architecture is weight 3, Maturity 4 / Implementation 8 (`:74`), section 11 Security is Maturity 4 /
 Implementation 8 (`:75`), section 23 Front-End Performance is Maturity 4 / Implementation 8 (`:87`), and slice
 cohesion section 5 (`:69`) and Resilience section 29 (`:93`) are Maturity 4. The insight section's convention-only
-survivor is section 17: `sample-deployment-validate` (`ci.yml:707`) runs two compile-only `az bicep build` steps
-(`:719`, `:723`) and is absent from the 8 required contexts (scorecard `:81`, read from the branch-protection
+survivor is section 17: `sample-deployment-validate` (`ci.yml:792`) runs two compile-only `az bicep build` steps
+(`:804`, `:808`) and is absent from the 8 required contexts (scorecard `:81`, read from the branch-protection
 API); section 12 Performance & Scalability is the merge-enforced counterpart at Maturity 4 (`:76`), gated by the
-`Performance gate (BenchmarkDotNet Short + baseline verify)` job (`ci.yml:311`) running `--filter "*" --job Short
---exporters json` (`:343`) then `build/perfgate` against the committed `perf-baseline.json` (`:352`). The
+`Performance gate (BenchmarkDotNet Short + baseline verify)` job (`ci.yml:395`) running `--filter "*" --job Short
+--exporters json` (`:428`) then `build/perfgate` against the committed `perf-baseline.json` (`:437`). The
 idempotency guard resolves an `IDistributedLock`
 (`Source/Presentation/MMCA.Common.API/Idempotency/IdempotencyFilter.cs:149`) and `AddCaching` registers
 `RedisDistributedLock` whenever a Redis multiplexer is present
-(`Source/Core/MMCA.Common.Infrastructure/DependencyInjection.Caching.cs:88-96`; SET with When.NotExists and an
+(`Source/Core/MMCA.Common.Infrastructure/DependencyInjection.Caching.cs:105-119`, `RedisDistributedLock`
+constructed at `:113`, `InProcessDistributedLock` fallback at `:118`; SET with When.NotExists and an
 expiry plus compare-and-delete at
 `Source/Core/MMCA.Common.Infrastructure/Concurrency/RedisDistributedLock.cs:37,67`). The SBOM release gate is
 `.github/workflows/release.yml:106` (the `Generate SBOM (CycloneDX)` step; hard-gate comment `:103-105`); the MassTransit pin guard is
@@ -269,7 +270,14 @@ and section 32 breaking-change policy (`:850`); the scorecard states Implementat
 on purpose as the original snapshot: the earlier single-axis baseline (80% / 218 of 272 / 28 applicable) and the
 first-scored lowest category (Compliance, soft-delete only, no erasure) are from MMCA.Common commit `f518099`,
 `ArchitectureScorecard.md:3` and `:42`; the "MassTransit will retry" comment and the `ServiceContractAttribute`
-claiming a nonexistent test are at `:100` and `:117` of the same commit. Neither is in the current scorecard. 2026-10-22
+claiming a nonexistent test are at `:100` and `:117` of the same commit. Neither is in the current scorecard. 2026-10-29
+run (re-verified 2026-10-29 against MMCA.Common v1.265.1): indices and every per-category score unchanged; body
+packages twenty-two to twenty-six (`FACTS.md:19`); Notes header v1.250.0 to v1.265.1; scorecard stamp 2026-10-22 /
+v1.250.0 / `51c321fe` to 2026-10-29 / v1.265.1 / `8658c6cf` (`:5`); `ci.yml` anchors moved (coverage floor
+398/409/396 to 483/494/481, `sample-deployment-validate` 707/719/723 to 792/804/808, Performance gate 311/343/352
+to 395/428/437; `ui-e2e` 223/232/233-235 unchanged); the `IDistributedLock` registration
+`DependencyInjection.Caching.cs:88-96` to `:105-119` (lines 88-96 are now the cache-service registration),
+behavior unchanged. All other anchors re-read unchanged. 2026-10-22
 run (re-verified 2026-10-22 against MMCA.Common v1.250.0): indices 96.6% (317/328) / 86.0% (705/820) to 97.3%
 (319/328) / 85.4% (700/820) in the header, body and summary; section 31 FinOps Maturity 2 to 3, so the body's
 "FinOps holds the lowest maturity, a 2" became "none below 3 on maturity" and the insight section's Maturity-3

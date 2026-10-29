@@ -1,6 +1,6 @@
 # Idempotency in one attribute: safe retries for HTTP APIs
 
-> Series: MMCA.Common · Article #18 (deep-dive) · Pillar P2 · Group G12 · Rubric §6,§9,§10,§29 · ADR-017 ·
+> Series: MMCA.Common · Article #18 (deep-dive) · Pillar P2 · Group G12 · Rubric §6,§9,§10,§29 · ADR-017 · ADR-021 ·
 > Status: grounded in `MMCA.Common/Source/Presentation/MMCA.Common.API/Idempotency/IdempotencyFilter.cs`,
 > `MMCA.Common/Source/Presentation/MMCA.Common.API/Idempotency/IdempotencyRecord.cs`,
 > `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Inbox/EfInboxStore.cs`,
@@ -33,8 +33,8 @@ produces a second perfectly valid-looking row. You find out when finance reconci
 complains about a duplicate charge, and by then the originating request is long gone from the logs.
 
 And the pressure toward retries only increases as systems get hardened. A stock resilience handler retries
-every verb unless it is told otherwise, which is exactly why MMCA's own outbound handlers switch the retry
-off for `POST` and `PATCH` (ADR-009), and why the framework's UI client retries a `POST` that may have
+every verb unless it is told otherwise, which is exactly why the default handler MMCA puts on every
+outbound `HttpClient` switches the retry off for `POST` and `PATCH` (ADR-009), and why the framework's UI client retries a `POST` that may have
 reached the server only when it carries an `Idempotency-Key` held constant across the attempts (a
 connection that failed before the request was ever sent is the one case it resends without a key). A
 server cannot assume every caller is that
@@ -196,7 +196,7 @@ counterpart to the HTTP filter, documented in ADR-021 and credited on the scorec
 genuinely idempotent inbox consumer (dedup by `MessageId` via `IInboxStore`):
 
 - `IInboxStore` (`EfInboxStore` for the real EF implementation, `NoOpInboxStore` when it is turned off)
-  records each handled message by its `MessageId` in an `InboxMessage` table with a unique index.
+  records each handled message by its `MessageId` in an `InboxMessages` table with a unique index.
 - `IntegrationEventConsumer` calls `TryBeginAsync(MessageId, eventType)` before invoking handlers: a
   message the inbox already holds is skipped and acked, never reapplied. `TryBegin` also *stages* the
   inbox row, unsaved, in the consume scope's unit of work, so a handler that calls `SaveChangesAsync`
@@ -212,8 +212,10 @@ genuinely idempotent inbox consumer (dedup by `MessageId` via `IInboxStore`):
   persist whatever is still unsaved.
 - The posture is resolved from the transport. `MessageBusSettings.EnableInbox` is a nullable bool left
   unset by default, and `IsInboxEnabled` reads that as on for a broker and off for the in-process
-  provider, which has no redelivery to dedup. An explicit value wins in both directions: a host that sets
-  `MessageBus:EnableInbox=false` gets the no-op store plus one startup warning recording the opt-out.
+  provider, which has no redelivery to dedup. The setting only acts on a broker host, because the
+  in-process provider wires no consumer-side messaging at all: a broker host that sets
+  `MessageBus:EnableInbox=false` gets the no-op store plus one startup warning recording the opt-out,
+  while `true` on an in-process host registers nothing.
 
 The retry half is wired too: every receive endpoint gets an exponential-backoff `UseMessageRetry` policy
 (`MessageBusSettings.RetryLimit`), and the consumer rethrows on handler failure so MassTransit applies it
@@ -257,8 +259,8 @@ cost, and writing every handler to be safe to repeat.
   deliberately, and the price is that duplicates can execute twice while the backend is down. Treat that
   metric as an alert, not a dashboard decoration.
 - **The inbox narrows the consumer-side duplicate problem; it does not remove it.** The inbox above
-  resolves on for a broker and off for the in-process provider, and a host can override either way with
-  `MessageBus:EnableInbox`. Wherever it resolves off, every duplicate reaches your handlers; wherever it
+  resolves on for a broker and off for the in-process provider, and a broker host can turn it off with
+  `MessageBus:EnableInbox=false`. Wherever it resolves off, every duplicate reaches your handlers; wherever it
   resolves on, a crash between a handler's commit and the inbox write still redelivers the event once
   more. Either way, every consumer's idempotency is code you own and test.
 - **Partial failure across the handlers of one event cuts both ways.** A handler that saves through the
@@ -318,26 +320,37 @@ onboarding guide, or `dotnet add package MMCA.Common.API` and try it.*
 
 *Tags: .NET, C Sharp, Web API, Distributed Systems, Resilience*
 
-*Notes: re-verified in source 2026-10-22 at framework v1.250.0 (`MMCA.Common/FACTS.md:4,14`). **Corrected this
-pass (2026-10-22):** (i) "Why it matters": the UI client's key requirement is narrowed to a POST that may have
+*Notes: re-verified in source 2026-10-29 at framework v1.265.1 (`MMCA.Common/FACTS.md:4,14`). **Corrected this
+pass (2026-10-29):** (A) "Why it matters" names the one HTTP handler that disables the retry for POST and
+PATCH, the global `ConfigureHttpClientDefaults` handler (`MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Extensions.cs:50`,
+handler `:60-85`, `DisableFor` at `:74`), because the framework ships no typed HTTP service-client helper
+(`Website/docs-src/adr/009-resilience-and-recovery-objectives.md:64-67`); the gRPC handler, where every call
+is a POST, keeps a retry limited to pre-send failures (`MMCA.Common/Source/Presentation/MMCA.Common.Grpc/DependencyInjection.cs:148-160`).
+(B) The inbox table is `InboxMessages`
+(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/ApplicationDbContext.cs:730`, unique
+`IX_InboxMessages_MessageId` `:735`). (C) The `EnableInbox` override is stated as broker-only:
+`AddBrokerMessaging` returns before any inbox registration for the in-process provider
+(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.Messaging.cs:57-60`), so `true` on an
+in-process host registers nothing; both the posture bullet and the trade-off bullet follow. (D) Header adds
+ADR-021, which the body relies on and the series README row already lists. All other anchors in the entries
+below were re-read and moved ones corrected in place. **Earlier pass (2026-10-22):** (i) "Why it matters": the UI client's key requirement is narrowed to a POST that may have
 reached the server. A response-based retry of a POST or PATCH needs a key (`IsReplaySafe`,
-`MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/Api/AuthenticatedServiceBase.cs:124-148`, method `:134`,
-applied at `:115`), while a transport failure is retried key-less when it happened before the send (name
-resolution, connect, TLS handshake; `IsRetryableException` `:177-181`, replay safety recorded by
-`MarkReplaySafety` `:167`). (ii) Mechanism: the generic update action carries `[Idempotent]` as well as create
+`MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/Api/AuthenticatedServiceBase.cs:135-159`, method `:145`,
+applied at `:126`), while a transport failure is retried key-less when it happened before the send (name
+resolution, connect, TLS handshake; `IsRetryableException` `:188-192`, replay safety recorded by
+`MarkReplaySafety` `:177`). (ii) Mechanism: the generic update action carries `[Idempotent]` as well as create
 (`MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/CrudEntityControllerBase.cs:88-89`), and the opt-in
 is declared, not silent: `NonIdempotentAttribute`
 (`MMCA.Common/Source/Presentation/MMCA.Common.API/Idempotency/NonIdempotentAttribute.cs:23`) and the
 `IdempotencyConventionTestsBase` gate
 (`MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Bases/Cqrs/IdempotencyConventionTestsBase.cs:3-10`,
 fact `:14-16`), recorded in ADR-017 (`Website/docs-src/adr/017-request-idempotency.md:8-13`, Revision 2026-08-18
-`:139`). (iii) The §10 row now scores Implementation 8, not 9
+`:143`; Revised 2026-10-28 at `:20`). (iii) The §10 row now scores Implementation 8, not 9
 (`Website/docs-src/governance/common-ArchitectureScorecard.md:74`), still listing the filter's `IDistributedLock`
 with the striped fallback; the body figure follows. **Earlier pass (2026-10-08), re-anchored 2026-10-22:** (a) Opener
-and "Why it matters": MMCA's own resilience handlers never replay a POST or PATCH
-(`MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Extensions.cs:56-63`, `DisableFor` at `:63`; typed-client handler
-`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.Messaging.cs:170-177`, `DisableFor` at `:177`;
-recorded in `Website/docs-src/adr/009-resilience-and-recovery-objectives.md:51,104`), and `EntityServiceBase` stamps
+and "Why it matters": MMCA's own resilience handlers never replay a POST or PATCH (then two handlers, the
+global default and a typed-client helper since removed; the current single handler and its anchors are in the
+2026-10-29 entry above), and `EntityServiceBase` stamps
 an `Idempotency-Key` on creates and holds it across attempts (`.../Services/Api/EntityServiceBase.cs:18`, `:174`).
 The opener's "ADR-009 wires one onto every outbound client" retry premise and the "more automatic retries" sentence
 are reframed around a client or third-party retry policy; the subtitle and recap follow. (b) Inbox bullet: the
@@ -345,14 +358,14 @@ framework's handlers derive from `ScopedIntegrationEventHandlerBase`, which open
 (`MMCA.Common/Source/Core/MMCA.Common.Application/DomainEvents/ScopedIntegrationEventHandlerBase.cs:51`), so their
 saves never carry the staged row; `CompleteAsync` writes it after every handler succeeds
 (`IntegrationEventConsumer.cs:77-81`, `:123`; `EfInboxStore.cs:18-27`; ADR-021 Revision 2026-10-06,
-`Website/docs-src/adr/021-consumer-inbox-idempotency.md:29-32`, `:80-92` (the handler-base passage `:86-88`),
-Revision section `:397`). (c) Handlers must be idempotent with the inbox on too (`IntegrationEventConsumer.cs:80-81`;
+`Website/docs-src/adr/021-consumer-inbox-idempotency.md:29-32`, the handler-base passage `:92-94`,
+Revision section `:406`). (c) Handlers must be idempotent with the inbox on too (`IntegrationEventConsumer.cs:80-81`;
 ADR-021 `:80-82`, `:92-93`): the section close and the transport trade-off bullet are rewritten. (d) The
 several-handlers trade-off is narrowed to same-scope handlers and gains the `ScopedIntegrationEventHandlerBase`
 full-redelivery case (`EfInboxStore.cs:109-133`, log-and-false `:128-132`; `IInboxStore.cs:57-62`). (e) Replicas:
-both apps run `minReplicas: 1` and autoscale to two or more (`MMCA.ADC/infra/main.bicep:2072`, `:2225`, `:2360`,
-`:2546`, `:2698-2699`, with `conferenceScaledMaxReplicas` 2, or 4 in conference mode, at `:192`;
-`MMCA.Store/infra/main.bicep:1684`, `:1808`, `:1956`, `:2074-2075`, `:2192-2193`), so "run more than one" becomes
+both apps run `minReplicas: 1` and autoscale to two or more (`MMCA.ADC/infra/main.bicep:2103`, `:2256`, `:2391`,
+`:2577`, `:2729-2730`, with `conferenceScaledMaxReplicas` 2, or 4 in conference mode, at `:192`;
+`MMCA.Store/infra/main.bicep:1689`, `:1813`, `:1961`, `:2079-2080`, `:2197-2198`), so "run more than one" becomes
 "autoscale to more than one". (f) Newline separator: narrowed to the client key, since an HTTP header value
 cannot carry a newline; the source comment (`IdempotencyFilter.cs:548`) asserts it for every component, but nothing
 validates the subject claim or the decoded-path route fallback (`:544-546`). **Earlier pass (2026-10-02):** (1) `IdempotencyRecord` is `(int StatusCode, string ResponseBody, string RequestBodyHash,
@@ -378,7 +391,7 @@ narrowed and a trade-off bullet added. (4) §10 attribution: the scorecard no lo
 to 9 lift. The §10 row (`Website/docs-src/governance/common-ArchitectureScorecard.md:74`, Implementation 8 as of
 2026-10-22) lists `IdempotencyFilter` resolving an `IDistributedLock` among its evidence, so the body says that
 instead of "on the strength of". (5) ADR-017 was revised 2026-10-01 (`Website/docs-src/adr/017-request-idempotency.md:13-15`,
-Revision `:207-219`) and documents the caller-scoped `sub` subject (`:40-50`), Location and ETag replay
+Revision `:211`) and documents the caller-scoped `sub` subject (`:40-50`), Location and ETag replay
 (`:57-59`), the body binding and 422 (`:60-65`) and the fail-open behavior (`:77-80`, `:128-131`); the previous
 ledger note that the ADR did not cover these is retired. **Re-anchored in `IdempotencyFilter.cs`:** class
 `IAsyncActionFilter, IAsyncResourceFilter` `:68-69`; two-stage remarks `:45-51`; fail-open remarks `:54-58`;
@@ -400,23 +413,23 @@ create action carries it (`.../Controllers/AggregateRootEntityControllerBase.cs:
 `IdempotencySettings.CacheExpirationHours` defaults to 24 with `[Range(1, 168)]`
 (`.../Idempotency/IdempotencySettings.cs:15-16`). The Infrastructure DI registration is split into partials:
 `AddInfrastructure` (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:57`) calls
-`AddCaching` at `:140`, and `AddCaching` (`.../DependencyInjection.Caching.cs:26`) registers the lock through
-`TryAddSingleton<IDistributedLock>` (`:88-102`; `RedisDistributedLock` `:96`, `InProcessDistributedLock`
-`:101`). The Redis acquire is `SET ... NX PX` (`.../Concurrency/RedisDistributedLock.cs:11`, `When.NotExists` at
+`AddCaching` at `:140`, and `AddCaching` (`.../DependencyInjection.Caching.cs:27`) registers the lock through
+`TryAddSingleton<IDistributedLock>` (`:105-119`; `RedisDistributedLock` `:113`, `InProcessDistributedLock`
+`:118`). The Redis acquire is `SET ... NX PX` (`.../Concurrency/RedisDistributedLock.cs:11`, `When.NotExists` at
 `:67`), single-instance and not Redlock (`:20`), with a Lua compare-and-delete release script (`:37`); the
 in-process fallback warns once (`.../Concurrency/InProcessDistributedLock.cs:75`). Contract:
 `MMCA.Common/Source/Core/MMCA.Common.Application/Interfaces/IDistributedLock.cs:30` (not reentrant `:20`,
 best-effort and not consensus `:24`). Stripe: `MMCA.Common/Source/Core/MMCA.Common.Shared/Concurrency/KeyedSemaphoreStripe.cs:22`
 (width 256 `:25`, acquire `:60`, the `Releaser` only releases `:78-85`), class doc `:8-16`. Inbox posture:
-`MessageBusSettings.EnableInbox` is `bool?` (`.../Messaging/MessageBusSettings.cs:133`), `IsInboxEnabled`
-`:141`, `RetryLimit` default 5 `:92`; registration `.../DependencyInjection.Messaging.cs:108-124`
-(`EfInboxStore` `:110`, `NoOpInboxStore` `:118`, `InboxDisabledWarningService` `:123`); `UseMessageRetry`
-`:292` and `:332`. Consumer: `TryBeginAsync` `IntegrationEventConsumer.cs:82` (staging rationale `:77-81`),
+`MessageBusSettings.EnableInbox` is `bool?` (`.../Messaging/MessageBusSettings.cs:139`), `IsInboxEnabled`
+`:147`, `RetryLimit` default 5 `:99`; registration `.../DependencyInjection.Messaging.cs:127-142`
+(`EfInboxStore` `:129`, `NoOpInboxStore` `:137`, `InboxDisabledWarningService` `:142`), after the in-process early return `:57-60`; `UseMessageRetry`
+`.../Messaging/Transports/BrokerTransportPolicies.cs:85` (exponential). Consumer: `TryBeginAsync` `IntegrationEventConsumer.cs:82` (staging rationale `:77-81`),
 rethrow `:109`, `CompleteAsync` `:123`. `InboxMessages` table
 (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/ApplicationDbContext.cs:730`) with a
 unique `MessageId` index (`:733-735`) inside `ConfigureInbox` (`:727`, invoked `:427`). ADR-021
-(`Website/docs-src/adr/021-consumer-inbox-idempotency.md:8`, revised 2026-10-06, 2026-10-07 and 2026-10-21, `:29-35`). At-least-once outbox delivery
-from ADR-003. Scorecard: evidence stamp 2026-10-22 at v1.250.0 (`common-ArchitectureScorecard.md:5`), Maturity
+(`Website/docs-src/adr/021-consumer-inbox-idempotency.md:8`, revised 2026-10-06, 2026-10-07, 2026-10-21, 2026-10-26 and 2026-10-28, `:29-40`). At-least-once outbox delivery
+from ADR-003. Scorecard: evidence stamp 2026-10-29 at v1.265.1 (`common-ArchitectureScorecard.md:5`), Maturity
 97.3% (319/328) `:9`, Implementation 85.4% (700/820) `:10`; §6 credits the inbox consumer `:70`, §9 the filter
 `:73`, §10 the filter's `IDistributedLock` `:74`, §29 the Polly handlers plus outbox degradation `:93`. Owner decision 2026-10-22: the header and the series README mapping row (`Website/docs-src/articles/README.md:28`) widen to Rubric §6, §9, §10, §29, matching the grounding line and the four scorecard credits above.*
 
