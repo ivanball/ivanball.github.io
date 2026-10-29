@@ -6,21 +6,21 @@
   <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#0e151f" media="(prefers-color-scheme: dark)">
   <title>MMCA.Store: Architecture Remediation Backlog · MMCA · Ivan Ball-llovera</title>
-  <meta name="description" content="Derived from ArchitectureScorecard.md: Maturity 97.5% (308/316) / Implementation 83.2% (657/790), evidence as of 2026-10-22 at MMCA.Common. v1.250.0…">
+  <meta name="description" content="Derived from ArchitectureScorecard.md: Maturity 97.5% (308/316) / Implementation 83.2% (657/790), evidence as of 2026-10-29 at MMCA.Common. v1.265.1…">
   <link rel="canonical" href="https://ivanball.github.io/docs/governance/store-RemediationBacklog.html">
   <link rel="icon" href="../../assets/img/favicon.svg" type="image/svg+xml">
   <link rel="alternate" type="application/rss+xml" title="Ivan Ball-llovera: deep dives on enterprise .NET" href="https://ivanball.github.io/feed.xml">
   <meta property="og:type" content="article">
   <meta property="og:site_name" content="Ivan Ball-llovera">
   <meta property="og:title" content="MMCA.Store: Architecture Remediation Backlog">
-  <meta property="og:description" content="Derived from ArchitectureScorecard.md: Maturity 97.5% (308/316) / Implementation 83.2% (657/790), evidence as of 2026-10-22 at MMCA.Common. v1.250.0…">
+  <meta property="og:description" content="Derived from ArchitectureScorecard.md: Maturity 97.5% (308/316) / Implementation 83.2% (657/790), evidence as of 2026-10-29 at MMCA.Common. v1.265.1…">
   <meta property="og:url" content="https://ivanball.github.io/docs/governance/store-RemediationBacklog.html">
   <meta property="og:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <meta property="og:image:alt" content="Ivan Ball-llovera, Principal Software Architect">
   <meta property="og:locale" content="en_US">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="MMCA.Store: Architecture Remediation Backlog">
-  <meta name="twitter:description" content="Derived from ArchitectureScorecard.md: Maturity 97.5% (308/316) / Implementation 83.2% (657/790), evidence as of 2026-10-22 at MMCA.Common. v1.250.0…">
+  <meta name="twitter:description" content="Derived from ArchitectureScorecard.md: Maturity 97.5% (308/316) / Implementation 83.2% (657/790), evidence as of 2026-10-29 at MMCA.Common. v1.265.1…">
   <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Platform","item":"https://ivanball.github.io/platform.html"},{"@type":"ListItem","position":2,"name":"Reference","item":"https://ivanball.github.io/docs/index.html"},{"@type":"ListItem","position":3,"name":"Architecture Governance","item":"https://ivanball.github.io/docs/governance/index.html"},{"@type":"ListItem","position":4,"name":"Store · MMCA.Store: Architecture Remediation Backlog","item":"https://ivanball.github.io/docs/governance/store-RemediationBacklog.html"}]}</script>
   <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);if(localStorage.getItem('mmca-rail')==='hidden')document.documentElement.setAttribute('data-rail','hidden');if(localStorage.getItem('mmca-cites')==='shown')document.documentElement.setAttribute('data-cites','shown');}catch(e){}})();</script>
@@ -114,7 +114,7 @@
         <article class="doc-content">
           <p class="eyebrow doc-kicker">Architecture governance</p>
           <h1 id="mmcastore-architecture-remediation-backlog">MMCA.Store: Architecture Remediation Backlog</h1>
-          <p>Derived from <a href="store-ArchitectureScorecard.html"><code>ArchitectureScorecard.md</code></a>: <strong>Maturity 97.5% (308/316) / Implementation 83.2% (657/790)</strong>, evidence as of 2026-10-22 at MMCA.Common.* v1.250.0 (lockstep, HEAD <code>d8d3ac91</code>, clean tree). Items are ranked on both scorecard axes, one band per axis. The <strong>maturity band</strong> holds categories scoring <strong>maturity &lt; 4</strong>, ranked by <strong>priority = (4 − maturity) × weight</strong>. The <strong>implementation band</strong> holds categories scoring <strong>implementation &lt;= 8**, ranked by **implPriority = max(0, 9 − implementation) × weight**; the scheduling target is **9, not 10**, because a 10 is recognition earned at re-score time rather than scheduled work, and ranking against 10 would put nearly every strong category in the band and drown the real gaps. Ties break by weight descending, then category number. A category leaves each band independently and reaches the protect list only at **maturity 4 AND implementation &gt;= 9</strong>; the indices keep their <code>× 4</code> and <code>× 10</code> denominators, and the 9-target governs scheduling only.</p>
+          <p>Derived from <a href="store-ArchitectureScorecard.html"><code>ArchitectureScorecard.md</code></a>: <strong>Maturity 97.5% (308/316) / Implementation 83.2% (657/790)</strong>, evidence as of 2026-10-29 at MMCA.Common.* v1.265.1 (lockstep, HEAD <code>e16935cd</code>, clean tree). Items are ranked on both scorecard axes, one band per axis. The <strong>maturity band</strong> holds categories scoring <strong>maturity &lt; 4</strong>, ranked by <strong>priority = (4 − maturity) × weight</strong>. The <strong>implementation band</strong> holds categories scoring <strong>implementation &lt;= 8**, ranked by **implPriority = max(0, 9 − implementation) × weight**; the scheduling target is **9, not 10**, because a 10 is recognition earned at re-score time rather than scheduled work, and ranking against 10 would put nearly every strong category in the band and drown the real gaps. Ties break by weight descending, then category number. A category leaves each band independently and reaches the protect list only at **maturity 4 AND implementation &gt;= 9</strong>; the indices keep their <code>× 4</code> and <code>× 10</code> denominators, and the 9-target governs scheduling only.</p>
           <p>The scorecard is the source of truth for scores, <a href="https://github.com/ivanball/MMCA.Common/blob/main/FACTS.md" target="_blank" rel="noopener"><code>../MMCA.Common/FACTS.md</code></a> for framework-wide facts, and the workspace-internal <code>Docs/Architecture/ArchitectureRemediation.md</code> (not published) for the cross-repo <code>[C→A]</code> roll-up. Tactical deferrals are recorded here as <code>TD</code> sub-items under their category (the single-ledger model). Status: <code>[ ]</code> open, <code>[~]</code> under way, <code>[x]</code> resolved.</p>
           <h2 id="open-work-at-a-glance">Open work at a glance</h2>
           <p>Two items carry scheduled work, and both need a human. Every other band row either has a recorded cap under Deliberate and accepted or a lever not yet identified, which the next re-score names.</p>
@@ -170,7 +170,7 @@
           <td>Security</td>
           <td>3</td>
           <td>7</td>
-          <td>accepted caps hold it: the plaintext Redis cache of the Stripe signing secret (<code>SharedCacheStripeWebhookSecretStore.cs:79</code>, 365-day lifetime <code>:54</code>), the shared <code>db_owner</code> identity (<code>infra/SQL-MANAGED-IDENTITY.md:80</code>), the Manage-rights SAS rules (<code>infra/main.bicep:1121,1133,1145</code>, rationale <code>:1104-1113</code>), insecure internal ingress (<code>:1530</code>) and SQL public access with password admin (<code>:880,883</code>), all under Deliberate and accepted and all still rubric red flags; seed-account rotation is operational (Open items)</td>
+          <td>accepted caps hold it: the plaintext Redis cache of the Stripe signing secret (<code>SharedCacheStripeWebhookSecretStore.cs:79</code>, 365-day lifetime <code>:54</code>), the shared <code>db_owner</code> identity (<code>infra/SQL-MANAGED-IDENTITY.md:80</code>), the Manage-rights SAS rules (<code>infra/main.bicep:1126,1138,1150</code>, rationale <code>:1109-1118</code>), insecure internal ingress (<code>:1535</code>) and SQL public access with password admin (<code>:884,887</code>), all under Deliberate and accepted and all still rubric red flags; seed-account rotation is operational (Open items)</td>
           </tr>
           <tr>
           <td>3</td>
@@ -186,7 +186,7 @@
           <td>Microservices Readiness</td>
           <td>3</td>
           <td>8</td>
-          <td>the accepted lockstep deploy caps it: one <code>azure/arm-deploy</code> of the whole <code>main.bicep</code> (<code>deploy.yml:1331</code>), all five images on one <code>IMAGE_SHA</code> (<code>:1159</code>), whole-fleet rollback (<code>:1535,1543</code>, app list <code>:1377</code>), recorded under Deliberate and accepted; no lever scheduled</td>
+          <td>the accepted lockstep deploy caps it: one <code>azure/arm-deploy</code> of the whole <code>main.bicep</code> (<code>deploy.yml:1332</code>), all five images on one <code>IMAGE_SHA</code> (<code>:1160</code>), whole-fleet rollback (<code>:1536,1544</code>, app list <code>:1378</code>), recorded under Deliberate and accepted; no lever scheduled</td>
           </tr>
           <tr>
           <td>3</td>
@@ -194,7 +194,7 @@
           <td>Messaging &amp; Integration Architecture</td>
           <td>3</td>
           <td>8</td>
-          <td>not yet identified, named at the next re-score (the error-queue alert, runbook and <code>[EventName]</code> rule are in place, <code>infra/main.bicep:500</code>, <code>infra/OPERATIONS.md:175</code>, <code>EventConventionTests.cs:3</code>; the real-broker round-trips for <code>CustomerErased</code>/<code>ProductInfoChanged</code> and a <code>ProductVariantChanged</code> ordering declaration are closed under Deliberate and accepted); #10 is also in the maturity band</td>
+          <td>not yet identified, named at the next re-score (the error-queue alert, runbook and <code>[EventName]</code> rule are in place, <code>infra/main.bicep:498</code>, <code>infra/OPERATIONS.md:178</code>, <code>EventConventionTests.cs:3</code>; the real-broker round-trips for <code>CustomerErased</code>/<code>ProductInfoChanged</code> and a <code>ProductVariantChanged</code> ordering declaration are closed under Deliberate and accepted); #10 is also in the maturity band</td>
           </tr>
           <tr>
           <td>3</td>
@@ -258,7 +258,7 @@
           <td>Best Practices &amp; Code Quality</td>
           <td>2</td>
           <td>8</td>
-          <td>not yet identified (the MAUI head is in neither solution filter, <code>MMCA.Store.CI.slnf:24-25</code>; its analyzer build is a weekly detection with no per-PR leg, <code>maui-audit.yml:198</code>, Sunday cron <code>:37</code>, first scheduled run pending)</td>
+          <td>not yet identified (the MAUI head is in neither solution filter, <code>MMCA.Store.CI.slnf:24-25</code>; its analyzer build is a weekly detection with no per-PR leg, <code>maui-audit.yml:198</code>, Sunday cron <code>:37</code>; the scheduled run passes)</td>
           </tr>
           <tr>
           <td>2</td>
@@ -266,7 +266,7 @@
           <td>DevOps &amp; Deployment</td>
           <td>2</td>
           <td>8</td>
-          <td>not yet identified (rollback reporting is in place, <code>deploy.yml:1535,1543</code>; the Bicep what-if and probe-only rollback are closed under Deliberate and accepted; the prod-only environment, <code>:41</code>, and SQL public access, <code>infra/main.bicep:883</code>, are accepted)</td>
+          <td>not yet identified (rollback reporting is in place, <code>deploy.yml:1536,1544</code>; the Bicep what-if and probe-only rollback are closed under Deliberate and accepted; the prod-only environment, <code>:41</code>, and SQL public access, <code>infra/main.bicep:887</code>, are accepted)</td>
           </tr>
           <tr>
           <td>2</td>
@@ -322,7 +322,7 @@
           <td>Cost Efficiency / FinOps</td>
           <td>2</td>
           <td>8</td>
-          <td>not yet identified (held at 8: the surge guard is read-only, <code>cost-guard.yml:7</code>, the recorded posture under Deliberate and accepted, and the budget is whole-RG with no tag filter, <code>infra/main.bicep:841</code>; per-service <code>service</code> tags exist on every container app, <code>:1512</code>, <code>:1694</code>, <code>:1818</code>, <code>:1970</code>, <code>:2099</code>)</td>
+          <td>not yet identified (held at 8: the surge guard is read-only, <code>cost-guard.yml:7</code>, the recorded posture under Deliberate and accepted, and the budget is whole-RG with no tag filter, <code>infra/main.bicep:845</code>; per-service <code>service</code> tags exist on every container app, <code>:1517</code>, <code>:1699</code>, <code>:1823</code>, <code>:1975</code>, <code>:2104</code>)</td>
           </tr>
           <tr>
           <td>2</td>
@@ -360,7 +360,7 @@
           <td>Messaging &amp; Integration Architecture</td>
           <td>3</td>
           <td>3</td>
-          <td>not yet identified, named at the next re-score. The error-queue procedure is in place (alert <code>infra/main.bicep:500</code>, runbook <code>infra/OPERATIONS.md:175</code>, <code>[EventName]</code> required by <code>EventConventionTests.cs:3</code>); the real broker round-trip reaches the deploy only through the <code>cross-service-freshness</code> recency check (<code>deploy.yml:827</code>), the shape ADC&#39;s §10 is held at M3 on, and #33&#39;s Service Bus emulator entry under Deliberate and accepted records that recency gating</td>
+          <td>not yet identified, named at the next re-score. The error-queue procedure is in place (alert <code>infra/main.bicep:498</code>, runbook <code>infra/OPERATIONS.md:178</code>, <code>[EventName]</code> required by <code>EventConventionTests.cs:3</code>); the real broker round-trip reaches the deploy only through the <code>cross-service-freshness</code> recency check (<code>deploy.yml:828</code>), the shape ADC&#39;s §10 is held at M3 on, and #33&#39;s Service Bus emulator entry under Deliberate and accepted records that recency gating</td>
           </tr>
           <tr>
           <td>3</td>
@@ -376,7 +376,7 @@
           <td>Performance &amp; Scalability</td>
           <td>2</td>
           <td>3</td>
-          <td>the accepted cap: no latency check runs on the merge path, and the monthly k6 run plus <code>load-freshness</code> is the recorded posture (Deliberate and accepted); the <code>load-freshness</code> break-glass skip is at <code>deploy.yml:819-820</code> (job at <code>:808</code>, 35-day window <code>:817</code>), the gate keys on the latest SUCCESSFUL k6 run so a threshold failure blocks nothing, and <code>deploy.needs</code> at <code>:1098</code> contains no perf job; no lever scheduled</td>
+          <td>the accepted cap: no latency check runs on the merge path, and the monthly k6 run plus <code>load-freshness</code> is the recorded posture (Deliberate and accepted); the <code>load-freshness</code> break-glass skip is at <code>deploy.yml:820-821</code> (job at <code>:809</code>, 35-day window <code>:818</code>), the gate keys on the latest SUCCESSFUL k6 run so a threshold failure blocks nothing, and <code>deploy.needs</code> at <code>:1099</code> contains no perf job; no lever scheduled</td>
           </tr>
           </tbody></table></div>
           <h2 id="deliberate-and-accepted">Deliberate and accepted</h2>
@@ -397,18 +397,18 @@
           <li><strong>Consolidating the services onto one host: declined</strong> (owner decision, 2026-10-24). Collapsing Store&#39;s distributed topology into a single host was considered and declined; the per-module services behind the Gateway stay, for the extraction rationale recorded in <a href="../adr/008-service-extraction-topology.html">ADR-008</a>. ADC records the same decision as TD-15 (<a href="adc-RemediationBacklog.html">adc-RemediationBacklog.md</a>, line 151). Do not re-propose without new evidence.</li>
           <li><strong>§16 AI-Native Application Architecture is N/A</strong> (rubric v2, <a href="../adr/110-rubric-v2-category-realignment.html">ADR-110</a>): no product feature calls a language model, so its weight 2 leaves both denominators until one does.</li>
           <li><strong>#5 layered-by-project hybrid.</strong> Cross-cutting concerns live in the pipeline and module projects keep a layered split; a deliberate design choice that caps §5 at Implementation 8, not a maturity deduction.</li>
-          <li><strong>Chromium-only deploy E2E gate (#22, #21): accepted CI-cost trade-off.</strong> The deploy-gating <code>e2e-gate</code> runs a single engine (job at <code>deploy.yml:753</code>, rationale <code>:742-752</code>, <code>browsers: &#39;[&quot;chromium&quot;]&#39;</code> at <code>:766</code>); firefox and webkit run on the advisory schedule, one alternating engine per week (the <code>browser</code> matrix expression at <code>e2e.yml:139-142</code>, Monday firefox <code>:140</code>, Thursday webkit <code>:141</code>, crons <code>:46-47</code>, schedule-scoped <code>continue-on-error</code> at <code>:149</code>). The <code>cross-browser-freshness</code> gate bounds each engine&#39;s blind window at 10 days as a hard <code>deploy</code> condition (<code>deploy.yml:858</code>, <code>:1098</code>, <code>:1128</code>). Revisit if a webkit-only or firefox-only defect reaches production, which is the risk being priced. The UI-scoping of the gate is the separate entry below.</li>
-          <li><strong>UI-scoped <code>e2e-gate</code> (#21, #22, #28): accepted Actions-minute trade-off, next to the chromium-only entry.</strong> The <code>e2e-gate</code> job runs only when <code>needs.changes.outputs.ui == &#39;true&#39;</code> (<code>deploy.yml:763</code>, job at <code>:753</code>, rationale comment <code>:755-762</code>, chromium-only input at <code>:766</code>), and the <code>deploy</code> job accepts it as <code>success</code> OR <code>skipped</code> (<code>:1131</code>, with <code>e2e-gate</code> in the deploy <code>needs</code> list at <code>:1098</code>). On a backend-only merge the 32 WCAG 2.1 AA axe scans (<code>Tests/E2E/MMCA.Store.E2E.Tests/Workflows/AccessibilityTests.cs</code>) and the Playwright workflow suite do not run. Backend tests precede every code deploy: the required <code>build-and-test</code> check runs the <code>MMCA.Store.CI.slnf</code> unit + architecture + bUnit tier (<code>deploy.yml:255</code>, test run at <code>:338</code>), branch protection enforces admins with strict up-to-date required checks, so the merged tree is the PR-tested tree, and the post-deploy smoke gate probes Catalog and Sales through the gateway. Revisit if a UI defect reaches production through a backend-only merge.</li>
-          <li><strong>TD · #22: the <code>cross-browser-freshness</code> gate is break-glass skippable.</strong> The gate proves a green firefox and webkit leg within 10 days (<code>deploy.yml:874</code>), not that this exact tree passes on those engines, and the <code>skip_freshness_gates</code> <code>workflow_dispatch</code> input (declared at <code>deploy.yml:26</code>) that also skips #12&#39;s <code>load-freshness</code> skips it with a justification (<code>:881-882</code>). Accepted as priced on the ADC precedent, whose row carries the identical caveat. <em>Blocker:</em> none; a per-change three-engine gate is the Actions-minute cost the chromium-only entry prices. <em>Resolution path:</em> none scheduled; revisit if a single-engine defect reaches production or the break-glass is used outside an incident. <em>Effort:</em> S (denying the skip is one <code>if:</code> change).</li>
-          <li><strong>#33 Service Bus emulator tier gates through recency.</strong> <code>Tests/Integration/MMCA.Store.ServiceBusEmulator.IntegrationTests</code> runs MassTransit v8 against the official Service Bus emulator (pinned 2.0.1) with the real <code>ProductVariantChanged</code> contract, and <code>cross-service-freshness</code> requires both it and the RabbitMQ tier to have succeeded in the same nightly run (the <code>cross-service-freshness</code> step of the <code>freshness</code> job, <code>deploy.yml:827</code>, required jobs <code>:842-845</code>, <code>freshness</code> in deploy <code>needs</code> at <code>:1098</code>). This recency gating is also what holds #10 at Maturity 3. The tier needs Docker, so it stays out of both solution filters and reaches the deploy chain through the recency check rather than per PR. Mirrors ADC&#39;s TD-17; ADR-066 records the gated end state in both consumers.</li>
+          <li><strong>Chromium-only deploy E2E gate (#22, #21): accepted CI-cost trade-off.</strong> The deploy-gating <code>e2e-gate</code> runs a single engine (job at <code>deploy.yml:754</code>, rationale <code>:743-753</code>, <code>browsers: &#39;[&quot;chromium&quot;]&#39;</code> at <code>:767</code>); firefox and webkit run on the advisory schedule, one alternating engine per week (the <code>browser</code> matrix expression at <code>e2e.yml:139-142</code>, Monday firefox <code>:140</code>, Thursday webkit <code>:141</code>, crons <code>:46-47</code>, schedule-scoped <code>continue-on-error</code> at <code>:149</code>). The <code>cross-browser-freshness</code> gate bounds each engine&#39;s blind window at 10 days as a hard <code>deploy</code> condition (<code>deploy.yml:859</code>, <code>:1099</code>, <code>:1129</code>). Revisit if a webkit-only or firefox-only defect reaches production, which is the risk being priced. The UI-scoping of the gate is the separate entry below.</li>
+          <li><strong>UI-scoped <code>e2e-gate</code> (#21, #22, #28): accepted Actions-minute trade-off, next to the chromium-only entry.</strong> The <code>e2e-gate</code> job runs only when <code>needs.changes.outputs.ui == &#39;true&#39;</code> (<code>deploy.yml:764</code>, job at <code>:754</code>, rationale comment <code>:756-763</code>, chromium-only input at <code>:767</code>), and the <code>deploy</code> job accepts it as <code>success</code> OR <code>skipped</code> (<code>:1132</code>, with <code>e2e-gate</code> in the deploy <code>needs</code> list at <code>:1099</code>). On a backend-only merge the 32 WCAG 2.1 AA axe scans (<code>Tests/E2E/MMCA.Store.E2E.Tests/Workflows/AccessibilityTests.cs</code>) and the Playwright workflow suite do not run. Backend tests precede every code deploy: the required <code>build-and-test</code> check runs the <code>MMCA.Store.CI.slnf</code> unit + architecture + bUnit tier (<code>deploy.yml:255</code>, test run at <code>:338</code>), branch protection enforces admins with strict up-to-date required checks, so the merged tree is the PR-tested tree, and the post-deploy smoke gate probes Catalog and Sales through the gateway. Revisit if a UI defect reaches production through a backend-only merge.</li>
+          <li><strong>TD · #22: the <code>cross-browser-freshness</code> gate is break-glass skippable.</strong> The gate proves a green firefox and webkit leg within 10 days (<code>deploy.yml:875</code>), not that this exact tree passes on those engines, and the <code>skip_freshness_gates</code> <code>workflow_dispatch</code> input (declared at <code>deploy.yml:26</code>) that also skips #12&#39;s <code>load-freshness</code> skips it with a justification (<code>:882-883</code>). Accepted as priced on the ADC precedent, whose row carries the identical caveat. <em>Blocker:</em> none; a per-change three-engine gate is the Actions-minute cost the chromium-only entry prices. <em>Resolution path:</em> none scheduled; revisit if a single-engine defect reaches production or the break-glass is used outside an incident. <em>Effort:</em> S (denying the skip is one <code>if:</code> change).</li>
+          <li><strong>#33 Service Bus emulator tier gates through recency.</strong> <code>Tests/Integration/MMCA.Store.ServiceBusEmulator.IntegrationTests</code> runs MassTransit v8 against the official Service Bus emulator (pinned 2.0.1) with the real <code>ProductVariantChanged</code> contract, and <code>cross-service-freshness</code> requires both it and the RabbitMQ tier to have succeeded in the same nightly run (the <code>cross-service-freshness</code> step of the <code>freshness</code> job, <code>deploy.yml:828</code>, required jobs <code>:843-846</code>, <code>freshness</code> in deploy <code>needs</code> at <code>:1099</code>). This recency gating is also what holds #10 at Maturity 3. The tier needs Docker, so it stays out of both solution filters and reaches the deploy chain through the recency check rather than per PR. Mirrors ADC&#39;s TD-17; ADR-066 records the gated end state in both consumers.</li>
           <li><strong>TD · Product-image derivatives (#12, #23): closed.</strong> Images are full-size DB blobs streamed as-is and rendered as card thumbnails with no <code>srcset</code>/dimensions, so a 12-card browse grid can pull 12 full-size assets. Fixing it is a storage-design decision, not a local change; closed as over-engineering (above).</li>
           <li><strong>Single-region deployment</strong>: accepted in <code>infra/DISASTER-RECOVERY.md</code> (real load does not justify multi-region cost).</li>
           <li><strong>All per-service DBs on one physical SQL server</strong>: logical isolation is complete; the shared server is a cost choice (minor §7/§8).</li>
-          <li><strong>#7 lockstep deploy: per-service image parameters are not adopted.</strong> The deploy is one <code>azure/arm-deploy</code> of the whole <code>main.bicep</code> (<code>deploy.yml:1331</code>) with all five images on one <code>IMAGE_SHA</code> (<code>:1159</code>) and a whole-fleet rollback (<code>:1495-1543</code>). Splitting the image parameters per service would add permanent complexity to the deploy and rollback logic for a five-app, one-developer fleet, so the lockstep deploy is accepted and caps section 7 at Implementation 8. The build half stays per-image incremental (per-image dirty flags in the <code>changes</code> job, <code>deploy.yml:80-218</code>, matrix <code>:956</code>).</li>
-          <li><strong>#11 per-service database identities and Bicep-created Service Bus topology: not adopted.</strong> One shared identity is <code>db_owner</code> in all three databases (<code>infra/SQL-MANAGED-IDENTITY.md:80</code>) and every per-app SAS rule keeps Manage rights (<code>infra/main.bicep:1121,1133,1145</code>) because MassTransit creates the topology at runtime (<code>:1104-1113</code>). Pre-creating the topology in Bicep would make every new consumer a Bicep edit, and a missing subscription loses messages silently, so the shared identity and SAS Manage are accepted at this scale. They remain red flags on the section 11 row.</li>
-          <li><strong>#12 in-band k6 on every deploy, and a shopper script that writes to production: not adopted.</strong> Either would load production on every deploy at a peak of about 67 users. The monthly <code>load-test.yml</code> run (<code>:21</code>, dispatch at <code>:12</code>) plus the 35-day <code>load-freshness</code> deploy gate (<code>deploy.yml:808</code>, window <code>:817</code>) is the accepted posture, with the Web Vitals budgets asserted per deploy in the chromium <code>e2e-gate</code>; section 12 stays at Maturity 3 on it.</li>
-          <li><strong>#18 code-behind cap lowered to 300: not adopted.</strong> Lowering the cap would force about a dozen extractions at once; the cap stays at 400 (<code>UIArchitectureConventionTests.cs:9</code>), and only the files near 400 are candidates for extraction (<code>ProductReviewsPanel.razor.cs</code> at 389 lines is the largest).</li>
-          <li><strong>#31 scheduled revert of surge drift: not adopted.</strong> <code>cost-guard</code> stays read-only (<code>cost-guard.yml:7</code>, manual reset printed at <code>:109</code>), because a scheduled revert would act on production unwatched (schedule detection, never action). The guard still blocks the deploy on drift (<code>deploy.yml:731,1127</code>) and runs on the Monday cron (<code>cost-guard.yml:21</code>); it caps section 31 at Implementation 8, the same basis as ADC&#39;s.</li>
+          <li><strong>#7 lockstep deploy: per-service image parameters are not adopted.</strong> The deploy is one <code>azure/arm-deploy</code> of the whole <code>main.bicep</code> (<code>deploy.yml:1332</code>) with all five images on one <code>IMAGE_SHA</code> (<code>:1160</code>) and a whole-fleet rollback (<code>:1496-1544</code>). Splitting the image parameters per service would add permanent complexity to the deploy and rollback logic for a five-app, one-developer fleet, so the lockstep deploy is accepted and caps section 7 at Implementation 8. The build half stays per-image incremental (per-image dirty flags in the <code>changes</code> job, <code>deploy.yml:80-218</code>, matrix <code>:957</code>).</li>
+          <li><strong>#11 per-service database identities and Bicep-created Service Bus topology: not adopted.</strong> One shared identity is <code>db_owner</code> in all three databases (<code>infra/SQL-MANAGED-IDENTITY.md:80</code>) and every per-app SAS rule keeps Manage rights (<code>infra/main.bicep:1126,1138,1150</code>) because MassTransit creates the topology at runtime (<code>:1109-1118</code>). Pre-creating the topology in Bicep would make every new consumer a Bicep edit, and a missing subscription loses messages silently, so the shared identity and SAS Manage are accepted at this scale. They remain red flags on the section 11 row.</li>
+          <li><strong>#12 in-band k6 on every deploy, and a shopper script that writes to production: not adopted.</strong> Either would load production on every deploy at a peak of about 67 users. The monthly <code>load-test.yml</code> run (<code>:21</code>, dispatch at <code>:12</code>) plus the 35-day <code>load-freshness</code> deploy gate (<code>deploy.yml:809</code>, window <code>:818</code>) is the accepted posture, with the Web Vitals budgets asserted per deploy in the chromium <code>e2e-gate</code>; section 12 stays at Maturity 3 on it.</li>
+          <li><strong>#18 code-behind cap lowered to 300: not adopted.</strong> Lowering the cap would force about a dozen extractions at once; the cap stays at 400 (<code>UIArchitectureConventionTests.cs:9</code>), and only the files near 400 are candidates for extraction (<code>ProductReviewsPanel.razor.cs</code> at 390 lines is the largest).</li>
+          <li><strong>#31 scheduled revert of surge drift: not adopted.</strong> <code>cost-guard</code> stays read-only (<code>cost-guard.yml:7</code>, manual reset printed at <code>:109</code>), because a scheduled revert would act on production unwatched (schedule detection, never action). The guard still blocks the deploy on drift (<code>deploy.yml:732,1128</code>) and runs on the Monday cron (<code>cost-guard.yml:21</code>); it caps section 31 at Implementation 8, the same basis as ADC&#39;s.</li>
           <li><strong>SQL public network access (no VNet)</strong>: the documented acceptance behind the §17 cap, the same caveat ADC carries.</li>
           <li><strong>ADR-042 device capability abstraction: latent.</strong> The core extension point is converged (Store wires browser + MAUI capabilities via <code>UseMauiDeviceCapabilities</code>/<code>AddBrowserDeviceCapabilities</code> and renders the shared <code>OfflineBanner</code>), but Store consumes no further capability in its own product UI: no <code>ExternalLink</code>, no <code>DeviceUIModule</code>/<code>DeepLinkListener</code>, no app actions. No Store product page carries an external anchor, so the WebView dead-end risk is latent, not a live defect. Adopt <code>ExternalLink</code> on any Store product page that grows an external anchor, and register a Store <code>IUIModule</code> with <code>DeepLinkListener</code> (the way ADC&#39;s <code>DeviceUIModule</code> does) if a Store MAUI feature surface is wanted. The framework side is complete in Common (18 capability contracts + the <code>MMCA.Common.UI.Maui</code> package), so this is consumer-side only, not <code>[C→A]</code>.</li>
           <li><strong>ADR-043 adoption (mobile deep links / app association / native OAuth callback): deferred.</strong> Adoption is feature-scale (Store-scheme deep links, iOS/Android manifest entries, associated domains) and rides the same trigger as ADR-042: adopt when a Store MAUI surface is actively wanted.</li>
@@ -461,7 +461,7 @@
           <td>#7</td>
           <td>Database-per-service</td>
           <td>M4 / I8</td>
-          <td><code>Store_Catalog</code>/<code>Store_Sales</code>/<code>Store_Identity</code>, each with its own outbox (<code>infra/main.bicep:966-999</code>); the legacy <code>MMCAStore</code> DB is archived to a bacpac and absent from IaC (<code>:954-966</code>)</td>
+          <td><code>Store_Catalog</code>/<code>Store_Sales</code>/<code>Store_Identity</code>, each with its own outbox (<code>infra/main.bicep:1021-1051</code>); the legacy <code>MMCAStore</code> DB is archived to a bacpac and absent from IaC (<code>:1011-1023</code>)</td>
           </tr>
           <tr>
           <td>#8</td>
@@ -473,7 +473,7 @@
           <td>#8</td>
           <td>Expand/contract migration guard</td>
           <td>M4 / I9</td>
-          <td>Step in the required <code>build-and-test</code> job (<code>deploy.yml:431-482</code>, fail-closed at <code>:460</code>, job at <code>:255</code>), policy at <code>CONTRIBUTING.md:56</code></td>
+          <td>Step in the required <code>build-and-test</code> job (<code>deploy.yml:431-483</code>, fail-closed at <code>:461</code>, job at <code>:255</code>), policy at <code>CONTRIBUTING.md:56</code></td>
           </tr>
           <tr>
           <td>#9</td>
@@ -485,7 +485,7 @@
           <td>#11</td>
           <td>Customers gRPC edge requires a user or service token</td>
           <td>M4 / I7</td>
-          <td><code>.RequireAuthorization(ServiceTokenDefaults.InternalCallerPolicy)</code> at <code>Identity.Service/Program.cs:343</code> (scheme <code>:173</code>), Sales <code>AddServiceTokenClient</code> at <code>Sales.Service/Program.cs:289</code>, Key Vault secret <code>Grpc--ServiceToken--SigningKey</code> at <code>infra/main.bicep:1420</code>, deploy fail-fast on a missing <code>GRPC_SERVICE_TOKEN_SIGNING_KEY</code> (<code>deploy.yml:1240-1244</code>), pinned by <code>CustomersGrpcAuthorizationTests.cs:40</code></td>
+          <td><code>.RequireAuthorization(ServiceTokenDefaults.InternalCallerPolicy)</code> at <code>Identity.Service/Program.cs:343</code> (scheme <code>:173</code>), Sales <code>AddServiceTokenClient</code> at <code>Sales.Service/Program.cs:289</code>, Key Vault secret <code>Grpc--ServiceToken--SigningKey</code> at <code>infra/main.bicep:1425</code>, deploy fail-fast on a missing <code>GRPC_SERVICE_TOKEN_SIGNING_KEY</code> (<code>deploy.yml:1241-1245</code>), pinned by <code>CustomersGrpcAuthorizationTests.cs:40</code></td>
           </tr>
           <tr>
           <td>#11</td>
@@ -575,7 +575,7 @@
           <td>#13</td>
           <td>Observability &amp; Operability</td>
           <td>M4 / I9</td>
-          <td><code>ObservabilityConventionTests.cs:3,13</code> pairs every <code>sloAlertSpecs</code> key with an <code>infra/OPERATIONS.md</code> section; workbook <code>main.bicep:745</code></td>
+          <td><code>ObservabilityConventionTests.cs:3,13</code> pairs every <code>sloAlertSpecs</code> key with an <code>infra/OPERATIONS.md</code> section; workbook <code>main.bicep:824</code></td>
           </tr>
           <tr>
           <td>#14</td>
@@ -671,7 +671,7 @@
           <td>#22</td>
           <td>Cross-browser freshness gate</td>
           <td>M4 / I8</td>
-          <td><code>cross-browser-freshness</code> (<code>deploy.yml:858</code>, window <code>:874</code>) in <code>deploy.needs</code> (<code>:1098</code>), required at <code>:1128</code></td>
+          <td><code>cross-browser-freshness</code> (<code>deploy.yml:859</code>, window <code>:875</code>) in <code>deploy.needs</code> (<code>:1099</code>), required at <code>:1129</code></td>
           </tr>
           <tr>
           <td>#23</td>
@@ -695,7 +695,7 @@
           <td>#25</td>
           <td>Notification-pages framework gate</td>
           <td>M4 / I8</td>
-          <td>Common <code>NotificationPageGate.cs:29-31</code> hides the pages when no notification UI module is registered; Store opts in at <code>UI.Web/appsettings.json:18</code> and <code>UI.Web.Client/wwwroot/appsettings.json:16</code> (the MAUI head does not set it)</td>
+          <td>Common <code>NotificationPageGate.cs:29-31</code> hides the pages when no notification UI module is registered; Store opts in at <code>UI.Web/appsettings.json:30</code> and <code>UI.Web.Client/wwwroot/appsettings.json:28</code> (the MAUI head does not set it)</td>
           </tr>
           <tr>
           <td>#26</td>
@@ -707,19 +707,19 @@
           <td>#10</td>
           <td>Broker error-queue alert and runbook</td>
           <td>M3 / I8</td>
-          <td><code>infra/main.bicep:510</code>, <code>infra/OPERATIONS.md:175</code>, five consumer flows in the outbox runbook (Store #213); <code>[EventName]</code> required by <code>Contracts/EventConventionTests.cs:3</code></td>
+          <td><code>infra/main.bicep:498</code>, <code>infra/OPERATIONS.md:178</code>, five consumer flows in the outbox runbook (Store #213); <code>[EventName]</code> required by <code>Contracts/EventConventionTests.cs:3</code></td>
           </tr>
           <tr>
           <td>#15</td>
           <td>MAUI head compiled weekly</td>
           <td>M4 / I8</td>
-          <td><code>.github/workflows/maui-audit.yml:198</code> (Release, analyzers, TWAE; Sunday cron <code>:37</code>; Store #213); detection only, first scheduled run pending</td>
+          <td><code>.github/workflows/maui-audit.yml:198</code> (Release, analyzers, TWAE; Sunday cron <code>:37</code>; Store #213); detection only, the scheduled run passes</td>
           </tr>
           <tr>
           <td>#17</td>
           <td>Rollback reports what it did</td>
           <td>M4 / I8</td>
-          <td>Per-app outcome and counted summary at <code>deploy.yml:1535,1543</code>, comment at <code>:1503-1506</code> (Store #213)</td>
+          <td>Per-app outcome and counted summary at <code>deploy.yml:1536,1544</code>, comment at <code>:1504-1507</code> (Store #213)</td>
           </tr>
           <tr>
           <td>#22</td>
@@ -767,7 +767,7 @@
           <td>#29</td>
           <td>Resilience &amp; Business Continuity</td>
           <td>M4 / I9</td>
-          <td><code>dr-freshness</code> in <code>deploy.needs</code> (<code>deploy.yml:1098</code>, <code>:1128</code>), weekly <code>dr-drill.yml:33</code>, <code>GracefulShutdownTests.cs</code></td>
+          <td><code>dr-freshness</code> in <code>deploy.needs</code> (<code>deploy.yml:1099</code>, <code>:1129</code>), weekly <code>dr-drill.yml:33</code>, <code>GracefulShutdownTests.cs</code></td>
           </tr>
           <tr>
           <td>#29</td>
@@ -785,7 +785,7 @@
           <td>#31</td>
           <td>Cost-guard deploy gate</td>
           <td>M4 / I8</td>
-          <td><code>cost-guard</code> job in <code>deploy.needs</code> (<code>deploy.yml:731,1098,1127</code>); the SQL check accepts only Basic or Standard S0, so a scaled-up Standard objective reads as drift (<code>cost-guard.yml:62-68</code>, <code>:102</code>, Store commit <code>398e70fc</code>)</td>
+          <td><code>cost-guard</code> job in <code>deploy.needs</code> (<code>deploy.yml:732,1099,1128</code>); the SQL check accepts only Basic or Standard S0, so a scaled-up Standard objective reads as drift (<code>cost-guard.yml:62-68</code>, <code>:102</code>, Store commit <code>398e70fc</code>)</td>
           </tr>
           <tr>
           <td>#31</td>
@@ -797,13 +797,13 @@
           <td>#32</td>
           <td>Dependency &amp; Supply-Chain</td>
           <td>M4 / I9</td>
-          <td><code>--locked-mode</code> restores (<code>deploy.yml:283,545,655</code>), gating suppress-aware audit, SBOM hard gate (<code>43d733f</code>)</td>
+          <td><code>--locked-mode</code> restores (<code>deploy.yml:283,546,656</code>), gating suppress-aware audit, SBOM hard gate (<code>43d733f</code>)</td>
           </tr>
           <tr>
           <td>#33</td>
           <td>Service Bus emulator tier authoritative</td>
           <td>M4 / I8</td>
-          <td>No <code>continue-on-error</code> on <code>servicebus-emulator-smoke</code> (<code>cross-service-tests.yml:141</code>, do-not-re-add note <code>:133</code>); both-jobs check <code>deploy.yml:827-848</code>, break-glass <code>:847-848</code></td>
+          <td>No <code>continue-on-error</code> on <code>servicebus-emulator-smoke</code> (<code>cross-service-tests.yml:141</code>, do-not-re-add note <code>:133</code>); both-jobs check <code>deploy.yml:828-849</code>, break-glass <code>:848-849</code></td>
           </tr>
           <tr>
           <td>#33</td>
