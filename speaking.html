@@ -144,26 +144,47 @@
         <p class="eyebrow">Speaking &amp; community</p>
         <h1>Talks and giving back</h1>
         <p class="lede">For more than 20 years I have been an active contributor to the Microsoft developer communities in Atlanta and South Florida: teaching, mentoring, speaking, and helping run community-driven events. My goal is simple, to lower the barrier to building well-architected systems on the Microsoft platform.</p>
+        <div class="btn-row btn-row--spaced">
+          <a class="btn btn--primary" href="contact.html">Invite me to speak</a>
+          <a class="btn btn--ghost" href="#topics">What I speak on</a>
+        </div>
       </div>
     </div>
+
+    <!-- Featured workshop -->
+    <section class="section">
+      <div class="container">
+        <div class="feature ink" data-reveal>
+          <div class="feature-grid">
+            <div>
+              <p class="eyebrow">Featured workshop · Atlanta Developers Conference precon · October 16, 2026</p>
+              <h2>Build an AI-Ready .NET App with an AI Pair: Clean Architecture, MCP, and Agentic Workflows</h2>
+              <p>A full-day, hands-on workshop at Improving in Alpharetta: one day, the whole SDLC with an AI pair. Attendees took one .NET 10 app from an empty solution to production with Claude Code as the pair.</p>
+              <p class="mb-0">Every lab had a manual path and a snapshot branch, so anyone who fell behind could catch up, and everyone left with an MIT-licensed starter kit (context-file templates, hooks, deny rules, a fitness-test seed, CI and release workflows, an Aspire seed, Agent Skills, and a mini rubric with scorer and verifier agents) to adopt in their own repo.</p>
+            </div>
+            <ul class="lead-list">
+              <li><span class="check" aria-hidden="true">▸</span><span><strong>Plan.</strong> Spec-first with CLAUDE.md, AGENTS.md, and portable Agent Skills.</span></li>
+              <li><span class="check" aria-hidden="true">▸</span><span><strong>Build.</strong> Aggregates, the Result pattern, and CQRS handlers behind a decorator pipeline.</span></li>
+              <li><span class="check" aria-hidden="true">▸</span><span><strong>Test and guard.</strong> Unit to API-level tests, architecture fitness tests, hooks, and sandboxing.</span></li>
+              <li><span class="check" aria-hidden="true">▸</span><span><strong>Ship.</strong> Agent-written CI with branch protection and a tagged container release.</span></li>
+              <li><span class="check" aria-hidden="true">▸</span><span><strong>Run.</strong> Aspire, with the agent reading live telemetry to fix a planted bug.</span></li>
+              <li><span class="check" aria-hidden="true">▸</span><span><strong>Expose and score.</strong> An in-app MCP endpoint for any AI client, then one agent scoring the architecture while a second tries to disprove the score.</span></li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </section>
 
     <!-- Talks -->
     <section class="section section--alt">
       <div class="container">
         <div class="section-head">
           <p class="eyebrow">Talks</p>
-          <h2>Sessions and workshops</h2>
+          <h2>Conference sessions</h2>
         </div>
-        <div class="grid grid--2">
+        <div class="grid grid--2" data-reveal>
           <article class="card">
-            <span class="kicker kicker--accent">Atlanta Developers Conference precon · October 16, 2026</span>
-            <h3>Build an AI-Ready .NET App with an AI Pair: Clean Architecture, MCP, and Agentic Workflows</h3>
-            <p style="font-weight:600;color:var(--text);margin-bottom:0.6rem">Full-day, hands-on workshop: one day, the whole SDLC with an AI pair</p>
-            <p class="muted" style="margin-bottom:0.6rem">Improving, Alpharetta</p>
-            <p class="mb-0">Attendees took one .NET 10 app from an empty solution to production with Claude Code as the pair. They planned it spec-first with CLAUDE.md, AGENTS.md, and portable Agent Skills, then built it with aggregates, the Result pattern, and CQRS handlers behind a decorator pipeline, tested it from unit to API level, and guarded it with architecture fitness tests, hooks, and sandboxing. From there they shipped it through agent-written CI with branch protection and a tagged release, ran it under Aspire while the agent read live telemetry to fix a planted bug, exposed it to any AI client through an in-app MCP endpoint, and scored its architecture with one agent while a second tried to disprove the score. Every lab had a manual path and a snapshot branch, so anyone who fell behind could catch up, and everyone left with an MIT-licensed starter kit (context-file templates, hooks, deny rules, a fitness-test seed, CI and release workflows, an Aspire seed, Agent Skills, and a mini rubric with scorer and verifier agents) to adopt in their own repo.</p>
-          </article>
-          <article class="card">
-            <span class="kicker kicker--accent">Atlanta Cloud + AI Conference · 2026</span>
+            <span class="kicker kicker--accent">Atlanta Cloud + AI Conference · May 2026</span>
             <h3>The App You're Using Right Now</h3>
             <p style="font-weight:600;color:var(--text);margin-bottom:0.6rem">Building Atlanta Cloud + AI's own platform with Claude in the loop</p>
             <p class="mb-0">A field report, not a slide deck about architecture. The conference's own app was the subject of the talk: a .NET 10 modular monolith on Azure Container Apps, modeled as one Aspire graph, built with Claude Code as a constant pair-programmer. It covered what shipped, what generalized to other projects, what it costs to run, and the places the model helped and the places it shipped subtle bugs, with a decision rule for when to let the model drive.</p>
@@ -177,77 +198,148 @@
       </div>
     </section>
 
+    <!-- Topics -->
+    <section class="section" id="topics">
+      <div class="container split">
+        <div class="split-head">
+          <div class="section-head">
+            <p class="eyebrow">Topics</p>
+            <h2>What I speak on</h2>
+            <p>Keynotes, conference sessions, half- or full-day workshops, user-group talks, and team sessions. Every topic is drawn from production code and the open-source framework, so each one comes with real source, architecture decision records, and a published article behind it.</p>
+          </div>
+          <div class="btn-row">
+            <a class="btn btn--primary" href="contact.html">Invite me to speak</a>
+            <a class="btn btn--ghost" href="writing.html">Read the articles</a>
+          </div>
+        </div>
+        <div class="grid grid--2" data-reveal>
+          <div class="card">
+            <h3>Architecture &amp; design</h3>
+            <ul class="pill-list">
+              <li class="pill">Clean Architecture &amp; DDD on .NET</li>
+              <li class="pill">Rich aggregates over anemic models</li>
+              <li class="pill">The Result pattern in C#</li>
+              <li class="pill">CQRS decorator pipelines</li>
+              <li class="pill">Modular monolith → microservices</li>
+              <li class="pill">Extracting a module to gRPC behind YARP</li>
+              <li class="pill">One Blazor UI on web and MAUI</li>
+            </ul>
+          </div>
+          <div class="card">
+            <h3>Distributed systems &amp; data</h3>
+            <ul class="pill-list">
+              <li class="pill">The transactional outbox</li>
+              <li class="pill">Database-per-service</li>
+              <li class="pill">Polyglot persistence</li>
+              <li class="pill">Event-schema versioning</li>
+              <li class="pill">Idempotency end to end</li>
+              <li class="pill">Sagas and compensation</li>
+              <li class="pill">Caching that invalidates itself</li>
+            </ul>
+          </div>
+          <div class="card">
+            <h3>Security &amp; identity</h3>
+            <ul class="pill-list">
+              <li class="pill">Cross-service auth with JWKS</li>
+              <li class="pill">Permission-based authorization</li>
+              <li class="pill">Rotating refresh tokens</li>
+              <li class="pill">Rate limiting and brute-force protection</li>
+              <li class="pill">Password hashing done right</li>
+              <li class="pill">Field-level encryption in EF Core</li>
+              <li class="pill">Security headers and CSP for Blazor</li>
+            </ul>
+          </div>
+          <div class="card">
+            <h3>Cloud-native &amp; operations</h3>
+            <ul class="pill-list">
+              <li class="pill">.NET Aspire on Azure Container Apps</li>
+              <li class="pill">Observability by default</li>
+              <li class="pill">Resilience and recovery objectives</li>
+              <li class="pill">One framework, three clouds</li>
+              <li class="pill">Supply-chain hygiene for NuGet</li>
+              <li class="pill">Running a conference app in production</li>
+            </ul>
+          </div>
+          <div class="card">
+            <h3>Quality &amp; governance</h3>
+            <ul class="pill-list">
+              <li class="pill">Architecture fitness functions</li>
+              <li class="pill">The test pyramid in practice</li>
+              <li class="pill">Scoring architecture with a rubric</li>
+              <li class="pill">ADRs that stay true to the code</li>
+              <li class="pill">Accessibility gates in CI</li>
+            </ul>
+          </div>
+          <div class="card">
+            <h3>AI-assisted engineering</h3>
+            <ul class="pill-list">
+              <li class="pill">AI-assisted development with Claude Code</li>
+              <li class="pill">Spec-first with CLAUDE.md and Agent Skills</li>
+              <li class="pill">Guardrails: hooks, deny rules, sandboxing</li>
+              <li class="pill">MCP servers in .NET apps</li>
+              <li class="pill">Agents as judges and verifiers</li>
+              <li class="pill">A governed LLM boundary</li>
+              <li class="pill">Context and token economics</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </section>
+
     <!-- Conference organizing -->
-    <section class="section">
+    <section class="section section--alt">
       <div class="container">
         <div class="section-head">
           <p class="eyebrow">Community leadership</p>
           <h2>Organizing two Atlanta conferences</h2>
           <p>I help convene developers in person, giving the local community direct, no-cost access to expert content on the Microsoft platform.</p>
         </div>
-        <div class="grid grid--2">
+        <div class="grid grid--2" data-reveal>
+          <article class="card">
+            <span class="kicker kicker--accent">Lead organizer</span>
+            <h3>Atlanta Developers Conference 2026</h3>
+            <p class="muted" style="margin-bottom:0.6rem">October 17, 2026 · <a href="https://www.atldevcon.com/" target="_blank" rel="noopener">www.atldevcon.com</a></p>
+            <p class="mb-0">Led the organizing team for the 2026 edition of the Atlanta Developers Conference, a community-driven, full-day, multi-track event at FCS Innovation Academy in Alpharetta, applying the same playbook and the same user-group network that feeds both Atlanta conferences. The edition added a precon day on October 16 with two parallel full-day workshops. The event ran on the MMCA conference application.</p>
+          </article>
           <article class="card">
             <span class="kicker kicker--accent">Lead organizer</span>
             <h3>Atlanta Cloud + AI Conference 2026</h3>
             <p class="muted" style="margin-bottom:0.6rem">May 30, 2026 · <a href="https://atlcloudconf.com/" target="_blank" rel="noopener">atlcloudconf.com</a></p>
             <p class="mb-0">Led the organizing committee for a community-driven, full-day, multi-track conference focused on Microsoft cloud and AI technologies. Owned speakers, sponsors, volunteers, logistics, marketing, and the attendee experience. The event ran on the MMCA conference application.</p>
           </article>
-          <article class="card">
-            <span class="kicker kicker--accent">Lead organizer</span>
-            <h3>Atlanta Developers Conference 2026</h3>
-            <p class="muted" style="margin-bottom:0.6rem">October 17, 2026 · <a href="https://www.atldevcon.com/" target="_blank" rel="noopener">www.atldevcon.com</a></p>
-            <p class="mb-0">Led the organizing team for the 2026 edition of the Atlanta Developers Conference, a community-driven, full-day, multi-track event at FCS Innovation Academy in Alpharetta, applying the same playbook and the same user-group network that feeds both Atlanta conferences. The edition added a precon day on October 16 with two parallel full-day workshops. Two Friday speaker cancellations were filled from the standby list within hours. The event ran on the MMCA conference application, which served about 42,000 requests on conference day with 3 server errors and a 70 ms median response.</p>
-          </article>
         </div>
       </div>
     </section>
 
     <!-- User groups + open source -->
-    <section class="section section--alt">
+    <section class="section">
       <div class="container">
-        <div class="grid grid--2">
-          <div>
+        <div class="grid grid--2" data-reveal>
+          <div class="card">
             <h2>User groups</h2>
-            <p class="muted">An active participant in Atlanta's Microsoft technology user-group ecosystem, the same community network from which the conferences draw their speakers and attendees.</p>
-            <ul class="lead-list" style="margin-top:1rem">
+            <p>An active participant in Atlanta's Microsoft technology user-group ecosystem, the same community network from which the conferences draw their speakers and attendees.</p>
+            <ul class="lead-list">
               <li><span class="check" aria-hidden="true">•</span><span>Atlanta .NET User Group</span></li>
               <li><span class="check" aria-hidden="true">•</span><span>Azure in the ATL</span></li>
               <li><span class="check" aria-hidden="true">•</span><span>Atlanta Azure Data User Group</span></li>
               <li><span class="check" aria-hidden="true">•</span><span>Atlanta Microsoft Business Intelligence Users</span></li>
             </ul>
           </div>
-          <div>
+          <div class="card">
             <h2>Open source &amp; mentorship</h2>
-            <p class="muted">My MMCA framework is Apache-2.0 licensed and documented with architecture decision records, so the patterns are not just usable but teachable. I mentor developers one on one, welcome engineers at every level, and keep events and learning open to people of all backgrounds, in English and Spanish.</p>
-            <div class="btn-row" style="margin-top:1rem">
+            <p>My MMCA framework is Apache-2.0 licensed and documented with architecture decision records, so the patterns are not just usable but teachable. I mentor developers one on one, welcome engineers at every level, and keep events and learning open to people of all backgrounds, in English and Spanish.</p>
+            <div class="btn-row card-foot">
               <a class="btn btn--ghost" href="platform.html">See the framework</a>
               <a class="btn btn--ghost" href="https://github.com/ivanball/MMCA.Common" target="_blank" rel="noopener">GitHub ↗</a>
             </div>
           </div>
         </div>
-      </div>
-    </section>
-
-    <!-- Topics -->
-    <section class="section">
-      <div class="container">
-        <div class="section-head">
-          <p class="eyebrow">Topics</p>
-          <h2>What I speak on</h2>
-          <p>Sessions and workshops for conferences, user groups, and teams.</p>
-        </div>
-        <ul class="pill-list">
-          <li class="pill">Clean Architecture &amp; DDD on .NET</li>
-          <li class="pill">Modular monolith → microservices</li>
-          <li class="pill">The transactional outbox</li>
-          <li class="pill">Database-per-service</li>
-          <li class="pill">Cross-service auth with JWKS</li>
-          <li class="pill">Architecture fitness functions</li>
-          <li class="pill">.NET Aspire on Azure Container Apps</li>
-          <li class="pill">AI-assisted development with Claude Code</li>
-        </ul>
-        <div class="btn-row" style="margin-top:1.75rem">
-          <a class="btn btn--primary" href="contact.html">Invite me to speak</a>
+        <div class="callout btn-row--spaced">
+          <h2 class="mt-0">Bring a talk or workshop to your event</h2>
+          <p>Conferences, user groups, and engineering teams: any topic above can run as a session or a hands-on workshop, tuned to your audience.</p>
+          <div class="btn-row">
+            <a class="btn btn--primary" href="contact.html">Invite me to speak</a>
+          </div>
         </div>
       </div>
     </section>
