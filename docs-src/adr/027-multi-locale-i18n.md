@@ -238,11 +238,16 @@ machine `Code`, which makes server-side error localization a keyed lookup rather
     (`MMCA.Common/Source/Core/MMCA.Common.Shared/Globalization/SupportedCultures.cs:51`, called from
     `.../MMCA.Common.UI.Maui/Globalization/MauiCultureStore.cs:43`); web heads keep the parent-culture
     matching of ASP.NET request localization (`UseCommonRequestLocalization`,
-    `.../MMCA.Common.API/Startup/WebApplicationExtensions.cs:74-94`). The one other caller is
-    server-side: the account emails resolve a recipient's stored preference through it and run the
+    `.../MMCA.Common.API/Startup/WebApplicationExtensions.cs:74-94`). The other callers are
+    server-side. The account emails resolve a recipient's stored preference through it and run the
     composition under that `CurrentUICulture`, restoring the previous culture afterwards
     (`MMCA.Common/Source/Core/MMCA.Common.Application/Users/Emails/UserEmailResources.cs:34`,
-    restored at `:43`). The active culture still reaches the services as `Accept-Language`: the
+    restored at `:43`). Registration stores the request's UI culture, resolved through it, as a new
+    account's preference when the user implements `IUserPreferences` and has none, skipping the
+    pseudo-locale and storing nothing for the default
+    (`MMCA.Common/Source/Core/MMCA.Common.Application/Auth/AuthenticationServiceBase.cs:286`,
+    resolved at `:535`), so the confirmation email, composed later outside the request, speaks the
+    language the account registered in. The active culture still reaches the services as `Accept-Language`: the
     hybrid head already shares `CultureDelegatingHandler` through `AddUIShared`, so once
     `CurrentUICulture` is right, localized backend errors follow with no extra wiring.
 
@@ -417,6 +422,17 @@ filter still holds, and only its anchors moved.
    from the matrix at `:376` and the `dotnet test` command at `:377` passing only
    `--minimum-expected-tests 1` (the 2026-10-26 `:344-345` is stale); the MudBlazor 9.11.0 pin at
    `MMCA.Common/Directory.Packages.props:239` (the 2026-10-21 `:183` is stale).
+
+## Revision (2026-10-31)
+Decision 10 gains a third caller of `SupportedCultures.ResolveClosest`; no decision or rationale
+changed.
+
+1. Decision 10: registration now seeds a new account's `PreferredCulture` from the request's UI
+   culture (`MMCA.Common/Source/Core/MMCA.Common.Application/Auth/AuthenticationServiceBase.cs:286`,
+   resolved at `:535`). Store had done this in its own `CreateUser` override while ADC did not, so
+   an ADC account registered from the Spanish UI received its confirmation email in English (drift
+   analysis 2026-10-31, D1). The 2026-10-21 statement that no caller exists in ADC, Store or
+   Helpdesk source was true on that date and is left as written.
 
 ## Related
 [ADR-011](011-single-locale-i18n.md) (superseded), [ADR-013](013-result-pattern.md) (the `Error.Code`
