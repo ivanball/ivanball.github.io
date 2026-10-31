@@ -469,11 +469,16 @@
           (<code>MMCA.Common/Source/Core/MMCA.Common.Shared/Globalization/SupportedCultures.cs:51</code>, called from
           <code>.../MMCA.Common.UI.Maui/Globalization/MauiCultureStore.cs:43</code>); web heads keep the parent-culture
           matching of ASP.NET request localization (<code>UseCommonRequestLocalization</code>,
-          <code>.../MMCA.Common.API/Startup/WebApplicationExtensions.cs:74-94</code>). The one other caller is
-          server-side: the account emails resolve a recipient&#39;s stored preference through it and run the
+          <code>.../MMCA.Common.API/Startup/WebApplicationExtensions.cs:74-94</code>). The other callers are
+          server-side. The account emails resolve a recipient&#39;s stored preference through it and run the
           composition under that <code>CurrentUICulture</code>, restoring the previous culture afterwards
           (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Users/Emails/UserEmailResources.cs:34</code>,
-          restored at <code>:43</code>). The active culture still reaches the services as <code>Accept-Language</code>: the
+          restored at <code>:43</code>). Registration stores the request&#39;s UI culture, resolved through it, as a new
+          account&#39;s preference when the user implements <code>IUserPreferences</code> and has none, skipping the
+          pseudo-locale and storing nothing for the default
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Auth/AuthenticationServiceBase.cs:286</code>,
+          resolved at <code>:535</code>), so the confirmation email, composed later outside the request, speaks the
+          language the account registered in. The active culture still reaches the services as <code>Accept-Language</code>: the
           hybrid head already shares <code>CultureDelegatingHandler</code> through <code>AddUIShared</code>, so once
           <code>CurrentUICulture</code> is right, localized backend errors follow with no extra wiring.</p>
           </li>
@@ -651,6 +656,17 @@
           <code>--minimum-expected-tests 1</code> (the 2026-10-26 <code>:344-345</code> is stale); the MudBlazor 9.11.0 pin at
           <code>MMCA.Common/Directory.Packages.props:239</code> (the 2026-10-21 <code>:183</code> is stale).</li>
           </ol>
+          <h2 id="revision-2026-10-31">Revision (2026-10-31)</h2>
+          <p>Decision 10 gains a third caller of <code>SupportedCultures.ResolveClosest</code>; no decision or rationale
+          changed.</p>
+          <ol>
+          <li>Decision 10: registration now seeds a new account&#39;s <code>PreferredCulture</code> from the request&#39;s UI
+          culture (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Auth/AuthenticationServiceBase.cs:286</code>,
+          resolved at <code>:535</code>). Store had done this in its own <code>CreateUser</code> override while ADC did not, so
+          an ADC account registered from the Spanish UI received its confirmation email in English (drift
+          analysis 2026-10-31, D1). The 2026-10-21 statement that no caller exists in ADC, Store or
+          Helpdesk source was true on that date and is left as written.</li>
+          </ol>
           <h2 id="related">Related</h2>
           <p><a href="011-single-locale-i18n.html">ADR-011</a> (superseded), <a href="013-result-pattern.html">ADR-013</a> (the <code>Error.Code</code>
           this localizes on), <a href="015-architecture-fitness-functions.html">ADR-015</a> (the i18n gates now live here: the <code>MA0076</code> culture-less
@@ -682,6 +698,7 @@
             <li><a href="#revision-2026-10-21">Revision (2026-10-21)</a></li>
             <li><a href="#revision-2026-10-26">Revision (2026-10-26)</a></li>
             <li><a href="#revision-2026-10-28">Revision (2026-10-28)</a></li>
+            <li><a href="#revision-2026-10-31">Revision (2026-10-31)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>
