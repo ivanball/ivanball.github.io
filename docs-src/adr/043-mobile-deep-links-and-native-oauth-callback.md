@@ -70,6 +70,8 @@ Revised 2026-10-26: anchors refreshed after the `Program.cs` association block, 
 `PublishDeepLink` and the shared `DeepLinkDispatcher` grew; see Revision below.
 Revised 2026-10-28: anchors refreshed after the `Program.cs` association block moved down one line;
 see Revision below.
+Revised 2026-10-31: the route a head builds from a link moved into the framework
+(`PlatformDeepLinks.TryPublish`), and MMCA.Store adopts the decision; see Revision below.
 ## Context
 Three mobile flows all need a URL to leave the web world and land inside the MAUI app:
 
@@ -558,3 +560,24 @@ MMCA.ADC `Program.cs` association block moved, down one line.
    `MMCA.ADC.UI.Web/appsettings.json` `AppAssociation` `:90` with `AndroidCertFingerprints` `:92-94`;
    `MMCA.ADC.Identity.Service/appsettings.json` `OAuth` `:89-91` with the `atldevcon` entry at `:90`.
    Every live citation above is updated; the dated entries keep the values they recorded.
+
+## Revision (2026-10-31)
+The decision is unchanged. Two things moved.
+
+1. **The route a head builds from a link is the framework's.** Each head used to turn the incoming
+   link into a route by hand, and the two copies had diverged: MMCA.ADC decoded the path and dropped
+   the fragment, MMCA.Store kept the encoded path, query and fragment (its guest-order and
+   confirm-email tokens ride in the fragment). `PlatformDeepLinks.TryPublish`
+   (`MMCA.Common/Source/Presentation/MMCA.Common.UI.Maui/Capabilities/Navigation/PlatformDeepLinks.cs`)
+   now does it for both platforms: it takes the Android `Intent` (only `ACTION_VIEW`) or the Apple
+   `NSUrl`, builds the route from the ENCODED path, query and fragment through
+   `DeepLinkDispatcher.TryComposeRoute`, which applies `IsAppRelativeRoute`, and drops a route that
+   fails the shape check instead of throwing out of the platform callback (SEC-Common-88,
+   SEC-ADC-65). A head keeps only its callbacks (`OnCreate`, `OnNewIntent`, `OpenUrl`,
+   `ContinueUserActivity`), each one line. The `PublishDeepLink` and route-reduction anchors in the
+   dated entries above no longer exist in MMCA.ADC; those entries keep the values they recorded.
+2. **MMCA.Store adopts the decision.** Its App Links filter claims `/checkout/return`, `/orders/`,
+   `/catalog/`, `/confirm-email` and `/reset-password` on its public web host, with a
+   `casaboutique://app/...` custom scheme beside it, and its web head serves the association files
+   through the same `MapAppAssociationEndpoints`. Its Stripe Checkout session returns to the
+   `/checkout/return` page on that host, which the app claims (Store specification, section 3.5).
