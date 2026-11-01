@@ -858,6 +858,10 @@
           <li>Store the Stripe session ID on the order</li>
           <li>Return the checkout URL for the customer to complete payment</li>
           </ol>
+          <p>The UI chooses where Stripe sends the shopper back (<code>ICheckoutReturnLinks</code>). The web heads return to
+          the order page on their own origin. The MAUI app opens Stripe in the system browser, where its WebView
+          origin does not exist, so it returns to the <code>/checkout/return</code> page on the public web host instead
+          (Section 11.3). The guest access token never rides in a Stripe URL; the app reads it from the device.</p>
           <p><strong>Webhook Confirmation (asynchronous):</strong></p>
           <ol>
           <li>Stripe sends a webhook notification to <code>POST /Payments/webhook</code></li>
@@ -1058,6 +1062,9 @@
           <code>catalog:product-images:manage</code>. A product holds at most 10 images
           (<code>ProductImageInvariants.cs:29</code>). Reordering reassigns display order from the supplied id list, and
           the first id becomes the primary image.</p>
+          <p>In the MAUI app the admin product page also offers &quot;Take photo&quot;: the device camera feeds the same
+          upload, and a photo over the 5 MB limit is scaled down to a JPEG on the device first
+          (<code>ProductDetail.Images.razor.cs</code>).</p>
           <p><strong>Implemented in:</strong></p>
           <ul>
           <li><code>Source/Modules/Catalog/MMCA.Store.Catalog.API/Controllers/ProductImagesController.cs</code></li>
@@ -2942,6 +2949,21 @@
           <p>The web head is an <strong>installable web app</strong>: it serves <code>manifest.webmanifest</code> and maps the framework
           service worker, which supplies an offline page (<code>MMCA.Store.UI.Web/Program.cs:281</code>,
           <a href="../adr/136-installable-web-app-service-worker.html">ADR-136</a>).</p>
+          <p>The MAUI app (application id <code>com.ivanball.casaboutiquestore</code>) adds the native capabilities from
+          MMCA.Common.UI.Maui (<a href="../adr/042-device-capability-abstraction.html">ADR-042</a>):</p>
+          <ul>
+          <li><strong>Links into the app</strong>: Android App Links on the public web host for <code>/checkout/return</code>, <code>/orders/</code>,
+          <code>/catalog/</code>, <code>/confirm-email</code> and <code>/reset-password</code>, plus the <code>casaboutique://app/...</code> scheme on
+          Android and iOS. The URL fragment is kept, because the guest and confirm-email tokens ride in it.
+          The web head serves <code>assetlinks.json</code> and <code>apple-app-site-association</code> from the <code>AppAssociation</code>
+          settings.</li>
+          <li><strong>Shared links</strong> point at the public website (<code>AddCommonMauiPublicLinkBuilder</code>, <code>PublicSite:BaseUrl</code>),
+          never at the WebView origin.</li>
+          <li><strong>App lock</strong>: an opt-in fingerprint or face lock, switched on from the Device Settings page
+          (<code>/settings/device</code>); turning it on asks for the biometric first.</li>
+          <li><strong>Haptics</strong> on adding to the bag and on a confirmed payment, and screen-reader announcements for bag
+          quantity changes and Undo.</li>
+          </ul>
           <h3 id="112-shopping-cart-ux">11.2 Shopping Cart UX</h3>
           <p>The shopping cart is exclusively accessible through a <strong>380px right-side drawer</strong> (CartDrawer), opened via the bag icon in the top app bar. There is no dedicated cart page.</p>
           <p><strong>Features:</strong></p>
@@ -2965,7 +2987,8 @@
           </ul>
           <p>The guest order page (<code>/orders/guest/{id}</code>) opens from the private link (the token in the URL fragment): the items, addresses, status, date placed, tracking and totals, a pay action, a thank-you block once paid, Cancel order while unpaid (after a confirmation), and an offer to create an account from the order&#39;s own details, which signs in and claims that order. Once the order is paid, its lines leave the device bag. A link that does not open the order points to find my order (<code>/orders/find</code>), where the order number and the checkout email ask for a new link by email; the page always shows the same confirmation.</p>
           <p>The customer&#39;s order page (<code>/orders/{id}</code>) shows the date placed in its summary and, once the Stripe return confirms payment, the same thank-you block (order number, date, where the receipt went, what happens next). <code>/orders</code> lists a customer&#39;s orders as cards (order number, status, date placed, item count, total) and keeps the data grid for an administrator.</p>
-          <p><code>OrphanOrderRecovery</code> (a content-header component) detects an order left in <code>PendingPayment</code> or <code>PaymentInitiated</code> after the shopper backed out of Stripe Checkout and offers to resume it.</p>
+          <p><code>OrphanOrderRecovery</code> (a content-header component) detects an order left in <code>PendingPayment</code> or <code>PaymentInitiated</code> after the shopper backed out of Stripe Checkout and offers to resume it. It re-reads the order when the app returns to the foreground (<code>IAppLifecycleNotifier.Resumed</code>, MAUI only), so an order paid in the system browser drops the banner.</p>
+          <p>The checkout return page (<code>/checkout/return?order=&amp;payment=success|cancelled[&amp;guest=true]</code>, anonymous) is where the MAUI app&#39;s Stripe session comes back. Inside the app it goes straight to the order page. In a browser it offers &quot;Open in the app&quot; (the <code>casaboutique://</code> link) and &quot;Continue on the website&quot;.</p>
           <h3 id="114-storefront-and-catalog-browse">11.4 Storefront and Catalog Browse</h3>
           <p>The home page (<code>/</code>, <code>StoreHome</code>) shows the hero, category tiles, a Special Offers banner to <code>/catalog?sale=true</code> while something is on sale, a Best Sellers row fed by <code>GET /Orders/best-sellers</code>, and the store perks. The information pages are <code>/shipping</code>, <code>/returns</code>, <code>/contact</code>, <code>/privacy</code>, <code>/terms</code> (one <code>StoreInfo</code> page) and <code>/about</code>; the contact page&#39;s support email line is left out while the setting is empty. The footer on every page links the shop, find my order and the five information pages.</p>
           <p>The catalog browse page (<code>/catalog</code>) runs on the anonymous <code>GET /Products/storefront</code> endpoint (<code>ProductsController.cs:96-118</code>) and provides:</p>
@@ -2983,6 +3006,7 @@
           <p>The product detail page (<code>/catalog/{id}</code>) shows:</p>
           <ul>
           <li>Breadcrumbs (Home &gt; Shop &gt; the product&#39;s category &gt; the product&#39;s name, <code>CatalogProductDetail.razor.cs:53-67</code>)</li>
+          <li>A share button carrying the product&#39;s public website link (the native share sheet in the app, the browser&#39;s share or copy on the web)</li>
           <li>Product description, brand, category</li>
           <li>Variant choice, price, quantity selector, and &quot;Add to Cart&quot;. A discounted variant shows the effective price beside the struck-through list price and a sale badge, and carries an accessible &quot;Was X, now Y&quot; label so a screen reader hears both numbers rather than the visual strike alone</li>
           <li>&quot;Buy Now&quot; (adds the variant and opens <code>/checkout</code>)</li>
@@ -2994,6 +3018,7 @@
           <ul>
           <li>Customer: Home, Shop, My Orders, My Profile</li>
           <li>Admin: Home, Shop, Categories, Products, Reviews, Inventory, Shopping Carts, Orders, Customers, Users, Roles, My Profile</li>
+          <li>MAUI app only: Device Settings, for every visitor</li>
           </ul>
           <p><strong>Top App Bar</strong>: the shop search and the bag icon with badge count for every visitor (each module&#39;s <code>PublicAppBarComponentTypes</code>, also in the mobile quick-actions row), then user email and Logout button (authenticated) or Login/Register buttons (anonymous)</p>
           <p><strong>Administration pages:</strong> <code>/users</code> and <code>/users/{id}</code> (lock, unlock, change role), <code>/roles</code> and <code>/roles/{role}</code> (edit stored grants), alongside the catalog, inventory, cart, order and customer pages. The profile page (<code>/profile</code>) links to the customer&#39;s orders (&quot;My orders&quot;) and the device list (&quot;Manage devices&quot;), picks the state from the US postal regions, and carries the &quot;Your data&quot; card for export and erasure.</p>

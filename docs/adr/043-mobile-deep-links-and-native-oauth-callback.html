@@ -312,7 +312,9 @@
           Revised 2026-10-26: anchors refreshed after the <code>Program.cs</code> association block, <code>MainActivity</code>&#39;s
           <code>PublishDeepLink</code> and the shared <code>DeepLinkDispatcher</code> grew; see Revision below.
           Revised 2026-10-28: anchors refreshed after the <code>Program.cs</code> association block moved down one line;
-          see Revision below.</p>
+          see Revision below.
+          Revised 2026-10-31: the route a head builds from a link moved into the framework
+          (<code>PlatformDeepLinks.TryPublish</code>), and MMCA.Store adopts the decision; see Revision below.</p>
           <h2 id="context">Context</h2>
           <p>Three mobile flows all need a URL to leave the web world and land inside the MAUI app:</p>
           <ol>
@@ -797,6 +799,27 @@
           <code>MMCA.ADC.Identity.Service/appsettings.json</code> <code>OAuth</code> <code>:89-91</code> with the <code>atldevcon</code> entry at <code>:90</code>.
           Every live citation above is updated; the dated entries keep the values they recorded.</li>
           </ol>
+          <h2 id="revision-2026-10-31">Revision (2026-10-31)</h2>
+          <p>The decision is unchanged. Two things moved.</p>
+          <ol>
+          <li><strong>The route a head builds from a link is the framework&#39;s.</strong> Each head used to turn the incoming
+          link into a route by hand, and the two copies had diverged: MMCA.ADC decoded the path and dropped
+          the fragment, MMCA.Store kept the encoded path, query and fragment (its guest-order and
+          confirm-email tokens ride in the fragment). <code>PlatformDeepLinks.TryPublish</code>
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI.Maui/Capabilities/Navigation/PlatformDeepLinks.cs</code>)
+          now does it for both platforms: it takes the Android <code>Intent</code> (only <code>ACTION_VIEW</code>) or the Apple
+          <code>NSUrl</code>, builds the route from the ENCODED path, query and fragment through
+          <code>DeepLinkDispatcher.TryComposeRoute</code>, which applies <code>IsAppRelativeRoute</code>, and drops a route that
+          fails the shape check instead of throwing out of the platform callback (SEC-Common-88,
+          SEC-ADC-65). A head keeps only its callbacks (<code>OnCreate</code>, <code>OnNewIntent</code>, <code>OpenUrl</code>,
+          <code>ContinueUserActivity</code>), each one line. The <code>PublishDeepLink</code> and route-reduction anchors in the
+          dated entries above no longer exist in MMCA.ADC; those entries keep the values they recorded.</li>
+          <li><strong>MMCA.Store adopts the decision.</strong> Its App Links filter claims <code>/checkout/return</code>, <code>/orders/</code>,
+          <code>/catalog/</code>, <code>/confirm-email</code> and <code>/reset-password</code> on its public web host, with a
+          <code>casaboutique://app/...</code> custom scheme beside it, and its web head serves the association files
+          through the same <code>MapAppAssociationEndpoints</code>. Its Stripe Checkout session returns to the
+          <code>/checkout/return</code> page on that host, which the app claims (Store specification, section 3.5).</li>
+          </ol>
           
         <div class="doc-foot btn-row">
           <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
@@ -826,6 +849,7 @@
             <li><a href="#revision-2026-10-21">Revision (2026-10-21)</a></li>
             <li><a href="#revision-2026-10-26">Revision (2026-10-26)</a></li>
             <li><a href="#revision-2026-10-28">Revision (2026-10-28)</a></li>
+            <li><a href="#revision-2026-10-31">Revision (2026-10-31)</a></li>
             </ul>
           </nav>
         </aside>

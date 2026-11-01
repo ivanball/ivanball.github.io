@@ -473,6 +473,11 @@ order's access token, which runs the same use case (Section 3.18).
 4. Store the Stripe session ID on the order
 5. Return the checkout URL for the customer to complete payment
 
+The UI chooses where Stripe sends the shopper back (`ICheckoutReturnLinks`). The web heads return to
+the order page on their own origin. The MAUI app opens Stripe in the system browser, where its WebView
+origin does not exist, so it returns to the `/checkout/return` page on the public web host instead
+(Section 11.3). The guest access token never rides in a Stripe URL; the app reads it from the device.
+
 **Webhook Confirmation (asynchronous):**
 1. Stripe sends a webhook notification to `POST /Payments/webhook`
 2. System verifies the webhook signature with Stripe's `EventUtility.ValidateSignature()` against
@@ -677,6 +682,10 @@ seconds; every mutation evicts the products cache. The routes form one collectio
 `catalog:product-images:manage`. A product holds at most 10 images
 (`ProductImageInvariants.cs:29`). Reordering reassigns display order from the supplied id list, and
 the first id becomes the primary image.
+
+In the MAUI app the admin product page also offers "Take photo": the device camera feeds the same
+upload, and a photo over the 5 MB limit is scaled down to a JPEG on the device first
+(`ProductDetail.Images.razor.cs`).
 
 **Implemented in:**
 - `Source/Modules/Catalog/MMCA.Store.Catalog.API/Controllers/ProductImagesController.cs`
@@ -1510,6 +1519,20 @@ The web head is an **installable web app**: it serves `manifest.webmanifest` and
 service worker, which supplies an offline page (`MMCA.Store.UI.Web/Program.cs:281`,
 [ADR-136](../adr/136-installable-web-app-service-worker.md)).
 
+The MAUI app (application id `com.ivanball.casaboutiquestore`) adds the native capabilities from
+MMCA.Common.UI.Maui ([ADR-042](../adr/042-device-capability-abstraction.md)):
+- **Links into the app**: Android App Links on the public web host for `/checkout/return`, `/orders/`,
+  `/catalog/`, `/confirm-email` and `/reset-password`, plus the `casaboutique://app/...` scheme on
+  Android and iOS. The URL fragment is kept, because the guest and confirm-email tokens ride in it.
+  The web head serves `assetlinks.json` and `apple-app-site-association` from the `AppAssociation`
+  settings.
+- **Shared links** point at the public website (`AddCommonMauiPublicLinkBuilder`, `PublicSite:BaseUrl`),
+  never at the WebView origin.
+- **App lock**: an opt-in fingerprint or face lock, switched on from the Device Settings page
+  (`/settings/device`); turning it on asks for the biometric first.
+- **Haptics** on adding to the bag and on a confirmed payment, and screen-reader announcements for bag
+  quantity changes and Undo.
+
 ### 11.2 Shopping Cart UX
 
 The shopping cart is exclusively accessible through a **380px right-side drawer** (CartDrawer), opened via the bag icon in the top app bar. There is no dedicated cart page.
@@ -1537,7 +1560,9 @@ The guest order page (`/orders/guest/{id}`) opens from the private link (the tok
 
 The customer's order page (`/orders/{id}`) shows the date placed in its summary and, once the Stripe return confirms payment, the same thank-you block (order number, date, where the receipt went, what happens next). `/orders` lists a customer's orders as cards (order number, status, date placed, item count, total) and keeps the data grid for an administrator.
 
-`OrphanOrderRecovery` (a content-header component) detects an order left in `PendingPayment` or `PaymentInitiated` after the shopper backed out of Stripe Checkout and offers to resume it.
+`OrphanOrderRecovery` (a content-header component) detects an order left in `PendingPayment` or `PaymentInitiated` after the shopper backed out of Stripe Checkout and offers to resume it. It re-reads the order when the app returns to the foreground (`IAppLifecycleNotifier.Resumed`, MAUI only), so an order paid in the system browser drops the banner.
+
+The checkout return page (`/checkout/return?order=&payment=success|cancelled[&guest=true]`, anonymous) is where the MAUI app's Stripe session comes back. Inside the app it goes straight to the order page. In a browser it offers "Open in the app" (the `casaboutique://` link) and "Continue on the website".
 
 ### 11.4 Storefront and Catalog Browse
 
@@ -1556,6 +1581,7 @@ The catalog browse page (`/catalog`) runs on the anonymous `GET /Products/storef
 
 The product detail page (`/catalog/{id}`) shows:
 - Breadcrumbs (Home > Shop > the product's category > the product's name, `CatalogProductDetail.razor.cs:53-67`)
+- A share button carrying the product's public website link (the native share sheet in the app, the browser's share or copy on the web)
 - Product description, brand, category
 - Variant choice, price, quantity selector, and "Add to Cart". A discounted variant shows the effective price beside the struck-through list price and a sale badge, and carries an accessible "Was X, now Y" label so a screen reader hears both numbers rather than the visual strike alone
 - "Buy Now" (adds the variant and opens `/checkout`)
@@ -1567,6 +1593,7 @@ The product detail page (`/catalog/{id}`) shows:
 **Sidebar** (role-based, dynamically populated from `IUIModule` registrations; Home comes from the framework navigation):
 - Customer: Home, Shop, My Orders, My Profile
 - Admin: Home, Shop, Categories, Products, Reviews, Inventory, Shopping Carts, Orders, Customers, Users, Roles, My Profile
+- MAUI app only: Device Settings, for every visitor
 
 **Top App Bar**: the shop search and the bag icon with badge count for every visitor (each module's `PublicAppBarComponentTypes`, also in the mobile quick-actions row), then user email and Logout button (authenticated) or Login/Register buttons (anonymous)
 
