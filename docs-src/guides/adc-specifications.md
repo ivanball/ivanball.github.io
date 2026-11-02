@@ -751,6 +751,10 @@ Every entity in the system tracks:
 | BR-272 | **A ticket links to an account only on a verified address.** Engagement links tickets on `UserRegistered` when `EmailVerified` is true, and on `UserEmailVerified`. Identity raises `UserEmailVerified` when an address is confirmed, when an external login with a verified address is attached, and when a sign-in link is redeemed. One order email can cover several tickets, so the handler links the ticket whose attendee name matches the account name. When no name matches and the order email has exactly one ticket, it links that ticket. Otherwise it leaves the tickets unlinked for a barcode claim (BR-273). A link records `LinkMethod = VerifiedEmail`. |
 | BR-273 | **An attendee can claim a ticket by its barcode.** `POST /Tickets/claim` (authenticated; the caller is taken from the token) links a Live, unlinked ticket of the event to the caller with `LinkMethod = Barcode`. A ticket already linked to another account answers HTTP 409. An erased account is refused before anything is written (BR-56). |
 | BR-274 | **The roster is deleted after the event, and erasure unlinks.** An organizer deletes an event's roster (`DELETE /Tickets/roster`) once the event is over, so the imported TicketLeap data is retained no longer than the invites need. Erasing an account (`UserDeleted`) unlinks the account's tickets, and a user's linked tickets are part of their GDPR export alongside the other engagement data (BR-254). |
+| BR-277 | **Tickets link to accounts that already exist.** `POST /Tickets/link-existing` takes the event's Live, unlinked tickets that carry an order email and asks Identity, over gRPC (`VerifiedUserLookupService`, at most 500 addresses per call), for the active accounts whose confirmed address matches one of them. It then applies the BR-272 rules: the ticket whose attendee name matches the account name, else the only ticket for that email, else none (left for a barcode claim, BR-273). Erased accounts are skipped, and a link records `LinkMethod = VerifiedEmail`. The response counts the tickets linked, the tickets left for a barcode claim and the tickets with no account, and a re-run links nothing new. When Identity cannot be reached the run fails and links nothing. A committed (not dry-run) roster upload runs the same step and reports how many tickets it linked; there an unreachable Identity is logged and reported as none linked, and the upload still succeeds. |
+| BR-278 | **Ticket insights are aggregate only.** No insights report or CSV carries a name, an email address, a barcode or a user ID; the email-domain report shows domains only. In every engagement cell (BR-280) and every email-domain cell (BR-279), a count of 1 or 2 reads "fewer than 3" and a percentage built on such a count is withheld with it; 0 and counts of 3 or more are exact. The rule is applied on the server, so neither the API nor the CSV carries the exact small count. |
+| BR-279 | **The roster reports describe the imported roster** (`GET /Tickets/insights/roster`). Funnel by ticket type: tickets, invited, linked, percent linked, and the split between `VerifiedEmail` and `Barcode` links. Adoption over time: invites sent and accounts linked per day from the first invite or link, the cumulative percent linked, and the median days from invite to link. Follow-up queue: tickets invited 3 or more and 7 or more days ago and still unlinked, split into single-ticket orders (reminder candidates) and multi-ticket orders (barcode-claim candidates). Group orders: order emails holding 2 or more tickets, a tickets-per-order histogram and the unlinked group tickets. Roster health: voided, blank attendee name, duplicate attendee names, erased, and when a ticket was last added and last changed. Email domain mix: personal webmail against company domains, with the top 10 company domains by ticket count; a company domain with fewer than 3 tickets is folded into Other. Days are counted in the event's UTC offset, derived from the event's first day, or in UTC when the event cannot be read; the report names the basis. |
+| BR-280 | **The engagement reports describe the linked holders, by ticket type** (`GET /Tickets/insights/engagement`). Engagement: the share with an event check-in, the average session check-ins, and the share with a bookmark, with session or event feedback (from the points ledger), with a poll vote and with a question asked, each scoped to the event. Ticketed against present: linked holders with no event check-in, and checked-in accounts holding no linked ticket (speakers, sponsors, complimentary and walk-in guests). Sponsor reach: unique sponsor-booth check-ins per sponsor, split by ticket type. Arrival curve: event check-ins per 30 minutes on the event's days. Session and sponsor names come from Conference; when Conference cannot be reached, sessions fall back to the ones local activity names and sponsors to their IDs, and the report says so. An account holding several ticket types counts in each type and once in the all-types row. |
 
 ### Inferred Rules
 
@@ -1481,6 +1485,36 @@ the count, never who voted (BR-238).
 
 **Business Rules:** BR-269, BR-274
 
+---
+
+### UC-55: Link Existing Accounts
+
+**Actors:** Organizer
+**Preconditions:** The `Engagement.Tickets` feature is enabled; the caller holds `engagement:tickets:manage`
+
+**Main Flow:**
+1. Organizer opens `/organizer/tickets` for an event and selects "Link existing accounts"
+2. The system looks up the accounts whose confirmed address matches an unlinked ticket's order email and links the tickets by the BR-272 rules (`POST /Tickets/link-existing`, BR-277)
+3. The system reports the tickets linked, the tickets left for a barcode claim and the tickets with no account
+
+**Alternative Flow:** A committed roster upload (UC-48) runs the same linking and reports the tickets it linked.
+
+**Business Rules:** BR-272, BR-273, BR-277
+
+---
+
+### UC-56: View Ticket Insights
+
+**Actors:** Organizer
+**Preconditions:** The `Engagement.Tickets` feature is enabled; the caller holds `engagement:tickets:manage`
+
+**Main Flow:**
+1. Organizer opens `/organizer/tickets/insights` (linked from Ticket Roster) and picks the event
+2. The system shows the roster reports (`GET /Tickets/insights/roster`, BR-279) and, loaded separately, the engagement reports (`GET /Tickets/insights/engagement`, BR-280), each with a chart where one fits and a "Show as table" view of the same numbers
+3. Organizer downloads any report table as CSV (`GET /Tickets/insights/export`)
+
+**Business Rules:** BR-278, BR-279, BR-280
+
 > **Use-case numbering.** UC-12 to UC-18, UC-20, and UC-28/UC-29 are unused; the numbers were retired
 > as the specification was reorganized and are deliberately not recycled. UC-30 to UC-35 are the
 > authentication flows and live in Section 12.2. UC-36 onward are the use cases added after them;
@@ -1760,6 +1794,10 @@ All Attendee actions, plus:
 | 144 | Send ticket-holder invites | UC-49, BR-270 | `POST /Tickets/invites`; one per order email; capped per run, remaining count reported |
 | 145 | View the roster summary | UC-52 | `GET /Tickets/summary`; tickets, invited and linked counts |
 | 146 | Delete an event's ticket roster | UC-53, BR-274 | `DELETE /Tickets/roster` |
+| 147 | Link tickets to existing accounts | UC-55, BR-277 | `POST /Tickets/link-existing?eventId=`; counts linked, left for barcode and no account |
+| 148 | View the roster insights | UC-56, BR-278, BR-279 | `GET /Tickets/insights/roster?eventId=`; aggregate only |
+| 149 | View the engagement insights | UC-56, BR-278, BR-280 | `GET /Tickets/insights/engagement?eventId=`; aggregate only, "fewer than 3" below 3 |
+| 150 | Export one insights table as CSV | UC-56, BR-278 | `GET /Tickets/insights/export?eventId=&report=`; `report` is `a1`-`a6` or `b1`-`b4` (ADR-078) |
 
 #### System (Non-Human)
 
@@ -1783,7 +1821,7 @@ Check-in and feedback points are awarded by integration-event consumers, not dom
 | **Attendee** | UC-30, UC-31, UC-32, UC-33, UC-34, UC-35, UC-4, UC-5, UC-10, UC-11, UC-21, UC-23, UC-24, UC-26, UC-40, UC-41, UC-42, UC-45, UC-46, UC-47, UC-50, UC-51, UC-54 | + API Consumer actions + feedback update/delete + account deletion + password change + password reset + sign-in links + ticket claim | API Consumer + 42 |
 | **Speaker** | UC-22, UC-25, UC-39 *(session-scoped)* | Own feedback view, profile editing, polls, moderation, materials (bookmark count views are public, already in API Consumer) | Attendee + 6 |
 | **ContentEditor** | UC-8, UC-9, UC-19 (sessions, speakers), UC-36, UC-37, UC-38, UC-39 | Subset of Organizer actions listed above | Attendee + subset |
-| **Organizer** | UC-6-UC-9, UC-19, UC-21, UC-22, UC-25, UC-27, UC-36-UC-44, UC-48, UC-49, UC-52, UC-53 | + Attendee actions + Conference CRUD (speaker question answer endpoints are domain-only, not exposed via REST) + user list/delete/admin + role admin + publish/unpublish + speaker link/unlink + live layer, check-in, points, selection, ticket roster and invites | Attendee + 65 |
+| **Organizer** | UC-6-UC-9, UC-19, UC-21, UC-22, UC-25, UC-27, UC-36-UC-44, UC-48, UC-49, UC-52, UC-53, UC-55, UC-56 | + Attendee actions + Conference CRUD (speaker question answer endpoints are domain-only, not exposed via REST) + user list/delete/admin + role admin + publish/unpublish + speaker link/unlink + live layer, check-in, points, selection, ticket roster, invites and insights | Attendee + 69 |
 | **System** |: | Speaker unlink, cache eviction, broadcasts, question points | 5 |
 
 ---
@@ -2100,7 +2138,7 @@ Each module runs as its own service host (`Source/Services/MMCA.ADC.{Module}.Ser
 |---|---|---|
 | **Conference** | `EventLiveValidationService` (event, session, sponsor and room live info; overlapping sessions), `SessionBookmarkValidationService` (bookmark eligibility, session IDs by event), `UserConferenceExportService` (data-subject export) | Engagement, Identity (export) |
 | **Engagement** | `BookmarkCountService` (bookmark counts per session), `UserEngagementExportService` (data-subject export) | Conference, Identity (export) |
-| **Identity** | `AttendeeQueryService` (attendee user IDs) | Notification |
+| **Identity** | `AttendeeQueryService` (attendee user IDs), `VerifiedUserLookupService` (active accounts by confirmed email, BR-277) | Notification, Engagement |
 | **Notification** | `LiveChannelPushService` (push a message to a live channel), `UserNotificationExportService` (data-subject export) | Engagement, Identity (export) |
 
 ### Aggregate Boundaries
