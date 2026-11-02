@@ -74,8 +74,8 @@ bearer it reads from the HttpOnly cookie. The browser never holds a token that a
   section `SameOriginApiProxy`, `:25`): `PathPrefix` `/api` (`:39`), `GatewayAddress` defaulting to
   `Api:ApiEndpoint` so an Aspire discovery name resolves as it does for the host's other clients
   (`:47`, filled at `SameOriginApiProxyServiceExtensions.cs:57-64`), token-issuing paths
-  `auth/login`, `auth/register`, `auth/oauth/exchange` plus any `AdditionalTokenIssuingPaths`
-  (`:32`, `:53`), `MaxRequestBodySizeByPath` (`:55-76`), `RefreshPath` `auth/refresh` (`:83`),
+  `auth/login`, `auth/register`, `auth/oauth/exchange`, `auth/sign-in-link/redeem` plus any
+  `AdditionalTokenIssuingPaths` (`:32`, `:53`), `MaxRequestBodySizeByPath` (`:55-76`), `RefreshPath` `auth/refresh` (`:83`),
   `RevokePath` `auth/revoke` (`:90`) and `SessionCookieSameSite` `Strict` (`:98`).
   `MaxRequestBodySizeByPath` is empty by default; each key is a gateway-relative path, matched
   case-insensitively on a whole-segment prefix with the longest key winning, and its value in bytes

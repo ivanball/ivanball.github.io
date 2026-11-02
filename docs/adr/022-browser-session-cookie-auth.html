@@ -281,8 +281,8 @@
           (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI.Web/SameOriginProxy/SameOriginApiProxyServiceExtensions.cs:73</code>),
           so that <code>POST</code> answers 204 without writing anything (<code>SessionCookieEndpoints.cs:41-55</code>). The cookies
           are instead written server-side: by the proxy transformer on the token-issuing paths <code>auth/login</code>,
-          <code>auth/register</code> and <code>auth/oauth/exchange</code> (<code>SameOriginProxyTransformer.cs:141</code>,
-          <code>SameOriginApiProxySettings.cs:32</code>) and by <code>POST /auth/session-cookie/handoff</code> for the Server circuit
+          <code>auth/register</code>, <code>auth/oauth/exchange</code> and <code>auth/sign-in-link/redeem</code>
+          (<code>SameOriginProxyTransformer.cs:141</code>, <code>SameOriginApiProxySettings.cs:32</code>) and by <code>POST /auth/session-cookie/handoff</code> for the Server circuit
           (<code>SessionHandoffEndpoints.cs:18</code>, <code>:55</code>). <code>DELETE /auth/session-cookie</code> clears them at logout
           (<code>SessionCookieEndpoints.cs:58-62</code>).</li>
           <li><strong>SameSite is a setting.</strong> <code>SessionCookieSettings.SameSite</code> defaults to <code>Lax</code>

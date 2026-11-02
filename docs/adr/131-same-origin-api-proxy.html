@@ -314,8 +314,8 @@
           section <code>SameOriginApiProxy</code>, <code>:25</code>): <code>PathPrefix</code> <code>/api</code> (<code>:39</code>), <code>GatewayAddress</code> defaulting to
           <code>Api:ApiEndpoint</code> so an Aspire discovery name resolves as it does for the host&#39;s other clients
           (<code>:47</code>, filled at <code>SameOriginApiProxyServiceExtensions.cs:57-64</code>), token-issuing paths
-          <code>auth/login</code>, <code>auth/register</code>, <code>auth/oauth/exchange</code> plus any <code>AdditionalTokenIssuingPaths</code>
-          (<code>:32</code>, <code>:53</code>), <code>MaxRequestBodySizeByPath</code> (<code>:55-76</code>), <code>RefreshPath</code> <code>auth/refresh</code> (<code>:83</code>),
+          <code>auth/login</code>, <code>auth/register</code>, <code>auth/oauth/exchange</code>, <code>auth/sign-in-link/redeem</code> plus any
+          <code>AdditionalTokenIssuingPaths</code> (<code>:32</code>, <code>:53</code>), <code>MaxRequestBodySizeByPath</code> (<code>:55-76</code>), <code>RefreshPath</code> <code>auth/refresh</code> (<code>:83</code>),
           <code>RevokePath</code> <code>auth/revoke</code> (<code>:90</code>) and <code>SessionCookieSameSite</code> <code>Strict</code> (<code>:98</code>).
           <code>MaxRequestBodySizeByPath</code> is empty by default; each key is a gateway-relative path, matched
           case-insensitively on a whole-segment prefix with the longest key winning, and its value in bytes
