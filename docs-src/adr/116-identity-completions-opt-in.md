@@ -11,6 +11,8 @@ Revised 2026-10-07: anchors refreshed after the v1.233.0 release.
 Revised 2026-10-21: anchors refreshed after the v1.250.0 release.
 Revised 2026-10-26: anchors refreshed after the v1.261.0 release.
 Revised 2026-10-28: anchors refreshed after the v1.265.1 release.
+Revised 2026-11-02: item 14 records sign-in links as a sixth opt-in completion of the same shape
+(see Revision below).
 Layers stored permission grants over
 [ADR-020](020-permission-based-authorization.md)'s compiled registry and extends the shared sign-in
 workflow of [ADR-050](050-jwt-refresh-token-rotation.md) with optional collaborators.
@@ -279,6 +281,76 @@ same one.**
     `.../Identity.API/Controllers/LegalAcceptanceController.cs:28`,
     `.../Identity.UI/IdentityUIModule.cs:33`); MMCA.Store and MMCA.Helpdesk do not.
 
+14. **Sign-in links are a sixth completion of the same shape.** `AddSignInLinks(configuration)`
+    (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.Auth.cs:97`) is another
+    separate DI call that nothing in the framework makes. It binds `SignInLinkSettings` (section
+    `Authentication:SignInLinks`,
+    `MMCA.Common/Source/Core/MMCA.Common.Application/Auth/SignInLinks/SignInLinkSettings.cs:13`) and
+    registers `SignInLinkTokenService` behind `ISignInLinkTokenService`
+    (`.../Auth/SignInLinks/ISignInLinkTokenService.cs:18`). `Enabled` defaults to false (`:20`), and
+    registering the call issues nothing on its own: a link is sent or redeemed only once the app wires
+    the handler bases and a controller AND turns `Enabled` on (`DependencyInjection.Auth.cs:94-95`).
+    - **The token follows the email-confirmation design.** The service
+      (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Auth/SignInLinks/SignInLinkTokenService.cs:40`)
+      lives over `ICacheService` under its own `signinlink:` key prefix. It keeps only the SHA-256 of
+      the token, so the token is hashed at rest, and redeeming consumes it, so it is single use. It
+      enforces a per-address request throttle and a validation-attempt cap (`:17-24`).
+    - **One active token per address AND purpose.** A token is keyed by address, not by account
+      (`ISignInLinkTokenService.cs:13-16`), because an invitation goes to an address that may have no
+      account yet. `SignInLinkPurpose` (`:59`) has two values, `SignIn` and `Invite`, each with its
+      own lifetime: 15 minutes and 14 days (`SignInLinkSettings.cs:35`, `:39`). Asking for a sign-in
+      link therefore never voids an outstanding invitation.
+    - **The token rides in the URL fragment.** `SignInLinkSettings.ComposeLink` (`:74`) puts the
+      address and the token after the `#`, for the reason `ForgotPasswordHandlerBase.ComposeResetLink`
+      documents (`SignInLinkSettings.cs:69-72`). A fragment never reaches a server, so the token
+      stays out of logs and `Referer` headers, and a mail scanner that prefetches the link with a GET
+      never sees it.
+    - **Redemption waits for an explicit tap.** The `/auth/sign-in-link` page
+      (`MMCA.Common/Source/Presentation/MMCA.Common.UI/Pages/Auth/SignInLinks/SignInLink.razor:1`)
+      reads the fragment and redeems only on a tap of Continue
+      (`.../Pages/Auth/SignInLinks/SignInLink.razor.cs:23-31`), so a scanner that renders the page with
+      script enabled still cannot spend the token. It shows a Terms and Privacy consent line when the
+      host publishes a Terms URL (`:79`). After a redeem it lands on
+      `SignInSettings.SignInLinkLandingPath`
+      (`MMCA.Common/Source/Presentation/MMCA.Common.UI/Common/Settings/SignInSettings.cs:28`).
+      `SignInSettings.OfferSignInLink` (`:22`, default false) adds "Email me a sign-in link" to the
+      sign-in page.
+    - **Send answers success on every outcome and never creates an account.**
+      `SendSignInLinkHandlerBase`
+      (`MMCA.Common/Source/Core/MMCA.Common.Application/Users/UseCases/SignInLinks/SendSignInLinkHandlerBase.cs:42`)
+      returns success for every case: a disabled feature, a malformed address, an address with no
+      account, a throttled request and a failed send (`:62-110`). An address with no account gets no
+      email (`:76-80`). The endpoint on `SignInLinkControllerBase`
+      (`MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/SignInLinks/SignInLinkControllerBase.cs:35`),
+      `POST sign-in-link`, therefore answers 202 to every well-formed request (`:80-97`). That keeps the
+      anti-enumeration posture `ForgotPasswordHandlerBase` already has. The endpoint and its
+      `POST sign-in-link/redeem` peer (`:108`) are anonymous and sit under the `auth-ip` limiter
+      (`:83`, `:111`).
+    - **Redeem spends the token first, and provisions only through a hook.**
+      `RedeemSignInLinkHandlerBase`
+      (`.../Users/UseCases/SignInLinks/RedeemSignInLinkHandlerBase.cs:47`) consumes the token before it
+      looks up the account (`:86`), so a caller with no token learns nothing from how the request
+      fails. When the address has no account, the handler creates one only if the grant carries a
+      `SignInLinkProfile`, and only through the overridable `ProvisionUser` hook (`:172-178`). The
+      default hook refuses (`:136-137`), and a plain sign-in link never carries a profile. Redeeming
+      confirms an unconfirmed address (`:221`). `OnUserProvisionedAsync` (`:146`) and
+      `OnEmailOwnershipProvedAsync` (`:158`) are the app's post-save hooks.
+    - **A link never bypasses a second factor.** `IAuthenticationService.SignInVerifiedEmailOwnerAsync`
+      (`.../Auth/IAuthenticationService.cs:155`) is a default member that rejects (`:161`), so existing
+      implementations keep compiling. `AuthenticationServiceBase` implements it
+      (`.../Auth/AuthenticationServiceBase.cs:476`): it runs the app's sign-in gate and refuses any
+      account whose challenge answers anything but `NotEnrolled` (`:495-499`), because owning the
+      mailbox does not prove the second factor.
+
+    The same release (`MMCA.Common/CHANGELOG.md:9`, `:29`) also changed the shared credential pages. A
+    registration refused with `EmailAlreadyExists`
+    (`MMCA.Common/Source/Presentation/MMCA.Common.UI/Pages/Auth/Register.razor:237-239`) now goes
+    straight to `/login`, with the address prefilled. `AuthEmailPrefill`
+    (`MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/Navigation/AuthEmailPrefill.cs:11`)
+    carries the address in navigation history state, never the URL, and the sign-in page passes it on
+    to Forgot password the same way (`.../Pages/Auth/Login.razor.cs:89`). The 409 already says the
+    account exists, so the hand-off reveals nothing new.
+
 ## Rationale
 Six shapes were considered for these four capabilities, and each rejection is what produced the
 opt-in posture above:
@@ -458,6 +530,18 @@ anchors moved.
    MMCA.ADC registers `AddLegalAcceptance` at
    `MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:249`. Items 3, 9, 12 and 13 now
    cite these.
+
+## Revision (2026-11-02)
+- Item 14 is new: sign-in links (MMCA.Common 1.273.0) are recorded as a sixth opt-in completion of the
+  same shape. They come with their own `AddSignInLinks` call and `Enabled` defaults to false. The
+  token is single use, hashed at rest, and has one active instance per address and purpose (`SignIn`
+  15 minutes, `Invite` 14 days). It rides in the URL fragment and is redeemed only on an explicit
+  tap. The send endpoint always answers 202 and never creates an account. An account is provisioned
+  only through the app's `ProvisionUser` override, when the invitation carries a profile, and an
+  account with an enrolled second factor is refused.
+- Item 14 also records the duplicate-email hand-off from registration to sign-in, which carries the
+  address in navigation history state rather than the URL.
+- The anchors in items 1 to 13 were not re-verified in this revision.
 
 ## Related
 [ADR-020](020-permission-based-authorization.md) (the compiled role-to-permission registry stored

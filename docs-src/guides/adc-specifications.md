@@ -1,6 +1,6 @@
 # ADC (Atlanta Developers Conference) - Business Specifications
 
-_As of: 2026-10-28._
+_As of: 2026-11-02._
 
 ---
 
@@ -28,9 +28,10 @@ ADC is a conference management system for the **Atlanta Developers Conference**.
 - **Live Session Q and A** - Attendee-submitted questions with moderation and upvoting, displayed anonymously
 - **Badge Check-In** - Organizers scan an attendee's QR badge to record session attendance, and attendees self-record sponsor booth visits and room check-ins from printed QR codes; door admission stays with TicketLeap (BR-244 to BR-249, BR-261, BR-262)
 - **Points and Leaderboard** - An append-only rewards ledger fed by check-in, sponsor visits, feedback and questions, with an opt-in leaderboard (BR-250 to BR-254)
+- **Ticket Roster and Invites** - Organizers upload a per-event ticket roster from the TicketLeap export (whitelisted columns only), email every ticket holder a one-tap invite that creates or signs in their account, and tickets link to accounts by verified email or by barcode claim (BR-268 to BR-274)
 
 **Identity** (identity and authentication):
-- **User Management** - Email + password registration, external OAuth sign-in (Google, GitHub, Apple), send-only email confirmation, JWT authentication, permission-based authorization, and organizer user administration (account lock and role change, BR-264)
+- **User Management** - Email + password registration, external OAuth sign-in (Google, GitHub, Apple), one-time emailed sign-in links (BR-275), send-only email confirmation, JWT authentication, permission-based authorization, and organizer user administration (account lock and role change, BR-264)
 
 **Notification** (real-time delivery): hosts the SignalR notification hub that pushes live-layer updates to clients (BR-229, ADR-039). It has no domain model of its own.
 
@@ -51,6 +52,7 @@ ADC is a conference management system for the **Atlanta Developers Conference**.
 14. Per-event sponsor, partner and social activity listings
 15. Speaker-published session materials (files and links)
 16. Conference-day live polls, session Q and A, badge check-in, sponsor visits, room check-in, and an opt-in points leaderboard
+17. Ticket-holder invites from an uploaded TicketLeap roster, and passwordless sign-in through one-time emailed links
 
 ---
 
@@ -515,6 +517,29 @@ Opting out soft-deletes the row and rejoining reactivates it (BR-253).
 
 A tombstone recording that an account was erased (UserId, unique, and ErasedOn, with no personal data), so Engagement can refuse writes that arrive after the erasure from a still-valid access token (BR-56).
 
+#### Ticket (Aggregate Root)
+
+One row per ticket in an organizer-uploaded TicketLeap roster (BR-268). It holds only the whitelisted columns. Door admission stays with TicketLeap (BR-248): the row exists to invite the ticket holder and to link the ticket to an account.
+
+| Attribute | Meaning |
+|---|---|
+| EventId | The ADC event the roster was uploaded for (required) |
+| SourceEventName | The TicketLeap `Event Name` the file carried (exactly one per file, BR-268) |
+| ExternalTicketId | The TicketLeap ticket ID; unique per event among active rows |
+| Barcode | The ticket barcode, used for the barcode claim (BR-273); unique per event among active rows |
+| TicketTypeName | The TicketLeap ticket type |
+| AttendeeFirstName / AttendeeLastName | The attendee name on the ticket, falling back to the buyer name when the attendee name is blank |
+| OrderEmail | The order email, normalized (`(Order) Email Address`, else `Buyer Email`); the address the invite is sent to (BR-270) |
+| Status | `Live`, or `Voided` when a later upload of the same source event no longer contains the ticket (BR-268) |
+| InvitedOn | When an invite was sent for the ticket, or null (BR-270) |
+| LinkedUserId | The account the ticket is linked to, or null (BR-272, BR-273) |
+| LinkedOn | When the ticket was linked, or null |
+| LinkMethod | `VerifiedEmail` or `Barcode`, or null while unlinked |
+
+Filtered unique indexes on (EventId, ExternalTicketId) and (EventId, Barcode), plus an index on OrderEmail. Change history is recorded (audited entity).
+
+**Business Rules:** BR-268 to BR-274
+
 ---
 
 ### Bounded Context: Identity
@@ -717,6 +742,15 @@ Every entity in the system tracks:
 | BR-263 | **`Event.SessionizeCode` is unique across events when set**, enforced by a unique index filtered to non-null codes: the code is the event's Sessionize identity, and the index is what lets concurrent replicas seed the same event without creating a duplicate. |
 | BR-264 | **An organizer can lock an account and change its role** (ADR-116). User administration (`Admin/Users`, permission `users:manage`, which only `Organizer` holds) locks and unlocks an account through `POST /Admin/Users/{userId}/lock` and `/unlock`, which set or clear `User.LockedOn`; a locked account keeps every row it owns and can be unlocked, unlike erasure (BR-56). A locked account is refused at password login (only after the password is proven) and at token refresh with HTTP 401 `Auth.AccountLocked`; at external sign-in the OAuth completion instead redirects back to the login page carrying `error=Auth.AccountLocked`. A role change (`PUT /Admin/Users/{userId}/roles`) must name exactly one of `Attendee`, `Organizer` or `ContentEditor`, because an ADC account holds exactly one role (otherwise 400 `User.Role.ExactlyOne`). Both locking and a real role change revoke the account's live refresh sessions, so the change takes effect within one access-token lifetime (BR-12). Both operations are idempotent: a repeated lock keeps the original `LockedOn` instant, and re-applying the current role writes nothing. |
 | BR-265 | **Activity writes need `conference:activities:manage`** (held by `Organizer` and `ContentEditor`); reads are anonymous and, for non-privileged callers, limited to activities of published events. An activity's name is required and its end time must be on or after its start time (`Activity.TimeRange.Invalid`). |
+| | |
+| **Ticket roster and invites (Engagement context)** | |
+| BR-268 | **The ticket roster is a per-event snapshot of the TicketLeap export, keeping whitelisted columns only.** An organizer uploads the TicketLeap CSV for one ADC event (`POST /Tickets/roster`). The parser maps columns by header name and keeps only six: ticket ID, barcode, ticket type, attendee first and last name (falling back to the buyer name when blank), and order email (`(Order) Email Address`, else `Buyer Email`). Every other column is discarded on read. A file must carry exactly one `Event Name`. Rows upsert on (EventId, ExternalTicketId), so uploading the same file twice reports every ticket unchanged. A ticket of the same source event that is missing from the new file is voided, and a voided ticket that comes back is reinstated. A dry run returns the same counts and writes nothing. |
+| BR-269 | **Uploading or deleting a roster, sending invites and reading the roster summary require the `engagement:tickets:manage` permission** (held by `Organizer`), and the whole ticket surface sits behind the `Engagement.Tickets` feature flag (permanent): with the flag off the controller returns 404 (ADR-031). Claiming a ticket by barcode and reading one's own tickets need authentication only. |
+| BR-270 | **Invites go out one per distinct order email per event, and only from an organizer's button.** `POST /Tickets/invites` selects the eligible tickets: Live, unlinked, not yet invited, and carrying an email. It groups them by order email, so a buyer holding several tickets gets one email. A run is capped at `Tickets:MaxInvitesPerRun` (200, leaving headroom under the mail relay's daily limit), and the response reports how many remain for the next run. The handler stamps `InvitedOn` and publishes `TicketHolderInvited` through the outbox in the same transaction (ADR-003), so a re-run emails only tickets not yet invited or linked. A dry run reports the counts and sends nothing. |
+| BR-271 | **An invite is a 14-day sign-in link that creates the account on first tap** (ADR-116). Identity consumes `TicketHolderInvited` and schedules the idempotent internal command `Identity.SendSignInLink.v1` (ADR-114) with the `Invite` purpose and the attendee's name. The email ("Your {Event} account is ready") carries a single-use link valid for 14 days. When the address has no account, redeeming the link creates an `Attendee` account with its email already confirmed, records Terms of Service acceptance, and publishes `UserRegistered` with `EmailVerified` true, which also drives the BR-207 speaker auto-link. When the address already has an account, the link signs that account in. Either way the attendee types no password. |
+| BR-272 | **A ticket links to an account only on a verified address.** Engagement links tickets on `UserRegistered` when `EmailVerified` is true, and on `UserEmailVerified`. Identity raises `UserEmailVerified` when an address is confirmed, when an external login with a verified address is attached, and when a sign-in link is redeemed. One order email can cover several tickets, so the handler links the ticket whose attendee name matches the account name. When no name matches and the order email has exactly one ticket, it links that ticket. Otherwise it leaves the tickets unlinked for a barcode claim (BR-273). A link records `LinkMethod = VerifiedEmail`. |
+| BR-273 | **An attendee can claim a ticket by its barcode.** `POST /Tickets/claim` (authenticated; the caller is taken from the token) links a Live, unlinked ticket of the event to the caller with `LinkMethod = Barcode`. A ticket already linked to another account answers HTTP 409. An erased account is refused before anything is written (BR-56). |
+| BR-274 | **The roster is deleted after the event, and erasure unlinks.** An organizer deletes an event's roster (`DELETE /Tickets/roster`) once the event is over, so the imported TicketLeap data is retained no longer than the invites need. Erasing an account (`UserDeleted`) unlinks the account's tickets, and a user's linked tickets are part of their GDPR export alongside the other engagement data (BR-254). |
 
 ### Inferred Rules
 
@@ -736,7 +770,7 @@ Every entity in the system tracks:
 
 ### UC-1: User Registration & Login
 
-See **UC-30** (Registration) and **UC-31** (Login) in Section 12.2 for the current email + password authentication flows. **UC-34** (Request password reset) and **UC-35** (Reset password) in the same section cover the self-service recovery path.
+See **UC-30** (Registration) and **UC-31** (Login) in Section 12.2 for the current email + password authentication flows. **UC-34** (Request password reset) and **UC-35** (Reset password) in the same section cover the self-service recovery path. **UC-54** (Sign in with an emailed link) covers passwordless sign-in and the ticket-holder invite.
 
 ---
 
@@ -1351,9 +1385,106 @@ the count, never who voted (BR-238).
 
 **Business Rules:** BR-116a
 
+---
+
+### UC-48: Import a Ticket Roster
+
+**Actors:** Organizer
+**Preconditions:** The `Engagement.Tickets` feature is enabled; the caller holds `engagement:tickets:manage` (BR-269); the event exists
+
+**Main Flow:**
+1. Organizer opens `/organizer/tickets`, picks the event and chooses the TicketLeap CSV export
+2. The system parses the file as a dry run (`POST /Tickets/roster` with `DryRun` set) and shows the resulting counts without writing anything
+3. Organizer confirms, and the same request without `DryRun` upserts the tickets in one transaction (BR-268)
+
+**Alternate Flows:**
+- The file carries no `Event Name`, or more than one: the upload is refused and nothing is written
+- The text is not well-formed CSV: the request fails naming the line (`Csv.Malformed`), nothing written
+- The same file uploaded twice: every ticket reports unchanged
+- A ticket missing from a later upload of the same source event: voided; a voided ticket that returns: reinstated
+
+**Business Rules:** BR-268, BR-269
+
+---
+
+### UC-49: Send Ticket-Holder Invites
+
+**Actors:** Organizer
+**Preconditions:** The `Engagement.Tickets` feature is enabled; the caller holds `engagement:tickets:manage`; a roster is uploaded for the event (UC-48)
+
+**Main Flow:**
+1. Organizer reviews the funnel on `/organizer/tickets` and selects "Send invites (N)"
+2. After a confirm dialog, the system groups the eligible tickets by order email and sends one invite per address, up to `Tickets:MaxInvitesPerRun` (`POST /Tickets/invites`, BR-270)
+3. The system stamps each ticket's `InvitedOn` and publishes `TicketHolderInvited` in the same transaction; Identity emails a 14-day sign-in link (BR-271)
+4. The response reports how many were sent and how many remain for the next run
+
+**Alternate Flows:**
+- A re-run after everyone was invited: 0 sent
+- More eligible addresses than the cap: the rest wait for the next run, and the page shows the remaining count
+- Dry run: the counts are reported and nothing is sent
+
+**Business Rules:** BR-269, BR-270, BR-271
+
+---
+
+### UC-50: Claim a Ticket by Barcode
+
+**Actors:** Authenticated attendee
+**Preconditions:** The `Engagement.Tickets` feature is enabled; a roster is uploaded for the event
+
+**Main Flow:**
+1. Attendee opens `/my-badge` and selects "Link my ticket"
+2. Attendee enters the barcode printed on their TicketLeap ticket (`POST /Tickets/claim` with the event and the barcode)
+3. The system links the Live, unlinked ticket to the caller (BR-273)
+
+**Alternate Flows:**
+- The ticket is already linked to another account: HTTP 409
+- The caller's account was erased: refused (BR-56)
+
+**Business Rules:** BR-272, BR-273
+
+---
+
+### UC-51: View My Tickets
+
+**Actors:** Authenticated attendee
+**Preconditions:** The `Engagement.Tickets` feature is enabled
+
+**Main Flow:**
+1. Attendee opens `/my-badge`, which shows a summary of the tickets linked to the caller (`GET /Tickets/mine`); the caller is always taken from the token
+
+**Business Rules:** BR-272, BR-273
+
+---
+
+### UC-52: Review the Roster Summary
+
+**Actors:** Organizer
+**Preconditions:** The `Engagement.Tickets` feature is enabled; the caller holds `engagement:tickets:manage`
+
+**Main Flow:**
+1. Organizer opens `/organizer/tickets` for an event
+2. The system shows the adoption funnel: tickets, invited and linked (`GET /Tickets/summary`)
+
+**Business Rules:** BR-269, BR-270, BR-272
+
+---
+
+### UC-53: Delete a Ticket Roster
+
+**Actors:** Organizer
+**Preconditions:** The `Engagement.Tickets` feature is enabled; the caller holds `engagement:tickets:manage`
+
+**Main Flow:**
+1. After the event, the organizer deletes the event's roster (`DELETE /Tickets/roster`)
+2. The system removes the event's roster, so the imported TicketLeap data is not kept past the event (BR-274)
+
+**Business Rules:** BR-269, BR-274
+
 > **Use-case numbering.** UC-12 to UC-18, UC-20, and UC-28/UC-29 are unused; the numbers were retired
 > as the specification was reorganized and are deliberately not recycled. UC-30 to UC-35 are the
-> authentication flows and live in Section 12.2. UC-36 onward are the use cases added after them.
+> authentication flows and live in Section 12.2. UC-36 onward are the use cases added after them;
+> UC-54 (sign in with an emailed link) is an authentication flow, so it lives in Section 12.2.
 
 ---
 
@@ -1366,7 +1497,7 @@ This section maps every action in the system to the actor(s) that can perform it
 | Actor | Identity | Authorization | Additive? |
 |---|---|---|---|
 | **API Consumer** | Unauthenticated | None: public endpoints only (BR-43) | Base level |
-| **Attendee** | Authenticated via email + password (UC-31) or external sign-in | Authenticated: valid JWT with `role: Attendee` (BR-42) | Includes all API Consumer actions |
+| **Attendee** | Authenticated via email + password (UC-31) or external sign-in, or an emailed sign-in link (UC-54) | Authenticated: valid JWT with `role: Attendee` (BR-42) | Includes all API Consumer actions |
 | **Speaker** | Attendee with `speaker_id` claim | Same as Attendee + speaker-specific data views (BR-210), plus session-scoped live-layer rights (BR-236) and materials rights (BR-116b) for the sessions they present | Not a separate role: an Attendee with a speaker identity link |
 | **ContentEditor** | Authenticated, `User.Role = ContentEditor` | Holds the Conference content-management permission set only: sessions, speakers, categories, sponsors, partners, activities, session materials | Includes all Attendee actions + privileged Conference reads |
 | **Organizer** | Authenticated, `User.Role = Organizer` | Holds every Conference, Engagement and Identity permission (BR-41) | Includes all Attendee and ContentEditor actions + all Speaker view access |
@@ -1412,6 +1543,8 @@ All API Consumer actions, plus:
 | 15c | Change password | UC-33 | `PUT /auth/password` |
 | 15d | Request a password reset link | UC-34, BR-217, BR-219 | `POST /auth/forgot-password` |
 | 15e | Reset the password with the emailed token | UC-35, BR-218 | `POST /auth/reset-password` |
+| 139 | Request an emailed sign-in link | UC-54, BR-275 | `POST /auth/sign-in-link` |
+| 140 | Redeem a sign-in link or an invite | UC-54, BR-271, BR-275 | `POST /auth/sign-in-link/redeem` |
 | 16 | View own JWT claims | UC-10 | `GET /UserClaims` |
 
 **Feedback (Conference context, attendee-written):**
@@ -1449,7 +1582,7 @@ All API Consumer actions, plus:
 | 97 | View a session's questions | UC-24, BR-238 | `GET /SessionQuestions?sessionId=`; approved questions plus own |
 | 98 | Upvote or withdraw an upvote | UC-26, BR-235 | `POST` or `DELETE /SessionQuestions/{id}/upvotes` |
 
-**Badge, check-in and points (Engagement context):**
+**Badge, check-in, tickets and points (Engagement context):**
 
 | # | Action | Source | Constraints |
 |---|--------|--------|-------------|
@@ -1459,6 +1592,8 @@ All API Consumer actions, plus:
 | 102 | View own points | UC-42 | `GET /Points/me` |
 | 103 | View the leaderboard | UC-42 | `GET /Points/leaderboard` |
 | 104 | Join or leave the leaderboard | UC-42, BR-253 | `PUT /Points/me/leaderboard-participation` |
+| 141 | Claim a ticket by barcode | UC-50, BR-273 | `POST /Tickets/claim`; Live, unlinked tickets only; 409 when linked to another account |
+| 142 | View own linked tickets | UC-51 | `GET /Tickets/mine` |
 
 **Account Management:**
 
@@ -1617,6 +1752,15 @@ All Attendee actions, plus:
 | 127 | Queue AI session scoring | UC-27 | `POST /SessionSelection/score/{eventId}`; HTTP 202 |
 | 133 | Export feedback answers as CSV | BR-8, BR-9 | `GET /EventQuestionAnswers/export`, `GET /SessionQuestionAnswers/export`; Organizer only |
 
+**Ticket roster and invites:**
+
+| # | Action | Source | Constraints |
+|---|--------|--------|-------------|
+| 143 | Upload an event's ticket roster | UC-48, BR-268, BR-269 | `POST /Tickets/roster` (`engagement:tickets:manage`); multipart CSV; dry run writes nothing |
+| 144 | Send ticket-holder invites | UC-49, BR-270 | `POST /Tickets/invites`; one per order email; capped per run, remaining count reported |
+| 145 | View the roster summary | UC-52 | `GET /Tickets/summary`; tickets, invited and linked counts |
+| 146 | Delete an event's ticket roster | UC-53, BR-274 | `DELETE /Tickets/roster` |
+
 #### System (Non-Human)
 
 Actions initiated autonomously by domain event handlers after persistence:
@@ -1629,17 +1773,17 @@ Actions initiated autonomously by domain event handlers after persistence:
 | 137 | Broadcast upvote count | `SessionQuestionUpvoteChanged` | Enqueues a best-effort post-commit `question.upvote-changed` broadcast carrying only the count (BR-238) |
 | 138 | Award points for a question | `SessionQuestionChanged` (Added) | Awards `QuestionAsked` points once per session (BR-250) |
 
-Check-in and feedback points are awarded by integration-event consumers, not domain event handlers (BR-252).
+Check-in and feedback points are awarded by integration-event consumers, not domain event handlers (BR-252). Ticket linking on a verified address (BR-272) and ticket unlinking on erasure (BR-274) are integration-event consumers too.
 
 #### Action Count Summary
 
 | Actor | Explicit UCs | Implicit Actions | Total |
 |-------|-------------|-----------------|-------|
 | **API Consumer** | UC-2, UC-3 | 13 entity read endpoints + bookmark counts + calendar, now-next, sponsor/partner/activity and materials reads | 19 |
-| **Attendee** | UC-30, UC-31, UC-32, UC-33, UC-34, UC-35, UC-4, UC-5, UC-10, UC-11, UC-21, UC-23, UC-24, UC-26, UC-40, UC-41, UC-42, UC-45, UC-46, UC-47 | + API Consumer actions + feedback update/delete + account deletion + password change + password reset | API Consumer + 38 |
+| **Attendee** | UC-30, UC-31, UC-32, UC-33, UC-34, UC-35, UC-4, UC-5, UC-10, UC-11, UC-21, UC-23, UC-24, UC-26, UC-40, UC-41, UC-42, UC-45, UC-46, UC-47, UC-50, UC-51, UC-54 | + API Consumer actions + feedback update/delete + account deletion + password change + password reset + sign-in links + ticket claim | API Consumer + 42 |
 | **Speaker** | UC-22, UC-25, UC-39 *(session-scoped)* | Own feedback view, profile editing, polls, moderation, materials (bookmark count views are public, already in API Consumer) | Attendee + 6 |
 | **ContentEditor** | UC-8, UC-9, UC-19 (sessions, speakers), UC-36, UC-37, UC-38, UC-39 | Subset of Organizer actions listed above | Attendee + subset |
-| **Organizer** | UC-6-UC-9, UC-19, UC-21, UC-22, UC-25, UC-27, UC-36-UC-44 | + Attendee actions + Conference CRUD (speaker question answer endpoints are domain-only, not exposed via REST) + user list/delete/admin + role admin + publish/unpublish + speaker link/unlink + live layer, check-in, points, selection | Attendee + 61 |
+| **Organizer** | UC-6-UC-9, UC-19, UC-21, UC-22, UC-25, UC-27, UC-36-UC-44, UC-48, UC-49, UC-52, UC-53 | + Attendee actions + Conference CRUD (speaker question answer endpoints are domain-only, not exposed via REST) + user list/delete/admin + role admin + publish/unpublish + speaker link/unlink + live layer, check-in, points, selection, ticket roster and invites | Attendee + 65 |
 | **System** |: | Speaker unlink, cache eviction, broadcasts, question points | 5 |
 
 ---
@@ -1757,13 +1901,15 @@ Integration events cross service boundaries. Each is raised on the aggregate ins
 
 | Integration Event | Published by | Trigger | Carried Data | Consumed by |
 |---|---|---|---|---|
-| `UserRegistered` (`Identity.UserRegistered.v1`) | Identity | Local registration or a first external (OAuth) login creates a user | UserId, Email, FirstName, LastName, Role, EmailVerified | Conference |
+| `UserRegistered` (`Identity.UserRegistered.v1`) | Identity | Local registration or a first external (OAuth) login creates a user | UserId, Email, FirstName, LastName, Role, EmailVerified | Conference, Engagement |
+| `UserEmailVerified` | Identity | An address is confirmed, an external login with a verified address is attached, or a sign-in link is redeemed | UserId, Email | Engagement |
 | `UserDeleted` (`Identity.UserDeleted.v1`) | Identity | A user account is deleted (soft-delete plus anonymization) | UserId, DeletedOn | Conference, Engagement |
 | `SpeakerLinkedToUser` (`Conference.SpeakerLinkedToUser.v1`) | Conference | Organizer links a user to a speaker (BR-209), or the BR-207 auto-link matches | UserId, SpeakerId | Identity |
 | `SpeakerUnlinkedFromUser` (`Conference.SpeakerUnlinkedFromUser.v1`) | Conference | Organizer unlinks a speaker, a linked speaker is soft-deleted (BR-70), or account erasure unlinks a speaker | UserId, SpeakerId | Identity |
 | `EventFeedbackSubmitted` (`Conference.EventFeedbackSubmitted.v1`) | Conference | An attendee's event feedback answer is created (single or batch submit) | UserId, EventId, SubmittedOnUtc | Engagement |
 | `SessionFeedbackSubmitted` (`Conference.SessionFeedbackSubmitted.v1`) | Conference | An attendee's session feedback answer is created (single or batch submit) | UserId, SessionId, EventId, SubmittedOnUtc | Engagement |
 | `AttendeeCheckedIn` (`Engagement.AttendeeCheckedIn.v1`) | Engagement | A check-in is recorded (event, session, or sponsor-booth scope) | UserId, Scope, EventId, SessionId?, CheckedInByUserId, CheckedInOn, SponsorId? | Engagement |
+| `TicketHolderInvited` | Engagement | An organizer's invite run selects an order email (BR-270) | EventId, Email, FirstName, LastName, EventName, EventStart | Identity |
 
 ### Event Handlers & Side Effects
 
@@ -1774,9 +1920,11 @@ Integration events cross service boundaries. Each is raised on the aggregate ins
 | `SpeakerUnlinkedFromUser` (integration event) | Identity | **Cross-context link cleanup:** clears `User.LinkedSpeakerId` when it still points at the unlinked speaker (BR-70). A user that no longer exists is a no-op. |
 | `UserRegistered` (integration event) | Conference | **Speaker auto-link (BR-207):** links the speaker whose recorded email equals the registered email, only when `EmailVerified` is true (an external provider asserted the address); otherwise, and for name-only matches, it logs a cue for an organizer to link manually (BR-209). A successful link publishes `SpeakerLinkedToUser`. |
 | `UserDeleted` (integration event) | Conference | **Cross-service erasure:** `UserDeletedSpeakerErasureHandler` anonymizes the email of every speaker linked to the erased account and unlinks it in one save (BR-56, BR-66), raising `SpeakerUnlinkedFromUser` for each; `UserDeletedFeedbackHandler` soft-deletes the account's attendee-feedback answers (questions with `QuestionSource = "User"`), overwriting any free-text value first (ratings are kept). |
-| `UserDeleted` (integration event) | Engagement | **Cross-service erasure:** takes the account off the leaderboard and overwrites the name it published there (the points ledger is kept), deletes its bookmarks, live-poll votes, question upvotes and attendee badge (check-in records are kept), erases the text of its session questions, and records the account as erased so later Engagement writes from a still-valid token are refused. |
+| `UserDeleted` (integration event) | Engagement | **Cross-service erasure:** takes the account off the leaderboard and overwrites the name it published there (the points ledger is kept), deletes its bookmarks, live-poll votes, question upvotes and attendee badge (check-in records are kept), erases the text of its session questions, unlinks its tickets (BR-274), and records the account as erased so later Engagement writes from a still-valid token are refused. |
 | `EventFeedbackSubmitted` / `SessionFeedbackSubmitted` (integration events) | Engagement | Awards `EventFeedback` / `SessionFeedback` points, once per event / session per attendee (the ledger's unique key collapses repeat events). |
 | `AttendeeCheckedIn` (integration event) | Engagement | Awards `EventCheckIn`, `SessionCheckIn` (once per time slot) or `SponsorVisit` points; an unknown scope awards nothing. |
+| `TicketHolderInvited` (integration event) | Identity | Schedules the idempotent internal command `Identity.SendSignInLink.v1` (ADR-114) with the `Invite` purpose, the attendee's name and the event name and date, which emails the 14-day invite link (BR-271). |
+| `UserRegistered` (only when `EmailVerified` is true) / `UserEmailVerified` (integration events) | Engagement | **Ticket linking (BR-272):** links the ticket whose attendee name matches the account name, otherwise the only ticket for that order email, otherwise leaves the tickets for a barcode claim (BR-273). |
 | `SessionQuestionChanged` (Added) | Engagement | Awards `QuestionAsked` points, once per session per attendee. |
 | `LivePollVoteChanged` | Engagement | Broadcasts fresh poll tallies (`poll.results-changed`) through the Notification service, best-effort, after commit (BR-229). |
 | `SessionQuestionUpvoteChanged` | Engagement | Broadcasts the fresh upvote count (`question.upvote-changed`) through the Notification service, best-effort, after commit (BR-238). |
@@ -1803,7 +1951,7 @@ Domain events are raised during entity mutations and dispatched in process after
 | Cascade restrictions | Cross-aggregate relationships do not cascade deletes: deleting a parent does not automatically delete records in other aggregates (SessionSpeaker, SessionCategoryItem, SpeakerCategoryItem, EventQuestionAnswer) |
 | Cross-context soft-delete (Session) | Soft-deleting a Session cascade soft-deletes all owned children (SessionSpeakers, SessionQuestionAnswers, SessionCategoryItems) per BR-55. Engagement records (bookmarks) referencing the session are not cascade-deleted. |
 | Cross-context soft-delete (Event) | Soft-deleting an Event cascade soft-deletes all Sessions belonging to that Event (and their children) per BR-127, plus the event's Sponsors, Partners, Activities and Session Assets, then the Event and its owned children (BR-72). The first child aggregate that fails to delete aborts the whole cascade, so the event is never half-deleted. |
-| Soft-delete (User) | Soft-deletes the User record per BR-56. The cross-service `UserDeleted` consumers erase the account's data in Conference (linked speaker email and link, attendee-feedback answers) and Engagement (leaderboard entry, bookmarks, poll votes, question upvotes, session question text, badge), and Engagement records the account as erased so later writes from it are refused. |
+| Soft-delete (User) | Soft-deletes the User record per BR-56. The cross-service `UserDeleted` consumers erase the account's data in Conference (linked speaker email and link, attendee-feedback answers) and Engagement (leaderboard entry, bookmarks, poll votes, question upvotes, session question text, badge, ticket links), and Engagement records the account as erased so later writes from it are refused. |
 
 ### Cross-Entity Constraints
 
@@ -1821,7 +1969,8 @@ Domain events are raised during entity mutations and dispatched in process after
 | Bookmark uniqueness | Only one active UserSessionBookmark per (UserId, SessionId) pair. Re-bookmarking after soft-delete reactivates the existing record (BR-135). |
 | Bookmark session status | Bookmarks can only be created for sessions with `Accepted` or null status. All other statuses (`Waitlisted`, `Accept_Queue`, `Nominated`, `Decline_Queue`, `Declined`, and unknown values) are ineligible for bookmarking (BR-49). The Engagement service checks eligibility through the Conference `ValidateSessionForBookmark` gRPC call. Existing bookmarks are retained when a session's status changes to a non-eligible value (BR-139). |
 | Bookmark denormalization avoidance | UserSessionBookmark does not store EventId: it stores only UserId and SessionId, and the event is resolved through Conference when needed |
-| Engagement aggregate independence | Engagement entities (bookmarks, live polls, poll votes, session questions, upvotes, check-ins, badges, leaderboard opt-ins, points entries) are standalone aggregate roots (a LivePoll owns its LivePollOptions): they reference User, Event and Session by scalar ID only, in a separate database, and are not managed through those aggregates, preventing write contention |
+| Ticket uniqueness | Only one active Ticket per (EventId, ExternalTicketId) and per (EventId, Barcode), each backed by a filtered unique index; a re-upload updates the matched row rather than adding one (BR-268). A ticket links to at most one account, and a claim on a ticket linked to another account answers 409 (BR-273). |
+| Engagement aggregate independence | Engagement entities (bookmarks, live polls, poll votes, session questions, upvotes, check-ins, badges, leaderboard opt-ins, points entries, tickets) are standalone aggregate roots (a LivePoll owns its LivePollOptions): they reference User, Event and Session by scalar ID only, in a separate database, and are not managed through those aggregates, preventing write contention |
 | Engagement pagination & filtering | Engagement list endpoints support pagination (BR-11 cap) and filtering: bookmarks by `EventId` through the Conference `GetSessionIdsByEvent` gRPC lookup, then an `IN` filter on SessionId (BR-58) |
 | Service session restrictions | Service sessions (`IsServiceSession = true`) cannot be bookmarked or receive feedback (BR-91) |
 | Event visibility | Unpublished events are visible only to privileged readers (`Organizer` or `ContentEditor`); published events are visible to all (BR-108). Visibility cascades to sessions: sessions belonging to unpublished events are excluded from public query results (consistent with Section 5 Event Lifecycle). Child entities within the Event aggregate (Rooms, EventSpeakers, EventQuestionAnswers) follow the same visibility as their parent event (BR-132). |
@@ -1876,7 +2025,8 @@ Domain events are raised during entity mutations and dispatched in process after
 
 | Service | Business purpose |
 |---|---|
-| **Email (SMTP)** | Sends the email-confirmation message (send-only: sign-in does not wait for confirmation) and password-reset messages from the Identity service. |
+| **Email (SMTP)** | Sends the email-confirmation message (send-only: sign-in does not wait for confirmation), password-reset messages, sign-in links and ticket-holder invites from the Identity service. Invites are capped per run (`Tickets:MaxInvitesPerRun`, BR-270) to stay under the relay's daily limit. |
+| **TicketLeap (roster export)** | Ticketing and door admission stay in TicketLeap (BR-248). There is no API integration: an organizer exports the event's CSV from TicketLeap and uploads it (BR-268), and ADC keeps only the ticket ID, barcode, ticket type, attendee name and order email. |
 | **External sign-in providers** | Google, GitHub and Sign in with Apple, each enabled by its configured client id. A provider that asserts the email as verified confirms the account, and that flag gates the BR-207 speaker auto-link. |
 | **Real-time and native push** | The Notification service hosts the SignalR hub that carries live poll tallies, question upvote counts and organizer push notifications to connected clients; native mobile push goes through Azure Notification Hubs and is a no-op unless configured (ADR-044). |
 | **AI session scoring** | Organizer-triggered scoring of an event's sessions (decision support) calls a hosted large language model through the framework's governed chat client, one paid call per session; contact details are redacted from the prompt, the trigger answers 202 and the scoring runs as an internal command. Disabled when no model is configured. |
@@ -1906,6 +2056,8 @@ Domain events are raised during entity mutations and dispatched in process after
 | **Domain Event** | A notification that something meaningful happened in the domain, dispatched after persistence |
 | **Specification** | A query-object pattern that encapsulates filtering criteria for entity retrieval |
 | **UserSessionBookmark** | A record indicating that an attendee plans to attend a specific session: forms their personal schedule |
+| **Ticket** | One ticket from an organizer-uploaded TicketLeap roster: the ticket ID, barcode, type, attendee name and order email, plus whether it was invited and which account it is linked to (BR-268 to BR-274) |
+| **Sign-in Link** | A single-use link emailed to an address that signs its owner in without a password: 15 minutes when requested from the sign-in page, 14 days when sent as a ticket-holder invite (BR-271, BR-275) |
 | **Organizer** | A conference administrator who manages master schedule data (events, sessions, speakers, rooms, categories). Identified by the `Organizer` value in the `User.Role` field. |
 | **Attendee Role** | The default user role assigned at registration. Grants access to engagement features (bookmarks, feedback) but not conference data management. |
 | **Content Editor** | A user with `Role = ContentEditor`: holds content-management permissions and counts as a privileged reader, but is not an Organizer for the Organizer-gated write rules. ADC has no `Admin` role. |
@@ -2064,10 +2216,10 @@ The system has three user roles: `Attendee` (default), `ContentEditor`, and `Org
 | Level | Who | Endpoints | Enforcement |
 |---|---|---|---|
 | **Public** | Anyone (no auth) | Read Conference entities (events, sessions, speakers, rooms, categories), filtered to publicly visible records (BR-49, BR-108, BR-239) | No authentication required |
-| **Authenticated** | Any logged-in user (Attendee, ContentEditor, or Organizer) | Engagement writes (bookmarks, live-poll votes, session questions and upvotes, self-recorded room check-ins and sponsor visits, leaderboard opt-in), feedback answers, user claims | Valid JWT required |
+| **Authenticated** | Any logged-in user (Attendee, ContentEditor, or Organizer) | Engagement writes (bookmarks, live-poll votes, session questions and upvotes, self-recorded room check-ins and sponsor visits, leaderboard opt-in, ticket claims by barcode), feedback answers, user claims | Valid JWT required |
 | **Privileged reader** | Users with `Role = Organizer` **or** `Role = ContentEditor` | Unfiltered Conference reads: unpublished events, non-accepted sessions, non-visible speakers, and the unfiltered lookup and junction endpoints | Membership in the privileged-reader role set; the same set is the output-cache bypass list, so a privileged reader never gets a public-filtered cached response |
 | **Content editor** | Users with `Role = ContentEditor` (and Organizer) | Content-management writes: sessions, speakers, categories, sponsors, partners, activities, session assets | The matching `conference:*:manage` permission |
-| **Organizer** | Users with `Role = Organizer` | Everything above plus event CRUD, Sessionize refresh, publish/unpublish, rooms, questions, session selection (AI scoring), speaker-user linking, live-layer management, staff check-in, points overview, push notifications, user management | `conference:events:manage`, `conference:rooms:manage`, `conference:questions:manage`, `conference:session-selection:manage`, `conference:speakers:link`, the `engagement:*` permissions, the notification manage permission and `users:manage`, held by Organizer only |
+| **Organizer** | Users with `Role = Organizer` | Everything above plus event CRUD, Sessionize refresh, publish/unpublish, rooms, questions, session selection (AI scoring), speaker-user linking, live-layer management, staff check-in, points overview, ticket roster and invites, push notifications, user management | `conference:events:manage`, `conference:rooms:manage`, `conference:questions:manage`, `conference:session-selection:manage`, `conference:speakers:link`, the `engagement:*` permissions, the notification manage permission and `users:manage`, held by Organizer only |
 
 A user linked to a speaker (BR-209) additionally carries a `speaker_id` claim that unlocks raw session feedback, live-poll management and question moderation; this is a claim on the account, not a fourth role.
 
@@ -2772,7 +2924,7 @@ A user is uniquely identified by their **email address**. Each email corresponds
 - HTTP 429: `auth-ip` per-IP rate limit exceeded
 
 **Alternate Flows:**
-- Email already registered (including by a concurrent registration that wins the insert race) -> HTTP 409 Conflict with message `"An account with this email already exists."`
+- Email already registered (including by a concurrent registration that wins the insert race) -> HTTP 409 Conflict with message `"An account with this email already exists."`. The registration page then opens `/login` with the address prefilled (carried in navigation history state, never the URL), a notice that the account exists, and a Reset password button that opens `/forgot-password` prefilled (BR-276)
 - Password does not meet strength requirements -> HTTP 400 with one `Validation` error per failed rule
 - Confirmation email cannot be scheduled -> logged at Error; the registration still answers 201 and the user can request a link from the confirmation page
 
@@ -2820,6 +2972,7 @@ A user is uniquely identified by their **email address**. Each email corresponds
 - Invalid credentials -> HTTP 401 with message `"Invalid email or password."` Failed attempt counter incremented (BR-212).
 - Account soft-deleted -> HTTP 401 (same generic message: soft-deleted accounts cannot authenticate)
 - Account locked by an administrator -> HTTP 401 `Auth.AccountLocked` ("This account has been locked by an administrator. Contact the organizers.")
+- The user does not remember the password -> "Email me a sign-in link" on the same page sends a one-time link (UC-54, BR-275)
 
 **Postconditions:** User has a valid access token and a new refresh session; any sessions on other devices stay signed in. Login does not run speaker linking: a link made since the last token appears in the next token issued (login or refresh).
 
@@ -2863,6 +3016,7 @@ Both fields are required. On the web the browser never holds either token: the B
 
 **Alternate Flows:**
 - An already-rotated token presented after the 10-second grace (reuse detection) -> every live refresh session of the user is revoked (BR-206). Returns HTTP 401. User must sign in again.
+- The same stale token presented after the grace because the client never received the rotation's response (lost-response recovery, BR-206): when the presented session was rotated no more than 120 minutes ago and its successor is still live and was never presented, the successor is rotated in its place and a fresh pair is returned with HTTP 200. Nothing is revoked
 
 **Session management:** `GET /auth/my-sessions` lists the caller's live sessions (one per device, marking the current one); `POST /auth/revoke/{sessionId}` signs one device out; `POST /auth/revoke` signs the caller out everywhere (BR-216). An Organizer lists a user's sessions through `GET /Admin/Users/{userId}/sessions`; locking the account or changing its role revokes them.
 
@@ -2991,6 +3145,47 @@ Both fields are required. On the web the browser never holds either token: the B
 - Token valid but a later invariant rejects the password change → the token is already consumed, so the user requests a new link. This is the deliberate cost of closing the replay window
 
 **Postconditions:** The account has the new password hash and salt, the reset token and the address's request counter are gone, every refresh session is revoked, and the login lockout counters are cleared. Existing access tokens are not revoked: they remain valid until their 15-minute TTL expires (BR-216).
+
+---
+
+#### UC-54: Sign In with an Emailed Link
+
+**Actors:** Registered user who prefers not to type a password, or a ticket holder who received an invite (any platform)
+**Preconditions:** Sign-in links are enabled (`Authentication:SignInLinks:Enabled`). An emailed sign-in link needs an existing account; an invite does not.
+
+**Endpoints:** `POST /auth/sign-in-link` (request a link) and `POST /auth/sign-in-link/redeem` (redeem it), both anonymous and `auth-ip` rate limited
+
+**Request bodies:**
+
+```json
+{ "email": "attendee@example.com" }
+```
+
+```json
+{ "email": "attendee@example.com", "token": "...", "acceptedTerms": true }
+```
+
+**Main Flow:**
+
+1. On `/login`, the user types their address and selects "Email me a sign-in link"
+2. System answers HTTP 202 whatever the outcome, and, when the address holds an account, emails a single-use link valid for 15 minutes (BR-275)
+3. The user opens the link. It points to the anonymous `/auth/sign-in-link` page and carries the address and the token in the URL fragment, which never reaches the server
+4. The page shows a Continue button (with a Terms of Service and Privacy line when the link creates the account). The token is redeemed only on that tap, so a mail scanner that opens the link cannot spend it
+5. System spends the token, confirms the address, and opens a new refresh session for the device
+6. The client stores the token pair and lands on My Schedule
+
+**Response body (redeem):** `AuthenticationResponse`, the same shape as login.
+
+**Response codes:**
+- `POST /auth/sign-in-link`: HTTP 202 for every well-formed request, HTTP 400 for a malformed one, HTTP 429 for the `auth-ip` limit
+- `POST /auth/sign-in-link/redeem`: HTTP 200 with the token pair; HTTP 401 `Authentication.InvalidSignInLink` for an unknown, expired, spent, mismatched or disabled link; HTTP 401 `Authentication.SignInLinkSecondFactorRequired` when the account has a second factor enrolled
+
+**Alternate Flows:**
+- No account for the address, an address over the request throttle, or a failed send: still HTTP 202, and no link is sent
+- An invite link (BR-271) for an address with no account: redeeming it creates the account, records the Terms acceptance, and signs the new account in
+- A newer link was requested for the same address and purpose: the older link stops working, while an outstanding invite stays valid
+
+**Postconditions:** The user is signed in with a new refresh session, and their address is confirmed. A redeemed link cannot be used again.
 
 ---
 
@@ -3147,7 +3342,7 @@ The current user's claims are read from the authentication state (`JwtAuthentica
 | BR-203 | Passwords must meet minimum strength requirements: **minimum 8 characters, maximum 128**, containing at least one uppercase letter, one lowercase letter, one digit, and one special character. The same rules guard registration, password change and password reset; a failure answers HTTP 400. |
 | BR-204 | Passwords are stored as a **one-way hash** with a **per-user salt**: both stored as `byte[]` (`varbinary` in SQL Server) on the User entity (`PasswordHash` and `PasswordSalt` fields). Plaintext passwords are never stored, logged, returned in API responses, or included in error messages. |
 | BR-205 | **Refresh tokens** are issued to every client in the token response: the web host keeps them in an HttpOnly session cookie (never readable by script), the MAUI app in SecureStorage. Each sign-in opens its own refresh session, stored only as a hash; a user holds at most **10** live sessions, and a new sign-in beyond that evicts the oldest. Valid for **7 days**. Rotated on each use: the previous session is revoked when a new one is issued. Changing or resetting the password, an administrator lock and a role change each revoke every live session of the account. |
-| BR-206 | **Refresh token reuse detection:** If a previously-rotated refresh token is presented more than **10 seconds** after its rotation, **all** live refresh sessions for that user are revoked immediately. This indicates potential token theft. The user must re-authenticate via login. Within those 10 seconds the presentation is treated as a race between the client's own concurrent requests and answered HTTP 409 (`Auth.RefreshSuperseded`) with nothing revoked. An expired session is not a reuse signal and fails alone. |
+| BR-206 | **Refresh token reuse detection:** If a previously-rotated refresh token is presented more than **10 seconds** after its rotation, **all** live refresh sessions for that user are revoked immediately. This indicates potential token theft. The user must re-authenticate via login. Within those 10 seconds the presentation is treated as a race between the client's own concurrent requests and answered HTTP 409 (`Auth.RefreshSuperseded`) with nothing revoked. An expired session is not a reuse signal and fails alone. **Lost-response recovery:** a mobile client can lose the response to a refresh that succeeded on the server (the app was suspended mid-request, or the network dropped) and present the old token again minutes later. That presentation is recovered instead of revoking the family when the presented session was revoked as `Rotated` within the recovery window and its successor is still live and was never rotated: the successor is rotated in its place and the client gets a fresh pair. A successor that was already used or has expired, or a presentation outside the window, revokes the family as above. ADC sets the window to **120 minutes** (`RefreshSessions:LostResponseRecoveryMinutes`); the framework default is 0, which turns recovery off. Every recovery is logged as a Warning, so recovered and revoked refreshes can both be counted. |
 | BR-207 | **Speaker-user linking** is automatic at account creation (local registration or a first-time external sign-in, never at login) when `User.Email` matches `Speaker.Email` (case-insensitive) and the address was verified by an identity provider (see the 2026-09-07 clarification below). The link is stored bidirectionally (`User.LinkedSpeakerId`, `Speaker.LinkedUserId`). **Discovery limitation:** Speaker emails are not exposed via public API (BR-66), so attendees cannot verify which email their Speaker profile uses in Sessionize. Organizers should inform speakers of their Sessionize-registered email address before the conference so they register with the matching email. When automatic matching fails (e.g., speaker uses a different personal email), organizers can use manual linking (BR-209). **Clarification (2026-09-07):** matching is by email equality AND requires a **provider-verified** address: the `UserRegistered` integration event carries an `EmailVerified` flag, and the Conference-side handler links only when an external identity provider asserted the address. A local password registration under a speaker's address links nothing (an address typed into a form proves nothing, and a speaker profile carries rights over that speaker's own record and sessions); when the name matches unlinked speakers the handler logs an organizer cue instead, and the organizer manual link (BR-209) is the path. **Clarification (2026-08-04, BugHunt C5):** matching is by email equality ONLY; a name-based fallback that briefly existed in code was removed as a security fix (registration names are unverified free text, so a name match would let anyone claim a speaker profile). Sessionize-imported speakers carry no email, so the organizer manual link (BR-209) is their intended path; when a registration's email match misses but unlinked speakers share the registrant's name, the handler logs an Information-level cue for the organizer rather than linking. **Clarification (2026-10-19):** an erased speaker's placeholder email (BR-66) is on the reserved `.invalid` domain, which no identity provider can verify, so it can never satisfy the provider-verified match and never auto-links. |
 | BR-208 | A Speaker can be linked to **at most one User**, and a User can be linked to **at most one Speaker** (1:1 relationship). Enforced by filtered unique indexes on both link columns (`User.LinkedSpeakerId` in the Identity database, `Speaker.LinkedUserId` in the Conference database; scalar columns, not cross-database FKs) and by the link handler's cross-check (`Speaker.UserAlreadyLinked`). |
 | BR-209 | Organizers can **manually link or unlink** a User and Speaker regardless of email match (`PUT /Speakers/{id}/link`, `DELETE /Speakers/{id}/link`, permission `conference:speakers:link`). A manual link does not displace an existing one: linking an already-linked speaker is refused (`Speaker.AlreadyLinked`), so changing a link is an unlink followed by a link. It is also the **only** path for a Sessionize-imported speaker (whose email is always null) and for any registration whose address no identity provider verified (BR-207). |
@@ -3163,6 +3358,8 @@ The current user's claims are read from the authentication state (`JwtAuthentica
 | BR-219 | **Reset request throttle:** at most **3 reset requests per email address per rolling hour** (`PasswordReset:MaxRequestsPerEmail` / `PasswordReset:RequestWindowMinutes`). An over-limit request still answers 202 and simply sends no email (BR-217). Both reset endpoints additionally carry the same `auth-ip` per-IP endpoint limit as login and register (30 requests per minute per client IP), which is the only path to an HTTP 429 here. A **successful** reset clears the account's login brute-force counters (BR-212) and its own request counter, so a user who reset precisely because they were locked out can sign in immediately and is not throttled out of a later legitimate request. |
 | BR-266 | **Email confirmation is send-only** (ADR-116). Every local registration schedules a confirmation email (a single-use link to the anonymous `/confirm-email` page, which reads the token from the URL fragment; the token lives 24 hours by default), and `POST /auth/send-email-confirmation` / `POST /auth/confirm-email` request and redeem a link. Sign-in is **not** gated on confirmation (`RequireConfirmedEmail` is false in every environment), because an attendee registering on the conference floor has to use the app before reaching their inbox. An account created from a provider-verified external sign-in starts confirmed. |
 | BR-267 | **External sign-in** (Google, GitHub, Sign in with Apple) creates a new account with no local password, or attaches the provider identity to an existing account with the same email **only** when the provider asserted the address as verified **and** that account has no local password. An account with a local password must be signed into with it (`Auth.ExternalLinkRequiresLocalSignIn`); an unverified address cannot claim an existing account (`Auth.ExternalEmailNotVerified`); an account holds one provider identity (`Auth.ExternalProviderAlreadyLinked`). Tokens never travel in the redirect URL: the callback hands the UI a single-use code that is exchanged through `POST /auth/oauth/exchange`. |
+| BR-275 | **Sign-in links** (ADR-116). The sign-in page offers "Email me a sign-in link" (`SignIn:OfferSignInLink`). `POST /auth/sign-in-link` answers **HTTP 202** for every well-formed request and never creates an account: an address with no account, a throttled address and a failed send all report accepted and send nothing, so the response never reveals whether an address is registered. The link is single use, held only as a SHA-256 hash, and valid for **15 minutes** (an invite, BR-271, lives **14 days**), and at most one is active per address and purpose. The address and the token ride in the URL **fragment**, so a mail scanner that prefetches the link never sees or spends the token. The anonymous `/auth/sign-in-link` page redeems only on an explicit tap of Continue (`POST /auth/sign-in-link/redeem`), confirms the address, and lands on My Schedule. An account with a second factor enrolled is refused, because owning the mailbox does not prove the second factor. ADC enables the feature (`Authentication:SignInLinks:Enabled`). |
+| BR-276 | **A duplicate-email registration goes straight to sign-in.** When registration answers 409 because the address already has an account, the UI opens `/login` with the address prefilled. The address travels in navigation history state, never the query string, so it stays out of URLs and logs. The sign-in page shows the notice "You already have an account with {email}. Sign in, or reset your password." with a Reset password button, which opens `/forgot-password` with the address prefilled the same way. "Email me a sign-in link" stays available on the same page (BR-275). The 409 already reveals that the account exists, so anti-enumeration is unchanged. |
 
 ---
 
@@ -3205,7 +3402,7 @@ Roles (`Attendee`, `ContentEditor`, `Organizer`) are permission tiers: each role
 
 **Why refresh tokens on every platform, and never a stored password:**
 
-Access tokens live 15 minutes, so every client needs a silent way to stay signed in for the conference duration. A rotating 7-day refresh token does that without keeping the user's password anywhere on the device: MAUI holds the token pair in SecureStorage, and the web host holds it in HttpOnly cookies that page script cannot read. Because each sign-in is its own server-side session, a lost phone is signed out from another device (`POST /auth/revoke/{sessionId}`) without touching the others, and a stolen, replayed token is detected and kills the whole family (BR-206).
+Access tokens live 15 minutes, so every client needs a silent way to stay signed in for the conference duration. A rotating 7-day refresh token does that without keeping the user's password anywhere on the device: MAUI holds the token pair in SecureStorage, and the web host holds it in HttpOnly cookies that page script cannot read. Because each sign-in is its own server-side session, a lost phone is signed out from another device (`POST /auth/revoke/{sessionId}`) without touching the others, and a stolen, replayed token is detected and kills the whole family (BR-206). A phone that lost a refresh response is the one exception the rule makes: inside the recovery window its never-presented successor is rotated instead, so a dropped response on a conference floor no longer signs the attendee out everywhere.
 
 **Why the device is recorded on the session, not the user:**
 

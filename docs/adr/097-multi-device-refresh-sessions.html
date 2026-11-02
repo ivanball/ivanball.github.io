@@ -276,7 +276,9 @@
           Revised 2026-10-25: a token already swept by reuse detection fails alone instead of re-revoking the
           user&#39;s newer sessions (1.261.0), because the flagged row is dead by construction and re-revoking
           bought no theft containment, only an extra sign-out per stale device.
-          Revised 2026-10-26: anchors refreshed after 1.261.0.</p>
+          Revised 2026-10-26: anchors refreshed after 1.261.0.
+          Revised 2026-11-02: opt-in lost-response recovery (1.273.0, <code>RefreshSessions:LostResponseRecoveryMinutes</code>,
+          default 0 = off) rotates a never-presented successor instead of revoking the family (see Revision below).</p>
           <h2 id="context">Context</h2>
           <p>ADR-050 stores a user&#39;s refresh token as a single nullable <code>RefreshToken</code> string plus its
           <code>RefreshTokenExpiry</code> on the app&#39;s <code>User</code> aggregate. That model settles rotation and reuse detection
@@ -390,6 +392,23 @@
           <code>:86-89</code>, <code>ReadSupersededOutcomeAsync</code> at <code>:108-122</code>), and
           <code>AuthUIService.TryRefreshTokenAsync</code> keeps the stored tokens on that outcome
           (<code>.../MMCA.Common.UI/Services/Auth/AuthUIService.cs:151</code>, <code>:165</code>).</li>
+          <li><strong>A lost rotation response can be recovered (opt-in, since 1.273.0).</strong> A mobile client can lose the
+          response to a refresh that succeeded on the server, for example when the app is suspended
+          mid-request or the network drops. It still holds the old pair and presents it again minutes later,
+          past the grace. With <code>RefreshSessions:LostResponseRecoveryMinutes</code> set
+          (<code>.../Application/Auth/RefreshSessionSettings.cs:122-123</code>, <code>[Range(0, 1440)]</code>, default <code>0</code> = off,
+          the trade-off argued at <code>:101-121</code>), that presentation is recovered instead of revoking the family.
+          The conditions are checked in <code>FindRecoverableSuccessorAsync</code> (<code>AuthSessionIssuer.cs:531-555</code>): the
+          presented row was revoked as <code>Rotated</code> no more than that many minutes ago (<code>:536-544</code>), and its
+          successor (found by <code>ReplacedByTokenHash</code>, <code>:546</code>) belongs to the same user and is still live
+          (<code>:552-554</code>). A live successor means nobody ever presented it. The issuer then returns the successor
+          (<code>:345-354</code>), the caller&#39;s normal rotation claim rotates it, and a Warning records each recovery
+          (<code>:557-560</code>). A successor that is used or expired, or a presentation past the window, keeps the
+          family revoke (<code>:363</code>). A sibling that has just recovered the same stale token answers 409
+          (<code>:356-361</code>, <code>:554</code>), so only one pair is issued. The cost is that detection is delayed by one
+          refresh, never lost: a thief replaying inside the window while the owner is idle gets a session,
+          and the owner&#39;s next refresh then presents a rotated-away successor, which revokes the whole
+          family, the thief included.</li>
           <li><strong>Sign-out has both scopes.</strong> <code>RevokeTokenAsync(userId, refreshToken)</code>
           (<code>AuthenticationServiceBase.cs:398</code>) delegates to <code>IAuthSessionIssuer.SignOutAsync</code>
           (<code>AuthSessionIssuer.cs:150-176</code>), which signs out one device when the token resolves to a live
@@ -955,6 +974,18 @@
           <code>:86-89</code>, <code>ReadSupersededOutcomeAsync</code> <code>:108-122</code>). Dated revisions above keep their anchors as
           written, including their <code>CHANGELOG.md</code> line citations.</li>
           </ol>
+          <h2 id="revision-2026-11-02">Revision (2026-11-02)</h2>
+          <p>Behavior added in MMCA.Common 1.273.0 (<code>MMCA.Common/CHANGELOG.md:17</code>); every other decision and default
+          is unchanged.</p>
+          <ol>
+          <li><strong>Lost-response recovery.</strong> A rotated token presented past the reuse grace no longer always
+          revokes the family. When <code>LostResponseRecoveryMinutes</code> is above zero, the presented row was revoked
+          as <code>Rotated</code> inside that window, and its successor is live and was never rotated, the issuer rotates
+          the successor in its place (<code>AuthSessionIssuer.cs:345-354</code>, <code>:531-555</code>). The setting defaults to <code>0</code>
+          (<code>RefreshSessionSettings.cs:122-123</code>), so a host that sets nothing sees the original BR-206 answer.
+          MMCA.ADC sets it to 120 minutes. The Decision has a new bullet for it.</li>
+          <li>Anchors outside that bullet were not re-verified in this revision.</li>
+          </ol>
           <h2 id="related">Related</h2>
           <p><a href="050-jwt-refresh-token-rotation.html">ADR-050</a> (the single-column model this record replaces, and the
           source of the rotation and reuse-detection policy it keeps),
@@ -1007,6 +1038,7 @@
             <li><a href="#revision-2026-10-07">Revision (2026-10-07)</a></li>
             <li><a href="#revision-2026-10-21">Revision (2026-10-21)</a></li>
             <li><a href="#revision-2026-10-26">Revision (2026-10-26)</a></li>
+            <li><a href="#revision-2026-11-02">Revision (2026-11-02)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

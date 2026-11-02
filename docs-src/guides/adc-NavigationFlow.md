@@ -1,6 +1,6 @@
 # Navigation Flow
 
-_As of: 2026-10-28._
+_As of: 2026-11-02._
 
 This document maps the site navigation flow for each actor in the MMCA.ADC application. Each mermaid diagram shows the pages accessible to that actor and the directional navigation links between them.
 
@@ -12,7 +12,7 @@ This document maps the site navigation flow for each actor in the MMCA.ADC appli
 | **Attendee** | Public + profile + feedback + bookmarks | Authenticated, default `Attendee` role |
 | **Speaker** | Attendee + speaker dashboard, speaker QR credential, live-session moderation and presenter view | Authenticated, account linked to a Speaker (`speaker_id` claim) |
 | **ContentEditor** | Attendee + catalog curation (sessions, speakers, categories, sponsors, partners, activities), a strict subset of the Organizer's capabilities, plus privileged reads on the public conference pages (unpublished events included) | Authenticated, `ContentEditor` role |
-| **Organizer** | Full access: conference CRUD, user management, role administration, push notifications, badge check-in and points overview, feedback analytics, session selection | Authenticated, `Organizer` role |
+| **Organizer** | Full access: conference CRUD, user management, role administration, push notifications, badge check-in and points overview, ticket roster and invites, feedback analytics, session selection | Authenticated, `Organizer` role |
 
 > **Roles & menu:** the role vocabulary is `Organizer`, `ContentEditor` and `Attendee` (the default, `RoleNames`). `Organizer` holds every capability; `ContentEditor` holds the catalog-curation subset and no event-structure, room, question, session-selection or user-administration rights; the role-to-capability map itself is editable on the Role Administration pages. A *Speaker* is an attendee whose account is linked to a Speaker, surfaced via the `speaker_id` claim. The left nav is data-driven from each module's `IUIModule.NavItems` (ADC's three modules, the MAUI head's `DeviceUIModule` and the framework's `NotificationUIModule`): items carry a required role (`Organizer`), claim (`speaker_id`) or permission (`notifications:manage`, on the framework's Push Notifications entry) and are hidden when the user lacks it. See **Authorization Model** at the end.
 
@@ -20,7 +20,7 @@ This document maps the site navigation flow for each actor in the MMCA.ADC appli
 
 ## 1. Anonymous User
 
-Pages accessible without authentication: home, login, register, the social sign-in completion page, the two password-reset pages, the email-confirmation landing, and all public conference pages. For an anonymous visitor (and for an attendee) `/conference/events` is a pass-through: it redirects to the current or next event's detail page instead of listing past editions, so that detail page carries no Back button.
+Pages accessible without authentication: home, login, register, the social sign-in completion page, the two password-reset pages, the email-confirmation landing, the sign-in-link landing, and all public conference pages. For an anonymous visitor (and for an attendee) `/conference/events` is a pass-through: it redirects to the current or next event's detail page instead of listing past editions, so that detail page carries no Back button.
 
 ```mermaid
 flowchart TD
@@ -30,6 +30,7 @@ flowchart TD
         OAuthComplete["/auth/oauth-complete<br/>Social sign-in completion"]
         ForgotPassword["/forgot-password<br/>Request Reset Link"]
         ResetPassword["/reset-password<br/>Set New Password"]
+        SignInLink["/auth/sign-in-link<br/>Sign-in link landing, from the email"]
     end
 
     subgraph Public["Public Conference"]
@@ -63,10 +64,14 @@ flowchart TD
     OAuthComplete -->|signed in| Home
 
     Login -->|Forgot password link| ForgotPassword
-    Register -->|reset password link| ForgotPassword
+    Register -->|email already registered, address prefilled| Login
+    Login -->|existing-account notice, Reset password, address prefilled| ForgotPassword
     ForgotPassword -->|back to sign in| Login
     ForgotPassword -.->|reset link in the email| ResetPassword
     ResetPassword -->|on success| Login
+
+    Login -.->|Email me a sign-in link, then the link in the email| SignInLink
+    SignInLink -->|Continue, signed in| MySchedule["My Schedule<br/>sign-in link landing route"]
 
     PubEvents -->|redirect| PubEventDetail
     PubEventDetail -->|view schedule| PubSessions
@@ -124,7 +129,7 @@ flowchart TD
     end
 
     subgraph Badge["Badge and Rewards"]
-        MyBadge["/my-badge<br/>My Badge, QR credential"]
+        MyBadge["/my-badge<br/>My Badge, QR credential, linked ticket"]
         MyPoints["/points<br/>My Points, leaderboard opt-in"]
     end
 
@@ -146,6 +151,7 @@ flowchart TD
     Home -->|nav menu, My Account| Inbox
     Home -->|hero button, while the event is live| HappeningNow
     Home -.->|typed URL, no nav item| MyBadge
+    MyBadge -->|Link my ticket, enter the barcode| MyBadge
 
     HappeningNow -->|session title| PubSessionDetail
     HappeningNow -->|join a running session| SessionLive
@@ -261,7 +267,7 @@ flowchart TD
 
 ## 4. Organizer
 
-Authenticated users with the `Organizer` role. Inherits all attendee and public pages. Adds CRUD management for every conference entity (events, sessions, speakers, categories, questions, rooms, sponsors, partners, activities), user management, **role administration** (the per-role permission editor), feedback analytics, the badge **check-in** and attendance pages, the points overview, push notifications, and the AI-assisted **Session Selection Dashboard**. The conference management items sit in the nav menu's *Admin* section (labelled "Administration") inside the collapsible "Conference" group; "Users" and "Roles" sit directly in that section and the framework's "Push Notifications" entry sits in its "Notifications" group; "My Badge", "Check In", "Attendance" and "Points Overview" sit in the general section, each gated on the `Organizer` role. As a privileged reader the Organizer also gets the full public event grid, unpublished events included, instead of the redirect to the current event.
+Authenticated users with the `Organizer` role. Inherits all attendee and public pages. Adds CRUD management for every conference entity (events, sessions, speakers, categories, questions, rooms, sponsors, partners, activities), user management, **role administration** (the per-role permission editor), feedback analytics, the badge **check-in** and attendance pages, the points overview, the **ticket roster** (upload a TicketLeap roster and send ticket-holder invites), push notifications, and the AI-assisted **Session Selection Dashboard**. The conference management items sit in the nav menu's *Admin* section (labelled "Administration") inside the collapsible "Conference" group; "Users" and "Roles" sit directly in that section and the framework's "Push Notifications" entry sits in its "Notifications" group; "My Badge", "Check In", "Attendance" and "Points Overview" sit in the general section, each gated on the `Organizer` role. As a privileged reader the Organizer also gets the full public event grid, unpublished events included, instead of the redirect to the current event.
 
 ```mermaid
 flowchart TD
@@ -349,10 +355,11 @@ flowchart TD
     end
 
     subgraph CheckIn["Organizer: Check-In and Rewards"]
-        MyBadge["/my-badge<br/>My Badge, QR credential"]
+        MyBadge["/my-badge<br/>My Badge, QR credential, linked ticket"]
         Scan["/check-in<br/>Scan Badges<br/>camera on MAUI, search on web"]
         Attendance["/organizer/attendance<br/>Attendance Overview"]
         PointsOverview["/organizer/points<br/>Points Overview"]
+        TicketRoster["/organizer/tickets<br/>Ticket Roster<br/>upload, dry run, send invites"]
     end
 
     subgraph Decision["Organizer: Session Selection"]
@@ -388,6 +395,7 @@ flowchart TD
     Home -->|nav menu| Scan
     Home -->|nav menu| Attendance
     Home -->|nav menu| PointsOverview
+    Home -->|nav menu| TicketRoster
     Home -->|nav menu| SessionSelection
 
     Login -->|on success| Home
@@ -496,10 +504,16 @@ flowchart TD
     Visitor(["Visitor"]) -->|Register| Register["/register<br/>Register"]
     Visitor -->|Login| Login["/login<br/>Login"]
     Register -->|submit, auto-links speaker by email| Home["/<br/>Home, signed in"]
+    Register -->|email already registered, address prefilled| Login
     Login -->|submit, back to returnUrl or Home| Home
     Login -->|Google, GitHub or Apple| OAuth["/auth/oauth-complete<br/>Social sign-in completion"]
     OAuth -->|signed in| Home
     Login -->|Forgot password| ForgotPassword["/forgot-password<br/>Request Reset Link"]
+    Login -->|existing-account notice, Reset password, address prefilled| ForgotPassword
+    Login -->|Email me a sign-in link, always accepted| LinkSent["Sign-in link sent notice"]
+    LinkSent -.->|link in the email| SignInLink["/auth/sign-in-link<br/>Sign-in link landing"]
+    Invite(["Ticket-holder invite email"]) -.->|one-tap link, creates the account if needed| SignInLink
+    SignInLink -->|Continue, signed in| MySchedule["My Schedule<br/>sign-in link landing route"]
     ForgotPassword -->|submit, always accepted| Sent["Check your email notice"]
     Sent -.->|reset link or pasted token| ResetPassword["/reset-password<br/>Set New Password"]
     ResetPassword -->|submit| Login
@@ -718,6 +732,7 @@ This table lists every routable page ADC itself ships, one row per route, with t
 | `/my-badge` | - | Authenticated |
 | `/organizer/attendance` | - | Organizer |
 | `/organizer/points` | - | Organizer |
+| `/organizer/tickets` | TicketRoster | Organizer |
 | `/partners` | PartnerList | Organizer |
 | `/partners/create` | PartnerCreate | Organizer |
 | `/partners/{Id:int}` | PartnerDetail | Organizer |
@@ -757,6 +772,8 @@ This table lists every routable page ADC itself ships, one row per route, with t
 - Logout (from NavMenu or the MainLayout app bar) redirects to `/login` with a full page reload; the Profile page has no logout of its own, and its Delete Account action signs the user out and returns to Home.
 - A signed-in user whose accepted Terms of Service version is behind sees the `TermsAcceptanceGate` (contributed by the Identity UI module as a layout component); declining signs out to `/login`.
 - The "Forgot password?" link on `/login` opens `/forgot-password`. The emailed reset link opens `/reset-password` with the email and token in the URL **fragment** (`#`), which the browser never sends to a server, so the single-use token stays out of ingress access logs, request telemetry and the `Referer` header; the page reads them from `location.hash` and scrubs it, and both fields stay editable so a recipient can paste the token by hand instead, and a successful reset returns to `/login`.
+- When registration is refused because the address already has an account, `/register` opens `/login` with the address prefilled. The address travels in navigation history state, never the URL. `/login` then shows a notice ("You already have an account with {email}. Sign in, or reset your password.") with a Reset password button that opens `/forgot-password` with the address prefilled the same way.
+- "Email me a sign-in link" on `/login` sends a one-time link to the typed address and always reports it as sent. The emailed link, and the ticket-holder invite an organizer sends from `/organizer/tickets`, open `/auth/sign-in-link` with the address and token in the URL **fragment**. The page redeems only on a tap of Continue (a new account first sees a Terms and Privacy line), stores the token pair and lands on My Schedule. On Android and iOS the same `/auth/sign-in-link` path is an app link, so the link opens the installed app.
 
 ### Authorization Model
 - **Roles:** three roles, `Organizer`, `ContentEditor` and `Attendee` (the default for new registrations). `Organizer` holds every capability and is the only role that opens the management pages; `ContentEditor` holds the catalog-curation subset of the Organizer's capabilities (API-side permission checks, no extra page routes) and, like the Organizer, is a privileged reader on the public pages: `/conference/events` shows it the full grid (unpublished events included) instead of redirecting, and the public session and speaker lists offer it an event picker; there is no separate "Admin" role. The role-to-capability map is editable at `/roles/{Role}`.
@@ -764,12 +781,12 @@ This table lists every routable page ADC itself ships, one row per route, with t
 - **In-page rights, not route rights:** the live layer gates *panels*, not routes. `/conference/sessions/{Id}/live` is one page for everyone authenticated; the moderation panel and the Present button render when the caller is an Organizer or holds the `speaker_id` claim (any linked speaker, not only this session's presenter), and the server re-checks the per-session right on every moderation call (BR-236), so the client-side gate is convenience, not security. On `/happening-now` the Manage tab renders for an Organizer only.
 - **Menu-driven visibility:** the left nav is built from each module's `IUIModule.NavItems`. Items declare a required role (`Organizer`), claim (`speaker_id`) or permission (the framework's "Push Notifications" item declares `RequiredPermission: notifications:manage`, read from the `permission` claim the Identity host mints, and ADC grants it to `Organizer`); the menu hides what the current user can't use. Every ADC item that opens an Organizer-only page, "Roles" included, is gated on the `Organizer` role itself, because `NavItemGuardContractTests` requires each item to be no looser than the guard of the page it opens. The conference management items sit in the *Admin* nav section (labelled "Administration") inside the "Conference" group, with "Users" and "Roles" directly in that section; "My Badge", "Check In", "Attendance" and "Points Overview" sit in the general section, gated on the `Organizer` role. "My Profile", "Happening Now", "My Points", the framework's "Notification Inbox", the Speaker "Dashboard" and the speaker's "QR" item sit in the *User* section, rendered under the "My Account" label for signed-in users only. "Activities" appears twice under two different items: a public one pointing at `/conference/activities` with no requirement, and an Organizer one pointing at `/activities` under the "Conference" admin group. The speaker QR item declares `RequiredClaim: "speaker_id"`, so it is hidden from an attendee whose account is not linked to a Speaker; the page itself carries only `[Authorize]` and answers a typed or bookmarked URL with an explanatory alert rather than an empty card.
 - **Page guards (`@attribute [Authorize…]`):**
-  - *Organizer role required:* `/sessions/selection-dashboard`, `/events/{EventId}/feedback`, `/sessions/{SessionId}/feedback`, and every conference/user management page (`/events`, `/sessions`, `/speakers`, `/conferencecategories`, `/questions`, `/rooms`, `/users`), each carrying a page-level `[Authorize(Roles = "Organizer")]` (e.g. `EventList.razor`, `UserList.razor`). The shared `Routes.razor` renders the Forbidden page for an authenticated non-Organizer; the inherited `RegisteredUser_AdminPages_ShouldBeForbidden` E2E fact pins this for the 13 management routes listed in ADC's `AdminPaths` (the seven above plus `/sponsors`, `/partners`, `/check-in`, `/organizer/attendance`, `/organizer/points` and `/sessions/selection-dashboard`). API-side role enforcement applies as well (defense in depth). The sponsor management pages (`/sponsors`, `/sponsors/create`, `/sponsors/{Id}`), the partner management pages (`/partners`, `/partners/create`, `/partners/{Id}`, each `[Authorize(Roles = "Organizer")]` on `PartnerList.razor`, `PartnerCreate.razor` and `PartnerDetail.razor`), the activity management pages (`/activities`, `/activities/create`, `/activities/{Id}`, each `[Authorize(Roles = "Organizer")]` on `ActivityList.razor`, `ActivityCreate.razor` and `ActivityDetail.razor`) and the check-in and rewards pages (`/check-in`, `/organizer/attendance`, `/organizer/points`) carry the same page-level attribute, and their **writes** are additionally permission-checked API-side (`conference:sponsors:manage`, `conference:partners:manage`, `engagement:checkin:manage`, `engagement:points:view-overview`), so the role opens the page and the permission authorizes the call. The role-administration pages (`/roles`, `/roles/{Role}`, `RoleList.razor` and `RoleEdit.razor`) follow the same shape: `[Authorize(Roles = "Organizer")]` opens the page and the `roles:manage` capability authorizes the `Admin/Roles` writes; `IdentityRouteAuthorizationTests` covers the Identity UI namespace.
+  - *Organizer role required:* `/sessions/selection-dashboard`, `/events/{EventId}/feedback`, `/sessions/{SessionId}/feedback`, and every conference/user management page (`/events`, `/sessions`, `/speakers`, `/conferencecategories`, `/questions`, `/rooms`, `/users`), each carrying a page-level `[Authorize(Roles = "Organizer")]` (e.g. `EventList.razor`, `UserList.razor`). The shared `Routes.razor` renders the Forbidden page for an authenticated non-Organizer; the inherited `RegisteredUser_AdminPages_ShouldBeForbidden` E2E fact pins this for the 13 management routes listed in ADC's `AdminPaths` (the seven above plus `/sponsors`, `/partners`, `/check-in`, `/organizer/attendance`, `/organizer/points` and `/sessions/selection-dashboard`). API-side role enforcement applies as well (defense in depth). The sponsor management pages (`/sponsors`, `/sponsors/create`, `/sponsors/{Id}`), the partner management pages (`/partners`, `/partners/create`, `/partners/{Id}`, each `[Authorize(Roles = "Organizer")]` on `PartnerList.razor`, `PartnerCreate.razor` and `PartnerDetail.razor`), the activity management pages (`/activities`, `/activities/create`, `/activities/{Id}`, each `[Authorize(Roles = "Organizer")]` on `ActivityList.razor`, `ActivityCreate.razor` and `ActivityDetail.razor`) and the check-in and rewards pages (`/check-in`, `/organizer/attendance`, `/organizer/points`) and the ticket roster page (`/organizer/tickets`) carry the same page-level attribute, and their **writes** are additionally permission-checked API-side (`conference:sponsors:manage`, `conference:partners:manage`, `engagement:checkin:manage`, `engagement:points:view-overview`, `engagement:tickets:manage`), so the role opens the page and the permission authorizes the call. The role-administration pages (`/roles`, `/roles/{Role}`, `RoleList.razor` and `RoleEdit.razor`) follow the same shape: `[Authorize(Roles = "Organizer")]` opens the page and the `roles:manage` capability authorizes the `Admin/Roles` writes; `IdentityRouteAuthorizationTests` covers the Identity UI namespace.
   - *Authentication only:* `/profile`, `/profile/claims`, `/speaker/dashboard`, `/speaker/qr`, `/my-badge` (its nav item is Organizer-only, the page is not), `/points`, the two scanned engagement landings (`/engage/sponsors/{SponsorId}`, `/engage/rooms/{RoomId}`), both attendee feedback forms, and the conference-day live pages (`/happening-now`, `/conference/sessions/{Id}/live`, `/conference/sessions/{Id}/present`). `/speakers/{Id}` is not in this list: SpeakerDetail is the Organizer editor reached from the management grids and carries `[Authorize(Roles = "Organizer")]` like the other speaker management pages (pinned by name in `ManagementRouteAuthorizationTests`); a linked speaker edits their own bio on `/speaker/dashboard`.
   - *Public (`[AllowAnonymous]`):* all `/conference/*` read pages including `/conference/activities` (the public activity list, filtered by the selected event), except the two live-layer routes above, plus the two password-reset pages (`/forgot-password`, `/reset-password`), which ship in the framework UI package and are reachable only by an unauthenticated visitor's own action (the "Forgot password?" link on `/login` or the link in the reset email).
   - *MAUI head only:* `/settings/device` is registered by `DeviceUIModule` and exists in no web head.
 - **Deep-link-only routes:** `/engage/sponsors/{SponsorId}` and `/engage/rooms/{RoomId}` contribute no nav item and appear in no menu. An attendee reaches them only by scanning a printed QR code (a sponsor booth sign, a session-room door), and both carry a plain `[Authorize]`, so the scan of an unauthenticated visitor lands on `/login` first. Both are idempotent: a rescan reports the existing visit or check-in as information rather than as an error, and an organizer having already scanned the attendee at the door yields the same one check-in.
-- **Feature-gated surfaces:** the badge and check-in pages (`/my-badge`, `/check-in`, `/organizer/attendance`) and the points pages (`/points`, `/organizer/points`) call APIs behind the `Engagement.CheckIn` and `Engagement.Points` flags. With a flag off the controller returns **404** rather than 403 (ADR-031) and the page renders empty; the route itself is not removed.
+- **Feature-gated surfaces:** the badge and check-in pages (`/my-badge`, `/check-in`, `/organizer/attendance`), the points pages (`/points`, `/organizer/points`) and the ticket surfaces (`/organizer/tickets` and the "Link my ticket" entry on `/my-badge`) call APIs behind the `Engagement.CheckIn`, `Engagement.Points` and `Engagement.Tickets` flags. With a flag off the controller returns **404** rather than 403 (ADR-031) and the page renders empty; the route itself is not removed.
 - **One route, two input surfaces:** `/check-in` renders the camera scan card only where the barcode-scanner capability reports itself supported (the MAUI head, [ADR-071](../adr/071-barcode-scanning-and-qr-display.md)). The manual attendee-search panel is always rendered, so on the web and Windows heads that search *is* the check-in surface rather than a degraded fallback. The page adapts; it does not branch on platform.
 
 ### Framework-Owned Routes
@@ -778,6 +795,7 @@ Some routes come from the `MMCA.Common.UI` package rather than from an ADC modul
 - **`/profile/sessions` (active refresh sessions):** the framework page (`MMCA.Common.UI/Pages/Auth/Sessions.razor:1`) gets its nav link from the framework `NavMenu` (`MMCA.Common.UI/Layout/NavMenu.razor:91-94`), shown only to the role named in `Layout:SessionsNavRequiredRole` (read at `NavMenu.razor:258-259`). ADC sets that to `Organizer` in all three UI hosts (`MMCA.ADC.UI.Web/appsettings.json:36`, `MMCA.ADC.UI.Web.Client/wwwroot/appsettings.json:11`, `MMCA.ADC.UI/appsettings.json:17`), so Attendees, Speakers and ContentEditors see no Sessions link. The setting gates the menu entry only: the page stays reachable for any signed-in account (`NavMenu.razor:86-90`), and every account reaches it from the "Manage devices" button on the Profile page's signed-in devices card (`Profile.razor:98-100`). That split is deliberate. The page lists the caller's own sign-ins and revokes them one device at a time, so it is account self-service that every signed-in account keeps; the menu link is kept to Organizers only to hold the attendee menu to the conference surfaces (ADC commit `48691548`).
 - **`/confirm-email` (email confirmation landing):** an anonymous framework page (`MMCA.Common.UI/Pages/Auth/ConfirmEmail.razor:1`, `[AllowAnonymous]` at `:3`, MMCA.Common commit `7d99f9a`), the same page MMCA.Store serves. ADC serves it instead of a copy of its own (ADC commit `379bedba`), and the local AppHost points the confirmation link at it (`MMCA.ADC.AppHost/Program.cs:511-513`). It has no nav item: a visitor reaches it only from the link in the confirmation email.
 - **`/auth/oauth-complete` (social sign-in completion):** an anonymous framework page (`MMCA.Common.UI/Pages/Auth/OAuthComplete.razor:1`, `[AllowAnonymous]` at `:12`) that finishes a Google, GitHub or Apple sign-in started from `/login` and returns to the sanitized `returnUrl` or Home (`:94`). It has no nav item.
+- **`/auth/sign-in-link` (sign-in link landing):** an anonymous framework page (`MMCA.Common.UI/Pages/Auth/SignInLinks/SignInLink.razor:1`) that reads the address and the token from the URL fragment and redeems them only on a tap of Continue (`SignInLink.razor.cs:23-31`), then lands on the configured `SignIn:SignInLinkLandingPath`, which ADC points at My Schedule. It has no nav item: a visitor reaches it only from a sign-in link or a ticket-holder invite email.
 - **Notification pages:** ADC enables the framework notification UI (`AddNotificationUI()`, `MMCA.ADC.UI.Web/Program.cs:183-184`), so it serves `/notifications/inbox` and `/notifications/inbox/{Id:int}` (any signed-in caller, `NotificationInbox.razor:1-2`, `:7`) with a "Notification Inbox" item in the *User* section, and `/notifications` plus `/notifications/send` (the `notifications:manage` permission, `NotificationList.razor:9`, `NotificationSend.razor:10`) with a "Push Notifications" item in the *Admin* section's "Notifications" group (`NotificationUIModule.cs:19-20`). Happening Now links to the inbox from its "View announcements" button.
 - **`/forbidden` and `/not-found`:** anonymous framework pages (`Forbidden.razor:1`, `NotFound.razor:1`); the shared router renders them for an authenticated caller without the page's role and for an unknown or malformed route.
 - **`/users/{Id:int}` (user detail):** an ADC page rather than a framework one (`UserDetail.razor:1`, `[Authorize(Roles = "Organizer")]` at `:2`), listed here because the roster it is reached from comes from the framework's shared `UserAdminList` (`UserList.razor:8`). The detail route is typed `{Id:int}` and is reached by a row click on `/users`.

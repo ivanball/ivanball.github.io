@@ -36,6 +36,8 @@ Revised 2026-10-25: a token already swept by reuse detection fails alone instead
 user's newer sessions (1.261.0), because the flagged row is dead by construction and re-revoking
 bought no theft containment, only an extra sign-out per stale device.
 Revised 2026-10-26: anchors refreshed after 1.261.0.
+Revised 2026-11-02: opt-in lost-response recovery (1.273.0, `RefreshSessions:LostResponseRecoveryMinutes`,
+default 0 = off) rotates a never-presented successor instead of revoking the family (see Revision below).
 ## Context
 ADR-050 stores a user's refresh token as a single nullable `RefreshToken` string plus its
 `RefreshTokenExpiry` on the app's `User` aggregate. That model settles rotation and reuse detection
@@ -153,6 +155,23 @@ chained on rotation.
   `:86-89`, `ReadSupersededOutcomeAsync` at `:108-122`), and
   `AuthUIService.TryRefreshTokenAsync` keeps the stored tokens on that outcome
   (`.../MMCA.Common.UI/Services/Auth/AuthUIService.cs:151`, `:165`).
+- **A lost rotation response can be recovered (opt-in, since 1.273.0).** A mobile client can lose the
+  response to a refresh that succeeded on the server, for example when the app is suspended
+  mid-request or the network drops. It still holds the old pair and presents it again minutes later,
+  past the grace. With `RefreshSessions:LostResponseRecoveryMinutes` set
+  (`.../Application/Auth/RefreshSessionSettings.cs:122-123`, `[Range(0, 1440)]`, default `0` = off,
+  the trade-off argued at `:101-121`), that presentation is recovered instead of revoking the family.
+  The conditions are checked in `FindRecoverableSuccessorAsync` (`AuthSessionIssuer.cs:531-555`): the
+  presented row was revoked as `Rotated` no more than that many minutes ago (`:536-544`), and its
+  successor (found by `ReplacedByTokenHash`, `:546`) belongs to the same user and is still live
+  (`:552-554`). A live successor means nobody ever presented it. The issuer then returns the successor
+  (`:345-354`), the caller's normal rotation claim rotates it, and a Warning records each recovery
+  (`:557-560`). A successor that is used or expired, or a presentation past the window, keeps the
+  family revoke (`:363`). A sibling that has just recovered the same stale token answers 409
+  (`:356-361`, `:554`), so only one pair is issued. The cost is that detection is delayed by one
+  refresh, never lost: a thief replaying inside the window while the owner is idle gets a session,
+  and the owner's next refresh then presents a rotated-away successor, which revokes the whole
+  family, the thief included.
 - **Sign-out has both scopes.** `RevokeTokenAsync(userId, refreshToken)`
   (`AuthenticationServiceBase.cs:398`) delegates to `IAuthSessionIssuer.SignOutAsync`
   (`AuthSessionIssuer.cs:150-176`), which signs out one device when the token resolves to a live
@@ -715,6 +734,17 @@ moved is line numbers in `AuthSessionIssuer.cs`, `AuthenticationServiceBase.cs` 
    `:118-121`, `ClassifyFailure` `:123-126`) and `DirectApiTokenRefresher.cs` (the 409 branch
    `:86-89`, `ReadSupersededOutcomeAsync` `:108-122`). Dated revisions above keep their anchors as
    written, including their `CHANGELOG.md` line citations.
+
+## Revision (2026-11-02)
+Behavior added in MMCA.Common 1.273.0 (`MMCA.Common/CHANGELOG.md:17`); every other decision and default
+is unchanged.
+1. **Lost-response recovery.** A rotated token presented past the reuse grace no longer always
+   revokes the family. When `LostResponseRecoveryMinutes` is above zero, the presented row was revoked
+   as `Rotated` inside that window, and its successor is live and was never rotated, the issuer rotates
+   the successor in its place (`AuthSessionIssuer.cs:345-354`, `:531-555`). The setting defaults to `0`
+   (`RefreshSessionSettings.cs:122-123`), so a host that sets nothing sees the original BR-206 answer.
+   MMCA.ADC sets it to 120 minutes. The Decision has a new bullet for it.
+2. Anchors outside that bullet were not re-verified in this revision.
 
 ## Related
 [ADR-050](050-jwt-refresh-token-rotation.md) (the single-column model this record replaces, and the
