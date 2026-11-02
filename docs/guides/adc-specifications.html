@@ -1848,6 +1848,22 @@
           <td>BR-274</td>
           <td><strong>The roster is deleted after the event, and erasure unlinks.</strong> An organizer deletes an event&#39;s roster (<code>DELETE /Tickets/roster</code>) once the event is over, so the imported TicketLeap data is retained no longer than the invites need. Erasing an account (<code>UserDeleted</code>) unlinks the account&#39;s tickets, and a user&#39;s linked tickets are part of their GDPR export alongside the other engagement data (BR-254).</td>
           </tr>
+          <tr>
+          <td>BR-277</td>
+          <td><strong>Tickets link to accounts that already exist.</strong> <code>POST /Tickets/link-existing</code> takes the event&#39;s Live, unlinked tickets that carry an order email and asks Identity, over gRPC (<code>VerifiedUserLookupService</code>, at most 500 addresses per call), for the active accounts whose confirmed address matches one of them. It then applies the BR-272 rules: the ticket whose attendee name matches the account name, else the only ticket for that email, else none (left for a barcode claim, BR-273). Erased accounts are skipped, and a link records <code>LinkMethod = VerifiedEmail</code>. The response counts the tickets linked, the tickets left for a barcode claim and the tickets with no account, and a re-run links nothing new. When Identity cannot be reached the run fails and links nothing. A committed (not dry-run) roster upload runs the same step and reports how many tickets it linked; there an unreachable Identity is logged and reported as none linked, and the upload still succeeds.</td>
+          </tr>
+          <tr>
+          <td>BR-278</td>
+          <td><strong>Ticket insights are aggregate only.</strong> No insights report or CSV carries a name, an email address, a barcode or a user ID; the email-domain report shows domains only. In every engagement cell (BR-280) and every email-domain cell (BR-279), a count of 1 or 2 reads &quot;fewer than 3&quot; and a percentage built on such a count is withheld with it; 0 and counts of 3 or more are exact. The rule is applied on the server, so neither the API nor the CSV carries the exact small count.</td>
+          </tr>
+          <tr>
+          <td>BR-279</td>
+          <td><strong>The roster reports describe the imported roster</strong> (<code>GET /Tickets/insights/roster</code>). Funnel by ticket type: tickets, invited, linked, percent linked, and the split between <code>VerifiedEmail</code> and <code>Barcode</code> links. Adoption over time: invites sent and accounts linked per day from the first invite or link, the cumulative percent linked, and the median days from invite to link. Follow-up queue: tickets invited 3 or more and 7 or more days ago and still unlinked, split into single-ticket orders (reminder candidates) and multi-ticket orders (barcode-claim candidates). Group orders: order emails holding 2 or more tickets, a tickets-per-order histogram and the unlinked group tickets. Roster health: voided, blank attendee name, duplicate attendee names, erased, and when a ticket was last added and last changed. Email domain mix: personal webmail against company domains, with the top 10 company domains by ticket count; a company domain with fewer than 3 tickets is folded into Other. Days are counted in the event&#39;s UTC offset, derived from the event&#39;s first day, or in UTC when the event cannot be read; the report names the basis.</td>
+          </tr>
+          <tr>
+          <td>BR-280</td>
+          <td><strong>The engagement reports describe the linked holders, by ticket type</strong> (<code>GET /Tickets/insights/engagement</code>). Engagement: the share with an event check-in, the average session check-ins, and the share with a bookmark, with session or event feedback (from the points ledger), with a poll vote and with a question asked, each scoped to the event. Ticketed against present: linked holders with no event check-in, and checked-in accounts holding no linked ticket (speakers, sponsors, complimentary and walk-in guests). Sponsor reach: unique sponsor-booth check-ins per sponsor, split by ticket type. Arrival curve: event check-ins per 30 minutes on the event&#39;s days. Session and sponsor names come from Conference; when Conference cannot be reached, sessions fall back to the ones local activity names and sponsors to their IDs, and the report says so. An account holding several ticket types counts in each type and once in the all-types row.</td>
+          </tr>
           </tbody></table></div>
           <h3 id="inferred-rules">Inferred Rules</h3>
           <div class="table-wrap"><table>
@@ -2518,6 +2534,29 @@
           <li>The system removes the event&#39;s roster, so the imported TicketLeap data is not kept past the event (BR-274)</li>
           </ol>
           <p><strong>Business Rules:</strong> BR-269, BR-274</p>
+          <hr>
+          <h3 id="uc-55-link-existing-accounts">UC-55: Link Existing Accounts</h3>
+          <p><strong>Actors:</strong> Organizer
+          <strong>Preconditions:</strong> The <code>Engagement.Tickets</code> feature is enabled; the caller holds <code>engagement:tickets:manage</code></p>
+          <p><strong>Main Flow:</strong></p>
+          <ol>
+          <li>Organizer opens <code>/organizer/tickets</code> for an event and selects &quot;Link existing accounts&quot;</li>
+          <li>The system looks up the accounts whose confirmed address matches an unlinked ticket&#39;s order email and links the tickets by the BR-272 rules (<code>POST /Tickets/link-existing</code>, BR-277)</li>
+          <li>The system reports the tickets linked, the tickets left for a barcode claim and the tickets with no account</li>
+          </ol>
+          <p><strong>Alternative Flow:</strong> A committed roster upload (UC-48) runs the same linking and reports the tickets it linked.</p>
+          <p><strong>Business Rules:</strong> BR-272, BR-273, BR-277</p>
+          <hr>
+          <h3 id="uc-56-view-ticket-insights">UC-56: View Ticket Insights</h3>
+          <p><strong>Actors:</strong> Organizer
+          <strong>Preconditions:</strong> The <code>Engagement.Tickets</code> feature is enabled; the caller holds <code>engagement:tickets:manage</code></p>
+          <p><strong>Main Flow:</strong></p>
+          <ol>
+          <li>Organizer opens <code>/organizer/tickets/insights</code> (linked from Ticket Roster) and picks the event</li>
+          <li>The system shows the roster reports (<code>GET /Tickets/insights/roster</code>, BR-279) and, loaded separately, the engagement reports (<code>GET /Tickets/insights/engagement</code>, BR-280), each with a chart where one fits and a &quot;Show as table&quot; view of the same numbers</li>
+          <li>Organizer downloads any report table as CSV (<code>GET /Tickets/insights/export</code>)</li>
+          </ol>
+          <p><strong>Business Rules:</strong> BR-278, BR-279, BR-280</p>
           <blockquote>
           <p><strong>Use-case numbering.</strong> UC-12 to UC-18, UC-20, and UC-28/UC-29 are unused; the numbers were retired
           as the specification was reorganized and are deliberately not recycled. UC-30 to UC-35 are the
@@ -3654,6 +3693,30 @@
           <td>UC-53, BR-274</td>
           <td><code>DELETE /Tickets/roster</code></td>
           </tr>
+          <tr>
+          <td>147</td>
+          <td>Link tickets to existing accounts</td>
+          <td>UC-55, BR-277</td>
+          <td><code>POST /Tickets/link-existing?eventId=</code>; counts linked, left for barcode and no account</td>
+          </tr>
+          <tr>
+          <td>148</td>
+          <td>View the roster insights</td>
+          <td>UC-56, BR-278, BR-279</td>
+          <td><code>GET /Tickets/insights/roster?eventId=</code>; aggregate only</td>
+          </tr>
+          <tr>
+          <td>149</td>
+          <td>View the engagement insights</td>
+          <td>UC-56, BR-278, BR-280</td>
+          <td><code>GET /Tickets/insights/engagement?eventId=</code>; aggregate only, &quot;fewer than 3&quot; below 3</td>
+          </tr>
+          <tr>
+          <td>150</td>
+          <td>Export one insights table as CSV</td>
+          <td>UC-56, BR-278</td>
+          <td><code>GET /Tickets/insights/export?eventId=&amp;report=</code>; <code>report</code> is <code>a1</code>-<code>a6</code> or <code>b1</code>-<code>b4</code> (ADR-078)</td>
+          </tr>
           </tbody></table></div>
           <h4 id="system-non-human">System (Non-Human)</h4>
           <p>Actions initiated autonomously by domain event handlers after persistence:</p>
@@ -3734,9 +3797,9 @@
           </tr>
           <tr>
           <td><strong>Organizer</strong></td>
-          <td>UC-6-UC-9, UC-19, UC-21, UC-22, UC-25, UC-27, UC-36-UC-44, UC-48, UC-49, UC-52, UC-53</td>
-          <td>+ Attendee actions + Conference CRUD (speaker question answer endpoints are domain-only, not exposed via REST) + user list/delete/admin + role admin + publish/unpublish + speaker link/unlink + live layer, check-in, points, selection, ticket roster and invites</td>
-          <td>Attendee + 65</td>
+          <td>UC-6-UC-9, UC-19, UC-21, UC-22, UC-25, UC-27, UC-36-UC-44, UC-48, UC-49, UC-52, UC-53, UC-55, UC-56</td>
+          <td>+ Attendee actions + Conference CRUD (speaker question answer endpoints are domain-only, not exposed via REST) + user list/delete/admin + role admin + publish/unpublish + speaker link/unlink + live layer, check-in, points, selection, ticket roster, invites and insights</td>
+          <td>Attendee + 69</td>
           </tr>
           <tr>
           <td><strong>System</strong></td>
@@ -4687,8 +4750,8 @@
           </tr>
           <tr>
           <td><strong>Identity</strong></td>
-          <td><code>AttendeeQueryService</code> (attendee user IDs)</td>
-          <td>Notification</td>
+          <td><code>AttendeeQueryService</code> (attendee user IDs), <code>VerifiedUserLookupService</code> (active accounts by confirmed email, BR-277)</td>
+          <td>Notification, Engagement</td>
           </tr>
           <tr>
           <td><strong>Notification</strong></td>
