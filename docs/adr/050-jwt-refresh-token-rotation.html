@@ -284,7 +284,9 @@
           revoking the user&#39;s live sessions again (Common #612, v1.261.0); anchors refreshed. Revised
           2026-10-28: a zero or negative <code>RefreshTokenExpirationDays</code> now fails host startup instead of
           silently reverting to the seven-day default (Common v1.247.0), so the Trade-offs bullet and the
-          Decision&#39;s sliding-expiry bullet are corrected; the changelog removal anchor is refreshed.</p>
+          Decision&#39;s sliding-expiry bullet are corrected; the changelog removal anchor is refreshed. Revised
+          2026-11-02: opt-in lost-response recovery (Common v1.273.0) can rotate a never-presented successor
+          instead of revoking the family; see Revision below.</p>
           <p>Note (2026-09-03): the body bullet on account deactivation and erasure described shipped code when this
           record was written (ADC revoked in <code>Delete()</code> and <code>Anonymize()</code>, Store in <code>Deactivate()</code> and
           <code>Anonymize()</code>), and stopped describing it on 2026-08-26, when the refresh-sessions sweep removed the
@@ -655,6 +657,22 @@
           <code>:3622</code>; <code>:3580</code> is now unrelated text); <code>TokenService.cs:165</code> and <code>ITokenService.cs:40</code> hold. The
           2026-10-26 and earlier revisions keep the anchors they recorded.</li>
           </ol>
+          <h2 id="revision-2026-11-02">Revision (2026-11-02)</h2>
+          <p>The Decision&#39;s &quot;Today&quot; parenthetical says a rotated token presented past the grace revokes the
+          user&#39;s whole live family. That still holds by default, with one opt-in exception (MMCA.Common
+          v1.273.0, <code>MMCA.Common/CHANGELOG.md:17</code>).</p>
+          <ol>
+          <li><strong>Lost-response recovery.</strong> <code>RefreshSessionSettings.LostResponseRecoveryMinutes</code>
+          (<code>Source/Core/MMCA.Common.Application/Auth/RefreshSessionSettings.cs:122-123</code>) defaults to <code>0</code>
+          (off). When it is set, a token presented past the grace is recovered instead of revoking the
+          family, but only if all three conditions hold: its row was revoked as <code>Rotated</code>, that revocation
+          is no more than that many minutes old, and the row&#39;s successor is still live, which means it was
+          never presented. The issuer
+          then rotates the successor in place of the presented token (<code>AuthSessionIssuer.cs:345-354</code>,
+          conditions in <code>FindRecoverableSuccessorAsync</code> at <code>:531-555</code>). A successor that is used or expired,
+          or a presentation past the window, still revokes the family (<code>:363</code>). ADR-097 carries the full
+          rule. The body above is not re-anchored by this revision.</li>
+          </ol>
           <h2 id="related">Related</h2>
           <p>ADR-004 (the stateless RS256/JWKS access token this refresh flow reissues, and the algorithm pinning
           <code>GetPrincipalFromExpiredToken</code> relies on), ADR-032 (the password hashing that gates the login which opens
@@ -685,6 +703,7 @@
             <li><a href="#revision-2026-10-21">Revision (2026-10-21)</a></li>
             <li><a href="#revision-2026-10-26">Revision (2026-10-26)</a></li>
             <li><a href="#revision-2026-10-28">Revision (2026-10-28)</a></li>
+            <li><a href="#revision-2026-11-02">Revision (2026-11-02)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

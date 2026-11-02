@@ -254,6 +254,8 @@
           Revised 2026-10-21: anchors refreshed after the v1.250.0 release.
           Revised 2026-10-26: anchors refreshed after the v1.261.0 release.
           Revised 2026-10-28: anchors refreshed after the v1.265.1 release.
+          Revised 2026-11-02: item 14 records sign-in links as a sixth opt-in completion of the same shape
+          (see Revision below).
           Layers stored permission grants over
           <a href="020-permission-based-authorization.html">ADR-020</a>&#39;s compiled registry and extends the shared sign-in
           workflow of <a href="050-jwt-refresh-token-rotation.html">ADR-050</a> with optional collaborators.</p>
@@ -515,6 +517,77 @@
           <code>.../Identity.API/Controllers/LegalAcceptanceController.cs:28</code>,
           <code>.../Identity.UI/IdentityUIModule.cs:33</code>); MMCA.Store and MMCA.Helpdesk do not.</p>
           </li>
+          <li><p><strong>Sign-in links are a sixth completion of the same shape.</strong> <code>AddSignInLinks(configuration)</code>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.Auth.cs:97</code>) is another
+          separate DI call that nothing in the framework makes. It binds <code>SignInLinkSettings</code> (section
+          <code>Authentication:SignInLinks</code>,
+          <code>MMCA.Common/Source/Core/MMCA.Common.Application/Auth/SignInLinks/SignInLinkSettings.cs:13</code>) and
+          registers <code>SignInLinkTokenService</code> behind <code>ISignInLinkTokenService</code>
+          (<code>.../Auth/SignInLinks/ISignInLinkTokenService.cs:18</code>). <code>Enabled</code> defaults to false (<code>:20</code>), and
+          registering the call issues nothing on its own: a link is sent or redeemed only once the app wires
+          the handler bases and a controller AND turns <code>Enabled</code> on (<code>DependencyInjection.Auth.cs:94-95</code>).</p>
+          <ul>
+          <li><strong>The token follows the email-confirmation design.</strong> The service
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Auth/SignInLinks/SignInLinkTokenService.cs:40</code>)
+          lives over <code>ICacheService</code> under its own <code>signinlink:</code> key prefix. It keeps only the SHA-256 of
+          the token, so the token is hashed at rest, and redeeming consumes it, so it is single use. It
+          enforces a per-address request throttle and a validation-attempt cap (<code>:17-24</code>).</li>
+          <li><strong>One active token per address AND purpose.</strong> A token is keyed by address, not by account
+          (<code>ISignInLinkTokenService.cs:13-16</code>), because an invitation goes to an address that may have no
+          account yet. <code>SignInLinkPurpose</code> (<code>:59</code>) has two values, <code>SignIn</code> and <code>Invite</code>, each with its
+          own lifetime: 15 minutes and 14 days (<code>SignInLinkSettings.cs:35</code>, <code>:39</code>). Asking for a sign-in
+          link therefore never voids an outstanding invitation.</li>
+          <li><strong>The token rides in the URL fragment.</strong> <code>SignInLinkSettings.ComposeLink</code> (<code>:74</code>) puts the
+          address and the token after the <code>#</code>, for the reason <code>ForgotPasswordHandlerBase.ComposeResetLink</code>
+          documents (<code>SignInLinkSettings.cs:69-72</code>). A fragment never reaches a server, so the token
+          stays out of logs and <code>Referer</code> headers, and a mail scanner that prefetches the link with a GET
+          never sees it.</li>
+          <li><strong>Redemption waits for an explicit tap.</strong> The <code>/auth/sign-in-link</code> page
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI/Pages/Auth/SignInLinks/SignInLink.razor:1</code>)
+          reads the fragment and redeems only on a tap of Continue
+          (<code>.../Pages/Auth/SignInLinks/SignInLink.razor.cs:23-31</code>), so a scanner that renders the page with
+          script enabled still cannot spend the token. It shows a Terms and Privacy consent line when the
+          host publishes a Terms URL (<code>:79</code>). After a redeem it lands on
+          <code>SignInSettings.SignInLinkLandingPath</code>
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI/Common/Settings/SignInSettings.cs:28</code>).
+          <code>SignInSettings.OfferSignInLink</code> (<code>:22</code>, default false) adds &quot;Email me a sign-in link&quot; to the
+          sign-in page.</li>
+          <li><strong>Send answers success on every outcome and never creates an account.</strong>
+          <code>SendSignInLinkHandlerBase</code>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Users/UseCases/SignInLinks/SendSignInLinkHandlerBase.cs:42</code>)
+          returns success for every case: a disabled feature, a malformed address, an address with no
+          account, a throttled request and a failed send (<code>:62-110</code>). An address with no account gets no
+          email (<code>:76-80</code>). The endpoint on <code>SignInLinkControllerBase</code>
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/SignInLinks/SignInLinkControllerBase.cs:35</code>),
+          <code>POST sign-in-link</code>, therefore answers 202 to every well-formed request (<code>:80-97</code>). That keeps the
+          anti-enumeration posture <code>ForgotPasswordHandlerBase</code> already has. The endpoint and its
+          <code>POST sign-in-link/redeem</code> peer (<code>:108</code>) are anonymous and sit under the <code>auth-ip</code> limiter
+          (<code>:83</code>, <code>:111</code>).</li>
+          <li><strong>Redeem spends the token first, and provisions only through a hook.</strong>
+          <code>RedeemSignInLinkHandlerBase</code>
+          (<code>.../Users/UseCases/SignInLinks/RedeemSignInLinkHandlerBase.cs:47</code>) consumes the token before it
+          looks up the account (<code>:86</code>), so a caller with no token learns nothing from how the request
+          fails. When the address has no account, the handler creates one only if the grant carries a
+          <code>SignInLinkProfile</code>, and only through the overridable <code>ProvisionUser</code> hook (<code>:172-178</code>). The
+          default hook refuses (<code>:136-137</code>), and a plain sign-in link never carries a profile. Redeeming
+          confirms an unconfirmed address (<code>:221</code>). <code>OnUserProvisionedAsync</code> (<code>:146</code>) and
+          <code>OnEmailOwnershipProvedAsync</code> (<code>:158</code>) are the app&#39;s post-save hooks.</li>
+          <li><strong>A link never bypasses a second factor.</strong> <code>IAuthenticationService.SignInVerifiedEmailOwnerAsync</code>
+          (<code>.../Auth/IAuthenticationService.cs:155</code>) is a default member that rejects (<code>:161</code>), so existing
+          implementations keep compiling. <code>AuthenticationServiceBase</code> implements it
+          (<code>.../Auth/AuthenticationServiceBase.cs:476</code>): it runs the app&#39;s sign-in gate and refuses any
+          account whose challenge answers anything but <code>NotEnrolled</code> (<code>:495-499</code>), because owning the
+          mailbox does not prove the second factor.</li>
+          </ul>
+          <p>The same release (<code>MMCA.Common/CHANGELOG.md:9</code>, <code>:29</code>) also changed the shared credential pages. A
+          registration refused with <code>EmailAlreadyExists</code>
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI/Pages/Auth/Register.razor:237-239</code>) now goes
+          straight to <code>/login</code>, with the address prefilled. <code>AuthEmailPrefill</code>
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/Navigation/AuthEmailPrefill.cs:11</code>)
+          carries the address in navigation history state, never the URL, and the sign-in page passes it on
+          to Forgot password the same way (<code>.../Pages/Auth/Login.razor.cs:89</code>). The 409 already says the
+          account exists, so the hand-off reveals nothing new.</p>
+          </li>
           </ol>
           <h2 id="rationale">Rationale</h2>
           <p>Six shapes were considered for these four capabilities, and each rejection is what produced the
@@ -697,6 +770,19 @@
           <code>MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:249</code>. Items 3, 9, 12 and 13 now
           cite these.</li>
           </ol>
+          <h2 id="revision-2026-11-02">Revision (2026-11-02)</h2>
+          <ul>
+          <li>Item 14 is new: sign-in links (MMCA.Common 1.273.0) are recorded as a sixth opt-in completion of the
+          same shape. They come with their own <code>AddSignInLinks</code> call and <code>Enabled</code> defaults to false. The
+          token is single use, hashed at rest, and has one active instance per address and purpose (<code>SignIn</code>
+          15 minutes, <code>Invite</code> 14 days). It rides in the URL fragment and is redeemed only on an explicit
+          tap. The send endpoint always answers 202 and never creates an account. An account is provisioned
+          only through the app&#39;s <code>ProvisionUser</code> override, when the invitation carries a profile, and an
+          account with an enrolled second factor is refused.</li>
+          <li>Item 14 also records the duplicate-email hand-off from registration to sign-in, which carries the
+          address in navigation history state rather than the URL.</li>
+          <li>The anchors in items 1 to 13 were not re-verified in this revision.</li>
+          </ul>
           <h2 id="related">Related</h2>
           <p><a href="020-permission-based-authorization.html">ADR-020</a> (the compiled role-to-permission registry stored
           grants layer over),
@@ -727,6 +813,7 @@
             <li><a href="#revision-2026-10-21">Revision (2026-10-21)</a></li>
             <li><a href="#revision-2026-10-26">Revision (2026-10-26)</a></li>
             <li><a href="#revision-2026-10-28">Revision (2026-10-28)</a></li>
+            <li><a href="#revision-2026-11-02">Revision (2026-11-02)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>
