@@ -266,7 +266,8 @@
           visitor while <code>AppBarComponentTypes</code> stay signed-in only, lists the two contract members the Decision
           had not named (<code>FooterComponentTypes</code>, <code>NotFoundContentType</code>), and re-anchors the <code>IUIModule</code>,
           <code>MainLayout</code> and <code>NavMenu</code> citations. Revised 2026-10-28: anchors refreshed after both Blazor Web
-          hosts gained a <code>MapCommonServiceWorker()</code> call ahead of their assembly wiring.</p>
+          hosts gained a <code>MapCommonServiceWorker()</code> call ahead of their assembly wiring. Revised 2026-11-04: records the <code>NavGroups</code> contract member and <code>NavItem.Order</code>, which let a
+          module describe a nav group (icon, initially expanded, order) by key and order its items.</p>
           <h2 id="context">Context</h2>
           <p>ADR-059 decided how a module plugs into the <strong>server</strong>: an <code>IModule</code> implementation is discovered by
           reflection, registered in topological order, and a host composes an application out of those modules
@@ -607,6 +608,21 @@
           with its reason at <code>:21-23</code>, the no-<code>AddUIShared</code> note <code>:33-35</code>); <code>GalleryHost.cs:97</code>; Store
           <code>MauiProgram.cs:89</code>. The 2026-10-26 revision&#39;s anchors are left as written there.</li>
           </ol>
+          <h2 id="revision-2026-11-04">Revision (2026-11-04)</h2>
+          <p>A module may describe nav groups by key through <code>IUIModule.NavGroups</code> (default empty): a
+          <code>NavGroup(Key, Icon, Expanded, Order)</code> sets the group&#39;s icon, whether it starts expanded, and its
+          position among the units of its section (each group, plus the section&#39;s ungrouped items as one unit
+          at order 0). A description applies to every module&#39;s items carrying that key, so a module can place
+          a group another module contributes (ADC places the framework&#39;s Notifications group last), and the
+          first registered description of a key wins, the same rule as <code>NotFoundContentType</code>. <code>NavItem.Order</code>
+          (init-only, outside the positional parameters so no constructor signature changed) orders an item
+          within its group or within the section&#39;s ungrouped items. Both sorts are stable, so an app that
+          declares neither renders exactly as before (<code>NavMenuOrderingTests</code> pins that default). The group
+          heading still resolves its key against the first registered item&#39;s <code>TitleResource</code>, so ordering the
+          items never changes which resource answers it. The nav logic moved to <code>NavMenu.razor.cs</code>.</p>
+          <p>Rejected: a group descriptor on <code>NavItem</code> itself, which every item of the group would repeat and two
+          items could contradict; and per-host configuration, because the group shape belongs to the modules,
+          which already own their items.</p>
           <h2 id="related">Related</h2>
           <p>ADR-059 (the server-side <code>IModule</code> contract this mirrors in the presentation layer), ADR-056 (the
           render-mode strategy for the web heads, which decides how these components render but not who supplies
@@ -634,6 +650,7 @@
             <li><a href="#revision-2026-10-26">Revision (2026-10-26)</a></li>
             <li><a href="#revision-2026-10-27">Revision (2026-10-27)</a></li>
             <li><a href="#revision-2026-10-28">Revision (2026-10-28)</a></li>
+            <li><a href="#revision-2026-11-04">Revision (2026-11-04)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>
