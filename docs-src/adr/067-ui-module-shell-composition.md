@@ -23,7 +23,8 @@ wiring, and after `ResultUiExtensions.NotifyOnFailure` moved. Revised 2026-10-27
 visitor while `AppBarComponentTypes` stay signed-in only, lists the two contract members the Decision
 had not named (`FooterComponentTypes`, `NotFoundContentType`), and re-anchors the `IUIModule`,
 `MainLayout` and `NavMenu` citations. Revised 2026-10-28: anchors refreshed after both Blazor Web
-hosts gained a `MapCommonServiceWorker()` call ahead of their assembly wiring.
+hosts gained a `MapCommonServiceWorker()` call ahead of their assembly wiring. Revised 2026-11-04: records the `NavGroups` contract member and `NavItem.Order`, which let a
+module describe a nav group (icon, initially expanded, order) by key and order its items.
 
 ## Context
 ADR-059 decided how a module plugs into the **server**: an `IModule` implementation is discovered by
@@ -358,6 +359,23 @@ Store does not) are unchanged; only anchors moved, mostly because both Blazor We
    (`MMCA.Helpdesk/Source/Hosts/UI/MMCA.Helpdesk.UI.Web/Program.cs`: `AddCommonUiFacades()` `:24`
    with its reason at `:21-23`, the no-`AddUIShared` note `:33-35`); `GalleryHost.cs:97`; Store
    `MauiProgram.cs:89`. The 2026-10-26 revision's anchors are left as written there.
+
+## Revision (2026-11-04)
+A module may describe nav groups by key through `IUIModule.NavGroups` (default empty): a
+`NavGroup(Key, Icon, Expanded, Order)` sets the group's icon, whether it starts expanded, and its
+position among the units of its section (each group, plus the section's ungrouped items as one unit
+at order 0). A description applies to every module's items carrying that key, so a module can place
+a group another module contributes (ADC places the framework's Notifications group last), and the
+first registered description of a key wins, the same rule as `NotFoundContentType`. `NavItem.Order`
+(init-only, outside the positional parameters so no constructor signature changed) orders an item
+within its group or within the section's ungrouped items. Both sorts are stable, so an app that
+declares neither renders exactly as before (`NavMenuOrderingTests` pins that default). The group
+heading still resolves its key against the first registered item's `TitleResource`, so ordering the
+items never changes which resource answers it. The nav logic moved to `NavMenu.razor.cs`.
+
+Rejected: a group descriptor on `NavItem` itself, which every item of the group would repeat and two
+items could contradict; and per-host configuration, because the group shape belongs to the modules,
+which already own their items.
 
 ## Related
 ADR-059 (the server-side `IModule` contract this mirrors in the presentation layer), ADR-056 (the

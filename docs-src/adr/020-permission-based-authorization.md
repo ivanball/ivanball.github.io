@@ -27,6 +27,8 @@ records that both Identity grant maps name the framework administration capabili
 partly through aliases; the ADC Notification registration anchor refreshed.
 Revised 2026-10-28: anchors refreshed after edits to `NavMenu.razor` and
 `ClaimsPrincipalExtensions.cs` moved the navigation-filter and `HasPermissionClaim` lines.
+Revised 2026-11-04: Blazor pages gate on a capability with `[HasPagePermission(p)]`, the page-side
+twin of `NavItem.RequiredPermission`; ADC's conference management pages adopt it.
 ## Context
 The default answer in ASP.NET Core is pure role-based access control (RBAC): an endpoint declares
 `[Authorize(Policy = "RequireOrganizer")]` against a named policy that calls `RequireRole(...)`, and a
@@ -292,6 +294,24 @@ keep their anchors as written.
    filter at `:263` and the `RequiredPermission` filter (over `HasPermissionClaim`) at `:265`;
    `HasPermissionClaim` is declared at
    `MMCA.Common/Source/Core/MMCA.Common.Shared/Auth/ClaimsPrincipalExtensions.cs:95`.
+
+## Revision (2026-11-04)
+A Blazor page gates on a capability with `[HasPagePermission(p)]` from `MMCA.Common.UI`, usable in
+every UI head. `AddUIShared` registers one `page-perm:<p>` policy per permission declared on a
+component in `MMCA.Common.UI` or a registered UI module's assembly, discovered when the
+authorization options are first built, so a host adds a guarded page with no registration call. The
+policy requires an authenticated caller and checks `HasPermissionClaim`, the same check
+`NavItem.RequiredPermission` makes, so a menu entry and the page it opens agree. It reads the claim
+only, because a UI head has no permission registry; it suits a host whose token issuer stamps
+permission claims, as ADC's Identity host does. ADC's conference management pages carry
+`[HasPagePermission(ConferencePermissions.X)]` with the capability their API enforces, so a
+ContentEditor opens exactly the catalog pages its grant covers.
+
+Rejected: reusing the API's `[HasPermission]`, because MMCA.Common.UI may not reference the API
+package and the MAUI head never loads it; and a UI policy provider for the `perm:` prefix, because
+`AddAuthorizationPolicies` installs the API provider with `Replace` and the two would compete in a
+web host that wires both. The distinct `page-perm:` prefix falls through the API provider to the
+default one, which reads the registered policy.
 
 ## Related
 ADR-004 (the authenticated principal and claims this keys on, including the optional `permission`
