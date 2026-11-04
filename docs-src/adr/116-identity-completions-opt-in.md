@@ -13,6 +13,8 @@ Revised 2026-10-26: anchors refreshed after the v1.261.0 release.
 Revised 2026-10-28: anchors refreshed after the v1.265.1 release.
 Revised 2026-11-02: item 14 records sign-in links as a sixth opt-in completion of the same shape
 (see Revision below).
+Revised 2026-11-04: the stored-grant cache interval defaults to 30 seconds as of MMCA.Common 1.277.0
+(see Revision below).
 Layers stored permission grants over
 [ADR-020](020-permission-based-authorization.md)'s compiled registry and extends the shared sign-in
 workflow of [ADR-050](050-jwt-refresh-token-rotation.md) with optional collaborators.
@@ -136,7 +138,7 @@ same one.**
    Rather than block on I/O there, the grants are held as a per-role `IMemoryCache` snapshot behind
    `IPermissionGrantCache` (`.../Auth/Permissions/IPermissionGrantCache.cs:21`), rebuilt by a hosted
    service on `Authentication:PermissionGrants:CacheSeconds`
-   (`.../Auth/Permissions/PermissionGrantSettings.cs:12`, `:25`) and immediately by
+   (`.../Auth/Permissions/PermissionGrantSettings.cs:12`, `:34`, default 30 seconds) and immediately by
    `IPermissionGrantCacheInvalidator` (`.../Auth/Permissions/IPermissionGrantCache.cs:53`) after an
    edit. A cold cache grants nothing, which is the safe direction, and the compiled layer answers
    from the first request either way.
@@ -389,9 +391,13 @@ opt-in posture above:
   the framework already made for `FindUntrackedByEmailAsync`: a framework-owned user table would cost
   more than the class it saves.
 - Stored grants are per-process cached, so an edit made on one replica is live there immediately and
-  reaches the others within `CacheSeconds` (default 300). A cross-replica push would put a broker on
-  the authorization path; the window it would close is a grant taking effect a few seconds late,
-  never a revoked grant outliving the interval.
+  reaches the others within `CacheSeconds` (default 30). Only the token-minting Identity service reads
+  the stored grants; every other service trusts the permission claims in an access token for its
+  whole lifetime (`AccessTokenExpirationMinutes`, default 15), so this lag adds on top of that
+  lifetime before a revoke reaches every service. At 30 seconds the cost is one small query per
+  Identity replica per interval. A cross-replica push would put a broker on the authorization path;
+  the window it would close is a grant taking effect a few seconds late, never a revoked grant
+  outliving the interval.
 - `EFPermissionGrantStore` hard-deletes a revoked grant, so it joins the framework's short
   soft-delete allowlist ([ADR-005](005-soft-delete-vs-erasure.md)). Consumers running the same
   fitness rule against the packages have to add the type to their own `AllowedHardDeleteTypes` when
@@ -542,6 +548,20 @@ anchors moved.
 - Item 14 also records the duplicate-email hand-off from registration to sign-in, which carries the
   address in navigation history state rather than the URL.
 - The anchors in items 1 to 13 were not re-verified in this revision.
+
+## Revision (2026-11-04)
+- `PermissionGrantSettings.CacheSeconds` defaults to 30 seconds (MMCA.Common 1.277.0), within its
+  `[Range(5, 3600)]` bound
+  (`MMCA.Common/Source/Core/MMCA.Common.Application/Auth/Permissions/PermissionGrantSettings.cs:33-34`).
+  Item 6 now cites the property at `:34` and the Trade-offs bullet on per-process caching states the
+  new default and why it is cheap enough: the stored grants are read only by the token-minting
+  Identity service, the permission claims it writes are trusted for the access token's lifetime
+  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Auth/JwtSettings.cs:66`, 15 minutes), so the
+  cross-replica lag is added on top of that lifetime, and the interval costs one small query per
+  Identity replica with no broker on the authorization path (`PermissionGrantSettings.cs:19-25`).
+- Each cached entry lives three intervals, so the snapshot survives up to two failed reloads before
+  stored grants fail closed (`PermissionGrantSettings.cs:28-30`).
+- The other anchors in items 1 to 14 were not re-verified in this revision.
 
 ## Related
 [ADR-020](020-permission-based-authorization.md) (the compiled role-to-permission registry stored

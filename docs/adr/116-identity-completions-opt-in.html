@@ -256,6 +256,8 @@
           Revised 2026-10-28: anchors refreshed after the v1.265.1 release.
           Revised 2026-11-02: item 14 records sign-in links as a sixth opt-in completion of the same shape
           (see Revision below).
+          Revised 2026-11-04: the stored-grant cache interval defaults to 30 seconds as of MMCA.Common 1.277.0
+          (see Revision below).
           Layers stored permission grants over
           <a href="020-permission-based-authorization.html">ADR-020</a>&#39;s compiled registry and extends the shared sign-in
           workflow of <a href="050-jwt-refresh-token-rotation.html">ADR-050</a> with optional collaborators.</p>
@@ -372,7 +374,7 @@
           Rather than block on I/O there, the grants are held as a per-role <code>IMemoryCache</code> snapshot behind
           <code>IPermissionGrantCache</code> (<code>.../Auth/Permissions/IPermissionGrantCache.cs:21</code>), rebuilt by a hosted
           service on <code>Authentication:PermissionGrants:CacheSeconds</code>
-          (<code>.../Auth/Permissions/PermissionGrantSettings.cs:12</code>, <code>:25</code>) and immediately by
+          (<code>.../Auth/Permissions/PermissionGrantSettings.cs:12</code>, <code>:34</code>, default 30 seconds) and immediately by
           <code>IPermissionGrantCacheInvalidator</code> (<code>.../Auth/Permissions/IPermissionGrantCache.cs:53</code>) after an
           edit. A cold cache grants nothing, which is the safe direction, and the compiled layer answers
           from the first request either way.</p>
@@ -628,9 +630,13 @@
           the framework already made for <code>FindUntrackedByEmailAsync</code>: a framework-owned user table would cost
           more than the class it saves.</li>
           <li>Stored grants are per-process cached, so an edit made on one replica is live there immediately and
-          reaches the others within <code>CacheSeconds</code> (default 300). A cross-replica push would put a broker on
-          the authorization path; the window it would close is a grant taking effect a few seconds late,
-          never a revoked grant outliving the interval.</li>
+          reaches the others within <code>CacheSeconds</code> (default 30). Only the token-minting Identity service reads
+          the stored grants; every other service trusts the permission claims in an access token for its
+          whole lifetime (<code>AccessTokenExpirationMinutes</code>, default 15), so this lag adds on top of that
+          lifetime before a revoke reaches every service. At 30 seconds the cost is one small query per
+          Identity replica per interval. A cross-replica push would put a broker on the authorization path;
+          the window it would close is a grant taking effect a few seconds late, never a revoked grant
+          outliving the interval.</li>
           <li><code>EFPermissionGrantStore</code> hard-deletes a revoked grant, so it joins the framework&#39;s short
           soft-delete allowlist (<a href="005-soft-delete-vs-erasure.html">ADR-005</a>). Consumers running the same
           fitness rule against the packages have to add the type to their own <code>AllowedHardDeleteTypes</code> when
@@ -783,6 +789,21 @@
           address in navigation history state rather than the URL.</li>
           <li>The anchors in items 1 to 13 were not re-verified in this revision.</li>
           </ul>
+          <h2 id="revision-2026-11-04">Revision (2026-11-04)</h2>
+          <ul>
+          <li><code>PermissionGrantSettings.CacheSeconds</code> defaults to 30 seconds (MMCA.Common 1.277.0), within its
+          <code>[Range(5, 3600)]</code> bound
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Auth/Permissions/PermissionGrantSettings.cs:33-34</code>).
+          Item 6 now cites the property at <code>:34</code> and the Trade-offs bullet on per-process caching states the
+          new default and why it is cheap enough: the stored grants are read only by the token-minting
+          Identity service, the permission claims it writes are trusted for the access token&#39;s lifetime
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Auth/JwtSettings.cs:66</code>, 15 minutes), so the
+          cross-replica lag is added on top of that lifetime, and the interval costs one small query per
+          Identity replica with no broker on the authorization path (<code>PermissionGrantSettings.cs:19-25</code>).</li>
+          <li>Each cached entry lives three intervals, so the snapshot survives up to two failed reloads before
+          stored grants fail closed (<code>PermissionGrantSettings.cs:28-30</code>).</li>
+          <li>The other anchors in items 1 to 14 were not re-verified in this revision.</li>
+          </ul>
           <h2 id="related">Related</h2>
           <p><a href="020-permission-based-authorization.html">ADR-020</a> (the compiled role-to-permission registry stored
           grants layer over),
@@ -814,6 +835,7 @@
             <li><a href="#revision-2026-10-26">Revision (2026-10-26)</a></li>
             <li><a href="#revision-2026-10-28">Revision (2026-10-28)</a></li>
             <li><a href="#revision-2026-11-02">Revision (2026-11-02)</a></li>
+            <li><a href="#revision-2026-11-04">Revision (2026-11-04)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

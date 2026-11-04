@@ -47,6 +47,13 @@ output-cache base, the two adopters included; the role-claim types are matched c
 only role values case-insensitively; anchors refreshed.
 Revised 2026-10-26: anchors refreshed after the v1.261.0 release and consumer sweep.
 Revised 2026-10-28: anchors refreshed after the v1.265.1 release and consumer sweep.
+Revised 2026-11-04 (Common v1.277.0): `DistributedCacheService` and `RedisPrefixScanner` are removed.
+`HybridCacheService` is the only shared-store substrate, prefix invalidation is one Redis write of a
+generation token instead of a keyspace SCAN, a non-empty prefix must end at `:` in every store, and
+resolving `ICacheService` throws when a distributed cache has no hybrid cache over it. The Decision and
+Trade-offs describe that state; the dated revisions below that name `DistributedCacheService`,
+`RedisPrefixScanner` or SCAN record the removed design as it stood on their date. See the Revision
+(2026-11-04) at the end.
 
 ## Context
 The framework needs caching in two distinct places. Inside the application pipeline, query results
@@ -74,23 +81,24 @@ Cache in two tiers, each with its own substrate.
   Caching decorators, `LoginProtectionService`) depends only on this interface, never on a concrete
   cache or on Redis.
 - **The backing store is chosen at startup, not in code (amended by ADR-077).** `AddCaching(configuration)`
-  (`MMCA.Common.Infrastructure/DependencyInjection.Caching.cs:27`, where the configuration parameter is
+  (`MMCA.Common.Infrastructure/DependencyInjection.Caching.cs:30`, where the configuration parameter is
   optional, called from `AddInfrastructure` at
-  `MMCA.Common.Infrastructure/DependencyInjection.cs:140`)
-  registers `DistributedCacheService` when a real `IDistributedCache` is present (one that is not the
-  in-memory `MemoryDistributedCache`, i.e. Aspire registered Redis), and otherwise
-  `MemoryCacheService`. The
-  monolith with no distributed cache gets in-process caching for free; a host that wires Redis gets the
-  distributed store with no application-code change. This is the same "monolith now, scale or extract
-  later" extension point as `InProcessMessageBus` vs `BrokerMessageBus` (ADR-003/006/008). Since
-  ADR-077 a third implementation exists, `HybridCacheService` (L1 in-process plus L2 distributed), and
-  it is the one substrate that is **not** auto-selected: a host opts into it explicitly with
-  `AddCommonHybridCache(...)` (`MMCA.Common.Infrastructure/DependencyInjection.Caching.cs:157`), which
-  replaces the registration this call made. That call, unlike the Redis wrappers in Trade-offs below,
-  has no guard of its own, so the framework pairs it with a guarded helper,
-  `AddCommonHybridCacheWhenRedisConfigured(configuration, connectionName = "redis")`
-  (`MMCA.Common.Infrastructure/DependencyInjection.Caching.cs:218`), which calls it only when the named
-  connection string is non-empty (`:224-227`) and otherwise leaves the registration untouched. Every
+  `MMCA.Common.Infrastructure/DependencyInjection.cs:140`) registers `MemoryCacheService` with
+  `TryAddSingleton` (`DependencyInjection.Caching.cs:78-98`). The shared-store substrate is
+  `HybridCacheService` (L1 in-process plus L2 distributed, ADR-077), registered by
+  `AddCommonHybridCache(...)` (`MMCA.Common.Infrastructure/DependencyInjection.Caching.cs:160`), which
+  replaces the registration this call made (`RemoveAll<ICacheService>` at `:186`). A host that registers
+  a real `IDistributedCache` (one that is not the in-memory `MemoryDistributedCache`) without that call
+  does not fall back to memory: resolving `ICacheService` throws an `InvalidOperationException` naming
+  `AddCommonHybridCache` (`:85-91`), because a silent in-process fallback would make single-use records,
+  counters and the lockout flag per-replica (`:80-84`). The monolith with no distributed cache gets
+  in-process caching for free; a host that wires Redis gets the shared store with no application-code
+  change. This is the same "monolith now, scale or extract later" extension point as
+  `InProcessMessageBus` vs `BrokerMessageBus` (ADR-003/006/008). `AddCommonHybridCache`, unlike the
+  Redis wrappers in Trade-offs below, has no guard of its own, so the framework pairs it with a guarded
+  helper, `AddCommonHybridCacheWhenRedisConfigured(configuration, connectionName = "redis")`
+  (`MMCA.Common.Infrastructure/DependencyInjection.Caching.cs:221`), which calls it only when the named
+  connection string is non-empty (`:227-230`) and otherwise leaves the registration untouched. Every
   one of the seven ADC and Store services opts in through that helper: ADC Conference
   (`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:210`), Notification
   (`.../MMCA.ADC.Notification.Service/Program.cs:125`), Engagement
@@ -99,14 +107,23 @@ Cache in two tiers, each with its own substrate.
   (`MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:114`), Sales
   (`.../MMCA.Store.Sales.Service/Program.cs:120`) and Identity
   (`.../MMCA.Store.Identity.Service/Program.cs:109`). So `HybridCacheService` is the live
-  `ICacheService` wherever Redis is configured, and the two-way swap above is what runs where it is
+  `ICacheService` wherever Redis is configured, and `MemoryCacheService` is what runs where it is
   not: local runs, tests, and any host that wires no Redis.
 - **Prefix invalidation, implemented per store.** `IMemoryCache` has no key-enumeration API, so
   `MemoryCacheService` tracks live keys in a `ConcurrentDictionary` (kept in sync by a post-eviction
-  callback) to support `RemoveByPrefixAsync`. `DistributedCacheService` serializes values as UTF-8 JSON
-  and, when an `IConnectionMultiplexer` is resolvable, enumerates matching Redis keys to delete them;
-  when no multiplexer is registered it treats prefix removal as a no-op and relies on the TTL backstop
-  below.
+  callback) to support `RemoveByPrefixAsync`. `HybridCacheService` never walks the keyspace: every
+  `:` boundary of a key (the empty root, then each prefix ending at `:`) carries a generation token, the
+  tokens in force are folded into the key an entry is stored under, and `RemoveByPrefixAsync` replaces
+  one token, so every entry written under the old token stops being addressed on every replica and
+  expires on its own TTL (`MMCA.Common.Infrastructure/Caching/CachePrefixGenerations.cs:9-13`). The
+  invalidation is one Redis `SET` under `{namespace}hcg:{prefix}`, whatever the size of the keyspace
+  (`CachePrefixGenerations.cs:217-238`, the write at `:237`, the key built at `:278`); when no
+  `IConnectionMultiplexer` is registered the tokens live in the process, so the invalidation reaches that
+  process only and is warned once (`:224-231`). Both stores enforce one argument contract: a prefix is
+  empty or ends at a `:` boundary, otherwise `ArgumentException`
+  (`MMCA.Common.Infrastructure/Caching/CachePrefixContract.cs:17-27`, called at
+  `MemoryCacheService.cs:146` and `HybridCacheService.cs:315`), the shape every
+  `ICacheInvalidating.CachePrefix` takes (`MMCA.Common.Application/Interfaces/ICacheService.cs:92-112`).
 - **A short default TTL bounds staleness.** The 30 seconds is one figure with one home:
   `CacheOptions.DefaultDuration` (`= TimeSpan.FromSeconds(30)`,
   `MMCA.Common.Infrastructure/Caching/CacheOptions.cs:23`), a bare `TimeSpan` so that an
@@ -116,20 +133,23 @@ Cache in two tiers, each with its own substrate.
   expiration (`AbsoluteExpirationRelativeToNow = DefaultDuration`,
   `MMCA.Common.Infrastructure/Caching/CacheOptions.cs:28-31`); callers may override per entry. A host
   may also move the default without code: `CacheSettings.DefaultDuration`
-  (`MMCA.Common.Infrastructure/Caching/CacheSettings.cs:32`, the `Cache:DefaultDuration` key) defaults
+  (`MMCA.Common.Infrastructure/Caching/CacheSettings.cs:34`, the `Cache:DefaultDuration` key) defaults
   to `CacheOptions.DefaultDuration`, is bound by `AddCaching` when it receives configuration
-  (`MMCA.Common.Infrastructure/DependencyInjection.Caching.cs:44-47`), and is what the cache services
+  (`MMCA.Common.Infrastructure/DependencyInjection.Caching.cs:47-50`), and is what the cache services
   apply to an entry whose caller supplies no expiration (for example
-  `MMCA.Common.Infrastructure/Caching/DistributedCacheService.cs:72`). The same section carries an
-  optional L1 ceiling for `HybridCacheService` (`CacheSettings.cs:42`) and the populate-lock timeout
-  (`:57`). The short default means even a prefix invalidation that cannot reach every replica (memory mode, or
-  distributed mode without a multiplexer) self-heals within seconds. The same holds for
-  `HybridCacheService` with Redis configured: a removal clears L2 and this process's L1, but other
-  replicas' L1 copies keep serving the removed value until their local expiration lapses, for up to
-  `Cache:LocalCacheDuration` (30 seconds by default,
-  `MMCA.Common.Infrastructure/Caching/HybridCacheService.cs:69`; the L1 lifetime is the shorter of the
-  entry TTL and that ceiling, `WriteOptions` at `:402-413`, the comparison at `:410`) (`:254-259` for
-  `RemoveAsync`, `:264-281` for `RemoveByPrefixAsync`).
+  `MMCA.Common.Infrastructure/Caching/HybridCacheService.cs:429`). The same section carries an
+  optional L1 ceiling for `HybridCacheService` (`CacheSettings.cs:47`, at least one second when set,
+  `:46`) and the populate-lock timeout (`:62`). The short default means even a prefix invalidation that
+  cannot reach every replica (memory mode, or the hybrid store without a multiplexer, where the
+  generation tokens are process-local) self-heals within seconds. With Redis configured the bound is
+  the local expiration: a single-key removal clears L2 and this process's L1, but other replicas' L1
+  copies keep serving the removed value until their local expiration lapses
+  (`MMCA.Common.Infrastructure/Caching/HybridCacheService.cs:285-291`), and a prefix invalidation
+  reaches another replica once its remembered generation token expires, within the local duration plus
+  one refresh round trip (`MMCA.Common.Infrastructure/Caching/CachePrefixGenerations.cs:37-42`). Both
+  are bounded by `Cache:LocalCacheDuration` (30 seconds by default, `HybridCacheService.cs:65`; the L1
+  lifetime is the shorter of the entry TTL and that ceiling, `WriteOptions` at `:427-438`, the
+  comparison at `:435`).
 
 ### Tier 2: an HTTP output-cache edge
 - **The pipeline always enables it; policies are opt-in per host.** `MMCA.Common.API` calls
@@ -259,24 +279,25 @@ switch on, and it is recorded here so a reader is not surprised by it in the UI 
   TTL. The framework's answer is to register a distributed cache once scaled out (both apps do), which
   bounds cross-replica staleness rather than removing it: with Redis configured each replica still
   holds an L1 copy, and an eviction on one replica leaves the others' copies serving for up to
-  `Cache:LocalCacheDuration` (`MMCA.Common.Infrastructure/Caching/HybridCacheService.cs:30-32`,
-  `:254-259`; see the next bullet).
-- **Distributed prefix invalidation needs the multiplexer, and every service registers it through one
-  framework wrapper.** Both distributed substrates can only scan-and-delete by prefix when an
-  `IConnectionMultiplexer` is in the container: `DistributedCacheService`, and the one that runs once
-  Redis is configured, `HybridCacheService.RemoveByPrefixAsync`
-  (`MMCA.Common.Infrastructure/Caching/HybridCacheService.cs:282-301`), which without a multiplexer
-  warns once and returns (`:284-292`). Putting it there is no longer each host's business:
-  `builder.AddRedisCaching()`
-  (`MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Caching/RedisCachingExtensions.cs:57`) registers the
-  distributed cache (`:64`) and the client (`:65`) together, both with `DisableHealthChecks = true`, and
+  `Cache:LocalCacheDuration` (`MMCA.Common.Infrastructure/Caching/HybridCacheService.cs:29-32`,
+  `:285-291`; see the next bullet).
+- **Cross-replica prefix invalidation needs the multiplexer, and every service registers it through one
+  framework wrapper.** `HybridCacheService.RemoveByPrefixAsync`
+  (`MMCA.Common.Infrastructure/Caching/HybridCacheService.cs:313-317`) writes its generation token
+  through the `IConnectionMultiplexer` the registration resolves
+  (`MMCA.Common.Infrastructure/DependencyInjection.Caching.cs:191`); without one the tokens are
+  process-local, so the invalidation reaches the invalidating process only and is warned once
+  (`MMCA.Common.Infrastructure/Caching/CachePrefixGenerations.cs:224-231`). Putting it there is no
+  longer each host's business: `builder.AddRedisCaching()`
+  (`MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Caching/RedisCachingExtensions.cs:59`) registers the
+  distributed cache (`:66`) and the client (`:67`) together, both with `DisableHealthChecks = true`, and
   no-ops when the named connection string is blank. The wrapper exists because the raw Aspire
   integrations register an untagged `StackExchange.Redis` health check, which readiness therefore
   includes, and against Azure Managed Redis that check issues `CLUSTER INFO`, a command the client
   refuses outside admin mode: every probe threw and every replica reported not ready
   ([ADR-025](025-startup-warmup-readiness.md) owns that decision and the PING-only replacement check).
   All seven services call the wrapper, and all seven call it unconditionally, since it no-ops on its
-  own (`RedisCachingExtensions.cs:59`): ADC Conference
+  own (`RedisCachingExtensions.cs:61-64`): ADC Conference
   `MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:191`, Notification
   `MMCA.ADC/Source/Services/MMCA.ADC.Notification.Service/Program.cs:117`, Engagement
   `MMCA.ADC/Source/Services/MMCA.ADC.Engagement.Service/Program.cs:114`, Identity
@@ -288,27 +309,28 @@ switch on, and it is recorded here so a reader is not surprised by it in the UI 
   guarded `AddCommonHybridCacheWhenRedisConfigured(...)` helper (Tier 1 above). Those
   seven are the whole set: a sweep of both repos' `Source/` trees finds no eighth `AddRedisCaching` call and no direct
   `AddRedisDistributedCache` / `AddRedisClient` call outside the wrapper. So whenever Redis is
-  configured, prefix-based invalidation against Redis is live and the shared L2 entries are evicted
-  on write. Eviction does not reach every copy, though: with Redis configured the live substrate is
-  `HybridCacheService`, and another replica's L1 copy keeps serving a removed value, for a single key
-  or a prefix alike, until its local expiration lapses (for up to `Cache:LocalCacheDuration`, 30 seconds by
-  default, `MMCA.Common.Infrastructure/Caching/HybridCacheService.cs:254-259` and `:264-281`); a read
-  that must see a removal everywhere goes through `GetFromSharedStoreAsync` (`:217`). So the 30-second
+  configured, a prefix invalidation is one Redis write that every replica observes, whatever the size
+  of the keyspace. It does not reach every copy at once, though: another replica's L1 copy of a single
+  removed key keeps serving until its local expiration lapses
+  (`MMCA.Common.Infrastructure/Caching/HybridCacheService.cs:285-291`), and another replica stops
+  serving an invalidated prefix once its remembered token expires, within `Cache:LocalCacheDuration`
+  (30 seconds by default) plus one refresh round trip
+  (`MMCA.Common.Infrastructure/Caching/CachePrefixGenerations.cs:37-42`); a read that must see a
+  removal everywhere goes through `GetFromSharedStoreAsync` (`HybridCacheService.cs:246`). So the 30-second
   bound is the cross-replica backstop in hybrid mode as well as the whole answer in memory mode, where
   prefix removal self-heals within seconds instead.
 - **Distributed mode pays serialization and a network hop.** Values cross the wire as JSON; large or
   hot objects cost more than the in-process path.
 - **Counter increments are not atomic, and that is the accepted position.**
   `ICacheService.IncrementAsync` is a default interface member implemented as a read-modify-write
-  (`MMCA.Common.Application/Interfaces/ICacheService.cs:116`), and `DistributedCacheService` overrides it
-  with the same read-modify-write shape rather than Redis `INCR`
-  (`MMCA.Common.Infrastructure/Caching/DistributedCacheService.cs:153`). With Redis configured the
-  override that runs is `HybridCacheService.IncrementAsync`
-  (`MMCA.Common.Infrastructure/Caching/HybridCacheService.cs:327`), also a read-modify-write, with both
-  legs on L2 only (remarks at `:304-326`). The reason is a storage
-  format mismatch, documented at the implementation
-  (`MMCA.Common.Infrastructure/Caching/DistributedCacheService.cs:134-152`): `INCR` writes a Redis
-  string, while `StackExchangeRedisCache` stores every entry as a Redis hash (`absexp` / `sldexp` /
+  (`MMCA.Common.Application/Interfaces/ICacheService.cs:133`), which `MemoryCacheService` inherits.
+  With Redis configured the override that runs is `HybridCacheService.IncrementAsync`
+  (`MMCA.Common.Infrastructure/Caching/HybridCacheService.cs:342`), also a read-modify-write rather
+  than Redis `INCR`, with both legs on L2 only (remarks at `:319-341`). The reason is a storage
+  format mismatch, documented on the interface
+  (`MMCA.Common.Application/Interfaces/ICacheService.cs:126-132`): `INCR` writes a Redis
+  string, while `StackExchangeRedisCache` (the L2 under `HybridCache`) stores every entry as a Redis
+  hash (`absexp` / `sldexp` /
   `data`, read back with `HMGET`). An `INCR`-written counter therefore makes the next read of that key
   fail with `WRONGTYPE`, which surfaces as a 500 on whatever endpoint owns the counter (registration and
   login, in the ADR-029 case). A counter has to live in the same storage format as the reads that
@@ -316,9 +338,9 @@ switch on, and it is recorded here so a reader is not surprised by it in the UI 
   can undercount under genuinely concurrent increments, and an occasional lost increment is the accepted
   cost of a counter that is always readable. The interface says the same thing: its `<summary>` states
   the member is not atomic in any shipped implementation
-  (`MMCA.Common.Application/Interfaces/ICacheService.cs:97-104`), and its `<remarks>` records that no
+  (`MMCA.Common.Application/Interfaces/ICacheService.cs:115-121`), and its `<remarks>` records that no
   shipped implementation overrides it with Redis `INCR`, for the storage-format reason above
-  (`:109-115`, the sentence at `:112-114`).
+  (`:126-132`, the sentence at `:129-131`).
 - **Output caching is opt-in per service.** A read-heavy service that forgets to register a real
   `AddOutputCache` policy gets no edge caching (the `NoCache` base is the safe default), the same
   audit-the-inventory caveat as other opt-in capabilities (ADR-019/020/021). Adopting a policy is only
@@ -1098,3 +1120,48 @@ Only anchors moved, in `DependencyInjection.Caching.cs` and the ADC Identity `Pr
    writes the `t` key at `:110`; and `GetRoleValues` is at
    `MMCA.Common.Shared/Auth/ClaimsPrincipalExtensions.cs:60` (Ordinal claim-type matches at `:65-67`),
    `HasRole` at `:76` (`OrdinalIgnoreCase` at `:78`).
+
+## Revision (2026-11-04)
+Common v1.277.0 (Common PR #668) changes Tier 1's substrate and its prefix-invalidation mechanism.
+Tier 2, the client tier, the seven-service Redis and hybrid wiring and the counter trade-off's
+conclusion are unchanged.
+
+1. **`DistributedCacheService` and `RedisPrefixScanner` are removed.** `AddCaching` registers
+   `MemoryCacheService` only (`MMCA.Common.Infrastructure/DependencyInjection.Caching.cs:78-98`), and a
+   host that registers a non-memory `IDistributedCache` without `AddCommonHybridCache` fails when
+   `ICacheService` resolves, with an `InvalidOperationException` naming the call (`:85-91`). The
+   memory-or-distributed swap is now a memory-or-hybrid choice, and every first-party service host
+   already made it.
+2. **Prefix invalidation is a generation-token write, not a SCAN.** `HybridCacheService` folds the
+   generation token of each `:` boundary of a key into the key it stores
+   (`MMCA.Common.Infrastructure/Caching/HybridCacheService.cs:414-418`, the boundaries listed at
+   `MMCA.Common.Infrastructure/Caching/CachePrefixGenerations.cs:246`), and `RemoveByPrefixAsync`
+   replaces one token with one `StringSetAsync` (`CachePrefixGenerations.cs:237`). Orphaned entries
+   expire on their own TTL. The token keys sit under their own `hcg:` segment
+   (`CachePrefixGenerations.cs:76`) and carry no TTL: one short string per distinct invalidated prefix
+   (`:43-45`).
+3. **Outage posture.** A failed token read never fails the cache call: it answers with the last token
+   this process knew for the boundary, or the empty baseline for a boundary it never saw, and is not
+   retried for one local cache duration (`CachePrefixGenerations.cs:52-66`, `ReadFailed` at
+   `:354-358`, `FallbackToken` at `:366-367`). A known token past its local duration is served while
+   one background read per boundary refreshes it (`:37-42`, the in-flight map at `:108`).
+4. **The boundary contract.** A non-empty prefix must end at `:` in every store, or
+   `RemoveByPrefixAsync` throws `ArgumentException`
+   (`MMCA.Common.Infrastructure/Caching/CachePrefixContract.cs:17-27`). The caching command decorator
+   logs a rejected prefix at Error and still schedules its delayed re-invalidation
+   (`MMCA.Common.Application/UseCases/Decorators/CachingCommandDecorator.cs:76-81`, `:97`).
+5. **Why not `HybridCache.RemoveByTagAsync`.** Recorded in [ADR-077](077-hybridcache-substrate.md)'s
+   Revision (2026-11-04): in Microsoft.Extensions.Caching.Hybrid 10.11.0 each process reads a tag's
+   invalidation time once and never refreshes it (`CachePrefixGenerations.cs:17-24`).
+6. **Anchors re-verified against current source** and re-pointed in the Decision and Trade-offs:
+   `AddCaching` `DependencyInjection.Caching.cs:30`, its `CacheSettings` chain `:47-50`,
+   `AddCommonHybridCache` `:160` (`RemoveAll<ICacheService>` at `:186`), the guarded helper `:221`
+   (guard `:227-230`); `CacheSettings.DefaultDuration` `CacheSettings.cs:34`, `LocalCacheDuration`
+   `:47`, `PopulateLockTimeout` `:62`; `HybridCacheService.cs` `LocalCacheDefault` `:65`,
+   `GetFromSharedStoreAsync` `:246`, `RemoveAsync` remarks `:285-291`, `RemoveByPrefixAsync`
+   `:313-317`, `IncrementAsync` `:342` (remarks `:319-341`), `WriteOptions` `:427-438` (comparison
+   `:435`); `ICacheService.IncrementAsync` `ICacheService.cs:133` (summary `:115-121`, remarks
+   `:126-132`); `AddRedisCaching` `RedisCachingExtensions.cs:59` (no-op `:61-64`, registrations `:66`,
+   `:67`). The seven consumer `Program.cs` anchors were not re-checked in this pass and stand as the
+   2026-10-28 Revision records them. The dated revisions above that name `DistributedCacheService`,
+   `RedisPrefixScanner`, `ScanAndDeleteAsync` or SCAN describe the design this revision removes.

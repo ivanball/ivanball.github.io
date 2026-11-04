@@ -255,7 +255,10 @@
           service, AppHost and Bicep edits and the Common hosting and warmup-task edits moved them; no decision
           or behavior changed. Revised 2026-10-28: the validator bullet now records that the JWT authority is
           resolved fail-closed through <code>GetRequiredJwtAuthority()</code>, alongside the audience, and the ADC and
-          Store Bicep anchors are refreshed.</p>
+          Store Bicep anchors are refreshed. Revised 2026-11-04: the JWKS document can publish more than one
+          public key (<code>JwksSettings.AdditionalKeys</code>, MMCA.Common 1.277.0), every local validator accepts the
+          published set, and the Rationale and Trade-offs now describe the staged signing-key rotation that
+          makes possible (see Revision below).</p>
           <h2 id="context">Context</h2>
           <p>When the modular monolith is extracted into per-module service hosts behind a gateway (ADR-008),
           every service must authenticate the same end-user JWT, but only one service (Identity) issues tokens.
@@ -278,10 +281,15 @@
           <ul>
           <li>Identity signs access tokens with its RSA private key (RS256) and publishes only the matching
           public key (ADC&#39;s Identity service sets <code>&quot;SigningAlgorithm&quot;: &quot;RS256&quot;</code>).</li>
-          <li><code>IJwksProvider</code> / <code>RsaJwksProvider</code> materialize a <code>JsonWebKeySet</code> from a PEM public key
-          (<code>JwksSettings</code>: <code>Enabled</code> defaults to <code>false</code>, <code>KeyId</code> defaults to <code>&quot;default&quot;</code>, key supplied
-          inline via <code>RsaPublicKeyPem</code> or by <code>RsaPublicKeyPath</code>). When publishing is disabled or no key is
-          configured, the provider returns an empty key set, so the endpoint stays queryable.</li>
+          <li><code>IJwksProvider</code> / <code>RsaJwksProvider</code> materialize a <code>JsonWebKeySet</code> from PEM public keys: the
+          current key first (<code>JwksSettings</code>: <code>Enabled</code> defaults to <code>false</code>, <code>KeyId</code> defaults to <code>&quot;default&quot;</code>,
+          key supplied inline via <code>RsaPublicKeyPem</code> or by <code>RsaPublicKeyPath</code>), then every
+          <code>JwksSettings.AdditionalKeys</code> entry (a <code>kid</code> plus an inline PEM or a path) in order
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Auth/RsaJwksProvider.cs:43</code>, <code>:47-50</code>;
+          <code>.../Auth/JwksSettings.cs:70</code>). An additional key is never used to sign: it is the next key staged
+          for a rotation or the previous key while its tokens are still live (<code>JwksSettings.cs:20-22</code>). When
+          publishing is disabled or no current key is configured, the provider returns an empty key set, so
+          the endpoint stays queryable (<code>RsaJwksProvider.cs:29-40</code>).</li>
           <li>Two well-known endpoints are mapped centrally for every host (<code>MapJwksEndpoint</code>,
           <code>MapOidcDiscoveryEndpoint</code>), both anonymous: <code>/.well-known/jwks.json</code> and
           <code>/.well-known/openid-configuration</code>. The discovery document advertises the validation-relevant
@@ -335,7 +343,11 @@
           <li><code>AddCommonAuthentication(configuration)</code> remains the in-process path: HS256 with the shared Base64
           secret (the monolith option), or RS256 validating against a locally configured public-key PEM (no
           JWKS fetch). It requires <code>RsaPublicKeyPem</code> when RS256 is selected and directs extracted services to
-          <code>AddForwardedJwtBearer</code> instead.</li>
+          <code>AddForwardedJwtBearer</code> instead. In RS256 mode it also accepts every <code>Jwks:AdditionalKeys</code> entry,
+          the same set the JWKS document publishes
+          (<code>.../WebApplicationBuilderExtensions.Authentication.cs:151</code>, <code>:248</code>), and so does <code>TokenService</code>&#39;s
+          refresh-flow validation of the expired access token it signed
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Auth/TokenService.cs:98</code>, <code>:194</code>).</li>
           </ul>
           <p><strong>Discovery routing and fallback.</strong></p>
           <ul>
@@ -370,7 +382,12 @@
           <ul>
           <li><strong>No shared signing key.</strong> Only Identity can mint tokens; every other service holds only the public
           key it fetched, so a compromised non-Identity service cannot forge tokens, and key rotation is
-          publish-once at the issuer.</li>
+          configured at the issuer alone.</li>
+          <li><strong>Rotation without a 401 wave.</strong> Because the key set can hold more than one key, the issuer stages
+          the next public key in <code>AdditionalKeys</code> before switching to it (so a validator that caches the JWKS
+          document already knows it), switches signing, then keeps the previous public key published until
+          every token it signed has expired (<code>JwksSettings.cs:151-153</code>). No live token is rejected at the
+          switch.</li>
           <li><strong>Discovery over hard-coded keys.</strong> Fetching the key set via OIDC discovery means consumers need no
           per-service key configuration, and rotation does not require redeploying every validator.</li>
           <li><strong>Origin-aligned issuer.</strong> Deriving the issuer from the discovery document rather than pinning it
@@ -407,6 +424,11 @@
           <li><strong>Endpoint hygiene is on the issuer.</strong> JWKS and discovery are anonymous by definition; the discovery
           doc returns <code>404</code> on non-issuer hosts and the JWKS provider returns an empty set when unconfigured,
           so only the real issuer advertises a key.</li>
+          <li><strong>Retiring a key runs on two clocks.</strong> In-process validators (<code>AddCommonAuthentication</code>, the
+          <code>TokenService</code> refresh flow) build their key list once, so removing an additional key takes effect
+          when the process restarts; forwarded validators drop it when they next refresh the JWKS document,
+          on the JWT bearer handler&#39;s metadata refresh interval (<code>JwksSettings.cs:64-68</code>). A rotation is
+          therefore a sequence of configuration deploys, not one change.</li>
           </ul>
           <h2 id="revision-2026-10-01">Revision (2026-10-01)</h2>
           <p>Anchor-only refresh; no decision or rationale changed. The <code>AddForwardedJwtBearer</code> registration
@@ -566,6 +588,32 @@
           </ul>
           </li>
           </ol>
+          <h2 id="revision-2026-11-04">Revision (2026-11-04)</h2>
+          <p>MMCA.Common 1.277.0 lets the JWKS document publish more than one key. The signing model, the
+          validator registration, discovery and the pinned algorithms are unchanged.</p>
+          <ol>
+          <li><code>JwksSettings.AdditionalKeys</code> lists further public keys, each a <code>JwksAdditionalKey</code> with a <code>kid</code>
+          and an inline PEM or a path
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Auth/JwksSettings.cs:70</code>, <code>:162</code>).
+          <code>RsaJwksProvider</code> publishes the current key first and the additional keys after it, in order
+          (<code>.../Auth/RsaJwksProvider.cs:43</code>, <code>:47-50</code>); signing stays on the current key
+          (<code>.../Auth/TokenService.cs:268</code>).</li>
+          <li>Every local validator accepts the published set: the RS256 in-process validator
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/WebApplicationBuilderExtensions.Authentication.cs:151</code>,
+          <code>:248</code>) and <code>TokenService</code>&#39;s refresh-flow validation (<code>TokenService.cs:98</code>, <code>:194</code>). Forwarded
+          validators see the extra keys through the JWKS document they already fetch.</li>
+          <li><code>JwksSettings</code> implements <code>IValidatableObject</code> (<code>JwksSettings.cs:25</code>): an additional key with a
+          missing or over-64-character <code>kid</code>, a <code>kid</code> that repeats another entry or the current <code>KeyId</code>, or
+          key material that is absent or does not load fails options validation at startup
+          (<code>JwksSettings.cs:79-116</code>).</li>
+          <li>The HS256 service-token path has no published key set and is unchanged
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.Grpc/Authentication/ServiceTokenServiceCollectionExtensions.cs:141</code>,
+          <code>:144</code>).</li>
+          <li>ADC&#39;s operational rotation procedure is its runbook (<code>MMCA.ADC/infra/OPERATIONS.md:618</code>).</li>
+          <li>The other anchors in this ADR were not re-verified in this revision; the changes to
+          <code>WebApplicationBuilderExtensions.Authentication.cs</code> sit after line 146, so the <code>:52-72</code> and
+          <code>:83-114</code> ranges cited above are unaffected.</li>
+          </ol>
           <h2 id="related">Related</h2>
           <p>ADR-007 (gRPC calls forward the validated JWT downstream via <code>JwtForwardingClientInterceptor</code>),
           ADR-008 (the extraction that split issuer and validator into separate processes), ADR-012 (the
@@ -593,6 +641,7 @@
             <li><a href="#revision-2026-10-21">Revision (2026-10-21)</a></li>
             <li><a href="#revision-2026-10-26">Revision (2026-10-26)</a></li>
             <li><a href="#revision-2026-10-28">Revision (2026-10-28)</a></li>
+            <li><a href="#revision-2026-11-04">Revision (2026-11-04)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

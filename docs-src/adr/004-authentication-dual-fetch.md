@@ -12,7 +12,10 @@ decision or behavior changed. Revised 2026-10-26: anchors refreshed after the AD
 service, AppHost and Bicep edits and the Common hosting and warmup-task edits moved them; no decision
 or behavior changed. Revised 2026-10-28: the validator bullet now records that the JWT authority is
 resolved fail-closed through `GetRequiredJwtAuthority()`, alongside the audience, and the ADC and
-Store Bicep anchors are refreshed.
+Store Bicep anchors are refreshed. Revised 2026-11-04: the JWKS document can publish more than one
+public key (`JwksSettings.AdditionalKeys`, MMCA.Common 1.277.0), every local validator accepts the
+published set, and the Rationale and Trade-offs now describe the staged signing-key rotation that
+makes possible (see Revision below).
 
 ## Context
 When the modular monolith is extracted into per-module service hosts behind a gateway (ADR-008),
@@ -37,10 +40,15 @@ opts into HS256 explicitly, alongside the `Jwt:SecretForKey` that choice require
 **Issuer side (Identity service).**
 - Identity signs access tokens with its RSA private key (RS256) and publishes only the matching
   public key (ADC's Identity service sets `"SigningAlgorithm": "RS256"`).
-- `IJwksProvider` / `RsaJwksProvider` materialize a `JsonWebKeySet` from a PEM public key
-  (`JwksSettings`: `Enabled` defaults to `false`, `KeyId` defaults to `"default"`, key supplied
-  inline via `RsaPublicKeyPem` or by `RsaPublicKeyPath`). When publishing is disabled or no key is
-  configured, the provider returns an empty key set, so the endpoint stays queryable.
+- `IJwksProvider` / `RsaJwksProvider` materialize a `JsonWebKeySet` from PEM public keys: the
+  current key first (`JwksSettings`: `Enabled` defaults to `false`, `KeyId` defaults to `"default"`,
+  key supplied inline via `RsaPublicKeyPem` or by `RsaPublicKeyPath`), then every
+  `JwksSettings.AdditionalKeys` entry (a `kid` plus an inline PEM or a path) in order
+  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Auth/RsaJwksProvider.cs:43`, `:47-50`;
+  `.../Auth/JwksSettings.cs:70`). An additional key is never used to sign: it is the next key staged
+  for a rotation or the previous key while its tokens are still live (`JwksSettings.cs:20-22`). When
+  publishing is disabled or no current key is configured, the provider returns an empty key set, so
+  the endpoint stays queryable (`RsaJwksProvider.cs:29-40`).
 - Two well-known endpoints are mapped centrally for every host (`MapJwksEndpoint`,
   `MapOidcDiscoveryEndpoint`), both anonymous: `/.well-known/jwks.json` and
   `/.well-known/openid-configuration`. The discovery document advertises the validation-relevant
@@ -93,7 +101,11 @@ opts into HS256 explicitly, alongside the `Jwt:SecretForKey` that choice require
 - `AddCommonAuthentication(configuration)` remains the in-process path: HS256 with the shared Base64
   secret (the monolith option), or RS256 validating against a locally configured public-key PEM (no
   JWKS fetch). It requires `RsaPublicKeyPem` when RS256 is selected and directs extracted services to
-  `AddForwardedJwtBearer` instead.
+  `AddForwardedJwtBearer` instead. In RS256 mode it also accepts every `Jwks:AdditionalKeys` entry,
+  the same set the JWKS document publishes
+  (`.../WebApplicationBuilderExtensions.Authentication.cs:151`, `:248`), and so does `TokenService`'s
+  refresh-flow validation of the expired access token it signed
+  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Auth/TokenService.cs:98`, `:194`).
 
 **Discovery routing and fallback.**
 - Discovery is wired by the AppHost helper `WithJwksDiscovery(identity, gateway?)`. Because the
@@ -126,7 +138,12 @@ opts into HS256 explicitly, alongside the `Jwt:SecretForKey` that choice require
 ## Rationale
 - **No shared signing key.** Only Identity can mint tokens; every other service holds only the public
   key it fetched, so a compromised non-Identity service cannot forge tokens, and key rotation is
-  publish-once at the issuer.
+  configured at the issuer alone.
+- **Rotation without a 401 wave.** Because the key set can hold more than one key, the issuer stages
+  the next public key in `AdditionalKeys` before switching to it (so a validator that caches the JWKS
+  document already knows it), switches signing, then keeps the previous public key published until
+  every token it signed has expired (`JwksSettings.cs:151-153`). No live token is rejected at the
+  switch.
 - **Discovery over hard-coded keys.** Fetching the key set via OIDC discovery means consumers need no
   per-service key configuration, and rotation does not require redeploying every validator.
 - **Origin-aligned issuer.** Deriving the issuer from the discovery document rather than pinning it
@@ -162,6 +179,11 @@ opts into HS256 explicitly, alongside the `Jwt:SecretForKey` that choice require
 - **Endpoint hygiene is on the issuer.** JWKS and discovery are anonymous by definition; the discovery
   doc returns `404` on non-issuer hosts and the JWKS provider returns an empty set when unconfigured,
   so only the real issuer advertises a key.
+- **Retiring a key runs on two clocks.** In-process validators (`AddCommonAuthentication`, the
+  `TokenService` refresh flow) build their key list once, so removing an additional key takes effect
+  when the process restarts; forwarded validators drop it when they next refresh the JWKS document,
+  on the JWT bearer handler's metadata refresh interval (`JwksSettings.cs:64-68`). A rotation is
+  therefore a sequence of configuration deploys, not one change.
 
 ## Revision (2026-10-01)
 Anchor-only refresh; no decision or rationale changed. The `AddForwardedJwtBearer` registration
@@ -310,6 +332,31 @@ Bicep anchors moved. The 2026-10-26 revision above keeps the anchors that were t
      and `MMCA.Store/Source/Hosting/MMCA.Store.AppHost/Program.cs:379-380`; the `AddForwardedJwtBearer`
      signature (`:52-57`), `RequireHttpsMetadata` resolution (`:64-66`) and warning-filter
      registration (`:68-72`) in `WebApplicationBuilderExtensions.Authentication.cs` are unchanged.
+
+## Revision (2026-11-04)
+MMCA.Common 1.277.0 lets the JWKS document publish more than one key. The signing model, the
+validator registration, discovery and the pinned algorithms are unchanged.
+1. `JwksSettings.AdditionalKeys` lists further public keys, each a `JwksAdditionalKey` with a `kid`
+   and an inline PEM or a path
+   (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Auth/JwksSettings.cs:70`, `:162`).
+   `RsaJwksProvider` publishes the current key first and the additional keys after it, in order
+   (`.../Auth/RsaJwksProvider.cs:43`, `:47-50`); signing stays on the current key
+   (`.../Auth/TokenService.cs:268`).
+2. Every local validator accepts the published set: the RS256 in-process validator
+   (`MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/WebApplicationBuilderExtensions.Authentication.cs:151`,
+   `:248`) and `TokenService`'s refresh-flow validation (`TokenService.cs:98`, `:194`). Forwarded
+   validators see the extra keys through the JWKS document they already fetch.
+3. `JwksSettings` implements `IValidatableObject` (`JwksSettings.cs:25`): an additional key with a
+   missing or over-64-character `kid`, a `kid` that repeats another entry or the current `KeyId`, or
+   key material that is absent or does not load fails options validation at startup
+   (`JwksSettings.cs:79-116`).
+4. The HS256 service-token path has no published key set and is unchanged
+   (`MMCA.Common/Source/Presentation/MMCA.Common.Grpc/Authentication/ServiceTokenServiceCollectionExtensions.cs:141`,
+   `:144`).
+5. ADC's operational rotation procedure is its runbook (`MMCA.ADC/infra/OPERATIONS.md:618`).
+6. The other anchors in this ADR were not re-verified in this revision; the changes to
+   `WebApplicationBuilderExtensions.Authentication.cs` sit after line 146, so the `:52-72` and
+   `:83-114` ranges cited above are unaffected.
 
 ## Related
 ADR-007 (gRPC calls forward the validated JWT downstream via `JwtForwardingClientInterceptor`),

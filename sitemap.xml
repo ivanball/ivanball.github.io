@@ -37,7 +37,7 @@
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/adr/index.html</loc>
-    <lastmod>2026-10-29</lastmod>
+    <lastmod>2026-11-04</lastmod>
     <priority>0.8</priority>
   </url>
   <url>
@@ -57,7 +57,7 @@
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/adr/004-authentication-dual-fetch.html</loc>
-    <lastmod>2026-10-29</lastmod>
+    <lastmod>2026-11-04</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
@@ -167,7 +167,7 @@
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/adr/026-caching-strategy.html</loc>
-    <lastmod>2026-10-29</lastmod>
+    <lastmod>2026-11-04</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
@@ -182,7 +182,7 @@
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/adr/029-authentication-brute-force-protection.html</loc>
-    <lastmod>2026-10-29</lastmod>
+    <lastmod>2026-11-04</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
@@ -387,7 +387,7 @@
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/adr/070-fail-fast-configuration-contract.html</loc>
-    <lastmod>2026-10-29</lastmod>
+    <lastmod>2026-11-04</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
@@ -422,7 +422,7 @@
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/adr/077-hybridcache-substrate.html</loc>
-    <lastmod>2026-10-29</lastmod>
+    <lastmod>2026-11-04</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
@@ -617,7 +617,7 @@
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/adr/116-identity-completions-opt-in.html</loc>
-    <lastmod>2026-11-02</lastmod>
+    <lastmod>2026-11-04</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
@@ -712,7 +712,7 @@
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/adr/135-application-namespace-keyspace-isolation.html</loc>
-    <lastmod>2026-10-29</lastmod>
+    <lastmod>2026-11-04</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
@@ -952,7 +952,7 @@
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/governance/common-RemediationBacklog.html</loc>
-    <lastmod>2026-10-29</lastmod>
+    <lastmod>2026-11-04</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
@@ -1002,7 +1002,7 @@
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/guides/common-CAPABILITIES.html</loc>
-    <lastmod>2026-11-02</lastmod>
+    <lastmod>2026-11-04</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
