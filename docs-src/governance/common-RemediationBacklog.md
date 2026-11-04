@@ -4,7 +4,7 @@ Derived from the [scorecard](common-ArchitectureScorecard.md): Maturity **97.3%*
 
 ## Open work at a glance
 
-No row carries scheduled work. Rows marked *closed* were weighed for whether their remaining work is worth building for one developer and about 67 peak users; each reason is under *Deliberate and accepted* (Closed as over-engineering, 2026-10-19), and a re-score must not re-propose one without new evidence. The #23 and #24 levers have shipped and both categories hold at Implementation 8; #10 has no lever identified yet.
+No row carries scheduled work. Common is judged against its design target, enterprise systems with millions of users and thousands concurrent; the consumer-load yardstick (one developer, about 67 peak users) belongs to the ADC and Store backlogs only. Rows marked *closed* carry their reason under *Deliberate and accepted* (Closed as over-engineering, 2026-10-19), and a re-score must not re-propose one without new evidence; a closure whose reason rested on consumer scale is re-weighed against the enterprise target, not re-scheduled automatically. The scale gaps found on 2026-11-04 are either shipped in v1.277.0 or held in the *Enterprise-scale register* below with a named trigger each. The #23 and #24 levers have shipped and both categories hold at Implementation 8; #10 has no lever identified yet.
 
 | Priority | # | Category | M / I | Band | Next action |
 |---|---|---|---|---|---|
@@ -159,7 +159,7 @@ Each was weighed and declined by user decision; none is scheduled, and a re-scor
 - **#12: the load tier on every pull request.** SQLite numbers on shared runners make a flaky merge gate and cost Actions minutes; the tier stays scheduled.
 
 ### [accepted] Closed as over-engineering, 2026-10-19
-Each row below was weighed against one developer, three consumer apps and about 67 peak users. None has a defect behind it that the existing gates miss, and each lever would add permanent machinery for a score point. These rows are the recorded cap; a re-score records them as such and must not re-propose one without new evidence (a named re-open trigger, a real incident, or an explicit ask).
+Each row below was weighed on 2026-10-19 against one developer, three consumer apps and about 67 peak users. That yardstick is the consumers', not Common's: Common targets enterprise scale (see *Open work at a glance*), so a row whose reason rests on consumer scale (FR-1's adopter trigger, #11 (b)'s second-team trigger, the #12 load tier, #17, #27) is re-weighed against that target before it is cited again, and the scale-sensitive items now live in the *Enterprise-scale register* with their triggers. None has a defect behind it that the existing gates miss, and each lever would add permanent machinery for a score point. These rows are the recorded cap; a re-score records them as such and must not re-propose one without new evidence (a named re-open trigger, a real incident, or an explicit ask).
 - **#1 SOLID.** The automatable halves (SRP ceiling, DIP layers, the LSP throw rule) are gated; OCP, ISP and type-sniffing have only metric proxies (the ISP ceiling is already declined). Raising S107/S1200 would fire on every DI constructor the dependency ceiling already governs. Moving `ApplicationDbContext` off its `IServiceProvider` resolution is a refactor with no observed defect behind it, and pulling `MMCA.Common.UI.Maui` into `CommonArchitectureMap` would need a MAUI TFM in the architecture test project for thin Essentials wrappers.
 - **#4 DDD.** Strategic DDD is a property of an application, and the consumers carry it. A strongly typed tenant id is a lockstep-wide breaking change for no observed defect; the `TenantId` marker gate stays.
 - **#11 (b) per-service or transport-level gRPC identity.** Per-service keys mean key distribution and rotation in every service for traffic that never leaves the Container Apps environment, the same cost profile that declined broker header signing. The shared-key token stays opt-in, and ADC's anonymous internal surfaces are accepted with compensating controls in the ADC backlog. **Re-open:** a service reachable from outside the environment, or a second team owning a service.
@@ -173,6 +173,33 @@ Each row below was weighed against one developer, three consumer apps and about 
 - **FR-3 `TResult : Result` constraint.** The architecture rule already asserts that command and query results derive from `Result`; a generic constraint would duplicate that gate with a breaking signature change.
 - **FR-4 preview extension types.** The watch condition is met: extension members are generally available in C# 14, the default language version for `net10.0`, so consumers do not need `LangVersion` preview to call the `extension(IServiceCollection)` registrations.
 - **FR-6 `MMCA.Common.UI.Maui` tests.** The capability contracts and fallbacks are tested in `MMCA.Common.UI.Tests`; what remains are thin Essentials wrappers verified on device, and ADC and Store now compile their MAUI heads weekly (`maui-audit.yml`).
+
+### [accepted] Enterprise-scale register, 2026-11-04
+A comparison against an external Web API curriculum, re-weighed against the enterprise target, found three gaps that were wrong at scale today and cheap to fix; they shipped in v1.277.0 (Common #668). Everything else is recorded here with the trigger that re-opens it, so nothing is lost and nothing is built ahead of need. A re-score cites a row as accepted until its trigger fires.
+
+Shipped in v1.277.0:
+- **Prefix invalidation without a keyspace SCAN (#12).** `HybridCacheService` folds a generation token per `:` boundary into every stored key (`Source/Core/MMCA.Common.Infrastructure/Caching/CachePrefixGenerations.cs:69`), so `RemoveByPrefixAsync` (`HybridCacheService.cs:313`) is one Redis write instead of a SCAN over every primary. `HybridCache.RemoveByTagAsync` was rejected on evidence: in Microsoft.Extensions.Caching.Hybrid 10.11.0 each process reads a tag's invalidation time once and never refreshes it, so another replica never sees it (recorded at `CachePrefixGenerations.cs:17-24`, found with a two-instance experiment); the committed two-instance Redis test pins the generation-token behaviour instead (`Tests/Core/MMCA.Common.Infrastructure.Redis.Tests/HybridCacheCrossInstanceInvalidationTests.cs:63`). `DistributedCacheService` and `RedisPrefixScanner` are removed; prefixes must end at `:` (`CachePrefixContract.cs:8`). See ADR-026 and ADR-077.
+- **Permission-grant snapshot interval 300 s to 30 s (#11).** `PermissionGrantSettings.CacheSeconds` (`Source/Core/MMCA.Common.Application/Auth/Permissions/PermissionGrantSettings.cs:34`). Only the token-minting Identity service reads stored grants, so the cost is one small query per Identity replica per 30 s, with no pub/sub. See ADR-116.
+- **JWKS publishes more than one key (#11).** `JwksSettings.AdditionalKeys` (`Source/Core/MMCA.Common.Infrastructure/Auth/JwksSettings.cs:70`) are published after the current key, signing stays on the current key, and every local validator accepts the set, so a signing key rotates without a 401 wave. Service-token HS256 is untouched. See ADR-004.
+
+Deferred, each with its re-open trigger:
+
+| Item | Trigger |
+|---|---|
+| Count-free export (an export-only query method with an unknown total). Dropped from v1.277.0: `EntityCsvExporter` uses `TotalItemCount` for last-page and truncation detection, and a flag on `IEntityQueryService.GetAllAsync` breaks about 100 consumer mock setups | export of a table past about 1M rows where COUNT shows in the export trace |
+| Outbox claim with READPAST / SKIP LOCKED, per-source parallelism | measured outbox lag with more than about 3 replicas draining one source |
+| Load test at target scale against a deployed sample | first enterprise adopter, or a capacity claim in sales material |
+| Keyset paging on generic controllers, keyset export | a consumer table past about 5M rows behind a generic list endpoint |
+| Read-replica routing | a consumer database CPU-bound on reads |
+| Bulk write path, audit via the outbox | an import or batch job past about 10k rows per run |
+| DbContext pool per data source | a benchmark showing context creation as a top-3 request cost |
+| Request timeouts, Kestrel limits | first externally exposed API with untrusted clients at volume |
+| Generic OIDC / Entra / Okta SSO, SCIM | first enterprise adopter requiring SSO |
+| API keys or client credentials, webhooks, versioned OpenAPI with Sunset | first B2B integrator, or a real v2 |
+| Search provider abstraction | a free-text search requirement over a large table |
+| Azure SignalR Service adapter, SSE fallback | about 10k concurrent hub connections, or a corporate proxy blocking WebSockets |
+
+Two candidates were dropped rather than deferred: wiring `AddApplicationProfiling()` into the consumers (MiniProfiler is off in every ADC service, so it would profile nothing), and graceful-shutdown tests with a custom `HostOptions.ShutdownTimeout` (the .NET 30 s default matches the Container Apps grace period, and the outbox and internal-command leases already make a cut-off batch safe). The configuration a host already has for scale is listed in the *Enterprise deployment checklist* of [the capabilities guide](../guides/common-CAPABILITIES.md).
 
 ### [n/a] #23 · Running `wasm-payload-budget` in Common's own `ci.yml`
 Common has no WASM app of its own, so there is no payload for its `ci.yml` to measure; the composite action ships here (`.github/actions/wasm-payload-budget/action.yml`) for the consumers to run. The consumers' required check ships (`wasm-payload-budget` is required in ADC and Store branch protection). The category score is unaffected.

@@ -116,7 +116,7 @@
           <h1 id="mmcacommon-architecture-remediation-backlog">MMCA.Common: Architecture Remediation Backlog</h1>
           <p>Derived from the <a href="common-ArchitectureScorecard.html">scorecard</a>: Maturity <strong>97.3%</strong> (319/328) and Implementation <strong>85.4%</strong> (700/820), framework v1.265.1, evidence as of 2026-10-29. Tasks are ranked on both scorecard axes, one band per axis. The <strong>maturity band</strong> holds every category with maturity &lt; 4, ranked by <strong>priority = (4 − maturity) × weight</strong>; the <strong>implementation band</strong> holds every category with implementation &lt;= 8, ranked by **implPriority = max(0, 9 − implementation) × weight** (target 9: a 10 is awardable at re-score time, but it is recognition, not scheduled work). Ties break by weight descending, then category number. A category reaches the Resolved table only at maturity 4 AND implementation &gt;= 9. The maturity band holds <strong>4 categories, 9 gap points</strong>; the implementation band holds <strong>17 categories, 38 gap points</strong>. Levers are cited only where this ledger or the scorecard records one; an unnamed lever is named at the next re-score, never invented here.</p>
           <h2 id="open-work-at-a-glance">Open work at a glance</h2>
-          <p>No row carries scheduled work. Rows marked <em>closed</em> were weighed for whether their remaining work is worth building for one developer and about 67 peak users; each reason is under <em>Deliberate and accepted</em> (Closed as over-engineering, 2026-10-19), and a re-score must not re-propose one without new evidence. The #23 and #24 levers have shipped and both categories hold at Implementation 8; #10 has no lever identified yet.</p>
+          <p>No row carries scheduled work. Common is judged against its design target, enterprise systems with millions of users and thousands concurrent; the consumer-load yardstick (one developer, about 67 peak users) belongs to the ADC and Store backlogs only. Rows marked <em>closed</em> carry their reason under <em>Deliberate and accepted</em> (Closed as over-engineering, 2026-10-19), and a re-score must not re-propose one without new evidence; a closure whose reason rested on consumer scale is re-weighed against the enterprise target, not re-scheduled automatically. The scale gaps found on 2026-11-04 are either shipped in v1.277.0 or held in the <em>Enterprise-scale register</em> below with a named trigger each. The #23 and #24 levers have shipped and both categories hold at Implementation 8; #10 has no lever identified yet.</p>
           <div class="table-wrap"><table>
           <thead>
           <tr>
@@ -573,7 +573,7 @@
           <li><strong>#12: the load tier on every pull request.</strong> SQLite numbers on shared runners make a flaky merge gate and cost Actions minutes; the tier stays scheduled.</li>
           </ul>
           <h3 id="accepted-closed-as-over-engineering-2026-10-19">[accepted] Closed as over-engineering, 2026-10-19</h3>
-          <p>Each row below was weighed against one developer, three consumer apps and about 67 peak users. None has a defect behind it that the existing gates miss, and each lever would add permanent machinery for a score point. These rows are the recorded cap; a re-score records them as such and must not re-propose one without new evidence (a named re-open trigger, a real incident, or an explicit ask).</p>
+          <p>Each row below was weighed on 2026-10-19 against one developer, three consumer apps and about 67 peak users. That yardstick is the consumers&#39;, not Common&#39;s: Common targets enterprise scale (see <em>Open work at a glance</em>), so a row whose reason rests on consumer scale (FR-1&#39;s adopter trigger, #11 (b)&#39;s second-team trigger, the #12 load tier, #17, #27) is re-weighed against that target before it is cited again, and the scale-sensitive items now live in the <em>Enterprise-scale register</em> with their triggers. None has a defect behind it that the existing gates miss, and each lever would add permanent machinery for a score point. These rows are the recorded cap; a re-score records them as such and must not re-propose one without new evidence (a named re-open trigger, a real incident, or an explicit ask).</p>
           <ul>
           <li><strong>#1 SOLID.</strong> The automatable halves (SRP ceiling, DIP layers, the LSP throw rule) are gated; OCP, ISP and type-sniffing have only metric proxies (the ISP ceiling is already declined). Raising S107/S1200 would fire on every DI constructor the dependency ceiling already governs. Moving <code>ApplicationDbContext</code> off its <code>IServiceProvider</code> resolution is a refactor with no observed defect behind it, and pulling <code>MMCA.Common.UI.Maui</code> into <code>CommonArchitectureMap</code> would need a MAUI TFM in the architecture test project for thin Essentials wrappers.</li>
           <li><strong>#4 DDD.</strong> Strategic DDD is a property of an application, and the consumers carry it. A strongly typed tenant id is a lockstep-wide breaking change for no observed defect; the <code>TenantId</code> marker gate stays.</li>
@@ -589,6 +589,72 @@
           <li><strong>FR-4 preview extension types.</strong> The watch condition is met: extension members are generally available in C# 14, the default language version for <code>net10.0</code>, so consumers do not need <code>LangVersion</code> preview to call the <code>extension(IServiceCollection)</code> registrations.</li>
           <li><strong>FR-6 <code>MMCA.Common.UI.Maui</code> tests.</strong> The capability contracts and fallbacks are tested in <code>MMCA.Common.UI.Tests</code>; what remains are thin Essentials wrappers verified on device, and ADC and Store now compile their MAUI heads weekly (<code>maui-audit.yml</code>).</li>
           </ul>
+          <h3 id="accepted-enterprise-scale-register-2026-11-04">[accepted] Enterprise-scale register, 2026-11-04</h3>
+          <p>A comparison against an external Web API curriculum, re-weighed against the enterprise target, found three gaps that were wrong at scale today and cheap to fix; they shipped in v1.277.0 (Common #668). Everything else is recorded here with the trigger that re-opens it, so nothing is lost and nothing is built ahead of need. A re-score cites a row as accepted until its trigger fires.</p>
+          <p>Shipped in v1.277.0:</p>
+          <ul>
+          <li><strong>Prefix invalidation without a keyspace SCAN (#12).</strong> <code>HybridCacheService</code> folds a generation token per <code>:</code> boundary into every stored key (<code>Source/Core/MMCA.Common.Infrastructure/Caching/CachePrefixGenerations.cs:69</code>), so <code>RemoveByPrefixAsync</code> (<code>HybridCacheService.cs:313</code>) is one Redis write instead of a SCAN over every primary. <code>HybridCache.RemoveByTagAsync</code> was rejected on evidence: in Microsoft.Extensions.Caching.Hybrid 10.11.0 each process reads a tag&#39;s invalidation time once and never refreshes it, so another replica never sees it (recorded at <code>CachePrefixGenerations.cs:17-24</code>, found with a two-instance experiment); the committed two-instance Redis test pins the generation-token behaviour instead (<code>Tests/Core/MMCA.Common.Infrastructure.Redis.Tests/HybridCacheCrossInstanceInvalidationTests.cs:63</code>). <code>DistributedCacheService</code> and <code>RedisPrefixScanner</code> are removed; prefixes must end at <code>:</code> (<code>CachePrefixContract.cs:8</code>). See ADR-026 and ADR-077.</li>
+          <li><strong>Permission-grant snapshot interval 300 s to 30 s (#11).</strong> <code>PermissionGrantSettings.CacheSeconds</code> (<code>Source/Core/MMCA.Common.Application/Auth/Permissions/PermissionGrantSettings.cs:34</code>). Only the token-minting Identity service reads stored grants, so the cost is one small query per Identity replica per 30 s, with no pub/sub. See ADR-116.</li>
+          <li><strong>JWKS publishes more than one key (#11).</strong> <code>JwksSettings.AdditionalKeys</code> (<code>Source/Core/MMCA.Common.Infrastructure/Auth/JwksSettings.cs:70</code>) are published after the current key, signing stays on the current key, and every local validator accepts the set, so a signing key rotates without a 401 wave. Service-token HS256 is untouched. See ADR-004.</li>
+          </ul>
+          <p>Deferred, each with its re-open trigger:</p>
+          <div class="table-wrap"><table>
+          <thead>
+          <tr>
+          <th>Item</th>
+          <th>Trigger</th>
+          </tr>
+          </thead>
+          <tbody><tr>
+          <td>Count-free export (an export-only query method with an unknown total). Dropped from v1.277.0: <code>EntityCsvExporter</code> uses <code>TotalItemCount</code> for last-page and truncation detection, and a flag on <code>IEntityQueryService.GetAllAsync</code> breaks about 100 consumer mock setups</td>
+          <td>export of a table past about 1M rows where COUNT shows in the export trace</td>
+          </tr>
+          <tr>
+          <td>Outbox claim with READPAST / SKIP LOCKED, per-source parallelism</td>
+          <td>measured outbox lag with more than about 3 replicas draining one source</td>
+          </tr>
+          <tr>
+          <td>Load test at target scale against a deployed sample</td>
+          <td>first enterprise adopter, or a capacity claim in sales material</td>
+          </tr>
+          <tr>
+          <td>Keyset paging on generic controllers, keyset export</td>
+          <td>a consumer table past about 5M rows behind a generic list endpoint</td>
+          </tr>
+          <tr>
+          <td>Read-replica routing</td>
+          <td>a consumer database CPU-bound on reads</td>
+          </tr>
+          <tr>
+          <td>Bulk write path, audit via the outbox</td>
+          <td>an import or batch job past about 10k rows per run</td>
+          </tr>
+          <tr>
+          <td>DbContext pool per data source</td>
+          <td>a benchmark showing context creation as a top-3 request cost</td>
+          </tr>
+          <tr>
+          <td>Request timeouts, Kestrel limits</td>
+          <td>first externally exposed API with untrusted clients at volume</td>
+          </tr>
+          <tr>
+          <td>Generic OIDC / Entra / Okta SSO, SCIM</td>
+          <td>first enterprise adopter requiring SSO</td>
+          </tr>
+          <tr>
+          <td>API keys or client credentials, webhooks, versioned OpenAPI with Sunset</td>
+          <td>first B2B integrator, or a real v2</td>
+          </tr>
+          <tr>
+          <td>Search provider abstraction</td>
+          <td>a free-text search requirement over a large table</td>
+          </tr>
+          <tr>
+          <td>Azure SignalR Service adapter, SSE fallback</td>
+          <td>about 10k concurrent hub connections, or a corporate proxy blocking WebSockets</td>
+          </tr>
+          </tbody></table></div>
+          <p>Two candidates were dropped rather than deferred: wiring <code>AddApplicationProfiling()</code> into the consumers (MiniProfiler is off in every ADC service, so it would profile nothing), and graceful-shutdown tests with a custom <code>HostOptions.ShutdownTimeout</code> (the .NET 30 s default matches the Container Apps grace period, and the outbox and internal-command leases already make a cut-off batch safe). The configuration a host already has for scale is listed in the <em>Enterprise deployment checklist</em> of <a href="../guides/common-CAPABILITIES.html">the capabilities guide</a>.</p>
           <h3 id="na-23--running-wasm-payload-budget-in-commons-own-ciyml">[n/a] #23 · Running <code>wasm-payload-budget</code> in Common&#39;s own <code>ci.yml</code></h3>
           <p>Common has no WASM app of its own, so there is no payload for its <code>ci.yml</code> to measure; the composite action ships here (<code>.github/actions/wasm-payload-budget/action.yml</code>) for the consumers to run. The consumers&#39; required check ships (<code>wasm-payload-budget</code> is required in ADC and Store branch protection). The category score is unaffected.</p>
           <h3 id="accepted-dual-registry-publishing-and-the-release-workflow-filename-is-load-bearing">[accepted] Dual-registry publishing, and the release-workflow filename is load-bearing</h3>

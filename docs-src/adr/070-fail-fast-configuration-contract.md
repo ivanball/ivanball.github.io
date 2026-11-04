@@ -40,6 +40,8 @@ reads never placed in the container are stated as outside the exception inventor
 Revised 2026-10-28: Store's Sales module now binds eight validated sections, its Application layer names
 thirteen `IOptions` injections, and its Sales Infrastructure readers include `StripeTaxCalculator` and
 `PaymentReconciliationSettingsValidator`; source citations re-anchored.
+Revised 2026-11-04: `JwksSettings` now implements `IValidatableObject` (MMCA.Common 1.277.0), so five
+settings types use it, and the `TokenService` constructor anchors moved; see Revision below.
 
 ## Context
 Every host in the workspace reads a dozen or more configuration sections: connection strings, SMTP,
@@ -170,8 +172,8 @@ value through `IOptions<T>` of the concrete settings class.**
   RS256 with no private key fails to boot rather than failing to sign its first token.
 - **`IOptions<T>` of the concrete settings class is the one resolution surface.** Code that needs a
   bound section takes it at the point of use: `TokenService` takes `IOptions<JwtSettings>`
-  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Auth/TokenService.cs:72`) beside an optional
-  `IOptions<JwksSettings>` that names the signing key in the token's `kid` header (`:76`), both of
+  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Auth/TokenService.cs:73`) beside an optional
+  `IOptions<JwksSettings>` that names the signing key in the token's `kid` header (`:77`), both of
   `SmtpEmailSender`'s constructors take `IOptions<SmtpSettings>` (`.../Mail/SmtpEmailSender.cs:29` and
   `:50`), `RepositoryFactory` takes
   `IOptions<ApplicationSettings>`
@@ -407,14 +409,18 @@ between to fall out of step with it.
   Infrastructure ones. The alternative buys that purity with an alias type per settings class, and this
   record takes the pipeline over the second type.
 - **Data annotations are the vocabulary.** Anything richer needs `IValidatableObject` or a custom
-  `IValidateOptions<T>`, and both escape hatches are in use in the framework: the former four times, the
+  `IValidateOptions<T>`, and both escape hatches are in use in the framework: the former five times, the
   latter eight times. `JwtSettings` implements `IValidatableObject`
   (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Auth/JwtSettings.cs:16`), and so do `AiSettings`
   (`MMCA.Common/Source/Core/MMCA.Common.AI/AiSettings.cs:22`), whose section is bound with the full chain
   (`MMCA.Common/Source/Core/MMCA.Common.AI/DependencyInjection.cs:123-126`), `ContentPolicySettings`
   (`MMCA.Common/Source/Core/MMCA.Common.AI/Guardrails/ContentPolicySettings.cs:23`) and
   `ServiceTokenSettings`
-  (`MMCA.Common/Source/Presentation/MMCA.Common.Grpc/Authentication/ServiceTokenSettings.cs:18`). Eight validator
+  (`MMCA.Common/Source/Presentation/MMCA.Common.Grpc/Authentication/ServiceTokenSettings.cs:18`), and
+  `JwksSettings` (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Auth/JwksSettings.cs:25`), whose
+  section is bound with the full chain (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:197-200`)
+  and which fails startup on an additional key with a missing, over-long or repeated `kid` (the
+  current `KeyId` included) or with key material that is absent or does not load (`:79-116`). Eight validator
   classes sit beside a chain instead, each registered with `TryAddEnumerable` so two modules calling the
   same registration method cannot run the validation twice.
   `AiProviderValidator`
@@ -652,6 +658,26 @@ layer three injections.
    registration (`SalesModule.cs:84-85`, the reason at `:82-83`); ADC UI Web `MapClientConfigEndpoint`
    (`MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs:272`); ADC Engagement `PointsAwarder`
    (`.../Points/Services/PointsAwarder.cs:32`).
+
+## Revision (2026-11-04)
+MMCA.Common 1.277.0 adds `JwksSettings.AdditionalKeys` (see
+[ADR-004](004-authentication-dual-fetch.md)). The decision, the rationale and the framework
+registration count are unchanged: `JwksSettings` keeps its existing chain.
+1. `JwksSettings` now implements `IValidatableObject`
+   (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Auth/JwksSettings.cs:25`, `Validate` at `:79`),
+   because the annotations on `JwksAdditionalKey` are not reached by `ValidateDataAnnotations()` on the
+   parent list. Every additional key needs a `kid` of at most 64 characters, distinct from every other
+   entry and from the current `KeyId` (`:81`, `:88-99`), and key material that loads (`:101-114`), so
+   a duplicate `kid` or a malformed PEM fails the host at startup. The Trade-offs count of
+   `IValidatableObject` types is now five.
+2. `TokenService` gained a field above its constructor, so the `IOptions<JwtSettings>` and
+   `IOptions<JwksSettings>` parameters moved to
+   `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Auth/TokenService.cs:73` and `:77`.
+3. Anchors re-verified against current source: the `JwksSettings` chain
+   (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:197-200`), the
+   `JwtSettings` chain in `AddCommonAuthentication`
+   (`MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/WebApplicationBuilderExtensions.Authentication.cs:135-138`)
+   and `RsaJwksProvider` (`.../Auth/RsaJwksProvider.cs:14`).
 
 ## Related
 ADR-025 (startup warm-up and readiness gating: this contract decides what happens *before* a host reaches

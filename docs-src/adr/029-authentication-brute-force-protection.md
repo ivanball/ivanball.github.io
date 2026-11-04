@@ -25,6 +25,9 @@ still answers 401; see Revision below.
 Revised 2026-10-21: the timing burn for an address with no usable credential is a discarded hash rather than a decoy verify, a wrong second-factor code also increments the login counter, change-password rejects a credential-less account before its lockout check, and the hybrid-cache checks read past L1; anchors refreshed.
 Revised 2026-10-26: the password verifier accepts a legacy 64-byte hash or a versioned header-plus-hash (not a 64-byte hash only); the login branches no longer all pay the same key-derivation cost, since a legacy record verifies at 600,000 iterations while the burn hashes at the current 210,000 (the gap ADR-133 accepts); a successful sign-in now ends with a best-effort password rehash; and the live anchors were refreshed.
 Revised 2026-10-28: anchors refreshed after Common #615 and ADC #298 moved them.
+Revised 2026-11-04 (Common v1.277.0 removed `DistributedCacheService`, so `HybridCacheService` is the only
+shared-store implementation the counters run on; see Revision below).
+
 ## Context
 ADR-019's global rate limiter is **principal-keyed**: it caps requests per authenticated principal,
 and anonymous traffic is exempt with one metered exception, the configured real-time hub path
@@ -83,17 +86,19 @@ table.
   never matches a user but still increments a counter, falls back to the same trim-and-lowercase shape
   so its variants collapse too.
 - **Counter increments are a read-modify-write, not atomic, by decision.**
-  `ICacheService.IncrementAsync` is a default interface member shaped as get, add one, set.
-  `DistributedCacheService` overrides it but keeps that same shape instead of issuing Redis `INCR`:
+  `ICacheService.IncrementAsync` is a default interface member shaped as get, add one, set
+  (`MMCA.Common/Source/Core/MMCA.Common.Application/Interfaces/ICacheService.cs:133`). The shared-store
+  implementation keeps that same shape instead of issuing Redis `INCR` (the remarks at `:126-132`):
   `INCR` writes a Redis *string* while `StackExchangeRedisCache` stores every entry as a Redis *hash*,
   so mixing the two formats at one key makes the next read of that counter fail with `WRONGTYPE`, which
   surfaces as a 500 on the login and registration endpoints that own it. A readable counter was worth
   more than an atomic one. `MemoryCacheService` does not override the member either, so memory mode runs
-  the same default. `HybridCacheService`, the opt-in two-level implementation a host selects by calling
+  the same default. `HybridCacheService`, the two-level implementation and, since Common v1.277.0 removed
+  `DistributedCacheService`, the only shared-store one, which a host selects by calling
   `AddCommonHybridCache` (which replaces whatever `ICacheService` was registered) or its guarded form
   `AddCommonHybridCacheWhenRedisConfigured`, which registers it only when the Redis connection string
-  is set (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.Caching.cs:218-230`),
-  overrides it (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Caching/HybridCacheService.cs:327`) with the
+  is set (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.Caching.cs:221-233`),
+  overrides it (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Caching/HybridCacheService.cs:342`) with the
   same read-modify-write shape and additionally forces both legs past the in-process L1: an L1 hit would
   let a replica read a stale counter and write it back near its starting value, which is a security
   control quietly weakened by a cache optimization. The checks read the same way: the lockout flag and
@@ -214,7 +219,8 @@ and runs check, increment and reset around the current-password verify (`:89`, `
 signed-in session cannot guess the current password without hitting the same exponential lockout.
 Its counter is keyed `password-change:{userId}` (`:128-129`), a principal key rather than an email,
 so the "keyed by submitted email / client IP" bullet now names this one exception. Second, the
-scale-out path is the hybrid cache rather than `DistributedCacheService` alone: every ADC and Store
+scale-out path is the hybrid cache rather than `DistributedCacheService` alone (and since Common v1.277.0
+the hybrid cache only: `DistributedCacheService` is removed, see the Revision (2026-11-04)): every ADC and Store
 service host calls the guarded `AddCommonHybridCacheWhenRedisConfigured`
 (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.Caching.cs:200-212`), so with
 Redis configured the counters run through `HybridCacheService.IncrementAsync`
@@ -405,10 +411,27 @@ lines of the 2026-10-26 pass) record those passes as written.
    at `MMCA.Common/CHANGELOG.md:863` (Common 1.219.0 lockout to `TooManyRequests`, heading `:851`)
    and `:226` (Common 1.252.0 best-effort rehash, heading `:214`).
 
+## Revision (2026-11-04)
+Common v1.277.0 (Common PR #668) removed `DistributedCacheService`. No behavior of this record changed:
+the counters stay a non-atomic read-modify-write with both legs on L2, and every ADC and Store host
+already ran them on `HybridCacheService`. What changed is that the hybrid cache is now the only
+shared-store implementation: a host that registers a distributed cache without `AddCommonHybridCache`
+fails when `ICacheService` resolves, rather than falling back to a per-replica store
+(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.Caching.cs:80-91`). The same
+release folds prefix-invalidation generation tokens into every stored key; on a failed token read, a
+boundary the process never saw reads as the shared baseline, so the lockout flag and the failure counters
+stay in the keyspace every replica shares during a Redis outage
+(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Caching/CachePrefixGenerations.cs:52-58`). The
+Decision and Alternatives rejected entries now name `HybridCacheService.IncrementAsync`
+(`HybridCacheService.cs:342`) and the guarded helper at `DependencyInjection.Caching.cs:221-233`; the
+dated revisions above that name `DistributedCacheService` record the code as it stood then.
+
 ## Alternatives rejected
 - **Making the failed-attempt and registration counters atomic.** The increment in
-  `DistributedCacheService.IncrementAsync` is a read-modify-write through `IDistributedCache` and is
-  knowingly not atomic (Common v1.125.2, PR #119). It once used Redis `INCR`, which is atomic but
+  `HybridCacheService.IncrementAsync`
+  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Caching/HybridCacheService.cs:342`) is a
+  read-modify-write against the `IDistributedCache` L2 only (both legs bypass L1) and is knowingly not
+  atomic (decided in Common v1.125.2, PR #119, on the since-removed `DistributedCacheService`). It once used Redis `INCR`, which is atomic but
   writes a Redis **string**, while `StackExchangeRedisCache` stores every entry as a Redis **hash**,
   so the next read of that key returned `WRONGTYPE` and answered 500 from both registration and
   login. Two remedies were weighed on 2026-07-25 and both declined: a Lua script written against the

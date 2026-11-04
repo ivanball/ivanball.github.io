@@ -245,7 +245,9 @@
           <h1 id="adr-135-one-application-namespace-isolates-shared-infrastructure-keyspaces">ADR-135: One Application Namespace Isolates Shared Infrastructure Keyspaces</h1>
           <h2 id="status">Status</h2>
           <p>Accepted (2026-10-26). Revised 2026-10-28: the Redis output-cache store is now a fifth namespaced
-          keyspace (its <code>InstanceName</code> defaults to the cache key prefix), and the cache anchors are refreshed.</p>
+          keyspace (its <code>InstanceName</code> defaults to the cache key prefix), and the cache anchors are refreshed. Revised 2026-11-04: Common v1.277.0
+          removed <code>DistributedCacheService</code>; the namespace reaches the cache through <code>HybridCacheService</code>, which
+          applies it to both its entry keys and its generation keys. See the Revision (2026-11-04).</p>
           <h2 id="context">Context</h2>
           <p>Several framework subsystems write into infrastructure that more than one deployed application can
           point at: Redis (distributed cache entries, distributed-lock keys, distributed rate-limit counters,
@@ -284,15 +286,17 @@
           <code>:67</code>), so a host that configures nothing still gets its own keyspace.</li>
           <li><strong>Distributed cache and distributed lock keys.</strong> <code>CacheKeyNamespace.From(IServiceProvider)</code> uses an
           explicit <code>Cache:KeyPrefix</code> when set and otherwise <code>&quot;{namespace}:&quot;</code>
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Caching/CacheKeyPrefix.cs:73-88</code>, the
-          <code>Resolve</code> call at <code>:83</code>). That one namespace is passed to <code>DistributedCacheService</code>
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.Caching.cs:83</code>, <code>:88</code>),
-          to <code>RedisDistributedLock</code> (<code>:111-112</code>) and to the opt-in <code>HybridCacheService</code> (<code>:189</code>, <code>:195</code>).
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Caching/CacheKeyPrefix.cs:72-87</code>, the
+          <code>Resolve</code> call at <code>:82</code>). That one namespace is passed to <code>HybridCacheService</code>, the shared-store
+          cache (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.Caching.cs:192</code>,
+          <code>:198</code>), which qualifies both its <code>hc:</code> entry keys and its <code>hcg:</code> prefix-invalidation generation keys
+          with it (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Caching/HybridCacheService.cs:417</code>,
+          <code>CachePrefixGenerations.cs:278</code>), and to <code>RedisDistributedLock</code> (<code>DependencyInjection.Caching.cs:114-115</code>).
           The in-process <code>MemoryCacheService</code> takes no prefix, because its keyspace is private to the
-          process (<code>:92-95</code>).</li>
+          process (<code>:94-97</code>).</li>
           <li><strong>Redis output-cache store.</strong> <code>AddCaching</code> post-configures <code>RedisOutputCacheOptions.InstanceName</code>
           to the same <code>CacheKeyNamespace</code> prefix when the host left it empty, and keeps an <code>InstanceName</code> a
-          host set explicitly (<code>DependencyInjection.Caching.cs:66-73</code>, the keep-explicit check at <code>:69</code>).
+          host set explicitly (<code>DependencyInjection.Caching.cs:69-76</code>, the keep-explicit check at <code>:72</code>).
           The registration comment records that the store prefixes both its value keys and its tag keys
           with that name, so tag eviction sees the same key shape (<code>:60-65</code>); no test pins that key shape. <code>AddInfrastructure</code> calls <code>AddCaching</code>
           (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:140</code>), so no consumer
@@ -407,9 +411,23 @@
           <li>&quot;Adopting the default renames resources&quot; now also records that the output cache starts cold under
           the new prefix (<code>MMCA.Common/CHANGELOG.md:47</code>).</li>
           <li>Anchors re-verified against current source: <code>DependencyInjection.Caching.cs:67</code> -&gt; <code>:83</code>, <code>:88</code>
-          (<code>DistributedCacheService</code>); <code>:95-96</code> -&gt; <code>:111-112</code> (<code>RedisDistributedLock</code>); <code>:173</code> -&gt; <code>:189</code>,
+          (<code>DistributedCacheService</code>, removed in Common v1.277.0; see the Revision (2026-11-04)); <code>:95-96</code> -&gt; <code>:111-112</code> (<code>RedisDistributedLock</code>); <code>:173</code> -&gt; <code>:189</code>,
           <code>:195</code> (<code>HybridCacheService</code>); <code>:76</code> -&gt; <code>:92-95</code> (<code>MemoryCacheService</code>);
           <code>MMCA.Common/CHANGELOG.md:2367-2374</code> -&gt; <code>:2410-2417</code> (the SEC-Common-53 entry).</li>
+          </ol>
+          <h2 id="revision-2026-11-04">Revision (2026-11-04)</h2>
+          <p>Common v1.277.0 (Common PR #668) removed <code>DistributedCacheService</code>. The resolver, its precedence and
+          every covered keyspace are unchanged; the cache keyspace is now written by <code>HybridCacheService</code> alone.</p>
+          <ol>
+          <li>The Decision&#39;s cache bullet names <code>HybridCacheService</code> as the namespace&#39;s cache consumer
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.Caching.cs:192</code>, <code>:198</code>).
+          The same namespace also prefixes the prefix-invalidation generation keys, <code>{namespace}hcg:{prefix}</code>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Caching/CachePrefixGenerations.cs:278</code>), so two
+          applications on one Redis cannot invalidate each other&#39;s prefixes.</li>
+          <li>Anchors re-verified against current source: <code>CacheKeyPrefix.cs:72-87</code> (<code>Resolve</code> at <code>:82</code>);
+          <code>DependencyInjection.Caching.cs</code> <code>RedisDistributedLock</code> <code>:114-115</code>, <code>MemoryCacheService</code> <code>:94-97</code>,
+          output-cache <code>PostConfigure</code> <code>:69-76</code> (keep-explicit check <code>:72</code>). The 2026-10-28 Revision&#39;s anchors
+          record that pass as written.</li>
           </ol>
           <h2 id="related">Related</h2>
           <ul>
@@ -443,6 +461,7 @@
             <li><a href="#rationale">Rationale</a></li>
             <li><a href="#trade-offs">Trade-offs</a></li>
             <li><a href="#revision-2026-10-28">Revision (2026-10-28)</a></li>
+            <li><a href="#revision-2026-11-04">Revision (2026-11-04)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

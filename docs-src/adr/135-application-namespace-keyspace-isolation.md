@@ -2,7 +2,9 @@
 
 ## Status
 Accepted (2026-10-26). Revised 2026-10-28: the Redis output-cache store is now a fifth namespaced
-keyspace (its `InstanceName` defaults to the cache key prefix), and the cache anchors are refreshed.
+keyspace (its `InstanceName` defaults to the cache key prefix), and the cache anchors are refreshed. Revised 2026-11-04: Common v1.277.0
+removed `DistributedCacheService`; the namespace reaches the cache through `HybridCacheService`, which
+applies it to both its entry keys and its generation keys. See the Revision (2026-11-04).
 
 ## Context
 Several framework subsystems write into infrastructure that more than one deployed application can
@@ -45,15 +47,17 @@ SignalR backplane, broker endpoint names), and isolation is the default rather t
   `:67`), so a host that configures nothing still gets its own keyspace.
 - **Distributed cache and distributed lock keys.** `CacheKeyNamespace.From(IServiceProvider)` uses an
   explicit `Cache:KeyPrefix` when set and otherwise `"{namespace}:"`
-  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Caching/CacheKeyPrefix.cs:73-88`, the
-  `Resolve` call at `:83`). That one namespace is passed to `DistributedCacheService`
-  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.Caching.cs:83`, `:88`),
-  to `RedisDistributedLock` (`:111-112`) and to the opt-in `HybridCacheService` (`:189`, `:195`).
+  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Caching/CacheKeyPrefix.cs:72-87`, the
+  `Resolve` call at `:82`). That one namespace is passed to `HybridCacheService`, the shared-store
+  cache (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.Caching.cs:192`,
+  `:198`), which qualifies both its `hc:` entry keys and its `hcg:` prefix-invalidation generation keys
+  with it (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Caching/HybridCacheService.cs:417`,
+  `CachePrefixGenerations.cs:278`), and to `RedisDistributedLock` (`DependencyInjection.Caching.cs:114-115`).
   The in-process `MemoryCacheService` takes no prefix, because its keyspace is private to the
-  process (`:92-95`).
+  process (`:94-97`).
 - **Redis output-cache store.** `AddCaching` post-configures `RedisOutputCacheOptions.InstanceName`
   to the same `CacheKeyNamespace` prefix when the host left it empty, and keeps an `InstanceName` a
-  host set explicitly (`DependencyInjection.Caching.cs:66-73`, the keep-explicit check at `:69`).
+  host set explicitly (`DependencyInjection.Caching.cs:69-76`, the keep-explicit check at `:72`).
   The registration comment records that the store prefixes both its value keys and its tag keys
   with that name, so tag eviction sees the same key shape (`:60-65`); no test pins that key shape. `AddInfrastructure` calls `AddCaching`
   (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:140`), so no consumer
@@ -167,9 +171,23 @@ Redis output-cache store, which is now namespaced like the cache and lock keys.
 3. "Adopting the default renames resources" now also records that the output cache starts cold under
    the new prefix (`MMCA.Common/CHANGELOG.md:47`).
 4. Anchors re-verified against current source: `DependencyInjection.Caching.cs:67` -> `:83`, `:88`
-   (`DistributedCacheService`); `:95-96` -> `:111-112` (`RedisDistributedLock`); `:173` -> `:189`,
+   (`DistributedCacheService`, removed in Common v1.277.0; see the Revision (2026-11-04)); `:95-96` -> `:111-112` (`RedisDistributedLock`); `:173` -> `:189`,
    `:195` (`HybridCacheService`); `:76` -> `:92-95` (`MemoryCacheService`);
    `MMCA.Common/CHANGELOG.md:2367-2374` -> `:2410-2417` (the SEC-Common-53 entry).
+
+## Revision (2026-11-04)
+Common v1.277.0 (Common PR #668) removed `DistributedCacheService`. The resolver, its precedence and
+every covered keyspace are unchanged; the cache keyspace is now written by `HybridCacheService` alone.
+
+1. The Decision's cache bullet names `HybridCacheService` as the namespace's cache consumer
+   (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.Caching.cs:192`, `:198`).
+   The same namespace also prefixes the prefix-invalidation generation keys, `{namespace}hcg:{prefix}`
+   (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Caching/CachePrefixGenerations.cs:278`), so two
+   applications on one Redis cannot invalidate each other's prefixes.
+2. Anchors re-verified against current source: `CacheKeyPrefix.cs:72-87` (`Resolve` at `:82`);
+   `DependencyInjection.Caching.cs` `RedisDistributedLock` `:114-115`, `MemoryCacheService` `:94-97`,
+   output-cache `PostConfigure` `:69-76` (keep-explicit check `:72`). The 2026-10-28 Revision's anchors
+   record that pass as written.
 
 ## Related
 - [ADR-019](019-rate-limiting.md) (Layered Rate Limiting): owns the distributed rate-limit counter

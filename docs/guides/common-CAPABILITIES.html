@@ -297,7 +297,7 @@
           </tr>
           </tbody></table></div>
           <h2 id="support-tiers">Support tiers</h2>
-          <p>Every configuration axis the startup summary names (data source engines, message bus, cache, tenancy; <code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Configuration/StartupConfigurationSummaryService.cs:138</code>) compiles and is unit-tested, but not every value carries the same evidence. <strong>Tier 1</strong> is production-proven (deployed by ADC or Store), <strong>Tier 2</strong> is exercised in CI against a real engine or end to end, and <strong>Tier 3</strong> compiles and is unit-tested only; an adopter choosing a Tier 2 or Tier 3 value is running ahead of the first-party consumers and should plan their own integration testing for it. Where the evidence read does not settle a tier, the row says so rather than rounding up.</p>
+          <p>Every configuration axis the startup summary names (data source engines, message bus, cache, tenancy; <code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Configuration/StartupConfigurationSummaryService.cs:140</code>) compiles and is unit-tested, but not every value carries the same evidence. <strong>Tier 1</strong> is production-proven (deployed by ADC or Store), <strong>Tier 2</strong> is exercised in CI against a real engine or end to end, and <strong>Tier 3</strong> compiles and is unit-tested only; an adopter choosing a Tier 2 or Tier 3 value is running ahead of the first-party consumers and should plan their own integration testing for it. Where the evidence read does not settle a tier, the row says so rather than rounding up.</p>
           <div class="table-wrap"><table>
           <thead>
           <tr>
@@ -365,19 +365,13 @@
           <td>Cache</td>
           <td><code>memory</code></td>
           <td>Ambiguous (2 or 3)</td>
-          <td>the fallback when no distributed cache is registered (<code>StartupConfigurationSummaryService.cs:114-115</code>); the deployed consumers run hybrid, and no CI job read for this table confirms a memory-only end-to-end run</td>
-          </tr>
-          <tr>
-          <td>Cache</td>
-          <td><code>distributed</code></td>
-          <td>2</td>
-          <td><code>redis-integration</code> Testcontainers job (<code>MMCA.Common/.github/workflows/ci.yml:810</code>, run at <code>:852</code>, which includes <code>DistributedCacheServiceRedisTests.cs</code>); no deployed consumer runs distributed-only</td>
+          <td>the fallback when no distributed cache is registered (<code>StartupConfigurationSummaryService.cs:110-117</code>); a non-memory <code>IDistributedCache</code> with no hybrid cache over it is not a mode but a startup error naming <code>AddCommonHybridCache</code> (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.Caching.cs:90</code>); the deployed consumers run hybrid, and no CI job read for this table confirms a memory-only end-to-end run</td>
           </tr>
           <tr>
           <td>Cache</td>
           <td><code>hybrid</code></td>
           <td>1</td>
-          <td><code>ConnectionStrings__redis</code> upgrades <code>ICacheService</code> to the hybrid cache in both deployed consumers (<code>MMCA.ADC/infra/main.bicep:1587</code>, <code>:1942</code>; <code>MMCA.Store/infra/main.bicep:1159</code>, <code>:1605</code>); also <code>HybridCacheServiceRedisTests.cs</code> in the <code>redis-integration</code> job</td>
+          <td><code>ConnectionStrings__redis</code> upgrades <code>ICacheService</code> to the hybrid cache in both deployed consumers (<code>MMCA.ADC/infra/main.bicep:1587</code>, <code>:1942</code>; <code>MMCA.Store/infra/main.bicep:1159</code>, <code>:1605</code>); also the <code>redis-integration</code> Testcontainers job (<code>MMCA.Common/.github/workflows/ci.yml:810</code>, run at <code>:852</code>), which includes <code>HybridCacheServiceRedisTests.cs</code> and the two-instance <code>HybridCacheCrossInstanceInvalidationTests.cs</code></td>
           </tr>
           <tr>
           <td>Tenancy</td>
@@ -389,7 +383,7 @@
           <td>Tenancy</td>
           <td><code>shared-database</code></td>
           <td>Ambiguous (2 or 3)</td>
-          <td>mode named at <code>StartupConfigurationSummaryService.cs:131-133</code>, unit-tested at <code>Tests/Core/MMCA.Common.Infrastructure.Tests/Configuration/StartupConfigurationSummaryServiceTests.cs:162</code>; a SQLite multi-source test in the CI unit tier references tenancy, but its scope was not confirmed for this table; no deployed consumer</td>
+          <td>mode named at <code>StartupConfigurationSummaryService.cs:133-135</code>, unit-tested at <code>Tests/Core/MMCA.Common.Infrastructure.Tests/Configuration/StartupConfigurationSummaryServiceTests.cs:162</code>; a SQLite multi-source test in the CI unit tier references tenancy, but its scope was not confirmed for this table; no deployed consumer</td>
           </tr>
           <tr>
           <td>Tenancy</td>
@@ -574,7 +568,7 @@
           <h3 id="server-side">Server side</h3>
           <ul>
           <li><strong>Declarative handler caching.</strong> A query implements <code>IQueryCacheable</code>, its invalidating commands implement <code>ICacheInvalidating</code>, and the pipeline does the rest; tenant-scoped keys are automatic. On a miss, a per-key striped lock with a double check means exactly one request populates a hot key (stampede protection), bounded by <code>Cache:PopulateLockTimeout</code>; failed results are never cached; hits and misses are metered.</li>
-          <li><strong>Swappable cache substrate.</strong> Memory, distributed Redis, or opt-in HybridCache behind one <code>ICacheService</code>, with <code>Cache:KeyPrefix</code> namespacing every key on a shared Redis, a 30-second default TTL, an L1 ceiling for the two-level cache, a disjoint <code>hc:</code> keyspace so the two implementations never meet at one key, and <code>RemoveByPrefixAsync</code> and atomic <code>IncrementAsync</code> beyond get and set. Every call is fail-open: a cache outage degrades to uncached reads.</li>
+          <li><strong>Swappable cache substrate.</strong> In-process memory for a single node, or HybridCache (in-process L1 over Redis L2) for a fleet, behind one <code>ICacheService</code>, with <code>Cache:KeyPrefix</code> namespacing every key on a shared Redis, a 30-second default TTL, an L1 ceiling for the two-level cache, an <code>hc:</code> keyspace segment, and <code>RemoveByPrefixAsync</code> and atomic <code>IncrementAsync</code> beyond get and set. Prefix invalidation costs one Redis write at any keyspace size: each <code>:</code> boundary of a key carries a generation token, and invalidating a prefix bumps its token, so every replica&#39;s L1 copies miss within one local duration (<a href="../adr/077-hybridcache-substrate.html">ADR-077</a>). A non-empty prefix must end at <code>:</code>. Every call is fail-open: a cache outage degrades to uncached reads.</li>
           <li><strong>Distributed locking ships with the cache.</strong> <code>IDistributedLock</code> is one non-reentrant, TTL-bounded, best-effort contract (<code>TryAcquireAsync(key, ttl, wait)</code> with owner-scoped release): Redis SET-NX-PX with Lua compare-and-delete when a multiplexer exists, otherwise a warn-once in-process fallback, registered by the same <code>AddCaching</code> call. It guards windows like the idempotency execute-then-store gap; anything the database can enforce keeps its claim lease instead (<a href="../adr/108-distributed-lock-primitive.html">ADR-108</a>).</li>
           <li><strong>Readiness-safe Redis wiring.</strong> <code>AddRedisCaching()</code> and <code>AddRedisOutputCaching()</code> register Aspire&#39;s Redis integrations with their untagged health checks switched off (they issue an admin-class command that Azure Managed Redis refuses) and add a PING-only <code>redis</code> check tagged optional; both are no-ops without a connection string (<a href="../adr/025-startup-warmup-readiness.html">ADR-025</a>).</li>
           <li><strong>Output caching at the edge.</strong> <code>AddPublicEndpointPolicy(name, expiration, bypassRoles, tags)</code> varies by every query key, skips lookup and storage for any bypass role, and refuses to store a response that sets a cookie or is not a 200 (<a href="../adr/040-authenticated-output-caching-for-public-reads.html">ADR-040</a>). <code>EvictTagsAsync</code> and best-effort <code>TryEvictTagsAsync</code> evict multiple tags at once; cross-host eviction is one DI call plus one bus registration, driven by the <code>OutputCacheEvictionRequested</code> event.</li>
@@ -713,6 +707,18 @@
           <li><strong><a href="common-COST.html">Cost and FinOps Notes</a>.</strong> The cost-relevant defaults the framework ships and the levers consumers should set.</li>
           <li><strong><a href="../adr/index.html">ADRs</a>, <a href="../governance/index.html">governance</a>, <a href="../onboarding/index.html">onboarding</a>.</strong> 136 decision records with one-line summaries; the 34-category rubric with three scorecards and three backlogs; thirty-plus onboarding chapters walking every first-party type plus DevOps chapters for Aspire, CI/CD, infrastructure, runbooks, and testing. In the repo: <code>FACTS.md</code>, <code>CHANGELOG.md</code>, <code>UPGRADING.md</code>, <code>SECURITY.md</code>, and the deployment sample&#39;s <code>DEPLOYMENT.md</code>.</li>
           </ul>
+          <h2 id="enterprise-deployment-checklist">Enterprise deployment checklist</h2>
+          <p>The framework&#39;s defaults suit one node and a small fleet. A host sized for many replicas and thousands of concurrent users turns on configuration the framework already ships; none of it needs code. Items that would need new code are held, each with its trigger, in the <em>Enterprise-scale register</em> of the <a href="../governance/common-RemediationBacklog.html">Common remediation backlog</a>.</p>
+          <ul>
+          <li><strong>Redis for the cache.</strong> Call <code>AddCommonHybridCacheWhenRedisConfigured(configuration)</code> and set <code>ConnectionStrings:redis</code>: <code>ICacheService</code> becomes the two-level hybrid cache, prefix invalidation reaches every replica, and <code>IDistributedLock</code> becomes Redis-backed (SET NX PX with an owner-checked release) instead of process-local, which the API idempotency filter, password-reset redemption, the two-factor time-step check and the OAuth exchange-code burn rely on across replicas (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.Caching.cs:107-112</code>, <code>:221</code>).</li>
+          <li><strong>Fleet-wide API rate limits.</strong> <code>RateLimiting:Distributed=true</code> moves the per-user and global limiters to a Redis fixed-window counter, so a limit means the same behind a load balancer as on one node; without a multiplexer it falls back to per-instance limits silently (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/RateLimiting/RateLimitingSettings.cs:72</code>). The gateway edge limiters stay per replica (see <em>Constraints worth knowing</em>).</li>
+          <li><strong>SignalR backplane.</strong> <code>AddPushNotifications(configuration)</code> adds the Redis backplane, with a per-application channel prefix, whenever <code>ConnectionStrings:redis</code> is set (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.Notifications.cs:47</code>, <code>:57</code>). Without it a push reaches only the clients connected to the replica that sent it.</li>
+          <li><strong>Trace sampling.</strong> <code>Telemetry:TracesSampleRatio</code> in (0,1) keeps that share of traces; at volume, full sampling is the largest telemetry cost (<code>MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Extensions.Telemetry.cs:176</code>).</li>
+          <li><strong>Outbox and internal-command throughput.</strong> <code>Outbox:BatchSize</code> (default 50), <code>Outbox:PollingIntervalSeconds</code> (default 2) and <code>InternalCommands:BatchSize</code> (default 50) bound how fast one replica drains its source (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/Administration/OutboxSettings.cs:17</code>, <code>:31</code>).</li>
+          <li><strong>Result-set ceilings.</strong> <code>ApplicationSettings:MaxPageSize</code> (default 500) caps every generic list and export page (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/EntityControllerBase.cs:64</code>); keyset requests are capped at 1000 rows.</li>
+          <li><strong>JWKS key rotation.</strong> Stage the next signing key&#39;s public half in <code>Jwks:AdditionalKeys</code> before switching the signing key, so every validator already trusts it and no access token is refused mid-rotation (<a href="../adr/004-authentication-dual-fetch.html">ADR-004</a>).</li>
+          <li><strong>Permission-grant freshness.</strong> <code>Authentication:PermissionGrants:CacheSeconds</code> (default 30) bounds how long an Identity replica serves a stale grant snapshot after a role edit (<a href="../adr/116-identity-completions-opt-in.html">ADR-116</a>).</li>
+          </ul>
           <h2 id="constraints-worth-knowing">Constraints worth knowing</h2>
           <p>Design choices an adopter should read before sizing a plan around them. None is a defect; each is documented in source or an ADR.</p>
           <ul>
@@ -733,7 +739,7 @@
           <p><strong>The one-paragraph pitch:</strong> adopt MMCA.Common and a small team gets, on day one, the architecture a platform team would take years to build: a scaffolded modular monolith with errors-as-values, a sealed CQRS pipeline, reliable messaging, multi-tenancy, full identity, a shared Blazor, desktop, and mobile UI layer, and 160 architecture tests guarding it all, plus a proven, host-only path to split into microservices when (and only when) an observable constraint demands it.</p>
           </blockquote>
           <hr>
-          <p>Compiled 2026-10-28 against MMCA.Common v1.265.1. The authoritative package and fitness counts live in <a href="https://github.com/ivanball/MMCA.Common/blob/main/FACTS.md" target="_blank" rel="noopener">FACTS.md</a> and the ADR range in the <a href="../adr/index.html">ADR index</a>; the figures above match FACTS.md at v1.265.1. Every capability is verified in framework source and in consumer use (MMCA.ADC, MMCA.Store, MMCA.Helpdesk).</p>
+          <p>Compiled 2026-10-28 against MMCA.Common v1.265.1; the caching rows, the cache substrate and the enterprise deployment checklist amended 2026-11-04 for v1.277.0. The authoritative package and fitness counts live in <a href="https://github.com/ivanball/MMCA.Common/blob/main/FACTS.md" target="_blank" rel="noopener">FACTS.md</a> and the ADR range in the <a href="../adr/index.html">ADR index</a>; the figures above match FACTS.md at v1.265.1. Every capability is verified in framework source and in consumer use (MMCA.ADC, MMCA.Store, MMCA.Helpdesk).</p>
           
         <div class="doc-foot btn-row">
           <a class="btn btn--ghost" href="../../docs/guides/index.html">← Back to Guides &amp; Specifications</a>
@@ -760,6 +766,7 @@
             <li><a href="#compliance-and-privacy">Compliance and privacy</a></li>
             <li><a href="#governance-versioning-and-supply-chain">Governance, versioning, and supply chain</a></li>
             <li><a href="#documentation-library">Documentation library</a></li>
+            <li><a href="#enterprise-deployment-checklist">Enterprise deployment checklist</a></li>
             <li><a href="#constraints-worth-knowing">Constraints worth knowing</a></li>
             </ul>
           </nav>

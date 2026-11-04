@@ -4,7 +4,7 @@
 Accepted (2026-08-13). **Amends [ADR-026](026-caching-strategy.md)**: Tier 1's substrate gains a third
 implementation beside `MemoryCacheService` and `DistributedCacheService`. It is opt-in through
 `AddCommonHybridCache(...)`; with no call the default path is byte-identical to today, so the release is
-non-breaking. Revised 2026-10-01 (single-use records read through an L1-bypassing `GetFromSharedStoreAsync`, and consumers opt in through a Redis-guarded wrapper; see Revision below). Revised 2026-10-06: the ADR-029 registration counter also reads through `GetFromSharedStoreAsync`, so the member is no longer single-use-only. Revised 2026-10-07: the login-lockout flag and the soft-deleted-user marker also read through `GetFromSharedStoreAsync` (seven callers), and the source anchors are refreshed after the v1.233.0 release. Revised 2026-10-21: the `HybridCacheService` `TryGetAsync` override (presence probe flags and thrown miss sentinel) is now recorded, and the source anchors are refreshed against current source. Revised 2026-10-26: anchors refreshed after the Common releases since 2026-10-21 shifted `ICacheService`, `HybridCacheService`, three caller files and two consumer `Program.cs` files. Revised 2026-10-28: anchors refreshed after v1.262.0 shifted `DependencyInjection.Caching.cs`.
+non-breaking. Revised 2026-10-01 (single-use records read through an L1-bypassing `GetFromSharedStoreAsync`, and consumers opt in through a Redis-guarded wrapper; see Revision below). Revised 2026-10-06: the ADR-029 registration counter also reads through `GetFromSharedStoreAsync`, so the member is no longer single-use-only. Revised 2026-10-07: the login-lockout flag and the soft-deleted-user marker also read through `GetFromSharedStoreAsync` (seven callers), and the source anchors are refreshed after the v1.233.0 release. Revised 2026-10-21: the `HybridCacheService` `TryGetAsync` override (presence probe flags and thrown miss sentinel) is now recorded, and the source anchors are refreshed against current source. Revised 2026-10-26: anchors refreshed after the Common releases since 2026-10-21 shifted `ICacheService`, `HybridCacheService`, three caller files and two consumer `Program.cs` files. Revised 2026-10-28: anchors refreshed after v1.262.0 shifted `DependencyInjection.Caching.cs`. Revised 2026-11-04 (Common v1.277.0): `HybridCacheService` is the only shared-store substrate (`DistributedCacheService` and `RedisPrefixScanner` are removed, so every `DistributedCacheService` named in this record is the removed type), prefix invalidation is a generation-token write instead of a SCAN, and `HybridCache.RemoveByTagAsync` is rejected on evidence; see Revision (2026-11-04).
 
 **Scope note (2026-08-18).** This record is Tier 1 only: the Status and Context sections above scope it to
 ADR-026's Tier 1 substrate, and the Related entry for ADR-040 leaves the Tier 2 output-cache edge untouched.
@@ -30,9 +30,9 @@ front of the distributed L2) that removes exactly that cost.
 
 Adopting it is not a drop-in replacement, because ADR-026 also records a production failure that
 constrains the design. `ICacheService.IncrementAsync` is a read-modify-write rather than Redis `INCR`
-because of a storage-format mismatch documented at the implementation
-(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Caching/DistributedCacheService.cs:133-152`, override
-at `:153`): `INCR` writes a Redis string while `StackExchangeRedisCache` stores every entry as a Redis
+because of a storage-format mismatch, documented then at the `DistributedCacheService` implementation
+(removed in v1.277.0) and today on the interface
+(`MMCA.Common/Source/Core/MMCA.Common.Application/Interfaces/ICacheService.cs:126-132`): `INCR` writes a Redis string while `StackExchangeRedisCache` stores every entry as a Redis
 hash, so an `INCR`-written counter answers `WRONGTYPE` on the next read and surfaces as a 500 on the
 endpoint that owns the counter. A second cache implementation writing a different payload shape into the
 same keys is the same failure with a different author, and a rolling deploy guarantees both writers are
@@ -51,9 +51,11 @@ keyspace.
 This is the structural rule the design is built around, and everything else follows from it. The
 `WRONGTYPE` failure ADR-026 records is a class of bug, not an incident: whenever two writers with different
 payload shapes address one key, one of them eventually reads what the other wrote. `HybridCacheService`
-therefore writes under `{prefix}hc:{key}`, disjoint from the keyspace `DistributedCacheService` uses, so an
-old-format and a new-format entry can never cross-read, including during a rolling deploy where both
-versions serve traffic against one Redis.
+therefore writes under `{prefix}hc:{key}`, disjoint from the keyspace the since-removed
+`DistributedCacheService` used, so an old-format and a new-format entry could never cross-read, including
+during a rolling deploy where both versions served traffic against one Redis. With that type gone the rule
+still holds against a host's own `IDistributedCache` use and the `hcg:` generation keys
+(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Caching/HybridCacheService.cs:20-23`).
 
 The alternative considered was a payload discriminator: one keyspace, with each reader detecting and
 skipping a foreign shape. It lost because it makes the failure unlikely rather than impossible, and because
@@ -63,8 +65,9 @@ that a key belongs to exactly one substrate: entries another `ICacheService` imp
 invisible here and age out on their own TTL (the 30-second ADR-026 default for decorator entries, longer
 only where a caller asked for longer, and 24 hours for the idempotency records of
 [ADR-017](017-request-idempotency.md)). A host that changes substrate therefore starts cold, which is a
-cost rather than a correctness problem. Prefix eviction follows the same rule: it scans the `hc:` keyspace
-and nothing else, so what this substrate writes is exactly what it evicts.
+cost rather than a correctness problem. Prefix invalidation follows the same rule: its generation tokens
+fold only into `hc:` keys (`HybridCacheService.cs:414-418`), so what this substrate writes is exactly what an
+invalidation stops addressing.
 
 ### `ICacheService` gains a default `GetOrCreateAsync`
 `ICacheService`
@@ -83,13 +86,14 @@ the member with its native two-level primitive.
 
 ### `HybridCacheService`
 A new `internal sealed partial class HybridCacheService : ICacheService`
-(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Caching/HybridCacheService.cs:48`) implements the
-interface over `HybridCache`. It takes its dependencies through a primary constructor,
+(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Caching/HybridCacheService.cs:49`) implements the
+interface over `HybridCache`. It takes its dependencies through a constructor,
 `(HybridCache hybrid, ILogger<HybridCacheService> logger, IConnectionMultiplexer? connectionMultiplexer = null, CacheKeyNamespace? keyNamespace = null, IOptions<CacheSettings>? cacheSettings = null)`
-(`:48-53`), the last three optional because a host without Redis still resolves the service, prefix eviction
-is the only operation that needs the multiplexer, and a directly constructed instance falls back to
-`new CacheSettings()` (`:120`) for its TTL policy. The registration passes all three explicitly rather than
-leaving them to the container, the settings included (`DependencyInjection.Caching.cs:196`), so a registered service
+(`:133-152`), the last three optional because a host without Redis still resolves the service, the
+multiplexer only carries the prefix-invalidation generation tokens (without it they stay in the process,
+`:128-129`), and a directly constructed instance falls back to
+`new CacheSettings()` (`:146`) for its TTL policy. The registration passes all three explicitly rather than
+leaving them to the container, the settings included (`DependencyInjection.Caching.cs:194-199`), so a registered service
 reads its durations from the bound `Cache` section rather than from the defaults. It is `partial` for the
 `LoggerMessage` source generator (`:435-448`), not because the type is split across hand-written files.
 
@@ -99,9 +103,9 @@ reads its durations from the bound `Cache` section rather than from the defaults
   replica's L1, so the next read of that key costs no hop. The call is wrapped fail-soft: any fault logs a
   warning, self-heal-deletes the key, and returns the default.
 - **`SetAsync` maps expiration to both levels**, with `LocalCacheExpiration` set to
-  `min(local ceiling, expiration)` (`:410`), the local ceiling being `Cache:LocalCacheDuration`
-  (`CacheSettings.cs:42`) when set and otherwise the 30-second `LocalCacheDefault` (`HybridCacheService.cs:69`), read at
-  `HybridCacheService.cs:405`. A shorter caller TTL applies at both levels; a longer one still leaves the L1 copy bounded at
+  `min(local ceiling, expiration)` (`:435`), the local ceiling being `Cache:LocalCacheDuration`
+  (`CacheSettings.cs:47`) when set and otherwise the 30-second `LocalCacheDefault` (`HybridCacheService.cs:65`), read at
+  `HybridCacheService.cs:430`. A shorter caller TTL applies at both levels; a longer one still leaves the L1 copy bounded at
   the local ceiling.
 - **`IncrementAsync` bypasses L1 on both legs** (`DisableLocalCacheRead | DisableLocalCacheWrite`), keeping
   today's L2-only read-modify-write semantics exactly. A counter served from a replica's local cache
@@ -133,16 +137,18 @@ reads its durations from the bound `Cache` section rather than from the defaults
   (`MMCA.Common/Source/Presentation/MMCA.Common.API/Middleware/SoftDeletedUserMiddleware.cs:92`), which
   whichever replica handled the delete writes (and which, on the Identity host, the middleware also writes
   when its validator finds the user deleted, `SoftDeletedUserMiddleware.cs:15-17`).
-- **`RemoveByPrefixAsync` reuses the existing SCAN machinery**, extracted out of `DistributedCacheService`
-  into a shared internal `RedisPrefixScanner`
-  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Caching/RedisPrefixScanner.cs`) that both services
-  call, so both evict through one implementation and the existing Redis-tier tests over
-  `DistributedCacheService` prove the extraction is behavior-identical. The scan pattern is the
-  caller's prefix qualified into this keyspace, `{namespace}hc:{prefix}*`
-  (`HybridCacheService.cs:282-301`, built at `:296`), this service's own keyspace and no other. The
-  delete is a caller-supplied callback, and here it is `hybrid.RemoveAsync` rather than a raw key delete,
-  because a raw delete would clear L2 and leave the calling replica's L1 copy serving the value it just
-  invalidated.
+- **`RemoveByPrefixAsync` replaces one generation token** (revised 2026-11-04; the original SCAN through a
+  shared `RedisPrefixScanner` is removed). Every `:` boundary of a key (the empty root, then each prefix
+  ending at `:`) carries a token, and the tokens in force are folded into the stored key
+  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Caching/HybridCacheService.cs:414-418`, boundaries at
+  `CachePrefixGenerations.cs:246`), so `A:B:C` carries the tokens of `""`, `A:` and `A:B:`.
+  `RemoveByPrefixAsync` checks the boundary contract (`HybridCacheService.cs:315`,
+  `CachePrefixContract.cs:17-27`) and writes one fresh random token under `{namespace}hcg:{prefix}`
+  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Caching/CachePrefixGenerations.cs:217-238`, the
+  write at `:237`, the key at `:278`). Every entry written under the old token stops being addressed and
+  expires on its own TTL; nothing is scanned or deleted, so the cost is one Redis write whatever the size
+  of the keyspace. The invalidating process adopts its token at once, before the write (`:234-236`);
+  another replica sees it within one local cache duration plus one refresh round trip (`:37-42`).
 
 ### The caching decorators keep their own stampede logic
 `CachingQueryDecorator` deliberately does **not** route through `GetOrCreateAsync`. It caches only
@@ -166,21 +172,30 @@ section (`Expiration` from `DefaultDuration`, `LocalCacheExpiration` from `Local
 parameters to the container. Remove-then-add makes the call order-independent against `AddInfrastructure`,
 whose `AddCaching` registers its substrate with `TryAddSingleton` (`:75`): the opt-in wins either way.
 
-### Tags are deferred
-`HybridCache.RemoveByTagAsync` would eventually retire prefix invalidation and its SCAN cost, and it is not
-in this release: adopting tags means every cache-writing call site declares its tags, a public-contract
-sweep across three repos, while the prefix model has production history. The keyspace decision above is
-what makes a later tag adoption possible without a second format collision.
+### Tags are rejected on evidence
+`HybridCache.RemoveByTagAsync` was first deferred (adopting tags means every cache-writing call site
+declares its tags, a public-contract sweep across three repos) and is rejected as of 2026-11-04: it does
+not invalidate across replicas. In Microsoft.Extensions.Caching.Hybrid 10.11.0 a tag invalidation stores a
+timestamp under `__MSFT_HCT__{tag}` in L2, but each process reads that timestamp once, the first time it
+meets the tag, and never refreshes it, so another replica that has already seen the tag keeps accepting the
+L2 payload after its L1 copy expires
+(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Caching/CachePrefixGenerations.cs:17-24`). The
+generation token is the replacement. The Redis-tier test `HybridCacheCrossInstanceInvalidationTests`
+builds two independent cache instances over one Testcontainers Redis
+(`MMCA.Common/Tests/Core/MMCA.Common.Infrastructure.Redis.Tests/HybridCacheCrossInstanceInvalidationTests.cs:32`)
+and pins the cross-replica property the token provides (`:63`, `:107`).
 
 ### Packaging and adoption
 `Microsoft.Extensions.Caching.Hybrid` is pinned in `Directory.Packages.props` and referenced by
 `MMCA.Common.Infrastructure`, with lock files regenerated across the solution **and** the out-of-slnx Redis
 tests project ([ADR-038](038-supply-chain-provenance.md)). Consumers opt in through the guarded wrapper
-`AddCommonHybridCacheWhenRedisConfigured(configuration)` (`DependencyInjection.Caching.cs:218-230`), which
-calls `AddCommonHybridCache` only when the `redis` connection string is set (`:224`): ADC calls it in its four service
+`AddCommonHybridCacheWhenRedisConfigured(configuration)` (`DependencyInjection.Caching.cs:221-233`), which
+calls `AddCommonHybridCache` only when the `redis` connection string is set (`:227`): ADC calls it in its four service
 hosts (for example `MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:210`) and Store in its
 three (for example `MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:114`); MMCA.Helpdesk
-does not (no Redis, so it stays on the memory substrate).
+does not (no Redis, so it stays on the memory substrate). Since v1.277.0 the call is required of any host
+with a distributed cache: without it `ICacheService` fails to resolve, naming the call
+(`DependencyInjection.Caching.cs:85-91`).
 
 ## Rationale
 - **The disjoint keyspace is the decision; everything else is implementation.** Rather than trusting a
@@ -201,14 +216,19 @@ does not (no Redis, so it stays on the memory substrate).
 - **Opt-in keeps the release non-breaking and the monolith cheap.** A host with no Redis gains nothing from
   a two-level cache over an in-process one, so automatic adoption would add a dependency and a second cache
   layer to hosts that cannot benefit.
-- **Extracting the scanner guarantees one eviction behavior.** Two SCAN implementations would drift, and
-  the drift would be silent (entries surviving an invalidation), the hardest kind of cache bug to see.
+- **A generation token makes invalidation constant-cost and convergent.** The removed SCAN walked every
+  Redis primary on each invalidation, and a caching command invalidates twice (immediately and once more
+  after a delay). A token write costs the same whatever the keyspace, and a random token rather than an
+  `INCR` counter needs no atomicity: whichever concurrent write lands last wins and both invalidated
+  (`CachePrefixGenerations.cs:27-29`).
 
 ## Trade-offs
 - **Invalidation does not reach other replicas' L1 immediately.** A remove evicts the L2 entry and the
   calling replica's L1; every other replica keeps its copy for up to `LocalCacheExpiration` (30 seconds).
   The command decorator's delayed 5-second re-invalidation already tolerates a comparable race, but this is
-  a second and longer staleness window that did not exist before.
+  a second and longer staleness window that did not exist before. A prefix invalidation is bounded the
+  same way: another replica adopts the new token within one local duration plus one refresh round trip
+  (`CachePrefixGenerations.cs:37-42`).
 - **Single-use records stay out of that window only when read through `GetFromSharedStoreAsync`.** The
   framework's own single-use reads (OAuth exchange code, password reset, email confirmation, two-factor time
   step) bypass L1, so their replay exposure is bounded by the record's removal; the registration-limit
@@ -229,8 +249,14 @@ does not (no Redis, so it stays on the memory substrate).
 - **A wider public contract, even when non-breaking.** `GetOrCreateAsync` is a member three repos now
   inherit, and it caches unconditionally (failures included, unlike the decorators), so a caller who
   assumes decorator semantics can misuse it.
-- **Deferring tags leaves SCAN as the only bulk-eviction tool.** Prefix invalidation remains an O(keyspace)
-  operation per invalidation, on every non-replica server.
+- **Generation tokens trade the SCAN for orphans and a baseline window.** Invalidated entries are not
+  deleted: they occupy Redis until their own TTL. A generation key carries no TTL, so if one is lost
+  (eviction, or a failover or restart without persistence) its prefix reads as the empty baseline again and
+  the entries written before that prefix's first invalidation are addressed until their TTL
+  (`CachePrefixGenerations.cs:27-34`); keep generation keys out of eviction where that matters. During a
+  partial Redis outage (L2 reads succeed, token reads fail) a cold replica can address a prefix's
+  pre-invalidation entries until their TTL, the cost of the baseline fallback that keeps the lockout flag,
+  counters and idempotency records in the shared keyspace (`:52-61`).
 
 ## Revision (2026-10-01)
 Two decisions joined the record. First, `ICacheService` gained `GetFromSharedStoreAsync`
@@ -341,10 +367,39 @@ consumer adoption are unchanged. Only the `DependencyInjection.Caching.cs` ancho
    at `:178`), `RemoveAll` `:183`, factory `:184-197` (settings passed at `:196`), wrapper `:218-230`
    (Redis guard at `:224`, `connectionName` defaulting to `redis` at `:220`).
 
+## Revision (2026-11-04)
+Common v1.277.0 (Common PR #668). `HybridCacheService` becomes the only shared-store substrate, and prefix
+invalidation changes mechanism. The disjoint `hc:` keyspace, the counter-path L1 bypass, the
+`GetFromSharedStoreAsync` callers and the consumer adoption are unchanged.
+1. **`DistributedCacheService` and `RedisPrefixScanner` are removed.** `AddCaching` registers
+   `MemoryCacheService` only, and resolving `ICacheService` with a non-memory `IDistributedCache`
+   registered and no `AddCommonHybridCache` call throws, naming the call
+   (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.Caching.cs:85-91`).
+2. **Generation tokens replace the SCAN** (the Decision's `RemoveByPrefixAsync` bullet). The class is
+   `CachePrefixGenerations`
+   (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Caching/CachePrefixGenerations.cs:69`, the `hcg:`
+   segment at `:76`).
+3. **Outage posture.** A failed token read never fails the cache call: it falls back to the last token
+   this process knew, or the empty baseline for a boundary it never saw, and is not retried for one local
+   cache duration (`CachePrefixGenerations.cs:354-358`, `:366-367`, the warning at `:403`). Concurrent
+   reads of one boundary share one in-flight read (`:108`, `:288`).
+4. **`RemoveByTagAsync` is rejected.** The former "Tags are deferred" section now records why: tag
+   invalidation in Microsoft.Extensions.Caching.Hybrid 10.11.0 does not cross replicas.
+5. **Boundary contract.** A non-empty prefix must end at `:` in every store
+   (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Caching/CachePrefixContract.cs:17-27`).
+6. Anchors re-verified for the passages this revision touched: `HybridCacheService.cs` class `:49`,
+   constructor `:133-152`, `LocalCacheDefault` `:65`, local ceiling read `:430` and applied `:435`;
+   `CacheSettings.cs:47`; `DependencyInjection.Caching.cs` constructor call `:194-199`, wrapper `:221-233`
+   (guard `:227`). The other Decision anchors (`ICacheService.cs`, `TryGetAsync`,
+   `GetFromSharedStoreAsync`, the `LoggerMessage` partials, the registration pipeline) were not
+   re-verified in this pass. The dated revisions above that name `DistributedCacheService`,
+   `RedisPrefixScanner` or SCAN describe the removed design.
+
 ## Related
 [ADR-026](026-caching-strategy.md) (amended by this record: its Tier 1 substrate gains a third
-implementation, its 30-second default TTL becomes the local-cache bound as well, its prefix-invalidation
-model gains a second and disjoint keyspace, and its `IncrementAsync` storage-format trade-off is the
+implementation, since 2026-11-04 its only shared-store one, its 30-second default TTL becomes the
+local-cache bound as well, its prefix-invalidation model becomes a generation-token write over a disjoint
+keyspace, and its `IncrementAsync` storage-format trade-off is the
 specific case this keyspace decision generalizes), [ADR-014](014-cqrs-decorator-pipeline.md) (the caching
 decorators, which keep their own stampede protection and their cache-only-success rule and take the L1 win
 through `GetAsync`), [ADR-029](029-authentication-brute-force-protection.md) (the brute-force and rate-limit
