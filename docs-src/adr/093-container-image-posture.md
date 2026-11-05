@@ -31,6 +31,7 @@ Revised 2026-10-19: Store's unchanged-leg re-tag also refreshes `latest` against
 Revised 2026-10-21: anchors refreshed after the `deploy.yml` and `main.bicep` growth in both consumers; no decision or posture changed. See Revision (2026-10-21).
 Revised 2026-10-26: anchors refreshed after further `deploy.yml` growth in both consumers (+1), `main.bicep` growth (+36) and a one-line shift in the ADC Gateway Dockerfile; no decision or posture changed. See Revision (2026-10-26).
 Revised 2026-10-28: anchors refreshed after a three-line shift in the ADC `main.bicep` per-app sizing and port blocks; no decision or posture changed. See Revision (2026-10-28).
+Revised 2026-11-04: the Trivy scan gates the deploy in both consumers (the baseline was clean), and all eleven runtime stages are chiseled images. See Revision (2026-11-04).
 ## Context
 Eleven Dockerfiles produce every deployable container in the two Azure-hosted applications: six in
 MMCA.ADC (four services, the Gateway, the Blazor web host) and five in MMCA.Store (three services,
@@ -233,7 +234,7 @@ review.
    rationale at `:31-35`), which is what makes the shipped artifact's package graph the one the lock
    file and the CI vulnerability gate actually saw. The publish restore is deliberately left unlocked,
    and one image per repo is unlocked outright: see the 2026-09-10 revision for the current inventory.
-4. **The built image is scanned, report-only in both.** Each deploy scans every image with Trivy
+4. **The built image is scanned, and since 2026-11-04 the scan gates the deploy** (Revision (2026-11-04) item 2; the rest of this item records the report-only posture that preceded it). Each deploy scans every image with Trivy
    (`MMCA.ADC/.github/workflows/deploy.yml:1297`, action pinned by SHA at `:1299`;
    `MMCA.Store/.github/workflows/deploy.yml:1183`, `:1191`). Neither gates: both steps carry
    `continue-on-error: true` (ADC `:1298`, Store `:1190`), so ADC's `exit-code: '1'` (`:1305`) marks
@@ -532,3 +533,32 @@ Revision sections keep the anchors they recorded on their dates.
    (`conferenceMode` `:157`, `conferenceScaledResources` `:182`, `conferenceIdentityResources`
    `:186` unchanged), Identity ports `:1874,1877,1916`, Conference `:2127,2130,2169`, Engagement
    `:2280,2283,2311`, Notification `:2415,2417,2423-2429,2465`.
+
+## Revision (2026-11-04)
+
+The image scan is a deploy gate in both consumers, and every runtime stage is a chiseled image.
+This closes the open gate recorded in Context ("What stays open is the gate, not the image") and the
+non-gating decision of Revision (2026-10-06): the exit both workflows named, a clean baseline, was
+met. Decision 4 now reads as item 2 below. The earlier Revision sections keep the anchors and
+posture they recorded on their dates.
+
+1. **Chiseled runtime images** (ADC #321, Store #254). All eleven final stages run on
+   `mcr.microsoft.com/dotnet/aspnet:10.0-noble-chiseled-extra`, still digest-pinned
+   (`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Dockerfile:7`,
+   `MMCA.Store/Source/Services/MMCA.Store.Sales.Service/Dockerfile:7`; six of six ADC and five of
+   five Store Dockerfiles). The `-extra` variant carries ICU and tzdata, which the `es` culture and
+   time-zone conversions need. A chiseled image ships no shell and no package manager, which shrinks
+   the base layer the scan below inspects.
+2. **The scan gates.** The per-image Trivy step no longer carries `continue-on-error`, so a fixable
+   CRITICAL or HIGH finding fails that `build-images` leg (`MMCA.ADC/.github/workflows/deploy.yml:1149`,
+   action pinned by SHA at `:1150`, `exit-code: '1'` `:1156`; `MMCA.Store/.github/workflows/deploy.yml:1087`,
+   `:1088`, `:1094`), and the deploy job requires `build-images` to succeed (ADC `:1197`, Store
+   `:1131`), so nothing rolls out. The baseline that justified the flip: all eleven chiseled images
+   scanned 0 OS and 0 dotnet-core CRITICAL/HIGH on the v1.277.0 deploys. Every leg is still scanned,
+   re-tagged unchanged images included, and `ignore-unfixed: true` stays.
+3. **The two exits, and the cost accepted.** A finding is cleared by bumping the base-image digest
+   to a patched one, or by accepting a specific CVE in a repo-root `.trivyignore` with a written
+   justification and a review date (the comment beside each step, ADC `:1138-1148`, Store
+   `:1076-1086`). An infrastructure failure of the action itself (an ACR pull, a
+   vulnerability-database download) now also blocks a deploy; the remedy is re-running the failed
+   job, not bypassing the gate.
