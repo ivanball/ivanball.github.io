@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 136 ADRs</summary>
+        <summary>All 138 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -236,6 +236,8 @@
         <li><a href="134-cloud-neutral-core-vendor-adapters.html">134 · Cloud-Neutral Core With Vendor Adapter Packages</a></li>
         <li><a href="135-application-namespace-keyspace-isolation.html">135 · One Application Namespace Isolates Shared Infrastructure Keyspaces</a></li>
         <li><a href="136-installable-web-app-service-worker.html">136 · Installable Web App Through a Framework Service Worker That Never Caches a Page</a></li>
+        <li><a href="137-read-only-view-as-support-access.html">137 · Read-Only View-As Support Access (Reasoned, 15 Minutes, Visible to the User)</a></li>
+        <li><a href="138-mcp-endpoint-over-module-queries.html">138 · MCP Endpoint Over Module Queries (Opt-In, Read-Only, Governed Per Tool)</a></li>
           </ol>
         </nav>
       </details>
@@ -250,7 +252,9 @@
           audit-trail migrations that create the table. Revised 2026-10-21: anchors refreshed after the outbox
           claim path and the <code>ConfigureScheduler</code> mapping moved in source. Revised 2026-10-26: anchors refreshed
           after the outbox claim path and the consumer <code>AddScheduledJobs</code> calls moved in source. Revised
-          2026-10-28: anchors refreshed after the ADC Identity host&#39;s <code>AddScheduledJobs</code> call moved in source. The implementation lands in the MMCA.Common &quot;enterprise capability wave&quot; release
+          2026-10-28: anchors refreshed after the ADC Identity host&#39;s <code>AddScheduledJobs</code> call moved in source. Revised
+          2026-11-07: a cron override applies when the host restarts, not on a running host (the runner reads its
+          settings once), and a cron with no next occurrence parks the job; see Revision (2026-11-07). The implementation lands in the MMCA.Common &quot;enterprise capability wave&quot; release
           and is opt-in: a host calls <code>AddScheduledJobs(configuration)</code> and sets <code>Scheduler:Enabled</code>. Until it does,
           the framework creates no table and starts no runner.</p>
           <h2 id="context">Context</h2>
@@ -358,9 +362,13 @@
           The runner resolves the two per job on every cycle, the override when it is present and non-blank and the
           compiled-in default otherwise (<code>ResolveCronExpression</code>, <code>.../Infrastructure/Scheduling/ScheduledJobRunner.cs:170</code>).
           The table is created only when the settings flag is on, the same gating <a href="075-audit-trail.html">ADR-075</a> uses.
-          Every cycle the registered jobs are <strong>upserted by <code>JobName</code></strong> (<code>SyncRegistrationsAsync</code>, <code>:267</code>), which is why
-          an override edited on a running host takes effect on the next cycle: the stored expression is rewritten and
-          the next occurrence recomputed from the current instant, with a row whose expression is unchanged left alone.</p>
+          Every cycle the registered jobs are <strong>upserted by <code>JobName</code></strong> (<code>SyncRegistrationsAsync</code>, <code>:267</code>): a row whose
+          expression changed has the expression rewritten and the next occurrence recomputed from the current instant,
+          and a row whose expression is unchanged is left alone (<code>:287-293</code>). <strong>An override applies on restart, not on a
+          running host.</strong> The runner reads <code>IOptions&lt;SchedulerSettings&gt;.Value</code> once, at construction
+          (<code>ScheduledJobRunner.cs:46</code>), and every cycle resolves the cron from that copy (<code>:286</code>), so a
+          <code>Scheduler:Jobs:{Name}:Cron</code> edit reaches the table on the first cycle after the host restarts
+          (<code>SchedulerSettings.cs:68-75</code>).</p>
           <h3 id="design-time-gets-the-same-flag">Design-time gets the same flag</h3>
           <p><code>DesignTimeDbContextOptions.EnableScheduler</code>
           (<code>.../Persistence/DbContexts/Design/DesignTimeDbContextOptions.cs:41</code>) is the design-time mirror of
@@ -429,7 +437,11 @@
           startup, and the override setting carries no validation attribute (<code>SchedulerSettings.cs:74</code>). A malformed
           expression such as <code>* * * * ? ?</code> does not stop the host: it is logged and its row is parked at
           <code>DateTime.MaxValue</code> with <code>LastOutcome</code> <code>Skipped</code> (<code>ScheduledJobRunner.cs:296-319</code>, <code>:342-365</code>). Parsing cannot catch <code>0 3 * * 1</code>
-          written when <code>0 3 * * *</code> was meant.</li>
+          written when <code>0 3 * * *</code> was meant. An expression that parses but has <strong>no next occurrence</strong>, such as
+          <code>0 0 31 2 *</code> (31 February), parks the job the same way and more quietly: Cronos returns no occurrence
+          rather than an error (<code>ScheduledJobRunner.cs:176-178</code>, <code>:195</code>), so the row&#39;s <code>NextRunOn</code> becomes
+          <code>DateTime.MaxValue</code> (<code>:313</code>, <code>:342</code>) with no parse-error log line and no <code>Skipped</code> outcome, and the
+          job never runs again until the expression changes.</li>
           <li><strong>One runner per host, and it is shared.</strong> A slow job delays the jobs due behind it, exactly as
           <a href="052-background-job-execution.html">ADR-052</a>&#39;s single-reader drain does for its queue.</li>
           </ul>
@@ -527,6 +539,24 @@
           still has no call. The 2026-10-26 entry above is left as written; its ADC Identity anchor (<code>:252</code>) is
           stale and its other <code>Program.cs</code> anchors are current.</li>
           </ol>
+          <h2 id="revision-2026-11-07">Revision (2026-11-07)</h2>
+          <p>A correction, not a behavior change. No decision, rationale or default changed.</p>
+          <ol>
+          <li><strong>A cron override applies on restart, not on the next cycle of a running host.</strong> The Decision said an
+          override edited on a running host takes effect on the next cycle. It does not: <code>ScheduledJobRunner</code>
+          copies <code>IOptions&lt;SchedulerSettings&gt;.Value</code> into a field once, at construction
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Scheduling/ScheduledJobRunner.cs:46</code>), and
+          <code>SyncRegistrationsAsync</code> resolves each job&#39;s cron from that copy (<code>:286</code>), so a changed
+          <code>Scheduler:Jobs:{Name}:Cron</code> is never seen until the host restarts. The first cycle after the restart
+          rewrites the stored expression and recomputes the next occurrence (<code>:295</code>, <code>:301-305</code>). The override&#39;s
+          own documentation now says so (<code>SchedulerSettings.cs:68-75</code>). The Decision paragraph is corrected.</li>
+          <li><strong>A cron with no next occurrence parks the job.</strong> <code>0 0 31 2 *</code> parses, so it raises no parse error,
+          but Cronos finds no 31 February and returns no occurrence (<code>ScheduledJobRunner.cs:176-178</code>, <code>:195</code>).
+          The sync stores <code>DateTime.MaxValue</code> as <code>NextRunOn</code> (<code>:313</code> for a new row, <code>:342</code> for a changed one),
+          and a completed run does the same when its expression has no further occurrence (<code>:488</code>). Unlike an
+          unparsable expression, nothing is logged and <code>LastOutcome</code> is not set to <code>Skipped</code>, so the only sign
+          is a <code>NextRunOn</code> of <code>DateTime.MaxValue</code>. The cron trade-off now records it.</li>
+          </ol>
           <h2 id="related">Related</h2>
           <p><a href="003-outbox-dual-dispatch.html">ADR-003</a> (the outbox whose claim-lease idiom and smart wait this reuses
           verbatim, and whose at-least-once posture it inherits along with the idempotency obligation on job bodies),
@@ -563,6 +593,7 @@
             <li><a href="#revision-2026-10-21">Revision (2026-10-21)</a></li>
             <li><a href="#revision-2026-10-26">Revision (2026-10-26)</a></li>
             <li><a href="#revision-2026-10-28">Revision (2026-10-28)</a></li>
+            <li><a href="#revision-2026-11-07">Revision (2026-11-07)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

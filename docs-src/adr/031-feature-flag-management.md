@@ -25,6 +25,10 @@ wires the targeting context unconditionally and that only the Targeting filter i
 (the Percentage filter is random per evaluation, so the 2026-08-18 sentence above holds for Targeting
 only), and the flag-debt entry records that all four repos adopt the lifecycle gate.
 
+Revised 2026-11-07: the targeting context adds the group `tenant:<tenantId>` when the request has
+resolved a tenant, so a Targeting audience can turn a flag on per tenant. See the Revision (2026-11-07)
+at the end.
+
 ## Context
 The apps need to decouple *release* from *deploy*: ship code dark, flip a kill switch, or roll a feature
 out to a percentage of users without a redeploy. A flag has to be enforceable at **two** different points
@@ -93,10 +97,12 @@ is enforced at two independent surfaces:
   (`MMCA.Common.API/DependencyInjection.cs:105-106`), so in a host that goes through `AddAPI` a
   Targeting-filter rollout gives a signed-in user the same answer across requests and replicas, keyed
   on the targeting id: the `sub` (or mapped `NameIdentifier`) claim, falling back to `Identity.Name`
-  when a principal carries neither (`MMCA.Common.API/FeatureManagement/CurrentUserTargetingContextAccessor.cs:86`).
-  An anonymous caller gets an empty context (no user id, no groups, `:67-74`), so it matches no named
-  user or group; the accessor documents a targeted feature as off for anonymous callers unless the
-  audience opts everyone in (`:27-28`). The built-in **Percentage** filter never reads the targeting
+  when a principal carries neither (`MMCA.Common.API/FeatureManagement/CurrentUserTargetingContextAccessor.cs:121`).
+  An anonymous caller gets no user id, and its only group is the resolved tenant's, if any
+  (`:101-108`), so it matches no named user or role; the accessor documents a targeted feature as off
+  for anonymous callers unless the audience opts everyone in or names their tenant (`:37-39`). When the
+  request has resolved a tenant, every caller also carries the group `tenant:<tenantId>` (see the
+  Revision (2026-11-07)). The built-in **Percentage** filter never reads the targeting
   context: it activates on a random percentage at each evaluation, so a Percentage-filter flag can
   flip between requests for the same user. A rollout that must be sticky uses Targeting with a
   `DefaultRolloutPercentage`, not Percentage.
@@ -275,3 +281,25 @@ writes its own "Feature not available" ProblemDetails, and both decorators retur
    anchors inside the Revisions (2026-08-18) and (2026-10-01) stay as written, as does the `:22`
    Detail anchor in the Revision (2026-10-06) superseded above; the rest of the Revision (2026-10-06)
    and the Revision (2026-10-21) carry current locations.
+
+## Revision (2026-11-07)
+Tenant targeting. The two enforcement surfaces, the `404` answers and the lifecycle gate are unchanged;
+the targeting context gains one group.
+
+1. **A resolved tenant becomes a targeting group.** `CurrentUserTargetingContextAccessor.GetContextAsync`
+   reads the request's scoped `ITenantContext` from `HttpContext.RequestServices` and, when it holds a
+   non-blank `TenantId`, adds the group `tenant:<tenantId>`
+   (`MMCA.Common/Source/Presentation/MMCA.Common.API/FeatureManagement/CurrentUserTargetingContextAccessor.cs:99`,
+   `:128-132`). It is appended after the role groups for a signed-in caller (`:110-117`) and is the only
+   group of an anonymous one (`:101-108`), so a request in tenant `acme` matches an audience group named
+   `tenant:acme` whether or not the caller is signed in. The name is built by the public
+   `TenantGroup(tenantId)` from `TenantGroupPrefix` = `"tenant:"` (`:75`, `:83-87`), so a test or an
+   admin tool can produce the exact group string.
+2. **No host changes.** The accessor is the one `AddAPI` already registers (`MMCA.Common.API/DependencyInjection.cs:104-106`).
+   A host without tenancy never registers or resolves a tenant, so no group is added
+   (`CurrentUserTargetingContextAccessor.cs:126-127`), and the group only matters to an audience that
+   names it. The tenant is the one [ADR-073](073-multi-tenancy-model.md)'s resolution put on the
+   request.
+3. The Trade-offs entry now names the tenant group and the current anchors (`:121` for the targeting
+   id, `:101-108` for the anonymous context, `:37-39` for the documented anonymous behavior). The
+   accessor's own example targets a tenant with `RolloutPercentage` 100 (`:53-55`).

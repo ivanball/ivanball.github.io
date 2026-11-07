@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 136 ADRs</summary>
+        <summary>All 138 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -236,6 +236,8 @@
         <li><a href="134-cloud-neutral-core-vendor-adapters.html">134 · Cloud-Neutral Core With Vendor Adapter Packages</a></li>
         <li><a href="135-application-namespace-keyspace-isolation.html">135 · One Application Namespace Isolates Shared Infrastructure Keyspaces</a></li>
         <li><a href="136-installable-web-app-service-worker.html">136 · Installable Web App Through a Framework Service Worker That Never Caches a Page</a></li>
+        <li><a href="137-read-only-view-as-support-access.html">137 · Read-Only View-As Support Access (Reasoned, 15 Minutes, Visible to the User)</a></li>
+        <li><a href="138-mcp-endpoint-over-module-queries.html">138 · MCP Endpoint Over Module Queries (Opt-In, Read-Only, Governed Per Tool)</a></li>
           </ol>
         </nav>
       </details>
@@ -284,7 +286,10 @@
           Revised 2026-10-26: the Decision now names all three facts of the optional <code>TenantResolutionTestsBase</code>
           (header opt-in through <code>AllowsHeaderResolution</code>, claim before header, health endpoints excluded), not
           only the claim-before-header one; anchors refreshed.
-          Revised 2026-10-28: anchors refreshed after the releases since v1.243.0 moved its <code>CHANGELOG.md</code> entry.</p>
+          Revised 2026-10-28: anchors refreshed after the releases since v1.243.0 moved its <code>CHANGELOG.md</code> entry.
+          Revised 2026-11-07: the forgotten-marker trade-off is now caught by <code>TenantScopeConventionTestsBase</code> in a
+          tenancy host that subclasses it (every module entity tenant-scoped or declared global); see Revision
+          (2026-11-07).</p>
           <h2 id="context">Context</h2>
           <p>MMCA.Common already partitions data along two axes and neither of them is a tenant. ADR-006 partitions by
           <strong>source name</strong> (every entity resolves to a <code>DataSourceKey(Engine, Name)</code>, each module or service owning
@@ -518,8 +523,9 @@
           provider stops emitting <code>tenant_id</code> returns 400 on every non-excluded route rather than degrading to a
           reduced view. That is the intended trade, and it is still an outage.</li>
           <li><strong>Shared-schema turns one bad filter into a data leak rather than an error,</strong> and a missing
-          <code>ITenantEntity</code> marker on a new entity fails no build and no test: it silently includes that entity&#39;s
-          rows in every tenant&#39;s queries.</li>
+          <code>ITenantEntity</code> marker on a new entity silently includes that entity&#39;s rows in every tenant&#39;s
+          queries. A tenancy host that subclasses <code>TenantScopeConventionTestsBase</code> fails its build on that
+          omission (see the Revision (2026-11-07)); a host that does not subclass it is still unguarded.</li>
           <li><strong>The system context is a privileged mode with no second gate.</strong> Any code path that runs without a
           resolved tenant reads across all tenants, and nothing distinguishes &quot;deliberately system&quot; from
           &quot;middleware did not run here&quot;.</li>
@@ -740,6 +746,33 @@
           by the Revision (2026-10-26)). It is a labeled bullet under Changed, not a separate Breaking
           section.</li>
           </ol>
+          <h2 id="revision-2026-11-07">Revision (2026-11-07)</h2>
+          <p>The forgotten-marker trade-off now has a gate a tenancy host can inherit. The isolation model, the
+          resolution defaults and the filters are unchanged.</p>
+          <ol>
+          <li><strong><code>TenantScopeConventionTestsBase</code></strong> ships in <code>MMCA.Common.Testing.Architecture</code>
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Bases/Domain/TenantScopeConventionTestsBase.cs:14</code>)
+          with two facts. <code>EntitiesWithTenantId_ShouldImplement_ITenantEntity</code> (<code>:24-26</code>) fails when any
+          concrete Domain or Infrastructure entity, framework or module, declares or inherits a <code>TenantId</code>
+          property without implementing <code>ITenantEntity</code>, the marker that applies the named <code>Tenant</code> filter and
+          the save interceptor (<code>.../Rules/Domain/ArchitectureRules.Tenancy.cs:8-16</code>).
+          <code>ModuleEntities_ShouldBeTenantScoped_OrDeclaredGlobal</code> (<code>:28-30</code>) fails when a concrete module entity
+          is neither tenant-scoped nor named in the subclass&#39;s <code>GlobalEntityTypes</code> (<code>:22</code>), type full names or
+          namespace prefixes matched ordinally (<code>ArchitectureRules.Tenancy.cs:30-46</code>). The second fact is the
+          one that closes the trade-off: a new module entity without the marker now fails the build unless
+          someone declares it global, and that declaration is a reviewed line in the test subclass rather than
+          an absence. Framework entities are out of its scope, since whether a framework row is tenant-owned is
+          the framework&#39;s decision (<code>ArchitectureRules.Tenancy.cs:37-39</code>).</li>
+          <li><strong>It is a host&#39;s opt-in, as the tenancy itself is.</strong> The base is subclassed only in a host that
+          enables tenancy, with an empty <code>GlobalEntityTypes</code> by default, so every module entity must be scoped
+          until the subclass lists the shared ones (<code>TenantScopeConventionTestsBase.cs:7-12</code>, <code>:18-22</code>). Common
+          has no modules, so its own test calls only the first rule
+          (<code>MMCA.Common/Tests/Architecture/MMCA.Common.Architecture.Tests/Domain/EntityModel/TenantEntityConventionTests.cs:29-39</code>),
+          and the second rule&#39;s fixture tests pin both outcomes
+          (<code>.../Domain/EntityModel/TenantScopeFitnessTests.cs:23</code>, <code>:32</code>, <code>:43</code>). No consumer subclasses the
+          base yet: Helpdesk, the reference tenancy adopter, is the planned first; ADC and Store stay
+          single-tenant. Until a host subclasses it, the trade-off holds for that host as originally written.</li>
+          </ol>
           
         <div class="doc-foot btn-row">
           <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
@@ -763,6 +796,7 @@
             <li><a href="#revision-2026-10-21">Revision (2026-10-21)</a></li>
             <li><a href="#revision-2026-10-26">Revision (2026-10-26)</a></li>
             <li><a href="#revision-2026-10-28">Revision (2026-10-28)</a></li>
+            <li><a href="#revision-2026-11-07">Revision (2026-11-07)</a></li>
             </ul>
           </nav>
         </aside>

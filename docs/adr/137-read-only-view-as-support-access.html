@@ -1,0 +1,510 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#0e151f" media="(prefers-color-scheme: dark)">
+  <title>ADR-137: Read-Only View-As Support Access (Reasoned, 15 Minutes, Visible to the User) · MMCA · Ivan Ball-llovera</title>
+  <meta name="description" content="Accepted (2026-11-07). Ships in the MMCA.Common release after v1.277.0. Off by default (ViewAs:Enabled,…">
+  <link rel="canonical" href="https://ivanball.github.io/docs/adr/137-read-only-view-as-support-access.html">
+  <link rel="icon" href="../../assets/img/favicon.svg" type="image/svg+xml">
+  <link rel="alternate" type="application/rss+xml" title="Ivan Ball-llovera: deep dives on enterprise .NET" href="https://ivanball.github.io/feed.xml">
+  <meta property="og:type" content="article">
+  <meta property="og:site_name" content="Ivan Ball-llovera">
+  <meta property="og:title" content="ADR-137: Read-Only View-As Support Access (Reasoned, 15 Minutes, Visible to the User)">
+  <meta property="og:description" content="Accepted (2026-11-07). Ships in the MMCA.Common release after v1.277.0. Off by default (ViewAs:Enabled,…">
+  <meta property="og:url" content="https://ivanball.github.io/docs/adr/137-read-only-view-as-support-access.html">
+  <meta property="og:image" content="https://ivanball.github.io/assets/img/og-image.png">
+  <meta property="og:image:alt" content="Ivan Ball-llovera, Principal Software Architect">
+  <meta property="og:locale" content="en_US">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="ADR-137: Read-Only View-As Support Access (Reasoned, 15 Minutes, Visible to the User)">
+  <meta name="twitter:description" content="Accepted (2026-11-07). Ships in the MMCA.Common release after v1.277.0. Off by default (ViewAs:Enabled,…">
+  <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Platform","item":"https://ivanball.github.io/platform.html"},{"@type":"ListItem","position":2,"name":"Reference","item":"https://ivanball.github.io/docs/index.html"},{"@type":"ListItem","position":3,"name":"Architecture Decision Records","item":"https://ivanball.github.io/docs/adr/index.html"},{"@type":"ListItem","position":4,"name":"137 · Read-Only View-As Support Access (Reasoned, 15 Minutes, Visible to the User)","item":"https://ivanball.github.io/docs/adr/137-read-only-view-as-support-access.html"}]}</script>
+  <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);if(localStorage.getItem('mmca-rail')==='hidden')document.documentElement.setAttribute('data-rail','hidden');if(localStorage.getItem('mmca-cites')==='shown')document.documentElement.setAttribute('data-cites','shown');}catch(e){}})();</script>
+  <link rel="preload" href="../../assets/fonts/inter-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="../../assets/fonts/jetbrains-mono-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="../../assets/css/styles.css">
+  <link rel="stylesheet" href="../../assets/css/docs.css">
+  <script defer src="../../assets/js/main.js"></script>
+  <script defer src="../../assets/js/search.js"></script>
+  <script defer src="../../assets/js/analytics.js"></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+
+  <header class="site-header">
+    <div class="container nav">
+      <a class="brand" href="../../index.html">
+        <span class="brand-mark" aria-hidden="true">IB</span>
+        <span>Ivan Ball-llovera</span>
+      </a>
+      <nav aria-label="Primary">
+        <ul class="nav-links" id="nav-links">
+          <li><a href="../../index.html">Home</a></li>
+          <li><a href="../../resume.html">Résumé</a></li>
+          <li><a href="../../platform.html">Platform</a></li>
+          <li><a href="../../docs/index.html" aria-current="page">Reference</a></li>
+          <li><a href="../../writing.html">Writing</a></li>
+          <li><a href="../../speaking.html">Speaking</a></li>
+          <li><a href="../../contact.html">Contact</a></li>
+        </ul>
+      </nav>
+      <div class="nav-tools">
+        <button class="icon-btn search-open" type="button" aria-label="Search the site" data-search-open>
+          <span aria-hidden="true">⌕</span>
+        </button>
+        <button class="icon-btn theme-toggle" type="button" aria-label="Switch color theme">
+          <span class="sun" aria-hidden="true">☀</span><span class="moon" aria-hidden="true">☾</span>
+        </button>
+        <button class="icon-btn nav-toggle" type="button" aria-label="Toggle navigation menu" aria-expanded="false" aria-controls="nav-links">☰</button>
+      </div>
+    </div>
+  </header>
+  <dialog class="search-dialog" id="site-search" aria-label="Search this site">
+    <form class="search-box" method="dialog" role="search">
+      <span class="search-icon" aria-hidden="true">⌕</span>
+      <input class="search-input" type="search" id="site-search-input" placeholder="Search ADRs, guides, chapters, articles…"
+             autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
+             aria-controls="site-search-results" aria-describedby="site-search-status">
+      <button class="btn btn--ghost search-close" type="button" data-search-close>Esc</button>
+    </form>
+    <p class="search-status" id="site-search-status" role="status" aria-live="polite"></p>
+    <ul class="search-results" id="site-search-results"></ul>
+    <p class="search-foot">
+      <span><kbd>↑</kbd><kbd>↓</kbd> to navigate</span>
+      <span><kbd>Enter</kbd> to open</span>
+      <span><kbd>"…"</kbd> all these words</span>
+      <span><kbd>AND</kbd><kbd>OR</kbd> to combine</span>
+    </p>
+  </dialog>
+
+  <main id="main">
+    <div class="container doc-container">
+      <nav class="doc-breadcrumb" aria-label="Breadcrumb">
+        <a href="../../platform.html">Platform</a>
+        <span aria-hidden="true">/</span>
+        <a href="../../docs/index.html">Reference</a>
+        <span aria-hidden="true">/</span>
+        <a href="../../docs/adr/index.html">Architecture Decision Records</a>
+        <span aria-hidden="true">/</span>
+        <span class="current">137 · Read-Only View-As Support Access (Reasoned, 15 Minutes, Visible to the User)</span>
+        <button class="rail-toggle" type="button" data-rail-toggle aria-expanded="true" aria-controls="doc-rail">On this page</button>
+      </nav>
+      <div class="doc-layout doc-layout--toc">
+      <aside class="doc-sidebar">
+      <details class="doc-sidebar-details" open>
+        <summary>All 138 ADRs</summary>
+        <nav class="doc-nav" aria-label="Architecture Decision Records">
+          <ol>
+        <li><a href="index.html">Overview</a></li>
+        <li><a href="001-manual-dto-mapping.html">001 · Manual DTO Mapping over AutoMapper</a></li>
+        <li><a href="002-navigation-populators.html">002 · NavigationPopulators for Cross-Container Loading</a></li>
+        <li><a href="003-outbox-dual-dispatch.html">003 · Outbox Pattern with Dual Dispatch</a></li>
+        <li><a href="004-authentication-dual-fetch.html">004 · Cross-Service Token Validation via JWKS / OIDC Discovery</a></li>
+        <li><a href="005-soft-delete-vs-erasure.html">005 · Soft-Delete vs. Right-to-Erasure</a></li>
+        <li><a href="006-database-per-service.html">006 · Database per Service</a></li>
+        <li><a href="007-grpc-extraction.html">007 · Synchronous Cross-Service Calls via gRPC Contracts</a></li>
+        <li><a href="008-service-extraction-topology.html">008 · Extraction of the Modular Monolith into Per-Module Services + Gateway</a></li>
+        <li><a href="009-resilience-and-recovery-objectives.html">009 · Resilience Policies &amp; Recovery Objectives</a></li>
+        <li><a href="010-integration-event-schema-versioning.html">010 · Integration-Event Schema Versioning &amp; Upcaster Policy</a></li>
+        <li><a href="011-single-locale-i18n.html">011 · Single-Locale by Design (No Internationalization)</a></li>
+        <li><a href="012-grpc-host-transport.html">012 · gRPC-Host Transport Convention (Http2-only h2c vs. Http1AndHttp2 + ALPN)</a></li>
+        <li><a href="013-result-pattern.html">013 · Result Pattern over Exceptions for Flow Control</a></li>
+        <li><a href="014-cqrs-decorator-pipeline.html">014 · CQRS Handlers with a Decorator Pipeline</a></li>
+        <li><a href="015-architecture-fitness-functions.html">015 · Architecture Invariants Enforced as Fitness Functions</a></li>
+        <li><a href="016-lockstep-versioning-masstransit-pin.html">016 · Lockstep Package Versioning and the MassTransit-v8 Pin</a></li>
+        <li><a href="017-request-idempotency.html">017 · HTTP Request Idempotency via Client-Supplied Keys</a></li>
+        <li><a href="018-polyglot-persistence.html">018 · Polyglot Persistence (Multiple Storage Engines Behind One Model)</a></li>
+        <li><a href="019-rate-limiting.html">019 · Layered Rate Limiting with an Authenticated-Only Global Limiter</a></li>
+        <li><a href="020-permission-based-authorization.html">020 · Permission-Based Authorization Layered over Roles</a></li>
+        <li><a href="021-consumer-inbox-idempotency.html">021 · Consumer-Side Inbox for Integration-Event Idempotency</a></li>
+        <li><a href="022-browser-session-cookie-auth.html">022 · Browser Session-Cookie Authentication for Blazor SSR</a></li>
+        <li><a href="023-security-response-headers.html">023 · Centralized Security-Response-Headers Middleware with a Pluggable CSP</a></li>
+        <li><a href="024-push-notifications.html">024 · Two-Channel User Notifications (Transient SignalR Push + Durable Inbox)</a></li>
+        <li><a href="025-startup-warmup-readiness.html">025 · Startup Warm-Up and Readiness Gating for Cold-Start Mitigation</a></li>
+        <li><a href="026-caching-strategy.html">026 · Two-Tier Caching: a Swappable ICacheService Substrate plus an HTTP Output-Cache Edge</a></li>
+        <li><a href="027-multi-locale-i18n.html">027 · Multi-Locale Internationalization (Supersedes ADR-011)</a></li>
+        <li><a href="028-dark-theme-mode.html">028 · Day/Dark Theme Mode</a></li>
+        <li><a href="029-authentication-brute-force-protection.html">029 · Authentication Brute-Force Protection and Registration Throttling</a></li>
+        <li><a href="030-startup-sole-migrator.html">030 · Each Service Self-Applies Its Migrations at Startup (Sole Migrator)</a></li>
+        <li><a href="031-feature-flag-management.html">031 · Config-Driven Feature Flags with Dual-Surface Enforcement</a></li>
+        <li><a href="032-password-hashing.html">032 · Password Hashing (PBKDF2-HMAC-SHA512) with Legacy-Hash Backward Compatibility</a></li>
+        <li><a href="033-resource-ownership-authorization.html">033 · Resource-Ownership Authorization (Row-Level + Action Filter)</a></li>
+        <li><a href="034-generic-entity-query-layer.html">034 · Generic Entity Controllers with a Dynamic Query Contract</a></li>
+        <li><a href="035-optimistic-concurrency.html">035 · Optimistic Concurrency via RowVersion Round-Trip</a></li>
+        <li><a href="036-external-oauth-login.html">036 · External OAuth Login (Federated Google/GitHub/Apple) with Local-JWT Exchange</a></li>
+        <li><a href="037-field-level-encryption-at-rest.html">037 · Field-Level Encryption at Rest (AES-256-GCM EF Converter)</a></li>
+        <li><a href="038-supply-chain-provenance.html">038 · Supply-Chain Provenance (SBOM Release Gate + Lock Files + Vulnerability Audit)</a></li>
+        <li><a href="039-live-channel-push.html">039 · Live channel push (ephemeral events over the notification hub)</a></li>
+        <li><a href="040-authenticated-output-caching-for-public-reads.html">040 · Authenticated output caching for public reads</a></li>
+        <li><a href="041-observability-and-telemetry.html">041 · Observability and Telemetry Strategy</a></li>
+        <li><a href="042-device-capability-abstraction.html">042 · Device Capability Abstraction (MAUI Blazor Hybrid)</a></li>
+        <li><a href="043-mobile-deep-links-and-native-oauth-callback.html">043 · Mobile Deep Links, App Association, and the Native OAuth Callback</a></li>
+        <li><a href="044-native-push-delivery.html">044 · Native Push Delivery (the Third Notification Channel)</a></li>
+        <li><a href="045-managed-file-storage-and-avatars.html">045 · Managed File Storage and User Avatars</a></li>
+        <li><a href="046-http-api-versioning.html">046 · HTTP API Versioning Strategy</a></li>
+        <li><a href="047-soft-deleted-user-session-revocation.html">047 · Runtime Revocation of Soft-Deleted Users&#39; Active Sessions</a></li>
+        <li><a href="048-primitive-identifier-type-aliases.html">048 · Primitive Identifier Type Aliases over Strongly-Typed ID Structs</a></li>
+        <li><a href="049-library-configureawait-policy.html">049 · Library-Scoped ConfigureAwait(false) Policy (CA2007)</a></li>
+        <li><a href="050-jwt-refresh-token-rotation.html">050 · JWT Access Tokens with a Single Rotating Refresh Token and Reuse Detection</a></li>
+        <li><a href="051-client-auth-token-lifecycle.html">051 · Client-Side Authentication Token Lifecycle Across Render Modes</a></li>
+        <li><a href="052-background-job-execution.html">052 · Background Job Execution (Bounded Queue plus Hosted Drain)</a></li>
+        <li><a href="053-dual-registry-package-publishing.html">053 · Dual-Registry Package Publishing (nuget.org plus GitHub Packages)</a></li>
+        <li><a href="054-saga-compensation-and-reconciliation.html">054 · Choreographed Saga Compensation with a Reconciliation Backstop</a></li>
+        <li><a href="055-repository-and-specification-contract.html">055 · Repository plus Specification as the Data-Access Contract</a></li>
+        <li><a href="056-blazor-render-mode-strategy.html">056 · Blazor Render-Mode Strategy for the Web Heads</a></li>
+        <li><a href="057-expand-contract-schema-evolution-gate.html">057 · Expand/Contract Schema Evolution Enforced as a CI Gate</a></li>
+        <li><a href="058-runtime-conformance-suites-as-a-package.html">058 · Runtime Conformance Suites Shipped as a Package</a></li>
+        <li><a href="059-module-contract-and-composition.html">059 · The IModule Contract and Reflection-Based Module Composition</a></li>
+        <li><a href="060-performance-regression-gate.html">060 · Performance-Regression Gate (Committed Benchmark Baseline in CI)</a></li>
+        <li><a href="061-runtime-secret-management.html">061 · Runtime Secret Management via Key Vault References and Managed Identity</a></li>
+        <li><a href="062-slo-alerting-as-code.html">062 · SLO Alerting as Code with an Alert-to-Runbook Build Gate</a></li>
+        <li><a href="063-accessibility-conformance-gate.html">063 · WCAG 2.1 AA Accessibility as a Shipped Test Contract and CI Gate</a></li>
+        <li><a href="064-deploy-recency-gates.html">064 · Deploy Preconditions as Proof-of-Recency Gates</a></li>
+        <li><a href="065-scaffolding-templates.html">065 · Scaffolding templates derived from the reference app</a></li>
+        <li><a href="066-broker-transport-selection.html">066 · Broker Transport Selection and Dev/Prod Parity</a></li>
+        <li><a href="067-ui-module-shell-composition.html">067 · Shared Blazor Application Shell and IUIModule Composition</a></li>
+        <li><a href="068-value-objects-as-validated-primitives.html">068 · Value Objects as Validated Domain Primitives</a></li>
+        <li><a href="069-shared-data-protection-key-ring.html">069 · Shared DataProtection Key Ring for Scaled-Out Hosts</a></li>
+        <li><a href="070-fail-fast-configuration-contract.html">070 · Fail-Fast Configuration Contract</a></li>
+        <li><a href="071-barcode-scanning-and-qr-display.html">071 · Device Capability Pattern for Barcode Scanning and QR Display</a></li>
+        <li><a href="072-qr-badge-check-in-and-points.html">072 · QR Badge Check-In and Points Gamification in ADC</a></li>
+        <li><a href="073-multi-tenancy-model.html">073 · Multi-Tenancy (Shared-Schema Query Filter plus DB-per-Tenant Routing)</a></li>
+        <li><a href="074-recurring-job-scheduler.html">074 · Recurring Job Scheduler (Persistent Cron Jobs on the Outbox Claim-Lease Pattern)</a></li>
+        <li><a href="075-audit-trail.html">075 · Audit Trail (Same-Transaction Field-Level Change History)</a></li>
+        <li><a href="076-data-subject-export.html">076 · Data-Subject Export (DSAR) as a Framework Contract</a></li>
+        <li><a href="077-hybridcache-substrate.html">077 · HybridCache as an Opt-In ICacheService Substrate (Amends ADR-026)</a></li>
+        <li><a href="078-csv-export-endpoint.html">078 · CSV Export as a Dedicated Endpoint, Not Content Negotiation</a></li>
+        <li><a href="079-shared-http-middleware-pipeline.html">079 · One Shared, Ordered HTTP Middleware Pipeline for Every Service Host</a></li>
+        <li><a href="080-deploy-rollout-revision-rollback.html">080 · Production Rollout with Automatic Revision-Only Rollback</a></li>
+        <li><a href="081-cost-baseline-deploy-gate.html">081 · The Cost Baseline as a Hard Deploy Gate</a></li>
+        <li><a href="082-two-tier-cors-posture.html">082 · Two-Tier Cross-Origin Posture: Allow-Listed Service Policies, an Any-Header Gateway Policy</a></li>
+        <li><a href="083-crud-lifecycle-event-taxonomy.html">083 · One CRUD Lifecycle Event per Entity with a State Discriminator</a></li>
+        <li><a href="084-stripe-webhook-ingress.html">084 · Stripe Webhook Ingress (Acceptance-Coded Responses and Startup Self-Registration)</a></li>
+        <li><a href="085-identifier-type-aliases-revisited.html">085 · Identifier Type Aliases Revisited (Wrapper Structs Deferred Again, With Triggers)</a></li>
+        <li><a href="086-process-manager-deferred.html">086 · A Process Manager Is Deferred, Not Absent (Relates to ADR-054)</a></li>
+        <li><a href="087-broker-poison-message-handling.html">087 · Broker Poison-Message Handling: Second-Level Redelivery and Fault Observability</a></li>
+        <li><a href="088-gateway-edge-responsibilities.html">088 · Gateway Edge Responsibilities (and the Three It Declines)</a></li>
+        <li><a href="089-gateway-topology-owned-by-configuration.html">089 · Gateway Topology Owned by Configuration</a></li>
+        <li><a href="090-event-upcaster-registration.html">090 · Event Upcaster Registration Extension Point</a></li>
+        <li><a href="091-cache-backed-password-reset.html">091 · Cache-Backed Password Reset</a></li>
+        <li><a href="092-web-vitals-budget-gate.html">092 · Core Web Vitals Budget as a Shipped Test Contract and Deploy Gate</a></li>
+        <li><a href="093-container-image-posture.html">093 · Container Image Build and Runtime Posture</a></li>
+        <li><a href="094-client-entity-data-access.html">094 · Client-Side Entity Data-Access Contract</a></li>
+        <li><a href="095-soft-delete-unique-indexes.html">095 · Uniqueness Under Soft Delete (Filtered Unique Indexes)</a></li>
+        <li><a href="096-best-effort-side-effects.html">096 · Best-Effort Side-Effect Contract</a></li>
+        <li><a href="097-multi-device-refresh-sessions.html">097 · Multi-Device Refresh Sessions (Hashed, Rotating, Per Device)</a></li>
+        <li><a href="098-aspire-orchestration-not-testing-or-dashboards.html">098 · Aspire for Orchestration, Not for Testing or Production Dashboards</a></li>
+        <li><a href="099-generic-write-side-entity-commands.html">099 · Generic Write-Side Entity Commands (Create, Update, Delete Without a Handler per Aggregate)</a></li>
+        <li><a href="100-outbox-opt-in-resolved-from-messaging-mode.html">100 · The Outbox Is Resolved from the Messaging Mode, Not Always On</a></li>
+        <li><a href="101-common-metapackage.html">101 · An MMCA.Common Metapackage for the Core Six</a></li>
+        <li><a href="102-pbkdf2-only-password-hashing.html">102 · PBKDF2-Only Password Hashing</a></li>
+        <li><a href="103-bunit-component-test-tier.html">103 · bUnit Component-Test Tier as a Shipped Package</a></li>
+        <li><a href="104-smart-enums-as-opt-in-capability.html">104 · Plain Enums by Default, Enumeration&lt;T&gt; as the Opt-In Smart-Enum Base</a></li>
+        <li><a href="105-data-residency-build-gate.html">105 · The Published Data-Residency Claim as a Build Gate</a></li>
+        <li><a href="106-extension-members-as-public-di-surface.html">106 · C# Extension Members as the Public DI Registration Surface</a></li>
+        <li><a href="107-transaction-execution-contract.html">107 · Transaction Execution and Commit-Ambiguity Contract</a></li>
+        <li><a href="108-distributed-lock-primitive.html">108 · Cross-Replica Mutual Exclusion via IDistributedLock</a></li>
+        <li><a href="109-feature-by-folder-convention.html">109 · Feature-by-Folder Layout as an Enforced Convention</a></li>
+        <li><a href="110-rubric-v2-category-realignment.html">110 · Rubric Version 2, Category Realignment at 34</a></li>
+        <li><a href="111-ai-session-scoring-governance.html">111 · AI Session Scoring Governance</a></li>
+        <li><a href="112-catalog-owned-effective-pricing.html">112 · Catalog Owns Effective Pricing; Sales Snapshots It at Checkout</a></li>
+        <li><a href="113-postgresql-as-a-first-class-engine.html">113 · PostgreSQL as a First-Class Engine</a></li>
+        <li><a href="114-internal-commands-durable-job-queue.html">114 · Internal Commands, a Job Queue Built on the Outbox&#39;s Machinery</a></li>
+        <li><a href="115-strongly-typed-identifiers-opt-in.html">115 · Strongly Typed Identifiers as an Opt-In Capability, Aliases Still the Default</a></li>
+        <li><a href="116-identity-completions-opt-in.html">116 · Identity Completions Ship as Opt-In Base Classes, Not as Framework Features</a></li>
+        <li><a href="117-apphost-integration-test-base.html">117 · AppHost Integration Testing as a Shipped Package</a></li>
+        <li><a href="118-message-transport-library-policy.html">118 · Message Transport Library Policy (MassTransit v8 Pin and Exit Strategy)</a></li>
+        <li><a href="119-restrict-delete-by-default.html">119 · Delete Behavior Is an Explicit Business Rule (Restrict by Default)</a></li>
+        <li><a href="120-governed-chat-client-boundary.html">120 · Governed Language-Model Boundary (MMCA.Common.AI)</a></li>
+        <li><a href="121-ephemeral-in-process-work-queue.html">121 · Ephemeral In-Process Work Queue (Bounded Channel plus Hosted Drain)</a></li>
+        <li><a href="122-dev-only-relaxations-fail-closed.html">122 · Dev-Only Relaxations Are Environment-Gated and Fail Closed</a></li>
+        <li><a href="123-speaker-session-assets.html">123 · Speaker-Published Session Materials</a></li>
+        <li><a href="124-blazor-circuit-ceiling-ui-edge.html">124 · The Server-Rendered UI Host Is Its Own Hardened Edge</a></li>
+        <li><a href="125-parameterized-sql-only.html">125 · Parameterized SQL Only, Enforced by a Fitness Gate</a></li>
+        <li><a href="126-event-sourcing-not-adopted.html">126 · Event Sourcing Is Not Adopted</a></li>
+        <li><a href="127-actor-model-not-adopted.html">127 · The Actor Model Is Not Adopted</a></li>
+        <li><a href="128-time-as-an-input.html">128 · Time as an Input (No Ambient Clock Reads in Domain and Application)</a></li>
+        <li><a href="129-tactical-aggregate-contract.html">129 · The Tactical Aggregate Contract</a></li>
+        <li><a href="130-per-engine-data-source-strategy.html">130 · Per-Engine Data Source Strategy (Engine Facts Instead of Branching on the Enum)</a></li>
+        <li><a href="131-same-origin-api-proxy.html">131 · Same-Origin API Proxy (a Backend-for-Frontend That Keeps Tokens Out of Browser Script)</a></li>
+        <li><a href="132-build-strictness-analyzer-policy.html">132 · Build Strictness: Analyzers at Error Severity, a Shared Baseline, and CI Test Floors</a></li>
+        <li><a href="133-versioned-password-hash-work-factor.html">133 · Versioned Password Hash Work Factor</a></li>
+        <li><a href="134-cloud-neutral-core-vendor-adapters.html">134 · Cloud-Neutral Core With Vendor Adapter Packages</a></li>
+        <li><a href="135-application-namespace-keyspace-isolation.html">135 · One Application Namespace Isolates Shared Infrastructure Keyspaces</a></li>
+        <li><a href="136-installable-web-app-service-worker.html">136 · Installable Web App Through a Framework Service Worker That Never Caches a Page</a></li>
+        <li><a href="137-read-only-view-as-support-access.html" aria-current="page">137 · Read-Only View-As Support Access (Reasoned, 15 Minutes, Visible to the User)</a></li>
+        <li><a href="138-mcp-endpoint-over-module-queries.html">138 · MCP Endpoint Over Module Queries (Opt-In, Read-Only, Governed Per Tool)</a></li>
+          </ol>
+        </nav>
+      </details>
+    </aside>
+        <article class="doc-content">
+          <p class="eyebrow doc-kicker">Architecture Decision Record</p>
+          <h1 id="adr-137-read-only-view-as-support-access-reasoned-15-minutes-visible-to-the-user">ADR-137: Read-Only View-As Support Access (Reasoned, 15 Minutes, Visible to the User)</h1>
+          <h2 id="status">Status</h2>
+          <p>Accepted (2026-11-07). Ships in the MMCA.Common release after v1.277.0. Off by default
+          (<code>ViewAs:Enabled</code>, <code>MMCA.Common/Source/Core/MMCA.Common.Application/Auth/ViewAs/ViewAsSettings.cs:28</code>);
+          a consumer opts in per host.</p>
+          <h2 id="context">Context</h2>
+          <p>A support or operations user who is asked &quot;why does my screen look like this&quot; cannot see what one
+          user sees without that user&#39;s password, and MMCA had no staff access path at all. Writing one raises
+          four forces:</p>
+          <ul>
+          <li><strong>The account holder must be able to tell.</strong> Access that only an operator can see is access the user
+          has to take on trust. The record of it has to be somewhere the user already looks.</li>
+          <li><strong>Nothing may be written in the user&#39;s name.</strong> Several writes never pass through a command handler
+          (sign-in, refresh, password and preference changes, device registration), so a check in the CQRS
+          pipeline alone (<a href="014-cqrs-decorator-pipeline.html">ADR-014</a>) would leave them open.</li>
+          <li><strong>&quot;Impersonating&quot; is taken.</strong> <code>ImpersonatingCurrentUserService</code> and <code>ScopedUserOverride</code> restore a
+          background identity onto an outbox or job scope
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Context/ImpersonatingCurrentUserService.cs:8-20</code>),
+          which is a different thing. This feature is called view-as everywhere: permission <code>users:view-as</code>,
+          claim <code>act_sub</code>, settings section <code>ViewAs</code>.</li>
+          <li><strong>The staff user&#39;s own web session must survive.</strong> On a web host behind the same-origin proxy
+          (<a href="131-same-origin-api-proxy.html">ADR-131</a>) the browser holds one session in HttpOnly cookies; replacing
+          it would sign the staff user out of their own account.</li>
+          </ul>
+          <h2 id="decision">Decision</h2>
+          <p><strong>A permission-gated, reasoned, at most 15-minute, never-renewed token carrying <code>act_sub</code>; reads
+          only, enforced at the HTTP method and at the command; each grant is a row the viewed user sees in
+          their sign-in history; off by default.</strong></p>
+          <ol>
+          <li><strong>Permission and reason.</strong> <code>POST {userId}/view-as</code> on <code>UsersAdminControllerBase</code>
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/Administration/UsersAdminControllerBase.cs:137</code>)
+          requires <code>users:view-as</code> (<code>:138</code>; <code>AdministrationPermissions.ViewAsUsers</code>,
+          <code>MMCA.Common/Source/Core/MMCA.Common.Shared/Auth/Permissions/AdministrationPermissions.cs:27</code>) on
+          top of the class-level <code>users:manage</code> (<code>UsersAdminControllerBase.cs:46</code>;
+          <code>AdministrationPermissions.cs:18</code>). The body is <code>StartViewAsRequest(Reason)</code>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Shared/Auth/Requests/AdministrationRequests.cs:32</code>), and a
+          reason of 10 to 500 characters after trimming is required
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Domain/Auth/ViewAsGrant.cs:20</code>, <code>:23</code>, <code>:74-81</code>). The action is
+          <code>[NonIdempotent]</code> (<code>UsersAdminControllerBase.cs:139</code>): every call is a new grant row.</li>
+          <li><strong>Refusals.</strong> The caller&#39;s own account (<code>ViewAs.Self</code>, <code>ViewAsGrant.cs:66-72</code>); an account the
+          consumer&#39;s resolver does not find (<code>ViewAs.TargetNotFound</code>) or reports soft-deleted
+          (<code>ViewAs.TargetDeleted</code>); and an account whose role itself holds <code>users:view-as</code>
+          (<code>ViewAs.TargetIsStaff</code>), so staff cannot view each other
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Auth/ViewAs/ViewAsService.cs:134-150</code>). A host
+          that enabled view-as but registered no <code>IViewAsSubjectResolver</code> refuses every grant
+          (<code>ViewAs.NotConfigured</code>, <code>:74-79</code>).</li>
+          <li><strong>The <code>ViewAsGrant</code> row is the audit record.</strong> There is no separate audit-event API, and the field
+          audit trail (<a href="075-audit-trail.html">ADR-075</a>) fires only on entity changes, so the row
+          (<code>Id</code>, <code>StaffUserId</code>, <code>TargetUserId</code>, <code>Reason</code>, <code>GrantedAt</code>, <code>ExpiresAt</code>, <code>EndedAt</code>;
+          <code>ViewAsGrant.cs:29-47</code>) is it. It is written before the token is minted, so no token exists without
+          its row (<code>ViewAsService.cs:88-89</code>). It is a flat bookkeeping record like <code>RefreshSession</code>, with no
+          soft-delete flag, so no query filter hides it from the per-request check (<code>ViewAsGrant.cs:10-15</code>).
+          Rows are kept <code>ViewAs:RetentionDays</code> (default 90, <code>[Range(1, 3650)]</code>, <code>ViewAsSettings.cs:34-35</code>),
+          matching the audit trail&#39;s default
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/AuditTrail/AuditTrailSettings.cs:38</code>),
+          and swept on each new grant rather than by a hosted service (<code>ViewAsService.cs:88</code>).</li>
+          <li><strong>The token: no <code>sid</code>, no <code>mfa</code>, at most 15 minutes.</strong> <code>ViewAsService</code> mints through the raw
+          <code>ITokenService</code>, not the session-stamping wrapper the sign-in workflow uses, so the token carries
+          no <code>sid</code> and no <code>mfa</code> claim and opens no refresh session (<code>ViewAsService.cs:16-22</code>). It carries the
+          viewed account&#39;s standard claims plus <code>act_sub</code> (the staff user,
+          <code>MMCA.Common/Source/Core/MMCA.Common.Shared/Auth/AuthClaimTypes.cs:79</code>) and <code>vag</code> (the grant id,
+          <code>:85</code>) (<code>ViewAsService.cs:91-102</code>). Its lifetime is min(15 minutes, the configured access-token
+          lifetime) (<code>:47-50</code>; <code>ViewAsGrant.MaxLifetime</code>, <code>ViewAsGrant.cs:26</code>, and the clamp at <code>:83-86</code>),
+          minted by <code>ITokenService.GenerateShortLivedAccessToken</code>, which the framework&#39;s <code>TokenService</code>
+          honors exactly
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Auth/TokenService.cs:118-128</code>).</li>
+          <li><strong>Never renewed, never chained.</strong> Nothing mints a refresh token for it, the proxy never refreshes or
+          replays it (point 9), and a grant request made under a view-as token is a non-safe method the guard
+          refuses (point 6), so a view cannot start another view.</li>
+          <li><strong>The guard is always in the pipeline and fails closed.</strong> <code>ViewAsGuardMiddleware</code> is the
+          <code>ViewAsGuard</code> step, after <code>SoftDeletedUserFilter</code> and before <code>Authorization</code>, added whether or not
+          view-as is enabled
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/Pipeline/MiddlewarePipelineBuilder.cs:126-133</code>;
+          <code>MiddlewarePipelineStepNames.cs:65</code>). A request without <code>act_sub</code> passes after one claim lookup
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Middleware/ViewAsGuardMiddleware.cs:52-56</code>). For a
+          view-as request:<ul>
+          <li>while <code>ViewAs:Enabled</code> is false, 401, so a token minted before the switch was turned off reaches
+          nothing (<code>:60-65</code>);</li>
+          <li>any method other than GET, HEAD or OPTIONS, 403 (<code>:67-72</code>, <code>:84-85</code>), except the one action marked
+          <code>[ViewAsEndEndpoint]</code> (<code>:87-89</code>, <code>:135-136</code>);</li>
+          <li>the grant must exist, name this staff user and this account, and be neither ended nor expired
+          (<code>ViewAsService.cs:119-131</code>; <code>ViewAsGrant.IsActiveAt</code>, <code>ViewAsGrant.cs:101</code>), else 401
+          (<code>ViewAsGuardMiddleware.cs:74-79</code>). The check is one uncached primary-key read per view-as request,
+          because a cached &quot;live&quot; answer on one replica would outlive an End handled on another, and a store
+          error or a missing <code>IViewAsService</code> answers 401 (<code>:29-34</code>, <code>:105-113</code>), unlike
+          <code>SoftDeletedUserMiddleware</code>, which fails open (<a href="047-soft-deleted-user-session-revocation.html">ADR-047</a>).</li>
+          </ul>
+          </li>
+          <li><strong>The outermost command decorator.</strong> <code>ViewAsCommandDecorator</code> refuses every command with
+          <code>Auth.ViewAsReadOnly</code> (Forbidden) while the caller carries <code>act_sub</code>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/UseCases/Decorators/ViewAsCommandDecorator.cs:36-45</code>),
+          and is registered last, so it runs first
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/DependencyInjection.cs:141</code>). That covers a command
+          sent from a GET handler or a hub method, and a refused command does no flag, permission, logging,
+          validation or transaction work. Queries carry no view-as decorator.</li>
+          <li><strong>Ending a view.</strong> <code>POST auth/view-as/end</code> on <code>AuthControllerBase</code>, <code>[ViewAsEndEndpoint]</code> and
+          <code>[NonIdempotent]</code>
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/AuthControllerBase.cs:253-256</code>), marks
+          the grant ended, so the same token is refused on its next request rather than at expiry. It answers
+          404 while disabled (<code>:269-272</code>) and 400 <code>ViewAs.NotViewing</code> for a token that is not a view-as token
+          (<code>:274-278</code>).</li>
+          <li><strong>Web only, through a separate overlay cookie in the same-origin proxy.</strong> The token never reaches
+          script and the staff user&#39;s session cookies are never touched:<ul>
+          <li>The cookie is <code>mmca_view_as</code>, HttpOnly, Secure by the session cookies&#39; rule, the proxy&#39;s
+          <code>SessionCookieSameSite</code>, <code>Path=/</code>, and a <code>Max-Age</code> equal to the token&#39;s remaining life
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/SessionCookies/ViewAsOverlayCookie.cs:31</code>,
+          <code>:92-104</code>, <code>:118-131</code>).</li>
+          <li><strong>When it is written.</strong> The proxy treats a POST whose last path segment is <code>view-as</code> as a grant
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI.Web/SameOriginProxy/SameOriginApiProxyEndpoint.cs:340-344</code>)
+          and writes the cookie only from a 2xx answer (<code>SameOriginProxyTransformer.cs:119-121</code>) whose token
+          parses as a JWT carrying both <code>act_sub</code> and <code>vag</code> (<code>:238-251</code>); the browser gets the same JSON with
+          the token replaced by its claims-only form (<code>:162-184</code>). Any other answer passes through and no
+          cookie is written.</li>
+          <li><strong>While it is live</strong> its token replaces the session bearer for every forwarded call except sign-in
+          and sign-out (<code>SameOriginApiProxyEndpoint.cs:405-417</code>), and it also answers server rendering,
+          <code>POST /auth/session/token</code> and the Blazor Server handoff (<code>ViewAsOverlayCookie.cs:21-25</code>;
+          <code>SameOriginApiProxyEndpoint.cs:441-444</code>; <code>SessionHandoffEndpoints.cs:31-33</code>).</li>
+          <li><strong>When it is deleted.</strong> On end (whatever the upstream answered), on sign-out, on a successful
+          sign-in, when it has already expired, and when the upstream answers 401 to its bearer
+          (<code>SameOriginProxyTransformer.cs:133-138</code>). The end path is <code>SameOriginApiProxy:ViewAsEndPath</code>
+          (default <code>auth/view-as/end</code>, <code>SameOriginApiProxySettings.cs:99</code>).</li>
+          </ul>
+          </li>
+          <li><strong>Banner and button.</strong> <code>ViewAsBanner</code> (&quot;Viewing as {name}, read-only, ends in mm:ss&quot; with End,
+          <code>MMCA.Common/Source/Presentation/MMCA.Common.UI/Components/Auth/ViewAsBanner.razor.cs:13-21</code>;
+          <code>SharedResource.resx:931-935</code>) renders nothing for an ordinary principal and sits in <code>MainLayout</code>
+          above every page (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI/Layout/MainLayout.razor:82-83</code>).
+          End posts through the proxy and reloads the app on the staff user&#39;s own session, as does the
+          countdown reaching zero. <code>ViewAsButton</code> asks for the reason and posts the grant from the browser; it
+          shows only to a principal holding <code>users:view-as</code> that is not itself viewing
+          (<code>ViewAsButton.razor.cs:12-21</code>, <code>:52</code>, <code>:58</code>). A consumer places it on its own admin user page.</li>
+          <li><strong>The viewed user sees it.</strong> The sign-in history merges each grant on the account as a
+          <code>SignInHistoryEntryKind.ViewAs</code> row
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Shared/Auth/Responses/SignInHistoryEntryKind.cs:19</code>;
+          <code>MMCA.Common/Source/Core/MMCA.Common.Application/Auth/Sessions/SignInHistory.cs:55-56</code>, <code>:80-103</code>)
+          in the same newest-first list capped at 50, with no device or address, never current, and ended
+          either <code>ViewAsEnded</code> (<code>SignInEndReasons.cs:26</code>) or <code>Expired</code>.
+          <code>SignInHistoryTable</code> labels it &quot;Viewed by support&quot;
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI/Components/Auth/SignInHistoryTable.razor.cs:71-73</code>;
+          <code>SharedResource.resx:952-953</code>). See the sign-in history amendment of
+          <a href="097-multi-device-refresh-sessions.html">ADR-097</a>.</li>
+          <li><strong>Off by default.</strong> <code>ViewAsSettings</code> binds the <code>ViewAs</code> section with <code>ValidateOnStart</code>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:186-191</code>). While
+          <code>Enabled</code> is false the grant and end actions answer 404 (<code>UsersAdminControllerBase.cs:155-158</code>;
+          <code>AuthControllerBase.cs:269-272</code>), the <code>ViewAsGrants</code> table is in no model
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/ApplicationDbContext.cs:951-956</code>),
+          the store answers as if no grant existed (<code>EFViewAsGrantStore.cs:19-21</code>, <code>:51-54</code>), and the guard
+          refuses every view-as token (point 6).</li>
+          </ol>
+          <h2 id="rationale">Rationale</h2>
+          <ul>
+          <li><strong>Two layers because the writes live in two places.</strong> The HTTP method check covers every endpoint,
+          including the auth writes that never become commands; the decorator covers a command reached by any
+          other path. Either alone leaves a gap.</li>
+          <li><strong>The grant row doubles as the user-visible record.</strong> One write serves the operator&#39;s audit and the
+          account holder&#39;s history, so the two cannot disagree.</li>
+          <li><strong>Fail closed is cheap here.</strong> The exposure is one staff user&#39;s support session, not every user&#39;s
+          every request, so an outage costs a support view, never a write in someone else&#39;s name.</li>
+          <li><strong>A short, unrenewable token bounds the damage of a leak</strong> to at most 15 minutes of reads, and End
+          shortens it to the next request.</li>
+          </ul>
+          <h2 id="trade-offs">Trade-offs</h2>
+          <ul>
+          <li><strong>One primary-key read per view-as request.</strong> Only view-as requests pay it; an ordinary request pays
+          one claim lookup in the middleware and one in the decorator.</li>
+          <li><strong>A read path that writes as a side effect answers 403 under view-as.</strong> That is the intended failure,
+          but it means a page that writes on GET does not render for a staff viewer.</li>
+          <li><strong>Standard claims only.</strong> The token is minted from <code>ViewAsSubject</code> (<code>sub</code>, email, role, display name,
+          and the role&#39;s permissions;
+          <code>MMCA.Common/Source/Core/MMCA.Common.Application/Auth/ViewAs/ViewAsSubject.cs:6-20</code>); claims an app
+          adds through its own sign-in path are not reproduced, so a page that depends on one can render
+          differently for the viewer.</li>
+          <li><strong>A hand-written <code>ITokenService</code> ignores the 15-minute lifetime.</strong> The interface default mints with
+          the configured lifetime
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Interfaces/Infrastructure/Auth/ITokenService.cs:29-34</code>,
+          <code>:42-49</code>); the guard still refuses the token once its grant expires.</li>
+          </ul>
+          <h2 id="alternatives-rejected">Alternatives rejected</h2>
+          <ul>
+          <li><strong>Full impersonation with writes</strong> (2026-11-07). It falsifies the audit trail (every row would name
+          the user, not the staff member) and would need the actor carried through the outbox and the broker
+          hop. Support needs to see, not to act.</li>
+          <li><strong>Reusing the <code>Impersonating*</code> types</strong> (2026-11-07). They mean background identity restore onto a
+          non-request scope; overloading the name would make both harder to reason about.</li>
+          <li><strong>Logging grants only</strong> (2026-11-07). Logs are not user-visible, so the account holder could not
+          tell that support looked.</li>
+          </ul>
+          <h2 id="consequences">Consequences</h2>
+          <ul>
+          <li><strong>One migration per consumer that enables it.</strong> The <code>ViewAsGrants</code> table with indexes
+          <code>IX_ViewAsGrants_TargetUserId_GrantedAt</code> and <code>IX_ViewAsGrants_GrantedAt</code>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Auth/ViewAsGrantModelBuilderExtensions.cs:15</code>,
+          <code>:18</code>, <code>:21</code>, <code>:33-48</code>), scaffolded with <code>DesignTimeDbContextOptions.EnableViewAsGrants = true</code>
+          (<code>MMCA.Common/UPGRADING.md:98-103</code>). A consumer that leaves it off adds nothing.</li>
+          <li><strong>A privacy disclosure for any consumer that enables it</strong>, stating that staff can view an account
+          read-only and that the account holder sees each view (<code>ViewAsSettings.cs:16-19</code>).</li>
+          <li><strong>Consumer wiring.</strong> Register an <code>IViewAsSubjectResolver</code> over the app&#39;s users, grant <code>users:view-as</code>
+          to the staff role that also holds <code>users:manage</code>, and place <code>ViewAsButton</code> on the admin user page
+          (<code>MMCA.Common/UPGRADING.md:104-112</code>).</li>
+          <li><strong>Binary-breaking constructors.</strong> <code>AuthSessionIssuer</code> and <code>UserSessionsAdministrationService</code> gain an
+          optional trailing <code>IViewAsGrantStore</code> (<code>AuthSessionIssuer.cs:60</code>;
+          <code>UserSessionsAdministrationService.cs:20</code>). Source that constructs them by hand still compiles, but
+          the old constructors are removed from the public API
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/PublicAPI.Unshipped.txt:77-78</code>), so an assembly
+          compiled against them must be rebuilt.</li>
+          <li><strong>App-specific claims are not reproduced</strong> in the view-as token (see Trade-offs).</li>
+          <li><strong>MAUI is excluded.</strong> The overlay lives in the web proxy; MAUI heads do not offer view-as
+          (<code>MMCA.Common/UPGRADING.md:112</code>).</li>
+          </ul>
+          <h2 id="related">Related</h2>
+          <p><a href="014-cqrs-decorator-pipeline.html">ADR-014</a> (the decorator pipeline the view-as decorator now heads),
+          <a href="020-permission-based-authorization.html">ADR-020</a> (the <code>users:view-as</code> permission),
+          <a href="047-soft-deleted-user-session-revocation.html">ADR-047</a> (the fail-open middleware this guard deliberately does not copy),
+          <a href="075-audit-trail.html">ADR-075</a> (the field audit trail the grant row complements),
+          <a href="079-shared-http-middleware-pipeline.html">ADR-079</a> (the named middleware steps <code>ViewAsGuard</code> joins),
+          <a href="097-multi-device-refresh-sessions.html">ADR-097</a> (the sign-in history the grants appear in),
+          <a href="116-identity-completions-opt-in.html">ADR-116</a> (the user administration controller the grant action lives on),
+          <a href="131-same-origin-api-proxy.html">ADR-131</a> (the proxy that carries the overlay cookie).</p>
+          
+        <div class="doc-foot btn-row">
+          <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
+          <a class="btn btn--ghost" href="https://github.com/ivanball/ivanball.github.io/blob/main/docs-src/adr/137-read-only-view-as-support-access.md" target="_blank" rel="noopener">View source on GitHub ↗</a>
+        </div>
+        </article>
+        <aside class="doc-aside" id="doc-rail">
+          <nav class="doc-toc" aria-label="On this page">
+            <p class="doc-toc-title">On this page</p>
+            <ul>
+            <li><a href="#status">Status</a></li>
+            <li><a href="#context">Context</a></li>
+            <li><a href="#decision">Decision</a></li>
+            <li><a href="#rationale">Rationale</a></li>
+            <li><a href="#trade-offs">Trade-offs</a></li>
+            <li><a href="#alternatives-rejected">Alternatives rejected</a></li>
+            <li><a href="#consequences">Consequences</a></li>
+            <li><a href="#related">Related</a></li>
+            </ul>
+          </nav>
+        </aside>
+      </div>
+    </div>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container">
+      <div class="footer-grid">
+        <p class="footer-meta mb-0"><strong>Ivan Ball-llovera</strong> · Principal Software Architect · Douglasville, GA</p>
+        <ul class="footer-links">
+          <li><a href="../../resume.html">Résumé</a></li>
+          <li><a href="../../platform.html">Platform</a></li>
+          <li><a href="../../docs/index.html">Reference</a></li>
+          <li><a href="../../writing.html">Writing</a></li>
+          <li><a href="../../speaking.html">Speaking</a></li>
+          <li><a href="../../contact.html">Contact</a></li>
+          <li><a href="https://github.com/ivanball" target="_blank" rel="me noopener">GitHub</a></li>
+          <li><a href="https://www.linkedin.com/in/ivan-ball-llovera-6549a911" target="_blank" rel="me noopener">LinkedIn</a></li>
+        </ul>
+      </div>
+      <p class="footer-meta" style="margin-top:1rem">© <span class="js-year">2026</span> Ivan Ball-llovera. Reference docs generated from source.</p>
+    </div>
+  </footer>
+
+</body>
+</html>

@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 136 ADRs</summary>
+        <summary>All 138 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -236,6 +236,8 @@
         <li><a href="134-cloud-neutral-core-vendor-adapters.html">134 · Cloud-Neutral Core With Vendor Adapter Packages</a></li>
         <li><a href="135-application-namespace-keyspace-isolation.html">135 · One Application Namespace Isolates Shared Infrastructure Keyspaces</a></li>
         <li><a href="136-installable-web-app-service-worker.html">136 · Installable Web App Through a Framework Service Worker That Never Caches a Page</a></li>
+        <li><a href="137-read-only-view-as-support-access.html">137 · Read-Only View-As Support Access (Reasoned, 15 Minutes, Visible to the User)</a></li>
+        <li><a href="138-mcp-endpoint-over-module-queries.html">138 · MCP Endpoint Over Module Queries (Opt-In, Read-Only, Governed Per Tool)</a></li>
           </ol>
         </nav>
       </details>
@@ -269,7 +271,9 @@
           Revised 2026-10-26: the password verifier accepts a legacy 64-byte hash or a versioned header-plus-hash (not a 64-byte hash only); the login branches no longer all pay the same key-derivation cost, since a legacy record verifies at 600,000 iterations while the burn hashes at the current 210,000 (the gap ADR-133 accepts); a successful sign-in now ends with a best-effort password rehash; and the live anchors were refreshed.
           Revised 2026-10-28: anchors refreshed after Common #615 and ADC #298 moved them.
           Revised 2026-11-04 (Common v1.277.0 removed <code>DistributedCacheService</code>, so <code>HybridCacheService</code> is the only
-          shared-store implementation the counters run on; see Revision below).</p>
+          shared-store implementation the counters run on; see Revision below).
+          Revised 2026-11-07: a login lockout now logs one Warning when it first trips, carrying a 12-character
+          prefix of the key&#39;s SHA-256 and the lockout seconds, never the email; see Revision (2026-11-07).</p>
           <h2 id="context">Context</h2>
           <p>ADR-019&#39;s global rate limiter is <strong>principal-keyed</strong>: it caps requests per authenticated principal,
           and anonymous traffic is exempt with one metered exception, the configured real-time hub path
@@ -664,6 +668,29 @@
           Decision and Alternatives rejected entries now name <code>HybridCacheService.IncrementAsync</code>
           (<code>HybridCacheService.cs:342</code>) and the guarded helper at <code>DependencyInjection.Caching.cs:221-233</code>; the
           dated revisions above that name <code>DistributedCacheService</code> record the code as it stood then.</p>
+          <h2 id="revision-2026-11-07">Revision (2026-11-07)</h2>
+          <p>A lockout is no longer silent. The lockout model, the backoff formula, the thresholds, the answers and
+          the fail-open posture are unchanged; what changed is that an operator now sees an account lock.</p>
+          <ol>
+          <li><strong>One Warning when the lockout first trips.</strong> <code>IncrementFailedAttemptsAsync</code> sets the lockout flag
+          whenever the counter is at or above <code>MaxFailedAttempts</code>, and logs only when the counter equals it
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Auth/LoginProtectionService.cs:99</code>, <code>:108</code>,
+          <code>:110-115</code>): &quot;Login protection lockout tripped for key {KeyHash}; locked out for {LockoutSeconds}s&quot;
+          (<code>:224-225</code>). A stuffing run that keeps guessing past the threshold extends the lockout but adds no
+          lines, so the log carries one line per locked account rather than one per attempt. The check reads
+          the same non-atomic counter the Alternatives below accept, so two truly concurrent attempts that read
+          the same prior value can both reach the threshold and log twice; that is the same narrow window that
+          lets such a burst slip under the threshold.</li>
+          <li><strong>A hashed key, never the email.</strong> <code>{KeyHash}</code> is the first 12 hex characters (48 bits,
+          <code>LogKeyHashLength</code>, <code>:35-36</code>) of the key segment the lockout cache entry already uses
+          (<code>LogKeyHash</code>, <code>:211-217</code>): <code>EmailIdentity.KeySegment</code>, the SHA-256 of the normalized address
+          (<code>.../Infrastructure/Auth/EmailIdentity.cs:25-26</code>). A full unsalted digest of a guessable address can
+          be reversed by hashing candidates; a 48-bit prefix matches too many addresses to name one, while still
+          correlating repeated lockouts of the same account (<code>:212-216</code>). No IP address or user agent is logged.</li>
+          <li>The refresh-token reuse Warning that pairs with it on the session side is recorded in
+          <a href="097-multi-device-refresh-sessions.html">ADR-097</a>&#39;s Amendment (2026-11-07). Failed attempts are still
+          not stored in a table.</li>
+          </ol>
           <h2 id="alternatives-rejected">Alternatives rejected</h2>
           <ul>
           <li><strong>Making the failed-attempt and registration counters atomic.</strong> The increment in
@@ -713,6 +740,7 @@
             <li><a href="#revision-2026-10-26">Revision (2026-10-26)</a></li>
             <li><a href="#revision-2026-10-28">Revision (2026-10-28)</a></li>
             <li><a href="#revision-2026-11-04">Revision (2026-11-04)</a></li>
+            <li><a href="#revision-2026-11-07">Revision (2026-11-07)</a></li>
             <li><a href="#alternatives-rejected">Alternatives rejected</a></li>
             <li><a href="#related">Related</a></li>
             </ul>

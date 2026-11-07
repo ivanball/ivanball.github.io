@@ -597,7 +597,7 @@
           <li><strong>Permission-grant snapshot interval 300 s to 30 s (#11).</strong> <code>PermissionGrantSettings.CacheSeconds</code> (<code>Source/Core/MMCA.Common.Application/Auth/Permissions/PermissionGrantSettings.cs:34</code>). Only the token-minting Identity service reads stored grants, so the cost is one small query per Identity replica per 30 s, with no pub/sub. See ADR-116.</li>
           <li><strong>JWKS publishes more than one key (#11).</strong> <code>JwksSettings.AdditionalKeys</code> (<code>Source/Core/MMCA.Common.Infrastructure/Auth/JwksSettings.cs:70</code>) are published after the current key, signing stays on the current key, and every local validator accepts the set, so a signing key rotates without a 401 wave. Service-token HS256 is untouched. See ADR-004.</li>
           </ul>
-          <p>Deferred, each with its re-open trigger:</p>
+          <p>Deferred, each with its re-open trigger. The last eleven rows were added on 2026-11-07 from the peer-repo wave review; a &quot;later&quot; row is kept with no trigger and is picked up by choice, not by an event:</p>
           <div class="table-wrap"><table>
           <thead>
           <tr>
@@ -642,7 +642,7 @@
           <td>first enterprise adopter requiring SSO</td>
           </tr>
           <tr>
-          <td>API keys or client credentials, webhooks, versioned OpenAPI with Sunset</td>
+          <td>API keys or client credentials, webhooks, versioned OpenAPI with Sunset. Design when built: webhooks are delivered from the outbox (<a href="../adr/003-outbox-dual-dispatch.html">ADR-003</a>) as timestamped, HMAC-SHA256-signed POSTs under the outbox retry and dead-letter policy (<code>Outbox:MaxRetries</code>, <code>Outbox:RetryBackoffBaseSeconds</code>, <code>Outbox:DeadLetterRetentionDays</code>; <code>Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/Administration/OutboxSettings.cs:21</code>, <code>:103</code>, <code>:114</code>), with subscriptions owned per tenant</td>
           <td>first B2B integrator, or a real v2</td>
           </tr>
           <tr>
@@ -652,6 +652,50 @@
           <tr>
           <td>Azure SignalR Service adapter, SSE fallback</td>
           <td>about 10k concurrent hub connections, or a corporate proxy blocking WebSockets</td>
+          </tr>
+          <tr>
+          <td>OpenAPI security transformer</td>
+          <td>first external integrator</td>
+          </tr>
+          <tr>
+          <td>Reloadable FeatureManagement configuration source</td>
+          <td>a kill switch needed without deploying a new revision</td>
+          </tr>
+          <tr>
+          <td>CAPTCHA port after the login lockout threshold</td>
+          <td>observed distributed credential stuffing</td>
+          </tr>
+          <tr>
+          <td>Presigned direct upload plus a pending-file lifecycle</td>
+          <td>files over about 50 MB</td>
+          </tr>
+          <tr>
+          <td>Browser web push</td>
+          <td>next conference planning</td>
+          </tr>
+          <tr>
+          <td>Dependency-review licence check on pull requests</td>
+          <td>later (no trigger)</td>
+          </tr>
+          <tr>
+          <td><code>PermissionCoverageTestsBase</code></td>
+          <td>later (no trigger)</td>
+          </tr>
+          <tr>
+          <td>Opt-in slow-command interceptor</td>
+          <td>later (no trigger)</td>
+          </tr>
+          <tr>
+          <td>Outbox and internal-command replay controller bases</td>
+          <td>later (no trigger)</td>
+          </tr>
+          <tr>
+          <td>Signed read URLs for private storage containers</td>
+          <td>later (no trigger)</td>
+          </tr>
+          <tr>
+          <td>Inbox-only notification retract</td>
+          <td>later (no trigger)</td>
           </tr>
           </tbody></table></div>
           <p>Two candidates were dropped rather than deferred: wiring <code>AddApplicationProfiling()</code> into the consumers (MiniProfiler is off in every ADC service, so it would profile nothing), and graceful-shutdown tests with a custom <code>HostOptions.ShutdownTimeout</code> (the .NET 30 s default matches the Container Apps grace period, and the outbox and internal-command leases already make a cut-off batch safe). The configuration a host already has for scale is listed in the <em>Enterprise deployment checklist</em> of <a href="../guides/common-CAPABILITIES.html">the capabilities guide</a>.</p>
