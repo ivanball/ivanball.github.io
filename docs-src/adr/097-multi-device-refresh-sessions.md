@@ -782,15 +782,15 @@ whole family was silent.
    answered from the index rather than by visiting every row of a long chain (`:75-81`). It declares no
    filter or INCLUDE list, so one configuration serves every relational engine.
 4. **The shaping is shared.** `SignInHistory`
-   (`MMCA.Common/Source/Core/MMCA.Common.Application/Auth/Sessions/SignInHistory.cs:19`) turns each
-   aggregate into a `SignInSummaryResponse`, capped at `MaxEntries` = 50 (`:22`), newest first
+   (`MMCA.Common/Source/Core/MMCA.Common.Application/Auth/Sessions/SignInHistory.cs:20`) turns each
+   aggregate into a `SignInSummaryResponse`, capped at `MaxEntries` = 50 (`:23`), newest first
    (`:57-59`). A sign-in starts at its earliest retained row and was last active at its head's issue
    instant (`:94-97`); the head decides how it ended: live (no end), revoked (the revocation instant and
    the stored reason, reported as it is) or expired (its expiry, `SignInEndReasons.Expired`) (`:105-115`).
    `IsCurrent` marks the sign-in the caller's own `sid` belongs to, found among the heads or by one
    user-scoped primary-key lookup (`:67-87`). Self-service (`AuthSessionIssuer.ListSignInsAsync`,
-   `AuthSessionIssuer.cs:233`) and administration (`UserSessionsAdministrationService.GetSignInsAsync`,
-   `.../Auth/Administration/UserSessionsAdministrationService.cs:54`) both go through it.
+   `AuthSessionIssuer.cs:238`) and administration (`UserSessionsAdministrationService.GetSignInsAsync`,
+   `.../Auth/Administration/UserSessionsAdministrationService.cs:59`) both go through it.
 5. **The response.** `SignInSummaryResponse(SignInId, StartedAt, LastActiveAt, IpAddress, UserAgent,
    EndedAt, EndReason, IsCurrent, Kind)`
    (`MMCA.Common/Source/Core/MMCA.Common.Shared/Auth/Responses/SignInSummaryResponse.cs:35-44`).
@@ -806,9 +806,9 @@ whole family was silent.
    decides.
 6. **Two endpoints.** `GET auth/my-sign-ins` on `AuthControllerBase`, `[Authorize]` and scoped to the
    caller (`MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/AuthControllerBase.cs:215-227`),
-   and `GET {userId}/sign-ins` on `UsersAdminControllerBase` (`.../Controllers/Administration/UsersAdminControllerBase.cs:100-111`),
+   and `GET {userId}/sign-ins` on `UsersAdminControllerBase` (`.../Controllers/Administration/UsersAdminControllerBase.cs:104-118`),
    which the class-level `[HasPermission(AdministrationPermissions.ManageUsers)]` gates to `users:manage`
-   (`:42`). The admin route prefix is the consumer's (`[Route("Admin/Users")]` in the class example,
+   (`:46`). The admin route prefix is the consumer's (`[Route("Admin/Users")]` in the class example,
    `:22`).
 7. **One shared component.** `SignInHistoryTable`
    (`MMCA.Common/Source/Presentation/MMCA.Common.UI/Components/Auth/SignInHistoryTable.razor`) renders the
