@@ -482,6 +482,86 @@
           dependency on the hot path of every service for a rare request), and mapping the grants table in
           every service&#39;s database (four copies of one record, and a migration in every service).</li>
           </ul>
+          <h2 id="revision-2026-11-07-support-access-log">Revision (2026-11-07): support access log</h2>
+          <p><strong>Context.</strong> Point 11 lets the viewed user see each grant on their own account, but an organizer
+          reviewing support access had to open one account&#39;s sign-in history at a time: <code>IViewAsGrantStore</code>
+          had no list member and no endpoint listed grants. Common also has no id-to-name service, so a list of
+          grants would show bare user ids. MMCA.Common v1.280.0 (<code>MMCA.Common/CHANGELOG.md:9</code>, <code>:24-26</code>) adds
+          one place that answers who viewed whom, why, when and how it ended.</p>
+          <p><strong>Decision.</strong></p>
+          <ul>
+          <li><strong>A paged read on the store.</strong> <code>IViewAsGrantStore.ListAsync(request, now)</code> returns one page, newest
+          first, with the total the filters match
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Auth/ViewAs/IViewAsGrantStore.cs:62-65</code>). The
+          filters are <code>ViewAsGrantListRequest</code>: <code>Staff</code> and <code>Viewed</code> email text, <code>From</code> inclusive and <code>To</code>
+          exclusive on the grant instant, <code>Status</code>, <code>PageNumber</code>, and <code>PageSize</code>, default 20 and clamped to
+          100 (<code>MMCA.Common/Source/Core/MMCA.Common.Shared/Auth/Requests/AdministrationRequests.cs:40-67</code>).
+          <code>ViewAsGrantStatus</code> is <code>Live</code>, <code>Ended</code> or <code>Expired</code>, serialized by name
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Shared/Auth/Responses/ViewAsGrantStatus.cs:10-21</code>), and is
+          derived at the read rather than stored (<code>ViewAsGrant.StatusAt</code>,
+          <code>MMCA.Common/Source/Core/MMCA.Common.Domain/Auth/ViewAsGrant.cs:181-189</code>). The EF store and the
+          in-memory test store share one filter, <code>ViewAsGrantLogQuery.Filter</code>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Auth/ViewAs/ViewAsGrantLogQuery.cs:26</code>, status
+          predicates at <code>:67-69</code>); the EF store orders by <code>GrantedAt</code> descending on the existing
+          <code>IX_ViewAsGrants_GrantedAt</code> index and is inert where the table is not mapped
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Auth/EFViewAsGrantStore.cs:120-136</code>;
+          <code>ViewAsGrantModelBuilderExtensions.cs:52</code>).</li>
+          <li><strong>A controller base the app subclasses.</strong> <code>ViewAsGrantsAdminControllerBase</code> is abstract, carries no
+          route, and is gated on <code>users:manage</code> (<code>AdministrationPermissions.ManageUsers</code>), the permission the
+          per-account sign-in history already requires
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/Administration/ViewAsGrantsAdminControllerBase.cs:39-40</code>).
+          Its one <code>GET</code> answers <code>PagedCollectionResult&lt;ViewAsGrantSummaryResponse&gt;</code> (<code>:53-58</code>, rows built at
+          <code>:78-91</code>) and answers 404 while <code>ViewAs:Enabled</code> is false or on a service without the grant store
+          (<code>ViewAs:HostsGrantStore</code> false), as the grant and end actions do (<code>:70-73</code>). The app supplies the
+          route, for example <code>Admin/ViewAsGrants</code> (<code>:21-26</code>; <code>MMCA.Common/UPGRADING.md:93-103</code>).</li>
+          <li><strong>A component, not a page.</strong> <code>SupportAccessLog</code> shows both parties, the reason in full, the start,
+          the end (or the expiry) and a status chip whose text carries the status, with staff, viewed, date
+          and status filters and a server pager
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI/Pages/Administration/SupportAccessLog.razor:9-58</code>,
+          <code>:85-116</code>). It declares no route: the app supplies the page and its authorization.
+          <code>services.AddSupportAccessLogUI()</code> registers its client, <code>IViewAsGrantsUIService</code>
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI/DependencyInjection.cs:343-348</code>).</li>
+          <li><strong>An email snapshot on the grant row.</strong> <code>ViewAsGrant.StaffDisplay</code> and <code>TargetDisplay</code> keep the
+          staff user&#39;s email and the viewed account&#39;s email as they were at grant time
+          (<code>ViewAsGrant.cs:59</code>, <code>:66</code>), folded to lower case and cut to <code>DisplayMaxLength</code> (256) by
+          <code>NormalizeDisplay</code> (<code>:27</code>, <code>:151-167</code>), so the log needs no user lookup and stays readable after an
+          account is deleted. <code>ViewAsService</code> takes the viewed account&#39;s email from the <code>ViewAsSubject</code> it
+          already resolved to mint the token, and the staff email from the caller&#39;s email claim through a new
+          optional <code>ICurrentUserService</code>, read only when the caller is the staff user
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Auth/ViewAs/ViewAsService.cs:40-47</code>, <code>:97</code>,
+          <code>:151-160</code>). Both columns are nullable, at most 256 characters
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Auth/ViewAsGrantModelBuilderExtensions.cs:44-45</code>).</li>
+          <li><strong>Erasure blanks the snapshot.</strong> <code>IViewAsGrantStore.ForgetUserAsync</code> blanks the erased account&#39;s
+          email on every grant naming it, as staff or as the viewed account, and saves nothing itself
+          (<code>IViewAsGrantStore.cs:67-76</code>; <code>ViewAsGrant.ForgetDisplayOf</code>, <code>ViewAsGrant.cs:202-218</code>).
+          <code>DeleteUserHandlerBase</code> takes an optional trailing <code>IViewAsGrantStore</code> and calls it right after the
+          refresh-session revocation, so the blanking commits in the erasure&#39;s one save
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Users/UseCases/DeleteUser/DeleteUserHandlerBase.cs:89</code>,
+          <code>:165-178</code>). The ids, reason and times stay on the row.</li>
+          <li><strong>Retention is unchanged.</strong> Rows still age out after <code>ViewAs:RetentionDays</code> (default 90,
+          <code>MMCA.Common/Source/Core/MMCA.Common.Application/Auth/ViewAs/ViewAsSettings.cs:55-56</code>), swept on each
+          new grant (<code>ViewAsService.cs:99</code>), so the log never shows an older grant and the snapshot lives only
+          as long as its row.</li>
+          </ul>
+          <p><strong>Consequences.</strong></p>
+          <ul>
+          <li>One more migration on the grant-store database only: two nullable <code>nvarchar(256)</code> columns on
+          <code>ViewAsGrants</code> (<code>MMCA.Common/UPGRADING.md:86-92</code>). Rows written before it have no snapshot and show
+          &quot;Email not on record&quot; until they age out.</li>
+          <li>A consumer subclasses the controller on the service that holds the grant store, forwards the store
+          from its <code>DeleteUserHandlerBase</code> subclass (one that forwards nothing leaves the snapshots in place
+          until the retention sweep), and adds a page that renders <code>&lt;SupportAccessLog /&gt;</code> behind its
+          <code>users:manage</code> gate (<code>MMCA.Common/UPGRADING.md:93-109</code>).</li>
+          <li>The snapshot is personal data held on the audit row; the privacy disclosure this ADR already asks
+          for covers it, and erasure removes it.</li>
+          <li>Binary-breaking constructors again: <code>ViewAsService</code> and <code>DeleteUserHandlerBase</code> gain an optional
+          trailing parameter (source compatible), and a class of a consumer&#39;s own that implements
+          <code>IViewAsGrantStore</code> adds <code>ListAsync</code> and <code>ForgetUserAsync</code> (<code>MMCA.Common/CHANGELOG.md:25</code>).</li>
+          <li>The log is view only. It does not export, and it cannot end another staff user&#39;s live view.</li>
+          <li>Rejected: resolving names through a user lookup at read time. Common has no id-to-name service,
+          and a lookup would read blank for a deleted account at once, where the snapshot keeps the record
+          readable until erasure blanks it.</li>
+          </ul>
           <h2 id="related">Related</h2>
           <p><a href="014-cqrs-decorator-pipeline.html">ADR-014</a> (the decorator pipeline the view-as decorator now heads),
           <a href="020-permission-based-authorization.html">ADR-020</a> (the <code>users:view-as</code> permission),
@@ -509,6 +589,7 @@
             <li><a href="#alternatives-rejected">Alternatives rejected</a></li>
             <li><a href="#consequences">Consequences</a></li>
             <li><a href="#revision-2026-11-07-multi-service-hosts">Revision (2026-11-07): multi-service hosts</a></li>
+            <li><a href="#revision-2026-11-07-support-access-log">Revision (2026-11-07): support access log</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>
