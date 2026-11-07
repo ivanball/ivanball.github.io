@@ -7,7 +7,9 @@ the consumer-adoption statement now names every host that calls `AddScheduledJob
 audit-trail migrations that create the table. Revised 2026-10-21: anchors refreshed after the outbox
 claim path and the `ConfigureScheduler` mapping moved in source. Revised 2026-10-26: anchors refreshed
 after the outbox claim path and the consumer `AddScheduledJobs` calls moved in source. Revised
-2026-10-28: anchors refreshed after the ADC Identity host's `AddScheduledJobs` call moved in source. The implementation lands in the MMCA.Common "enterprise capability wave" release
+2026-10-28: anchors refreshed after the ADC Identity host's `AddScheduledJobs` call moved in source. Revised
+2026-11-07: a cron override applies when the host restarts, not on a running host (the runner reads its
+settings once), and a cron with no next occurrence parks the job; see Revision (2026-11-07). The implementation lands in the MMCA.Common "enterprise capability wave" release
 and is opt-in: a host calls `AddScheduledJobs(configuration)` and sets `Scheduler:Enabled`. Until it does,
 the framework creates no table and starts no runner.
 
@@ -130,9 +132,13 @@ configuration, the `Scheduler:Jobs:{Name}:Cron` section bound by `SchedulerSetti
 The runner resolves the two per job on every cycle, the override when it is present and non-blank and the
 compiled-in default otherwise (`ResolveCronExpression`, `.../Infrastructure/Scheduling/ScheduledJobRunner.cs:170`).
 The table is created only when the settings flag is on, the same gating [ADR-075](075-audit-trail.md) uses.
-Every cycle the registered jobs are **upserted by `JobName`** (`SyncRegistrationsAsync`, `:267`), which is why
-an override edited on a running host takes effect on the next cycle: the stored expression is rewritten and
-the next occurrence recomputed from the current instant, with a row whose expression is unchanged left alone.
+Every cycle the registered jobs are **upserted by `JobName`** (`SyncRegistrationsAsync`, `:267`): a row whose
+expression changed has the expression rewritten and the next occurrence recomputed from the current instant,
+and a row whose expression is unchanged is left alone (`:287-293`). **An override applies on restart, not on a
+running host.** The runner reads `IOptions<SchedulerSettings>.Value` once, at construction
+(`ScheduledJobRunner.cs:46`), and every cycle resolves the cron from that copy (`:286`), so a
+`Scheduler:Jobs:{Name}:Cron` edit reaches the table on the first cycle after the host restarts
+(`SchedulerSettings.cs:68-75`).
 
 ### Design-time gets the same flag
 `DesignTimeDbContextOptions.EnableScheduler`
@@ -202,7 +208,11 @@ Helpdesk one.
   startup, and the override setting carries no validation attribute (`SchedulerSettings.cs:74`). A malformed
   expression such as `* * * * ? ?` does not stop the host: it is logged and its row is parked at
   `DateTime.MaxValue` with `LastOutcome` `Skipped` (`ScheduledJobRunner.cs:296-319`, `:342-365`). Parsing cannot catch `0 3 * * 1`
-  written when `0 3 * * *` was meant.
+  written when `0 3 * * *` was meant. An expression that parses but has **no next occurrence**, such as
+  `0 0 31 2 *` (31 February), parks the job the same way and more quietly: Cronos returns no occurrence
+  rather than an error (`ScheduledJobRunner.cs:176-178`, `:195`), so the row's `NextRunOn` becomes
+  `DateTime.MaxValue` (`:313`, `:342`) with no parse-error log line and no `Skipped` outcome, and the
+  job never runs again until the expression changes.
 - **One runner per host, and it is shared.** A slow job delays the jobs due behind it, exactly as
   [ADR-052](052-background-job-execution.md)'s single-reader drain does for its queue.
 
@@ -299,6 +309,24 @@ stands as described. Only the ADC Identity `AddScheduledJobs` anchor moved, by o
    `MMCA.Helpdesk/Source/Hosts/MMCA.Helpdesk.Web/Program.cs:89`; `MMCA.ADC.Notification.Service/Program.cs`
    still has no call. The 2026-10-26 entry above is left as written; its ADC Identity anchor (`:252`) is
    stale and its other `Program.cs` anchors are current.
+
+## Revision (2026-11-07)
+A correction, not a behavior change. No decision, rationale or default changed.
+
+1. **A cron override applies on restart, not on the next cycle of a running host.** The Decision said an
+   override edited on a running host takes effect on the next cycle. It does not: `ScheduledJobRunner`
+   copies `IOptions<SchedulerSettings>.Value` into a field once, at construction
+   (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Scheduling/ScheduledJobRunner.cs:46`), and
+   `SyncRegistrationsAsync` resolves each job's cron from that copy (`:286`), so a changed
+   `Scheduler:Jobs:{Name}:Cron` is never seen until the host restarts. The first cycle after the restart
+   rewrites the stored expression and recomputes the next occurrence (`:295`, `:301-305`). The override's
+   own documentation now says so (`SchedulerSettings.cs:68-75`). The Decision paragraph is corrected.
+2. **A cron with no next occurrence parks the job.** `0 0 31 2 *` parses, so it raises no parse error,
+   but Cronos finds no 31 February and returns no occurrence (`ScheduledJobRunner.cs:176-178`, `:195`).
+   The sync stores `DateTime.MaxValue` as `NextRunOn` (`:313` for a new row, `:342` for a changed one),
+   and a completed run does the same when its expression has no further occurrence (`:488`). Unlike an
+   unparsable expression, nothing is logged and `LastOutcome` is not set to `Skipped`, so the only sign
+   is a `NextRunOn` of `DateTime.MaxValue`. The cron trade-off now records it.
 
 ## Related
 [ADR-003](003-outbox-dual-dispatch.md) (the outbox whose claim-lease idiom and smart wait this reuses

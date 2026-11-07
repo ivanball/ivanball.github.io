@@ -36,6 +36,10 @@ the Store UI adoption of `ModelValidation.For` is now 7 page call sites, and the
 decorator-order test composes through `AddMmcaApplicationPipeline`; all seven service-host call sites
 re-pointed. Revised 2026-10-28: anchors refreshed after the ADC Identity and Engagement hosts
 gained an `AddAzureServiceBusTransport()` registration ahead of their pipeline call.
+Revised 2026-11-07: the command chain gains an eighth decorator, `ViewAsCommandDecorator`, registered
+outermost, which refuses every command while the caller holds a view-as token
+(ADR-137); the query chain is unchanged. See the Revision
+(2026-11-07) at the end.
 
 ## Context
 Commands and queries share cross-cutting concerns: validation, transactions, cache invalidation,
@@ -54,10 +58,10 @@ Use single-responsibility handlers behind a Scrutor-composed decorator pipeline.
 - Cross-cutting concerns are decorators registered with Scrutor `TryDecorate` in
   `AddApplicationDecorators()`. Because `TryDecorate` applies in **reverse** registration order (last
   registered is outermost), the execution order (outermost to innermost) is (registration sequence at
-  `MMCA.Common/Source/Core/MMCA.Common.Application/DependencyInjection.cs:134-140` for commands and
-  `:143-148` for queries; how the chain reached this shape is in the Revisions (2026-08-18) and
-  (2026-08-26) below):
-  - **Commands:** FeatureGate -> Authorization -> Logging -> Caching -> Validating -> Timeout ->
+  `MMCA.Common/Source/Core/MMCA.Common.Application/DependencyInjection.cs:134-141` for commands and
+  `:144-149` for queries; how the chain reached this shape is in the Revisions (2026-08-18),
+  (2026-08-26) and (2026-11-07) below):
+  - **Commands:** ViewAs -> FeatureGate -> Authorization -> Logging -> Caching -> Validating -> Timeout ->
     Transactional -> Handler
   - **Queries:** FeatureGate -> Authorization -> Logging -> Caching -> Validating -> Timeout -> Handler
   - plus an optional pair of `Profiling` decorators (`ProfilingCommandDecorator` /
@@ -587,3 +591,35 @@ sections are left as historical records.
    (`MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:267`) and Sales
    (`MMCA.Store/Source/Services/MMCA.Store.Sales.Service/Program.cs:248`), and
    `MMCA.Helpdesk/Source/Hosts/MMCA.Helpdesk.Web/Program.cs:121` still match.
+
+## Revision (2026-11-07)
+The command chain gains an outermost decorator. The query chain, the sealing rule and every other
+position are unchanged. The shipped execution order (outermost to innermost) is now:
+
+- **Commands:** ViewAs -> FeatureGate -> Authorization -> Logging -> Caching -> Validating -> Timeout ->
+  Transactional -> Handler
+- **Queries:** FeatureGate -> Authorization -> Logging -> Caching -> Validating -> Timeout -> Handler
+
+1. **`ViewAsCommandDecorator` is registered last, so it runs first**
+   (`MMCA.Common/Source/Core/MMCA.Common.Application/DependencyInjection.cs:141`, after the
+   FeatureGate registration at `:140`). When the caller's principal carries the view-as actor claim
+   (`IsViewAs()`, a presence check on `act_sub`:
+   `MMCA.Common/Source/Core/MMCA.Common.Shared/Auth/ClaimsPrincipalExtensions.cs:137-138`,
+   `AuthClaimTypes.cs:79`), it returns a `Forbidden` failure with code `Auth.ViewAsReadOnly` without
+   calling the inner handler
+   (`MMCA.Common/Source/Core/MMCA.Common.Application/UseCases/Decorators/ViewAsCommandDecorator.cs:38-44`).
+   Any other caller passes straight through after one claim lookup (`:38-39`). View-as itself, a
+   read-only, time-boxed support token, is ADR-137; this
+   decorator is its command-level layer, the one that also covers a command sent from a GET handler or a
+   hub method, which an HTTP-method check cannot see (`ViewAsCommandDecorator.cs:9-12`).
+2. **Why outermost.** A refused command must cost nothing downstream: no feature-flag lookup, permission
+   check, log line, validation or transaction (`ViewAsCommandDecorator.cs:14-16`). Placing it outside
+   FeatureGate also means a view-as caller is refused the same way whether or not the command's flag is
+   on, so the answer does not reveal flag state.
+3. **Registered unconditionally.** `AddApplicationDecorators()` adds it for every host, whether or not
+   the host offers view-as; a host that never issues the claim pays only the claim lookup per command.
+   The failure is built lazily on the first refusal, for the reason `FeatureGateCommandDecorator`
+   documents (`ViewAsCommandDecorator.cs:25-33`).
+4. The command chain is now eight decorators and the query chain six. The Decision's registration anchors
+   moved to `DependencyInjection.cs:134-141` (commands) and `:144-149` (queries); the earlier Revision
+   sections keep the anchors they recorded.

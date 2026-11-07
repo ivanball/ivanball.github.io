@@ -43,6 +43,9 @@ Revised 2026-10-26: the Decision now names all three facts of the optional `Tena
 (header opt-in through `AllowsHeaderResolution`, claim before header, health endpoints excluded), not
 only the claim-before-header one; anchors refreshed.
 Revised 2026-10-28: anchors refreshed after the releases since v1.243.0 moved its `CHANGELOG.md` entry.
+Revised 2026-11-07: the forgotten-marker trade-off is now caught by `TenantScopeConventionTestsBase` in a
+tenancy host that subclasses it (every module entity tenant-scoped or declared global); see Revision
+(2026-11-07).
 
 ## Context
 MMCA.Common already partitions data along two axes and neither of them is a tenant. ADR-006 partitions by
@@ -293,8 +296,9 @@ per-tenant database override, so the runnable seed exercises both halves of this
   provider stops emitting `tenant_id` returns 400 on every non-excluded route rather than degrading to a
   reduced view. That is the intended trade, and it is still an outage.
 - **Shared-schema turns one bad filter into a data leak rather than an error,** and a missing
-  `ITenantEntity` marker on a new entity fails no build and no test: it silently includes that entity's
-  rows in every tenant's queries.
+  `ITenantEntity` marker on a new entity silently includes that entity's rows in every tenant's
+  queries. A tenancy host that subclasses `TenantScopeConventionTestsBase` fails its build on that
+  omission (see the Revision (2026-11-07)); a host that does not subclass it is still unguarded.
 - **The system context is a privileged mode with no second gate.** Any code path that runs without a
   resolved tenant reads across all tenants, and nothing distinguishes "deliberately system" from
   "middleware did not run here".
@@ -521,3 +525,30 @@ releases were prepended above the v1.243.0 entry.
    unless configured otherwise." at `:447` (cited as `:189` by the Revision (2026-10-21) and as `:404`
    by the Revision (2026-10-26)). It is a labeled bullet under Changed, not a separate Breaking
    section.
+
+## Revision (2026-11-07)
+The forgotten-marker trade-off now has a gate a tenancy host can inherit. The isolation model, the
+resolution defaults and the filters are unchanged.
+
+1. **`TenantScopeConventionTestsBase`** ships in `MMCA.Common.Testing.Architecture`
+   (`MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Bases/Domain/TenantScopeConventionTestsBase.cs:14`)
+   with two facts. `EntitiesWithTenantId_ShouldImplement_ITenantEntity` (`:24-26`) fails when any
+   concrete Domain or Infrastructure entity, framework or module, declares or inherits a `TenantId`
+   property without implementing `ITenantEntity`, the marker that applies the named `Tenant` filter and
+   the save interceptor (`.../Rules/Domain/ArchitectureRules.Tenancy.cs:8-16`).
+   `ModuleEntities_ShouldBeTenantScoped_OrDeclaredGlobal` (`:28-30`) fails when a concrete module entity
+   is neither tenant-scoped nor named in the subclass's `GlobalEntityTypes` (`:22`), type full names or
+   namespace prefixes matched ordinally (`ArchitectureRules.Tenancy.cs:30-46`). The second fact is the
+   one that closes the trade-off: a new module entity without the marker now fails the build unless
+   someone declares it global, and that declaration is a reviewed line in the test subclass rather than
+   an absence. Framework entities are out of its scope, since whether a framework row is tenant-owned is
+   the framework's decision (`ArchitectureRules.Tenancy.cs:37-39`).
+2. **It is a host's opt-in, as the tenancy itself is.** The base is subclassed only in a host that
+   enables tenancy, with an empty `GlobalEntityTypes` by default, so every module entity must be scoped
+   until the subclass lists the shared ones (`TenantScopeConventionTestsBase.cs:7-12`, `:18-22`). Common
+   has no modules, so its own test calls only the first rule
+   (`MMCA.Common/Tests/Architecture/MMCA.Common.Architecture.Tests/Domain/EntityModel/TenantEntityConventionTests.cs:29-39`),
+   and the second rule's fixture tests pin both outcomes
+   (`.../Domain/EntityModel/TenantScopeFitnessTests.cs:23`, `:32`, `:43`). No consumer subclasses the
+   base yet: Helpdesk, the reference tenancy adopter, is the planned first; ADC and Store stay
+   single-tenant. Until a host subclasses it, the trade-off holds for that host as originally written.

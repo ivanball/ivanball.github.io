@@ -27,6 +27,8 @@ Revised 2026-10-26: the password verifier accepts a legacy 64-byte hash or a ver
 Revised 2026-10-28: anchors refreshed after Common #615 and ADC #298 moved them.
 Revised 2026-11-04 (Common v1.277.0 removed `DistributedCacheService`, so `HybridCacheService` is the only
 shared-store implementation the counters run on; see Revision below).
+Revised 2026-11-07: a login lockout now logs one Warning when it first trips, carrying a 12-character
+prefix of the key's SHA-256 and the lockout seconds, never the email; see Revision (2026-11-07).
 
 ## Context
 ADR-019's global rate limiter is **principal-keyed**: it caps requests per authenticated principal,
@@ -425,6 +427,29 @@ stay in the keyspace every replica shares during a Redis outage
 Decision and Alternatives rejected entries now name `HybridCacheService.IncrementAsync`
 (`HybridCacheService.cs:342`) and the guarded helper at `DependencyInjection.Caching.cs:221-233`; the
 dated revisions above that name `DistributedCacheService` record the code as it stood then.
+
+## Revision (2026-11-07)
+A lockout is no longer silent. The lockout model, the backoff formula, the thresholds, the answers and
+the fail-open posture are unchanged; what changed is that an operator now sees an account lock.
+
+1. **One Warning when the lockout first trips.** `IncrementFailedAttemptsAsync` sets the lockout flag
+   whenever the counter is at or above `MaxFailedAttempts`, and logs only when the counter equals it
+   (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Auth/LoginProtectionService.cs:99`, `:108`,
+   `:110-115`): "Login protection lockout tripped for key {KeyHash}; locked out for {LockoutSeconds}s"
+   (`:224-225`). A stuffing run that keeps guessing past the threshold extends the lockout but adds no
+   lines, so the log carries one line per locked account rather than one per attempt. The check reads
+   the same non-atomic counter the Alternatives below accept, so two truly concurrent attempts that read
+   the same prior value can both reach the threshold and log twice; that is the same narrow window that
+   lets such a burst slip under the threshold.
+2. **A hashed key, never the email.** `{KeyHash}` is the first 12 hex characters (48 bits,
+   `LogKeyHashLength`, `:35-36`) of the key segment the lockout cache entry already uses
+   (`LogKeyHash`, `:211-217`): `EmailIdentity.KeySegment`, the SHA-256 of the normalized address
+   (`.../Infrastructure/Auth/EmailIdentity.cs:25-26`). A full unsalted digest of a guessable address can
+   be reversed by hashing candidates; a 48-bit prefix matches too many addresses to name one, while still
+   correlating repeated lockouts of the same account (`:212-216`). No IP address or user agent is logged.
+3. The refresh-token reuse Warning that pairs with it on the session side is recorded in
+   [ADR-097](097-multi-device-refresh-sessions.md)'s Amendment (2026-11-07). Failed attempts are still
+   not stored in a table.
 
 ## Alternatives rejected
 - **Making the failed-attempt and registration counters atomic.** The increment in

@@ -38,6 +38,10 @@ bought no theft containment, only an extra sign-out per stale device.
 Revised 2026-10-26: anchors refreshed after 1.261.0.
 Revised 2026-11-02: opt-in lost-response recovery (1.273.0, `RefreshSessions:LostResponseRecoveryMinutes`,
 default 0 = off) rotates a never-presented successor instead of revoking the family (see Revision below).
+Amended 2026-11-07: sign-in history. A nullable `SignInId` groups a rotation chain into one sign-in,
+users and administrators read the last `RetentionDays` of sign-ins (ended ones included, newest 50)
+through two endpoints and a shared table, and a reuse revocation logs a Warning without IP or user
+agent. One nullable column and one index per host that maps the table (see Amendment (2026-11-07)).
 ## Context
 ADR-050 stores a user's refresh token as a single nullable `RefreshToken` string plus its
 `RefreshTokenExpiry` on the app's `User` aggregate. That model settles rotation and reuse detection
@@ -745,6 +749,98 @@ is unchanged.
    (`RefreshSessionSettings.cs:122-123`), so a host that sets nothing sees the original BR-206 answer.
    MMCA.ADC sets it to 120 minutes. The Decision has a new bullet for it.
 2. Anchors outside that bullet were not re-verified in this revision.
+
+## Amendment (2026-11-07): sign-in history
+**Context.** Sessions were visible only while live: `GET auth/my-sessions` and the administrator's
+sessions view list un-revoked rows, so a user or an operator reviewing a suspected compromise had no
+record of a sign-in once it ended. A rotation chain was linked only by `ReplacedByTokenHash`, so
+grouping one sign-in meant walking the chain row by row. And a refresh-token reuse that revoked a
+whole family was silent.
+
+**Decision.**
+1. **`SignInId` groups a rotation chain.** `RefreshSession.SignInId` is a nullable `Guid`
+   (`MMCA.Common/Source/Core/MMCA.Common.Domain/Auth/RefreshSession.cs:106`). `Create` sets it to the
+   row's own `Id` (`:176`), so a fresh sign-in opens a group, and `CreateSuccessor` (`:192`) copies the
+   predecessor's value to the successor (`:200-204`), which the issuer's rotation now calls
+   (`MMCA.Common/Source/Core/MMCA.Common.Application/Auth/Sessions/AuthSessionIssuer.cs:450`). A row
+   written before the column existed holds null; its successor keeps the group it opened in `Create`, so
+   from the first rotation after the upgrade the chain is grouped like any other.
+2. **The store aggregates; one row per sign-in, never one per rotation.**
+   `IRefreshSessionStore.GetRecentSignInsAsync` (`MMCA.Common/Source/Core/MMCA.Common.Application/Auth/IRefreshSessionStore.cs:81`)
+   returns `RefreshSessionSignIn` aggregates. The EF store runs at most three statements, each bounded
+   by the cap and none by the user's row count
+   (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Auth/EFRefreshSessionStore.cs:88-95`):
+   a grouped query that returns each `SignInId` with the MIN and MAX of its rows' `CreatedAt`, ordered
+   and limited in the database (`SignInChainsQuery`, `:158-173`); a load of only the row at each
+   group's MAX, the head (`SignInHeadsQuery`, `:186-193`, matched exactly in memory with the key as the
+   tie-break, `:120-131`); and the capped legacy rows, where each null-`SignInId` row that was not
+   revoked as `Rotated` counts as its own sign-in (`LegacySignInsQuery`, `:204-214`). All three are
+   untracked (`:103`). That fallback ages out with the retention sweep.
+3. **One index.** `IX_RefreshSessions_UserId_SignInId` on `(UserId, SignInId, CreatedAt)`
+   (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Auth/RefreshSessionModelBuilderExtensions.cs:28`,
+   `:83-85`). `CreatedAt` is the trailing key, so the per-group MIN and MAX and the head lookup are
+   answered from the index rather than by visiting every row of a long chain (`:75-81`). It declares no
+   filter or INCLUDE list, so one configuration serves every relational engine.
+4. **The shaping is shared.** `SignInHistory`
+   (`MMCA.Common/Source/Core/MMCA.Common.Application/Auth/Sessions/SignInHistory.cs:19`) turns each
+   aggregate into a `SignInSummaryResponse`, capped at `MaxEntries` = 50 (`:22`), newest first
+   (`:57-59`). A sign-in starts at its earliest retained row and was last active at its head's issue
+   instant (`:94-97`); the head decides how it ended: live (no end), revoked (the revocation instant and
+   the stored reason, reported as it is) or expired (its expiry, `SignInEndReasons.Expired`) (`:105-115`).
+   `IsCurrent` marks the sign-in the caller's own `sid` belongs to, found among the heads or by one
+   user-scoped primary-key lookup (`:67-87`). Self-service (`AuthSessionIssuer.ListSignInsAsync`,
+   `AuthSessionIssuer.cs:233`) and administration (`UserSessionsAdministrationService.GetSignInsAsync`,
+   `.../Auth/Administration/UserSessionsAdministrationService.cs:54`) both go through it.
+5. **The response.** `SignInSummaryResponse(SignInId, StartedAt, LastActiveAt, IpAddress, UserAgent,
+   EndedAt, EndReason, IsCurrent, Kind)`
+   (`MMCA.Common/Source/Core/MMCA.Common.Shared/Auth/Responses/SignInSummaryResponse.cs:35-44`).
+   `EndReason` takes the values of `SignInEndReasons`: `SignedOut`, `ReuseDetected`,
+   `SessionCapExceeded`, `AccountDeleted` and `Expired`
+   (`.../Shared/Auth/Responses/SignInEndReasons.cs:11-23`), the first four shared with the session's own
+   revocation reasons. `Kind` is an extension point serialized by name, with one value today,
+   `SignIn` (`.../Shared/Auth/Responses/SignInHistoryEntryKind.cs:9-13`), so a later entry kind reads as
+   an unknown string to an older client rather than as a bare number.
+6. **Two endpoints.** `GET auth/my-sign-ins` on `AuthControllerBase`, `[Authorize]` and scoped to the
+   caller (`MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/AuthControllerBase.cs:215-227`),
+   and `GET {userId}/sign-ins` on `UsersAdminControllerBase` (`.../Controllers/Administration/UsersAdminControllerBase.cs:100-111`),
+   which the class-level `[HasPermission(AdministrationPermissions.ManageUsers)]` gates to `users:manage`
+   (`:42`). The admin route prefix is the consumer's (`[Route("Admin/Users")]` in the class example,
+   `:22`).
+7. **One shared component.** `SignInHistoryTable`
+   (`MMCA.Common/Source/Presentation/MMCA.Common.UI/Components/Auth/SignInHistoryTable.razor`) renders the
+   list read-only, with the current sign-in marked by a text chip rather than a colour, and the shared
+   `/profile/sessions` page shows it below the live devices
+   (`MMCA.Common/Source/Presentation/MMCA.Common.UI/Pages/Auth/Sessions.razor:1`, `:125`). The
+   administrator's client is `IUserAdminUIService<TUserDto>.GetSignInsAsync`; a consumer places the
+   component on its own user-detail page.
+8. **Reuse is logged.** When a replayed token revokes the family, `RevokeFamilyOnReuseAsync` logs one
+   Warning, "Refresh token reuse detected for user {UserId}; {RevokedCount} live sessions revoked"
+   (`AuthSessionIssuer.cs:584-587`, called at `:601`). Both reuse paths end in that method, so each event
+   logs once (`:590-593`). It carries the user id and the count only, never the client IP or user agent,
+   which are personal data on the session row (`:582-583`). The lockout Warning that pairs with it is
+   [ADR-029](029-authentication-brute-force-protection.md)'s.
+
+**Consequences.**
+- Every host that maps `RefreshSessions` adds one migration: a nullable column and one index, with no
+  data rewrite (`MMCA.Common/CHANGELOG.md:11`).
+- History depth equals `RefreshSessions:RetentionDays` (default 30,
+  `MMCA.Common/Source/Core/MMCA.Common.Application/Auth/RefreshSessionSettings.cs:72`): the sweep that
+  bounds reuse detection also bounds what a user can review, and nothing here extends it.
+- "Last active" is the last refresh, not the last request: an access token used for its full lifetime
+  without a refresh does not move it.
+- A sign-in that began before the upgrade loses its start: once its live pre-upgrade row rotates, that
+  row is `Rotated` and leaves the legacy query, and the history shows the sign-in as starting at the
+  first post-upgrade rotation. A pre-upgrade row that never rotates again shows as its own sign-in
+  until it ages out.
+
+**Rejected.**
+- **Walking `ReplacedByTokenHash` chains per request** (2026-11-07): unbounded rows per active device,
+  since a device that refreshes at the default 15-minute access-token lifetime
+  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Auth/JwtSettings.cs:66`) writes about 96 rows a
+  day. Revisit only if a host cannot take the migration.
+- **A failed-attempts table** (2026-11-07): failed sign-ins stay counters in the cache, as
+  [ADR-029](029-authentication-brute-force-protection.md) decided; a sign-in history lists sessions
+  that were issued, not attempts that failed.
 
 ## Related
 [ADR-050](050-jwt-refresh-token-rotation.md) (the single-column model this record replaces, and the
