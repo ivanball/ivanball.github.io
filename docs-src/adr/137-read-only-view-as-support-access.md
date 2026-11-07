@@ -201,6 +201,37 @@ their sign-in history; off by default.**
 - **MAUI is excluded.** The overlay lives in the web proxy; MAUI heads do not offer view-as
   (`MMCA.Common/UPGRADING.md:112`).
 
+## Revision (2026-11-07): multi-service hosts
+
+**Context.** Adopting v1.278.0 in MMCA.ADC, which runs Identity, Conference, Engagement and
+Notification services behind a gateway, showed the decision above assumed one host. The guard
+checked the grant against the local database, and only Identity's database holds `ViewAsGrants`.
+The first call to any other service returned 401, the proxy dropped the overlay cookie on that 401,
+and the view ended on the first page load. It failed closed (nothing leaked, nothing was written),
+but view-as was unusable in a multi-service host, which the framework exists to support.
+
+**Decision.** A new setting, `ViewAs:HostsGrantStore` (default true, so a single host is unchanged),
+says whether a host holds the grant store. Only a host with `Enabled` and the store maps the
+`ViewAsGrants` table and serves the grant and end actions; on a host without it they answer 404.
+Ending a grant also writes a `viewas:ended:{grantId}` marker to the shared `ICacheService`, with a
+time to live of the token's remaining life plus the host's JWT clock skew, the same pattern
+`SoftDeletedUserCache` uses for deleted accounts ([ADR-047](047-soft-deleted-user-session-revocation.md)).
+A host without the store keeps the read-only method rule, refuses an expired or malformed token,
+reads the marker from the shared store, and refuses once it exists. When the shared cache cannot
+be read it refuses too: unlike the soft-deleted check it fails closed, because the request it would
+admit acts with another user's identity.
+
+**Consequences.**
+- A multi-service consumer enables view-as in every service, sets `HostsGrantStore=false` in every
+  service except the one holding the Identity database, and adds the migration there only.
+- Every service must share one distributed cache. With a cache per service, a view ended on Identity
+  keeps working on the others until the token expires (at most 15 minutes, still read-only).
+- A failed marker write is logged at Error and the end still succeeds: the grant row is ended and
+  the proxy drops the overlay cookie, so the browser no longer carries the token.
+- Rejected: a cross-service call from each service to Identity per view-as request (a new runtime
+  dependency on the hot path of every service for a rare request), and mapping the grants table in
+  every service's database (four copies of one record, and a migration in every service).
+
 ## Related
 [ADR-014](014-cqrs-decorator-pipeline.md) (the decorator pipeline the view-as decorator now heads),
 [ADR-020](020-permission-based-authorization.md) (the `users:view-as` permission),
