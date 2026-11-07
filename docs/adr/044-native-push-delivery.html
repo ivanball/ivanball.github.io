@@ -258,7 +258,8 @@
           Revised 2026-10-25: two more delivery adapters ship, SNS mobile push over a DynamoDB registry (MMCA.Common.Aws) and FCM HTTP v1 over a Firestore registry (MMCA.Common.Gcp), and the payload builders moved into the core; see Revision (2026-10-25).
           Revised 2026-10-26: anchors refreshed after the releases that moved the SNS sender and registrar and the core payload builders.
           Revised 2026-10-28: the hub-call cost consequence is scoped to the Notification Hubs adapter, with the SNS per-endpoint cost beside it, and the native-leg anchor is corrected.
-          Revised 2026-11-07: <code>INativePushSender.BroadcastAsync</code> and the SNS and FCM broadcast topics are removed (breaking), and the Notification Hubs sender attempts every chunk on both platforms and rethrows the collected failures at the end; see Revision (2026-11-07).</p>
+          Revised 2026-11-07: <code>INativePushSender.BroadcastAsync</code> and the SNS and FCM broadcast topics are removed (breaking), and the Notification Hubs sender attempts every chunk on both platforms and rethrows the collected failures at the end; see Revision (2026-11-07).
+          Revised 2026-11-07 (v1.280.0, breaking): <code>SendToUsersAsync</code> returns a per-platform <code>NativePushOutcome</code> instead of throwing, and the handler records it on each notification for a &quot;Phone delivery&quot; column; see Revision (2026-11-07): per-platform outcome.</p>
           <h2 id="context">Context</h2>
           <p>ADR-024 established two notification channels: a durable per-user <code>UserNotification</code> inbox (the
           source of truth) and a transient SignalR push behind <code>IPushNotificationSender</code>. Both stop at the
@@ -273,9 +274,10 @@
           <h2 id="decision">Decision</h2>
           <ul>
           <li><strong>Two Application abstractions, Null by default</strong> (the ADR-024 pattern):
-          <code>INativePushSender</code> (user-targeted native sends only, <code>SendToUsersAsync</code>;
+          <code>INativePushSender</code> (user-targeted native sends only, <code>SendToUsersAsync</code>, returning a
+          <code>NativePushOutcome</code>;
           <code>MMCA.Common/Source/Core/MMCA.Common.Application/Interfaces/Infrastructure/Notifications/INativePushSender.cs:12</code>,
-          <code>:21</code>) and <code>IPushDeviceRegistrar</code>
+          <code>:26</code>) and <code>IPushDeviceRegistrar</code>
           (installation upsert/delete,
           <code>MMCA.Common/Source/Core/MMCA.Common.Application/Interfaces/Infrastructure/Notifications/IPushDeviceRegistrar.cs:11</code>,
           <code>UpsertAsync</code> at <code>:29</code>, <code>DeleteAsync</code> at <code>:48</code>). <code>AddInfrastructure</code> TryAdds no-op defaults.</li>
@@ -297,7 +299,7 @@
           rule is one conditional write, <code>attribute_not_exists(InstallationId) OR UserId = :me OR PushChannel = :channel</code> (<code>SnsInstallationRegistry.cs:36</code>, applied at <code>:97</code>), so it holds under
           concurrency without a lock. Endpoints are subscribed to no topic (the broadcast topic was removed;
           see Revision (2026-11-07)), and an endpoint SNS reports disabled or missing is removed with its row on send
-          (<code>SnsNativePushSender.cs:81-83</code>, <code>:97-102</code>).</li>
+          (<code>SnsNativePushSender.cs:95-99</code>, <code>:111</code>).</li>
           <li><strong>Google FCM HTTP v1</strong>, <code>AddFirebaseCloudMessagingPush(configuration)</code>
           (<code>MMCA.Common/Source/Hosting/MMCA.Common.Gcp/GcpServiceCollectionExtensions.cs:137</code>), gated on
           <code>NativePush:Fcm</code> carrying <code>ProjectId</code> and <code>InstallationsCollection</code>
@@ -310,7 +312,7 @@
           client registers its FCM token on this adapter. The registrar subscribes tokens to no topic (see
           Revision (2026-11-07)), and a send that reports the token unregistered, or
           names it as an invalid registration token, prunes the installation
-          (<code>Notifications/FcmSendOutcome.cs:25-28</code>, <code>FcmNativePushSender.cs:76</code>). The token target is set
+          (<code>Notifications/FcmSendOutcome.cs:25-28</code>, <code>FcmNativePushSender.cs:70-73</code>). The token target is set
           under a scoped CS0618 suppression (<code>Notifications/FcmPushMessage.cs:31-37</code>): FirebaseAdmin 3.6+
           deprecates <code>Message.Token</code> in favour of Firebase installation ids (FIDs), kept deliberately because
           this adapter registers FCM registration tokens and the FCM HTTP v1 API still accepts a token target.
@@ -379,13 +381,13 @@
           <code>SendEachAsync</code> per 500 distinct tokens (<code>FcmNativePushSender.cs:57,63</code>,
           <code>IFcmMessagingClient.cs:17</code>).</li>
           <li>On Notification Hubs one failing send does not stop the rest. Every 20-tag chunk is attempted on
-          both platforms; a failure is collected and the loop continues, and once every send has been attempted
-          the failures are rethrown, a single one as itself and several as an <code>AggregateException</code>, so the
-          handler&#39;s non-fatal catch still logs the failure
-          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Azure/Notifications/AzureNotificationHubNativePushSender.cs:34-50</code>,
-          <code>:55-66</code>). The caller&#39;s own cancellation is not collected and stops the loop (<code>:61</code>).</li>
+          both platforms; a failure is counted and the loop continues, and the counts and the first failure
+          come back in the outcome rather than as an exception
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Azure/Notifications/AzureNotificationHubNativePushSender.cs:40-66</code>,
+          <code>:71-84</code>). The caller&#39;s own cancellation is not counted and stops the loop (<code>:78</code>).</li>
           <li>The handler&#39;s third leg is best-effort: it is awaited inside a non-fatal catch
-          (<code>SendPushNotificationHandler.cs:140-153</code>), with no per-device delivery tracking. Because
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Notifications/PushNotifications/UseCases/Send/SendPushNotificationHandler.cs:153-190</code>),
+          with per-platform counts recorded on the notification but no per-device delivery tracking. Because
           <code>SendPushNotificationCommand</code> is <code>ITransactional</code>, a transient fault on the final status save
           re-runs the live legs under the execution strategy, so native delivery is at-least-once and a
           device can receive the same OS push twice (<code>SendPushNotificationHandler.cs:21-30</code>). The
@@ -597,6 +599,76 @@
           <code>FcmNativePushSender.cs:76</code>. The Consequences anchors and those inside earlier revisions were not
           re-verified in this revision.</li>
           </ol>
+          <h2 id="revision-2026-11-07-per-platform-outcome">Revision (2026-11-07): per-platform outcome</h2>
+          <p>On 2026-10-17 iOS delivery failed for every recipient and nobody in the app could tell: the only trace
+          was a log Warning. MMCA.Common v1.280.0 makes the native leg report what it achieved, per platform,
+          and shows it to the organizer who pressed Send (<code>MMCA.Common/CHANGELOG.md:13</code>, <code>:21-23</code>). User-targeted
+          sends, the three adapters, the Null defaults, the best-effort leg and the SignalR-owned <code>Status</code> are
+          unchanged.</p>
+          <ol>
+          <li><strong>The interface returns an outcome (breaking).</strong> <code>SendToUsersAsync</code> returns
+          <code>Task&lt;NativePushOutcome&gt;</code> and reports a failed send instead of throwing; only the caller&#39;s own
+          cancellation propagates
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Interfaces/Infrastructure/Notifications/INativePushSender.cs:14-26</code>).
+          <code>NativePushOutcome</code> carries <code>Android</code> and <code>Apple</code> (<code>NativePushPlatformCounts?</code>, null when that
+          platform was not attempted), the <code>Unit</code>, the <code>FirstFailure</code>, <code>HasFailures</code>, <code>None</code> and <code>From(...)</code>
+          (<code>.../Notifications/NativePushOutcome.cs:9-57</code>); <code>NativePushPlatformCounts</code> is <code>Sent</code>, <code>Failed</code> and
+          <code>Attempted</code> (<code>.../Notifications/NativePushPlatformCounts.cs:9-13</code>). <code>NullNativePushSender</code> returns
+          <code>None</code> (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Notifications/Push/NullNativePushSender.cs:15-16</code>).
+          A custom sender changes its return type, and a Moq mock returns
+          <code>NativePushOutcome.None</code> (<code>MMCA.Common/UPGRADING.md:39-71</code>).</li>
+          <li><strong>Units per provider</strong> (<code>NativePushDeliveryUnit</code>, <code>.../Notifications/NativePushDeliveryUnit.cs:4-17</code>):<ul>
+          <li>Notification Hubs counts <code>Batch</code>, one per 20-user chunk per platform, Android for FCM v1 and
+          Apple for APNs, because the hub reports per send only, never per device. The rethrow the previous
+          revision added is gone: the counts and the first failure are returned
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Azure/Notifications/AzureNotificationHubNativePushSender.cs:14-19</code>,
+          <code>:40-66</code>). An audience of 8 users therefore shows &quot;1 of 1 batch&quot;.</li>
+          <li>SNS counts <code>Endpoint</code>, on the platform of the endpoint&#39;s platform application (<code>fcmv1</code> Android,
+          <code>apns</code> Apple); a disabled or missing endpoint counts as failed, which is how a bad APNs
+          credential surfaces, and a failed user lookup is a failure with no platform count
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Aws/Notifications/SnsNativePushSender.cs:27-30</code>,
+          <code>:56-71</code>, <code>:201-202</code>).</li>
+          <li>FCM reports <code>Message</code> with the first failure and <strong>no per-platform counts</strong>. An FCM installation
+          records platform <code>fcmv1</code> on Android and iOS alike
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Gcp/Notifications/FcmPushDeviceRegistrar.cs:49</code>), so a
+          token does not say which phone it belongs to, and guessing would mislabel phones
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Gcp/Notifications/FcmNativePushSender.cs:21-23</code>, <code>:85-87</code>).</li>
+          </ul>
+          </li>
+          <li><strong>The handler records five columns and keeps the Warning.</strong> The native leg moved into
+          <code>SendNativeAsync</code>, which records the outcome with <code>PushNotification.RecordNativePushOutcome</code>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Notifications/PushNotifications/UseCases/Send/SendPushNotificationHandler.cs:153-177</code>):
+          <code>AndroidSent</code>, <code>AndroidFailed</code>, <code>AppleSent</code>, <code>AppleFailed</code> (nullable ints; null means not attempted,
+          or a row written before this release) and <code>NativeDeliveryUnit</code> (the unit&#39;s name, at most 20
+          characters) (<code>MMCA.Common/Source/Core/MMCA.Common.Domain/Notifications/PushNotifications/PushNotification.cs:25</code>,
+          <code>:63-79</code>, <code>:185-191</code>), mapped in the one engine-neutral configuration
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Configuration/EntityTypeConfiguration/Notifications/PushNotificationConfiguration.cs:58-63</code>)
+          and carried on <code>PushNotificationDTO</code>. An outcome with no counts and no failure (nothing attempted, or
+          a fully successful FCM send) records nothing (<code>SendPushNotificationHandler.cs:167-173</code>), so a stored
+          unit without counts always means a failure no platform could be named for. When <code>FirstFailure</code> is
+          set the handler logs the same Warning, &quot;Push notification {NotificationId} native (OS-level)
+          delivery failed; inbox and SignalR legs unaffected&quot;, WITH that exception (<code>:179-182</code>, <code>:236-237</code>),
+          and an exception from the sender itself still lands in the same catch (<code>:185-189</code>). The production
+          native-push alert reads that exception row, so the message text and the exception both stay. SNS and
+          FCM failures now raise the Warning too, where before neither sender threw.</li>
+          <li><strong>The Phone delivery column.</strong> <code>NotificationList</code> gains a &quot;Phone delivery&quot; column
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI/Pages/Notifications/NotificationList.razor:73</code>,
+          <code>:95-112</code>; <code>SharedResource.resx:955-956</code>): per platform counted, status first with the unit
+          explicit, for example &quot;Android: delivered (1 of 1 batch)&quot; or &quot;iPhone: partly failed (2 of 3
+          batches)&quot;, the unit word singular for a count of 1 (batch, device or message); &quot;Phones: failed&quot; when
+          a failure was recorded without counts; &quot;-&quot; for a row with nothing recorded
+          (<code>NotificationList.razor.cs:67-110</code>; <code>SharedResource.resx:973-1001</code>). The chip text carries the
+          status, so color and icon are never the only cue. English and Spanish.</li>
+          <li><strong>Consequences.</strong> One migration on the Notification database of every host that maps
+          <code>PushNotification</code> (five nullable columns, no default, no backfill; <code>MMCA.Common/UPGRADING.md:73-81</code>);
+          among the first-party consumers only ADC maps it. Two live Consequences entries are corrected in
+          place (the Notification Hubs failure handling no longer rethrows; the third leg now records
+          per-platform counts), and the Decision anchors for <code>SendToUsersAsync</code>, the SNS stale-endpoint
+          removal and the FCM prune are refreshed (<code>INativePushSender.cs:26</code>, <code>SnsNativePushSender.cs:95-99</code>
+          and <code>:111</code>, <code>FcmNativePushSender.cs:70-73</code>).</li>
+          <li><strong>Not done.</strong> A per-device delivery record (the hub does not return one, and the stored counts are
+          per-platform totals), retrying a failed batch, and any change to the inbox or SignalR legs or to the overall <code>Status</code>.</li>
+          </ol>
           
         <div class="doc-foot btn-row">
           <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
@@ -620,6 +692,7 @@
             <li><a href="#revision-2026-10-26">Revision (2026-10-26)</a></li>
             <li><a href="#revision-2026-10-28">Revision (2026-10-28)</a></li>
             <li><a href="#revision-2026-11-07">Revision (2026-11-07)</a></li>
+            <li><a href="#revision-2026-11-07-per-platform-outcome">Revision (2026-11-07): per-platform outcome</a></li>
             </ul>
           </nav>
         </aside>

@@ -1,6 +1,6 @@
 # Navigation Flow
 
-_As of: 2026-11-02._
+_As of: 2026-11-07._
 
 This document maps the site navigation flow for each actor in the MMCA.ADC application. Each mermaid diagram shows the pages accessible to that actor and the directional navigation links between them.
 
@@ -14,13 +14,13 @@ This document maps the site navigation flow for each actor in the MMCA.ADC appli
 | **ContentEditor** | Attendee + catalog curation (sessions, speakers, categories, sponsors, partners, activities), a strict subset of the Organizer's capabilities, plus privileged reads on the public conference pages (unpublished events included) | Authenticated, `ContentEditor` role |
 | **Organizer** | Full access: conference CRUD, user management, role administration, push notifications, badge check-in and points overview, ticket roster and invites, feedback analytics, session selection | Authenticated, `Organizer` role |
 
-> **Roles & menu:** the role vocabulary is `Organizer`, `ContentEditor` and `Attendee` (the default, `RoleNames`). `Organizer` holds every capability; `ContentEditor` holds the catalog-curation subset and no event-structure, room, question, session-selection or user-administration rights; the role-to-capability map itself is editable on the Role Administration pages. A *Speaker* is an attendee whose account is linked to a Speaker, surfaced via the `speaker_id` claim. The left nav is data-driven from each module's `IUIModule.NavItems` (ADC's three modules, the MAUI head's `DeviceUIModule` and the framework's `NotificationUIModule`): items carry a required role (`Organizer`), claim (`speaker_id`) or permission (a `conference:*:manage` capability on the management entries, `notifications:manage` on the framework's Push Notifications entry) and are hidden when the user lacks it. The menu has three sections: the public entries (Home, Schedule, Speakers, Activities, Sponsors, Event Info), *My Account* for signed-in users, and *Administration*, whose groups (Conference Day, Program, Attendees & Access, Partners, Setup, Notifications) are described once in `ConferenceUIModule.NavGroups`. See **Authorization Model** at the end.
+> **Roles & menu:** the role vocabulary is `Organizer`, `ContentEditor` and `Attendee` (the default, `RoleNames`). `Organizer` holds every capability; `ContentEditor` holds the catalog-curation subset and no event-structure, room, question, session-selection or user-administration rights; the role-to-capability map itself is editable on the Role Administration pages. A *Speaker* is an attendee whose account is linked to a Speaker, surfaced via the `speaker_id` claim. The left nav is data-driven from each module's `IUIModule.NavItems` (ADC's three modules, the MAUI head's `DeviceUIModule` and the framework's `NotificationUIModule`): items carry a required role (`Organizer`), claim (`speaker_id`) or permission (a `conference:*:manage` capability on the management entries, `notifications:manage` on the framework's Push Notifications entry) and are hidden when the user lacks it. The menu has three sections: the public entries (Home, Schedule, Speakers, Activities, Sponsors, Event Info, AI Assistant), *My Account* for signed-in users, and *Administration*, whose groups (Conference Day, Program, Attendees & Access, Partners, Setup, Notifications) are described once in `ConferenceUIModule.NavGroups`. See **Authorization Model** at the end.
 
 ---
 
 ## 1. Anonymous User
 
-Pages accessible without authentication: home, login, register, the social sign-in completion page, the two password-reset pages, the email-confirmation landing, the sign-in-link landing, and all public conference pages. For an anonymous visitor (and for an attendee) `/conference/events` is a pass-through: it redirects to the current or next event's detail page instead of listing past editions, so that detail page carries no Back button.
+Pages accessible without authentication: home, login, register, the social sign-in completion page, the two password-reset pages, the email-confirmation landing, the sign-in-link landing, and all public conference pages. For an anonymous visitor (and for an attendee) `/conference/events` is a pass-through: it redirects to the current or next event's detail page instead of listing past editions, so that detail page carries no Back button. `/conference/ai-assistant` (`PublicAiAssistant.razor:1`, `[AllowAnonymous]` at `:3`) shows the schedule MCP server's URL (`Mcp:ServerUrl`) and how to connect an AI client to it; its "AI Assistant" item is the last of the public entries, after Event Info (`ConferenceUIModule.cs:65`, `Order = -5`).
 
 ```mermaid
 flowchart TD
@@ -42,6 +42,7 @@ flowchart TD
         PubSpeakerDetail["/conference/speakers/:Id<br/>Speaker Detail"]
         PubSponsors["/conference/sponsors<br/>Sponsors, grouped by tier"]
         PubActivities["/conference/activities<br/>Activity List, filtered by event"]
+        PubAiAssistant["/conference/ai-assistant<br/>AI Assistant, connect an AI client to the schedule"]
     end
 
     Home["/  Home Page"]
@@ -55,6 +56,7 @@ flowchart TD
     Home -->|scroll, shown only when announced| HomePartners
     HomePartners -.->|partner logo, new tab| PartnerSite
     Home -->|nav menu| PubActivities
+    Home -->|nav menu| PubAiAssistant
     Home -->|auth links| Login
     Home -->|auth links| Register
 
@@ -116,6 +118,7 @@ flowchart TD
         PubSpeakerDetail["/conference/speakers/:Id<br/>Speaker Detail"]
         PubSponsors["/conference/sponsors<br/>Sponsors, grouped by tier"]
         PubActivities["/conference/activities<br/>Activity List, filtered by event"]
+        PubAiAssistant["/conference/ai-assistant<br/>AI Assistant, connect an AI client to the schedule"]
     end
 
     subgraph Engagement["Engagement / Feedback"]
@@ -145,6 +148,7 @@ flowchart TD
     Home -->|nav menu| PubSpeakers
     Home -->|nav menu| PubSponsors
     Home -->|nav menu| PubActivities
+    Home -->|nav menu| PubAiAssistant
     Home -->|nav menu, My Account| MyProfile
     Home -->|nav menu, My Account| HappeningNow
     Home -->|nav menu, My Account| MyPoints
@@ -223,6 +227,7 @@ flowchart TD
         PubSpeakerDetail["/conference/speakers/:Id<br/>Speaker Detail"]
         PubSponsors["/conference/sponsors<br/>Sponsors, grouped by tier"]
         PubActivities["/conference/activities<br/>Activity List, filtered by event"]
+        PubAiAssistant["/conference/ai-assistant<br/>AI Assistant, connect an AI client to the schedule"]
     end
 
     subgraph Engagement["Engagement / Feedback"]
@@ -237,6 +242,7 @@ flowchart TD
     Home -->|nav menu| PubSpeakers
     Home -->|nav menu| PubSponsors
     Home -->|nav menu| PubActivities
+    Home -->|nav menu| PubAiAssistant
     Home -->|nav menu, My Account| MyProfile
     Home -->|nav menu, My Account| Dashboard
     Home -->|nav menu, My Account| SpeakerQr
@@ -268,7 +274,7 @@ flowchart TD
 
 ## 4. Organizer
 
-Authenticated users with the `Organizer` role. Inherits all attendee and public pages. Adds CRUD management for every conference entity (events, sessions, speakers, categories, questions, rooms, sponsors, partners, activities), user management, **role administration** (the per-role permission editor), feedback analytics, the badge **check-in** and attendance pages, the points overview, the **ticket roster** (upload a TicketLeap roster and send ticket-holder invites), push notifications, and the AI-assisted **Session Selection Dashboard**. Every organizer entry sits in the nav menu's *Administration* section, in six groups: **Conference Day** (Check In, Attendance, Points Overview) and **Program** (Events, Sessions, Speakers, Session Selection) start expanded; **Attendees & Access** (Ticket Roster, Users, Roles), **Partners** (Sponsors, Partners, Activities), **Setup** (Rooms, Categories, Questions) and the framework's **Notifications** group (Push Notifications) start collapsed. The conference management pages are gated on their `conference:*:manage` capability rather than the role, which the Organizer holds in full. As a privileged reader the Organizer also gets the full public event grid, unpublished events included, instead of the redirect to the current event.
+Authenticated users with the `Organizer` role. Inherits all attendee and public pages. Adds CRUD management for every conference entity (events, sessions, speakers, categories, questions, rooms, sponsors, partners, activities), user management, **role administration** (the per-role permission editor), the **support access log** (every read-only view-as grant), feedback analytics, the badge **check-in** and attendance pages, the points overview, the **ticket roster** (upload a TicketLeap roster and send ticket-holder invites), push notifications, and the AI-assisted **Session Selection Dashboard**. Every organizer entry sits in the nav menu's *Administration* section, in six groups: **Conference Day** (Check In, Attendance, Points Overview) and **Program** (Events, Sessions, Speakers, Session Selection) start expanded; **Attendees & Access** (Ticket Roster, Users, Support Access, Roles), **Partners** (Sponsors, Partners, Activities), **Setup** (Rooms, Categories, Questions) and the framework's **Notifications** group (Push Notifications) start collapsed. The conference management pages are gated on their `conference:*:manage` capability rather than the role, which the Organizer holds in full. As a privileged reader the Organizer also gets the full public event grid, unpublished events included, instead of the redirect to the current event.
 
 ```mermaid
 flowchart TD
@@ -280,6 +286,7 @@ flowchart TD
         MyProfile["/profile<br/>My Profile"]
         Users["/users<br/>User Management"]
         UserDetail["/users/:Id<br/>User Detail"]
+        SupportAccess["/users/support-access<br/>Support Access Log"]
         Roles["/roles<br/>Role Administration"]
         RoleEdit["/roles/:Role<br/>Role Permission Editor"]
     end
@@ -298,6 +305,7 @@ flowchart TD
         PubSpeakerDetail["/conference/speakers/:Id<br/>Public Speaker Detail"]
         PubSponsors["/conference/sponsors<br/>Public Sponsors, grouped by tier"]
         PubActivities["/conference/activities<br/>Public Activity List"]
+        PubAiAssistant["/conference/ai-assistant<br/>Public AI Assistant"]
     end
 
     subgraph Engagement["Engagement / Feedback"]
@@ -376,9 +384,11 @@ flowchart TD
     Home -->|nav menu| PubSpeakers
     Home -->|nav menu| PubSponsors
     Home -->|nav menu| PubActivities
+    Home -->|nav menu| PubAiAssistant
     Home -->|nav menu, My Account| MyProfile
     Home -->|Administration, Attendees and Access| Users
     Users -->|row click| UserDetail
+    Home -->|Administration, Attendees and Access| SupportAccess
     Home -->|Administration, Attendees and Access| Roles
     Roles -->|edit role| RoleEdit
     RoleEdit -->|back| Roles
@@ -711,6 +721,7 @@ This table lists every routable page ADC itself ships, one row per route, with t
 | `/activities/{Id:int}` | ActivityDetail | Permission: conference:activities:manage |
 | `/check-in` | - | Organizer |
 | `/conference/activities` | - | Anonymous |
+| `/conference/ai-assistant` | PublicAiAssistant | Anonymous |
 | `/conference/events` | - | Anonymous |
 | `/conference/events/{Id:int}` | - | Anonymous |
 | `/conference/sessions` | PublicSessionList | Anonymous |
@@ -766,6 +777,7 @@ This table lists every routable page ADC itself ships, one row per route, with t
 | `/sponsors/create` | - | Permission: conference:sponsors:manage |
 | `/sponsors/{Id:int}` | - | Permission: conference:sponsors:manage |
 | `/users` | UserList | Organizer |
+| `/users/support-access` | SupportAccess | Organizer |
 | `/users/{Id:int}` | UserDetail | Organizer |
 
 ## Navigation Patterns
@@ -783,9 +795,9 @@ This table lists every routable page ADC itself ships, one row per route, with t
 - **Roles:** three roles, `Organizer`, `ContentEditor` and `Attendee` (the default for new registrations). `Organizer` holds every capability and is the only role that opens the management pages; `ContentEditor` holds the catalog-curation subset of the Organizer's capabilities (API-side permission checks, no extra page routes) and, like the Organizer, is a privileged reader on the public pages: `/conference/events` shows it the full grid (unpublished events included) instead of redirecting, and the public session and speaker lists offer it an event picker; there is no separate "Admin" role. The role-to-capability map is editable at `/roles/{Role}`.
 - **Speaker:** not a role, but an attendee whose account is linked to a Speaker, surfaced as the `speaker_id` JWT claim (auto-linked by email match at registration, or linked manually by an organizer).
 - **In-page rights, not route rights:** the live layer gates *panels*, not routes. `/conference/sessions/{Id}/live` is one page for everyone authenticated; the moderation panel and the Present button render when the caller is an Organizer or holds the `speaker_id` claim (any linked speaker, not only this session's presenter), and the server re-checks the per-session right on every moderation call (BR-236), so the client-side gate is convenience, not security. On `/happening-now` the Manage tab renders for an Organizer only.
-- **Menu-driven visibility:** the left nav is built from each module's `IUIModule.NavItems`. Items declare a required role (`Organizer`), claim (`speaker_id`) or permission (the conference management entries declare their `conference:*:manage` capability and the framework's "Push Notifications" item declares `notifications:manage`, each read from the `permission` claim the Identity host mints); the menu hides what the current user can't use. Every item is no looser than the guard of the page it opens (`NavItemGuardContractTests`): the conference management pages carry `[HasPagePermission(ConferencePermissions.X)]` and their entries the same `RequiredPermission`, so a ContentEditor sees exactly Sessions, Speakers, Sponsors, Partners, Activities and Categories, while the check-in, points, roster, user and role entries stay gated on the `Organizer` role their pages require. The public entries (Home, Schedule, Speakers, Activities, Sponsors, Event Info) render for everyone; "Happening Now", "My Schedule", "My Points", "My Badge", the speaker's "Speaker Dashboard" and "Speaker QR", "My Profile" and the framework's "Notification Inbox" sit in the *User* section, rendered under the "My Account" label for signed-in users only, ordered by `NavItem.Order`. The Administration groups, their icons, which start expanded (Conference Day and Program) and their order are described once in `ConferenceUIModule.NavGroups`, which also places the framework's Notifications group last. Sessions, Speakers, Sponsors and Activities each appear twice under two different items: a public one (`/conference/...`, no requirement) and a management one with its own icon under an Administration group. The speaker QR item declares `RequiredClaim: "speaker_id"`, so it is hidden from an attendee whose account is not linked to a Speaker; the page itself carries only `[Authorize]` and answers a typed or bookmarked URL with an explanatory alert rather than an empty card.
+- **Menu-driven visibility:** the left nav is built from each module's `IUIModule.NavItems`. Items declare a required role (`Organizer`), claim (`speaker_id`) or permission (the conference management entries declare their `conference:*:manage` capability and the framework's "Push Notifications" item declares `notifications:manage`, each read from the `permission` claim the Identity host mints); the menu hides what the current user can't use. Every item is no looser than the guard of the page it opens (`NavItemGuardContractTests`): the conference management pages carry `[HasPagePermission(ConferencePermissions.X)]` and their entries the same `RequiredPermission`, so a ContentEditor sees exactly Sessions, Speakers, Sponsors, Partners, Activities and Categories, while the check-in, points, roster, user and role entries stay gated on the `Organizer` role their pages require. The public entries (Home, Schedule, Speakers, Activities, Sponsors, Event Info, AI Assistant) render for everyone; "Happening Now", "My Schedule", "My Points", "My Badge", the speaker's "Speaker Dashboard" and "Speaker QR", "My Profile" and the framework's "Notification Inbox" sit in the *User* section, rendered under the "My Account" label for signed-in users only, ordered by `NavItem.Order`. The Administration groups, their icons, which start expanded (Conference Day and Program) and their order are described once in `ConferenceUIModule.NavGroups`, which also places the framework's Notifications group last. Sessions, Speakers, Sponsors and Activities each appear twice under two different items: a public one (`/conference/...`, no requirement) and a management one with its own icon under an Administration group. The speaker QR item declares `RequiredClaim: "speaker_id"`, so it is hidden from an attendee whose account is not linked to a Speaker; the page itself carries only `[Authorize]` and answers a typed or bookmarked URL with an explanatory alert rather than an empty card.
 - **Page guards (`@attribute [Authorize…]`):**
-  - *Organizer role required:* `/sessions/selection-dashboard`, `/events/{EventId}/feedback`, `/sessions/{SessionId}/feedback`, and every conference/user management page (`/events`, `/sessions`, `/speakers`, `/conferencecategories`, `/questions`, `/rooms`, `/users`), each carrying a page-level `[Authorize(Roles = "Organizer")]` (e.g. `EventList.razor`, `UserList.razor`). The shared `Routes.razor` renders the Forbidden page for an authenticated non-Organizer; the inherited `RegisteredUser_AdminPages_ShouldBeForbidden` E2E fact pins this for the 13 management routes listed in ADC's `AdminPaths` (the seven above plus `/sponsors`, `/partners`, `/check-in`, `/organizer/attendance`, `/organizer/points` and `/sessions/selection-dashboard`). API-side role enforcement applies as well (defense in depth). The sponsor management pages (`/sponsors`, `/sponsors/create`, `/sponsors/{Id}`), the partner management pages (`/partners`, `/partners/create`, `/partners/{Id}`, each `[Authorize(Roles = "Organizer")]` on `PartnerList.razor`, `PartnerCreate.razor` and `PartnerDetail.razor`), the activity management pages (`/activities`, `/activities/create`, `/activities/{Id}`, each `[Authorize(Roles = "Organizer")]` on `ActivityList.razor`, `ActivityCreate.razor` and `ActivityDetail.razor`) and the check-in and rewards pages (`/check-in`, `/organizer/attendance`, `/organizer/points`) and the ticket roster and insights pages (`/organizer/tickets`, `/organizer/tickets/insights`) carry the same page-level attribute, and their **writes** are additionally permission-checked API-side (`conference:sponsors:manage`, `conference:partners:manage`, `engagement:checkin:manage`, `engagement:points:view-overview`, `engagement:tickets:manage`), so the role opens the page and the permission authorizes the call. The role-administration pages (`/roles`, `/roles/{Role}`, `RoleList.razor` and `RoleEdit.razor`) follow the same shape: `[Authorize(Roles = "Organizer")]` opens the page and the `roles:manage` capability authorizes the `Admin/Roles` writes; `IdentityRouteAuthorizationTests` covers the Identity UI namespace.
+  - *Organizer role required:* `/sessions/selection-dashboard`, `/events/{EventId}/feedback`, `/sessions/{SessionId}/feedback`, and every conference/user management page (`/events`, `/sessions`, `/speakers`, `/conferencecategories`, `/questions`, `/rooms`, `/users`), each carrying a page-level `[Authorize(Roles = "Organizer")]` (e.g. `EventList.razor`, `UserList.razor`). The shared `Routes.razor` renders the Forbidden page for an authenticated non-Organizer; the inherited `RegisteredUser_AdminPages_ShouldBeForbidden` E2E fact pins this for the 13 management routes listed in ADC's `AdminPaths` (the seven above plus `/sponsors`, `/partners`, `/check-in`, `/organizer/attendance`, `/organizer/points` and `/sessions/selection-dashboard`). API-side role enforcement applies as well (defense in depth). The sponsor management pages (`/sponsors`, `/sponsors/create`, `/sponsors/{Id}`), the partner management pages (`/partners`, `/partners/create`, `/partners/{Id}`, each `[Authorize(Roles = "Organizer")]` on `PartnerList.razor`, `PartnerCreate.razor` and `PartnerDetail.razor`), the activity management pages (`/activities`, `/activities/create`, `/activities/{Id}`, each `[Authorize(Roles = "Organizer")]` on `ActivityList.razor`, `ActivityCreate.razor` and `ActivityDetail.razor`) and the check-in and rewards pages (`/check-in`, `/organizer/attendance`, `/organizer/points`) and the ticket roster and insights pages (`/organizer/tickets`, `/organizer/tickets/insights`) carry the same page-level attribute, and their **writes** are additionally permission-checked API-side (`conference:sponsors:manage`, `conference:partners:manage`, `engagement:checkin:manage`, `engagement:points:view-overview`, `engagement:tickets:manage`), so the role opens the page and the permission authorizes the call. The support access log (`/users/support-access`, `SupportAccess.razor`) carries the same attribute, and its `Admin/ViewAsGrants` read requires `users:manage`. The role-administration pages (`/roles`, `/roles/{Role}`, `RoleList.razor` and `RoleEdit.razor`) follow the same shape: `[Authorize(Roles = "Organizer")]` opens the page and the `roles:manage` capability authorizes the `Admin/Roles` writes; `IdentityRouteAuthorizationTests` covers the Identity UI namespace.
   - *Authentication only:* `/profile`, `/profile/claims`, `/speaker/dashboard`, `/speaker/qr`, `/my-badge` (its nav item is Organizer-only, the page is not), `/points`, the two scanned engagement landings (`/engage/sponsors/{SponsorId}`, `/engage/rooms/{RoomId}`), both attendee feedback forms, and the conference-day live pages (`/happening-now`, `/conference/sessions/{Id}/live`, `/conference/sessions/{Id}/present`). `/speakers/{Id}` is not in this list: SpeakerDetail is the Organizer editor reached from the management grids and carries `[Authorize(Roles = "Organizer")]` like the other speaker management pages (pinned by name in `ManagementRouteAuthorizationTests`); a linked speaker edits their own bio on `/speaker/dashboard`.
   - *Public (`[AllowAnonymous]`):* all `/conference/*` read pages including `/conference/activities` (the public activity list, filtered by the selected event), except the two live-layer routes above, plus the two password-reset pages (`/forgot-password`, `/reset-password`), which ship in the framework UI package and are reachable only by an unauthenticated visitor's own action (the "Forgot password?" link on `/login` or the link in the reset email).
   - *MAUI head only:* `/settings/device` is registered by `DeviceUIModule` and exists in no web head.
@@ -803,6 +815,7 @@ Some routes come from the `MMCA.Common.UI` package rather than from an ADC modul
 - **Notification pages:** ADC enables the framework notification UI (`AddNotificationUI()`, `MMCA.ADC.UI.Web/Program.cs:183-184`), so it serves `/notifications/inbox` and `/notifications/inbox/{Id:int}` (any signed-in caller, `NotificationInbox.razor:1-2`, `:7`) with a "Notification Inbox" item in the *User* section, and `/notifications` plus `/notifications/send` (the `notifications:manage` permission, `NotificationList.razor:9`, `NotificationSend.razor:10`) with a "Push Notifications" item in the *Admin* section's "Notifications" group (`NotificationUIModule.cs:19-20`). Happening Now links to the inbox from its "View announcements" button.
 - **`/forbidden` and `/not-found`:** anonymous framework pages (`Forbidden.razor:1`, `NotFound.razor:1`); the shared router renders them for an authenticated caller without the page's role and for an unknown or malformed route.
 - **`/users/{Id:int}` (user detail):** an ADC page rather than a framework one (`UserDetail.razor:1`, `[Authorize(Roles = "Organizer")]` at `:2`), listed here because the roster it is reached from comes from the framework's shared `UserAdminList` (`UserList.razor:8`). The detail route is typed `{Id:int}` and is reached by a row click on `/users`.
+- **`/users/support-access` (support access log):** an ADC page (`SupportAccess.razor:1`, `[Authorize(Roles = RoleNames.Organizer)]` at `:2`) that renders the framework's `SupportAccessLog` component (`:10`; MMCA.Common v1.280.0, [ADR-137](../adr/137-read-only-view-as-support-access.md)), listing every read-only view-as grant (who viewed whom, why, when, and how it ended) through the Identity service's `Admin/ViewAsGrants` endpoint, which requires `users:manage`. Its "Support access" item sits in Administration > Attendees and Access right after Users and requires both the `Organizer` role and `users:manage` (`IdentityUIModule.cs:38`, `Order = 3`), so the entry never opens a log whose read is refused. The page guard is the Organizer role, like the user list beside it, so its Route Contract row reads `Organizer`.
 
 ### CRUD Pattern (Organizer)
 All admin entity management follows the same navigation pattern:
