@@ -453,6 +453,35 @@
           <li><strong>MAUI is excluded.</strong> The overlay lives in the web proxy; MAUI heads do not offer view-as
           (<code>MMCA.Common/UPGRADING.md:112</code>).</li>
           </ul>
+          <h2 id="revision-2026-11-07-multi-service-hosts">Revision (2026-11-07): multi-service hosts</h2>
+          <p><strong>Context.</strong> Adopting v1.278.0 in MMCA.ADC, which runs Identity, Conference, Engagement and
+          Notification services behind a gateway, showed the decision above assumed one host. The guard
+          checked the grant against the local database, and only Identity&#39;s database holds <code>ViewAsGrants</code>.
+          The first call to any other service returned 401, the proxy dropped the overlay cookie on that 401,
+          and the view ended on the first page load. It failed closed (nothing leaked, nothing was written),
+          but view-as was unusable in a multi-service host, which the framework exists to support.</p>
+          <p><strong>Decision.</strong> A new setting, <code>ViewAs:HostsGrantStore</code> (default true, so a single host is unchanged),
+          says whether a host holds the grant store. Only a host with <code>Enabled</code> and the store maps the
+          <code>ViewAsGrants</code> table and serves the grant and end actions; on a host without it they answer 404.
+          Ending a grant also writes a <code>viewas:ended:{grantId}</code> marker to the shared <code>ICacheService</code>, with a
+          time to live of the token&#39;s remaining life plus the host&#39;s JWT clock skew, the same pattern
+          <code>SoftDeletedUserCache</code> uses for deleted accounts (<a href="047-soft-deleted-user-session-revocation.html">ADR-047</a>).
+          A host without the store keeps the read-only method rule, refuses an expired or malformed token,
+          reads the marker from the shared store, and refuses once it exists. When the shared cache cannot
+          be read it refuses too: unlike the soft-deleted check it fails closed, because the request it would
+          admit acts with another user&#39;s identity.</p>
+          <p><strong>Consequences.</strong></p>
+          <ul>
+          <li>A multi-service consumer enables view-as in every service, sets <code>HostsGrantStore=false</code> in every
+          service except the one holding the Identity database, and adds the migration there only.</li>
+          <li>Every service must share one distributed cache. With a cache per service, a view ended on Identity
+          keeps working on the others until the token expires (at most 15 minutes, still read-only).</li>
+          <li>A failed marker write is logged at Error and the end still succeeds: the grant row is ended and
+          the proxy drops the overlay cookie, so the browser no longer carries the token.</li>
+          <li>Rejected: a cross-service call from each service to Identity per view-as request (a new runtime
+          dependency on the hot path of every service for a rare request), and mapping the grants table in
+          every service&#39;s database (four copies of one record, and a migration in every service).</li>
+          </ul>
           <h2 id="related">Related</h2>
           <p><a href="014-cqrs-decorator-pipeline.html">ADR-014</a> (the decorator pipeline the view-as decorator now heads),
           <a href="020-permission-based-authorization.html">ADR-020</a> (the <code>users:view-as</code> permission),
@@ -479,6 +508,7 @@
             <li><a href="#trade-offs">Trade-offs</a></li>
             <li><a href="#alternatives-rejected">Alternatives rejected</a></li>
             <li><a href="#consequences">Consequences</a></li>
+            <li><a href="#revision-2026-11-07-multi-service-hosts">Revision (2026-11-07): multi-service hosts</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>
