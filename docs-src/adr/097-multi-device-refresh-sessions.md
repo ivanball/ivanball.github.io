@@ -797,9 +797,13 @@ whole family was silent.
    `EndReason` takes the values of `SignInEndReasons`: `SignedOut`, `ReuseDetected`,
    `SessionCapExceeded`, `AccountDeleted` and `Expired`
    (`.../Shared/Auth/Responses/SignInEndReasons.cs:11-23`), the first four shared with the session's own
-   revocation reasons. `Kind` is an extension point serialized by name, with one value today,
-   `SignIn` (`.../Shared/Auth/Responses/SignInHistoryEntryKind.cs:9-13`), so a later entry kind reads as
-   an unknown string to an older client rather than as a bare number.
+   revocation reasons. `Kind` is an extension point serialized by name
+   (`.../Shared/Auth/Responses/SignInHistoryEntryKind.cs:9-10`), so a later entry kind reads as an
+   unknown string to an older client rather than as a bare number; besides `SignIn` (`:13`), view-as
+   grants now appear in the viewed user's history as `SignInHistoryEntryKind.ViewAs` rows (`:19`,
+   "Viewed by support", ended `ViewAsEnded` or `Expired`, `SignInEndReasons.cs:26`), merged by
+   `SignInHistory` (`SignInHistory.cs:55-56`) as [ADR-137](137-read-only-view-as-support-access.md)
+   decides.
 6. **Two endpoints.** `GET auth/my-sign-ins` on `AuthControllerBase`, `[Authorize]` and scoped to the
    caller (`MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/AuthControllerBase.cs:215-227`),
    and `GET {userId}/sign-ins` on `UsersAdminControllerBase` (`.../Controllers/Administration/UsersAdminControllerBase.cs:100-111`),
