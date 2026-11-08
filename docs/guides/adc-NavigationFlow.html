@@ -404,7 +404,7 @@
     SessionFeedback --&gt;|cancel| PubSessionDetail</pre>
           <hr>
           <h2 id="4-organizer">4. Organizer</h2>
-          <p>Authenticated users with the <code>Organizer</code> role. Inherits all attendee and public pages. Adds CRUD management for every conference entity (events, sessions, speakers, categories, questions, rooms, sponsors, partners, activities), user management, <strong>role administration</strong> (the per-role permission editor), the <strong>support access log</strong> (every read-only view-as grant), feedback analytics, the badge <strong>check-in</strong> and attendance pages, the points overview, the <strong>ticket roster</strong> (upload a TicketLeap roster and send ticket-holder invites), push notifications, and the AI-assisted <strong>Session Selection Dashboard</strong>. Every organizer entry sits in the nav menu&#39;s <em>Administration</em> section, in six groups: <strong>Conference Day</strong> (Check In, Attendance, Points Overview) and <strong>Program</strong> (Events, Sessions, Speakers, Session Selection) start expanded; <strong>Attendees &amp; Access</strong> (Ticket Roster, Users, Support Access, Roles), <strong>Partners</strong> (Sponsors, Partners, Activities), <strong>Setup</strong> (Rooms, Categories, Questions) and the framework&#39;s <strong>Notifications</strong> group (Push Notifications) start collapsed. The conference management pages are gated on their <code>conference:*:manage</code> capability rather than the role, which the Organizer holds in full. As a privileged reader the Organizer also gets the full public event grid, unpublished events included, instead of the redirect to the current event.</p>
+          <p>Authenticated users with the <code>Organizer</code> role. Inherits all attendee and public pages. Adds CRUD management for every conference entity (events, sessions, speakers, categories, questions, rooms, sponsors, partners, activities), user management, <strong>role administration</strong> (the per-role permission editor), the <strong>support access log</strong> (every read-only view-as grant), the <strong>feature flags</strong> page (each Conference and Engagement kill switch with its configured value, stored override and reason, gated on <code>features:manage</code>), feedback analytics, the badge <strong>check-in</strong> and attendance pages, the points overview, the <strong>ticket roster</strong> (upload a TicketLeap roster and send ticket-holder invites), push notifications, and the AI-assisted <strong>Session Selection Dashboard</strong>. Every organizer entry sits in the nav menu&#39;s <em>Administration</em> section, in six groups: <strong>Conference Day</strong> (Check In, Attendance, Points Overview) and <strong>Program</strong> (Events, Sessions, Speakers, Session Selection) start expanded; <strong>Attendees &amp; Access</strong> (Ticket Roster, Users, Support Access, Roles), <strong>Partners</strong> (Sponsors, Partners, Activities), <strong>Setup</strong> (Rooms, Categories, Questions, Feature Flags) and the framework&#39;s <strong>Notifications</strong> group (Push Notifications) start collapsed. The conference management pages are gated on their <code>conference:*:manage</code> capability rather than the role, which the Organizer holds in full. As a privileged reader the Organizer also gets the full public event grid, unpublished events included, instead of the redirect to the current event.</p>
           <pre class="mermaid">flowchart TD
     subgraph Auth[&quot;Authentication&quot;]
         Login[&quot;/login&lt;br/&gt;Login&quot;]
@@ -471,6 +471,7 @@
         RoomList[&quot;/rooms&lt;br/&gt;Room List&quot;]
         RoomCreate[&quot;/rooms/create&lt;br/&gt;Create Room&quot;]
         RoomDetail[&quot;/rooms/:Id&lt;br/&gt;Edit Room&quot;]
+        FeatureFlags[&quot;/feature-flags&lt;br/&gt;Feature Flags&quot;]
     end
 
     subgraph SponsorMgmt[&quot;Organizer: Sponsor Management&quot;]
@@ -529,6 +530,7 @@
     Home --&gt;|Administration, Setup| CatList
     Home --&gt;|Administration, Setup| QuestionList
     Home --&gt;|Administration, Setup| RoomList
+    Home --&gt;|Administration, Setup| FeatureFlags
     Home --&gt;|Administration, Partners| SponsorList
     Home --&gt;|Administration, Partners| PartnerList
     Home --&gt;|Administration, Partners| ActivityList
@@ -916,6 +918,11 @@
           <td><code>/events/{Id:int}</code></td>
           <td>-</td>
           <td>Permission: conference:events:manage</td>
+          </tr>
+          <tr>
+          <td><code>/feature-flags</code></td>
+          <td>FeatureFlagList</td>
+          <td>Organizer</td>
           </tr>
           <tr>
           <td><code>/feedback/event/{EventId:int}</code></td>

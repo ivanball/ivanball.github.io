@@ -274,7 +274,7 @@ flowchart TD
 
 ## 4. Organizer
 
-Authenticated users with the `Organizer` role. Inherits all attendee and public pages. Adds CRUD management for every conference entity (events, sessions, speakers, categories, questions, rooms, sponsors, partners, activities), user management, **role administration** (the per-role permission editor), the **support access log** (every read-only view-as grant), feedback analytics, the badge **check-in** and attendance pages, the points overview, the **ticket roster** (upload a TicketLeap roster and send ticket-holder invites), push notifications, and the AI-assisted **Session Selection Dashboard**. Every organizer entry sits in the nav menu's *Administration* section, in six groups: **Conference Day** (Check In, Attendance, Points Overview) and **Program** (Events, Sessions, Speakers, Session Selection) start expanded; **Attendees & Access** (Ticket Roster, Users, Support Access, Roles), **Partners** (Sponsors, Partners, Activities), **Setup** (Rooms, Categories, Questions) and the framework's **Notifications** group (Push Notifications) start collapsed. The conference management pages are gated on their `conference:*:manage` capability rather than the role, which the Organizer holds in full. As a privileged reader the Organizer also gets the full public event grid, unpublished events included, instead of the redirect to the current event.
+Authenticated users with the `Organizer` role. Inherits all attendee and public pages. Adds CRUD management for every conference entity (events, sessions, speakers, categories, questions, rooms, sponsors, partners, activities), user management, **role administration** (the per-role permission editor), the **support access log** (every read-only view-as grant), the **feature flags** page (each Conference and Engagement kill switch with its configured value, stored override and reason, gated on `features:manage`), feedback analytics, the badge **check-in** and attendance pages, the points overview, the **ticket roster** (upload a TicketLeap roster and send ticket-holder invites), push notifications, and the AI-assisted **Session Selection Dashboard**. Every organizer entry sits in the nav menu's *Administration* section, in six groups: **Conference Day** (Check In, Attendance, Points Overview) and **Program** (Events, Sessions, Speakers, Session Selection) start expanded; **Attendees & Access** (Ticket Roster, Users, Support Access, Roles), **Partners** (Sponsors, Partners, Activities), **Setup** (Rooms, Categories, Questions, Feature Flags) and the framework's **Notifications** group (Push Notifications) start collapsed. The conference management pages are gated on their `conference:*:manage` capability rather than the role, which the Organizer holds in full. As a privileged reader the Organizer also gets the full public event grid, unpublished events included, instead of the redirect to the current event.
 
 ```mermaid
 flowchart TD
@@ -343,6 +343,7 @@ flowchart TD
         RoomList["/rooms<br/>Room List"]
         RoomCreate["/rooms/create<br/>Create Room"]
         RoomDetail["/rooms/:Id<br/>Edit Room"]
+        FeatureFlags["/feature-flags<br/>Feature Flags"]
     end
 
     subgraph SponsorMgmt["Organizer: Sponsor Management"]
@@ -401,6 +402,7 @@ flowchart TD
     Home -->|Administration, Setup| CatList
     Home -->|Administration, Setup| QuestionList
     Home -->|Administration, Setup| RoomList
+    Home -->|Administration, Setup| FeatureFlags
     Home -->|Administration, Partners| SponsorList
     Home -->|Administration, Partners| PartnerList
     Home -->|Administration, Partners| ActivityList
@@ -740,6 +742,7 @@ This table lists every routable page ADC itself ships, one row per route, with t
 | `/events/create` | - | Permission: conference:events:manage |
 | `/events/{EventId:int}/feedback` | - | Organizer |
 | `/events/{Id:int}` | - | Permission: conference:events:manage |
+| `/feature-flags` | FeatureFlagList | Organizer |
 | `/feedback/event/{EventId:int}` | - | Authenticated |
 | `/feedback/session/{SessionId:int}` | - | Authenticated |
 | `/happening-now` | - | Authenticated |
