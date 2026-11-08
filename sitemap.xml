@@ -2,17 +2,17 @@
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   <url>
     <loc>https://ivanball.github.io/</loc>
-    <lastmod>2026-11-07</lastmod>
+    <lastmod>2026-11-08</lastmod>
     <priority>1.0</priority>
   </url>
   <url>
     <loc>https://ivanball.github.io/resume.html</loc>
-    <lastmod>2026-11-07</lastmod>
+    <lastmod>2026-11-08</lastmod>
     <priority>0.9</priority>
   </url>
   <url>
     <loc>https://ivanball.github.io/platform.html</loc>
-    <lastmod>2026-11-07</lastmod>
+    <lastmod>2026-11-08</lastmod>
     <priority>0.9</priority>
   </url>
   <url>
@@ -32,12 +32,12 @@
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/index.html</loc>
-    <lastmod>2026-11-07</lastmod>
+    <lastmod>2026-11-08</lastmod>
     <priority>0.8</priority>
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/adr/index.html</loc>
-    <lastmod>2026-11-07</lastmod>
+    <lastmod>2026-11-08</lastmod>
     <priority>0.8</priority>
   </url>
   <url>
@@ -728,6 +728,16 @@
   <url>
     <loc>https://ivanball.github.io/docs/adr/138-mcp-endpoint-over-module-queries.html</loc>
     <lastmod>2026-11-07</lastmod>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://ivanball.github.io/docs/adr/139-passkeys-webauthn-opt-in-sign-in.html</loc>
+    <lastmod>2026-11-08</lastmod>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://ivanball.github.io/docs/adr/140-machine-clients-oauth-client-credentials.html</loc>
+    <lastmod>2026-11-08</lastmod>
     <priority>0.6</priority>
   </url>
   <url>

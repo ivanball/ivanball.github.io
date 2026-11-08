@@ -95,7 +95,7 @@
       <div class="doc-layout">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 138 ADRs</summary>
+        <summary>All 140 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html" aria-current="page">Overview</a></li>
@@ -237,6 +237,8 @@
         <li><a href="136-installable-web-app-service-worker.html">136 · Installable Web App Through a Framework Service Worker That Never Caches a Page</a></li>
         <li><a href="137-read-only-view-as-support-access.html">137 · Read-Only View-As Support Access (Reasoned, 15 Minutes, Visible to the User)</a></li>
         <li><a href="138-mcp-endpoint-over-module-queries.html">138 · MCP Endpoint Over Module Queries (Opt-In, Read-Only, Governed Per Tool)</a></li>
+        <li><a href="139-passkeys-webauthn-opt-in-sign-in.html">139 · Passkeys (WebAuthn) as an Opt-In Sign-In and Second Factor</a></li>
+        <li><a href="140-machine-clients-oauth-client-credentials.html">140 · Machine Clients Through OAuth Client Credentials Backed by Service Accounts</a></li>
           </ol>
         </nav>
       </details>
@@ -246,7 +248,7 @@
           <h1 id="architecture-decision-records">Architecture Decision Records</h1>
           <p>Accepted ADRs explaining <em>why</em> the core cross-cutting patterns exist. Read these before changing a
           pattern they describe: they capture context and trade-offs that aren&#39;t obvious from the code.</p>
-          <p><strong>138 accepted ADRs</strong>, 001-138, numbered contiguously with one row per ADR in the table below.
+          <p><strong>140 accepted ADRs</strong>, 001-140, numbered contiguously with one row per ADR in the table below.
           This file owns the ADR count and range (<code>MMCA.Common/FACTS.md</code>): read them here rather than
           recounting, and when you add an ADR, update this line with its row. <code>tools/adr-index.ps1</code> in this
           repo re-derives both from the files and fails if this line, the table, or a link drifts from them;
@@ -948,6 +950,16 @@
           <td><a href="138-mcp-endpoint-over-module-queries.html">138</a></td>
           <td>MCP endpoint over module queries</td>
           <td>New opt-in package <code>MMCA.Common.Mcp</code> (the 27th, and the only reference to the official MCP C# SDK, <code>ModelContextProtocol.AspNetCore</code> 2.4.0 pinned exactly, per ADR-134): <code>builder.AddCommonMcpServer(...)</code> registers a stateless streamable-HTTP server over the host&#39;s <code>[McpServerToolType]</code> classes and <code>app.MapCommonMcp()</code> maps <code>/mcp</code>, both inert unless <code>Mcp:Enabled</code> is true (disabled answers 404). Tools are read-only wrappers over existing query handlers, so the decorator pipeline applies; no write tools, resources or prompts. Per tool: <code>Mcp:Tools:&lt;name&gt;:Enabled</code> hides and refuses a tool, <code>[McpToolPermission]</code> checks the same <code>perm:</code> policy as <code>[HasPermission]</code> (hidden from <code>tools/list</code> and refused without it), and <code>Mcp:Tools:&lt;name&gt;:PermitsPerMinute</code> limits one caller per instance; refusals are tool error results (<code>Mcp.ToolUnavailable</code>, <code>Mcp.Forbidden</code>, <code>Mcp.RateLimited</code>). The endpoint carries the <code>mcp</code> rate-limit policy (<code>RateLimiting:McpPermitLimit</code>, default 60, per user else IP). Startup fails when any tool, parameter or server description contains a Unicode format character, a tag character or an HTML comment (R023). Public tools are anonymous, permissioned tools need a bearer token. Rejected: an OAuth 2.1 server now (deferred to the first external integrator), a production diagnostics MCP, scanning tool results.</td>
+          </tr>
+          <tr>
+          <td><a href="139-passkeys-webauthn-opt-in-sign-in.html">139</a></td>
+          <td>Passkeys (WebAuthn) as an opt-in sign-in and second factor</td>
+          <td>New opt-in package <code>MMCA.Common.Passkeys</code>, the only reference to Fido2NetLib (and through it NSec and the native libsodium), behind the core <code>IPasskeyCeremony</code>; <code>EnforcePasskeysBoundary</code> (build) and <code>PasskeysIsolationTests</code> (runtime) keep it there. <code>AddPasskeys</code> plus <code>Passkeys:Enabled</code> (RP id, name, origins); enabled without the call fails startup. Credentials live in a gated, hard-deleted <code>PasskeyCredentials</code> table on the Identity database; challenges are single-use, 5 minutes, in the shared cache under a lock; a non-advancing signature counter is refused (0 to 0 allowed for synced passkeys). A passkey sign-in mints the normal token pair and refresh session with <code>mfa=passkey</code>. Registration needs an interactive sign-in under 10 minutes old by the new <code>auth_time</code> claim, which a refresh carries unchanged (stricter than token age or <code>mfa</code>, both of which ride every refresh). <code>auth/passkeys/signin</code> joins the proxy&#39;s token-issuing paths. Web only; passkeys bind to the RP id, so a domain change orphans them. Rejected: own CBOR/COSE verification, ASP.NET Core Identity passkeys, Fido2 in Infrastructure, MAUI native passkeys now.</td>
+          </tr>
+          <tr>
+          <td><a href="140-machine-clients-oauth-client-credentials.html">140</a></td>
+          <td>Machine clients through OAuth client credentials backed by service accounts</td>
+          <td>Off by default (<code>MachineClients:Enabled</code>); <code>AddMachineClients</code> plus a consumer-supplied <code>IServiceAccountProvisioner</code> (enabled without either fails startup). Each client is backed one to one by its own service-account user (<code>IAuthUser.IsServiceAccount</code>, defaulted false), which every interactive sign-in path and view-as refuse. <code>MachineTokenControllerBase</code>, its own base routed at <code>auth/token</code> so no consumer&#39;s OpenAPI changes, serves the anonymous <code>client_credentials</code> grant on <code>auth-ip</code> with RFC 6749 responses. The token&#39;s <code>sub</code> is the service account, its permissions the role&#39;s, plus <code>client_id</code> and <code>token_use=machine</code>; no refresh token, <code>sid</code>, <code>auth_time</code> or <code>mfa</code>. Lifetime 1 to 15 minutes so it always lapses inside the 20-minute soft-deleted marker revocation writes. Secrets: 32 random bytes shown once, SHA-256, constant-time compare, rotate and promote. A role granting <code>users:view-as</code>, <code>users:manage</code>, <code>roles:manage</code> or <code>clients:manage</code> cannot back a client, checked at create and every mint. Permissioned MCP tools admit machine tokens with no MCP change. Rejected: API keys, a separate client principal, the action on <code>AuthControllerBase</code>, an OAuth 2.1 server (still deferred).</td>
           </tr>
           </tbody></table></div>
           <h2 id="writing-a-new-adr">Writing a new ADR</h2>
