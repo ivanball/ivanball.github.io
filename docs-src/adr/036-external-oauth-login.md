@@ -17,6 +17,10 @@ Revised 2026-10-26: the exchange's administrator-lock gate on existing accounts 
 the one-provider guard refuses any already-externally-linked account (the same provider under a
 different key included), and anchors refreshed after ADC's `AuthenticationService.cs` and `User.cs`
 lines and the framework's `AuthenticationServiceBase.cs` lines moved.
+Revised 2026-11-08 (MMCA.Common v1.281.0): any OpenID Connect provider joins by configuration
+(`OAuth:Oidc:<Name>`), with a provider key of `{tid}|{oid}` or `{iss}|{sub}`, `email_verified` passed
+through only under `TrustEmail`, reserved names, and home-realm discovery. See the Revision
+(2026-11-08) at the end.
 ## Context
 The framework's Identity story so far is entirely first-party: a user registers with an email and
 password, the credentials are hashed (ADR-032), and Identity mints its own RS256 JWT pair. Every auth
@@ -366,6 +370,68 @@ source).
    - The password-login refusal for an account with no stored credential is
      `MMCA.Common/Source/Core/MMCA.Common.Application/Auth/AuthenticationServiceBase.cs:170` (cost
      burned by `BurnPasswordVerificationCost` at `:172`, predicate `HasStoredCredential` at `:627`).
+
+## Revision (2026-11-08): generic OIDC providers
+**Context.** Sign-in supported exactly Google, GitHub and Apple, one hard-coded scheme and one
+literal route each. An enterprise adopter needs its own identity provider (Entra ID, Okta, any
+OpenID Connect issuer) by configuration, and the app's `ExternalLoginAsync` should not have to learn
+a new claim shape per provider. MMCA.Common v1.281.0 (`MMCA.Common/CHANGELOG.md:15`) adds that.
+
+**Decision.**
+- **One scheme per configuration section.** `AddExternalAuthProviders` reads every `OAuth:Oidc:<Name>`
+  section that sets a `ClientId` (`MMCA.Common/Source/Presentation/MMCA.Common.API/Authentication/ExternalAuthExtensions.cs:58`,
+  `:95`) and registers `AddOpenIdConnect(<Name>)` with the authorization code flow, PKCE, the existing
+  `ExternalLogin` cookie as the sign-in scheme and the callback `/auth/callback/<Name>` (`:112-121`).
+  `Authority` and `ClientSecret` are required, and a missing one fails startup naming the key
+  (`MMCA.Common/Source/Presentation/MMCA.Common.API/Authentication/OidcProviderSettings.cs:94-95`,
+  `:131-136`); `Scopes`, `DisplayName`, `Domains` and `TrustEmail` (default false) are optional
+  (`:97-128`). Google, GitHub and Apple are unchanged.
+- **Reserved and validated names.** `google`, `github`, `apple`, `complete`, `exchange` and `discover`
+  are refused, because a name becomes a route segment beside those literal routes (`:39-40`,
+  `:82-86`), and a name must match `^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$` (`:88-92`, `:148-149`). A domain
+  claimed by two providers fails startup (`:63-67`).
+- **One claim shape for every provider.** `OnTokenValidated` replaces the principal with
+  `OidcClaimNormalizer.Normalize` (`ExternalAuthExtensions.cs:140-142`), so the controller's claim
+  extraction (`MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/OAuthControllerBase.cs:349-350`)
+  and the app's `ExternalLoginAsync` need no change:
+  - **Provider key `{tid}|{oid}` when both claims exist, else `{iss}|{sub}`, never the email**
+    (`MMCA.Common/Source/Presentation/MMCA.Common.API/Authentication/OidcClaimNormalizer.cs:56-81`).
+    Entra ID's `sub` is pairwise per application while `oid` is the user's stable id inside the
+    tenant; `iss|sub` is unique across issuers; an email can be changed by its owner or an
+    administrator (`:10-13`).
+  - **`email_verified=true` survives only when the provider sets `TrustEmail` AND the token asserts
+    it** (`:46-51`). Entra ID asserts nothing, so ADC's existing link guard refuses to link an Entra
+    login to an existing account by email
+    (`MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Application/Users/AuthenticationService.cs:432-442`),
+    and the SEC-ADC-01 reasoning above still applies.
+  - **No `preferred_username` fallback.** The email is read from `email` alone (`:41`). Entra ID puts
+    `email` in the ID token only when that optional claim is configured on the app registration;
+    without it the completion ends with `missing_claims` (`OAuthControllerBase.cs:223`). Falling back
+    to `preferred_username`, which Entra does not verify, would hand the app an unverified address as
+    if it were an email.
+- **Generic routes.** `OAuthControllerBase` gains `GET auth/oauth/{provider}`, which challenges a
+  configured OIDC scheme and answers 404 for an unknown name; the literal `google`, `github` and
+  `apple` routes keep precedence (`OAuthControllerBase.cs:109-155`). MAUI already builds
+  `/auth/oauth/{provider}`
+  (`MMCA.Common/Source/Presentation/MMCA.Common.UI.Maui/Capabilities/Auth/MauiExternalAuthBroker.cs:71`),
+  so the mobile flow needs no change.
+- **Home-realm discovery.** `GET auth/oauth/discover?email=` is anonymous on the `auth-ip` policy and
+  answers `OidcDiscoveryResponse` (provider and display name) for an exact domain match, else 404
+  (`OAuthControllerBase.cs:159-178`). The Common.UI login renders one button per provider and, when
+  any provider declares `Domains`, an email-first "Sign in with your organization" step.
+- **No proxy change.** The token still leaves through `auth/oauth/exchange`, already a default
+  token-issuing path (`MMCA.Common/Source/Presentation/MMCA.Common.UI.Web/SameOriginProxy/SameOriginApiProxySettings.cs:33`).
+
+**Consequences.**
+- An adopter adds a section per identity provider; sign-up and role policy stay in the app's
+  `ExternalLoginAsync`.
+- An app that links external logins by verified email links an OIDC login only for a provider the
+  operator marked `TrustEmail`.
+- Real identity providers differ in claim shape; the framework's tests run against an in-process
+  OIDC stub, so the first adopter should try its own provider before relying on it.
+- Out of scope, and still in the *Enterprise-scale register* of
+  [the Common backlog](../governance/common-RemediationBacklog.md): SCIM provisioning. Also out: SAML
+  and per-tenant identity providers.
 
 ## Related
 ADR-004 (the RS256/JWKS token this flow exchanges the external identity *for*, and validates

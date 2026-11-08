@@ -6,21 +6,21 @@
   <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#0e151f" media="(prefers-color-scheme: dark)">
   <title>ADC (Atlanta Developers Conference) - Business Specifications · MMCA · Ivan Ball-llovera</title>
-  <meta name="description" content="As of: 2026-11-02.">
+  <meta name="description" content="As of: 2026-11-08.">
   <link rel="canonical" href="https://ivanball.github.io/docs/guides/adc-specifications.html">
   <link rel="icon" href="../../assets/img/favicon.svg" type="image/svg+xml">
   <link rel="alternate" type="application/rss+xml" title="Ivan Ball-llovera: deep dives on enterprise .NET" href="https://ivanball.github.io/feed.xml">
   <meta property="og:type" content="article">
   <meta property="og:site_name" content="Ivan Ball-llovera">
   <meta property="og:title" content="ADC (Atlanta Developers Conference) - Business Specifications">
-  <meta property="og:description" content="As of: 2026-11-02.">
+  <meta property="og:description" content="As of: 2026-11-08.">
   <meta property="og:url" content="https://ivanball.github.io/docs/guides/adc-specifications.html">
   <meta property="og:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <meta property="og:image:alt" content="Ivan Ball-llovera, Principal Software Architect">
   <meta property="og:locale" content="en_US">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="ADC (Atlanta Developers Conference) - Business Specifications">
-  <meta name="twitter:description" content="As of: 2026-11-02.">
+  <meta name="twitter:description" content="As of: 2026-11-08.">
   <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Platform","item":"https://ivanball.github.io/platform.html"},{"@type":"ListItem","position":2,"name":"Reference","item":"https://ivanball.github.io/docs/index.html"},{"@type":"ListItem","position":3,"name":"Guides & Specifications","item":"https://ivanball.github.io/docs/guides/index.html"},{"@type":"ListItem","position":4,"name":"ADC · Business Specifications","item":"https://ivanball.github.io/docs/guides/adc-specifications.html"}]}</script>
   <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);if(localStorage.getItem('mmca-rail')==='hidden')document.documentElement.setAttribute('data-rail','hidden');if(localStorage.getItem('mmca-cites')==='shown')document.documentElement.setAttribute('data-cites','shown');}catch(e){}})();</script>
@@ -126,7 +126,7 @@
         <article class="doc-content">
           <p class="eyebrow doc-kicker">Guides &amp; specifications</p>
           <h1 id="adc-atlanta-developers-conference---business-specifications">ADC (Atlanta Developers Conference) - Business Specifications</h1>
-          <p><em>As of: 2026-11-02.</em></p>
+          <p><em>As of: 2026-11-08.</em></p>
           <hr>
           <h2 id="1-system-overview">1. System Overview</h2>
           <h3 id="purpose">Purpose</h3>
@@ -2557,6 +2557,24 @@
           <li>Organizer downloads any report table as CSV (<code>GET /Tickets/insights/export</code>)</li>
           </ol>
           <p><strong>Business Rules:</strong> BR-278, BR-279, BR-280</p>
+          <hr>
+          <h3 id="uc-57-override-a-feature-flag">UC-57: Override a Feature Flag</h3>
+          <p><strong>Actors:</strong> Organizer
+          <strong>Preconditions:</strong> Caller holds <code>features:manage</code> (granted to Organizer only, by both the Conference and the Engagement permission grants)</p>
+          <p><strong>Main Flow:</strong></p>
+          <ol>
+          <li>Organizer opens Feature flags (<code>/feature-flags</code>, under Administration &gt; Setup), which lists every flag the Conference and Engagement services declare in one table (<code>GET /Admin/Conference/FeatureFlags</code>, <code>GET /Admin/Engagement/FeatureFlags</code>): its lifetime and owner, what configuration says, the stored override and its reason, and the value in force</li>
+          <li>Organizer sets an override (<code>PUT /Admin/{Conference|Engagement}/FeatureFlags/{name}</code>): on, off, a percentage of users, or targeted users and groups, with a required reason</li>
+          <li>The new value takes effect on the next evaluation in that service, with no deploy</li>
+          <li>Organizer clears the override (<code>DELETE /Admin/{Conference|Engagement}/FeatureFlags/{name}</code>), and the flag answers from configuration again</li>
+          </ol>
+          <p><strong>Alternate Flows:</strong></p>
+          <ul>
+          <li>A name the service does not declare: HTTP 404 (<code>FeatureFlag.Undeclared</code>)</li>
+          <li>A missing reason, or one over 500 characters: HTTP 400 (<code>FeatureFlagOverride.ReasonRequired</code>)</li>
+          <li>While the stored overrides cannot be read, every flag answers from configuration</li>
+          </ul>
+          <p><strong>Notes:</strong> The mechanism is the framework&#39;s stored-override layer (<a href="../adr/031-feature-flag-management.html">ADR-031</a>); each service keeps its overrides in its own database.</p>
           <blockquote>
           <p><strong>Use-case numbering.</strong> UC-12 to UC-18, UC-20, and UC-28/UC-29 are unused; the numbers were retired
           as the specification was reorganized and are deliberately not recycled. UC-30 to UC-35 are the
@@ -3717,6 +3735,18 @@
           <td>UC-56, BR-278</td>
           <td><code>GET /Tickets/insights/export?eventId=&amp;report=</code>; <code>report</code> is <code>a1</code>-<code>a6</code> or <code>b1</code>-<code>b4</code> (ADR-078)</td>
           </tr>
+          <tr>
+          <td>151</td>
+          <td>View the feature flags of Conference and Engagement</td>
+          <td>UC-57</td>
+          <td><code>GET /Admin/Conference/FeatureFlags</code>, <code>GET /Admin/Engagement/FeatureFlags</code>; <code>features:manage</code></td>
+          </tr>
+          <tr>
+          <td>152</td>
+          <td>Set or clear a feature flag override</td>
+          <td>UC-57</td>
+          <td><code>PUT</code> / <code>DELETE /Admin/Conference/FeatureFlags/{name}</code> and the Engagement twin; reason required</td>
+          </tr>
           </tbody></table></div>
           <h4 id="system-non-human">System (Non-Human)</h4>
           <p>Actions initiated autonomously by domain event handlers after persistence:</p>
@@ -3797,9 +3827,9 @@
           </tr>
           <tr>
           <td><strong>Organizer</strong></td>
-          <td>UC-6-UC-9, UC-19, UC-21, UC-22, UC-25, UC-27, UC-36-UC-44, UC-48, UC-49, UC-52, UC-53, UC-55, UC-56</td>
-          <td>+ Attendee actions + Conference CRUD (speaker question answer endpoints are domain-only, not exposed via REST) + user list/delete/admin + role admin + publish/unpublish + speaker link/unlink + live layer, check-in, points, selection, ticket roster, invites and insights</td>
-          <td>Attendee + 69</td>
+          <td>UC-6-UC-9, UC-19, UC-21, UC-22, UC-25, UC-27, UC-36-UC-44, UC-48, UC-49, UC-52, UC-53, UC-55, UC-56, UC-57</td>
+          <td>+ Attendee actions + Conference CRUD (speaker question answer endpoints are domain-only, not exposed via REST) + user list/delete/admin + role admin + publish/unpublish + speaker link/unlink + live layer, check-in, points, selection, ticket roster, invites and insights + feature flag overrides</td>
+          <td>Attendee + 71</td>
           </tr>
           <tr>
           <td><strong>System</strong></td>
@@ -6059,6 +6089,59 @@
           <a href="../adr/045-managed-file-storage-and-avatars.html">ADR-045</a>. There is no by-id read endpoint: an asset
           is only ever fetched as part of its session&#39;s list, so the filtered list is the <code>Location</code> a create
           returns.</p>
+          <h3 id="1114-mcp-tools-ai-clients">11.14 MCP Tools (AI clients)</h3>
+          <p>The Conference service exposes read-only Model Context Protocol tools at <code>/mcp</code>, routed through the
+          gateway, when <code>Mcp:Enabled</code> is true (<a href="../adr/138-mcp-endpoint-over-module-queries.html">ADR-138</a>).
+          Every tool is anonymous and shows only what the public schedule pages show: tools read through the
+          same public filters as the anonymous endpoints (BR-49, BR-132, BR-239), project into public-only
+          result records, and fail closed. A miss or refusal is a tool error result whose text carries the
+          error code, never an exception.</p>
+          <p><strong>One event at a time.</strong> Every list read is scoped to one published event. <code>eventId</code> is optional on
+          <code>list_sessions</code>, <code>list_speakers</code>, <code>now_next</code> and <code>get_speaker</code>; omitted, it means the current event,
+          chosen as the landing pages choose it: the live one, else the next upcoming, else the most recently
+          ended. An id that is not a published event answers <code>Mcp.EventNotFound</code> (whose text points at
+          <code>list_events</code>) before anything else is read.</p>
+          <div class="table-wrap"><table>
+          <thead>
+          <tr>
+          <th>Tool</th>
+          <th>Parameters</th>
+          <th>Returns</th>
+          </tr>
+          </thead>
+          <tbody><tr>
+          <td><code>list_events</code></td>
+          <td>none</td>
+          <td>The published events, newest first: <code>id</code> (the <code>eventId</code> the other tools accept), name, first and last day, time zone, venue, and <code>status</code> (<code>live</code>, <code>upcoming</code> or <code>past</code>, by the app&#39;s own live window)</td>
+          </tr>
+          <tr>
+          <td><code>list_sessions</code></td>
+          <td><code>eventId?</code>, <code>day?</code> (<code>yyyy-MM-dd</code>), <code>track?</code>, <code>text?</code></td>
+          <td>The event&#39;s public sessions in start order, at most 100: <code>id</code>, <code>eventId</code> and <code>eventName</code>, title, start and end in the event&#39;s local time, room, categories (track and level) and speaker names. Filters combine</td>
+          </tr>
+          <tr>
+          <td><code>get_session</code></td>
+          <td><code>sessionId</code></td>
+          <td>One public session: <code>eventId</code> and <code>eventName</code>, title, abstract, schedule, room, accessibility note, categories, and speakers with the id <code>get_speaker</code> accepts. Takes no <code>eventId</code>, because a session belongs to one event; an unknown id is <code>Mcp.SessionNotFound</code></td>
+          </tr>
+          <tr>
+          <td><code>list_speakers</code></td>
+          <td><code>eventId?</code>, <code>text?</code></td>
+          <td>The event&#39;s public speakers by last name, at most 100: <code>id</code>, name and tagline</td>
+          </tr>
+          <tr>
+          <td><code>get_speaker</code></td>
+          <td><code>speakerId</code>, <code>eventId?</code></td>
+          <td>One public speaker: name, tagline, biography, picture, public profile links, and their public sessions at the chosen event (each carrying <code>eventId</code> and <code>eventName</code>). Never the email or the linked account (BR-66)</td>
+          </tr>
+          <tr>
+          <td><code>now_next</code></td>
+          <td><code>eventId?</code></td>
+          <td>What is on now and up next at the event: its name, whether it is live, and the sessions with their rooms and times (the <code>GET /Events/{id}/now-next</code> snapshot, section 11.10)</td>
+          </tr>
+          </tbody></table></div>
+          <p>Per-tool enablement and per-caller limits come from the framework&#39;s <code>Mcp:Tools:&lt;name&gt;</code> settings;
+          every tool and parameter description passes the framework&#39;s hidden-text check at startup.</p>
           <hr>
           <h2 id="12-authentication--identity-architecture">12. Authentication &amp; Identity Architecture</h2>
           <p>This section defines the authentication mechanism for both the Web UI (Blazor) and MAUI (mobile) clients, which share a common Razor class library. Identity is email-based: a user signs in with email + password, or through an external OAuth provider (Google, GitHub or Sign in with Apple, each enabled by its configured client id), and a user account can be linked to a Speaker. The Identity service signs RS256 access tokens and publishes them for validation through JWKS; every other service validates the bearer itself, and the Gateway authenticates no one.</p>

@@ -29,6 +29,11 @@ Revised 2026-11-07: the targeting context adds the group `tenant:<tenantId>` whe
 resolved a tenant, so a Targeting audience can turn a flag on per tenant. See the Revision (2026-11-07)
 at the end.
 
+Revised 2026-11-08 (MMCA.Common v1.281.0): stored overrides can be layered over the configuration
+(`AddReloadableFeatureFlags`), so a kill switch flips without a new revision; configuration stays the
+default and the answer whenever the overrides cannot be loaded. See the Revision (2026-11-08) at the
+end.
+
 ## Context
 The apps need to decouple *release* from *deploy*: ship code dark, flip a kill switch, or roll a feature
 out to a percentage of users without a redeploy. A flag has to be enforceable at **two** different points
@@ -303,3 +308,78 @@ the targeting context gains one group.
 3. The Trade-offs entry now names the tenant group and the current anchors (`:121` for the targeting
    id, `:101-108` for the anonymous context, `:37-39` for the documented anonymous behavior). The
    accessor's own example targets a tenant with `RolloutPercentage` 100 (`:53-55`).
+
+## Revision (2026-11-08): stored overrides over configuration
+**Context.** A flag's value came from configuration alone, so flipping a kill switch meant a new
+revision: the very deploy a kill switch exists to avoid. MMCA.Common v1.281.0
+(`MMCA.Common/CHANGELOG.md:19`) adds an opt-in layer of stored overrides. The two enforcement surfaces,
+the `404` answers, the targeting context and the lifecycle gate are unchanged.
+
+**Decision.**
+1. **Overrides are a definition provider layered over the configured one.**
+   `AddReloadableFeatureFlags(configuration, params Assembly[] flagAssemblies)`, called after `AddAPI()`,
+   decorates the registered `IFeatureDefinitionProvider` and throws when none is registered yet
+   (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.FeatureFlags.cs:47`,
+   `:77-86`). `StoredOverrideFeatureDefinitionProvider` answers a flag with a stored override from that
+   override and every other flag from the configured provider, unchanged
+   (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/FeatureFlags/StoredOverrideFeatureDefinitionProvider.cs:43-70`).
+   The FeatureGate decorators and `[FeatureGate]` keep calling `IFeatureManager`, so an override takes
+   effect on the next evaluation with no restart (`:16-18`).
+2. **An override is expressed with the built-in filters.** On becomes `AlwaysOn`, off becomes no
+   filter, and a percentage or a targeted audience becomes the targeting filter's audience, so a
+   percentage stays sticky per user (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/FeatureFlags/FeatureFlagDefinitions.cs:13-17`,
+   `:33-46`).
+3. **One snapshot, invalidated on write.** The whole override table is one cache entry in the host's
+   `ICacheService`, keyed by the owning data source under `featureflags:overrides:`
+   (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/FeatureFlags/FeatureFlagOverrideSnapshot.cs:43-57`),
+   the `PermissionGrantCache` shape. Every set or clear invalidates it by prefix
+   (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/FeatureFlags/FeatureFlagAdministrationService.cs:80`,
+   `:99`, `:111-119`). With the two-level cache the prefix invalidation replaces one generation token
+   on the shared Redis ([ADR-077](077-hybridcache-substrate.md)), so a flip reaches every replica
+   within seconds; on a memory-only host `FeatureFlags:OverrideCacheSeconds` (default 30, 1 to 3600)
+   bounds how long another replica serves the old snapshot
+   (`FeatureFlagOverrideSnapshot.cs:16-23`;
+   `MMCA.Common/Source/Core/MMCA.Common.Application/FeatureFlags/FeatureFlagOverrideSettings.cs:14-24`).
+   A failed invalidation after a committed write is logged and the write still succeeds
+   (`FeatureFlagAdministrationService.cs:19-23`).
+4. **Configuration answers when the overrides cannot be loaded.** A load failure is logged as a
+   Warning and every flag answers from configuration until the next load succeeds; cancellation is
+   never swallowed (`StoredOverrideFeatureDefinitionProvider.cs:75-95`). The override layer is never
+   more fragile than the configuration under it: a transient database error or an unapplied migration
+   would otherwise fail every feature-gated command and query.
+5. **Only declared flags can be overridden.** The catalog is `FeatureFlagRegistry.Describe` over the
+   assemblies the host passes (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/FeatureFlags/FeatureFlagCatalog.cs:17-20`);
+   any other name, including one configuration happens to carry, is refused with
+   `FeatureFlag.Undeclared` (404) before anything is written (`FeatureFlagAdministrationService.cs:15-17`,
+   `:69-72`, `:88-91`, `:103-106`). An override must name a flag some code reads, or it is a typo
+   stored as data.
+6. **Stored in the owning service's database, mapped only where enabled.** `FeatureFlagOverrides` lives
+   in the database `FeatureFlags:DataSourceName` names (`FeatureFlagOverrideSettings.cs:26-31`), and the
+   call registers the model gate that maps it there and nowhere else
+   (`DependencyInjection.FeatureFlags.cs:36-40`, `:69-70`;
+   `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/ApplicationDbContext.cs:470`,
+   `:1009`). Clearing an override soft-deletes the row, so the audit fields record who cleared it.
+7. **An administration surface behind `features:manage`.** `FeatureFlagsControllerBase` (abstract, no
+   route) lists each declared flag with its lifetime, owner, configured value, override and effective
+   value, sets an override with a required `Reason`, and clears one
+   (`MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/Administration/FeatureFlagsControllerBase.cs:37-38`,
+   `:49`, `:68`, `:93`; `AdministrationPermissions.ManageFeatures`,
+   `MMCA.Common/Source/Core/MMCA.Common.Shared/Auth/Permissions/AdministrationPermissions.cs:33`). The
+   routeless `FeatureFlagAdmin` page shows one table across the flag sources given to
+   `AddFeatureFlagAdministrationUI(params string[] sources)`
+   (`MMCA.Common/Source/Presentation/MMCA.Common.UI/DependencyInjection.cs:387`), so a multi-service
+   host shows every service's flags together.
+
+**Consequences.**
+- A host opts in per service: the call, one `FeatureFlagOverrides` migration on that service's
+  database (`DesignTimeDbContextOptions.EnableFeatureFlagOverrides`), the controller subclass and a
+  page route behind `features:manage` (`MMCA.Common/UPGRADING.md:72-88`). A host that never calls it
+  changes nothing.
+- MMCA.ADC adopts it on Conference and Engagement, with `features:manage` granted to Organizer only
+  and one Feature flags page over both sources
+  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/DependencyInjection.cs:58-60`).
+- An override outlives its reason: it is not time-boxed, and the page shows each active override with
+  its `Reason` so a stale one is visible.
+- Rejected: Azure App Configuration (a paid service and a vendor dependency for a table the owning
+  service can hold), and per-tenant override rows (targeting groups already cover tenants, see the
+  Revision (2026-11-07)).

@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 138 ADRs</summary>
+        <summary>All 140 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -238,6 +238,8 @@
         <li><a href="136-installable-web-app-service-worker.html">136 · Installable Web App Through a Framework Service Worker That Never Caches a Page</a></li>
         <li><a href="137-read-only-view-as-support-access.html">137 · Read-Only View-As Support Access (Reasoned, 15 Minutes, Visible to the User)</a></li>
         <li><a href="138-mcp-endpoint-over-module-queries.html" aria-current="page">138 · MCP Endpoint Over Module Queries (Opt-In, Read-Only, Governed Per Tool)</a></li>
+        <li><a href="139-passkeys-webauthn-opt-in-sign-in.html">139 · Passkeys (WebAuthn) as an Opt-In Sign-In and Second Factor</a></li>
+        <li><a href="140-machine-clients-oauth-client-credentials.html">140 · Machine Clients Through OAuth Client Credentials Backed by Service Accounts</a></li>
           </ol>
         </nav>
       </details>
@@ -248,7 +250,10 @@
           <h2 id="status">Status</h2>
           <p>Accepted (2026-11-07). Ships in the MMCA.Common release after v1.277.0 as a new package,
           <code>MMCA.Common.Mcp</code>, the framework&#39;s 27th (<code>MMCA.Common/FACTS.md:20</code>, <code>:32</code>). Off unless a host calls
-          both registration methods and sets <code>Mcp:Enabled</code>.</p>
+          both registration methods and sets <code>Mcp:Enabled</code>.
+          Revised 2026-11-08 (MMCA.Common v1.281.0): a machine client&#39;s token now satisfies permissioned tools
+          for server-to-server callers, OAuth 2.1 for desktop clients stays deferred, and ADC&#39;s tools are
+          scoped to one event with a <code>list_events</code> tool. See the Revision (2026-11-08) at the end.</p>
           <h2 id="context">Context</h2>
           <p>AI clients (Claude Code, Claude Desktop, any Model Context Protocol client) can query an application
           through tools a server exposes. A consumer that wants to offer its data to such a client had no
@@ -409,6 +414,53 @@
           <li>A host that offers only public data needs no privacy-notice change for this endpoint: no personal
           data is exposed and the AI provider is the user&#39;s own client.</li>
           </ul>
+          <h2 id="revision-2026-11-08-machine-tokens-and-event-scoped-adc-tools">Revision (2026-11-08): machine tokens and event-scoped ADC tools</h2>
+          <p><strong>Context.</strong> Point 7 left permissioned tools to &quot;programmatic clients that refresh their own tokens&quot;,
+          but only a person could obtain a token, so in practice no program could call one. MMCA.Common v1.281.0
+          adds machine clients (<a href="140-machine-clients-oauth-client-credentials.html">ADR-140</a>). Separately, ADC&#39;s
+          first session and speaker tools took no event at all, so a question about &quot;the schedule&quot; could mix
+          editions and a client had no way to name one.</p>
+          <p><strong>Decision.</strong></p>
+          <ul>
+          <li><strong>A machine token is a bearer token the permission check already accepts.</strong> A program obtains one
+          through the client credentials grant; its <code>sub</code> is the client&#39;s service account and its permission
+          claims are that account&#39;s role&#39;s
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Auth/MachineClients/MachineClientService.cs:103-115</code>;
+          <code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Auth/TokenService.cs:159-171</code>). The permission
+          filter checks the <code>perm:</code> policy through <code>IAuthorizationService</code> (point 4), so a machine token
+          holding the tool&#39;s permission is listed and admitted with no MCP change. Point 7&#39;s &quot;Programmatic
+          clients that refresh their own tokens&quot; is now concretely a machine client asking <code>auth/token</code> again
+          every 15 minutes or less.</li>
+          <li><strong>OAuth 2.1 for desktop clients stays deferred.</strong> A machine client is a server-to-server credential
+          an operator issues to a program, not a user&#39;s consent to a third-party client acting for them.
+          Claude Desktop or another desktop client calling a permissioned tool on a person&#39;s behalf still
+          needs the authorization server this record rejected; that entry stands. The register row it
+          pointed to no longer lists client credentials (ADR-140 shipped them); API keys stay rejected there.</li>
+          <li><strong>ADC&#39;s tools read one event at a time.</strong> All in
+          <code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Mcp/</code> (no handler, schema or migration
+          change):<ul>
+          <li>A new <code>list_events</code> tool lists the published events, newest first, with id, name, first and last
+          day, time zone, venue and a status of <code>live</code>, <code>upcoming</code> or <code>past</code>
+          (<code>ConferenceMcpTools.cs:32-40</code>; <code>ConferenceMcpResults.cs:53-68</code>), the status judged by the app&#39;s
+          own live window (<code>ConferenceMcpReader.cs:331-340</code>).</li>
+          <li><code>list_sessions</code>, <code>list_speakers</code> and <code>now_next</code> take an optional <code>eventId</code>, and <code>get_speaker</code>
+          takes one to choose which event&#39;s sessions it lists (<code>ConferenceMcpTools.cs:50-62</code>, <code>:86-130</code>).
+          Omitted, it means the current event: live now, else the next upcoming, else the most recently
+          ended (<code>ConferenceMcpTools.cs:23-24</code>; <code>ConferenceMcpReader.cs:40-43</code>, <code>:346-361</code>).</li>
+          <li>An id that is not a published event answers <code>Mcp.EventNotFound</code> before anything else is read
+          (<code>ConferenceMcpReader.cs:321-326</code>, <code>:358-359</code>).</li>
+          <li>Session summaries and details carry <code>EventId</code> and <code>EventName</code> (<code>ConferenceMcpResults.cs:17-51</code>);
+          <code>get_session</code> takes no <code>eventId</code>, because a session belongs to one event.</li>
+          <li>The new tool and parameter descriptions pass the hidden-text check (point 6) like the rest.</li>
+          </ul>
+          </li>
+          </ul>
+          <p><strong>Consequences.</strong></p>
+          <ul>
+          <li>A consumer that wants programs to call permissioned tools turns on machine clients (ADR-140) and
+          grants the tool&#39;s permission to the role behind the client; nothing in the MCP package changes.</li>
+          <li>An ADC MCP client should call <code>list_events</code> first when the user names an edition.</li>
+          </ul>
           <h2 id="related">Related</h2>
           <p><a href="014-cqrs-decorator-pipeline.html">ADR-014</a> (the decorator pipeline every tool call goes through),
           <a href="020-permission-based-authorization.html">ADR-020</a> (the <code>perm:</code> policy the permission attribute reuses),
@@ -433,6 +485,7 @@
             <li><a href="#trade-offs">Trade-offs</a></li>
             <li><a href="#alternatives-rejected">Alternatives rejected</a></li>
             <li><a href="#consequences">Consequences</a></li>
+            <li><a href="#revision-2026-11-08-machine-tokens-and-event-scoped-adc-tools">Revision (2026-11-08): machine tokens and event-scoped ADC tools</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>
