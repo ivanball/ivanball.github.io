@@ -7,6 +7,7 @@ both registration methods and sets `Mcp:Enabled`.
 Revised 2026-11-08 (MMCA.Common v1.281.0): a machine client's token now satisfies permissioned tools
 for server-to-server callers, OAuth 2.1 for desktop clients stays deferred, and ADC's tools are
 scoped to one event with a `list_events` tool. See the Revision (2026-11-08) at the end.
+Revised 2026-11-08 (MMCA.Common v1.282.0): a tool now declares `[McpToolPublic]` or `[McpToolPermission]`, enforced at test time; the runtime rule is unchanged. See the Revision (2026-11-08, access declaration) at the end.
 
 ## Context
 AI clients (Claude Code, Claude Desktop, any Model Context Protocol client) can query an application
@@ -207,6 +208,28 @@ editions and a client had no way to name one.
 - A consumer that wants programs to call permissioned tools turns on machine clients (ADR-140) and
   grants the tool's permission to the role behind the client; nothing in the MCP package changes.
 - An ADC MCP client should call `list_events` first when the user names an edition.
+
+## Revision (2026-11-08, access declaration)
+
+**Context.** A tool with no `[McpToolPermission]` is public at runtime, so a tool someone forgot to
+protect and a tool left public on purpose look identical in source.
+
+**Decision.** A tool now says which it is. `[McpToolPublic]`
+(`MMCA.Common/Source/Presentation/MMCA.Common.Mcp/McpToolPublicAttribute.cs:11-12`) records that a tool is
+public on purpose and has no runtime effect. `McpToolAccessDeclarationTestsBase`
+(`MMCA.Common.Testing.Architecture/Bases/`, over `ArchitectureRules.McpToolsDeclareAccess` at
+`Rules/Api/ArchitectureRules.McpToolAccess.cs:18-35`) fails when an `[McpServerTool]` method, or an override
+of one, declares neither or both of the two attributes. The attributes are read where declared, so an
+override states its own, while `[McpServerTool]` is read with inheritance (`:23`, `:59`). The rule
+also exposes `CountMcpTools` (`:43-47`) so a host can assert a non-vacuity floor and a renamed assembly
+cannot pass having inspected nothing. The runtime rule in the Decision above is unchanged: a tool without
+`[McpToolPermission]` is still public, and the permission gate still wins if both were somehow present.
+
+**Consequences.**
+- A host adds a subclass of the base naming its tool assemblies, and every existing tool needs one of the
+  two attributes before that test passes.
+- The declaration is enforced by the test, not at runtime: a host that does not subclass the base keeps the
+  old behaviour.
 
 ## Related
 [ADR-014](014-cqrs-decorator-pipeline.md) (the decorator pipeline every tool call goes through),

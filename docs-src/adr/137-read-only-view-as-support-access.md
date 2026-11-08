@@ -312,6 +312,29 @@ one place that answers who viewed whom, why, when and how it ended.
   and a lookup would read blank for a deleted account at once, where the snapshot keeps the record
   readable until erasure blanks it.
 
+## Revision (2026-11-08): read-only gRPC endpoints
+
+**Context.** The method rule refuses every method other than GET, HEAD and OPTIONS, and gRPC is always
+POST. A view-as read that fans out to a peer over gRPC was therefore refused on the peer with 403,
+although the call writes nothing.
+
+**Decision.** A host marks a read-only gRPC service or method with `ViewAsReadOnlyEndpointAttribute`
+(`MMCA.Common/Source/Core/MMCA.Common.Shared/Auth/ViewAsReadOnlyEndpointAttribute.cs:17-18`, a class or
+method attribute that lives in Shared so a gRPC project applies it without referencing the API
+package). `ViewAsGuardMiddleware` reads it from the routed endpoint's metadata and treats a POST to a
+marked endpoint as safe for the METHOD rule only (`ViewAsGuardMiddleware.cs:74`, `:117-119`); any other
+non-safe method is still refused. `ViewAs:Enabled` and the grant-liveness check still run on the request,
+so an ended or expired grant is refused on the peer exactly as on the web host. Only POST qualifies, and
+there is no exemption by content type or for gRPC in general. `ViewAsCommandDecorator` is unchanged, so a
+command still refuses under a view-as token however it was reached.
+
+**Consequences.**
+- The mark is an assertion the host makes that the marked code performs no write; nothing verifies it
+  (`ViewAsReadOnlyEndpointAttribute.cs:12-14`). Apply it per service or per method to reads only.
+- A per-user export service is deliberately not marked, so personal data export stays unavailable under
+  a view-as token.
+- Without the mark the behaviour is as before: the read is refused on the peer.
+
 ## Related
 [ADR-014](014-cqrs-decorator-pipeline.md) (the decorator pipeline the view-as decorator now heads),
 [ADR-020](020-permission-based-authorization.md) (the `users:view-as` permission),

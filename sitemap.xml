@@ -272,7 +272,7 @@
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/adr/047-soft-deleted-user-session-revocation.html</loc>
-    <lastmod>2026-10-29</lastmod>
+    <lastmod>2026-11-08</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
@@ -472,7 +472,7 @@
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/adr/087-broker-poison-message-handling.html</loc>
-    <lastmod>2026-10-29</lastmod>
+    <lastmod>2026-11-08</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
@@ -722,7 +722,7 @@
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/adr/137-read-only-view-as-support-access.html</loc>
-    <lastmod>2026-11-07</lastmod>
+    <lastmod>2026-11-08</lastmod>
     <priority>0.6</priority>
   </url>
   <url>

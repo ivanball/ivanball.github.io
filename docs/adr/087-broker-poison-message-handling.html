@@ -260,7 +260,8 @@
           Revised 2026-10-21: the source comments now document that monolith integration events run inside the breaker (the Decision no longer calls the inline comment distributed-only), the circuit-open Warning text is corrected to &quot;Message bus circuit is open&quot;, the per-batch log latch is re-anchored in <code>DispatchRowsAsync</code>, and anchors are refreshed.
           Revised 2026-10-23: the east-west gRPC breaker values moved into <code>HttpResilienceDefaults</code> (<code>Grpc</code>-prefixed), so the database-breaker search re-anchors the gRPC defaults and handler citations there; the broker breaker is unchanged.
           Revised 2026-10-26: redelivery now runs through four pluggable transports (RabbitMQ alone gates it on the flag; Azure Service Bus, Amazon SQS and PostgreSQL apply it unconditionally, SQS with its own 900-second-capped default), <code>RedeliveryIntervalsSeconds</code> defaults to <code>null</code> with the framework default held separately and <code>[0]</code> as the off switch, the fault consumer only Debug-logs faults produced by other assemblies (no Error log, no count), the fault Trade-off records the alerts and runbooks both applications now carry, and anchors are refreshed.
-          Revised 2026-10-28: anchors refreshed after the MMCA.ADC <code>infra/OPERATIONS.md</code> runbook headings moved down one line.</p>
+          Revised 2026-10-28: anchors refreshed after the MMCA.ADC <code>infra/OPERATIONS.md</code> runbook headings moved down one line.
+          Revised 2026-11-08: a <code>BrokenCircuitException</code> no longer consumes a retry. An open circuit does not increment <code>RetryCount</code> and cannot dead-letter the row, which is re-leased for about the break duration plus jitter, capped at the lease; real publish failures and failed half-open probes still count. The section &quot;<code>BrokenCircuitException</code> follows the ordinary failure path&quot; is rewritten and renamed, the one-retry-ladder rationale is restated, and the anchors in those paragraphs are refreshed.</p>
           <h2 id="context">Context</h2>
           <p>Delivery in this workspace has always been at-least-once with retries on both legs: the outbox
           retries a failed publish with jittered exponential backoff and eventually dead-letters
@@ -402,19 +403,30 @@
           loop that re-leases and retries would multiply the attempt count without changing the outcome.
           <code>ShouldHandle</code> excludes <code>OperationCanceledException</code> (<code>:1085-1086</code>) so a host shutdown never counts
           toward opening the circuit.</p>
-          <p><strong><code>BrokenCircuitException</code> follows the ordinary failure path.</strong> It is caught by the same
-          <code>catch (Exception ex)</code> as any publish failure (<code>:593</code>, after the shutdown-cancellation rethrow at
-          <code>:585-592</code>), increments <code>RetryCount</code> (<code>:595</code>), records <code>LastError</code> (<code>:596</code>) and re-leases the row with
-          the usual backoff (<code>:604-605</code>); it dead-letters only on <code>RetryCount &gt;= MaxRetries</code> like everything else
-          (<code>:629</code>). Only observability differs: the run sets <code>circuitOpen</code> (<code>:615</code>), increments
-          <code>broker.circuit.open.count</code> (<code>:618-620</code>), writes one <code>LogBrokerCircuitOpen</code> line naming the data source
-          <strong>per batch</strong> rather than per message (latch at <code>:538</code>, logged at <code>:623-627</code>, defined at <code>:1154-1155</code>),
-          and suppresses the per-message retry log for those rows (<code>:640-643</code>). A batch here is one
-          <code>DispatchRowsAsync</code> pass (<code>:526</code>), which <code>DispatchMessagesAsync</code> (<code>:493</code>) makes once (<code>:506</code>) over the
-          rows claimed for one data-source target (<code>:247</code>), and each row&#39;s outcome is persisted by
-          <code>RecordOutcomeAsync</code> outside the <code>try</code> (<code>:654</code>). A short-circuited publish is a failed publish, not a
-          new category of one; what the breaker buys in a distributed host is that it fails in microseconds
-          instead of a connection timeout, and that the log volume during an outage is one line per batch instead of one per message.</p>
+          <p><strong>An open circuit is a rejection, not an attempt.</strong> <code>BrokenCircuitException</code> is caught by the same
+          <code>catch (Exception ex)</code> as any publish failure (<code>OutboxProcessor.cs:594</code>, after the shutdown-cancellation
+          rethrow at <code>:586-593</code>) and handed to <code>ApplyDeliveryFailure</code> (<code>:625</code>), which does not increment
+          <code>RetryCount</code> for it (<code>:637-641</code>) and so cannot dead-letter the row. It still records <code>LastError</code>
+          (<code>:644</code>) and re-leases the row, but for about the break rather than a backoff keyed on a count it did not
+          spend: <code>BrokerResilienceDefaults.BreakDuration</code> plus up to a quarter of it in jitter, capped at
+          <code>Outbox:LeaseSeconds</code> (<code>:654-657</code>, <code>PollingLoop.ComputeCircuitOpenBackoffSeconds</code> at
+          <code>PollingLoop.cs:205-206</code>). The jitter keeps a whole rejected batch from becoming claimable at the instant
+          the circuit half-opens, and the row cannot hot-spin because it is leased and the next fetch skips it.
+          A publish that reaches the broker and fails keeps counting, and so does the single half-open probe
+          when it fails, because that probe is a real attempt. Dead-lettering therefore still happens on
+          <code>RetryCount &gt;= MaxRetries</code> (<code>:677</code>, default 5 at <code>OutboxSettings.cs:21</code>), but a very long outage
+          now spends one retry per failed probe instead of one per cycle, so it can still dead-letter about one row
+          per five failed probes rather than every undelivered row.</p>
+          <p>The observability is unchanged: the run increments <code>broker.circuit.open.count</code> (<code>:665-667</code>) and writes one
+          <code>LogBrokerCircuitOpen</code> line naming the data source <strong>per batch</strong> rather than per message (latch at <code>:539</code>,
+          passed through <code>:596</code>, logged at <code>:669-672</code>, defined at <code>:1189</code>), and the per-message retry log is
+          skipped for those rows because the circuit branch returns first (<code>:674</code>). A batch here is one
+          <code>DispatchRowsAsync</code> pass, which <code>DispatchMessagesAsync</code> makes once over the rows claimed for one
+          data-source target, and each row&#39;s outcome is persisted by <code>RecordOutcomeAsync</code> outside the <code>try</code>
+          (<code>:606</code>). What the breaker buys in a distributed host is that it fails in microseconds instead of a
+          connection timeout, that the log volume during an outage is one line per batch instead of one per message,
+          and, since this revision, that an outage does not drain the retry budget of rows that never reached the
+          broker.</p>
           <h3 id="a-database-circuit-breaker-was-considered-and-rejected-in-this-wave">A database circuit breaker was considered and rejected in this wave</h3>
           <p>The obvious symmetric move is a breaker on the query path, so a failing database sheds load instead of
           queueing on it. It is <strong>not</strong> being made. A repository-wide search for <code>CircuitBreaker</code>,
@@ -470,10 +482,7 @@
           a cost and a noise fix, and it is honest to describe it as only that. It holds for a host with a
           broker; in a monolith there is no connection to time out, so the latency saving does not apply
           and the breaker&#39;s remaining effect is the one recorded under Trade-offs.</li>
-          <li><strong>Feeding <code>BrokenCircuitException</code> into the normal path keeps one retry ladder.</strong> A special case
-          would give short-circuited rows a different retry count, a different backoff, or a different
-          dead-letter threshold, and the outbox would then have two failure taxonomies to reason about during
-          an incident.</li>
+          <li><strong>Not charging an open circuit to the row keeps the retry budget meaning &quot;attempts that reached the broker&quot;.</strong> Counting a rejection that never left the process walked every undelivered row to the dead-letter threshold during a long outage, which is a loss caused by the breaker rather than by the broker. The ladder stays one ladder: the same <code>RetryCount</code>, the same <code>MaxRetries</code> threshold and the same dead-letter path; only the re-lease interval differs for a rejected row.</li>
           <li><strong>Recording the database rejection is the point of recording it.</strong> An engineer who finds a breaker
           on the broker and none on the database will otherwise conclude the second was forgotten and add it.</li>
           </ul>
@@ -721,7 +730,7 @@
           </ol>
           <h2 id="related">Related</h2>
           <p><a href="003-outbox-dual-dispatch.html">ADR-003</a> (the outbox publish leg this breaker wraps, and the retry,
-          jittered backoff and dead-lettering that <code>BrokenCircuitException</code> reuses unchanged),
+          jittered backoff and dead-lettering that real publish failures and failed half-open probes still use; an open circuit re-leases the row without spending a retry),
           <a href="066-broker-transport-selection.html">ADR-066</a> (the transport selection that makes the asymmetry between
           RabbitMQ and the natively scheduling transports (Azure Service Bus, Amazon SQS, PostgreSQL)
           expressible per <code>IBrokerTransport</code>, and the per-transport retry configuration
