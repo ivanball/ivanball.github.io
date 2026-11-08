@@ -253,7 +253,8 @@
           both registration methods and sets <code>Mcp:Enabled</code>.
           Revised 2026-11-08 (MMCA.Common v1.281.0): a machine client&#39;s token now satisfies permissioned tools
           for server-to-server callers, OAuth 2.1 for desktop clients stays deferred, and ADC&#39;s tools are
-          scoped to one event with a <code>list_events</code> tool. See the Revision (2026-11-08) at the end.</p>
+          scoped to one event with a <code>list_events</code> tool. See the Revision (2026-11-08) at the end.
+          Revised 2026-11-08 (MMCA.Common v1.282.0): a tool now declares <code>[McpToolPublic]</code> or <code>[McpToolPermission]</code>, enforced at test time; the runtime rule is unchanged. See the Revision (2026-11-08, access declaration) at the end.</p>
           <h2 id="context">Context</h2>
           <p>AI clients (Claude Code, Claude Desktop, any Model Context Protocol client) can query an application
           through tools a server exposes. A consumer that wants to offer its data to such a client had no
@@ -461,6 +462,26 @@
           grants the tool&#39;s permission to the role behind the client; nothing in the MCP package changes.</li>
           <li>An ADC MCP client should call <code>list_events</code> first when the user names an edition.</li>
           </ul>
+          <h2 id="revision-2026-11-08-access-declaration">Revision (2026-11-08, access declaration)</h2>
+          <p><strong>Context.</strong> A tool with no <code>[McpToolPermission]</code> is public at runtime, so a tool someone forgot to
+          protect and a tool left public on purpose look identical in source.</p>
+          <p><strong>Decision.</strong> A tool now says which it is. <code>[McpToolPublic]</code>
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.Mcp/McpToolPublicAttribute.cs:11-12</code>) records that a tool is
+          public on purpose and has no runtime effect. <code>McpToolAccessDeclarationTestsBase</code>
+          (<code>MMCA.Common.Testing.Architecture/Bases/</code>, over <code>ArchitectureRules.McpToolsDeclareAccess</code> at
+          <code>Rules/Api/ArchitectureRules.McpToolAccess.cs:18-35</code>) fails when an <code>[McpServerTool]</code> method, or an override
+          of one, declares neither or both of the two attributes. The attributes are read where declared, so an
+          override states its own, while <code>[McpServerTool]</code> is read with inheritance (<code>:23</code>, <code>:59</code>). The rule
+          also exposes <code>CountMcpTools</code> (<code>:43-47</code>) so a host can assert a non-vacuity floor and a renamed assembly
+          cannot pass having inspected nothing. The runtime rule in the Decision above is unchanged: a tool without
+          <code>[McpToolPermission]</code> is still public, and the permission gate still wins if both were somehow present.</p>
+          <p><strong>Consequences.</strong></p>
+          <ul>
+          <li>A host adds a subclass of the base naming its tool assemblies, and every existing tool needs one of the
+          two attributes before that test passes.</li>
+          <li>The declaration is enforced by the test, not at runtime: a host that does not subclass the base keeps the
+          old behaviour.</li>
+          </ul>
           <h2 id="related">Related</h2>
           <p><a href="014-cqrs-decorator-pipeline.html">ADR-014</a> (the decorator pipeline every tool call goes through),
           <a href="020-permission-based-authorization.html">ADR-020</a> (the <code>perm:</code> policy the permission attribute reuses),
@@ -486,6 +507,7 @@
             <li><a href="#alternatives-rejected">Alternatives rejected</a></li>
             <li><a href="#consequences">Consequences</a></li>
             <li><a href="#revision-2026-11-08-machine-tokens-and-event-scoped-adc-tools">Revision (2026-11-08): machine tokens and event-scoped ADC tools</a></li>
+            <li><a href="#revision-2026-11-08-access-declaration">Revision (2026-11-08, access declaration)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

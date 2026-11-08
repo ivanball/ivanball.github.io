@@ -17,7 +17,10 @@ validator query on every authenticated request and the 30-second window is gone.
 before the save, both middleware write-failure tests exercise a failed marker write, and anchors are
 refreshed. Revised 2026-10-26: anchors refreshed after line shifts in the pipeline builder, the
 cache service, the shared erasure base and ADC's delete handler. Revised 2026-10-28: anchors
-refreshed after line shifts in ADC's delete handler and the cache registration.
+refreshed after line shifts in ADC's delete handler and the cache registration. Revised 2026-11-08: the marker
+lifetime is stated as 20 minutes (the earlier text said 15, which is the default access-token lifetime
+alone), writers use the longer of 20 minutes and the access-token lifetime plus clock skew, and
+`DeleteUserHandlerBase` writes through `ISoftDeletedUserMarkerWriter`, so a host no longer writes its own marker.
 
 ## Context
 Soft-delete is the framework's default deletion model (ADR-005): `AuditableBaseEntity.Delete()` sets
@@ -93,10 +96,12 @@ also falls back to an uncached account-status query when no marker is set.
   marker lifetime live in a shared class rather than inside the middleware, because a module that
   deletes an account has to write the exact key the middleware reads and a private constant in the
   presentation layer is unreachable from an application-layer handler.
-  `SoftDeletedUserCache.MarkerDuration` is `TimeSpan.FromMinutes(15)`
-  (`Source/Core/MMCA.Common.Application/Auth/SoftDeletedUserCache.cs:32`), sized to the default
-  access-token lifetime so the marker outlives every token issued before the delete (its remarks,
-  `SoftDeletedUserCache.cs:22-29`), and `SoftDeletedUserCache.KeyFor(userId)` builds
+  `SoftDeletedUserCache.MarkerDuration` is `TimeSpan.FromMinutes(20)`
+  (`Source/Core/MMCA.Common.Application/Auth/SoftDeletedUserCache.cs:38`), the 15-minute default
+  access-token lifetime plus the 5-minute default JWT clock skew, so the marker outlives every token
+  issued before the delete (its remarks, `SoftDeletedUserCache.cs:25-36`). That constant is the floor:
+  `SoftDeletedUserCache.MarkerDurationFor(accessTokenLifetime, clockSkew)` returns the longer of it and
+  the lifetime plus skew (`:48-52`), and `MarkDeletedForAsync` writes with that duration (`:95`), and `SoftDeletedUserCache.KeyFor(userId)` builds
   `user:deleted:{userId}` under the invariant culture (`SoftDeletedUserCache.cs:45-46`). The
   middleware builds the key (`SoftDeletedUserMiddleware.cs:82`) and reads it through
   `ICacheService.GetFromSharedStoreAsync<bool?>` (`:91-93`), never from a replica's local copy
@@ -242,9 +247,12 @@ keeps its linked-`Customer` cascade and gains the marker behavior purely by forw
   cache, every authenticated request on an Identity-hosting service runs one shared-store read and
   one account-status query (`SoftDeletedUserMiddleware.cs:17-19`). There is no lookup window to tune:
   the database load scales with authenticated traffic on that host instead of with live users.
-  The marker lifetime is compile-time (`SoftDeletedUserCache.MarkerDuration`,
-  `SoftDeletedUserCache.cs:32`, 15 minutes): its own remarks say a host that raises the access-token
-  lifetime should write its own marker with a matching duration (`SoftDeletedUserCache.cs:27-29`).
+  The marker floor is compile-time (`SoftDeletedUserCache.MarkerDuration`,
+  `SoftDeletedUserCache.cs:38`, 20 minutes), but a writer lengthens it for a raised access-token lifetime
+  through `MarkerDurationFor` (`:48-52`). `DeleteUserHandlerBase` takes a required
+  `ISoftDeletedUserMarkerWriter` (`DeleteUserHandlerBase.cs:88`), whose implementation writes the marker with
+  `MarkerDurationFor(tokenService.AccessTokenLifetime)` (the call at `DeleteUserHandlerBase.cs:189`), so a host that raises the lifetime cannot keep a shorter marker by omission. The
+  Application-layer writers assume the 5-minute default clock skew (`SoftDeletedUserCache.cs:20`).
 - **The marker only covers erasures that go through the shared base.** The framework now both
   supplies the key and TTL (`SoftDeletedUserCache.MarkDeletedAsync`, `SoftDeletedUserCache.cs:56-64`)
   and calls it on the app's behalf (`DeleteUserHandlerBase.cs:167-169`), so no app can forget it. What
