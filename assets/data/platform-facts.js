@@ -16,8 +16,8 @@
    ============================================================================ */
 window.PLATFORM_FACTS = {
   /* FACTS.md "Published packages" */
-  packages: 26,
-  /* The same 26 packages, grouped by the layer they serve, for the stack on
+  packages: 28,
+  /* The same 28 packages, grouped by the layer they serve, for the stack on
      platform.html. The count above is derived from this list at build time, so a
      package added here cannot leave the headline figure behind (the hand-typed
      pill list this replaced had drifted to 13 while the copy still said fifteen).
@@ -26,8 +26,8 @@ window.PLATFORM_FACTS = {
     { name: "Shared", note: "Result pattern, value objects, error handling, DTOs", items: ["MMCA.Common.Shared"] },
     { name: "Domain", note: "Entities, aggregate roots, domain events, specifications", items: ["MMCA.Common.Domain"] },
     { name: "Application", note: "CQRS handlers, the decorator pipeline, the module system", items: ["MMCA.Common.Application"] },
-    { name: "Infrastructure", note: "EF Core multi-engine, repositories, caching, outbox, message bus, multi-tenancy, audit trail, job scheduler", items: ["MMCA.Common.Infrastructure"] },
-    { name: "API &amp; transport", note: "Controllers, middleware, idempotency, JWKS, gRPC contracts", items: ["MMCA.Common.API", "MMCA.Common.Grpc"], edge: true },
+    { name: "Infrastructure", note: "EF Core multi-engine, repositories, caching, outbox, message bus, multi-tenancy, audit trail, job scheduler; WebAuthn passkeys as an opt-in package", items: ["MMCA.Common.Infrastructure", "MMCA.Common.Passkeys"] },
+    { name: "API &amp; transport", note: "Controllers, middleware, idempotency, JWKS, gRPC contracts, an opt-in MCP endpoint", items: ["MMCA.Common.API", "MMCA.Common.Grpc", "MMCA.Common.Mcp"], edge: true },
     { name: "UI", note: "Blazor shared components, MudBlazor theme, web and MAUI clients", items: ["MMCA.Common.UI", "MMCA.Common.UI.Web", "MMCA.Common.UI.Maui"] },
     { name: "Hosting", note: "Aspire service defaults, OpenTelemetry, health checks, broker wiring, YARP gateway composition", items: ["MMCA.Common.Aspire", "MMCA.Common.Aspire.Hosting", "MMCA.Common.Gateway"], edge: true },
     { name: "AI", note: "Governed language-model boundary: prompt contracts, bounds, guardrails, tool policy, usage metering; one adapter package per provider and a replay evaluation harness", items: ["MMCA.Common.AI", "MMCA.Common.AI.Anthropic", "MMCA.Common.AI.OpenAI", "MMCA.Common.AI.Testing"], edge: true },
@@ -36,7 +36,7 @@ window.PLATFORM_FACTS = {
     { name: "Metapackage", note: "MMCA.Common: one reference that bundles the six core packages (Shared, Domain, Application, Infrastructure, API, Aspire) so a standard app starts from a single PackageReference", items: ["MMCA.Common"] },
   ],
   /* FACTS.md "Architecture fitness functions": test methods, not base classes */
-  fitnessTests: 161,
+  fitnessTests: 164,
   /* Store, ADC, Helpdesk */
   referenceApps: 3,
   /* docs-src/governance/ArchitectureEvaluationCriteria.md */

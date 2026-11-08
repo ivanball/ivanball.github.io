@@ -119,9 +119,9 @@
         </div>
         <div class="stats">
           <!-- BEGIN platform-stats -->
-          <div class="stat"><div class="num">26</div><div class="label">NuGet packages</div></div>
+          <div class="stat"><div class="num">28</div><div class="label">NuGet packages</div></div>
           <div class="stat"><div class="num">140</div><div class="label">Architecture Decision Records</div></div>
-          <div class="stat"><div class="num">161</div><div class="label">Architecture fitness tests</div></div>
+          <div class="stat"><div class="num">164</div><div class="label">Architecture fitness tests</div></div>
           <div class="stat"><div class="num">3</div><div class="label">Reference applications</div></div>
           <!-- END platform-stats -->
         </div>
@@ -164,15 +164,15 @@
           <li class="layer">
             <span class="layer-name">Infrastructure</span>
             <span>
-              <span class="pill-list"><span class="pill">MMCA.Common.Infrastructure</span></span>
-              <span class="layer-note">EF Core multi-engine, repositories, caching, outbox, message bus, multi-tenancy, audit trail, job scheduler</span>
+              <span class="pill-list"><span class="pill">MMCA.Common.Infrastructure</span><span class="pill">MMCA.Common.Passkeys</span></span>
+              <span class="layer-note">EF Core multi-engine, repositories, caching, outbox, message bus, multi-tenancy, audit trail, job scheduler; WebAuthn passkeys as an opt-in package</span>
             </span>
           </li>
           <li class="layer layer--edge">
             <span class="layer-name">API &amp; transport</span>
             <span>
-              <span class="pill-list"><span class="pill">MMCA.Common.API</span><span class="pill">MMCA.Common.Grpc</span></span>
-              <span class="layer-note">Controllers, middleware, idempotency, JWKS, gRPC contracts</span>
+              <span class="pill-list"><span class="pill">MMCA.Common.API</span><span class="pill">MMCA.Common.Grpc</span><span class="pill">MMCA.Common.Mcp</span></span>
+              <span class="layer-note">Controllers, middleware, idempotency, JWKS, gRPC contracts, an opt-in MCP endpoint</span>
             </span>
           </li>
           <li class="layer">
