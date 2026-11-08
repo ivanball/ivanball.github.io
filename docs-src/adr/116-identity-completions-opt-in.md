@@ -15,6 +15,9 @@ Revised 2026-11-02: item 14 records sign-in links as a sixth opt-in completion o
 (see Revision below).
 Revised 2026-11-04: the stored-grant cache interval defaults to 30 seconds as of MMCA.Common 1.277.0
 (see Revision below).
+Revised 2026-11-08: passkeys ([ADR-139](139-passkeys-webauthn-opt-in-sign-in.md)) and machine clients
+([ADR-140](140-machine-clients-oauth-client-credentials.md)) are further identity opt-ins of this
+shape (see Revision below).
 Layers stored permission grants over
 [ADR-020](020-permission-based-authorization.md)'s compiled registry and extends the shared sign-in
 workflow of [ADR-050](050-jwt-refresh-token-rotation.md) with optional collaborators.
@@ -562,6 +565,15 @@ anchors moved.
 - Each cached entry lives three intervals, so the snapshot survives up to two failed reloads before
   stored grants fail closed (`PermissionGrantSettings.cs:28-30`).
 - The other anchors in items 1 to 14 were not re-verified in this revision.
+
+## Revision (2026-11-08)
+- MMCA.Common v1.281.0 adds two further identity opt-ins of this shape, each recorded in its own ADR
+  because each brings a decision of its own: passkeys
+  ([ADR-139](139-passkeys-webauthn-opt-in-sign-in.md), a separate package, a gated table and the
+  `auth_time` step-up) and machine clients
+  ([ADR-140](140-machine-clients-oauth-client-credentials.md), service-account users through a
+  consumer-supplied `IServiceAccountProvisioner`, the store shape this record set for `ITwoFactorStore`).
+- The anchors in items 1 to 14 were not re-verified in this revision.
 
 ## Related
 [ADR-020](020-permission-based-authorization.md) (the compiled role-to-permission registry stored

@@ -262,6 +262,9 @@
           (see Revision below).
           Revised 2026-11-04: the stored-grant cache interval defaults to 30 seconds as of MMCA.Common 1.277.0
           (see Revision below).
+          Revised 2026-11-08: passkeys (<a href="139-passkeys-webauthn-opt-in-sign-in.html">ADR-139</a>) and machine clients
+          (<a href="140-machine-clients-oauth-client-credentials.html">ADR-140</a>) are further identity opt-ins of this
+          shape (see Revision below).
           Layers stored permission grants over
           <a href="020-permission-based-authorization.html">ADR-020</a>&#39;s compiled registry and extends the shared sign-in
           workflow of <a href="050-jwt-refresh-token-rotation.html">ADR-050</a> with optional collaborators.</p>
@@ -808,6 +811,16 @@
           stored grants fail closed (<code>PermissionGrantSettings.cs:28-30</code>).</li>
           <li>The other anchors in items 1 to 14 were not re-verified in this revision.</li>
           </ul>
+          <h2 id="revision-2026-11-08">Revision (2026-11-08)</h2>
+          <ul>
+          <li>MMCA.Common v1.281.0 adds two further identity opt-ins of this shape, each recorded in its own ADR
+          because each brings a decision of its own: passkeys
+          (<a href="139-passkeys-webauthn-opt-in-sign-in.html">ADR-139</a>, a separate package, a gated table and the
+          <code>auth_time</code> step-up) and machine clients
+          (<a href="140-machine-clients-oauth-client-credentials.html">ADR-140</a>, service-account users through a
+          consumer-supplied <code>IServiceAccountProvisioner</code>, the store shape this record set for <code>ITwoFactorStore</code>).</li>
+          <li>The anchors in items 1 to 14 were not re-verified in this revision.</li>
+          </ul>
           <h2 id="related">Related</h2>
           <p><a href="020-permission-based-authorization.html">ADR-020</a> (the compiled role-to-permission registry stored
           grants layer over),
@@ -840,6 +853,7 @@
             <li><a href="#revision-2026-10-28">Revision (2026-10-28)</a></li>
             <li><a href="#revision-2026-11-02">Revision (2026-11-02)</a></li>
             <li><a href="#revision-2026-11-04">Revision (2026-11-04)</a></li>
+            <li><a href="#revision-2026-11-08">Revision (2026-11-08)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

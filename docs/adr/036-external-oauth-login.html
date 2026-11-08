@@ -263,7 +263,11 @@
           Revised 2026-10-26: the exchange&#39;s administrator-lock gate on existing accounts is now recorded,
           the one-provider guard refuses any already-externally-linked account (the same provider under a
           different key included), and anchors refreshed after ADC&#39;s <code>AuthenticationService.cs</code> and <code>User.cs</code>
-          lines and the framework&#39;s <code>AuthenticationServiceBase.cs</code> lines moved.</p>
+          lines and the framework&#39;s <code>AuthenticationServiceBase.cs</code> lines moved.
+          Revised 2026-11-08 (MMCA.Common v1.281.0): any OpenID Connect provider joins by configuration
+          (<code>OAuth:Oidc:&lt;Name&gt;</code>), with a provider key of <code>{tid}|{oid}</code> or <code>{iss}|{sub}</code>, <code>email_verified</code> passed
+          through only under <code>TrustEmail</code>, reserved names, and home-realm discovery. See the Revision
+          (2026-11-08) at the end.</p>
           <h2 id="context">Context</h2>
           <p>The framework&#39;s Identity story so far is entirely first-party: a user registers with an email and
           password, the credentials are hashed (ADR-032), and Identity mints its own RS256 JWT pair. Every auth
@@ -615,6 +619,71 @@
           </ul>
           </li>
           </ol>
+          <h2 id="revision-2026-11-08-generic-oidc-providers">Revision (2026-11-08): generic OIDC providers</h2>
+          <p><strong>Context.</strong> Sign-in supported exactly Google, GitHub and Apple, one hard-coded scheme and one
+          literal route each. An enterprise adopter needs its own identity provider (Entra ID, Okta, any
+          OpenID Connect issuer) by configuration, and the app&#39;s <code>ExternalLoginAsync</code> should not have to learn
+          a new claim shape per provider. MMCA.Common v1.281.0 (<code>MMCA.Common/CHANGELOG.md:15</code>) adds that.</p>
+          <p><strong>Decision.</strong></p>
+          <ul>
+          <li><strong>One scheme per configuration section.</strong> <code>AddExternalAuthProviders</code> reads every <code>OAuth:Oidc:&lt;Name&gt;</code>
+          section that sets a <code>ClientId</code> (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Authentication/ExternalAuthExtensions.cs:58</code>,
+          <code>:95</code>) and registers <code>AddOpenIdConnect(&lt;Name&gt;)</code> with the authorization code flow, PKCE, the existing
+          <code>ExternalLogin</code> cookie as the sign-in scheme and the callback <code>/auth/callback/&lt;Name&gt;</code> (<code>:112-121</code>).
+          <code>Authority</code> and <code>ClientSecret</code> are required, and a missing one fails startup naming the key
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Authentication/OidcProviderSettings.cs:94-95</code>,
+          <code>:131-136</code>); <code>Scopes</code>, <code>DisplayName</code>, <code>Domains</code> and <code>TrustEmail</code> (default false) are optional
+          (<code>:97-128</code>). Google, GitHub and Apple are unchanged.</li>
+          <li><strong>Reserved and validated names.</strong> <code>google</code>, <code>github</code>, <code>apple</code>, <code>complete</code>, <code>exchange</code> and <code>discover</code>
+          are refused, because a name becomes a route segment beside those literal routes (<code>:39-40</code>,
+          <code>:82-86</code>), and a name must match <code>^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$</code> (<code>:88-92</code>, <code>:148-149</code>). A domain
+          claimed by two providers fails startup (<code>:63-67</code>).</li>
+          <li><strong>One claim shape for every provider.</strong> <code>OnTokenValidated</code> replaces the principal with
+          <code>OidcClaimNormalizer.Normalize</code> (<code>ExternalAuthExtensions.cs:140-142</code>), so the controller&#39;s claim
+          extraction (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/OAuthControllerBase.cs:349-350</code>)
+          and the app&#39;s <code>ExternalLoginAsync</code> need no change:<ul>
+          <li><strong>Provider key <code>{tid}|{oid}</code> when both claims exist, else <code>{iss}|{sub}</code>, never the email</strong>
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Authentication/OidcClaimNormalizer.cs:56-81</code>).
+          Entra ID&#39;s <code>sub</code> is pairwise per application while <code>oid</code> is the user&#39;s stable id inside the
+          tenant; <code>iss|sub</code> is unique across issuers; an email can be changed by its owner or an
+          administrator (<code>:10-13</code>).</li>
+          <li><strong><code>email_verified=true</code> survives only when the provider sets <code>TrustEmail</code> AND the token asserts
+          it</strong> (<code>:46-51</code>). Entra ID asserts nothing, so ADC&#39;s existing link guard refuses to link an Entra
+          login to an existing account by email
+          (<code>MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Application/Users/AuthenticationService.cs:432-442</code>),
+          and the SEC-ADC-01 reasoning above still applies.</li>
+          <li><strong>No <code>preferred_username</code> fallback.</strong> The email is read from <code>email</code> alone (<code>:41</code>). Entra ID puts
+          <code>email</code> in the ID token only when that optional claim is configured on the app registration;
+          without it the completion ends with <code>missing_claims</code> (<code>OAuthControllerBase.cs:223</code>). Falling back
+          to <code>preferred_username</code>, which Entra does not verify, would hand the app an unverified address as
+          if it were an email.</li>
+          </ul>
+          </li>
+          <li><strong>Generic routes.</strong> <code>OAuthControllerBase</code> gains <code>GET auth/oauth/{provider}</code>, which challenges a
+          configured OIDC scheme and answers 404 for an unknown name; the literal <code>google</code>, <code>github</code> and
+          <code>apple</code> routes keep precedence (<code>OAuthControllerBase.cs:109-155</code>). MAUI already builds
+          <code>/auth/oauth/{provider}</code>
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI.Maui/Capabilities/Auth/MauiExternalAuthBroker.cs:71</code>),
+          so the mobile flow needs no change.</li>
+          <li><strong>Home-realm discovery.</strong> <code>GET auth/oauth/discover?email=</code> is anonymous on the <code>auth-ip</code> policy and
+          answers <code>OidcDiscoveryResponse</code> (provider and display name) for an exact domain match, else 404
+          (<code>OAuthControllerBase.cs:159-178</code>). The Common.UI login renders one button per provider and, when
+          any provider declares <code>Domains</code>, an email-first &quot;Sign in with your organization&quot; step.</li>
+          <li><strong>No proxy change.</strong> The token still leaves through <code>auth/oauth/exchange</code>, already a default
+          token-issuing path (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI.Web/SameOriginProxy/SameOriginApiProxySettings.cs:33</code>).</li>
+          </ul>
+          <p><strong>Consequences.</strong></p>
+          <ul>
+          <li>An adopter adds a section per identity provider; sign-up and role policy stay in the app&#39;s
+          <code>ExternalLoginAsync</code>.</li>
+          <li>An app that links external logins by verified email links an OIDC login only for a provider the
+          operator marked <code>TrustEmail</code>.</li>
+          <li>Real identity providers differ in claim shape; the framework&#39;s tests run against an in-process
+          OIDC stub, so the first adopter should try its own provider before relying on it.</li>
+          <li>Out of scope, and still in the <em>Enterprise-scale register</em> of
+          <a href="../governance/common-RemediationBacklog.html">the Common backlog</a>: SCIM provisioning. Also out: SAML
+          and per-tenant identity providers.</li>
+          </ul>
           <h2 id="related">Related</h2>
           <p>ADR-004 (the RS256/JWKS token this flow exchanges the external identity <em>for</em>, and validates
           everywhere after), ADR-022 (the browser cookies that carry the resulting session), ADR-029 (the
@@ -643,6 +712,7 @@
             <li><a href="#revision-2026-10-06">Revision (2026-10-06)</a></li>
             <li><a href="#revision-2026-10-21">Revision (2026-10-21)</a></li>
             <li><a href="#revision-2026-10-26">Revision (2026-10-26)</a></li>
+            <li><a href="#revision-2026-11-08-generic-oidc-providers">Revision (2026-11-08): generic OIDC providers</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

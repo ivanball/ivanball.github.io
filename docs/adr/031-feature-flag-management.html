@@ -271,6 +271,10 @@
           <p>Revised 2026-11-07: the targeting context adds the group <code>tenant:&lt;tenantId&gt;</code> when the request has
           resolved a tenant, so a Targeting audience can turn a flag on per tenant. See the Revision (2026-11-07)
           at the end.</p>
+          <p>Revised 2026-11-08 (MMCA.Common v1.281.0): stored overrides can be layered over the configuration
+          (<code>AddReloadableFeatureFlags</code>), so a kill switch flips without a new revision; configuration stays the
+          default and the answer whenever the overrides cannot be loaded. See the Revision (2026-11-08) at the
+          end.</p>
           <h2 id="context">Context</h2>
           <p>The apps need to decouple <em>release</em> from <em>deploy</em>: ship code dark, flip a kill switch, or roll a feature
           out to a percentage of users without a redeploy. A flag has to be enforceable at <strong>two</strong> different points
@@ -535,6 +539,82 @@
           id, <code>:101-108</code> for the anonymous context, <code>:37-39</code> for the documented anonymous behavior). The
           accessor&#39;s own example targets a tenant with <code>RolloutPercentage</code> 100 (<code>:53-55</code>).</li>
           </ol>
+          <h2 id="revision-2026-11-08-stored-overrides-over-configuration">Revision (2026-11-08): stored overrides over configuration</h2>
+          <p><strong>Context.</strong> A flag&#39;s value came from configuration alone, so flipping a kill switch meant a new
+          revision: the very deploy a kill switch exists to avoid. MMCA.Common v1.281.0
+          (<code>MMCA.Common/CHANGELOG.md:19</code>) adds an opt-in layer of stored overrides. The two enforcement surfaces,
+          the <code>404</code> answers, the targeting context and the lifecycle gate are unchanged.</p>
+          <p><strong>Decision.</strong></p>
+          <ol>
+          <li><strong>Overrides are a definition provider layered over the configured one.</strong>
+          <code>AddReloadableFeatureFlags(configuration, params Assembly[] flagAssemblies)</code>, called after <code>AddAPI()</code>,
+          decorates the registered <code>IFeatureDefinitionProvider</code> and throws when none is registered yet
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.FeatureFlags.cs:47</code>,
+          <code>:77-86</code>). <code>StoredOverrideFeatureDefinitionProvider</code> answers a flag with a stored override from that
+          override and every other flag from the configured provider, unchanged
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/FeatureFlags/StoredOverrideFeatureDefinitionProvider.cs:43-70</code>).
+          The FeatureGate decorators and <code>[FeatureGate]</code> keep calling <code>IFeatureManager</code>, so an override takes
+          effect on the next evaluation with no restart (<code>:16-18</code>).</li>
+          <li><strong>An override is expressed with the built-in filters.</strong> On becomes <code>AlwaysOn</code>, off becomes no
+          filter, and a percentage or a targeted audience becomes the targeting filter&#39;s audience, so a
+          percentage stays sticky per user (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/FeatureFlags/FeatureFlagDefinitions.cs:13-17</code>,
+          <code>:33-46</code>).</li>
+          <li><strong>One snapshot, invalidated on write.</strong> The whole override table is one cache entry in the host&#39;s
+          <code>ICacheService</code>, keyed by the owning data source under <code>featureflags:overrides:</code>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/FeatureFlags/FeatureFlagOverrideSnapshot.cs:43-57</code>),
+          the <code>PermissionGrantCache</code> shape. Every set or clear invalidates it by prefix
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/FeatureFlags/FeatureFlagAdministrationService.cs:80</code>,
+          <code>:99</code>, <code>:111-119</code>). With the two-level cache the prefix invalidation replaces one generation token
+          on the shared Redis (<a href="077-hybridcache-substrate.html">ADR-077</a>), so a flip reaches every replica
+          within seconds; on a memory-only host <code>FeatureFlags:OverrideCacheSeconds</code> (default 30, 1 to 3600)
+          bounds how long another replica serves the old snapshot
+          (<code>FeatureFlagOverrideSnapshot.cs:16-23</code>;
+          <code>MMCA.Common/Source/Core/MMCA.Common.Application/FeatureFlags/FeatureFlagOverrideSettings.cs:14-24</code>).
+          A failed invalidation after a committed write is logged and the write still succeeds
+          (<code>FeatureFlagAdministrationService.cs:19-23</code>).</li>
+          <li><strong>Configuration answers when the overrides cannot be loaded.</strong> A load failure is logged as a
+          Warning and every flag answers from configuration until the next load succeeds; cancellation is
+          never swallowed (<code>StoredOverrideFeatureDefinitionProvider.cs:75-95</code>). The override layer is never
+          more fragile than the configuration under it: a transient database error or an unapplied migration
+          would otherwise fail every feature-gated command and query.</li>
+          <li><strong>Only declared flags can be overridden.</strong> The catalog is <code>FeatureFlagRegistry.Describe</code> over the
+          assemblies the host passes (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/FeatureFlags/FeatureFlagCatalog.cs:17-20</code>);
+          any other name, including one configuration happens to carry, is refused with
+          <code>FeatureFlag.Undeclared</code> (404) before anything is written (<code>FeatureFlagAdministrationService.cs:15-17</code>,
+          <code>:69-72</code>, <code>:88-91</code>, <code>:103-106</code>). An override must name a flag some code reads, or it is a typo
+          stored as data.</li>
+          <li><strong>Stored in the owning service&#39;s database, mapped only where enabled.</strong> <code>FeatureFlagOverrides</code> lives
+          in the database <code>FeatureFlags:DataSourceName</code> names (<code>FeatureFlagOverrideSettings.cs:26-31</code>), and the
+          call registers the model gate that maps it there and nowhere else
+          (<code>DependencyInjection.FeatureFlags.cs:36-40</code>, <code>:69-70</code>;
+          <code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/ApplicationDbContext.cs:470</code>,
+          <code>:1009</code>). Clearing an override soft-deletes the row, so the audit fields record who cleared it.</li>
+          <li><strong>An administration surface behind <code>features:manage</code>.</strong> <code>FeatureFlagsControllerBase</code> (abstract, no
+          route) lists each declared flag with its lifetime, owner, configured value, override and effective
+          value, sets an override with a required <code>Reason</code>, and clears one
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/Administration/FeatureFlagsControllerBase.cs:37-38</code>,
+          <code>:49</code>, <code>:68</code>, <code>:93</code>; <code>AdministrationPermissions.ManageFeatures</code>,
+          <code>MMCA.Common/Source/Core/MMCA.Common.Shared/Auth/Permissions/AdministrationPermissions.cs:33</code>). The
+          routeless <code>FeatureFlagAdmin</code> page shows one table across the flag sources given to
+          <code>AddFeatureFlagAdministrationUI(params string[] sources)</code>
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI/DependencyInjection.cs:387</code>), so a multi-service
+          host shows every service&#39;s flags together.</li>
+          </ol>
+          <p><strong>Consequences.</strong></p>
+          <ul>
+          <li>A host opts in per service: the call, one <code>FeatureFlagOverrides</code> migration on that service&#39;s
+          database (<code>DesignTimeDbContextOptions.EnableFeatureFlagOverrides</code>), the controller subclass and a
+          page route behind <code>features:manage</code> (<code>MMCA.Common/UPGRADING.md:72-88</code>). A host that never calls it
+          changes nothing.</li>
+          <li>MMCA.ADC adopts it on Conference and Engagement, with <code>features:manage</code> granted to Organizer only
+          and one Feature flags page over both sources
+          (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/DependencyInjection.cs:58-60</code>).</li>
+          <li>An override outlives its reason: it is not time-boxed, and the page shows each active override with
+          its <code>Reason</code> so a stale one is visible.</li>
+          <li>Rejected: Azure App Configuration (a paid service and a vendor dependency for a table the owning
+          service can hold), and per-tenant override rows (targeting groups already cover tenants, see the
+          Revision (2026-11-07)).</li>
+          </ul>
           
         <div class="doc-foot btn-row">
           <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
@@ -558,6 +638,7 @@
             <li><a href="#revision-2026-10-21">Revision (2026-10-21)</a></li>
             <li><a href="#revision-2026-10-26">Revision (2026-10-26)</a></li>
             <li><a href="#revision-2026-11-07">Revision (2026-11-07)</a></li>
+            <li><a href="#revision-2026-11-08-stored-overrides-over-configuration">Revision (2026-11-08): stored overrides over configuration</a></li>
             </ul>
           </nav>
         </aside>
