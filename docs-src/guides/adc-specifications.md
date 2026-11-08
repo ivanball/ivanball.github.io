@@ -1,6 +1,6 @@
 # ADC (Atlanta Developers Conference) - Business Specifications
 
-_As of: 2026-11-02._
+_As of: 2026-11-08._
 
 ---
 
@@ -1515,6 +1515,26 @@ the count, never who voted (BR-238).
 
 **Business Rules:** BR-278, BR-279, BR-280
 
+---
+
+### UC-57: Override a Feature Flag
+
+**Actors:** Organizer
+**Preconditions:** Caller holds `features:manage` (granted to Organizer only, by both the Conference and the Engagement permission grants)
+
+**Main Flow:**
+1. Organizer opens Feature flags (`/feature-flags`, under Administration > Setup), which lists every flag the Conference and Engagement services declare in one table (`GET /Admin/Conference/FeatureFlags`, `GET /Admin/Engagement/FeatureFlags`): its lifetime and owner, what configuration says, the stored override and its reason, and the value in force
+2. Organizer sets an override (`PUT /Admin/{Conference|Engagement}/FeatureFlags/{name}`): on, off, a percentage of users, or targeted users and groups, with a required reason
+3. The new value takes effect on the next evaluation in that service, with no deploy
+4. Organizer clears the override (`DELETE /Admin/{Conference|Engagement}/FeatureFlags/{name}`), and the flag answers from configuration again
+
+**Alternate Flows:**
+- A name the service does not declare: HTTP 404 (`FeatureFlag.Undeclared`)
+- A missing reason, or one over 500 characters: HTTP 400 (`FeatureFlagOverride.ReasonRequired`)
+- While the stored overrides cannot be read, every flag answers from configuration
+
+**Notes:** The mechanism is the framework's stored-override layer ([ADR-031](../adr/031-feature-flag-management.md)); each service keeps its overrides in its own database.
+
 > **Use-case numbering.** UC-12 to UC-18, UC-20, and UC-28/UC-29 are unused; the numbers were retired
 > as the specification was reorganized and are deliberately not recycled. UC-30 to UC-35 are the
 > authentication flows and live in Section 12.2. UC-36 onward are the use cases added after them;
@@ -1798,6 +1818,8 @@ All Attendee actions, plus:
 | 148 | View the roster insights | UC-56, BR-278, BR-279 | `GET /Tickets/insights/roster?eventId=`; aggregate only |
 | 149 | View the engagement insights | UC-56, BR-278, BR-280 | `GET /Tickets/insights/engagement?eventId=`; aggregate only, "fewer than 3" below 3 |
 | 150 | Export one insights table as CSV | UC-56, BR-278 | `GET /Tickets/insights/export?eventId=&report=`; `report` is `a1`-`a6` or `b1`-`b4` (ADR-078) |
+| 151 | View the feature flags of Conference and Engagement | UC-57 | `GET /Admin/Conference/FeatureFlags`, `GET /Admin/Engagement/FeatureFlags`; `features:manage` |
+| 152 | Set or clear a feature flag override | UC-57 | `PUT` / `DELETE /Admin/Conference/FeatureFlags/{name}` and the Engagement twin; reason required |
 
 #### System (Non-Human)
 
@@ -1821,7 +1843,7 @@ Check-in and feedback points are awarded by integration-event consumers, not dom
 | **Attendee** | UC-30, UC-31, UC-32, UC-33, UC-34, UC-35, UC-4, UC-5, UC-10, UC-11, UC-21, UC-23, UC-24, UC-26, UC-40, UC-41, UC-42, UC-45, UC-46, UC-47, UC-50, UC-51, UC-54 | + API Consumer actions + feedback update/delete + account deletion + password change + password reset + sign-in links + ticket claim | API Consumer + 42 |
 | **Speaker** | UC-22, UC-25, UC-39 *(session-scoped)* | Own feedback view, profile editing, polls, moderation, materials (bookmark count views are public, already in API Consumer) | Attendee + 6 |
 | **ContentEditor** | UC-8, UC-9, UC-19 (sessions, speakers), UC-36, UC-37, UC-38, UC-39 | Subset of Organizer actions listed above | Attendee + subset |
-| **Organizer** | UC-6-UC-9, UC-19, UC-21, UC-22, UC-25, UC-27, UC-36-UC-44, UC-48, UC-49, UC-52, UC-53, UC-55, UC-56 | + Attendee actions + Conference CRUD (speaker question answer endpoints are domain-only, not exposed via REST) + user list/delete/admin + role admin + publish/unpublish + speaker link/unlink + live layer, check-in, points, selection, ticket roster, invites and insights | Attendee + 69 |
+| **Organizer** | UC-6-UC-9, UC-19, UC-21, UC-22, UC-25, UC-27, UC-36-UC-44, UC-48, UC-49, UC-52, UC-53, UC-55, UC-56, UC-57 | + Attendee actions + Conference CRUD (speaker question answer endpoints are domain-only, not exposed via REST) + user list/delete/admin + role admin + publish/unpublish + speaker link/unlink + live layer, check-in, points, selection, ticket roster, invites and insights + feature flag overrides | Attendee + 71 |
 | **System** |: | Speaker unlink, cache eviction, broadcasts, question points | 5 |
 
 ---
@@ -2851,6 +2873,33 @@ Storage, content sniffing and the stored response headers follow
 [ADR-045](../adr/045-managed-file-storage-and-avatars.md). There is no by-id read endpoint: an asset
 is only ever fetched as part of its session's list, so the filtered list is the `Location` a create
 returns.
+
+### 11.14 MCP Tools (AI clients)
+
+The Conference service exposes read-only Model Context Protocol tools at `/mcp`, routed through the
+gateway, when `Mcp:Enabled` is true ([ADR-138](../adr/138-mcp-endpoint-over-module-queries.md)).
+Every tool is anonymous and shows only what the public schedule pages show: tools read through the
+same public filters as the anonymous endpoints (BR-49, BR-132, BR-239), project into public-only
+result records, and fail closed. A miss or refusal is a tool error result whose text carries the
+error code, never an exception.
+
+**One event at a time.** Every list read is scoped to one published event. `eventId` is optional on
+`list_sessions`, `list_speakers`, `now_next` and `get_speaker`; omitted, it means the current event,
+chosen as the landing pages choose it: the live one, else the next upcoming, else the most recently
+ended. An id that is not a published event answers `Mcp.EventNotFound` (whose text points at
+`list_events`) before anything else is read.
+
+| Tool | Parameters | Returns |
+|------|------------|---------|
+| `list_events` | none | The published events, newest first: `id` (the `eventId` the other tools accept), name, first and last day, time zone, venue, and `status` (`live`, `upcoming` or `past`, by the app's own live window) |
+| `list_sessions` | `eventId?`, `day?` (`yyyy-MM-dd`), `track?`, `text?` | The event's public sessions in start order, at most 100: `id`, `eventId` and `eventName`, title, start and end in the event's local time, room, categories (track and level) and speaker names. Filters combine |
+| `get_session` | `sessionId` | One public session: `eventId` and `eventName`, title, abstract, schedule, room, accessibility note, categories, and speakers with the id `get_speaker` accepts. Takes no `eventId`, because a session belongs to one event; an unknown id is `Mcp.SessionNotFound` |
+| `list_speakers` | `eventId?`, `text?` | The event's public speakers by last name, at most 100: `id`, name and tagline |
+| `get_speaker` | `speakerId`, `eventId?` | One public speaker: name, tagline, biography, picture, public profile links, and their public sessions at the chosen event (each carrying `eventId` and `eventName`). Never the email or the linked account (BR-66) |
+| `now_next` | `eventId?` | What is on now and up next at the event: its name, whether it is live, and the sessions with their rooms and times (the `GET /Events/{id}/now-next` snapshot, section 11.10) |
+
+Per-tool enablement and per-caller limits come from the framework's `Mcp:Tools:<name>` settings;
+every tool and parameter description passes the framework's hidden-text check at startup.
 
 ---
 
