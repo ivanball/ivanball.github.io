@@ -597,7 +597,15 @@
           <li><strong>Permission-grant snapshot interval 300 s to 30 s (#11).</strong> <code>PermissionGrantSettings.CacheSeconds</code> (<code>Source/Core/MMCA.Common.Application/Auth/Permissions/PermissionGrantSettings.cs:34</code>). Only the token-minting Identity service reads stored grants, so the cost is one small query per Identity replica per 30 s, with no pub/sub. See ADR-116.</li>
           <li><strong>JWKS publishes more than one key (#11).</strong> <code>JwksSettings.AdditionalKeys</code> (<code>Source/Core/MMCA.Common.Infrastructure/Auth/JwksSettings.cs:70</code>) are published after the current key, signing stays on the current key, and every local validator accepts the set, so a signing key rotates without a 401 wave. Service-token HS256 is untouched. See ADR-004.</li>
           </ul>
-          <p>Deferred, each with its re-open trigger. The last eleven rows were added on 2026-11-07 from the peer-repo wave review; a &quot;later&quot; row is kept with no trigger and is picked up by choice, not by an event:</p>
+          <p>Shipped in v1.281.0 (2026-11-08), each retiring or narrowing a row below:</p>
+          <ul>
+          <li><strong>Generic OIDC sign-in.</strong> Any OpenID Connect provider joins by configuration (<code>OAuth:Oidc:&lt;Name&gt;</code>), so the SSO row narrows to SCIM provisioning. See ADR-036.</li>
+          <li><strong>Machine clients through OAuth client credentials.</strong> A program authenticates as its own service-account user and gets a token of at most 15 minutes (<code>Source/Presentation/MMCA.Common.API/Controllers/MachineClients/MachineTokenControllerBase.cs:40</code>), so the integrator row narrows to webhooks and versioned OpenAPI with Sunset; API keys stay rejected. See ADR-140.</li>
+          <li><strong>Reloadable feature flags.</strong> Stored overrides layer over the <code>FeatureManagement</code> configuration (<code>Source/Core/MMCA.Common.Infrastructure/DependencyInjection.FeatureFlags.cs:47</code>), so a kill switch flips without a new revision. See ADR-031.</li>
+          <li><strong><code>PermissionCoverageTestsBase</code>.</strong> Every permission a controller, page, MCP tool or menu entry names must be granted to some role (<code>Source/Hosting/MMCA.Common.Testing.Architecture/Bases/Api/PermissionCoverageTestsBase.cs:15</code>); Common runs it over its own API, UI and MCP packages, and consumers with a permission catalog subclass it.</li>
+          <li><strong>Passkeys</strong> ship for web heads (ADR-139); their MAUI native half is the new row at the end of the table.</li>
+          </ul>
+          <p>Deferred, each with its re-open trigger. The nine rows from &quot;OpenAPI security transformer&quot; to &quot;Inbox-only notification retract&quot; were added on 2026-11-07 from the peer-repo wave review, and the last row on 2026-11-08 from the identity wave; a &quot;later&quot; row is kept with no trigger and is picked up by choice, not by an event:</p>
           <div class="table-wrap"><table>
           <thead>
           <tr>
@@ -638,11 +646,11 @@
           <td>first externally exposed API with untrusted clients at volume</td>
           </tr>
           <tr>
-          <td>Generic OIDC / Entra / Okta SSO, SCIM</td>
+          <td>SCIM provisioning</td>
           <td>first enterprise adopter requiring SSO</td>
           </tr>
           <tr>
-          <td>API keys or client credentials, webhooks, versioned OpenAPI with Sunset. Design when built: webhooks are delivered from the outbox (<a href="../adr/003-outbox-dual-dispatch.html">ADR-003</a>) as timestamped, HMAC-SHA256-signed POSTs under the outbox retry and dead-letter policy (<code>Outbox:MaxRetries</code>, <code>Outbox:RetryBackoffBaseSeconds</code>, <code>Outbox:DeadLetterRetentionDays</code>; <code>Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/Administration/OutboxSettings.cs:21</code>, <code>:103</code>, <code>:114</code>), with subscriptions owned per tenant</td>
+          <td>Webhooks, versioned OpenAPI with Sunset. Design when built: webhooks are delivered from the outbox (<a href="../adr/003-outbox-dual-dispatch.html">ADR-003</a>) as timestamped, HMAC-SHA256-signed POSTs under the outbox retry and dead-letter policy (<code>Outbox:MaxRetries</code>, <code>Outbox:RetryBackoffBaseSeconds</code>, <code>Outbox:DeadLetterRetentionDays</code>; <code>Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/Administration/OutboxSettings.cs:21</code>, <code>:103</code>, <code>:114</code>), with subscriptions owned per tenant</td>
           <td>first B2B integrator, or a real v2</td>
           </tr>
           <tr>
@@ -656,10 +664,6 @@
           <tr>
           <td>OpenAPI security transformer</td>
           <td>first external integrator</td>
-          </tr>
-          <tr>
-          <td>Reloadable FeatureManagement configuration source</td>
-          <td>a kill switch needed without deploying a new revision</td>
           </tr>
           <tr>
           <td>CAPTCHA port after the login lockout threshold</td>
@@ -678,10 +682,6 @@
           <td>later (no trigger)</td>
           </tr>
           <tr>
-          <td><code>PermissionCoverageTestsBase</code></td>
-          <td>later (no trigger)</td>
-          </tr>
-          <tr>
           <td>Opt-in slow-command interceptor</td>
           <td>later (no trigger)</td>
           </tr>
@@ -696,6 +696,10 @@
           <tr>
           <td>Inbox-only notification retract</td>
           <td>later (no trigger)</td>
+          </tr>
+          <tr>
+          <td>MAUI native passkeys (Credential Manager, associated domains)</td>
+          <td>mobile users asking for passkeys, or a store-review requirement</td>
           </tr>
           </tbody></table></div>
           <p>Two candidates were dropped rather than deferred: wiring <code>AddApplicationProfiling()</code> into the consumers (MiniProfiler is off in every ADC service, so it would profile nothing), and graceful-shutdown tests with a custom <code>HostOptions.ShutdownTimeout</code> (the .NET 30 s default matches the Container Apps grace period, and the outbox and internal-command leases already make a cut-off batch safe). The configuration a host already has for scale is listed in the <em>Enterprise deployment checklist</em> of <a href="../guides/common-CAPABILITIES.html">the capabilities guide</a>.</p>

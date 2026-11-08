@@ -182,7 +182,14 @@ Shipped in v1.277.0:
 - **Permission-grant snapshot interval 300 s to 30 s (#11).** `PermissionGrantSettings.CacheSeconds` (`Source/Core/MMCA.Common.Application/Auth/Permissions/PermissionGrantSettings.cs:34`). Only the token-minting Identity service reads stored grants, so the cost is one small query per Identity replica per 30 s, with no pub/sub. See ADR-116.
 - **JWKS publishes more than one key (#11).** `JwksSettings.AdditionalKeys` (`Source/Core/MMCA.Common.Infrastructure/Auth/JwksSettings.cs:70`) are published after the current key, signing stays on the current key, and every local validator accepts the set, so a signing key rotates without a 401 wave. Service-token HS256 is untouched. See ADR-004.
 
-Deferred, each with its re-open trigger. The last eleven rows were added on 2026-11-07 from the peer-repo wave review; a "later" row is kept with no trigger and is picked up by choice, not by an event:
+Shipped in v1.281.0 (2026-11-08), each retiring or narrowing a row below:
+- **Generic OIDC sign-in.** Any OpenID Connect provider joins by configuration (`OAuth:Oidc:<Name>`), so the SSO row narrows to SCIM provisioning. See ADR-036.
+- **Machine clients through OAuth client credentials.** A program authenticates as its own service-account user and gets a token of at most 15 minutes (`Source/Presentation/MMCA.Common.API/Controllers/MachineClients/MachineTokenControllerBase.cs:40`), so the integrator row narrows to webhooks and versioned OpenAPI with Sunset; API keys stay rejected. See ADR-140.
+- **Reloadable feature flags.** Stored overrides layer over the `FeatureManagement` configuration (`Source/Core/MMCA.Common.Infrastructure/DependencyInjection.FeatureFlags.cs:47`), so a kill switch flips without a new revision. See ADR-031.
+- **`PermissionCoverageTestsBase`.** Every permission a controller, page, MCP tool or menu entry names must be granted to some role (`Source/Hosting/MMCA.Common.Testing.Architecture/Bases/Api/PermissionCoverageTestsBase.cs:15`); Common runs it over its own API, UI and MCP packages, and consumers with a permission catalog subclass it.
+- **Passkeys** ship for web heads (ADR-139); their MAUI native half is the new row at the end of the table.
+
+Deferred, each with its re-open trigger. The nine rows from "OpenAPI security transformer" to "Inbox-only notification retract" were added on 2026-11-07 from the peer-repo wave review, and the last row on 2026-11-08 from the identity wave; a "later" row is kept with no trigger and is picked up by choice, not by an event:
 
 | Item | Trigger |
 |---|---|
@@ -194,21 +201,20 @@ Deferred, each with its re-open trigger. The last eleven rows were added on 2026
 | Bulk write path, audit via the outbox | an import or batch job past about 10k rows per run |
 | DbContext pool per data source | a benchmark showing context creation as a top-3 request cost |
 | Request timeouts, Kestrel limits | first externally exposed API with untrusted clients at volume |
-| Generic OIDC / Entra / Okta SSO, SCIM | first enterprise adopter requiring SSO |
-| API keys or client credentials, webhooks, versioned OpenAPI with Sunset. Design when built: webhooks are delivered from the outbox ([ADR-003](../adr/003-outbox-dual-dispatch.md)) as timestamped, HMAC-SHA256-signed POSTs under the outbox retry and dead-letter policy (`Outbox:MaxRetries`, `Outbox:RetryBackoffBaseSeconds`, `Outbox:DeadLetterRetentionDays`; `Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/Administration/OutboxSettings.cs:21`, `:103`, `:114`), with subscriptions owned per tenant | first B2B integrator, or a real v2 |
+| SCIM provisioning | first enterprise adopter requiring SSO |
+| Webhooks, versioned OpenAPI with Sunset. Design when built: webhooks are delivered from the outbox ([ADR-003](../adr/003-outbox-dual-dispatch.md)) as timestamped, HMAC-SHA256-signed POSTs under the outbox retry and dead-letter policy (`Outbox:MaxRetries`, `Outbox:RetryBackoffBaseSeconds`, `Outbox:DeadLetterRetentionDays`; `Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/Administration/OutboxSettings.cs:21`, `:103`, `:114`), with subscriptions owned per tenant | first B2B integrator, or a real v2 |
 | Search provider abstraction | a free-text search requirement over a large table |
 | Azure SignalR Service adapter, SSE fallback | about 10k concurrent hub connections, or a corporate proxy blocking WebSockets |
 | OpenAPI security transformer | first external integrator |
-| Reloadable FeatureManagement configuration source | a kill switch needed without deploying a new revision |
 | CAPTCHA port after the login lockout threshold | observed distributed credential stuffing |
 | Presigned direct upload plus a pending-file lifecycle | files over about 50 MB |
 | Browser web push | next conference planning |
 | Dependency-review licence check on pull requests | later (no trigger) |
-| `PermissionCoverageTestsBase` | later (no trigger) |
 | Opt-in slow-command interceptor | later (no trigger) |
 | Outbox and internal-command replay controller bases | later (no trigger) |
 | Signed read URLs for private storage containers | later (no trigger) |
 | Inbox-only notification retract | later (no trigger) |
+| MAUI native passkeys (Credential Manager, associated domains) | mobile users asking for passkeys, or a store-review requirement |
 
 Two candidates were dropped rather than deferred: wiring `AddApplicationProfiling()` into the consumers (MiniProfiler is off in every ADC service, so it would profile nothing), and graceful-shutdown tests with a custom `HostOptions.ShutdownTimeout` (the .NET 30 s default matches the Container Apps grace period, and the outbox and internal-command leases already make a cut-off batch safe). The configuration a host already has for scale is listed in the *Enterprise deployment checklist* of [the capabilities guide](../guides/common-CAPABILITIES.md).
 
