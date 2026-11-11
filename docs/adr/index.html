@@ -95,7 +95,7 @@
       <div class="doc-layout">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 140 ADRs</summary>
+        <summary>All 141 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html" aria-current="page">Overview</a></li>
@@ -239,6 +239,7 @@
         <li><a href="138-mcp-endpoint-over-module-queries.html">138 · MCP Endpoint Over Module Queries (Opt-In, Read-Only, Governed Per Tool)</a></li>
         <li><a href="139-passkeys-webauthn-opt-in-sign-in.html">139 · Passkeys (WebAuthn) as an Opt-In Sign-In and Second Factor</a></li>
         <li><a href="140-machine-clients-oauth-client-credentials.html">140 · Machine Clients Through OAuth Client Credentials Backed by Service Accounts</a></li>
+        <li><a href="141-two-framework-lines-from-one-tree.html">141 · Two .NET Framework Lines From One Source Tree (net10.0 and net11.0)</a></li>
           </ol>
         </nav>
       </details>
@@ -248,7 +249,7 @@
           <h1 id="architecture-decision-records">Architecture Decision Records</h1>
           <p>Accepted ADRs explaining <em>why</em> the core cross-cutting patterns exist. Read these before changing a
           pattern they describe: they capture context and trade-offs that aren&#39;t obvious from the code.</p>
-          <p><strong>140 accepted ADRs</strong>, 001-140, numbered contiguously with one row per ADR in the table below.
+          <p><strong>141 accepted ADRs</strong>, 001-141, numbered contiguously with one row per ADR in the table below.
           This file owns the ADR count and range (<code>MMCA.Common/FACTS.md</code>): read them here rather than
           recounting, and when you add an ADR, update this line with its row. <code>tools/adr-index.ps1</code> in this
           repo re-derives both from the files and fails if this line, the table, or a link drifts from them;
@@ -960,6 +961,11 @@
           <td><a href="140-machine-clients-oauth-client-credentials.html">140</a></td>
           <td>Machine clients through OAuth client credentials backed by service accounts</td>
           <td>Off by default (<code>MachineClients:Enabled</code>); <code>AddMachineClients</code> plus a consumer-supplied <code>IServiceAccountProvisioner</code> (enabled without either fails startup). Each client is backed one to one by its own service-account user (<code>IAuthUser.IsServiceAccount</code>, defaulted false), which every interactive sign-in path and view-as refuse. <code>MachineTokenControllerBase</code>, its own base routed at <code>auth/token</code> so no consumer&#39;s OpenAPI changes, serves the anonymous <code>client_credentials</code> grant on <code>auth-ip</code> with RFC 6749 responses. The token&#39;s <code>sub</code> is the service account, its permissions the role&#39;s, plus <code>client_id</code> and <code>token_use=machine</code>; no refresh token, <code>sid</code>, <code>auth_time</code> or <code>mfa</code>. Lifetime 1 to 15 minutes so it always lapses inside the 20-minute soft-deleted marker revocation writes. Secrets: 32 random bytes shown once, SHA-256, constant-time compare, rotate and promote. A role granting <code>users:view-as</code>, <code>users:manage</code>, <code>roles:manage</code> or <code>clients:manage</code> cannot back a client, checked at create and every mint. Permissioned MCP tools admit machine tokens with no MCP change. Rejected: API keys, a separate client principal, the action on <code>AuthControllerBase</code>, an OAuth 2.1 server (still deferred).</td>
+          </tr>
+          <tr>
+          <td><a href="141-two-framework-lines-from-one-tree.html">141</a></td>
+          <td>Two .NET framework lines from one source tree</td>
+          <td><code>net10.0</code> and <code>net11.0</code> are both permanent lines in one branch. Libraries multi-target (<code>MMCA.Common/build/Frameworks.props</code>) and every package ships both assets under one version; an application switches (<code>MmcaNet</code>, default <code>net11.0</code>) and never multi-targets. Version-specific code is <code>#if NET11_0_OR_GREATER</code> only, the public API is identical on both (the existing PublicAPI analyzer enforces it per framework), framework-following packages take their version from a property, and EF Core is held on 10.0 for both until a stable Npgsql provider exists. MMCA.ADC gates the second line with a required <code>build-and-test-net10</code> check and can deploy it through a <code>runtime</code> input.</td>
           </tr>
           </tbody></table></div>
           <h2 id="writing-a-new-adr">Writing a new ADR</h2>
