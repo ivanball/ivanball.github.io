@@ -6,21 +6,21 @@
   <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#0e151f" media="(prefers-color-scheme: dark)">
   <title>ADR-141: Two .NET Framework Lines From One Source Tree (net10.0 and net11.0) · MMCA · Ivan Ball-llovera</title>
-  <meta name="description" content="Accepted (2026-11-10). Builds on ADR-016: the lockstep release policy is unchanged, and one package version now carries assets for two target frameworks.">
+  <meta name="description" content="Accepted (2026-11-10); amended 2026-11-11 (decision 8: the MAUI head follows the application switch). Builds on ADR-016: the lockstep release policy is…">
   <link rel="canonical" href="https://ivanball.github.io/docs/adr/141-two-framework-lines-from-one-tree.html">
   <link rel="icon" href="../../assets/img/favicon.svg" type="image/svg+xml">
   <link rel="alternate" type="application/rss+xml" title="Ivan Ball-llovera: deep dives on enterprise .NET" href="https://ivanball.github.io/feed.xml">
   <meta property="og:type" content="article">
   <meta property="og:site_name" content="Ivan Ball-llovera">
   <meta property="og:title" content="ADR-141: Two .NET Framework Lines From One Source Tree (net10.0 and net11.0)">
-  <meta property="og:description" content="Accepted (2026-11-10). Builds on ADR-016: the lockstep release policy is unchanged, and one package version now carries assets for two target frameworks.">
+  <meta property="og:description" content="Accepted (2026-11-10); amended 2026-11-11 (decision 8: the MAUI head follows the application switch). Builds on ADR-016: the lockstep release policy is…">
   <meta property="og:url" content="https://ivanball.github.io/docs/adr/141-two-framework-lines-from-one-tree.html">
   <meta property="og:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <meta property="og:image:alt" content="Ivan Ball-llovera, Principal Software Architect">
   <meta property="og:locale" content="en_US">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="ADR-141: Two .NET Framework Lines From One Source Tree (net10.0 and net11.0)">
-  <meta name="twitter:description" content="Accepted (2026-11-10). Builds on ADR-016: the lockstep release policy is unchanged, and one package version now carries assets for two target frameworks.">
+  <meta name="twitter:description" content="Accepted (2026-11-10); amended 2026-11-11 (decision 8: the MAUI head follows the application switch). Builds on ADR-016: the lockstep release policy is…">
   <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Platform","item":"https://ivanball.github.io/platform.html"},{"@type":"ListItem","position":2,"name":"Reference","item":"https://ivanball.github.io/docs/index.html"},{"@type":"ListItem","position":3,"name":"Architecture Decision Records","item":"https://ivanball.github.io/docs/adr/index.html"},{"@type":"ListItem","position":4,"name":"141 · Two .NET Framework Lines From One Source Tree (net10.0 and net11.0)","item":"https://ivanball.github.io/docs/adr/141-two-framework-lines-from-one-tree.html"}]}</script>
   <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);if(localStorage.getItem('mmca-rail')==='hidden')document.documentElement.setAttribute('data-rail','hidden');if(localStorage.getItem('mmca-cites')==='shown')document.documentElement.setAttribute('data-cites','shown');}catch(e){}})();</script>
@@ -249,7 +249,8 @@
           <p class="eyebrow doc-kicker">Architecture Decision Record</p>
           <h1 id="adr-141-two-net-framework-lines-from-one-source-tree-net100-and-net110">ADR-141: Two .NET Framework Lines From One Source Tree (net10.0 and net11.0)</h1>
           <h2 id="status">Status</h2>
-          <p>Accepted (2026-11-10). Builds on <a href="016-lockstep-versioning-masstransit-pin.html">ADR-016</a>: the lockstep
+          <p>Accepted (2026-11-10); amended 2026-11-11 (decision 8: the MAUI head follows the application
+          switch). Builds on <a href="016-lockstep-versioning-masstransit-pin.html">ADR-016</a>: the lockstep
           release policy is unchanged, and one package version now carries assets for two target frameworks.</p>
           <h2 id="context">Context</h2>
           <p>.NET 11 shipped on 2026-11-10. The workspace had one target framework, <code>net10.0</code>, named once per
@@ -273,10 +274,13 @@
           (<code>MmcaNetVersions</code> = <code>net10.0;net11.0</code>, <code>MmcaDefaultNet</code> = <code>net11.0</code>), and every packaged library and
           its tests build for both (<code>MMCA.Common/Directory.Build.props:7</code>). Projects that are run rather than
           referenced build for the newest framework only (<code>Frameworks.props:27</code>); the benchmark harness is
-          held on the oldest because no stable BenchmarkDotNet recognizes <code>net11.0</code> (<code>Frameworks.props:33</code>).</p>
+          held on the oldest because no stable BenchmarkDotNet recognizes <code>net11.0</code> (<code>Frameworks.props:33</code>).
+          The one MAUI package derives its platform targets from the same list, so it carries the four MAUI
+          platforms once per framework
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI.Maui/MMCA.Common.UI.Maui.csproj:18</code>).</p>
           <p>An application does not multi-target. MMCA.ADC has one switch, <code>MmcaNet</code>, defaulting to <code>net11.0</code>
           and overridable by <code>-p:MmcaNet=net10.0</code> or an environment variable
-          (<code>MMCA.ADC/Directory.Build.props:34-35</code>, <code>:44</code>). Its hosts publish with no <code>-f</code> and each service
+          (<code>MMCA.ADC/Directory.Build.props:30-31</code>, <code>:34</code>). Its hosts publish with no <code>-f</code> and each service
           writes one committed OpenAPI document, so an application builds for exactly one framework at a time.</p>
           <p><strong>2. Version-specific code is forward-only.</strong>
           Only <code>#if NET11_0_OR_GREATER</code> with the existing code as the <code>#else</code> branch, never <code>#if NET10_0</code>
@@ -284,7 +288,8 @@
           <code>#else</code> branches. The two PRs that introduced the policy needed one conditional each
           (<code>MMCA.Common/Tests/Presentation/MMCA.Common.API.Tests/OpenApi/OpenApiBaselineTests.cs:44</code>,
           <code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs:231</code>); everything else was written in a form
-          valid on both frameworks.</p>
+          valid on both frameworks. The first <code>net11.0</code>-only feature added a third
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/WebApplicationBuilderExtensions.cs:75</code>).</p>
           <p><strong>3. The public API is identical on both frameworks.</strong>
           No new gate is needed for this. Every packable project already carries one <code>PublicAPI.Shipped.txt</code>
           checked by RS0016 and RS0017 at error severity (<code>MMCA.Common/Directory.Build.props:127-136</code>), and
@@ -292,24 +297,34 @@
           framework only fails the build on the other. A deliberate framework-only member would need a
           per-framework PublicAPI file; none exists.</p>
           <p><strong>4. A package that follows the framework takes its version from a property.</strong>
-          <code>MmcaFrameworkVersion</code> (10.0.14 / 11.0.0) covers ASP.NET Core and the runtime
-          <code>Microsoft.Extensions.*</code> packages; <code>MmcaOpenApiVersion</code> (2.13.0 / 3.11.0) covers <code>Microsoft.OpenApi</code>
-          (<code>MMCA.Common/Directory.Packages.props:24-30</code>). Never a second <code>PackageVersion</code> item. A consumer
-          that pins the same packages mirrors the properties (<code>MMCA.ADC/Directory.Packages.props:23-27</code>).</p>
+          <code>MmcaFrameworkVersion</code> (10.0.15 / 11.0.0) covers ASP.NET Core and the runtime
+          <code>Microsoft.Extensions.*</code> packages; <code>MmcaOpenApiVersion</code> (2.13.0 / 3.11.0) covers <code>Microsoft.OpenApi</code>;
+          <code>MmcaMauiVersion</code> (10.0.130 / 11.0.10), <code>MmcaMauiToolkitVersion</code> (16.0.0 / 17.0.0) and
+          <code>MmcaAndroidBiometricVersion</code> (1.1.0.30 / 1.1.0.33) cover the MAUI train
+          (<code>MMCA.Common/Directory.Packages.props:34-46</code>). Never a second <code>PackageVersion</code> item. A consumer
+          that pins the same packages mirrors the properties (<code>MMCA.ADC/Directory.Packages.props:26-34</code>).</p>
           <p><strong>5. EF Core is held on the 10.0 line for both frameworks.</strong>
-          <code>MmcaEfCoreVersion</code> is 10.0.14 with no <code>net11.0</code> override (<code>MMCA.Common/Directory.Packages.props:25</code>).
+          <code>MmcaEfCoreVersion</code> is 10.0.15 with no <code>net11.0</code> override (<code>MMCA.Common/Directory.Packages.props:35</code>).
           A <code>net11.0</code> host runs EF Core 10 on the .NET 11 runtime. It moves when the Npgsql provider ships a
           stable 11.0.0, in MMCA.Common first.</p>
           <p><strong>6. Both lines are gated.</strong>
           MMCA.Common&#39;s test projects run on both frameworks. MMCA.ADC adds a required check,
           <code>build-and-test-net10</code> (<code>MMCA.ADC/.github/workflows/deploy.yml:493</code>), which restores from a second
-          lock file set (<code>packages.net10.0.lock.json</code>, <code>MMCA.ADC/Directory.Build.props:93</code>), builds with
+          lock file set (<code>packages.net10.0.lock.json</code>, <code>MMCA.ADC/Directory.Build.props:80</code>), builds with
           analyzers at error severity, runs the same suites, and fails if the build did not target <code>net10.0</code>.</p>
           <p><strong>7. The second line is deployable.</strong>
           <code>deploy.yml</code> takes a <code>runtime</code> input (<code>MMCA.ADC/.github/workflows/deploy.yml:23</code>, <code>:38</code>). Each
           Dockerfile selects one of two digest-pinned runtime stages from one build argument
-          (<code>MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Dockerfile:5</code>, <code>:16-18</code>, <code>:32</code>). A build for
+          (<code>MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Dockerfile:5</code>, <code>:16-18</code>, <code>:20</code>). A build for
           the second line pushes its commit tag only, never <code>:latest</code>, and uses its own build cache reference.</p>
+          <p><strong>8. The MAUI head follows the application switch (2026-11-11).</strong>
+          MMCA.ADC&#39;s mobile head targets <code>$(MmcaNet)-android</code> and the other platforms
+          (<code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI/MMCA.ADC.UI.csproj:8</code>), so the store build comes from the
+          default <code>net11.0</code> line and the second line still proves the head compiles on <code>net10.0</code>. The head has
+          a lock file per line like every other project. The Android target API level is pinned per line,
+          37 on <code>net11.0</code> and 36 on <code>net10.0</code> (<code>MMCA.ADC.UI.csproj:65-66</code>): each Android workload accepts only
+          its own level, and the .NET 11 one rejects 36.0 outright (NETSDK1140). Targeting 37 for the store
+          build, instead of compiling against 37 while still declaring 36, was the owner&#39;s choice.</p>
           <h2 id="rationale">Rationale</h2>
           <p>One tree and one release line keep ADR-016 intact: there is still one version to bump and one sweep.
           Multi-targeting is the right tool for a library, where each consumer picks an asset, and the wrong
@@ -323,19 +338,29 @@
           <li>A <code>net11.0</code> host does not get EF Core 11&#39;s query improvements while decision 5 holds.</li>
           <li>The Blazor WebAssembly payload grew with the .NET 11 runtime: MMCA.ADC&#39;s compressed budget went
           from 5900 KB to 6510 KB (<code>MMCA.ADC/.github/workflows/deploy.yml:579</code>).</li>
-          <li>The MAUI head cannot follow yet. <code>MMCA.Common.UI.Maui</code> ships <code>net10.0</code> platform targets only
-          (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI.Maui/MMCA.Common.UI.Maui.csproj:15</code>), so MMCA.ADC
-          holds its mobile head on <code>net10.0</code> (<code>MMCA.ADC/Directory.Build.props:36</code>) and the six projects that
-          head references build for both frameworks on the default line (<code>:39</code>). That list retires when the
-          framework package gains <code>net11.0</code> platform assets.</li>
-          <li>One toolchain: a repo that builds MMCA.Common from source needs the .NET 11 SDK. MMCA.Common,
-          MMCA.Helpdesk and MMCA.ADC pin 11.0.100; MMCA.Store stays on the .NET 10 SDK band
-          (<code>MMCA.Store/global.json:3</code>) until it takes its own analyzer pass.</li>
+          <li>The MAUI package builds eight targets instead of four, and its Android bindings need a version
+          per framework (decision 4). <code>Xamarin.Firebase.Messaging</code> is held at 124.1.2 on both: the newer
+          release fails restore on either MAUI line.</li>
+          <li>The store build and the second line declare different Android target levels (decision 8), so a
+          device pass on one line does not cover the other&#39;s Android behaviour.</li>
+          <li>One analyzer rule is suppressed on the head&#39;s windows target only: the .NET 11 WinRT analyzer
+          rejects a collection expression whose target is a read-only interface (CsWinRT1032), and the
+          spellings that avoid it trip other rules.</li>
+          <li>One toolchain: a repo that builds MMCA.Common from source needs the .NET 11 SDK. All four repos
+          pin 11.0.100; MMCA.Store and MMCA.Helpdesk still target <code>net10.0</code> (<code>MMCA.Store/global.json:3</code>).</li>
           <li>Both frameworks reach end of support on the same date, so the second line buys consumer choice,
           not a longer support window.</li>
           </ul>
           <h2 id="alternatives-rejected">Alternatives rejected</h2>
           <ul>
+          <li><strong>Hold the MAUI head on <code>net10.0</code>, or fix it on <code>net11.0</code> regardless of the switch</strong>
+          (2026-11-11). The hold needed a list of the projects the head references, each built for both
+          frameworks; fixing it on <code>net11.0</code> keeps that list, mirrored, on the second line. Following the
+          switch deletes the list. Revisit only if a <code>net10.0</code> mobile build must be made impossible.</li>
+          <li><strong>Compile against Android API 37 but keep declaring target 36</strong> (2026-11-11). It builds (one
+          suppressed warning, XA1006) and would have changed the .NET version only. Rejected by the owner&#39;s
+          decision in favor of one level per line; the cost is that the first <code>net11.0</code> store build also
+          opts into Android 17 behaviour and needs the full device checklist.</li>
           <li><strong>Multi-target the application hosts</strong> (2026-11-10). <code>dotnet publish</code> in the Dockerfiles passes
           no framework, and the build-time OpenAPI writer has one output path per host. Revisit only if a
           host ever needs to ship both frameworks in one artifact.</li>
@@ -352,7 +377,7 @@
           MMCA.Common keeps one baseline per framework; MMCA.ADC pins the specification version
           (<code>MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:194</code>) and commits the default
           line&#39;s output only. The build-time generator ignores that option and is passed the version
-          explicitly (<code>MMCA.ADC/Directory.Build.props:283</code>).</li>
+          explicitly (<code>MMCA.ADC/Directory.Build.props:270</code>).</li>
           <li><strong>A cross-framework public-API fitness test</strong> (2026-11-10). Redundant with decision 3: the
           existing analyzer already compares each framework against one file. Revisit when a per-framework
           PublicAPI file is introduced.</li>
@@ -365,12 +390,14 @@
           <ul>
           <li>A consumer adopting <code>net11.0</code> needs: the SDK pin, an analyzer pass, the per-framework version
           properties, and, if it keeps the second line, a second lock file set excluded from the default
-          content globs (<code>MMCA.ADC/Directory.Build.props:99</code>); without that exclusion the Web and Razor
+          content globs (<code>MMCA.ADC/Directory.Build.props:86</code>); without that exclusion the Web and Razor
           SDKs publish the file and fail on a duplicate path.</li>
           <li>A lock file regeneration in MMCA.ADC is two restores, the second with <code>-p:MmcaNet=net10.0</code>.</li>
-          <li>Open: <code>net11.0</code> platform targets for <code>MMCA.Common.UI.Maui</code>, MMCA.Store&#39;s SDK 11 pass, and the
-          <code>net11.0</code>-only feature adoptions behind <code>#if NET11_0_OR_GREATER</code>. The <code>runtime=net10.0</code> deploy
-          path has not been exercised against production.</li>
+          <li>A build compiler server left running across MAUI or second-line builds can report a wall of
+          Razor errors on a clean tree; <code>dotnet build-server shutdown</code> clears it.</li>
+          <li>Open: the first <code>net11.0</code> mobile build has not run on a device and has not been uploaded to a
+          store. The <code>runtime=net10.0</code> deploy path has not been exercised against production. EF Core 11
+          waits on decision 5.</li>
           </ul>
           
         <div class="doc-foot btn-row">
