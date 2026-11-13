@@ -10,11 +10,15 @@ rationale was corrected, since `System.String` does implement `IParsable<string>
 2026-10-21: the alias count is 49 (47 `int`), `StronglyTypedIdMappings` ships two conversions
 rather than four, and the public API surface is 53 declarations rather than 55. Revised
 2026-10-26: anchors refreshed after `AddStronglyTypedIds` moved within the Infrastructure
-`DependencyInjection.cs`.
+`DependencyInjection.cs`. Revised 2026-11-12 (unreleased, on the `feat/fresh-eyes-wave` branch): MMCA.Helpdesk is the first adopter (one
+identifier, `TicketCommentId`), the design-time option `AddStronglyTypedIdAssembly` and the
+model-cache key joined the capability, and Decision points 12, 13 and 14 were amended and point 15
+added accordingly.
 **Revisits [ADR-048](048-primitive-identifier-type-aliases.md) and
 [ADR-085](085-identifier-type-aliases-revisited.md)** by adding the capability those records deferred,
-without migrating anything. ADR-048's decision (every entity identity is a primitive named through a
-per-module `global using {Entity}IdentifierType = ...` alias) stays in force, and ADR-085's priced
+without a workspace-wide migration. ADR-048's decision (every entity identity is a primitive named through a
+per-module `global using {Entity}IdentifierType = ...` alias) stays the default, with one deliberate
+exception in the reference app (Decision point 13), and ADR-085's priced
 deferral of a workspace-wide migration stays in force. What changes is that the wrapper struct is now
 a first-class thing the framework supports, rather than a shape a team would have to hand-roll at six
 boundaries.
@@ -44,7 +48,7 @@ separately: the framework ships the capability, and the aliases stay the default
 
 This is exactly the posture [ADR-104](104-smart-enums-as-opt-in-capability.md) records for
 smart enumerations. A plain CLR enum is the default there; `Enumeration<T>` is complete, tested,
-wired into JSON and EF Core, and adopted by nothing. That record's own argument applies verbatim
+wired into JSON and EF Core, and adopted only by the reference app MMCA.Helpdesk. That record's own argument applies verbatim
 here: the default should be the cheap type, the expensive case still needs an answer, and a
 capability that is ready is what stops the first team that needs it from arriving with a hand-rolled
 variant, its own JSON shape and its own `HasConversion` lambda pair.
@@ -61,8 +65,9 @@ MVC route and query binding, filtering, OpenAPI and object mapping.
 
 ## Decision
 **The framework ships strongly typed identifiers as an opt-in capability. The primitive aliases
-remain the default identifier model, no existing entity, consumer or test migrates, and nothing in
-the framework pushes a consumer toward a wrapper.**
+remain the default identifier model, MMCA.Store and MMCA.ADC migrate nothing, the reference app
+MMCA.Helpdesk wraps exactly one identifier to show the opt-in end to end, and nothing in the
+framework pushes a consumer toward a wrapper.**
 
 1. **The declaration is two lines, and the second one is a factory.**
    `IStronglyTypedId<TSelf, TValue>`
@@ -125,16 +130,16 @@ the framework pushes a consumer toward a wrapper.**
 
 6. **One call is the whole opt-in.**
    `services.AddStronglyTypedIds(typeof(OrderId).Assembly)`
-   (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:401`) scans the named
+   (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:418`) scans the named
    assemblies for wrappers, registers the `TypeConverter` for each, and registers a
-   `StronglyTypedIdRegistry` singleton through `TryAddSingleton` (`:410`)
+   `StronglyTypedIdRegistry` singleton through `TryAddSingleton`
    (`MMCA.Common/Source/Core/MMCA.Common.Shared/Identifiers/StronglyTypedIdRegistry.cs:22`). A host
    that never calls it keeps the aliases and sees no behavioural change anywhere.
 
 7. **EF Core maps a wrapper as a PRE-CONVENTION type mapping, registered once on the base
    context.** `ApplicationDbContext.ConfigureConventions` resolves the registry with `GetService` and
    applies it
-   (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/ApplicationDbContext.cs:407-409`);
+   (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/ApplicationDbContext.cs:512-514`);
    `StronglyTypedIdModelConfiguration.Apply`
    (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Conventions/StronglyTypedIdModelConfiguration.cs:29`)
    declares `configurationBuilder.Properties(identifierType).HaveConversion(converterType, comparerType)`
@@ -192,48 +197,103 @@ the framework pushes a consumer toward a wrapper.**
     They carry no Mapperly attribute, so the Shared layer takes no dependency on
     `Riok.Mapperly.Abstractions`.
 
-12. **A fitness rule holds the shape, and passes vacuously today.**
+12. **A fitness rule holds the shape, and one repository gives it something to check.**
     `StronglyTypedIdsAreReadonlyRecordStructs`
     (`MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Rules/Domain/ArchitectureRules.StronglyTypedIds.cs:34`)
     flags a wrapper that is not a struct, is not `readonly`, is not a record, or declares instance
     state beyond the wrapped value. It is exposed by `StronglyTypedIdTestsBase`
     (`MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Bases/Domain/StronglyTypedIdTestsBase.cs:9`)
-    and subclassed in three repositories' architecture tests: MMCA.Common
+    and subclassed in all four repositories' architecture tests: MMCA.Common
     (`MMCA.Common/Tests/Architecture/MMCA.Common.Architecture.Tests/Domain/StronglyTypedIdConventionTests.cs:12`),
     MMCA.ADC
-    (`MMCA.ADC/Tests/Architecture/MMCA.ADC.Architecture.Tests/Domain/StronglyTypedIdTests.cs:9`) and
+    (`MMCA.ADC/Tests/Architecture/MMCA.ADC.Architecture.Tests/Domain/StronglyTypedIdTests.cs:9`),
     MMCA.Store
-    (`MMCA.Store/Tests/Architecture/MMCA.Store.Architecture.Tests/Domain/StronglyTypedIdTests.cs:3`).
-    All three are satisfied by having nothing to check; MMCA.Helpdesk declares no subclass. It exists to hold the FIRST wrapper any repo declares to the shape the converters,
+    (`MMCA.Store/Tests/Architecture/MMCA.Store.Architecture.Tests/Domain/StronglyTypedIdTests.cs:3`)
+    and MMCA.Helpdesk
+    (`MMCA.Helpdesk/Tests/Architecture/MMCA.Helpdesk.Architecture.Tests/ArchitectureTests.cs:231`).
+    The first three are satisfied by having nothing to check. Helpdesk's is not vacuous: it runs
+    over `TicketCommentId`, and adds a fact that the Tickets module declares exactly one wrapper,
+    that type, over `int` (`ArchitectureTests.cs:237-251`), inside the template's child region so a
+    scaffold with no child collection passes the base vacuously (`:226-230`). The rule holds every
+    wrapper any repo declares to the shape the converters,
     comparer and route binding are written against. The rule is deliberately separate from
     `ValueObjectsAreImmutableSealedInShared`: an identifier is not a `ValueObject` derivative, it has
     no validation to fail and no `Result`-returning `Create` factory, which is the same reasoning
     ADR-104 records for `Enumeration<T>` sitting outside that rule.
 
-13. **Adoption is zero and this record says so.** No production type in MMCA.Common, MMCA.Store,
-    MMCA.ADC or MMCA.Helpdesk implements `IStronglyTypedId<,>`. The only
-    implementations anywhere are the fixtures in seven of the framework's own test files. The 49
-    aliases in force across the four repositories on 2026-10-21 (47 `int`, two `System.Guid`) are
-    untouched, and no consumer needs a version-bump behaviour change:
+13. **Adoption is one identifier, in the reference app, and this record says so.** No production
+    type in MMCA.Common, MMCA.Store or MMCA.ADC implements `IStronglyTypedId<,>`. MMCA.Helpdesk, the
+    reference app and template source, declares one: the ticket comment id, a `readonly record struct`
+    over `int`
+    (`MMCA.Helpdesk/Source/Modules/Tickets/MMCA.Helpdesk.Tickets.Shared/Tickets/TicketCommentId.cs:19`,
+    factory at `:22`). It also carries `[JsonConverter(typeof(StronglyTypedIdJsonConverterFactory))]`
+    (`:18`), because the UI's typed HttpClient and the cache register no converter factory and must
+    still write the bare integer (`:12-14`). The module's alias now names the wrapper
+    (`MMCA.Helpdesk/Source/Modules/Tickets/MMCA.Helpdesk.Tickets.Shared/MMCA.Helpdesk.Tickets.GlobalUsings.IdentifierType.cs:8`)
+    while the ticket id stays the primitive (`:10`), so one module shows both styles side by side
+    (`:6-7`); the entity and its DTO keep reading the alias
+    (`MMCA.Helpdesk/Source/Modules/Tickets/MMCA.Helpdesk.Tickets.Domain/Tickets/TicketComment.cs:16`,
+    `MMCA.Helpdesk/Source/Modules/Tickets/MMCA.Helpdesk.Tickets.Shared/Tickets/TicketCommentDTO.cs:10`).
+    The web host opts in with one call over the module's Shared assembly
+    (`MMCA.Helpdesk/Source/Hosts/MMCA.Helpdesk.Web/Program.cs:82-86`). The adoption needed no
+    migration, as point 8 predicts: the column stays the `int` it was, and the newest migration in
+    the Tickets migrations project (`20261112163619_AddWebhookSubscriptions`) names no comment column.
+    The only other implementations anywhere are fixtures in the framework's own test files, among
+    them the design-time wrapper `DesignWrappedId`
+    (`MMCA.Common/Tests/Core/MMCA.Common.Infrastructure.Tests/Persistence/DataSources/DesignTimeDbContextHelperTests.cs:514`).
+    Of the 49 aliases in force across the four repositories on 2026-10-21 (47 `int`, two
+    `System.Guid`), Helpdesk's `TicketCommentIdentifierType` is the one that now names a wrapper, and
+    no consumer needs a version-bump behaviour change:
     without a call to `AddStronglyTypedIds`, every framework site that reads the registry treats its
     absence as "no wrappers in use".
 
-14. **The contract is pinned by 78 executed tests, not by adoption.** Shared: 34 executed cases
+14. **The contract is pinned by framework tests, and now by an adopter's.** Helpdesk
+    asserts that its design-time model maps the wrapped key through
+    `StronglyTypedIdValueConverter<TicketCommentId, int>`
+    (`MMCA.Helpdesk/Tests/Architecture/MMCA.Helpdesk.Architecture.Tests/Persistence/TicketCommentIdMappingTests.cs:33`,
+    design-time option at `:64`) and serializes the wrapper with both framework factories registered
+    (`MMCA.Helpdesk/Tests/Modules/Tickets/MMCA.Helpdesk.Tickets.Domain.Tests/Tickets/TicketCommentIdTests.cs:33`).
+    The framework's own test methods follow. Shared: 30 methods
     across `StronglyTypedIdTests.cs`, `StronglyTypedIdSerializationTests.cs` and
     `StronglyTypedIdTypeConverterTests.cs` (equality, the compile-time separation of two
     same-primitive identifiers, parsing, JSON round trips including null, nesting, collections and
-    dictionary keys, and the `TypeDescriptor` registration, including the nullable-converter refresh). Infrastructure: 21 in
+    dictionary keys, and the `TypeDescriptor` registration, including the nullable-converter refresh). Infrastructure: 13 methods in
     `StronglyTypedIdPersistenceTests.cs` (9 facts plus four theories over the three relational
     engines), including per-engine model assertions for SQLite, SQL Server and PostgreSQL, a SQLite
     round trip that inserts through a real database and reads a generated wrapped `int` key back, a
-    raw-column read proving the stored value is the primitive, and filter and sort translated to SQL.
-    Application: 13 across the filter strategy and a Mapperly test mapper that maps both ways in both
-    DTO shapes. API: 5 over a started in-memory host running the real `AddAPI` + `AddCommonOpenApi`
+    raw-column read proving the stored value is the primitive, and filter and sort translated to SQL;
+    beside them, the design-time and model-cache wrapper tests of point 15 in
+    `.../Persistence/DataSources/DesignTimeDbContextHelperTests.cs` (`:209-278`) and
+    `.../Persistence/DataSources/ModelCacheKeyGateTests.cs` (`:166-176`).
+    Application: 13 methods across the filter strategy and a Mapperly test mapper that maps both ways in both
+    DTO shapes. API: 5 methods over a started in-memory host running the real `AddAPI` + `AddCommonOpenApi`
     pipeline (route binding, query binding, the 400 for an unparseable segment, a JSON body, and the
-    OpenAPI document). Architecture: 5, being 4 fixture-driven checks that the rule flags a
+    OpenAPI document). Architecture: 4 fixture-driven methods in `StronglyTypedIdFitnessTests.cs` that the rule flags a
     non-record, a mutable record struct and a wrapper carrying extra state and says nothing about the
     two compliant shapes, plus the vacuous run of the shared base over the framework's own
     assemblies.
+
+15. **Design time and the model cache know the declared set.** A migrations project builds its
+    context outside the host, so it never sees the host's `AddStronglyTypedIds` call, and without a
+    registry the design-time model has no converter for a wrapped key and fails naming the property
+    (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/Design/DesignTimeDbContextOptions.cs:185-187`).
+    `DesignTimeDbContextOptions.AddStronglyTypedIdAssembly` (`:194`, over the list at `:189`; the
+    same assembly added twice keeps one entry, `:197-200`) names the same assemblies the host
+    passes. When the list is non-empty the design-time helper registers a `StronglyTypedIdRegistry`
+    over it, and when it is empty the model builds exactly as before
+    (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/Design/DesignTimeDbContextHelper.cs:243-248`).
+    Helpdesk's SQL Server migrations factory names the Tickets Shared assembly
+    (`MMCA.Helpdesk/Source/Hosting/MMCA.Helpdesk.Migrations.SqlServer.Tickets/DesignTimeSQLServerDbContextFactory.cs:52`).
+    Because the declared set changes the model, it also joins EF's model cache key:
+    `ApplicationDbContext` resolves the registry while configuring and records its identifier types
+    as one string of assembly-qualified names (`ApplicationDbContext.cs:442-447`, property at `:216`,
+    computed once per registry through a weak table at `:182`), and `DataSourceModelCacheKeyFactory`
+    puts that string in the key
+    (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/DataSourceModelCacheKeyFactory.cs:30`).
+    Two contexts that declare different wrappers never share a cached model, and two registries
+    over the same types do, because the key is the content rather than the registry instance
+    (`ApplicationDbContext.cs:213-214`). Both design-time members are public API not yet shipped
+    (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/PublicAPI.Unshipped.txt:2-3`).
 
 ## Rationale
 - **The gap was the plumbing, not the type.** A `readonly record struct` wrapping an `int` is four
@@ -287,8 +347,10 @@ the framework pushes a consumer toward a wrapper.**
 - **Two identifier styles can now coexist in one codebase, and nothing prevents that.** A repo can
   wrap some identifiers and leave others primitive, and the reader cannot tell from the absence of a
   compiler error whether a call site is protected. ADR-085 named that as the reason the migration is
-  all-or-nothing; this record does not fix it, it only makes the wrapped half possible. The rule in
-  Decision point 13 (adopt nothing) is prose, not a fitness function.
+  all-or-nothing; this record does not fix it, it only makes the wrapped half possible. Helpdesk
+  mixes the two styles in one module on purpose (Decision point 13), and only its own count fact
+  (Decision point 12) pins how many wrappers it declares; nothing but prose holds any other repo
+  to the aliases.
 - **The ADR-085 transposition risk is only closed for adopters.** `CheckIn`'s five identifier
   parameters
   (`MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Domain/CheckIns/CheckIn.cs:57-64`) are
@@ -297,9 +359,11 @@ the framework pushes a consumer toward a wrapper.**
   four that follows it, which narrows the transposable window without closing it, since four adjacent
   `int`-aliased parameters remain and an `int` converts implicitly to `int?`. Shipping the capability does not retire the risk; it makes retiring it a choice
   someone can now make cheaply for one aggregate at a time.
-- **A capability nobody uses is a capability nobody has stress-tested.** 78 tests against fixtures
-  are not a production module with real migrations, a real wire history and a real query surface.
-  The same honesty ADR-104 applies to `Enumeration<T>` applies here.
+- **A capability adopted only by the reference app is lightly stress-tested.** Helpdesk's ticket
+  comment id is a real key with a real column, a real route and a real design-time model (Decision
+  points 13 and 15), but it is a child identifier in a sample app, not a production module with a
+  wire history and a large query surface. The same honesty ADR-104 applies to `Enumeration<T>`
+  applies here.
 - **The `IParsable` implementations are explicit, so `OrderId.Parse(...)` does not compile.** That is
   the price of the two-line declaration: a default implementation of an inherited static abstract
   member has no non-explicit form. A wrapper that wants the pair publicly adds two forwarding lines.
@@ -307,10 +371,11 @@ the framework pushes a consumer toward a wrapper.**
   THAN and BETWEEN are refused with a 400 where the same column as a primitive accepted them. That
   is a deliberate narrowing, and it is a behaviour difference a client would notice if a column
   changed type.
-- **Public API surface with no consumer.** The 53 declarations these types add across Shared,
+- **Public API surface with one consumer.** The 53 declarations these types add across Shared,
   Infrastructure, API and Testing.Architecture are in the shipped baselines (`PublicAPI.Shipped.txt`
   in each of the four packages) and are frozen under
-  [ADR-015](015-architecture-fitness-functions.md)'s RS0016/RS0017 gate.
+  [ADR-015](015-architecture-fitness-functions.md)'s RS0016/RS0017 gate; the two design-time
+  members of Decision point 15 are unshipped and join them at the next release.
   Removing any of it later is a breaking change to the package surface.
 - **EF discovery needs the type list up front.** The mapping has to be declared pre-convention, and
   at `ConfigureConventions` time no entity type exists yet, so the framework cannot discover wrappers
@@ -335,7 +400,8 @@ in force),
 [ADR-085](085-identifier-type-aliases-revisited.md) (the priced deferral and its three revisit
 triggers, none of which is the trigger here),
 [ADR-104](104-smart-enums-as-opt-in-capability.md) (the posture this record copies exactly:
-the framework ships the capability, the default does not move, and adoption is zero by design),
+the framework ships the capability, the default does not move, and the reference app is the
+only adopter),
 [ADR-006](006-database-per-service.md) (the cross-module scalar reference that concentrates the
 transposition risk a wrapper closes),
 [ADR-013](013-result-pattern.md) (the `Result` posture the parse helpers deliberately do NOT follow,

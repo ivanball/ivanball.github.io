@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 141 ADRs</summary>
+        <summary>All 146 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -241,6 +241,11 @@
         <li><a href="139-passkeys-webauthn-opt-in-sign-in.html">139 · Passkeys (WebAuthn) as an Opt-In Sign-In and Second Factor</a></li>
         <li><a href="140-machine-clients-oauth-client-credentials.html">140 · Machine Clients Through OAuth Client Credentials Backed by Service Accounts</a></li>
         <li><a href="141-two-framework-lines-from-one-tree.html">141 · Two .NET Framework Lines From One Source Tree (net10.0 and net11.0)</a></li>
+        <li><a href="142-outbound-webhooks-and-delivery-lane.html">142 · Outbound Webhooks (Signed Delivery over Internal Commands, with a Dedicated Delivery Lane)</a></li>
+        <li><a href="143-process-manager-primitive.html">143 · Process-Manager Primitive (Consumer-Owned Process Aggregate, Timeouts over Internal Commands)</a></li>
+        <li><a href="144-offline-writes-and-delta-reads.html">144 · Offline Writes and Delta Reads (Client Write Queue, Server Change Feed with Tombstones)</a></li>
+        <li><a href="145-opt-in-cursor-paging.html">145 · Opt-In Cursor Paging on List Endpoints (Beside Offset Paging)</a></li>
+        <li><a href="146-ui-page-bases-and-list-shell.html">146 · UI Page Bases and the List Shell (Bases Own Plumbing, Pages Own Model and Service Call)</a></li>
           </ol>
         </nav>
       </details>
@@ -265,7 +270,13 @@
           PostgreSQL built in, Azure Service Bus and Amazon SQS as adapters), so the EF saga repository would be
           a sixth pinned package; the deferral stands. Revised 2026-10-28: the unpaid-order deadline is now
           armed by <code>PlacedOrderFinalizer</code>, shared by customer and guest checkout, and a second independent
-          <code>OrderCancelled</code> handler schedules the cancellation notice; the deferral stands.</p>
+          <code>OrderCancelled</code> handler schedules the cancellation notice; the deferral stands.
+          Revised 2026-11-12 (unreleased, on the <code>feat/fresh-eyes-wave</code> branch): the deferral was revisited and is resolved for a flow whose state fits ONE
+          aggregate, by the behaviour-only process-manager primitive of
+          <a href="143-process-manager-primitive.html">ADR-143</a> (no framework state table, no correlation store, no
+          package; MMCA.Store&#39;s order flow is its first adopter). The MassTransit saga state machine below, its
+          correlation store and its trigger remain deferred for workflow state that fits no aggregate. See the
+          Revision below.</p>
           <h2 id="context">Context</h2>
           <p><a href="054-saga-compensation-and-reconciliation.html">ADR-054</a> decided how this workspace achieves
           cross-boundary consistency without two-phase commit: <strong>choreography</strong>. Each step of a workflow raises
@@ -313,8 +324,12 @@
           cross-service workflow arriving with no recorded design, and being answered with a fifth ad-hoc status
           column.</p>
           <h2 id="decision">Decision</h2>
-          <p>Defer the process manager, and record its shape so the deferral is a design decision rather than an
-          omission.</p>
+          <p>Defer the orchestrated process manager (a coordinator that owns workflow state outside any
+          aggregate), and record its shape so the deferral is a design decision rather than an omission. A flow
+          whose whole state fits on one aggregate is not deferred: that aggregate is the process, under the
+          behaviour-only primitive of <a href="143-process-manager-primitive.html">ADR-143</a>, which adds no state row
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Domain/ProcessManagers/ProcessManagerAggregateRoot.cs:10-11,17</code>).
+          Everything below describes the coordinator that stays deferred.</p>
           <h3 id="the-shape-it-would-take">The shape it would take</h3>
           <p>A durable multi-step workflow coordinator in this workspace is a <strong>MassTransit v8 saga state
           machine</strong>, not a hand-rolled orchestrator and not a third-party workflow engine:</p>
@@ -590,6 +605,46 @@
           2026-10-21) and <code>:178</code> with the scheduler at <code>:45</code> (2026-10-26); <code>CheckOutHandler.cs</code> now has 244
           lines and <code>:226-229</code> falls inside an unrelated inventory fetch.</li>
           </ol>
+          <h2 id="revision-2026-11-12-the-deferral-is-revisited-and-resolved-for-single-aggregate-state">Revision (2026-11-12): the deferral is revisited, and resolved for single-aggregate state</h2>
+          <p>The deferral was revisited on 2026-11-12. For a flow whose state fits one aggregate it is resolved,
+          not by the coordinator this record describes, but by the behaviour-only primitive recorded in
+          <a href="143-process-manager-primitive.html">ADR-143</a>; for state that fits no aggregate it stands unchanged.</p>
+          <ol>
+          <li><strong>What the primitive adds is behaviour, not state.</strong> <code>ProcessManagerAggregateRoot&lt;TIdentifierType&gt;</code> derives
+          <code>AuditableAggregateRootEntity&lt;TIdentifierType&gt;</code> and declares no property and no field
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Domain/ProcessManagers/ProcessManagerAggregateRoot.cs:10-11,17</code>);
+          its <code>DecideTimeout</code> answers not-applicable by default (<code>:43-44</code>). Timeouts are consumer-owned
+          internal commands on ADR-114&#39;s queue, run by <code>ProcessTimeoutHandlerBase</code>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/ProcessManagers/ProcessTimeoutHandlerBase.cs:36-43</code>),
+          and each event step runs through <code>ProcessDomainEventHandlerBase</code>
+          (<code>.../ProcessManagers/ProcessDomainEventHandlerBase.cs:31-35</code>). <code>AddProcessManagers()</code> registers
+          only the scoped <code>IProcessTimeoutScheduler</code> and a fallback clock
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/DependencyInjection.ProcessManagers.cs:26-27</code>),
+          and the primitive brings no table, no migration and no configuration key
+          (<code>MMCA.Common/UPGRADING.md:241</code>). There is no correlation store and no new package.</li>
+          <li><strong>It is the case this record&#39;s Rationale already called correct for choreography.</strong> The state
+          stays on the aggregate: <code>Order</code> derives the base
+          (<code>MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Domain/Orders/Order.cs:47</code>), still names
+          <code>Status</code> plus <code>InventoryRestored</code> as the saga state (<code>Order.cs:40-43</code>), and decides its own payment
+          deadline in <code>DecideTimeout</code> (<code>Order.cs:984-1004</code>).
+          <code>ExpireUnpaidOrderInternalCommandHandler</code> derives the timeout base
+          (<code>MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Application/Orders/InternalCommands/ExpireUnpaidOrderInternalCommandHandler.cs:39-48</code>),
+          <code>OrderCancelledSagaHandler</code> derives the step base (<code>.../Orders/Saga/OrderCancelledSagaHandler.cs:49-52</code>),
+          and <code>OrderPaymentFailedSagaHandler</code> remains a plain <code>IDomainEventHandler&lt;OrderPaymentFailed&gt;</code>
+          (<code>.../Orders/Saga/OrderPaymentFailedSagaHandler.cs:23-25</code>). Both arming sites construct
+          <code>new ProcessTimeoutScheduler(...)</code> rather than resolving <code>IProcessTimeoutScheduler</code>:
+          <code>CheckOutDeadlineScheduler</code> over its injected internal-command scheduler and clock, and
+          <code>OrderPaymentFailedSagaHandler</code> over its scope&#39;s services
+          (<code>.../ShoppingCarts/UseCases/CheckOut/CheckOutDeadlineScheduler.cs:31-37</code>,
+          <code>OrderPaymentFailedSagaHandler.cs:82-84</code>). The 2026-09-11 Revision&#39;s handler anchor
+          <code>ExpireUnpaidOrderInternalCommandHandler.cs:61-74</code> no longer holds: the re-derivation is
+          <code>Order.cs:988-998</code>.</li>
+          <li><strong>What stays deferred.</strong> The MassTransit v8 saga state machine, its correlation row and the
+          trigger in the Decision are unchanged: they answer state that fits no aggregate, which the
+          primitive does not cover. A per-repo content sweep of the four <code>Source</code> trees for
+          <code>MassTransitStateMachine</code>, <code>SagaStateMachineInstance</code>, <code>ISaga</code>, <code>InMemorySagaRepository</code> and
+          <code>MassTransit.EntityFrameworkCore</code> still returns no match.</li>
+          </ol>
           <h2 id="related">Related</h2>
           <p><a href="054-saga-compensation-and-reconciliation.html">ADR-054</a> (the accepted mechanism this record defers an
           alternative to: choreographed compensation, the persisted aggregate marker, and the reconciliation
@@ -606,7 +661,8 @@
           <a href="084-stripe-webhook-ingress.html">ADR-084</a> (the third-party ingress whose unreliability is the specific
           thing no coordinator can fix), <a href="114-internal-commands-durable-job-queue.html">ADR-114</a> (the durable internal-command
           queue that carries the first per-instance deadline, one aggregate id at a time, without a
-          coordinator).</p>
+          coordinator), <a href="143-process-manager-primitive.html">ADR-143</a> (the process-manager primitive that
+          resolves this deferral for a flow whose state fits one aggregate).</p>
           
         <div class="doc-foot btn-row">
           <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
@@ -628,6 +684,7 @@
             <li><a href="#revision-2026-10-21">Revision (2026-10-21)</a></li>
             <li><a href="#revision-2026-10-26">Revision (2026-10-26)</a></li>
             <li><a href="#revision-2026-10-28">Revision (2026-10-28)</a></li>
+            <li><a href="#revision-2026-11-12-the-deferral-is-revisited-and-resolved-for-single-aggregate-state">Revision (2026-11-12): the deferral is revisited, and resolved for single-aggregate state</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

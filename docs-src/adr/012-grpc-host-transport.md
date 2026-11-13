@@ -11,6 +11,7 @@ Revised 2026-10-21: Context now lists ADC's Identity -> Conference export edge, 
 Revised 2026-10-23: the east-west gRPC values moved into `HttpResilienceDefaults` (`Grpc`-prefixed) with their own 8s/20s timeouts instead of reusing the outbound-HTTP 30s/90s, and `AddTypedGrpcClient` gained a per-client override.
 Revised 2026-10-26: anchors refreshed across both apps' Program.cs, AppHost and Bicep files after line shifts in recent releases; no decision or value changed.
 Revised 2026-10-28: anchors refreshed across ADC's and Store's Bicep files and two ADC Program.cs files after line shifts in recent releases; no decision or value changed.
+Amended 2026-11-12 (unreleased, on the `feat/fresh-eyes-wave` branch): the local Aspire startup probe for each service resource is selected by `WithMmcaServiceInfrastructure` from an explicit `ServiceEndpointProfile` value (the first 2026-08-29 update below).
 ## Update (2026-06-22): Store converged to Profile A
 Store originally chose Profile B, but its cross-service gRPC failed in Azure Container Apps. With
 `Http1AndHttp2` Kestrel + `transport: 'auto'` ingress on a **cleartext** endpoint there is no ALPN, so
@@ -394,8 +395,24 @@ carried no Aspire health check at all and every `WaitFor` on them waited only fo
 (`MMCA.Common/Source/Hosting/MMCA.Common.Aspire.Hosting/H2cHealthCheckExtensions.cs:110`, whose
 `DefaultProbePath` is `"/alive"` at `:53`): an AppHost-side health check that issues the same GET
 over HTTP/2 exact version against the resource's existing endpoint, exactly the profile the
-gateway's downstream probe already speaks. Both AppHosts chain it on their Profile A resources,
-probing **`/alive` (liveness), not `/health/ready`**: service readiness includes the warm-up gate,
+gateway's downstream probe already speaks. Neither the MMCA.ADC nor the MMCA.Store AppHost picks the
+probe per service by hand (the framework's own sample AppHost does,
+`MMCA.Common/Tests/Hosting/MMCA.Common.Testing.Aspire.AppHostTests.SampleAppHost/Program.cs:55`,
+`:67`, `:80`): each
+service resource states its cleartext profile as an explicit `ServiceEndpointProfile` value
+(`MMCA.Common/Source/Hosting/MMCA.Common.Aspire.Hosting/ServiceEndpointProfile.cs:7`) passed to
+`WithMmcaServiceInfrastructure` (ADR-098;
+`MMCA.Common/Source/Hosting/MMCA.Common.Aspire.Hosting/ServiceInfrastructureExtensions.cs:51`,
+`:57`), and that value selects the probe (`:74-78`). `Http2Only` (`ServiceEndpointProfile.cs:13`)
+registers `WithH2cHealthCheck` on the named endpoint, or on `DefaultEndpointName` `"http"`
+(`H2cHealthCheckExtensions.cs:59`) when none is named; `Mixed` (`ServiceEndpointProfile.cs:19`), the
+mixed-endpoint profile's `Http1AndHttp2` default endpoint, registers Aspire's stock
+`WithHttpHealthCheck`. Both probe `DefaultProbePath` (`ServiceInfrastructureExtensions.cs:75`, `:77`).
+ADC passes `Http2Only` for Identity, Conference and Engagement and `Mixed` for Notification
+(`MMCA.ADC/Source/Hosting/MMCA.ADC.AppHost/Program.cs:214`, `:191`, `:154`, `:134`); Store passes
+`Http2Only` for Catalog and Identity and `Mixed` for Sales, naming its `http` endpoint
+(`MMCA.Store/Source/Hosting/MMCA.Store.AppHost/Program.cs:166`, `:189`, `:246-247`). Every probe
+targets **`/alive` (liveness), not `/health/ready`**: service readiness includes the warm-up gate,
 whose OIDC metadata task fetches through the gateway, and the gateway `WaitFor`s the services, so a
 readiness startup gate is a cycle (each service retries against the not-yet-started gateway until
 warm-up fails open at ~90s). Liveness proves what a `WaitFor` needs, a live Kestrel serving the

@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 141 ADRs</summary>
+        <summary>All 146 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -241,6 +241,11 @@
         <li><a href="139-passkeys-webauthn-opt-in-sign-in.html" aria-current="page">139 · Passkeys (WebAuthn) as an Opt-In Sign-In and Second Factor</a></li>
         <li><a href="140-machine-clients-oauth-client-credentials.html">140 · Machine Clients Through OAuth Client Credentials Backed by Service Accounts</a></li>
         <li><a href="141-two-framework-lines-from-one-tree.html">141 · Two .NET Framework Lines From One Source Tree (net10.0 and net11.0)</a></li>
+        <li><a href="142-outbound-webhooks-and-delivery-lane.html">142 · Outbound Webhooks (Signed Delivery over Internal Commands, with a Dedicated Delivery Lane)</a></li>
+        <li><a href="143-process-manager-primitive.html">143 · Process-Manager Primitive (Consumer-Owned Process Aggregate, Timeouts over Internal Commands)</a></li>
+        <li><a href="144-offline-writes-and-delta-reads.html">144 · Offline Writes and Delta Reads (Client Write Queue, Server Change Feed with Tombstones)</a></li>
+        <li><a href="145-opt-in-cursor-paging.html">145 · Opt-In Cursor Paging on List Endpoints (Beside Offset Paging)</a></li>
+        <li><a href="146-ui-page-bases-and-list-shell.html">146 · UI Page Bases and the List Shell (Bases Own Plumbing, Pages Own Model and Service Call)</a></li>
           </ol>
         </nav>
       </details>
@@ -253,7 +258,9 @@
           (the package list and count are owned by <code>MMCA.Common/FACTS.md</code>). Off unless the host calls
           <code>AddPasskeys</code> and sets <code>Passkeys:Enabled</code>
           (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Auth/Passkeys/PasskeySettings.cs:24-25</code>, default
-          false).</p>
+          false).
+          Amended 2026-11-12: MMCA.ADC is the first consumer to carry the code path, on its adoption branch,
+          switched off in production (see Consequences).</p>
           <h2 id="context">Context</h2>
           <p>A password plus a TOTP code is phishable: a convincing proxy page collects both and replays them
           within the code&#39;s window. The only passwordless path the framework offered was the emailed sign-in
@@ -375,7 +382,7 @@
           browser implementation over <code>passkeys.js</code>
           (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/Capabilities/DependencyInjection.cs:57-59</code>,
           <code>:113-114</code>). The login page offers passkeys only when <code>SignIn:OfferPasskeys</code> is true and the
-          capability is available (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI/Pages/Auth/Login.razor.cs:101-106</code>),
+          capability is available (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI/Pages/Auth/Login.razor.cs:105-108</code>),
           and browser autofill asks for a challenge only where conditional mediation is available
           (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI/wwwroot/passkeys.js:137-143</code>).</li>
           <li><strong>Service accounts never sign in with a passkey.</strong> <code>SignInWithPasskeyAsync</code> treats an account
@@ -440,8 +447,33 @@
           <code>AddPasskeys</code>, setting the RP id, name and origins, adding the <code>PasskeyCredentials</code> migration with
           <code>EnablePasskeys</code>, routing a <code>PasskeysControllerBase</code> subclass, setting <code>SignIn:OfferPasskeys</code> and
           placing <code>PasskeysPanel</code> on the profile page (<code>MMCA.Common/UPGRADING.md:54-70</code>).</li>
-          <li>MMCA.ADC ships the code path off: it overrides <code>HasExternalLoginAsync</code> but adds no migration, no
-          configuration and no UI wiring, pending a decision on its production domain (recorded in
+          <li>MMCA.ADC is the first consumer to carry the code path, on its adoption branch
+          <code>feat/fresh-eyes-wave</code>, and carries it switched OFF in production. Its Identity service references
+          the package (<code>MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/MMCA.ADC.Identity.Service.csproj:35</code>)
+          and calls <code>AddPasskeys</code> (<code>MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:170-174</code>),
+          but its base <code>appsettings.json</code> sets <code>Passkeys:Enabled</code> false
+          (<code>MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/appsettings.json:133-134</code>). Only the
+          service&#39;s <code>appsettings.Development.json</code> (<code>:33-34</code> of that file) and the AppHost
+          (<code>MMCA.ADC/Source/Hosting/MMCA.ADC.AppHost/Program.cs:490</code>) turn it on, and no file under
+          <code>MMCA.ADC/infra/</code> sets <code>Passkeys</code> or <code>SignIn:OfferPasskeys</code>, so in production every passkey route
+          answers 404 (<code>PasskeysControllerBase.cs:53-54</code>, <code>:71-73</code>). <code>SignIn:OfferPasskeys</code> is true only in
+          the web head&#39;s Development settings
+          (<code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/appsettings.Development.json:13</code>) and through the
+          AppHost (<code>MMCA.ADC/Source/Hosting/MMCA.ADC.AppHost/Program.cs:492</code>); the web head hands it to the
+          browser (<code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs:195-199</code>), so the framework login
+          page&#39;s passkey button and ADC&#39;s profile Passkeys card
+          (<code>MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.UI/Pages/Users/Profile/Profile.razor:110</code>)
+          never render where it is false; the login button also needs an available passkey capability and a
+          registered passkey UI service (<code>Login.razor.cs:105-108</code>). The controller is a sealed <code>PasskeysControllerBase</code> subclass routed
+          at <code>auth/passkeys</code>
+          (<code>MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.API/Controllers/Passkeys/PasskeysController.cs:19-21</code>).
+          The <code>AddPasskeyCredentials</code> migration creates the one <code>PasskeyCredentials</code> table with a unique
+          index on <code>CredentialId</code> and an index on <code>UserId</code>
+          (<code>MMCA.ADC/Source/Hosting/MMCA.ADC.Migrations.SqlServer.Identity/Migrations/20261112192534_AddPasskeyCredentials.cs:14-45</code>),
+          so once the migration runs the table exists, unused, while the switch is off (<code>Program.cs:171-173</code> of the Identity
+          service). ADC also overrides <code>HasExternalLoginAsync</code>. Turning passkeys on in production waits on a
+          decision about ADC&#39;s production domain, because a passkey is bound to the relying-party id
+          (<code>appsettings.json:129-130</code> of the Identity service; recorded in
           <a href="../governance/adc-RemediationBacklog.html">the ADC backlog</a>). Store and Helpdesk leave it off.</li>
           <li><code>MMCA.Common/FACTS.md</code> lists the new package.</li>
           </ul>

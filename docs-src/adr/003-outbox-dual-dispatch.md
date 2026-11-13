@@ -46,6 +46,16 @@ dispatched one at a time with each failure logged at Error (see the Revision (20
 end).
 Revised 2026-10-28: anchors refreshed after later MMCA.Common releases moved them (see the Revision
 (2026-10-28) at the end).
+Revised 2026-11-12 (unreleased, on the `feat/fresh-eyes-wave` branch): draining after a dependency
+outage is asserted end to end by the AppHost outage tier
+([ADR-117](117-apphost-integration-test-base.md)). In a broker-outage scenario the test's own
+during-outage callback writes an integration event while the broker is down
+(`MMCA.Common/Tests/Hosting/MMCA.Common.Testing.Aspire.AppHostTests/SampleOutageTests.cs:59`,
+`:125-146`); the base then asserts that the pending outbox count is above zero and, once the broker
+is back, polls `AssertOutboxDrainedAsync`, which the base carries, until no outbox row has a null
+`ProcessedOn`
+(`MMCA.Common/Source/Hosting/MMCA.Common.Testing.Aspire/Outages/DependencyOutageTestBase.cs:134-143`,
+`:162-165`, `:351-369`; the SQL Server count, overridable per engine, at `:310-342`).
 
 ## Context
 Domain events must be reliably published after aggregate changes are persisted. Two failure modes exist:

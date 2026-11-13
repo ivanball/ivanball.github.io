@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 141 ADRs</summary>
+        <summary>All 146 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -241,6 +241,11 @@
         <li><a href="139-passkeys-webauthn-opt-in-sign-in.html">139 · Passkeys (WebAuthn) as an Opt-In Sign-In and Second Factor</a></li>
         <li><a href="140-machine-clients-oauth-client-credentials.html">140 · Machine Clients Through OAuth Client Credentials Backed by Service Accounts</a></li>
         <li><a href="141-two-framework-lines-from-one-tree.html">141 · Two .NET Framework Lines From One Source Tree (net10.0 and net11.0)</a></li>
+        <li><a href="142-outbound-webhooks-and-delivery-lane.html">142 · Outbound Webhooks (Signed Delivery over Internal Commands, with a Dedicated Delivery Lane)</a></li>
+        <li><a href="143-process-manager-primitive.html">143 · Process-Manager Primitive (Consumer-Owned Process Aggregate, Timeouts over Internal Commands)</a></li>
+        <li><a href="144-offline-writes-and-delta-reads.html">144 · Offline Writes and Delta Reads (Client Write Queue, Server Change Feed with Tombstones)</a></li>
+        <li><a href="145-opt-in-cursor-paging.html">145 · Opt-In Cursor Paging on List Endpoints (Beside Offset Paging)</a></li>
+        <li><a href="146-ui-page-bases-and-list-shell.html">146 · UI Page Bases and the List Shell (Bases Own Plumbing, Pages Own Model and Service Call)</a></li>
           </ol>
         </nav>
       </details>
@@ -294,7 +299,8 @@
           Revised 2026-10-07: anchors refreshed after the v1.233.0 release; see the Revision (2026-10-07) below.
           Revised 2026-10-21: <code>AddMmcaGateway</code> now fail-fast validates the nested gateway settings on both overloads, ADC&#39;s route-table comment now agrees with its no-fallback host, and anchors are refreshed after the v1.250.0 release; see the Revision (2026-10-21) below.
           Revised 2026-10-26: edge 429s now carry a <code>Retry-After</code> header when the rejecting limiter has a hint, a gateway host takes a third framework package (<code>MMCA.Common.Azure</code>), and anchors are refreshed after the v1.261.0 release; see the Revision (2026-10-26) below.
-          Revised 2026-10-28: the Store gateway&#39;s source comments now match its five package references, its Azure calls and its disabled active probe, and anchors are refreshed after the v1.265.1 release; see the Revision (2026-10-28) below.</p>
+          Revised 2026-10-28: the Store gateway&#39;s source comments now match its five package references, its Azure calls and its disabled active probe, and anchors are refreshed after the v1.265.1 release; see the Revision (2026-10-28) below.
+          Revised 2026-11-12 (unreleased, on the <code>feat/fresh-eyes-wave</code> branch): <code>AddMmcaGateway</code> can install an opt-in connect-failure retry confined to a body-less GET or HEAD that never reached its destination, so the proxy-hop retry delegation now names its one exception, and the <code>Wire</code> anchors are refreshed; see What the edge delegates below.</p>
           <h2 id="context">Context</h2>
           <p><a href="008-service-extraction-topology.html">ADR-008</a> made the Gateway the only client entry point and gave it
           three jobs: the route-to-service map, CORS, and forwarding the caller&#39;s <code>Authorization</code> header. Nothing
@@ -509,10 +515,11 @@
           overloads on <code>IReverseProxyBuilder</code>
           (<code>MMCA.Common/Source/Hosting/MMCA.Common.Gateway/GatewayReverseProxyExtensions.cs:48</code> taking
           <code>IConfiguration</code>, <code>:74</code> taking a <code>GatewaySettings</code> instance), and both funnel into one <code>Wire</code> method
-          (<code>:92</code>) that first validates the settings with <code>GatewaySettingsValidator.ThrowIfInvalid</code> (<code>:97</code>) and
-          then registers, in order: the named per-route rate-limiter policies (<code>:98</code>), the cluster profile
-          config filter that owns each cluster&#39;s <code>HttpRequest</code> version policy (<code>:101</code>), the health-check
-          defaults filter (<code>:102</code>), and the trace-header transform (<code>:103</code>). Filter order carries no meaning and
+          (<code>:94</code>) that first validates the settings with <code>GatewaySettingsValidator.ThrowIfInvalid</code> (<code>:99</code>) and
+          then registers, in order: the named per-route rate-limiter policies (<code>:100</code>), the connect-failure
+          retry only when <code>MmcaGateway:Retry:Enabled</code> is true (<code>:102-105</code>, described under the delegations
+          below), the cluster profile config filter that owns each cluster&#39;s <code>HttpRequest</code> version policy
+          (<code>:108</code>), the health-check defaults filter (<code>:109</code>), and the trace-header transform (<code>:110</code>). Filter order carries no meaning and
           the type says so: the two filters own disjoint parts of a cluster and neither reads what the other
           wrote (<code>:39-41</code>). Settings bind from the <code>&quot;MmcaGateway&quot;</code> section (<code>GatewaySettings.cs:15</code>) through
           <code>ValidateDataAnnotations().ValidateOnStart()</code> (<code>GatewayReverseProxyExtensions.cs:55-58</code>), the same
@@ -520,7 +527,7 @@
           into the nested trace-header and health-check objects, the configuration overload also registers
           <code>GatewaySettingsValidator</code> as an <code>IValidateOptions&lt;GatewaySettings&gt;</code> (<code>:62-63</code>, reasoning at
           <code>:60-61</code>), and the registration-time <code>ThrowIfInvalid</code> in <code>Wire</code> covers BOTH overloads, so a blank
-          trace-header name fails at startup rather than throwing on every proxied request (<code>:94-96</code>). The
+          trace-header name fails at startup rather than throwing on every proxied request (<code>:96-98</code>). The
           per-route policies are additionally validated
           at registration with <code>Validator.ValidateObject</code>
           (<code>RateLimiting/GatewayRoutePolicyExtensions.cs:62</code>, reasoning at <code>:45-46</code>), because the limiter
@@ -615,13 +622,15 @@
           <code>MMCA.Store/Tests/Hosts/MMCA.Store.Gateway.Tests/RouteMapTests.cs:315-317</code>). A second destination in
           a cluster would be the gateway balancing across replicas the platform is already balancing across,
           with two schedulers holding different opinions about which instance is healthy.</p>
-          <p><strong>Proxy-hop retries are delegated to client-side resilience.</strong> The gateway retries nothing: no retry
-          configuration, no Polly pipeline and no <code>IForwarderHttpClientFactory</code> appears in the package or in
+          <p><strong>Proxy-hop retries are delegated to client-side resilience, with one opt-in exception for a request
+          that never reached its destination.</strong> By default the gateway retries nothing: <code>MmcaGateway:Retry:Enabled</code>
+          is false (<code>MMCA.Common/Source/Hosting/MMCA.Common.Gateway/GatewaySettings.cs:64</code>), YARP&#39;s own
+          forwarder client factory stays in use (<code>:60-63</code>), and no Polly pipeline appears in the package or in
           either host. Retries live in the client the user is waiting on, where
           <code>EntityServiceBase</code> runs a Polly exponential-backoff-with-jitter policy declared on its base
           <code>AuthenticatedServiceBase</code> (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/Api/AuthenticatedServiceBase.cs:30</code>,
           built by <code>BuildRetryPolicy</code> at <code>:239-255</code>, backoff with jitter at <code>:197-199</code>; executed in
-          <code>EntityServiceBase.cs</code> at <code>:365</code> and <code>:393</code>), and that policy itself refuses to resend a POST or PATCH
+          <code>EntityServiceBase.cs</code> at <code>:364</code> and <code>:392</code>), and that policy itself refuses to resend a POST or PATCH
           without an <code>Idempotency-Key</code> once it may have been sent (<code>IsRetryableException</code>, <code>:188-192</code>, rule
           at <code>:180-187</code>), while the server-to-server budget is deliberately one retry beyond the initial attempt
           (<code>.../MMCA.Common.Shared/Resilience/HttpResilienceDefaults.cs:33</code>, the up-to-16x storm argument at
@@ -630,6 +639,32 @@
           the gateway package or either gateway host. A proxy-hop retry would therefore be a replay with
           nothing attached to make it safe, on a write the proxy cannot inspect to know whether replaying it
           is harmless. Retrying where the key is is the only version that is correct.</p>
+          <p><strong>The opt-in connect-failure retry.</strong> A host that sets <code>MmcaGateway:Retry:Enabled</code> to true (the
+          <code>Retry</code> block at <code>GatewaySettings.cs:49</code>, documented at <code>:52-57</code>) gets a retrying forwarder client
+          factory in place of YARP&#39;s (<code>GatewayReverseProxyExtensions.cs:102-105</code>, registered at <code>:144</code>), which
+          installs <code>GatewayConnectRetryHandler</code> as the outermost handler of every cluster client, so a retried
+          attempt runs the whole inner pipeline again
+          (<code>Forwarding/GatewayRetryForwarderHttpClientFactory.cs:64-68</code>). It retries only a request that
+          cannot have reached the destination. The request must be a GET or HEAD with no content
+          (<code>Forwarding/GatewayConnectRetryHandler.cs:36-38</code>), and the attempt must have thrown an
+          <code>HttpRequestException</code> whose <code>HttpRequestError</code> is <code>NameResolutionError</code>, <code>ConnectionError</code> or
+          <code>SecureConnectionError</code> (<code>:41-44</code>), the same before-send rule the gRPC client applies
+          (<a href="009-resilience-and-recovery-objectives.html">ADR-009</a>). Every other request goes straight to the
+          inner handler (<code>:30-32</code>), so a POST, PUT, PATCH or DELETE is never retried, and neither is a GET or
+          HEAD that carries a body; for a retryable request, a response of any status, any other exception and
+          a cancelled request pass through untouched (the exception filter at <code>:55-58</code>). The budget is
+          <code>MaxRetryAttempts</code> extra attempts after the first, default 1 and range 1 to 3
+          (<code>GatewaySettings.cs:66-68</code>), each after <code>Delay</code>, default 200 milliseconds and at most 5 seconds
+          (<code>:70-72</code>), waited on the injected clock (<code>GatewayConnectRetryHandler.cs:70-73</code>). Both ranges are
+          validated with the other nested settings (<code>GatewaySettingsValidator.cs:55</code>). When the budget is spent
+          the filter stops catching and the last exception propagates unchanged, so YARP still answers its usual
+          502 and the passive health policy counts one failure (<code>GatewayConnectRetryHandler.cs:11-14</code>); each
+          retry logs one Warning naming the method, the destination authority and the error (<code>:77-79</code>). This
+          does not reopen the delegation above: the ADR-017 argument is about replaying a request the
+          destination may already have acted on, and a connect failure on a body-less GET or HEAD is a request
+          it never received. A host that composed its own <code>IForwarderHttpClientFactory</code> keeps it: enabling the
+          retry beside one fails registration, naming the existing factory
+          (<code>GatewayReverseProxyExtensions.cs:127-136</code>).</p>
           <p><strong>Active destination probing is available and off by default, and both consumers leave it off.</strong> The
           package can apply YARP health-check defaults to any cluster that declares none
           (<code>Configuration/GatewayHealthCheckDefaultsConfigFilter.cs</code>, additive-only: an existing block is kept
@@ -723,7 +758,9 @@
           route table itself hot-reloads.</li>
           <li><strong>The delegations are correct today because of facts nothing enforces framework-side.</strong> Load
           balancing is safely delegated only while each cluster has one destination, and proxy-hop retries
-          are safely absent only while the idempotency key is minted client-side. Both consumers pin the
+          are safely absent only while the idempotency key is minted client-side. The one retry the package
+          carries stays outside that argument only because it is confined to a body-less GET or HEAD whose
+          connection never opened (<code>Forwarding/GatewayConnectRetryHandler.cs:36-38</code>, <code>:41-44</code>). Both consumers pin the
           first with a test; nothing pins the second beyond the fact that no gateway code mints a key. A
           future gateway that added a second destination to a cluster, or a retry, would invalidate a
           recorded decision without failing a build.</li>

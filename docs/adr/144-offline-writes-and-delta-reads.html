@@ -1,0 +1,389 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#0e151f" media="(prefers-color-scheme: dark)">
+  <title>ADR-144: Offline Writes and Delta Reads (Client Write Queue, Server Change Feed with Tombstones) · MMCA · Ivan Ball-llovera</title>
+  <meta name="description" content="Accepted (2026-11-12). Unreleased: listed under [Unreleased] in MMCA.Common/CHANGELOG.md:7, and the reference adopter is on MMCA.ADC&#39;s…">
+  <link rel="canonical" href="https://ivanball.github.io/docs/adr/144-offline-writes-and-delta-reads.html">
+  <link rel="icon" href="../../assets/img/favicon.svg" type="image/svg+xml">
+  <link rel="alternate" type="application/rss+xml" title="Ivan Ball-llovera: deep dives on enterprise .NET" href="https://ivanball.github.io/feed.xml">
+  <meta property="og:type" content="article">
+  <meta property="og:site_name" content="Ivan Ball-llovera">
+  <meta property="og:title" content="ADR-144: Offline Writes and Delta Reads (Client Write Queue, Server Change Feed with Tombstones)">
+  <meta property="og:description" content="Accepted (2026-11-12). Unreleased: listed under [Unreleased] in MMCA.Common/CHANGELOG.md:7, and the reference adopter is on MMCA.ADC&#39;s…">
+  <meta property="og:url" content="https://ivanball.github.io/docs/adr/144-offline-writes-and-delta-reads.html">
+  <meta property="og:image" content="https://ivanball.github.io/assets/img/og-image.png">
+  <meta property="og:image:alt" content="Ivan Ball-llovera, Principal Software Architect">
+  <meta property="og:locale" content="en_US">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="ADR-144: Offline Writes and Delta Reads (Client Write Queue, Server Change Feed with Tombstones)">
+  <meta name="twitter:description" content="Accepted (2026-11-12). Unreleased: listed under [Unreleased] in MMCA.Common/CHANGELOG.md:7, and the reference adopter is on MMCA.ADC&#39;s…">
+  <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Platform","item":"https://ivanball.github.io/platform.html"},{"@type":"ListItem","position":2,"name":"Reference","item":"https://ivanball.github.io/docs/index.html"},{"@type":"ListItem","position":3,"name":"Architecture Decision Records","item":"https://ivanball.github.io/docs/adr/index.html"},{"@type":"ListItem","position":4,"name":"144 · Offline Writes and Delta Reads (Client Write Queue, Server Change Feed with Tombstones)","item":"https://ivanball.github.io/docs/adr/144-offline-writes-and-delta-reads.html"}]}</script>
+  <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);if(localStorage.getItem('mmca-rail')==='hidden')document.documentElement.setAttribute('data-rail','hidden');if(localStorage.getItem('mmca-cites')==='shown')document.documentElement.setAttribute('data-cites','shown');}catch(e){}})();</script>
+  <link rel="preload" href="../../assets/fonts/inter-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="../../assets/fonts/jetbrains-mono-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="../../assets/css/styles.css">
+  <link rel="stylesheet" href="../../assets/css/docs.css">
+  <script defer src="../../assets/js/main.js"></script>
+  <script defer src="../../assets/js/search.js"></script>
+  <script defer src="../../assets/js/analytics.js"></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+
+  <header class="site-header">
+    <div class="container nav">
+      <a class="brand" href="../../index.html">
+        <span class="brand-mark" aria-hidden="true">IB</span>
+        <span>Ivan Ball-llovera</span>
+      </a>
+      <nav aria-label="Primary">
+        <ul class="nav-links" id="nav-links">
+          <li><a href="../../index.html">Home</a></li>
+          <li><a href="../../resume.html">Résumé</a></li>
+          <li><a href="../../platform.html">Platform</a></li>
+          <li><a href="../../docs/index.html" aria-current="page">Reference</a></li>
+          <li><a href="../../writing.html">Writing</a></li>
+          <li><a href="../../speaking.html">Speaking</a></li>
+          <li><a href="../../contact.html">Contact</a></li>
+        </ul>
+      </nav>
+      <div class="nav-tools">
+        <button class="icon-btn search-open" type="button" aria-label="Search the site" data-search-open>
+          <span aria-hidden="true">⌕</span>
+        </button>
+        <button class="icon-btn theme-toggle" type="button" aria-label="Switch color theme">
+          <span class="sun" aria-hidden="true">☀</span><span class="moon" aria-hidden="true">☾</span>
+        </button>
+        <button class="icon-btn nav-toggle" type="button" aria-label="Toggle navigation menu" aria-expanded="false" aria-controls="nav-links">☰</button>
+      </div>
+    </div>
+  </header>
+  <dialog class="search-dialog" id="site-search" aria-label="Search this site">
+    <form class="search-box" method="dialog" role="search">
+      <span class="search-icon" aria-hidden="true">⌕</span>
+      <input class="search-input" type="search" id="site-search-input" placeholder="Search ADRs, guides, chapters, articles…"
+             autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
+             aria-controls="site-search-results" aria-describedby="site-search-status">
+      <button class="btn btn--ghost search-close" type="button" data-search-close>Esc</button>
+    </form>
+    <p class="search-status" id="site-search-status" role="status" aria-live="polite"></p>
+    <ul class="search-results" id="site-search-results"></ul>
+    <p class="search-foot">
+      <span><kbd>↑</kbd><kbd>↓</kbd> to navigate</span>
+      <span><kbd>Enter</kbd> to open</span>
+      <span><kbd>"…"</kbd> all these words</span>
+      <span><kbd>AND</kbd><kbd>OR</kbd> to combine</span>
+    </p>
+  </dialog>
+
+  <main id="main">
+    <div class="container doc-container">
+      <nav class="doc-breadcrumb" aria-label="Breadcrumb">
+        <a href="../../platform.html">Platform</a>
+        <span aria-hidden="true">/</span>
+        <a href="../../docs/index.html">Reference</a>
+        <span aria-hidden="true">/</span>
+        <a href="../../docs/adr/index.html">Architecture Decision Records</a>
+        <span aria-hidden="true">/</span>
+        <span class="current">144 · Offline Writes and Delta Reads (Client Write Queue, Server Change Feed with Tombstones)</span>
+        <button class="rail-toggle" type="button" data-rail-toggle aria-expanded="true" aria-controls="doc-rail">On this page</button>
+      </nav>
+      <div class="doc-layout doc-layout--toc">
+      <aside class="doc-sidebar">
+      <details class="doc-sidebar-details" open>
+        <summary>All 146 ADRs</summary>
+        <nav class="doc-nav" aria-label="Architecture Decision Records">
+          <ol>
+        <li><a href="index.html">Overview</a></li>
+        <li><a href="001-manual-dto-mapping.html">001 · Manual DTO Mapping over AutoMapper</a></li>
+        <li><a href="002-navigation-populators.html">002 · NavigationPopulators for Cross-Container Loading</a></li>
+        <li><a href="003-outbox-dual-dispatch.html">003 · Outbox Pattern with Dual Dispatch</a></li>
+        <li><a href="004-authentication-dual-fetch.html">004 · Cross-Service Token Validation via JWKS / OIDC Discovery</a></li>
+        <li><a href="005-soft-delete-vs-erasure.html">005 · Soft-Delete vs. Right-to-Erasure</a></li>
+        <li><a href="006-database-per-service.html">006 · Database per Service</a></li>
+        <li><a href="007-grpc-extraction.html">007 · Synchronous Cross-Service Calls via gRPC Contracts</a></li>
+        <li><a href="008-service-extraction-topology.html">008 · Extraction of the Modular Monolith into Per-Module Services + Gateway</a></li>
+        <li><a href="009-resilience-and-recovery-objectives.html">009 · Resilience Policies &amp; Recovery Objectives</a></li>
+        <li><a href="010-integration-event-schema-versioning.html">010 · Integration-Event Schema Versioning &amp; Upcaster Policy</a></li>
+        <li><a href="011-single-locale-i18n.html">011 · Single-Locale by Design (No Internationalization)</a></li>
+        <li><a href="012-grpc-host-transport.html">012 · gRPC-Host Transport Convention (Http2-only h2c vs. Http1AndHttp2 + ALPN)</a></li>
+        <li><a href="013-result-pattern.html">013 · Result Pattern over Exceptions for Flow Control</a></li>
+        <li><a href="014-cqrs-decorator-pipeline.html">014 · CQRS Handlers with a Decorator Pipeline</a></li>
+        <li><a href="015-architecture-fitness-functions.html">015 · Architecture Invariants Enforced as Fitness Functions</a></li>
+        <li><a href="016-lockstep-versioning-masstransit-pin.html">016 · Lockstep Package Versioning and the MassTransit-v8 Pin</a></li>
+        <li><a href="017-request-idempotency.html">017 · HTTP Request Idempotency via Client-Supplied Keys</a></li>
+        <li><a href="018-polyglot-persistence.html">018 · Polyglot Persistence (Multiple Storage Engines Behind One Model)</a></li>
+        <li><a href="019-rate-limiting.html">019 · Layered Rate Limiting with an Authenticated-Only Global Limiter</a></li>
+        <li><a href="020-permission-based-authorization.html">020 · Permission-Based Authorization Layered over Roles</a></li>
+        <li><a href="021-consumer-inbox-idempotency.html">021 · Consumer-Side Inbox for Integration-Event Idempotency</a></li>
+        <li><a href="022-browser-session-cookie-auth.html">022 · Browser Session-Cookie Authentication for Blazor SSR</a></li>
+        <li><a href="023-security-response-headers.html">023 · Centralized Security-Response-Headers Middleware with a Pluggable CSP</a></li>
+        <li><a href="024-push-notifications.html">024 · Two-Channel User Notifications (Transient SignalR Push + Durable Inbox)</a></li>
+        <li><a href="025-startup-warmup-readiness.html">025 · Startup Warm-Up and Readiness Gating for Cold-Start Mitigation</a></li>
+        <li><a href="026-caching-strategy.html">026 · Two-Tier Caching: a Swappable ICacheService Substrate plus an HTTP Output-Cache Edge</a></li>
+        <li><a href="027-multi-locale-i18n.html">027 · Multi-Locale Internationalization (Supersedes ADR-011)</a></li>
+        <li><a href="028-dark-theme-mode.html">028 · Day/Dark Theme Mode</a></li>
+        <li><a href="029-authentication-brute-force-protection.html">029 · Authentication Brute-Force Protection and Registration Throttling</a></li>
+        <li><a href="030-startup-sole-migrator.html">030 · Each Service Self-Applies Its Migrations at Startup (Sole Migrator)</a></li>
+        <li><a href="031-feature-flag-management.html">031 · Config-Driven Feature Flags with Dual-Surface Enforcement</a></li>
+        <li><a href="032-password-hashing.html">032 · Password Hashing (PBKDF2-HMAC-SHA512) with Legacy-Hash Backward Compatibility</a></li>
+        <li><a href="033-resource-ownership-authorization.html">033 · Resource-Ownership Authorization (Row-Level + Action Filter)</a></li>
+        <li><a href="034-generic-entity-query-layer.html">034 · Generic Entity Controllers with a Dynamic Query Contract</a></li>
+        <li><a href="035-optimistic-concurrency.html">035 · Optimistic Concurrency via RowVersion Round-Trip</a></li>
+        <li><a href="036-external-oauth-login.html">036 · External OAuth Login (Federated Google/GitHub/Apple) with Local-JWT Exchange</a></li>
+        <li><a href="037-field-level-encryption-at-rest.html">037 · Field-Level Encryption at Rest (AES-256-GCM EF Converter)</a></li>
+        <li><a href="038-supply-chain-provenance.html">038 · Supply-Chain Provenance (SBOM Release Gate + Lock Files + Vulnerability Audit)</a></li>
+        <li><a href="039-live-channel-push.html">039 · Live channel push (ephemeral events over the notification hub)</a></li>
+        <li><a href="040-authenticated-output-caching-for-public-reads.html">040 · Authenticated output caching for public reads</a></li>
+        <li><a href="041-observability-and-telemetry.html">041 · Observability and Telemetry Strategy</a></li>
+        <li><a href="042-device-capability-abstraction.html">042 · Device Capability Abstraction (MAUI Blazor Hybrid)</a></li>
+        <li><a href="043-mobile-deep-links-and-native-oauth-callback.html">043 · Mobile Deep Links, App Association, and the Native OAuth Callback</a></li>
+        <li><a href="044-native-push-delivery.html">044 · Native Push Delivery (the Third Notification Channel)</a></li>
+        <li><a href="045-managed-file-storage-and-avatars.html">045 · Managed File Storage and User Avatars</a></li>
+        <li><a href="046-http-api-versioning.html">046 · HTTP API Versioning Strategy</a></li>
+        <li><a href="047-soft-deleted-user-session-revocation.html">047 · Runtime Revocation of Soft-Deleted Users&#39; Active Sessions</a></li>
+        <li><a href="048-primitive-identifier-type-aliases.html">048 · Primitive Identifier Type Aliases over Strongly-Typed ID Structs</a></li>
+        <li><a href="049-library-configureawait-policy.html">049 · Library-Scoped ConfigureAwait(false) Policy (CA2007)</a></li>
+        <li><a href="050-jwt-refresh-token-rotation.html">050 · JWT Access Tokens with a Single Rotating Refresh Token and Reuse Detection</a></li>
+        <li><a href="051-client-auth-token-lifecycle.html">051 · Client-Side Authentication Token Lifecycle Across Render Modes</a></li>
+        <li><a href="052-background-job-execution.html">052 · Background Job Execution (Bounded Queue plus Hosted Drain)</a></li>
+        <li><a href="053-dual-registry-package-publishing.html">053 · Dual-Registry Package Publishing (nuget.org plus GitHub Packages)</a></li>
+        <li><a href="054-saga-compensation-and-reconciliation.html">054 · Choreographed Saga Compensation with a Reconciliation Backstop</a></li>
+        <li><a href="055-repository-and-specification-contract.html">055 · Repository plus Specification as the Data-Access Contract</a></li>
+        <li><a href="056-blazor-render-mode-strategy.html">056 · Blazor Render-Mode Strategy for the Web Heads</a></li>
+        <li><a href="057-expand-contract-schema-evolution-gate.html">057 · Expand/Contract Schema Evolution Enforced as a CI Gate</a></li>
+        <li><a href="058-runtime-conformance-suites-as-a-package.html">058 · Runtime Conformance Suites Shipped as a Package</a></li>
+        <li><a href="059-module-contract-and-composition.html">059 · The IModule Contract and Reflection-Based Module Composition</a></li>
+        <li><a href="060-performance-regression-gate.html">060 · Performance-Regression Gate (Committed Benchmark Baseline in CI)</a></li>
+        <li><a href="061-runtime-secret-management.html">061 · Runtime Secret Management via Key Vault References and Managed Identity</a></li>
+        <li><a href="062-slo-alerting-as-code.html">062 · SLO Alerting as Code with an Alert-to-Runbook Build Gate</a></li>
+        <li><a href="063-accessibility-conformance-gate.html">063 · WCAG 2.1 AA Accessibility as a Shipped Test Contract and CI Gate</a></li>
+        <li><a href="064-deploy-recency-gates.html">064 · Deploy Preconditions as Proof-of-Recency Gates</a></li>
+        <li><a href="065-scaffolding-templates.html">065 · Scaffolding templates derived from the reference app</a></li>
+        <li><a href="066-broker-transport-selection.html">066 · Broker Transport Selection and Dev/Prod Parity</a></li>
+        <li><a href="067-ui-module-shell-composition.html">067 · Shared Blazor Application Shell and IUIModule Composition</a></li>
+        <li><a href="068-value-objects-as-validated-primitives.html">068 · Value Objects as Validated Domain Primitives</a></li>
+        <li><a href="069-shared-data-protection-key-ring.html">069 · Shared DataProtection Key Ring for Scaled-Out Hosts</a></li>
+        <li><a href="070-fail-fast-configuration-contract.html">070 · Fail-Fast Configuration Contract</a></li>
+        <li><a href="071-barcode-scanning-and-qr-display.html">071 · Device Capability Pattern for Barcode Scanning and QR Display</a></li>
+        <li><a href="072-qr-badge-check-in-and-points.html">072 · QR Badge Check-In and Points Gamification in ADC</a></li>
+        <li><a href="073-multi-tenancy-model.html">073 · Multi-Tenancy (Shared-Schema Query Filter plus DB-per-Tenant Routing)</a></li>
+        <li><a href="074-recurring-job-scheduler.html">074 · Recurring Job Scheduler (Persistent Cron Jobs on the Outbox Claim-Lease Pattern)</a></li>
+        <li><a href="075-audit-trail.html">075 · Audit Trail (Same-Transaction Field-Level Change History)</a></li>
+        <li><a href="076-data-subject-export.html">076 · Data-Subject Export (DSAR) as a Framework Contract</a></li>
+        <li><a href="077-hybridcache-substrate.html">077 · HybridCache as an Opt-In ICacheService Substrate (Amends ADR-026)</a></li>
+        <li><a href="078-csv-export-endpoint.html">078 · CSV Export as a Dedicated Endpoint, Not Content Negotiation</a></li>
+        <li><a href="079-shared-http-middleware-pipeline.html">079 · One Shared, Ordered HTTP Middleware Pipeline for Every Service Host</a></li>
+        <li><a href="080-deploy-rollout-revision-rollback.html">080 · Production Rollout with Automatic Revision-Only Rollback</a></li>
+        <li><a href="081-cost-baseline-deploy-gate.html">081 · The Cost Baseline as a Hard Deploy Gate</a></li>
+        <li><a href="082-two-tier-cors-posture.html">082 · Two-Tier Cross-Origin Posture: Allow-Listed Service Policies, an Any-Header Gateway Policy</a></li>
+        <li><a href="083-crud-lifecycle-event-taxonomy.html">083 · One CRUD Lifecycle Event per Entity with a State Discriminator</a></li>
+        <li><a href="084-stripe-webhook-ingress.html">084 · Stripe Webhook Ingress (Acceptance-Coded Responses and Startup Self-Registration)</a></li>
+        <li><a href="085-identifier-type-aliases-revisited.html">085 · Identifier Type Aliases Revisited (Wrapper Structs Deferred Again, With Triggers)</a></li>
+        <li><a href="086-process-manager-deferred.html">086 · A Process Manager Is Deferred, Not Absent (Relates to ADR-054)</a></li>
+        <li><a href="087-broker-poison-message-handling.html">087 · Broker Poison-Message Handling: Second-Level Redelivery and Fault Observability</a></li>
+        <li><a href="088-gateway-edge-responsibilities.html">088 · Gateway Edge Responsibilities (and the Three It Declines)</a></li>
+        <li><a href="089-gateway-topology-owned-by-configuration.html">089 · Gateway Topology Owned by Configuration</a></li>
+        <li><a href="090-event-upcaster-registration.html">090 · Event Upcaster Registration Extension Point</a></li>
+        <li><a href="091-cache-backed-password-reset.html">091 · Cache-Backed Password Reset</a></li>
+        <li><a href="092-web-vitals-budget-gate.html">092 · Core Web Vitals Budget as a Shipped Test Contract and Deploy Gate</a></li>
+        <li><a href="093-container-image-posture.html">093 · Container Image Build and Runtime Posture</a></li>
+        <li><a href="094-client-entity-data-access.html">094 · Client-Side Entity Data-Access Contract</a></li>
+        <li><a href="095-soft-delete-unique-indexes.html">095 · Uniqueness Under Soft Delete (Filtered Unique Indexes)</a></li>
+        <li><a href="096-best-effort-side-effects.html">096 · Best-Effort Side-Effect Contract</a></li>
+        <li><a href="097-multi-device-refresh-sessions.html">097 · Multi-Device Refresh Sessions (Hashed, Rotating, Per Device)</a></li>
+        <li><a href="098-aspire-orchestration-not-testing-or-dashboards.html">098 · Aspire for Orchestration, Not for Testing or Production Dashboards</a></li>
+        <li><a href="099-generic-write-side-entity-commands.html">099 · Generic Write-Side Entity Commands (Create, Update, Delete Without a Handler per Aggregate)</a></li>
+        <li><a href="100-outbox-opt-in-resolved-from-messaging-mode.html">100 · The Outbox Is Resolved from the Messaging Mode, Not Always On</a></li>
+        <li><a href="101-common-metapackage.html">101 · An MMCA.Common Metapackage for the Core Six</a></li>
+        <li><a href="102-pbkdf2-only-password-hashing.html">102 · PBKDF2-Only Password Hashing</a></li>
+        <li><a href="103-bunit-component-test-tier.html">103 · bUnit Component-Test Tier as a Shipped Package</a></li>
+        <li><a href="104-smart-enums-as-opt-in-capability.html">104 · Plain Enums by Default, Enumeration&lt;T&gt; as the Opt-In Smart-Enum Base</a></li>
+        <li><a href="105-data-residency-build-gate.html">105 · The Published Data-Residency Claim as a Build Gate</a></li>
+        <li><a href="106-extension-members-as-public-di-surface.html">106 · C# Extension Members as the Public DI Registration Surface</a></li>
+        <li><a href="107-transaction-execution-contract.html">107 · Transaction Execution and Commit-Ambiguity Contract</a></li>
+        <li><a href="108-distributed-lock-primitive.html">108 · Cross-Replica Mutual Exclusion via IDistributedLock</a></li>
+        <li><a href="109-feature-by-folder-convention.html">109 · Feature-by-Folder Layout as an Enforced Convention</a></li>
+        <li><a href="110-rubric-v2-category-realignment.html">110 · Rubric Version 2, Category Realignment at 34</a></li>
+        <li><a href="111-ai-session-scoring-governance.html">111 · AI Session Scoring Governance</a></li>
+        <li><a href="112-catalog-owned-effective-pricing.html">112 · Catalog Owns Effective Pricing; Sales Snapshots It at Checkout</a></li>
+        <li><a href="113-postgresql-as-a-first-class-engine.html">113 · PostgreSQL as a First-Class Engine</a></li>
+        <li><a href="114-internal-commands-durable-job-queue.html">114 · Internal Commands, a Job Queue Built on the Outbox&#39;s Machinery</a></li>
+        <li><a href="115-strongly-typed-identifiers-opt-in.html">115 · Strongly Typed Identifiers as an Opt-In Capability, Aliases Still the Default</a></li>
+        <li><a href="116-identity-completions-opt-in.html">116 · Identity Completions Ship as Opt-In Base Classes, Not as Framework Features</a></li>
+        <li><a href="117-apphost-integration-test-base.html">117 · AppHost Integration Testing as a Shipped Package</a></li>
+        <li><a href="118-message-transport-library-policy.html">118 · Message Transport Library Policy (MassTransit v8 Pin and Exit Strategy)</a></li>
+        <li><a href="119-restrict-delete-by-default.html">119 · Delete Behavior Is an Explicit Business Rule (Restrict by Default)</a></li>
+        <li><a href="120-governed-chat-client-boundary.html">120 · Governed Language-Model Boundary (MMCA.Common.AI)</a></li>
+        <li><a href="121-ephemeral-in-process-work-queue.html">121 · Ephemeral In-Process Work Queue (Bounded Channel plus Hosted Drain)</a></li>
+        <li><a href="122-dev-only-relaxations-fail-closed.html">122 · Dev-Only Relaxations Are Environment-Gated and Fail Closed</a></li>
+        <li><a href="123-speaker-session-assets.html">123 · Speaker-Published Session Materials</a></li>
+        <li><a href="124-blazor-circuit-ceiling-ui-edge.html">124 · The Server-Rendered UI Host Is Its Own Hardened Edge</a></li>
+        <li><a href="125-parameterized-sql-only.html">125 · Parameterized SQL Only, Enforced by a Fitness Gate</a></li>
+        <li><a href="126-event-sourcing-not-adopted.html">126 · Event Sourcing Is Not Adopted</a></li>
+        <li><a href="127-actor-model-not-adopted.html">127 · The Actor Model Is Not Adopted</a></li>
+        <li><a href="128-time-as-an-input.html">128 · Time as an Input (No Ambient Clock Reads in Domain and Application)</a></li>
+        <li><a href="129-tactical-aggregate-contract.html">129 · The Tactical Aggregate Contract</a></li>
+        <li><a href="130-per-engine-data-source-strategy.html">130 · Per-Engine Data Source Strategy (Engine Facts Instead of Branching on the Enum)</a></li>
+        <li><a href="131-same-origin-api-proxy.html">131 · Same-Origin API Proxy (a Backend-for-Frontend That Keeps Tokens Out of Browser Script)</a></li>
+        <li><a href="132-build-strictness-analyzer-policy.html">132 · Build Strictness: Analyzers at Error Severity, a Shared Baseline, and CI Test Floors</a></li>
+        <li><a href="133-versioned-password-hash-work-factor.html">133 · Versioned Password Hash Work Factor</a></li>
+        <li><a href="134-cloud-neutral-core-vendor-adapters.html">134 · Cloud-Neutral Core With Vendor Adapter Packages</a></li>
+        <li><a href="135-application-namespace-keyspace-isolation.html">135 · One Application Namespace Isolates Shared Infrastructure Keyspaces</a></li>
+        <li><a href="136-installable-web-app-service-worker.html">136 · Installable Web App Through a Framework Service Worker That Never Caches a Page</a></li>
+        <li><a href="137-read-only-view-as-support-access.html">137 · Read-Only View-As Support Access (Reasoned, 15 Minutes, Visible to the User)</a></li>
+        <li><a href="138-mcp-endpoint-over-module-queries.html">138 · MCP Endpoint Over Module Queries (Opt-In, Read-Only, Governed Per Tool)</a></li>
+        <li><a href="139-passkeys-webauthn-opt-in-sign-in.html">139 · Passkeys (WebAuthn) as an Opt-In Sign-In and Second Factor</a></li>
+        <li><a href="140-machine-clients-oauth-client-credentials.html">140 · Machine Clients Through OAuth Client Credentials Backed by Service Accounts</a></li>
+        <li><a href="141-two-framework-lines-from-one-tree.html">141 · Two .NET Framework Lines From One Source Tree (net10.0 and net11.0)</a></li>
+        <li><a href="142-outbound-webhooks-and-delivery-lane.html">142 · Outbound Webhooks (Signed Delivery over Internal Commands, with a Dedicated Delivery Lane)</a></li>
+        <li><a href="143-process-manager-primitive.html">143 · Process-Manager Primitive (Consumer-Owned Process Aggregate, Timeouts over Internal Commands)</a></li>
+        <li><a href="144-offline-writes-and-delta-reads.html" aria-current="page">144 · Offline Writes and Delta Reads (Client Write Queue, Server Change Feed with Tombstones)</a></li>
+        <li><a href="145-opt-in-cursor-paging.html">145 · Opt-In Cursor Paging on List Endpoints (Beside Offset Paging)</a></li>
+        <li><a href="146-ui-page-bases-and-list-shell.html">146 · UI Page Bases and the List Shell (Bases Own Plumbing, Pages Own Model and Service Call)</a></li>
+          </ol>
+        </nav>
+      </details>
+    </aside>
+        <article class="doc-content">
+          <p class="eyebrow doc-kicker">Architecture Decision Record</p>
+          <h1 id="adr-144-offline-writes-and-delta-reads-client-write-queue-server-change-feed-with-tombstones">ADR-144: Offline Writes and Delta Reads (Client Write Queue, Server Change Feed with Tombstones)</h1>
+          <h2 id="status">Status</h2>
+          <p>Accepted (2026-11-12). Unreleased: listed under <code>[Unreleased]</code> in <code>MMCA.Common/CHANGELOG.md:7</code>, and the reference adopter is on MMCA.ADC&#39;s <code>feat/fresh-eyes-wave</code> branch.</p>
+          <h2 id="context">Context</h2>
+          <p>The framework already lets a client read while offline: <code>ILocalCacheStore</code> keeps JSON documents on the device, over <code>localStorage</code> in the browser (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/Capabilities/DeviceStorage/BrowserLocalCacheStore.cs:6</code>) and as files in an <code>mmca-cache</code> folder under the app data directory on MAUI (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI.Maui/Capabilities/DeviceStorage/MauiLocalCacheStore.cs:7</code>). Writes had no such path. A client write is an HTTP call through <code>HttpResultExecutor</code>, which turns a request that never got an answer into an <code>Http.TransportFailure</code> or <code>Http.Timeout</code> failure (<a href="013-result-pattern.html">ADR-013</a>); with the device offline, every write failed and the user&#39;s intent was lost. The reference adopter makes this concrete: an attendee in a conference hall with no signal taps the star on a session and the bookmark never reaches the server.</p>
+          <p>A client that keeps a local copy also needs to bring it up to date cheaply when it reconnects. The list endpoints answer &quot;what exists now&quot;, which forces a full re-read and cannot report a row that was deleted, because the soft-delete query filter hides it (<a href="005-soft-delete-vs-erasure.html">ADR-005</a>).</p>
+          <p>Three existing decisions shape the answer. <a href="017-request-idempotency.html">ADR-017</a> makes idempotency a per-action opt-in through <code>[Idempotent]</code> (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Idempotency/IdempotentAttribute.cs:15-16</code>): a request to such an action that carries a client-minted <code>Idempotency-Key</code> is answered from a replay cache kept 24 hours by default (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Idempotency/IdempotencySettings.cs:16</code>), so the same request sent twice runs once. <a href="035-optimistic-concurrency.html">ADR-035</a> round-trips a <code>RowVersion</code> as a weak ETag in <code>If-Match</code>, so a write based on stale data answers 412. <a href="136-installable-web-app-service-worker.html">ADR-136</a> puts a service worker in front of the installable web app and has it never cache a page or a response, because server-rendered pages carry the signed-in user&#39;s data.</p>
+          <h2 id="decision">Decision</h2>
+          <p>MMCA.Common ships two opt-in pieces: a durable client-side write queue in <code>MMCA.Common.UI</code>, and a server change feed on <code>EntityControllerBase</code> that returns the rows changed since a point in time with soft-deleted rows as tombstones. Neither is wired by the framework itself (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI/DependencyInjection.cs:402</code>, <code>MMCA.Common/Source/Presentation/MMCA.Common.API/Pagination/SupportsChangeFeedAttribute.cs:7</code>).</p>
+          <h3 id="the-client-write-queue">The client write queue</h3>
+          <ol>
+          <li><p><strong>Registration.</strong> <code>AddOfflineWriteQueue(configure)</code> registers <code>IOfflineWriteQueue</code> as <code>OfflineWriteQueue</code>, scoped, and <code>TimeProvider.System</code> unless one is registered (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI/DependencyInjection.cs:406-409</code>). In the browser hosts the connectivity service and local store the queue reads are scoped too (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/Capabilities/DependencyInjection.cs:108</code>, <code>:110</code>); the MAUI head registers its local store as a singleton (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI.Maui/DependencyInjection.cs:62</code>). <code>AddOfflineWriteHandler&lt;THandler&gt;()</code> adds one scoped <code>IOfflineWriteHandler</code> per write kind, and registering the same type again adds nothing (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI/DependencyInjection.cs:426-429</code>). The queue indexes handlers by an ordinal match on <code>Kind</code>, the first registered for a kind winning (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/Offline/OfflineWriteQueue.cs:56</code>, <code>:97-100</code>).</p>
+          </li>
+          <li><p><strong>Storage on each head.</strong> The whole queue is one <code>List&lt;PendingWrite&gt;</code> under <code>OfflineWriteQueueOptions.StorageKey</code>, default <code>mmca.offline-writes</code> (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/Offline/OfflineWriteQueueOptions.cs:7</code>), kept in the device&#39;s <code>ILocalCacheStore</code>, and the queue is available wherever the host registered a device store: its <code>IsAvailable</code> is the store&#39;s (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/Offline/OfflineWriteQueue.cs:112</code>). Three cases follow from the registrations. With the default <code>NullLocalCacheStore</code>, which <code>AddUIShared</code> registers only when nothing else did (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/Capabilities/DependencyInjection.cs:60</code>), <code>IsAvailable</code> is false (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/Capabilities/DeviceStorage/NullLocalCacheStore.cs:7</code>) and <code>EnqueueAsync</code> answers <code>OfflineWrites.Unavailable</code> (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/Offline/OfflineWriteQueue.cs:129-133</code>). A host that calls <code>AddBrowserDeviceCapabilities</code> gets <code>BrowserLocalCacheStore</code> (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/Capabilities/DependencyInjection.cs:110</code>), whose <code>IsAvailable</code> is true (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/Capabilities/DeviceStorage/BrowserLocalCacheStore.cs:20</code>): browser <code>localStorage</code> behind the <code>mmca.localCache.</code> key prefix (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/Capabilities/DeviceStorage/BrowserLocalCacheStore.cs:12</code>), reached through JS interop. The composed Blazor web-host call makes that call right after <code>AddUIShared</code> (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI.Web/Hosting/BlazorWebHostExtensions.cs:96-97</code>), so this case covers WebAssembly and a Blazor Server circuit alike: on a server circuit the writes are kept in the browser&#39;s storage, and the queue works only while the circuit is up, because every read and write crosses that circuit&#39;s JS interop and a disconnected one answers nothing (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/Capabilities/CapabilitiesJsModule.cs:41-44</code>). On MAUI the store is <code>MauiLocalCacheStore</code>, a file under the app data directory (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI.Maui/Capabilities/DeviceStorage/MauiLocalCacheStore.cs:7</code>, <code>MMCA.Common/Source/Presentation/MMCA.Common.UI.Maui/DependencyInjection.cs:62</code>). Every change re-reads, edits and writes the list back under one <code>SemaphoreSlim</code> and raises <code>PendingChanged</code> (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/Offline/OfflineWriteQueue.cs:446-470</code>); the semaphore belongs to one queue instance (<code>:61</code>), so it serializes the callers of that instance only (see Trade-offs).</p>
+          </li>
+          <li><p><strong>The pending write.</strong> <code>PendingWrite</code> carries <code>Kind</code>, <code>IdempotencyKey</code>, <code>BasedOnRowVersion</code>, <code>PayloadJson</code> (serialized with <code>JsonSerializerOptions.Web</code>), <code>CoalesceKey</code>, <code>UserScope</code>, <code>EnqueuedOn</code> and <code>Attempts</code> (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/Offline/PendingWrite.cs:15-40</code>). The caller supplies the idempotency key, the row version and the coalesce key through <code>OfflineWriteOptions</code>, all optional (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/Offline/OfflineWriteOptions.cs:7-14</code>); with no key the queue mints a GUID in <code>N</code> form (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/Offline/OfflineWriteQueue.cs:139</code>). A row version is rendered as the ADR-035 weak ETag for <code>If-Match</code> (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/Offline/PendingWrite.cs:47</code>).</p>
+          </li>
+          <li><p><strong>Per-user scoping.</strong> Each write is stamped with the signed-in user&#39;s id, read afresh from the <code>AuthenticationStateProvider</code> (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/Offline/OfflineWriteQueue.cs:143</code>, <code>:490-496</code>). Listing, cancelling and replaying see only the current user&#39;s writes, oldest first (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/Offline/OfflineWriteQueue.cs:253-256</code>). A local sign-out clears the whole local store, and with it every user&#39;s queued writes (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/Auth/AuthUIService.cs:495</code>, <code>:548</code>).</p>
+          </li>
+          <li><p><strong>The coalesce key.</strong> <code>CancelPendingAsync(coalesceKey)</code> removes every queued write of the current user with that key (ordinal) and raises no <code>WriteSettled</code> (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/Offline/IOfflineWriteQueue.cs:39-43</code>, <code>MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/Offline/OfflineWriteQueue.cs:192-207</code>).</p>
+          </li>
+          <li><p><strong>The cap.</strong> <code>MaxPendingWrites</code> defaults to 200 (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/Offline/OfflineWriteQueueOptions.cs:17</code>); an enqueue past it answers <code>OfflineWrites.QueueFull</code> (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/Offline/OfflineWriteQueue.cs:151-154</code>, <code>:172-175</code>). <code>MaxAge</code> defaults to 24 hours (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/Offline/OfflineWriteQueueOptions.cs:10-14</code>), the same as the server&#39;s default idempotency window (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Idempotency/IdempotencySettings.cs:16</code>); the two are separate settings. A pass removes as <code>Expired</code>, unsent, a write older than <code>MaxAge</code> at the start of the pass (item 8), which keeps a replay inside the server&#39;s window except at its edge (see Trade-offs).</p>
+          </li>
+          <li><p><strong>When it replays.</strong> <code>ReplayAsync</code> does nothing unless the store is available, the device is online and no other replay is running: a compare-exchange makes it single flight (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/Offline/OfflineWriteQueue.cs:212-215</code>). A replay starts in three situations: the queue starts one, unawaited, whenever connectivity changes to online (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/Offline/OfflineWriteQueue.cs:498-517</code>); <code>OfflineWriteNotifier</code> runs one on its first interactive render while online (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI/Components/Capabilities/OfflineWriteNotifier.razor:33-54</code>), and Common&#39;s <code>MainLayout</code> already hosts that component (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI/Layout/MainLayout.razor:84</code>); and the queue retries by itself (item 9).</p>
+          </li>
+          <li><p><strong>What a handler returns and what each outcome does.</strong> <code>IOfflineWriteHandler.ReplayAsync</code> sends the write with its idempotency key (and <code>If-Match</code> when set) and returns the server&#39;s answer as a <code>Result</code> (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/Offline/IOfflineWriteHandler.cs:14-23</code>). A pass walks the user&#39;s writes oldest first, and before it expires or sends one it re-checks under the semaphore that the write is still stored, skipping one that left the store since the pass read it (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/Offline/OfflineWriteQueue.cs:292-351</code>, <code>:303-309</code>, <code>:473-484</code>):</p>
+          <ul>
+          <li>older than <code>MaxAge</code>: removed as <code>Expired</code> without being sent (<code>:311-316</code>);</li>
+          <li>no handler for its kind in this app: skipped and kept (<code>:318-322</code>);</li>
+          <li>success: removed as <code>Completed</code> (<code>:264-267</code>);</li>
+          <li>a transport failure, a timeout, or an <code>Unexpected</code>, <code>TooManyRequests</code> or <code>Unauthorized</code> error, or a handler that throws any exception other than a cancellation: kept with <code>Attempts</code> incremented, and the pass stops (<code>:279-282</code>, <code>:333-344</code>);</li>
+          <li>a handler that throws <code>OperationCanceledException</code>: rethrown, so the pass ends without counting an attempt (<code>:329-332</code>) and the next retry is still scheduled (<code>:226-230</code>, <code>:362-366</code>);</li>
+          <li>any other <code>Conflict</code>: removed as <code>Conflict</code>; any other failure: removed as <code>Rejected</code> (<code>:274-276</code>).</li>
+          </ul>
+          <p>The transient check runs before the conflict check (<code>:269</code> before <code>:274</code>). A settled write leaves the store first, then <code>WriteSettled</code> fires (<code>:421-425</code>), and <code>OfflineWriteNotifier</code> turns it into a toast: a warning for <code>Conflict</code> and <code>Expired</code>, an error for <code>Rejected</code>, and a success toast for <code>Completed</code> only when <code>ShowCompleted</code> is set (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI/Components/Capabilities/OfflineWriteNotifier.razor:30</code>, <code>:88-104</code>). The outcomes are the <code>OfflineWriteOutcome</code> enum (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/Offline/OfflineWriteOutcome.cs:4-16</code>).</p>
+          </li>
+          <li><p><strong>The self-retry while online.</strong> The queue holds at most one retry timer on the injected <code>TimeProvider</code> (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/Offline/OfflineWriteQueue.cs:380-391</code>). It is set after a write with a registered handler is queued (<code>:161-170</code>) and after a pass that stopped on a transient failure or threw (<code>:358-366</code>). The first delay is 5 seconds (<code>:49</code>); it doubles after each pass that settled nothing, capped at 5 minutes (<code>:52</code>, <code>:284-285</code>), and returns to 5 seconds after a pass that settled a write (<code>:364</code>). A pass that leaves nothing to retry removes the timer, unless a replayable write was queued while it ran (<code>:367-375</code>). The timer is never created while the device reports offline (<code>:382</code>), and going offline removes it (<code>:505-514</code>), so an empty queue or an offline device holds none.</p>
+          </li>
+          </ol>
+          <h3 id="the-server-change-feed">The server change feed</h3>
+          <ol>
+          <li><strong>Opt-in per controller.</strong> <code>EntityControllerBase.GetChangesAsync</code> serves <code>GET {controller}/changes?since=&amp;cursor=&amp;pageSize=</code> (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/EntityControllerBase.cs:454-463</code>). Its <code>[OptInAction(typeof(SupportsChangeFeedAttribute))]</code> (<code>:455</code>) removes the action from the application model unless the controller carries <code>[SupportsChangeFeed]</code> (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Pagination/OptInActionAttribute.cs:24-33</code>), so a controller that did not opt in has no route and an unchanged API document (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Pagination/OptInActionAttribute.cs:11-13</code>). The attribute is inherited, so declaring it on an abstract base controller opts in every derived one (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Pagination/SupportsChangeFeedAttribute.cs:10</code>, <code>:13</code>).</li>
+          <li><strong>Paging.</strong> <code>pageSize</code> defaults to 100 and is clamped to the controller&#39;s <code>MaxPageSize</code> (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/EntityControllerBase.cs:462</code>, <code>:465</code>). The query service reads one keyset page over <code>LastModifiedOn</code> ascending through <code>GetPageByCursorAsync</code>, with <code>Id</code> as the tie-break (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Services/EntityQueryService.cs:569-570</code>, <code>:584-590</code>), and returns a <code>KeysetCollectionResult&lt;EntityChange&lt;TEntityDTO, TIdentifierType&gt;&gt;</code> with the next cursor (<code>:609</code>).</li>
+          <li><strong>The <code>since</code> bound.</strong> The bound is inclusive: <code>ChangeFeedSpecification</code> filters <code>LastModifiedOn &gt;= since</code> and omits the bound when <code>since</code> is null (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Services/Query/ChangeFeedSpecification.cs:36-41</code>). A local value is converted to UTC and an unspecified one taken as UTC (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Services/EntityQueryService.cs:613-619</code>). A client pages with one <code>since</code> until the cursor is null, then keeps the largest <code>changedOn</code> as its next <code>since</code>; boundary rows come again and are applied idempotently by id and row version (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/EntityControllerBase.cs:446-448</code>).</li>
+          <li><strong>Tombstones.</strong> The specification lifts the soft-delete filter (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Services/Query/ChangeFeedSpecification.cs:30</code>). Each row becomes an <code>EntityChange</code> with <code>Id</code>, <code>IsDeleted</code>, <code>ChangedOn</code> (<code>LastModifiedOn</code>, else <code>CreatedOn</code>) and <code>Item</code>; only live rows are mapped, so a tombstone carries no field of the deleted row (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Services/EntityQueryService.cs:596-607</code>).</li>
+          <li><strong>Scope stays in force.</strong> The rows are ANDed with the controller&#39;s <code>GetReadSpecificationAsync</code> scope (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/EntityControllerBase.cs:467-469</code>, <code>MMCA.Common/Source/Core/MMCA.Common.Application/Services/Query/ChangeFeedSpecification.cs:44-54</code>), and only the soft-delete filter is lifted, so the tenant filter and every other global filter stay in force (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Services/Query/ChangeFeedSpecification.cs:9-11</code>).</li>
+          <li><strong>A query service that predates it.</strong> <code>IEntityQueryService.GetChangesSinceAsync</code> has a default body that fails with <code>Query.ChangeFeedNotSupported</code> (<code>Unexpected</code>, 500) (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Interfaces/Mapping/IEntityQueryService.cs:34</code>, <code>:199</code>, <code>:214</code>), so a custom query service learns of the feed by answering 500 rather than returning wrong data.</li>
+          </ol>
+          <h2 id="rationale">Rationale</h2>
+          <ul>
+          <li><strong>The queue reuses the stores the client already has.</strong> Offline reads already put JSON documents in <code>ILocalCacheStore</code> on both heads, so the queue is one more document in the same store and works wherever offline reads do, with no second persistence stack on the device.</li>
+          <li><strong>Idempotency keys make a replay safe without a sync protocol.</strong> A write that may already have reached the server is resent with the same key, and ADR-017 answers it from the replay cache instead of running it twice. The queue&#39;s <code>MaxAge</code> and the server&#39;s replay window are separate settings, both 24 hours by default, so a replay falls inside the window except in the narrow case under Trade-offs. A stale edit carries its row version and gets ADR-035&#39;s 412, which the queue reports as <code>Conflict</code> instead of overwriting.</li>
+          <li><strong>The handler owns the meaning of a failure.</strong> Only the app knows that &quot;already bookmarked&quot; is a success for an add. The queue&#39;s classification covers the general case (transient keeps, conflict and refusal discard) and leaves domain equivalences to the handler.</li>
+          <li><strong>The change feed is a read over data the framework already stamps.</strong> <code>LastModifiedOn</code> and <code>IsDeleted</code> exist on every auditable entity, so the feed needs no new column, no change log table and no migration, and it reuses keyset paging and the read scope that the list endpoints already enforce.</li>
+          <li><strong>Opt-in on both sides.</strong> A consumer that registers nothing and declares no attribute sees no new service, no new route and no change to its API document.</li>
+          </ul>
+          <h2 id="trade-offs">Trade-offs</h2>
+          <ul>
+          <li><strong><code>MaxPendingWrites</code> counts every user&#39;s queued writes on the device</strong>, not the current user&#39;s: the cap check reads the whole list (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/Offline/OfflineWriteQueue.cs:151</code>). A local sign-out wipes the whole store, every user&#39;s backlog with it (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/Auth/AuthUIService.cs:495</code>, <code>:548</code>), and that clear is best-effort (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/Auth/AuthUIService.cs:536-554</code>). Another user&#39;s writes therefore count against the cap only after a session that ended without that sign-out or whose clear failed; such a backlog can refuse the next user&#39;s enqueue, and since a pass reads only the current user&#39;s writes (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/Offline/OfflineWriteQueue.cs:295</code>), it neither drains nor expires until its own user signs in again.</li>
+          <li><strong>Only a transport failure falls back to the queue in the reference adopter.</strong> A timeout, a 429 or a 5xx on the online attempt is returned to the caller as a failure, not queued (<code>MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.UI/Services/Bookmarks/SessionBookmarkUIService.cs:215-217</code>), even though the queue would keep such an error on replay. Which errors queue is the adopter&#39;s choice; the framework does not decide it.</li>
+          <li><strong>Both device stores are best-effort.</strong> On MAUI <code>MauiLocalCacheStore.SetAsync</code> swallows an <code>IOException</code> or an <code>UnauthorizedAccessException</code> (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI.Maui/Capabilities/DeviceStorage/MauiLocalCacheStore.cs:27-34</code>). In the browser <code>storageSet</code> catches a failed <code>localStorage.setItem</code>, a full quota included, and returns false (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI/wwwroot/capabilities-interop.js:141-148</code>), <code>BrowserLocalCacheStore.SetAsync</code> ignores that result (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/Capabilities/DeviceStorage/BrowserLocalCacheStore.cs:27-30</code>), and the interop wrapper turns an unavailable interop, a <code>JSDisconnectedException</code> or a <code>JSException</code> into a default answer (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/Capabilities/CapabilitiesJsModule.cs:36-48</code>). Either way a failed write loses the queued write while <code>EnqueueAsync</code> still reports success (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/Offline/OfflineWriteQueue.cs:148-175</code>). The browser store is bounded by <code>localStorage</code>&#39;s quota of roughly 5 MB (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/Capabilities/DeviceStorage/BrowserLocalCacheStore.cs:7-8</code>).</li>
+          <li><strong>The semaphore serializes the callers of one queue instance only</strong> (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/Offline/OfflineWriteQueue.cs:61</code>, <code>:449</code>). Several browser tabs or circuits share one storage key with one queue instance each, so their read-modify-write cycles can overwrite each other and lose a write. And a read failure that a store swallows comes back as an empty list (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI.Maui/Capabilities/DeviceStorage/MauiLocalCacheStore.cs:53-64</code>, <code>MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/Capabilities/DeviceStorage/BrowserLocalCacheStore.cs:50-53</code>, <code>MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/Offline/OfflineWriteQueue.cs:486-487</code>), so the next change writes that list back (<code>:452-456</code>) and drops the rest of the queue.</li>
+          <li><strong>Newest intent wins only over a write the pass has not started sending.</strong> A pass skips an entry that left the store after the pass read it (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/Offline/OfflineWriteQueue.cs:303-309</code>), but <code>CancelPendingAsync</code> does not wait for a running pass (<code>:192-207</code>), so a write cancelled while its own request is in flight still lands; the next intent, issued in full, is what corrects the server.</li>
+          <li><strong>A replay can reach the server just after it forgot the key.</strong> The server stores its replay entry after the action runs, for <code>CacheExpirationHours</code> (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Idempotency/IdempotencyFilter.cs:442-450</code>), the failed online attempt runs before the queued write&#39;s <code>EnqueuedOn</code> is stamped (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/Offline/OfflineWriteQueue.cs:144</code>), and a pass measures age once, at its start (<code>:296</code>). So with the two windows equal, a write near the edge of <code>MaxAge</code> can go out after the server evicted its key and run again unless the action refuses the duplicate itself, and a host that sets the server window (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Idempotency/IdempotencySettings.cs:15-16</code>) below <code>MaxAge</code> widens that gap.</li>
+          <li><strong>A pass stops at the first transient failure</strong>, so one write that keeps failing transiently holds back every later write of the same user until it settles or reaches <code>MaxAge</code>.</li>
+          <li><strong>Rows with no last-modified time are invisible to a time-bounded feed.</strong> <code>LastModifiedOn &gt;= since</code> never matches a null <code>LastModifiedOn</code> (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Services/Query/ChangeFeedSpecification.cs:41</code>), so a row written before the framework stamped <code>LastModifiedOn</code> on insert appears only in a full read (<code>since</code> null), where its <code>ChangedOn</code> falls back to <code>CreatedOn</code> (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Services/EntityQueryService.cs:604</code>).</li>
+          <li><strong>The <code>since</code> bound trusts the application clock.</strong> <code>LastModifiedOn</code> is stamped from the application&#39;s clock when <code>SaveChanges</code> runs, not when the transaction commits (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Interceptors/AuditSaveChangesInterceptor.cs:65</code>, <code>:83</code>, <code>:94</code>). With the largest <code>changedOn</code> as the next <code>since</code>, a row committed after a client read past its stamp, or stamped by a host whose clock runs behind, falls below that client&#39;s <code>since</code> and is missed until its next full read.</li>
+          <li><strong>A row that leaves the read scope without being deleted yields no tombstone</strong> (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/EntityControllerBase.cs:451</code>). A client that cached it keeps it until its next full read.</li>
+          <li><strong>A hard delete yields no tombstone.</strong> The audit interceptor stamps only added and modified rows and leaves an <code>EntityState.Deleted</code> row alone (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Interceptors/AuditSaveChangesInterceptor.cs:101</code>), and a row that is gone cannot match the feed, so only a soft delete is reported; a client that cached a hard-deleted row keeps it until its next full read.</li>
+          <li><strong>The feed is time-based, not a log.</strong> It reports the latest state of each changed row, not each intermediate change, and depends on <code>LastModifiedOn</code> being stamped by the save path; a write that bypasses the audit stamping is not reported.</li>
+          <li><strong>Nothing here was exercised on a physical device.</strong> The queue, the notifier and the reference adopter are covered by tests and builds only; a device run (airplane mode on a phone, an installed web app going offline) has not been performed.</li>
+          </ul>
+          <p><strong>The rule an adopter must follow, learned in the reference adopter: the newest intent for a key wins over every queued write not yet in flight, and it is always issued in full.</strong> On every new intent the adopter cancels the pending writes under the coalesce key FIRST, then sends or queues the new intent as a complete write of its own; it never cancels the queued write and stops. Cancelling removes a queued write that a replay pass has not started sending (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/Offline/OfflineWriteQueue.cs:303-309</code>), but a write whose own request is already in flight still lands, and a write queued after a transport failure may already have reached the server, so cancelling it locally does not undo it: the opposite intent must still reach the server (<code>MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.UI/Services/Bookmarks/SessionBookmarkUIService.cs:86-91</code>). Two companion rules follow from the same fact: a queued create reuses the idempotency key of the failed online request it replaces, chosen before the online attempt (<code>:93-96</code>, <code>:202</code>), and a device that already reports offline queues at once rather than spending the retry budget on a request that cannot leave it (<code>:98-103</code>). A queued delete carries no key of its own (<code>:204-208</code>): the queue mints one (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/Offline/OfflineWriteQueue.cs:139</code>) that the delete handler does not send, and neither the online nor the replayed delete sends a key (<code>MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.UI/Services/Bookmarks/BookmarkApiClient.cs:84</code>, <code>MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.UI/Services/Bookmarks/BookmarkDeleteReplayHandler.cs:57</code>); a repeated delete is safe because a bookmark the server no longer has counts as done (<code>MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.UI/Services/Bookmarks/BookmarkDeleteReplayHandler.cs:58</code>, <code>MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.UI/Services/Bookmarks/SessionBookmarkUIService.cs:181</code>).</p>
+          <h2 id="alternatives-rejected">Alternatives rejected</h2>
+          <ul>
+          <li><strong>An embedded SQLite store on the device</strong> (weighed 2026-11-12). It would give the queue transactions and queries, but it is a second persistence stack on the client beside <code>ILocalCacheStore</code>, with its own native dependency on MAUI and a WebAssembly build of its own in the browser, for a queue that holds at most a few hundred small documents. Revisit when a consumer needs offline writes that must query or join locally queued data, or when the queue outgrows the browser&#39;s <code>localStorage</code> quota.</li>
+          <li><strong>Letting the service worker queue requests</strong> (Background Sync style, weighed 2026-11-12). <a href="136-installable-web-app-service-worker.html">ADR-136</a> keeps the worker to GET navigations and has it never cache a page or a response; a worker that stores request bodies carrying the user&#39;s data and replays them outside the app would break that rule, would exist only in the browser (the MAUI head has no worker), and could not attach a fresh bearer token or classify a <code>Result</code>. Revisit if ADR-136 is superseded by a worker that is allowed to hold user data.</li>
+          <li><strong>Free-form replay without idempotency keys</strong> (weighed 2026-11-12). A write that died in transit may have reached the server, so resending it without a key can run it twice (a duplicate create, a double toggle). The key is what makes &quot;resend until answered&quot; safe. Revisit never for non-idempotent writes; a handler whose write is naturally idempotent (a PUT of a full state) may still pass any key.</li>
+          <li><strong>A full sync protocol</strong> (client-side change tracking, server-side conflict resolution and merge, weighed 2026-11-12). It solves conflicts the framework does not have: the queue holds short-lived user intents, a conflict is reported through ADR-035&#39;s 412 rather than merged, and the change feed covers the read side. Revisit when a consumer needs multi-device offline editing of the same record with automatic merge.</li>
+          </ul>
+          <h2 id="consequences">Consequences</h2>
+          <p>An adopter adds, using ADC&#39;s bookmark toggle as the worked example:</p>
+          <ol>
+          <li><strong>Register the queue and one handler per write kind.</strong> ADC&#39;s Engagement UI calls <code>AddOfflineWriteQueue()</code> and <code>AddOfflineWriteHandler&lt;&gt;()</code> for <code>BookmarkCreateReplayHandler</code> and <code>BookmarkDeleteReplayHandler</code> (<code>MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.UI/DependencyInjection.cs:41-43</code>).</li>
+          <li><strong>Name versioned kinds and a coalesce key.</strong> <code>Engagement.Bookmark.Create.v1</code> and <code>Engagement.Bookmark.Delete.v1</code> are versioned because a queued write can outlive an app update, and the coalesce key <code>bookmark:{userId}:{sessionId}</code> pairs one user&#39;s toggles of one session (<code>MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.UI/Services/Bookmarks/BookmarkOfflineWrites.cs:13</code>, <code>:16</code>, <code>:22-23</code>).</li>
+          <li><strong>Route every write through one place that applies the newest-intent rule.</strong> <code>SessionBookmarkUIService.SetBookmarkedAsync</code> cancels the pending writes for the key, mints the create&#39;s key before the online attempt, queues at once when offline, and otherwise falls back to the queue only on a transport failure (<code>MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.UI/Services/Bookmarks/SessionBookmarkUIService.cs:79-135</code>). <code>BookmarkService</code> sends both of its writes through that toggle, so every new intent first removes each queued write of the same user and session that a replay pass has not started sending; one already in flight still lands (see Trade-offs) (<code>MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.UI/Services/Bookmarks/BookmarkService.cs:12-14</code>, <code>:27-34</code>, <code>:76-81</code>). A write the queue refuses is returned as a failure, never as queued (<code>MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.UI/Services/Bookmarks/SessionBookmarkUIService.cs:210-212</code>).</li>
+          <li><strong>Write each handler to map domain equivalences to success.</strong> The create handler resends with the queued key and treats <code>UserSessionBookmark.Duplicate</code> as done, since the star already exists (<code>MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.UI/Services/Bookmarks/BookmarkCreateReplayHandler.cs:48-55</code>). The delete handler resolves a missing bookmark id through the session-ids read and counts a bookmark the server does not have, or a 404, as done (<code>MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.UI/Services/Bookmarks/BookmarkDeleteReplayHandler.cs:40-65</code>). Both return every other failure unchanged so the queue classifies it.</li>
+          <li><strong>Expose a change feed scoped to the caller.</strong> <code>BookmarksController</code> derives from <code>ApiControllerBase</code>, not <code>EntityControllerBase</code>, so it serves its own <code>GET bookmarks/changes</code> (<code>MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.API/Controllers/BookmarksController.cs:35</code>, <code>:118</code>, <code>:123</code>): behind the <code>OwnerOrAdminFilter</code> (<code>:119</code>), with a required <code>userId</code> (<code>:124</code>), a page clamped to 500 (<code>:44</code>, <code>:133</code>), and a scope of that user&#39;s rows passed to the same <code>GetChangesSinceAsync</code> (<code>:134</code>). An <code>EntityControllerBase</code> controller gets the same feed by declaring <code>[SupportsChangeFeed]</code>.</li>
+          </ol>
+          <p>What to watch: the cross-user cap on shared devices, a write held back behind a transient failure until <code>MaxAge</code>, rows with no <code>LastModifiedOn</code> in a time-bounded feed, and the first physical-device run of the offline path.</p>
+          
+        <div class="doc-foot btn-row">
+          <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
+          <a class="btn btn--ghost" href="https://github.com/ivanball/ivanball.github.io/blob/main/docs-src/adr/144-offline-writes-and-delta-reads.md" target="_blank" rel="noopener">View source on GitHub ↗</a>
+        </div>
+        </article>
+        <aside class="doc-aside" id="doc-rail">
+          <nav class="doc-toc" aria-label="On this page">
+            <p class="doc-toc-title">On this page</p>
+            <ul>
+            <li><a href="#status">Status</a></li>
+            <li><a href="#context">Context</a></li>
+            <li><a href="#decision">Decision</a></li>
+            <li><a href="#rationale">Rationale</a></li>
+            <li><a href="#trade-offs">Trade-offs</a></li>
+            <li><a href="#alternatives-rejected">Alternatives rejected</a></li>
+            <li><a href="#consequences">Consequences</a></li>
+            </ul>
+          </nav>
+        </aside>
+      </div>
+    </div>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container">
+      <div class="footer-grid">
+        <p class="footer-meta mb-0"><strong>Ivan Ball-llovera</strong> · Principal Software Architect · Douglasville, GA</p>
+        <ul class="footer-links">
+          <li><a href="../../resume.html">Résumé</a></li>
+          <li><a href="../../platform.html">Platform</a></li>
+          <li><a href="../../docs/index.html">Reference</a></li>
+          <li><a href="../../writing.html">Writing</a></li>
+          <li><a href="../../speaking.html">Speaking</a></li>
+          <li><a href="../../contact.html">Contact</a></li>
+          <li><a href="https://github.com/ivanball" target="_blank" rel="me noopener">GitHub</a></li>
+          <li><a href="https://www.linkedin.com/in/ivan-ball-llovera-6549a911" target="_blank" rel="me noopener">LinkedIn</a></li>
+        </ul>
+      </div>
+      <p class="footer-meta" style="margin-top:1rem">© <span class="js-year">2026</span> Ivan Ball-llovera. Reference docs generated from source.</p>
+    </div>
+  </footer>
+
+</body>
+</html>

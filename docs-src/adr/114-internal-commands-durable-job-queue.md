@@ -19,6 +19,9 @@ polling settings), and Related now links ADR-135, noting that the queue sits out
 shared keyspaces that record namespaces.
 Revised 2026-10-28: anchors refreshed after the infra/main.bicep edits that moved the deployed
 polling settings in ADC and Store.
+Revised 2026-11-12: a command type can be drained by a dedicated lane instead of the shared loop (one
+lane exists, for webhook deliveries), process timeouts are internal commands, and anchors into
+`InternalCommandProcessor.cs` were refreshed; see Revision below.
 
 ## Context
 The framework has had two ways to move work off the request thread and neither of them is a job
@@ -97,7 +100,7 @@ row is due yet
 (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/InternalCommands/InternalCommandScheduler.cs:129`):
 a due row runs on the wake, and a future-dated row re-arms the processor's smart wait on its
 `ScheduledOn` plus `ProcessingDelaySeconds`, floored at one second and capped at the polling
-interval (`InternalCommandProcessor.cs:101`, delegating to `PollingLoop.ComputeWaitTime` at
+interval (`InternalCommandProcessor.cs:112`, delegating to `PollingLoop.ComputeWaitTime` at
 `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Polling/PollingLoop.cs:104`). That is the
 outbox's atomicity guarantee applied to an instruction instead of an event: a transaction that
 aborts schedules nothing.
@@ -127,34 +130,34 @@ permission claims (`InternalCommandMessage.UserPermissions`,
 `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/InternalCommands/InternalCommandMessage.cs:129`),
 tenant and correlation id. The processor does not restore that context itself: before the dispatcher
 runs it calls the shared `AmbientOrigin.Restore`
-(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Context/AmbientOrigin.cs:254`, called at `InternalCommandProcessor.cs:483`), the same helper
+(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Context/AmbientOrigin.cs:254`, called at `InternalCommandProcessor.cs:545`), the same helper
 the other background hops use, so every hop restores the same shape. `Restore` sets the tenant
 first, then rebuilds a `ClaimsPrincipal` carrying the `sub` claim, one role claim per stored role and one
 `AuthClaimTypes.Permission` claim per captured permission (`AmbientOrigin.BuildPrincipal`, same file
-`:179`, permissions added at `:202`; the processor passes `row.UserPermissions` at
-`InternalCommandProcessor.cs:487`) and hands it to `ScopedUserOverride`
+`:179`, permissions added at `:203`; the processor passes `row.UserPermissions` at
+`InternalCommandProcessor.cs:549`) and hands it to `ScopedUserOverride`
 (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Context/ScopedUserOverride.cs:27`), a scoped
 carrier read by `ImpersonatingCurrentUserService`
 (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Context/ImpersonatingCurrentUserService.cs:20`),
 which decorates whatever `ICurrentUserService` the host registered
-(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:262`). With no override
+(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:279`). With no override
 set every member reads straight through, so an HTTP request behaves exactly as before.
 
 **5. Failure policy: the outbox's, with one deliberate divergence.** `InternalCommandProcessor`
-(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/InternalCommands/Processing/InternalCommandProcessor.cs:43`)
+(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/InternalCommands/Processing/InternalCommandProcessor.cs:44`)
 claims the due prefix of each batch with a lease token
-(`ClaimDueAsync`, `:286`), executes each row in a fresh DI scope, and stamps the outcome through a
-set-based update guarded by that token (`StampAsync`, `:607`) so a replica whose lease expired
+(`ClaimDueAsync`, `:333`), executes each row in a fresh DI scope, and stamps the outcome through a
+set-based update guarded by that token (`StampAsync`, `:669`) so a replica whose lease expired
 mid-execution silently drops its stale outcome. A `Result.Failure` and a thrown exception are the
 same operational fact and both consume an attempt; the backoff is
 `RetryBackoffBaseSeconds * 2^(attempts-1)` with jitter in `[0.8, 1.2]`, capped at
-`MaxRetryBackoffSeconds` (`ComputeRetryBackoffSeconds`, `:633`, delegating to the shared
+`MaxRetryBackoffSeconds` (`ComputeRetryBackoffSeconds`, `:695`, delegating to the shared
 `PollingLoop.ComputeRetryBackoffSeconds` at
 `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Polling/PollingLoop.cs:183`). A
 payload that no longer deserializes is dead-lettered on the first attempt as `payload_invalid`
-(`:374`), because retrying cannot change the stored bytes. The divergence: an unresolvable
-command type (`type_unresolvable`, `:387`) and a missing handler registration (`handler_missing`,
-`:409`) are terminal on the FIRST attempt, where the outbox
+(`:427`), because retrying cannot change the stored bytes. The divergence: an unresolvable
+command type (`type_unresolvable`, `:440`) and a missing handler registration (`handler_missing`,
+`:462`) are terminal on the FIRST attempt, where the outbox
 retries an unresolvable type once. An outbox row's type may live in an assembly that has simply not
 loaded yet; a queue row can only run on a host that registers a handler for it, and a host that
 cannot name the type has no such handler, so retrying would burn the attempt budget waiting for a
@@ -176,6 +179,59 @@ parks a command, where the outbox caps its backoff at `LeaseSeconds` and gets on
 mirrors `IOutboxAdministration`: count pending, list dead letters, requeue, purge completed. A
 requeue keeps `LastError` on purpose, because the reason a command failed is the first thing anyone
 asks after a requeue.
+
+**Dedicated lanes.** The shared processor is not necessarily the only drainer: a command type can be
+drained by a dedicated lane instead of the shared loop. A lane is an `InternalCommandLaneProcessor`
+(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/InternalCommands/Processing/InternalCommandLaneProcessor.cs:51`)
+built from an `InternalCommandLane` record naming the lane, the stored command type it claims, a
+receiver key, a concurrency and a batch start budget
+(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/InternalCommands/Processing/InternalCommandLane.cs:23`).
+Exactly one lane exists, for webhook deliveries: `WebhookDeliveryLane`
+(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Webhooks/WebhookDeliveryLane.cs:20`) registers
+the `InternalCommandLanes` registry and the lane hosted service only when `Webhooks:Enabled` and
+`InternalCommands:Enabled` are both true (`:64`, `:69`, `:73`). Every lane type is internal
+(`InternalCommandLanes.cs:10`, `InternalCommandLane.cs:23`, `InternalCommandLaneProcessor.cs:51`,
+`WebhookDeliveryLane.cs:20`), so there is no public API through which an arbitrary command names a
+lane. The shared processor resolves the excluded type once, on its first cycle, from an optional
+`InternalCommandLanes` service (`InternalCommandProcessor.cs:315`, `:320`). In a host that registers
+no lane that lookup returns null and the shared loop's fetch and backlog count are the pending
+predicate alone (`:251`, `:293`), with the same claim order (`:263`); its behaviour, queries and
+metrics are those described above. With a lane registered each of the two queries gains exactly one
+predicate, `CommandType != excluded` (`:259`, `:301`). A lane row is an ordinary
+`InternalCommandMessage` row in the same table, so the lane brought no schema change and the
+unconditional mapping of Decision 3 stands. The lane reuses the shared row runner rather than a copy
+of it: it owns a not-started `InternalCommandProcessor` (`InternalCommandLaneProcessor.cs:52`,
+constructed at `WebhookDeliveryLane.cs:74`), polls with the shared pending predicate, order and batch
+size (`InternalCommandLaneProcessor.cs:23`), and calls that processor's `ClaimDueAsync`,
+`RenewClaimAsync`, `ExecuteClaimedAsync` and `RecordFailedAttemptAsync`
+(`InternalCommandLaneProcessor.cs:276`, `:475`, `:482`, `:525`), which the processor exposes as
+internal members (`InternalCommandProcessor.cs:333`, `:381`, `:407`, `:489`) along with its
+`Settings` (`:72`). Retry, backoff, `MaxAttempts`, dead-lettering and requeue therefore run through
+the same code for a lane row as for a shared row. What differs is what counts as an attempt: while a
+receiver cools down the lane charges each of its due rows one failed attempt without running the
+handler (`InternalCommandLaneProcessor.cs:515-535`), so a lane row can reach `MaxAttempts` and
+dead-letter on fewer real sends than a shared row gets runs
+([ADR-142](142-outbound-webhooks-and-delivery-lane.md)). The one addition to the row runner is an optional observer on
+`ExecuteClaimedAsync` (`:413`), invoked just before a failed attempt is recorded, which the shared
+loop never passes and the lane uses to cool a failing receiver down (`ReceiverCooldowns.cs:10`). One
+`Signal()` wakes both loops: the framework signal keeps a second wake that exists only once a lane
+creates it (`InternalCommandSignal.cs:19`, `:28`, `:39`), so neither steals the other's permit. The
+lane reports on the same `MMCA.Common.InternalCommands` meter through its own
+`internal_commands.lane.*` instruments tagged by `lane` (`InternalCommandMetrics.cs:128`, `:137`,
+`:143`, `:153`, `:160`). The lane's own rules (concurrency, the per-receiver cooldown, the batch start
+budget) are recorded in [ADR-142](142-outbound-webhooks-and-delivery-lane.md).
+
+**Process timeouts are internal commands.** A process manager's timeout is an
+`IProcessTimeoutCommand<TProcessId>`, which derives from `IInternalCommand`
+(`MMCA.Common/Source/Core/MMCA.Common.Application/ProcessManagers/IProcessTimeoutCommand.cs:17`).
+`ProcessTimeoutScheduler` arms it with one `IInternalCommandScheduler.ScheduleAsync` call at the
+injected clock's now plus the delay, refusing a delay that is not strictly positive
+(`MMCA.Common/Source/Core/MMCA.Common.Application/ProcessManagers/ProcessTimeoutScheduler.cs:13`,
+`:29`, `:38`), and a consumer handles it with a subclass of `ProcessTimeoutHandlerBase`, an ordinary
+`ICommandHandler<TCommand, Result>`
+(`MMCA.Common/Source/Core/MMCA.Common.Application/ProcessManagers/ProcessTimeoutHandlerBase.cs:36`,
+`:40`). A timeout therefore rides this queue's scheduling, decorator pipeline and failure policy
+unchanged; the process manager primitive is [ADR-143](143-process-manager-primitive.md).
 
 ## Rationale
 Four alternatives were weighed, and each one gave up the atomicity guarantee or duplicated a
@@ -256,7 +312,9 @@ side, each with its own signal instance so a burst of schedules cannot consume t
 pending wake-up. Both poll spans are suppressed from telemetry export by the same Aspire processor
 (`MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Telemetry/OutboxPollFilterProcessor.cs:63`), and the
 queue's metrics land on their own `MMCA.Common.InternalCommands` meter
-(`.../Persistence/InternalCommands/Processing/InternalCommandMetrics.cs:20`).
+(`.../Persistence/InternalCommands/Processing/InternalCommandMetrics.cs:20`). A host that registers a
+dedicated lane runs a third loop beside these two (see "Dedicated lanes" above and
+[ADR-142](142-outbound-webhooks-and-delivery-lane.md)).
 
 **What this unlocks.** Templated email, outbound webhooks with retry, tenant provisioning, saga
 timeouts and an operations console over deferred work now share one durable substrate with one
@@ -365,6 +423,22 @@ unchanged; only the deployed polling anchors moved.
    `MMCA.Store/infra/main.bicep:1596` and `:1589`). The 2026-10-01, 2026-10-06, 2026-10-07,
    2026-10-21 and 2026-10-26 revisions keep their dated anchors as written.
 
+## Revision (2026-11-12)
+Re-verified against current source. The decision, the five parts, the failure policy and the settings
+defaults are unchanged; Decision gained two paragraphs and anchors into `InternalCommandProcessor.cs`
+moved.
+
+1. Decision now records dedicated lanes (one exists, for webhook deliveries,
+   [ADR-142](142-outbound-webhooks-and-delivery-lane.md)) and process timeouts
+   ([ADR-143](143-process-manager-primitive.md)) as part of this queue.
+2. Anchors re-verified against current source: the smart wait (`InternalCommandProcessor.cs:112`),
+   the `AmbientOrigin.Restore` call and `row.UserPermissions` (`:545`, `:549`), the permission claims
+   (`AmbientOrigin.cs:203`), the `ICurrentUserService` decoration (`DependencyInjection.cs:279`),
+   `InternalCommandProcessor` (`:44`), `ClaimDueAsync` (`:333`), `StampAsync` (`:669`),
+   `ComputeRetryBackoffSeconds` (`:695`), and the `payload_invalid`, `type_unresolvable` and
+   `handler_missing` dead letters (`:427`, `:440`, `:462`). The earlier revisions keep their dated
+   anchors as written.
+
 ## Related
 [ADR-003](003-outbox-dual-dispatch.md) (the claim-lease, backoff and dead-letter machinery this
 record borrows as an idiom),
@@ -376,4 +450,8 @@ unchanged),
 [ADR-100](100-outbox-opt-in-resolved-from-messaging-mode.md) (why an always-mapped table is not a
 migration decision),
 [ADR-135](135-application-namespace-keyspace-isolation.md) (the application namespace for shared
-keyspaces, which does not reach this per-source table).
+keyspaces, which does not reach this per-source table),
+[ADR-142](142-outbound-webhooks-and-delivery-lane.md) (outbound webhooks, whose deliveries are the one
+command type drained by a dedicated lane),
+[ADR-143](143-process-manager-primitive.md) (the process-manager primitive, whose timeouts are
+internal commands).

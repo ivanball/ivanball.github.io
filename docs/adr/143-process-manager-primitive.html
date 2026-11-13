@@ -1,0 +1,566 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#0e151f" media="(prefers-color-scheme: dark)">
+  <title>ADR-143: Process-Manager Primitive (Consumer-Owned Process Aggregate, Timeouts over Internal Commands) · MMCA · Ivan Ball-llovera</title>
+  <meta name="description" content="Accepted (2026-11-12). The primitive is listed under [Unreleased] in MMCA.Common (MMCA.Common/CHANGELOG.md:7,43) and ships in the next release; it is…">
+  <link rel="canonical" href="https://ivanball.github.io/docs/adr/143-process-manager-primitive.html">
+  <link rel="icon" href="../../assets/img/favicon.svg" type="image/svg+xml">
+  <link rel="alternate" type="application/rss+xml" title="Ivan Ball-llovera: deep dives on enterprise .NET" href="https://ivanball.github.io/feed.xml">
+  <meta property="og:type" content="article">
+  <meta property="og:site_name" content="Ivan Ball-llovera">
+  <meta property="og:title" content="ADR-143: Process-Manager Primitive (Consumer-Owned Process Aggregate, Timeouts over Internal Commands)">
+  <meta property="og:description" content="Accepted (2026-11-12). The primitive is listed under [Unreleased] in MMCA.Common (MMCA.Common/CHANGELOG.md:7,43) and ships in the next release; it is…">
+  <meta property="og:url" content="https://ivanball.github.io/docs/adr/143-process-manager-primitive.html">
+  <meta property="og:image" content="https://ivanball.github.io/assets/img/og-image.png">
+  <meta property="og:image:alt" content="Ivan Ball-llovera, Principal Software Architect">
+  <meta property="og:locale" content="en_US">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="ADR-143: Process-Manager Primitive (Consumer-Owned Process Aggregate, Timeouts over Internal Commands)">
+  <meta name="twitter:description" content="Accepted (2026-11-12). The primitive is listed under [Unreleased] in MMCA.Common (MMCA.Common/CHANGELOG.md:7,43) and ships in the next release; it is…">
+  <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Platform","item":"https://ivanball.github.io/platform.html"},{"@type":"ListItem","position":2,"name":"Reference","item":"https://ivanball.github.io/docs/index.html"},{"@type":"ListItem","position":3,"name":"Architecture Decision Records","item":"https://ivanball.github.io/docs/adr/index.html"},{"@type":"ListItem","position":4,"name":"143 · Process-Manager Primitive (Consumer-Owned Process Aggregate, Timeouts over Internal Commands)","item":"https://ivanball.github.io/docs/adr/143-process-manager-primitive.html"}]}</script>
+  <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);if(localStorage.getItem('mmca-rail')==='hidden')document.documentElement.setAttribute('data-rail','hidden');if(localStorage.getItem('mmca-cites')==='shown')document.documentElement.setAttribute('data-cites','shown');}catch(e){}})();</script>
+  <link rel="preload" href="../../assets/fonts/inter-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="../../assets/fonts/jetbrains-mono-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="../../assets/css/styles.css">
+  <link rel="stylesheet" href="../../assets/css/docs.css">
+  <script defer src="../../assets/js/main.js"></script>
+  <script defer src="../../assets/js/search.js"></script>
+  <script defer src="../../assets/js/analytics.js"></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+
+  <header class="site-header">
+    <div class="container nav">
+      <a class="brand" href="../../index.html">
+        <span class="brand-mark" aria-hidden="true">IB</span>
+        <span>Ivan Ball-llovera</span>
+      </a>
+      <nav aria-label="Primary">
+        <ul class="nav-links" id="nav-links">
+          <li><a href="../../index.html">Home</a></li>
+          <li><a href="../../resume.html">Résumé</a></li>
+          <li><a href="../../platform.html">Platform</a></li>
+          <li><a href="../../docs/index.html" aria-current="page">Reference</a></li>
+          <li><a href="../../writing.html">Writing</a></li>
+          <li><a href="../../speaking.html">Speaking</a></li>
+          <li><a href="../../contact.html">Contact</a></li>
+        </ul>
+      </nav>
+      <div class="nav-tools">
+        <button class="icon-btn search-open" type="button" aria-label="Search the site" data-search-open>
+          <span aria-hidden="true">⌕</span>
+        </button>
+        <button class="icon-btn theme-toggle" type="button" aria-label="Switch color theme">
+          <span class="sun" aria-hidden="true">☀</span><span class="moon" aria-hidden="true">☾</span>
+        </button>
+        <button class="icon-btn nav-toggle" type="button" aria-label="Toggle navigation menu" aria-expanded="false" aria-controls="nav-links">☰</button>
+      </div>
+    </div>
+  </header>
+  <dialog class="search-dialog" id="site-search" aria-label="Search this site">
+    <form class="search-box" method="dialog" role="search">
+      <span class="search-icon" aria-hidden="true">⌕</span>
+      <input class="search-input" type="search" id="site-search-input" placeholder="Search ADRs, guides, chapters, articles…"
+             autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
+             aria-controls="site-search-results" aria-describedby="site-search-status">
+      <button class="btn btn--ghost search-close" type="button" data-search-close>Esc</button>
+    </form>
+    <p class="search-status" id="site-search-status" role="status" aria-live="polite"></p>
+    <ul class="search-results" id="site-search-results"></ul>
+    <p class="search-foot">
+      <span><kbd>↑</kbd><kbd>↓</kbd> to navigate</span>
+      <span><kbd>Enter</kbd> to open</span>
+      <span><kbd>"…"</kbd> all these words</span>
+      <span><kbd>AND</kbd><kbd>OR</kbd> to combine</span>
+    </p>
+  </dialog>
+
+  <main id="main">
+    <div class="container doc-container">
+      <nav class="doc-breadcrumb" aria-label="Breadcrumb">
+        <a href="../../platform.html">Platform</a>
+        <span aria-hidden="true">/</span>
+        <a href="../../docs/index.html">Reference</a>
+        <span aria-hidden="true">/</span>
+        <a href="../../docs/adr/index.html">Architecture Decision Records</a>
+        <span aria-hidden="true">/</span>
+        <span class="current">143 · Process-Manager Primitive (Consumer-Owned Process Aggregate, Timeouts over Internal Commands)</span>
+        <button class="rail-toggle" type="button" data-rail-toggle aria-expanded="true" aria-controls="doc-rail">On this page</button>
+      </nav>
+      <div class="doc-layout doc-layout--toc">
+      <aside class="doc-sidebar">
+      <details class="doc-sidebar-details" open>
+        <summary>All 146 ADRs</summary>
+        <nav class="doc-nav" aria-label="Architecture Decision Records">
+          <ol>
+        <li><a href="index.html">Overview</a></li>
+        <li><a href="001-manual-dto-mapping.html">001 · Manual DTO Mapping over AutoMapper</a></li>
+        <li><a href="002-navigation-populators.html">002 · NavigationPopulators for Cross-Container Loading</a></li>
+        <li><a href="003-outbox-dual-dispatch.html">003 · Outbox Pattern with Dual Dispatch</a></li>
+        <li><a href="004-authentication-dual-fetch.html">004 · Cross-Service Token Validation via JWKS / OIDC Discovery</a></li>
+        <li><a href="005-soft-delete-vs-erasure.html">005 · Soft-Delete vs. Right-to-Erasure</a></li>
+        <li><a href="006-database-per-service.html">006 · Database per Service</a></li>
+        <li><a href="007-grpc-extraction.html">007 · Synchronous Cross-Service Calls via gRPC Contracts</a></li>
+        <li><a href="008-service-extraction-topology.html">008 · Extraction of the Modular Monolith into Per-Module Services + Gateway</a></li>
+        <li><a href="009-resilience-and-recovery-objectives.html">009 · Resilience Policies &amp; Recovery Objectives</a></li>
+        <li><a href="010-integration-event-schema-versioning.html">010 · Integration-Event Schema Versioning &amp; Upcaster Policy</a></li>
+        <li><a href="011-single-locale-i18n.html">011 · Single-Locale by Design (No Internationalization)</a></li>
+        <li><a href="012-grpc-host-transport.html">012 · gRPC-Host Transport Convention (Http2-only h2c vs. Http1AndHttp2 + ALPN)</a></li>
+        <li><a href="013-result-pattern.html">013 · Result Pattern over Exceptions for Flow Control</a></li>
+        <li><a href="014-cqrs-decorator-pipeline.html">014 · CQRS Handlers with a Decorator Pipeline</a></li>
+        <li><a href="015-architecture-fitness-functions.html">015 · Architecture Invariants Enforced as Fitness Functions</a></li>
+        <li><a href="016-lockstep-versioning-masstransit-pin.html">016 · Lockstep Package Versioning and the MassTransit-v8 Pin</a></li>
+        <li><a href="017-request-idempotency.html">017 · HTTP Request Idempotency via Client-Supplied Keys</a></li>
+        <li><a href="018-polyglot-persistence.html">018 · Polyglot Persistence (Multiple Storage Engines Behind One Model)</a></li>
+        <li><a href="019-rate-limiting.html">019 · Layered Rate Limiting with an Authenticated-Only Global Limiter</a></li>
+        <li><a href="020-permission-based-authorization.html">020 · Permission-Based Authorization Layered over Roles</a></li>
+        <li><a href="021-consumer-inbox-idempotency.html">021 · Consumer-Side Inbox for Integration-Event Idempotency</a></li>
+        <li><a href="022-browser-session-cookie-auth.html">022 · Browser Session-Cookie Authentication for Blazor SSR</a></li>
+        <li><a href="023-security-response-headers.html">023 · Centralized Security-Response-Headers Middleware with a Pluggable CSP</a></li>
+        <li><a href="024-push-notifications.html">024 · Two-Channel User Notifications (Transient SignalR Push + Durable Inbox)</a></li>
+        <li><a href="025-startup-warmup-readiness.html">025 · Startup Warm-Up and Readiness Gating for Cold-Start Mitigation</a></li>
+        <li><a href="026-caching-strategy.html">026 · Two-Tier Caching: a Swappable ICacheService Substrate plus an HTTP Output-Cache Edge</a></li>
+        <li><a href="027-multi-locale-i18n.html">027 · Multi-Locale Internationalization (Supersedes ADR-011)</a></li>
+        <li><a href="028-dark-theme-mode.html">028 · Day/Dark Theme Mode</a></li>
+        <li><a href="029-authentication-brute-force-protection.html">029 · Authentication Brute-Force Protection and Registration Throttling</a></li>
+        <li><a href="030-startup-sole-migrator.html">030 · Each Service Self-Applies Its Migrations at Startup (Sole Migrator)</a></li>
+        <li><a href="031-feature-flag-management.html">031 · Config-Driven Feature Flags with Dual-Surface Enforcement</a></li>
+        <li><a href="032-password-hashing.html">032 · Password Hashing (PBKDF2-HMAC-SHA512) with Legacy-Hash Backward Compatibility</a></li>
+        <li><a href="033-resource-ownership-authorization.html">033 · Resource-Ownership Authorization (Row-Level + Action Filter)</a></li>
+        <li><a href="034-generic-entity-query-layer.html">034 · Generic Entity Controllers with a Dynamic Query Contract</a></li>
+        <li><a href="035-optimistic-concurrency.html">035 · Optimistic Concurrency via RowVersion Round-Trip</a></li>
+        <li><a href="036-external-oauth-login.html">036 · External OAuth Login (Federated Google/GitHub/Apple) with Local-JWT Exchange</a></li>
+        <li><a href="037-field-level-encryption-at-rest.html">037 · Field-Level Encryption at Rest (AES-256-GCM EF Converter)</a></li>
+        <li><a href="038-supply-chain-provenance.html">038 · Supply-Chain Provenance (SBOM Release Gate + Lock Files + Vulnerability Audit)</a></li>
+        <li><a href="039-live-channel-push.html">039 · Live channel push (ephemeral events over the notification hub)</a></li>
+        <li><a href="040-authenticated-output-caching-for-public-reads.html">040 · Authenticated output caching for public reads</a></li>
+        <li><a href="041-observability-and-telemetry.html">041 · Observability and Telemetry Strategy</a></li>
+        <li><a href="042-device-capability-abstraction.html">042 · Device Capability Abstraction (MAUI Blazor Hybrid)</a></li>
+        <li><a href="043-mobile-deep-links-and-native-oauth-callback.html">043 · Mobile Deep Links, App Association, and the Native OAuth Callback</a></li>
+        <li><a href="044-native-push-delivery.html">044 · Native Push Delivery (the Third Notification Channel)</a></li>
+        <li><a href="045-managed-file-storage-and-avatars.html">045 · Managed File Storage and User Avatars</a></li>
+        <li><a href="046-http-api-versioning.html">046 · HTTP API Versioning Strategy</a></li>
+        <li><a href="047-soft-deleted-user-session-revocation.html">047 · Runtime Revocation of Soft-Deleted Users&#39; Active Sessions</a></li>
+        <li><a href="048-primitive-identifier-type-aliases.html">048 · Primitive Identifier Type Aliases over Strongly-Typed ID Structs</a></li>
+        <li><a href="049-library-configureawait-policy.html">049 · Library-Scoped ConfigureAwait(false) Policy (CA2007)</a></li>
+        <li><a href="050-jwt-refresh-token-rotation.html">050 · JWT Access Tokens with a Single Rotating Refresh Token and Reuse Detection</a></li>
+        <li><a href="051-client-auth-token-lifecycle.html">051 · Client-Side Authentication Token Lifecycle Across Render Modes</a></li>
+        <li><a href="052-background-job-execution.html">052 · Background Job Execution (Bounded Queue plus Hosted Drain)</a></li>
+        <li><a href="053-dual-registry-package-publishing.html">053 · Dual-Registry Package Publishing (nuget.org plus GitHub Packages)</a></li>
+        <li><a href="054-saga-compensation-and-reconciliation.html">054 · Choreographed Saga Compensation with a Reconciliation Backstop</a></li>
+        <li><a href="055-repository-and-specification-contract.html">055 · Repository plus Specification as the Data-Access Contract</a></li>
+        <li><a href="056-blazor-render-mode-strategy.html">056 · Blazor Render-Mode Strategy for the Web Heads</a></li>
+        <li><a href="057-expand-contract-schema-evolution-gate.html">057 · Expand/Contract Schema Evolution Enforced as a CI Gate</a></li>
+        <li><a href="058-runtime-conformance-suites-as-a-package.html">058 · Runtime Conformance Suites Shipped as a Package</a></li>
+        <li><a href="059-module-contract-and-composition.html">059 · The IModule Contract and Reflection-Based Module Composition</a></li>
+        <li><a href="060-performance-regression-gate.html">060 · Performance-Regression Gate (Committed Benchmark Baseline in CI)</a></li>
+        <li><a href="061-runtime-secret-management.html">061 · Runtime Secret Management via Key Vault References and Managed Identity</a></li>
+        <li><a href="062-slo-alerting-as-code.html">062 · SLO Alerting as Code with an Alert-to-Runbook Build Gate</a></li>
+        <li><a href="063-accessibility-conformance-gate.html">063 · WCAG 2.1 AA Accessibility as a Shipped Test Contract and CI Gate</a></li>
+        <li><a href="064-deploy-recency-gates.html">064 · Deploy Preconditions as Proof-of-Recency Gates</a></li>
+        <li><a href="065-scaffolding-templates.html">065 · Scaffolding templates derived from the reference app</a></li>
+        <li><a href="066-broker-transport-selection.html">066 · Broker Transport Selection and Dev/Prod Parity</a></li>
+        <li><a href="067-ui-module-shell-composition.html">067 · Shared Blazor Application Shell and IUIModule Composition</a></li>
+        <li><a href="068-value-objects-as-validated-primitives.html">068 · Value Objects as Validated Domain Primitives</a></li>
+        <li><a href="069-shared-data-protection-key-ring.html">069 · Shared DataProtection Key Ring for Scaled-Out Hosts</a></li>
+        <li><a href="070-fail-fast-configuration-contract.html">070 · Fail-Fast Configuration Contract</a></li>
+        <li><a href="071-barcode-scanning-and-qr-display.html">071 · Device Capability Pattern for Barcode Scanning and QR Display</a></li>
+        <li><a href="072-qr-badge-check-in-and-points.html">072 · QR Badge Check-In and Points Gamification in ADC</a></li>
+        <li><a href="073-multi-tenancy-model.html">073 · Multi-Tenancy (Shared-Schema Query Filter plus DB-per-Tenant Routing)</a></li>
+        <li><a href="074-recurring-job-scheduler.html">074 · Recurring Job Scheduler (Persistent Cron Jobs on the Outbox Claim-Lease Pattern)</a></li>
+        <li><a href="075-audit-trail.html">075 · Audit Trail (Same-Transaction Field-Level Change History)</a></li>
+        <li><a href="076-data-subject-export.html">076 · Data-Subject Export (DSAR) as a Framework Contract</a></li>
+        <li><a href="077-hybridcache-substrate.html">077 · HybridCache as an Opt-In ICacheService Substrate (Amends ADR-026)</a></li>
+        <li><a href="078-csv-export-endpoint.html">078 · CSV Export as a Dedicated Endpoint, Not Content Negotiation</a></li>
+        <li><a href="079-shared-http-middleware-pipeline.html">079 · One Shared, Ordered HTTP Middleware Pipeline for Every Service Host</a></li>
+        <li><a href="080-deploy-rollout-revision-rollback.html">080 · Production Rollout with Automatic Revision-Only Rollback</a></li>
+        <li><a href="081-cost-baseline-deploy-gate.html">081 · The Cost Baseline as a Hard Deploy Gate</a></li>
+        <li><a href="082-two-tier-cors-posture.html">082 · Two-Tier Cross-Origin Posture: Allow-Listed Service Policies, an Any-Header Gateway Policy</a></li>
+        <li><a href="083-crud-lifecycle-event-taxonomy.html">083 · One CRUD Lifecycle Event per Entity with a State Discriminator</a></li>
+        <li><a href="084-stripe-webhook-ingress.html">084 · Stripe Webhook Ingress (Acceptance-Coded Responses and Startup Self-Registration)</a></li>
+        <li><a href="085-identifier-type-aliases-revisited.html">085 · Identifier Type Aliases Revisited (Wrapper Structs Deferred Again, With Triggers)</a></li>
+        <li><a href="086-process-manager-deferred.html">086 · A Process Manager Is Deferred, Not Absent (Relates to ADR-054)</a></li>
+        <li><a href="087-broker-poison-message-handling.html">087 · Broker Poison-Message Handling: Second-Level Redelivery and Fault Observability</a></li>
+        <li><a href="088-gateway-edge-responsibilities.html">088 · Gateway Edge Responsibilities (and the Three It Declines)</a></li>
+        <li><a href="089-gateway-topology-owned-by-configuration.html">089 · Gateway Topology Owned by Configuration</a></li>
+        <li><a href="090-event-upcaster-registration.html">090 · Event Upcaster Registration Extension Point</a></li>
+        <li><a href="091-cache-backed-password-reset.html">091 · Cache-Backed Password Reset</a></li>
+        <li><a href="092-web-vitals-budget-gate.html">092 · Core Web Vitals Budget as a Shipped Test Contract and Deploy Gate</a></li>
+        <li><a href="093-container-image-posture.html">093 · Container Image Build and Runtime Posture</a></li>
+        <li><a href="094-client-entity-data-access.html">094 · Client-Side Entity Data-Access Contract</a></li>
+        <li><a href="095-soft-delete-unique-indexes.html">095 · Uniqueness Under Soft Delete (Filtered Unique Indexes)</a></li>
+        <li><a href="096-best-effort-side-effects.html">096 · Best-Effort Side-Effect Contract</a></li>
+        <li><a href="097-multi-device-refresh-sessions.html">097 · Multi-Device Refresh Sessions (Hashed, Rotating, Per Device)</a></li>
+        <li><a href="098-aspire-orchestration-not-testing-or-dashboards.html">098 · Aspire for Orchestration, Not for Testing or Production Dashboards</a></li>
+        <li><a href="099-generic-write-side-entity-commands.html">099 · Generic Write-Side Entity Commands (Create, Update, Delete Without a Handler per Aggregate)</a></li>
+        <li><a href="100-outbox-opt-in-resolved-from-messaging-mode.html">100 · The Outbox Is Resolved from the Messaging Mode, Not Always On</a></li>
+        <li><a href="101-common-metapackage.html">101 · An MMCA.Common Metapackage for the Core Six</a></li>
+        <li><a href="102-pbkdf2-only-password-hashing.html">102 · PBKDF2-Only Password Hashing</a></li>
+        <li><a href="103-bunit-component-test-tier.html">103 · bUnit Component-Test Tier as a Shipped Package</a></li>
+        <li><a href="104-smart-enums-as-opt-in-capability.html">104 · Plain Enums by Default, Enumeration&lt;T&gt; as the Opt-In Smart-Enum Base</a></li>
+        <li><a href="105-data-residency-build-gate.html">105 · The Published Data-Residency Claim as a Build Gate</a></li>
+        <li><a href="106-extension-members-as-public-di-surface.html">106 · C# Extension Members as the Public DI Registration Surface</a></li>
+        <li><a href="107-transaction-execution-contract.html">107 · Transaction Execution and Commit-Ambiguity Contract</a></li>
+        <li><a href="108-distributed-lock-primitive.html">108 · Cross-Replica Mutual Exclusion via IDistributedLock</a></li>
+        <li><a href="109-feature-by-folder-convention.html">109 · Feature-by-Folder Layout as an Enforced Convention</a></li>
+        <li><a href="110-rubric-v2-category-realignment.html">110 · Rubric Version 2, Category Realignment at 34</a></li>
+        <li><a href="111-ai-session-scoring-governance.html">111 · AI Session Scoring Governance</a></li>
+        <li><a href="112-catalog-owned-effective-pricing.html">112 · Catalog Owns Effective Pricing; Sales Snapshots It at Checkout</a></li>
+        <li><a href="113-postgresql-as-a-first-class-engine.html">113 · PostgreSQL as a First-Class Engine</a></li>
+        <li><a href="114-internal-commands-durable-job-queue.html">114 · Internal Commands, a Job Queue Built on the Outbox&#39;s Machinery</a></li>
+        <li><a href="115-strongly-typed-identifiers-opt-in.html">115 · Strongly Typed Identifiers as an Opt-In Capability, Aliases Still the Default</a></li>
+        <li><a href="116-identity-completions-opt-in.html">116 · Identity Completions Ship as Opt-In Base Classes, Not as Framework Features</a></li>
+        <li><a href="117-apphost-integration-test-base.html">117 · AppHost Integration Testing as a Shipped Package</a></li>
+        <li><a href="118-message-transport-library-policy.html">118 · Message Transport Library Policy (MassTransit v8 Pin and Exit Strategy)</a></li>
+        <li><a href="119-restrict-delete-by-default.html">119 · Delete Behavior Is an Explicit Business Rule (Restrict by Default)</a></li>
+        <li><a href="120-governed-chat-client-boundary.html">120 · Governed Language-Model Boundary (MMCA.Common.AI)</a></li>
+        <li><a href="121-ephemeral-in-process-work-queue.html">121 · Ephemeral In-Process Work Queue (Bounded Channel plus Hosted Drain)</a></li>
+        <li><a href="122-dev-only-relaxations-fail-closed.html">122 · Dev-Only Relaxations Are Environment-Gated and Fail Closed</a></li>
+        <li><a href="123-speaker-session-assets.html">123 · Speaker-Published Session Materials</a></li>
+        <li><a href="124-blazor-circuit-ceiling-ui-edge.html">124 · The Server-Rendered UI Host Is Its Own Hardened Edge</a></li>
+        <li><a href="125-parameterized-sql-only.html">125 · Parameterized SQL Only, Enforced by a Fitness Gate</a></li>
+        <li><a href="126-event-sourcing-not-adopted.html">126 · Event Sourcing Is Not Adopted</a></li>
+        <li><a href="127-actor-model-not-adopted.html">127 · The Actor Model Is Not Adopted</a></li>
+        <li><a href="128-time-as-an-input.html">128 · Time as an Input (No Ambient Clock Reads in Domain and Application)</a></li>
+        <li><a href="129-tactical-aggregate-contract.html">129 · The Tactical Aggregate Contract</a></li>
+        <li><a href="130-per-engine-data-source-strategy.html">130 · Per-Engine Data Source Strategy (Engine Facts Instead of Branching on the Enum)</a></li>
+        <li><a href="131-same-origin-api-proxy.html">131 · Same-Origin API Proxy (a Backend-for-Frontend That Keeps Tokens Out of Browser Script)</a></li>
+        <li><a href="132-build-strictness-analyzer-policy.html">132 · Build Strictness: Analyzers at Error Severity, a Shared Baseline, and CI Test Floors</a></li>
+        <li><a href="133-versioned-password-hash-work-factor.html">133 · Versioned Password Hash Work Factor</a></li>
+        <li><a href="134-cloud-neutral-core-vendor-adapters.html">134 · Cloud-Neutral Core With Vendor Adapter Packages</a></li>
+        <li><a href="135-application-namespace-keyspace-isolation.html">135 · One Application Namespace Isolates Shared Infrastructure Keyspaces</a></li>
+        <li><a href="136-installable-web-app-service-worker.html">136 · Installable Web App Through a Framework Service Worker That Never Caches a Page</a></li>
+        <li><a href="137-read-only-view-as-support-access.html">137 · Read-Only View-As Support Access (Reasoned, 15 Minutes, Visible to the User)</a></li>
+        <li><a href="138-mcp-endpoint-over-module-queries.html">138 · MCP Endpoint Over Module Queries (Opt-In, Read-Only, Governed Per Tool)</a></li>
+        <li><a href="139-passkeys-webauthn-opt-in-sign-in.html">139 · Passkeys (WebAuthn) as an Opt-In Sign-In and Second Factor</a></li>
+        <li><a href="140-machine-clients-oauth-client-credentials.html">140 · Machine Clients Through OAuth Client Credentials Backed by Service Accounts</a></li>
+        <li><a href="141-two-framework-lines-from-one-tree.html">141 · Two .NET Framework Lines From One Source Tree (net10.0 and net11.0)</a></li>
+        <li><a href="142-outbound-webhooks-and-delivery-lane.html">142 · Outbound Webhooks (Signed Delivery over Internal Commands, with a Dedicated Delivery Lane)</a></li>
+        <li><a href="143-process-manager-primitive.html" aria-current="page">143 · Process-Manager Primitive (Consumer-Owned Process Aggregate, Timeouts over Internal Commands)</a></li>
+        <li><a href="144-offline-writes-and-delta-reads.html">144 · Offline Writes and Delta Reads (Client Write Queue, Server Change Feed with Tombstones)</a></li>
+        <li><a href="145-opt-in-cursor-paging.html">145 · Opt-In Cursor Paging on List Endpoints (Beside Offset Paging)</a></li>
+        <li><a href="146-ui-page-bases-and-list-shell.html">146 · UI Page Bases and the List Shell (Bases Own Plumbing, Pages Own Model and Service Call)</a></li>
+          </ol>
+        </nav>
+      </details>
+    </aside>
+        <article class="doc-content">
+          <p class="eyebrow doc-kicker">Architecture Decision Record</p>
+          <h1 id="adr-143-process-manager-primitive-consumer-owned-process-aggregate-timeouts-over-internal-commands">ADR-143: Process-Manager Primitive (Consumer-Owned Process Aggregate, Timeouts over Internal Commands)</h1>
+          <h2 id="status">Status</h2>
+          <p>Accepted (2026-11-12). The primitive is listed under <code>[Unreleased]</code> in MMCA.Common
+          (<code>MMCA.Common/CHANGELOG.md:7,43</code>) and ships in the next release; it is opt-in, with no table, no
+          migration and no configuration key (<code>MMCA.Common/UPGRADING.md:240-241</code>). MMCA.Store is its first
+          adopter, through the consumer version bump that follows that release.</p>
+          <h2 id="context">Context</h2>
+          <p>A long-running flow (a process that spans several events and has a deadline) had no framework shape.
+          Each flow kept its state and its deadlines ad hoc on its own aggregate and its own handlers, and the
+          rules that make such a flow safe under redelivery had to be rediscovered per flow.</p>
+          <p>Store&#39;s unpaid-order deadline is the concrete case. The order&#39;s saga state is two members of the
+          aggregate, <code>Order.Status</code> and <code>Order.InventoryRestored</code>
+          (<code>MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Domain/Orders/Order.cs:40-43</code>). The deadline is a
+          durable internal command, <code>Sales.ExpireUnpaidOrder</code>, armed inside the checkout transaction
+          (<code>MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Application/ShoppingCarts/UseCases/CheckOut/CheckOutDeadlineScheduler.cs:16-20</code>)
+          and armed again when a payment fails, so the retry window starts over
+          (<code>MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Application/Orders/Saga/OrderPaymentFailedSagaHandler.cs:68-98</code>).
+          Re-arming leaves the older row in the queue, so the handler cannot trust the instant it was woken
+          at: it must re-derive the due instant from what is stored
+          (<code>.../Orders/Saga/OrderPaymentFailedSagaHandler.cs:57-62</code>). A reconciliation sweep stays as the
+          backstop for a deadline that was never written
+          (<code>MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Infrastructure/Payments/Reconciliation/PaymentReconciliationService.cs:52-60</code>).</p>
+          <p>This record builds on four others. <a href="054-saga-compensation-and-reconciliation.html">ADR-054</a> is the
+          choreographed compensation and the reconciliation backstop this primitive gives a shape to, and its
+          rationale holds that <code>Order.Status</code> plus <code>Order.InventoryRestored</code> <em>are</em> the saga state.
+          <a href="086-process-manager-deferred.html">ADR-086</a> deferred a separate coordinator until a workflow whose
+          state fits no single aggregate appears. <a href="114-internal-commands-durable-job-queue.html">ADR-114</a>
+          supplies the durable internal-command queue that carries the timeouts,
+          <a href="003-outbox-dual-dispatch.html">ADR-003</a> the outbox that redelivers the events that drive each step,
+          and <a href="014-cqrs-decorator-pipeline.html">ADR-014</a> the decorator pipeline that wraps the timeout handler.</p>
+          <h2 id="decision">Decision</h2>
+          <p>MMCA.Common ships a behaviour-only process-manager primitive in three parts: a base class for the
+          aggregate that IS the process, a base handler that runs one process step per domain event, and
+          process timeouts carried by consumer-owned internal commands and decided by the aggregate itself.</p>
+          <h3 id="1-the-process-aggregate-adds-behaviour-never-a-column">1. The process aggregate adds behaviour, never a column</h3>
+          <p><code>ProcessManagerAggregateRoot&lt;TIdentifierType&gt;</code> derives <code>AuditableAggregateRootEntity&lt;TIdentifierType&gt;</code>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Domain/ProcessManagers/ProcessManagerAggregateRoot.cs:17</code>) and
+          declares no property and no field, so deriving from it leaves the EF model and every migration
+          snapshot unchanged (<code>.../ProcessManagerAggregateRoot.cs:10-11</code>). It adds two members:</p>
+          <ul>
+          <li><code>GetLastTransitionOn()</code> returns <code>LastModifiedOn ?? CreatedOn</code>, the instant of the last persisted
+          transition (<code>.../ProcessManagerAggregateRoot.cs:29-31</code>). It is a method rather than a property on
+          purpose, because a property declared on the base would map into every adopter&#39;s model
+          (<code>.../ProcessManagerAggregateRoot.cs:25-28</code>).</li>
+          <li><code>DecideTimeout(ProcessTimeout timeout, DateTime utcNow)</code> is virtual and returns
+          <code>ProcessTimeoutDecision.NotApplicable()</code> by default (<code>.../ProcessManagerAggregateRoot.cs:43-44</code>).</li>
+          </ul>
+          <p>A <code>ProcessTimeout</code> is a name and a window: the name may not be blank and the window must be strictly
+          positive (<code>MMCA.Common/Source/Core/MMCA.Common.Domain/ProcessManagers/ProcessTimeout.cs:14-17</code>), and
+          <code>DueAfter(lastTransitionOn)</code> returns <code>lastTransitionOn + Window</code> (<code>.../ProcessTimeout.cs:32</code>). The
+          window is therefore measured from the last stored transition, not from the moment the timeout was
+          scheduled.</p>
+          <p><code>ProcessTimeoutDecision</code> has four outcomes, the <code>ProcessTimeoutOutcome</code> values <code>NotApplicable = 0</code>,
+          <code>NotYetDue = 1</code>, <code>Applied = 2</code> and <code>Rejected = 3</code>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Domain/ProcessManagers/ProcessTimeoutOutcome.cs:7-16</code>). Only
+          <code>NotYetDue</code> carries <code>DueAt</code> and only <code>Rejected</code> carries <code>Errors</code>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Domain/ProcessManagers/ProcessTimeoutDecision.cs:6-8,30-54</code>), and
+          <code>Rejected</code> throws when given no error (<code>.../ProcessTimeoutDecision.cs:48-51</code>). An override matches the
+          timeout by name, checks the stored state, answers <code>NotYetDue(timeout.DueAfter(GetLastTransitionOn()))</code>
+          while the due instant lies after <code>utcNow</code>, and otherwise applies the transition
+          (<code>.../ProcessManagerAggregateRoot.cs:33-38</code>).</p>
+          <h3 id="2-one-step-per-domain-event-in-one-scope-and-one-transaction">2. One step per domain event, in one scope and one transaction</h3>
+          <p><code>ProcessDomainEventHandlerBase&lt;TDomainEvent, TProcess, TProcessId&gt;</code> implements
+          <code>IDomainEventHandler&lt;TDomainEvent&gt;</code>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/ProcessManagers/ProcessDomainEventHandlerBase.cs:31-35</code>).
+          For each event it calls <code>OnStepStarting</code>, opens ONE async scope, resolves that scope&#39;s <code>IUnitOfWork</code>
+          and runs ONE <code>ExecuteInTransactionAsync</code> whose delegate loads the process tracked, by
+          <code>CorrelateProcessId(event)</code> with the overridable <code>Includes</code>
+          (<code>.../ProcessDomainEventHandlerBase.cs:45-57</code>), then hands it to the abstract <code>HandleStepAsync</code> with a
+          <code>ProcessStepContext</code> (<code>.../ProcessDomainEventHandlerBase.cs:65-69,94-98</code>). The context carries the
+          scope&#39;s provider, its unit of work and, when the host called <code>AddProcessManagers()</code>, the timeout
+          scheduler, which is null otherwise
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/ProcessManagers/ProcessStepContext.cs:16-33</code>).</p>
+          <ul>
+          <li><strong>The step owns its saves.</strong> The base never calls <code>SaveChangesAsync</code>; the transaction refuses to
+          commit unsaved changes, so a step that forgets to save fails loudly
+          (<code>.../ProcessDomainEventHandlerBase.cs:17-18</code>).</li>
+          <li><strong>A failed result</strong> rolls the unit back, after which the base calls <code>OnStepFailed</code>
+          (<code>.../ProcessDomainEventHandlerBase.cs:21-23,73-76</code>). The default throws
+          <code>ProcessStepFailedException</code>, carrying the process type name, the id formatted with the invariant
+          culture and the errors, so the outbox redelivers the event
+          (<code>.../ProcessDomainEventHandlerBase.cs:120-124</code>); an override that returns normally keeps the event
+          handled (<code>.../ProcessDomainEventHandlerBase.cs:112-116</code>).</li>
+          <li><strong>An exception</strong> thrown by the step is not caught by the base, and cancellation is never caught
+          (<code>.../ProcessDomainEventHandlerBase.cs:23-24</code>). The step runs inside the transaction wrapper, which
+          runs under the provider&#39;s execution strategy, so a transient database fault re-runs the whole step
+          before anything propagates, and a commit whose outcome is unknown surfaces as
+          <code>TransactionCommitAmbiguousException</code>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/Factory/DbContextFactory.cs:600-621</code>).
+          A step must therefore be safe to run twice.</li>
+          <li><strong>A missing process</strong> calls <code>OnProcessMissing</code> and the delegate returns success, so the event is
+          handled (<code>.../ProcessDomainEventHandlerBase.cs:59-63,106-110</code>).</li>
+          </ul>
+          <h3 id="3-timeouts-are-internal-commands-the-aggregate-decides">3. Timeouts are internal commands the aggregate decides</h3>
+          <ul>
+          <li><strong>The command.</strong> <code>IProcessTimeoutCommand&lt;TProcessId&gt;</code> extends <code>IInternalCommand</code> with one member,
+          <code>ProcessId</code>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/ProcessManagers/IProcessTimeoutCommand.cs:17-22</code>).
+          It is consumer-owned and declares a stable <code>[InternalCommandName]</code>
+          (<code>.../IProcessTimeoutCommand.cs:6-8</code>). <code>ProcessId</code> may be an explicit interface implementation over
+          the command&#39;s own id property; <code>System.Text.Json</code> does not serialize an explicit implementation, so
+          the stored payload is the command&#39;s own public properties only
+          (<code>.../IProcessTimeoutCommand.cs:11-14</code>).</li>
+          <li><strong>The scheduler.</strong> <code>IProcessTimeoutScheduler.ArmAsync(timeout, after, ct)</code> returns the scheduled
+          row&#39;s id, and its write inherits the internal command scheduler&#39;s atomicity: enrolled in the active
+          transaction when there is one, saved outright otherwise
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/ProcessManagers/IProcessTimeoutScheduler.cs:11-28</code>).
+          The default <code>ProcessTimeoutScheduler</code> refuses a zero or negative delay with the validation error
+          <code>ProcessManagers.TimeoutNotInFuture</code> and otherwise makes one <code>ScheduleAsync</code> call at the injected
+          clock&#39;s now plus the delay, so the due instant comes from the same clock the handler later decides
+          with (<code>MMCA.Common/Source/Core/MMCA.Common.Application/ProcessManagers/ProcessTimeoutScheduler.cs:7-9,18,29-38</code>).</li>
+          <li><strong>The handler.</strong> <code>ProcessTimeoutHandlerBase&lt;TCommand, TProcess, TProcessId&gt;</code> is an
+          <code>ICommandHandler&lt;TCommand, Result&gt;</code>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/ProcessManagers/ProcessTimeoutHandlerBase.cs:36-43</code>).
+          It calls the abstract <code>ResolveTimeout(command)</code> once, before the load, loads the process tracked,
+          and asks it to decide at <code>timeProvider.GetUtcNow().UtcDateTime</code>
+          (<code>.../ProcessTimeoutHandlerBase.cs:53-67</code>). A missing process, <code>NotApplicable</code>, <code>NotYetDue</code> and
+          <code>Rejected</code> all complete the row with success and save nothing
+          (<code>.../ProcessTimeoutHandlerBase.cs:60-64,78-84</code>). <code>Applied</code> saves once; a save failure the
+          <code>IConcurrencyConflictDetector</code> classifies as a conflict is a lost race and also completes the row,
+          and any other save exception propagates so the row retries with backoff
+          (<code>.../ProcessTimeoutHandlerBase.cs:14-18,86-97</code>). An exception from resolving the timeout, from the
+          load or from <code>DecideTimeout</code> is not caught either, so it propagates the same way
+          (<code>.../ProcessTimeoutHandlerBase.cs:53-67</code>). Every outcome that completes the row reaches the <code>OnHandled</code> hook as a
+          <code>ProcessTimeoutReport&lt;TProcessId&gt;</code>, whose <code>Handling</code> is one of <code>ProcessMissing</code>, <code>NotApplicable</code>,
+          <code>NotYetDue</code>, <code>Applied</code>, <code>Rejected</code> and <code>LostRace</code>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/ProcessManagers/ProcessTimeoutHandling.cs:4-23</code>,
+          <code>MMCA.Common/Source/Core/MMCA.Common.Application/ProcessManagers/ProcessTimeoutReport.cs:16-23</code>),
+          with <code>DescribeState(process)</code> captured before the decision
+          (<code>.../ProcessTimeoutHandlerBase.cs:66,105-111</code>). A consumer derives one sealed class per timeout
+          command, which the module scan registers as a closed handler the decorator pipeline wraps
+          (<code>.../ProcessTimeoutHandlerBase.cs:26-27</code>).</li>
+          <li><strong>Registration.</strong> <code>services.AddProcessManagers()</code> registers only the scoped
+          <code>IProcessTimeoutScheduler</code> and, when the host has no clock, <code>TimeProvider.System</code>; it registers no
+          handler, a second call adds nothing, and <code>AddApplication()</code> registers none of it
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/DependencyInjection.ProcessManagers.cs:11-28</code>).</li>
+          </ul>
+          <h3 id="4-the-gate-a-convention-test-that-cannot-pass-vacuously">4. The gate: a convention test that cannot pass vacuously</h3>
+          <p><code>ProcessTimeoutConventionTestsBase</code> holds three facts
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Bases/ProcessManagers/ProcessTimeoutConventionTestsBase.cs:30-42</code>).
+          Every concrete <code>IProcessTimeoutCommand&lt;T&gt;</code> in the map&#39;s module Application assemblies must declare
+          <code>[InternalCommandName]</code> itself, because a stored row resolves its handler by that name or, without
+          one, by its CLR type name, so a rename strands every queued row
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Rules/Cqrs/ArchitectureRules.ProcessTimeouts.cs:9-33</code>).
+          Each must be handled by exactly one concrete <code>ProcessTimeoutHandlerBase</code> subclass; none dead-letters
+          its rows, two make the resolution ambiguous, and a plain <code>ICommandHandler</code> does not count
+          (<code>.../ArchitectureRules.ProcessTimeouts.cs:35-64</code>). The third fact is the non-vacuity floor: the scan
+          must find at least <code>MinimumTimeoutCommands</code> timeout commands, default 1, so a map that omits the
+          declaring module fails instead of letting both rules pass without reading anything
+          (<code>.../ProcessTimeoutConventionTestsBase.cs:13-15,28-34</code>). A repo subclasses the base only when it uses
+          the primitive (<code>MMCA.Common/UPGRADING.md:259-262</code>).</p>
+          <h2 id="rationale">Rationale</h2>
+          <ul>
+          <li><strong>The aggregate already is the state.</strong> ADR-054&#39;s rationale holds that <code>Order.Status</code> plus
+          <code>Order.InventoryRestored</code> are the saga state and that an orchestrator would track what the aggregate
+          already records (<a href="054-saga-compensation-and-reconciliation.html">ADR-054</a>, Rationale). A base class
+          that adds behaviour only gives every such flow one shape without a second copy of the state that
+          could disagree with the first.</li>
+          <li><strong>Re-deriving the due instant makes stale timeouts harmless by construction.</strong> Because the
+          aggregate computes the due instant from its own stored transition time, a timeout superseded by a
+          later transition answers <code>NotYetDue</code> and a timeout fired twice applies once
+          (<code>.../ProcessManagerAggregateRoot.cs:36-38</code>; <code>.../Orders/Order.cs:976-978</code>). No row needs to be
+          found and cancelled when the process moves.</li>
+          <li><strong>Every outcome decided by stored state completes the row.</strong> Retrying a missing process, a
+          timeout that does not apply, an early row or a refused transition cannot change the answer, so only
+          a fault retries: a save failure that is not a conflict, or an exception while loading or deciding
+          (<code>.../ProcessTimeoutHandlerBase.cs:14-18,53-67</code>). The internal-command
+          queue&#39;s retry and dead-letter budget (<a href="114-internal-commands-durable-job-queue.html">ADR-114</a>) is
+          spent only where a retry can succeed.</li>
+          <li><strong>One scope and one transaction per step keeps a step atomic under redelivery.</strong> The outbox
+          delivers at least once (<a href="003-outbox-dual-dispatch.html">ADR-003</a>); a step whose marker and writes
+          commit together, or roll back together on a failed result, is safe to run again.</li>
+          <li><strong>Nothing new to deploy.</strong> Timeouts ride the existing internal-command queue and steps ride
+          existing domain-event dispatch, so the primitive adds no table, no package and no configuration
+          (<code>MMCA.Common/UPGRADING.md:240-241</code>).</li>
+          </ul>
+          <h2 id="trade-offs">Trade-offs</h2>
+          <ul>
+          <li><strong>A <code>NotYetDue</code> decision does not re-arm.</strong> The handler completes the row without scheduling
+          another (<code>.../ProcessTimeoutHandlerBase.cs:21-23</code>). Every step that moves the process and still
+          wants its timeout must schedule it again, as Store&#39;s payment-failure handler does
+          (<code>.../Orders/Saga/OrderPaymentFailedSagaHandler.cs:48,68-98</code>); a step that forgets leaves the
+          process with no live timeout.</li>
+          <li><strong>A host keeps a reconciliation sweep.</strong> Any write that moves the last-modified time without
+          re-arming (a write no step covers, a scheduling failure that is logged and swallowed, a dead-lettered
+          row) pushes the due instant past every queued row. Store keeps its sweep as the backstop: its own
+          list is a deadline that was never written, a dead-lettered row and an order older than the deadline
+          mechanism, and it measures from the same <code>LastModifiedOn ?? CreatedOn</code>
+          (<code>.../Payments/Reconciliation/PaymentReconciliationService.cs:52-60,194-203</code>). The two windows are
+          separate settings, <code>PaymentReconciliation:StuckAgeMinutes</code> and <code>UnpaidOrderExpiry:Minutes</code>, equal by
+          default (30) and kept equal by convention, not by a check
+          (<code>.../Payments/Reconciliation/PaymentReconciliationSettings.cs:17-21,48</code>;
+          <code>MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Application/Orders/UnpaidOrderExpirySettings.cs:42-43</code>).</li>
+          <li><strong>The window is coupled to the audit stamp.</strong> <code>GetLastTransitionOn()</code> reads the audit columns
+          (<code>.../ProcessManagerAggregateRoot.cs:29-31</code>), so any save of the aggregate, not only a status
+          change, restarts every timeout window measured from it.</li>
+          <li><strong>Scope is one aggregate.</strong> The base assumes the whole process state lives on one aggregate; a
+          flow whose state spans aggregates or services gets no help from it.</li>
+          <li><strong>Opt-in wiring is the adopter&#39;s.</strong> <code>AddProcessManagers()</code> is not part of <code>AddApplication()</code>, and
+          <code>ProcessStepContext.Timeouts</code> is null in a host that never calls it
+          (<code>.../ProcessStepContext.cs:32-33</code>).</li>
+          </ul>
+          <h2 id="alternatives-rejected">Alternatives rejected</h2>
+          <ul>
+          <li><strong>A framework-owned saga state table</strong> (weighed 2026-11-11). Every consumer would take a migration
+          and carry a second state row that mirrors, and can disagree with, the aggregate&#39;s own columns,
+          which is the duplication ADR-054 and ADR-086 already argue against
+          (<code>Website/docs-src/adr/054-saga-compensation-and-reconciliation.md:240-242</code>;
+          <code>Website/docs-src/adr/086-process-manager-deferred.md:142-145</code>). Revisit when a flow&#39;s state fits
+          no single aggregate.</li>
+          <li><strong>Trusting the scheduled time</strong> (weighed 2026-11-11). A handler that acts because its row came due
+          would cancel an order whose window a later transition restarted, since the older row is still
+          queued; it would need every superseded row found and removed in the same transaction as the
+          transition. Re-deriving from stored state removes that obligation. Revisit if the internal-command
+          queue ever supersedes a pending row atomically with the write that re-arms it.</li>
+          <li><strong>A separate workflow engine</strong> (weighed 2026-11-11), such as the broker-side saga state machine
+          ADR-086 describes. It brings a second persistence model, a package and a stuck-instance failure
+          mode for a flow whose state is already two members of one aggregate. Revisit at
+          <a href="086-process-manager-deferred.html">ADR-086</a>&#39;s trigger: a workflow of at least three steps across at
+          least two services whose state fits no single aggregate and which needs a per-instance deadline.</li>
+          </ul>
+          <h2 id="consequences">Consequences</h2>
+          <p><strong>Store adopted it without changing its stored command.</strong> <code>Order</code> derives
+          <code>ProcessManagerAggregateRoot&lt;OrderIdentifierType&gt;</code> (<code>.../Orders/Order.cs:47</code>) and its <code>DecideTimeout</code>
+          checks the timeout name <code>PaymentExpiry</code> and the status first, then the due instant from the last
+          transition, then cancels with <code>OrderCancellationReason.PaymentExpired</code>
+          (<code>.../Orders/Order.cs:54,984-1004</code>). <code>ExpireUnpaidOrderInternalCommandHandler</code> derives the timeout
+          base, resolves the window from <code>UnpaidOrderExpirySettings.Minutes</code> and maps each report to its log
+          line
+          (<code>MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Application/Orders/InternalCommands/ExpireUnpaidOrderInternalCommandHandler.cs:39-93</code>).
+          <code>OrderCancelledSagaHandler</code> derives the step base, loads the order with its lines, and overrides
+          <code>OnStepFailed</code> to return normally, so a failed restoration rolls back and the event stays handled
+          (<code>MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Application/Orders/Saga/OrderCancelledSagaHandler.cs:49-55,83-87</code>).
+          The Sales Application DI calls <code>AddProcessManagers()</code>
+          (<code>MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Application/DependencyInjection.cs:55</code>), and Store&#39;s
+          architecture suite subclasses the convention base with a floor of 1
+          (<code>MMCA.Store/Tests/Architecture/MMCA.Store.Architecture.Tests/Cqrs/ProcessTimeoutConventionTests.cs:14,18</code>).</p>
+          <p>The stored name <code>Sales.ExpireUnpaidOrder</code> and the payload <code>{&quot;OrderId&quot;:n}</code> are a contract with the
+          rows already queued. The command keeps its type name, namespace, name attribute and positional
+          <code>OrderId</code>, and implements <code>ProcessId</code> explicitly, so the serialized payload stays exactly the
+          <code>OrderId</code> property
+          (<code>MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Application/Orders/InternalCommands/ExpireUnpaidOrderInternalCommand.cs:24-37</code>).
+          Both arming sites build a <code>ProcessTimeoutScheduler</code> over the internal-command scheduler and the
+          clock (the checkout scheduler takes them through its constructor, the payment-failure handler resolves
+          them from the scope it creates), which writes the same row a direct <code>ScheduleAsync</code> wrote
+          (<code>.../CheckOut/CheckOutDeadlineScheduler.cs:22-24,37,63-66</code>;
+          <code>.../Orders/Saga/OrderPaymentFailedSagaHandler.cs:79-89</code>). The payment-failure handler stays a plain
+          <code>IDomainEventHandler&lt;OrderPaymentFailed&gt;</code> (<code>.../Orders/Saga/OrderPaymentFailedSagaHandler.cs:23-25</code>).</p>
+          <p><strong>A new adopter</strong> derives its aggregate from <code>ProcessManagerAggregateRoot&lt;TId&gt;</code> and overrides
+          <code>DecideTimeout</code>; declares each timeout command consumer-owned with a stable <code>[InternalCommandName]</code>
+          and one sealed <code>ProcessTimeoutHandlerBase</code> subclass; drives event steps with
+          <code>ProcessDomainEventHandlerBase</code> subclasses that save for themselves; calls <code>AddProcessManagers()</code> in
+          the module&#39;s Application DI and re-arms the timeout from every step that moves the process; keeps a
+          reconciliation sweep; and subclasses <code>ProcessTimeoutConventionTestsBase</code>, raising the floor to its
+          known count (<code>MMCA.Common/UPGRADING.md:243-262</code>).</p>
+          <h2 id="related">Related</h2>
+          <ul>
+          <li><a href="003-outbox-dual-dispatch.html">ADR-003</a>: the outbox that redelivers the events driving each step.</li>
+          <li><a href="014-cqrs-decorator-pipeline.html">ADR-014</a>: the pipeline that wraps every timeout handler.</li>
+          <li><a href="054-saga-compensation-and-reconciliation.html">ADR-054</a>: the compensation and the reconciliation
+          backstop; Store&#39;s compensation and deadline ride the two bases.</li>
+          <li><a href="086-process-manager-deferred.html">ADR-086</a>: the deferred coordinator for state that fits no single
+          aggregate.</li>
+          <li><a href="114-internal-commands-durable-job-queue.html">ADR-114</a>: the internal-command queue that carries the
+          timeouts.</li>
+          </ul>
+          
+        <div class="doc-foot btn-row">
+          <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
+          <a class="btn btn--ghost" href="https://github.com/ivanball/ivanball.github.io/blob/main/docs-src/adr/143-process-manager-primitive.md" target="_blank" rel="noopener">View source on GitHub ↗</a>
+        </div>
+        </article>
+        <aside class="doc-aside" id="doc-rail">
+          <nav class="doc-toc" aria-label="On this page">
+            <p class="doc-toc-title">On this page</p>
+            <ul>
+            <li><a href="#status">Status</a></li>
+            <li><a href="#context">Context</a></li>
+            <li><a href="#decision">Decision</a></li>
+            <li><a href="#rationale">Rationale</a></li>
+            <li><a href="#trade-offs">Trade-offs</a></li>
+            <li><a href="#alternatives-rejected">Alternatives rejected</a></li>
+            <li><a href="#consequences">Consequences</a></li>
+            <li><a href="#related">Related</a></li>
+            </ul>
+          </nav>
+        </aside>
+      </div>
+    </div>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container">
+      <div class="footer-grid">
+        <p class="footer-meta mb-0"><strong>Ivan Ball-llovera</strong> · Principal Software Architect · Douglasville, GA</p>
+        <ul class="footer-links">
+          <li><a href="../../resume.html">Résumé</a></li>
+          <li><a href="../../platform.html">Platform</a></li>
+          <li><a href="../../docs/index.html">Reference</a></li>
+          <li><a href="../../writing.html">Writing</a></li>
+          <li><a href="../../speaking.html">Speaking</a></li>
+          <li><a href="../../contact.html">Contact</a></li>
+          <li><a href="https://github.com/ivanball" target="_blank" rel="me noopener">GitHub</a></li>
+          <li><a href="https://www.linkedin.com/in/ivan-ball-llovera-6549a911" target="_blank" rel="me noopener">LinkedIn</a></li>
+        </ul>
+      </div>
+      <p class="footer-meta" style="margin-top:1rem">© <span class="js-year">2026</span> Ivan Ball-llovera. Reference docs generated from source.</p>
+    </div>
+  </footer>
+
+</body>
+</html>

@@ -15,7 +15,9 @@ providers as its users; decisions 2 and 8 are extended and decision 10 is new. S
 (2026-10-25) at the end. Revised 2026-10-26: decision 4 corrected (SQLite quotes outbox filter
 columns with double quotes like PostgreSQL, and only SQL Server and Cosmos answer brackets), decision
 9 gains the periodic-password-provider test, and anchors refreshed after the v1.257.0 and v1.261.0
-releases. Revised 2026-10-28: anchors refreshed after the v1.265.1 release.
+releases. Revised 2026-10-28: anchors refreshed after the v1.265.1 release. Revised 2026-11-12:
+decision 10 gains a third user, the Azure Entra token login (`AddAzurePostgreSqlEntraAuthentication`,
+opt-in, not tried against a live server; [ADR-134](134-cloud-neutral-core-vendor-adapters.md)).
 
 ## Context
 The framework has shipped three database engines since its first release: SQL Server, Azure Cosmos DB
@@ -180,7 +182,7 @@ and differing from it only where the server forces a difference.**
    in the unit tier. A further test authenticates through a periodic password provider on the
    configured data source (`PostgreSQLPersistenceTests.cs:254-255`, decision 10).
 
-10. **Connection customization is one extension point, and cloud IAM authentication is its two users.**
+10. **Connection customization is one extension point, and cloud token authentication is its three users.**
     `INpgsqlDataSourceConfigurator`
     (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/INpgsqlDataSourceConfigurator.cs:23`,
     `Configure` at `:27`) is registered through `AddNpgsqlDataSourceConfigurator`
@@ -194,7 +196,25 @@ and differing from it only where the server forces a difference.**
     (`NpgsqlDataSources.cs:29-32`). With none registered nothing is built and every path keeps the raw
     connection string (`INpgsqlDataSourceConfigurator.cs:12-13`, `NpgsqlDataSources.cs:15-16`); SQL
     Server, SQLite and Cosmos sources never reach a configurator (`INpgsqlDataSourceConfigurator.cs:19-20`).
-    Two adapter calls register one: `AddAwsRdsIamAuthentication`
+    Three adapter calls register one. The Azure one is an opt-in capability of the Azure adapter
+    ([ADR-134](134-cloud-neutral-core-vendor-adapters.md)): `AddAzurePostgreSqlEntraAuthentication(configuration)`
+    (`MMCA.Common/Source/Hosting/MMCA.Common.Azure/AzureServiceCollectionExtensions.cs:146`) is gated on
+    the boolean `AzurePostgreSql:EntraAuthentication:Enabled` (`:124`, read at `:150`-`:156`, registering
+    nothing when absent or false) and registers its configurator through `AddNpgsqlDataSourceConfigurator`
+    (`:172`). That configurator sends a Microsoft Entra access token for the `ossrdbms-aad` scope, from
+    `DefaultAzureCredential`, as the password through Npgsql's periodic password provider
+    (`MMCA.Common/Source/Hosting/MMCA.Common.Azure/PostgreSql/AzurePostgreSqlEntraAuthenticationConfigurator.cs:10`-`:14`,
+    `:34`-`:35`, `:54`), refreshed every four minutes, inside the credential's five-minute refresh margin,
+    and retried 30 seconds after a failed request (`:17`-`:21`, `:26`, `:29`). Because the token is the
+    password, a configured PostgreSQL connection string below `SSL Mode=Require` (or `VerifyCA` /
+    `VerifyFull`) fails registration naming its key, and one supplied later fails when its data source is
+    built (`AzureServiceCollectionExtensions.cs:158`-`:160`; `AzurePostgreSqlEntraAuthenticationConfigurator.cs:50`-`:52`,
+    `:65`-`:81`, `:95`-`:106`). The gate set true without the call, or set to a value that is not a
+    boolean, fails startup
+    (`MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Integrations/HostIntegrationTripwire.cs:56`,
+    `:119`-`:131`; the call's marker at `AzureServiceCollectionExtensions.cs:162`-`:170`). Its limit: it
+    has not been tried against a live Azure Database for PostgreSQL server (ADR-134). The other two are
+    `AddAwsRdsIamAuthentication`
     (`MMCA.Common/Source/Hosting/MMCA.Common.Aws/AwsServiceCollectionExtensions.cs:107`, gated on
     `Rds:IamAuthentication:Enabled`, `MMCA.Common/Source/Hosting/MMCA.Common.Aws/Rds/RdsIamAuthenticationSettings.cs:11`, `:14`)
     and `AddCloudSqlIamAuthentication`

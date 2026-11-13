@@ -24,7 +24,11 @@ generic-path boundary is the generic update path, not the presence of a provider
 2026-10-21: anchors refreshed after the controller base and the consumer DI registrations shifted.
 Revised 2026-10-26: anchors refreshed after #590 shifted the controller base delete action.
 Revised 2026-10-28: re-verified against current source; no decision, behavior, adoption or anchor
-changed.
+changed. Revised 2026-11-12: Decision 2 records the generic commands' cache prefix beside the
+entity-keyed `ICacheInvalidating<TEntity>` marker and its convention test, Decision 6 places the
+`ETag` helper on `ApiControllerBase`, Decisions 7 and 8 add the conditional-write helpers for
+narrow updates and the controller-level read caching and eviction attributes, and the cache-prefix
+trade-off names the allow-list.
 
 ## Context
 ADR-034 records the read side of the generic resource layer and stops one verb short. Its
@@ -89,10 +93,28 @@ Ship the generic write side as four additive pieces plus a registration helper.
      (`Source/Core/MMCA.Common.Application/DependencyInjection.Crud.cs:94-96`). A module writes
      `IValidator<TUpdateRequest>` and nothing else; the command is validated by the same Validating
      decorator every hand-written command goes through (ADR-014).
-   - It implements `ICacheInvalidating` (`:52`) with a `CachePrefix` defaulting to
-     `typeof(TEntity).FullName + ":"` (`:65`), the aggregate-prefix convention consumers already key
-     cached reads under, because the generic controller constructs the command itself and cannot
-     supply one. Setting it to an empty string opts out.
+   - It implements the non-generic `ICacheInvalidating` (`:52`) with an `init`-settable
+     `CachePrefix` defaulting to `EntityCachePrefix.For<TEntity>()` (`:65`), the
+     `"{typeof(TEntity).FullName}:"` key space an aggregate's cached reads live under
+     (`Source/Core/MMCA.Common.Application/UseCases/Markers/ICacheInvalidating.cs:26-29`), because
+     the generic controller constructs the command itself and cannot supply one. Setting it to an
+     empty string opts out, and a derived command can narrow it to a per-verb prefix
+     (`UpdateEntityCommand.cs:61-64`). `DeleteEntityCommand` carries the same default
+     (`Source/Core/MMCA.Common.Application/UseCases/Crud/DeleteEntityCommand.cs:13`, `:22`).
+   - A hand-written command takes the entity-keyed form instead. `ICacheInvalidating<TEntity>`
+     supplies the same prefix as a default interface member, so the command names its aggregate
+     and carries no `CachePrefix` getter (`ICacheInvalidating.cs:39-43`), as Store's commands do
+     (`MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.Application/Reviews/UseCases/Hide/HideReviewCommand.cs:17`).
+     `CacheInvalidationConventionTestsBase`
+     (`Source/Hosting/MMCA.Common.Testing.Architecture/Bases/Cqrs/CacheInvalidationConventionTestsBase.cs:20`,
+     rule at `Source/Hosting/MMCA.Common.Testing.Architecture/Rules/Cqrs/ArchitectureRules.CacheInvalidation.cs:37`)
+     fails every concrete invalidating command that uses only the non-generic marker or declares a
+     prefix of its own (`ArchitectureRules.CacheInvalidation.cs:63-77`) unless it is allow-listed.
+     The generic commands keep the non-generic marker because their prefix is a per-instance
+     opt-out, so MMCA.Common's own run allow-lists their open definitions
+     (`Tests/Architecture/MMCA.Common.Architecture.Tests/Cqrs/Caching/CommonCacheInvalidationConventionTests.cs:21-25`);
+     an allow-listed open generic exempts its closed forms and every type deriving from it
+     (`CacheInvalidationConventionTestsBase.cs:24-30`).
 
 3. **One generic update handler, on the existing base.**
    `UpdateEntityHandler<TEntity, TEntityDTO, TIdentifierType, TUpdateRequest>`
@@ -132,15 +154,56 @@ Ship the generic write side as four additive pieces plus a registration helper.
 6. **PUT ships on a new derived controller base, not on the shipped one.**
    `CrudEntityControllerBase<TEntity, TEntityDTO, TIdentifierType, TCreateRequest, TUpdateRequest>`
    (`Source/Presentation/MMCA.Common.API/Controllers/CrudEntityControllerBase.cs:54`) inherits
-   `AggregateRootEntityControllerBase` and adds `[HttpPut("{id}")]` (`:88`). A controller offering
+   `AggregateRootEntityControllerBase` and adds `[HttpPut("{id}")]` (`:89`). A controller offering
    only create and delete keeps inheriting the four-parameter base; one that also offers update
-   inherits this and gains the action (`:24-29`). The action is `[Idempotent]` (`:89`, ADR-017) and
-   `[SupportsIfMatch]` (`:90`, ADR-035), so the PUT is conditional: the filter decodes the caller's
+   inherits this and gains the action (`:24-29`). The action is `[Idempotent]` (`:90`, ADR-017) and
+   `[SupportsIfMatch]` (`:91`, ADR-035), so the PUT is conditional: the filter decodes the caller's
    `If-Match` header, refuses a request that states no precondition with 428, and the action reads
    the decoded token with `SupportsIfMatchAttribute.RequiredToken(HttpContext)` and hands it to the
-   command (`:103`). A failed precondition is answered with 412 rather than 409. The request body
-   carries no token. On success the refreshed token is emitted as a weak `ETag` through the inherited
-   `SetConcurrencyETag` (`:112`), so a client can condition its next write without re-reading.
+   command (`:104`). A failed precondition is answered with 412 rather than 409. The request body
+   carries no token. On success the refreshed token is emitted as a weak `ETag` through
+   `SetConcurrencyETag` (`:113`), which the entity and use-case controllers inherit from
+   `ApiControllerBase` (`Source/Presentation/MMCA.Common.API/Controllers/ApiControllerBase.cs:97`; the
+   OAuth and service-info bases derive `ControllerBase` directly, `OAuthControllerBase.cs:60`,
+   `ServiceInfoControllerBase.cs:30`), so a client can
+   condition its next write without re-reading.
+
+7. **A narrow update outside the generic PUT uses the conditional-write helpers.** A write that is
+   not the whole-request PUT (a lifecycle transition, a single-field change) is still conditional,
+   and `ApiControllerBase` carries its action body. `HandleConditionalCommandWithResponseAsync`
+   (`ApiControllerBase.cs:156`) reads the token `[SupportsIfMatch]` decoded (`:165`), builds the
+   command from it, dispatches it, awaits an optional success follow-up and answers 200 with the
+   value and its weak `ETag` (`:194-202`). `HandleConditionalCommandAsync` (`:125`) is the form for
+   a command whose value is discarded and answers 204 (`:177-184`). A failure goes through
+   `HandleFailure` (`:179`, `:196`), and an action without the attribute throws before the handler
+   runs (`:123-124`, `:154-155`). ADC runs most of its conditional actions through them
+   (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/Activities/ActivitiesController.cs:165`,
+   `:171`); its event update keeps its own body because the handler answers with an envelope the
+   action unwraps after adding a warning header
+   (`.../Controllers/Events/EventsController.cs:196-213`).
+
+8. **Read caching and eviction are declared on the controller.** `[PublicCachedReads(policyName)]`
+   (unreleased, on the `feat/fresh-eyes-wave` branch;
+   `Source/Presentation/MMCA.Common.API/Caching/PublicCachedReadsAttribute.cs:42`) is a controller
+   model convention that marks the base reads of an `EntityControllerBase` (`GetAllAsync`,
+   `GetAllForLookupAsync`, `GetByIdAsync`, `:45-50`), whether inherited or overridden (a read is
+   matched through its base definition, `:171-177`), anonymous and output-cached under the named
+   policy, each only when the selector does not already carry one (`:120-128`), and names the by-id
+   route (`:97`, `:130-133`). It throws on a controller that is not an entity controller (`:87-89`),
+   and on an overridden base read that declares its own authorization attribute without
+   `[AllowAnonymous]`, naming the controller and the action (`:146-153`), because the anonymous
+   marker would otherwise replace that requirement silently. It leaves alone the export, the writes,
+   the opt-in cursor and change-feed reads, and every action the application declares itself, as
+   opposed to an override of a base read (`:24-26`).
+   `[EvictOutputCache(tags)]`
+   (`Source/Presentation/MMCA.Common.API/Caching/EvictOutputCacheAttribute.cs:36`) is a result
+   filter on the controller or the action. It evicts its tags only for a request that is not a GET
+   or HEAD and whose final status is 2xx (`:89-97`), so it runs after `[SupportsIfMatch]` has
+   rewritten a conflict to 412 and evicts nothing for it (`:17-21`). Eviction is best effort: a
+   cache-store fault is logged as a Warning and never fails the committed write (`:24-27`,
+   `:111-114`), and a tag named at class and method level is evicted once per request (`:30-32`).
+   ADC declares both on its Conference controllers (`ActivitiesController.cs:39-40`). Output-cache
+   eviction is separate from the `CachePrefix` the caching decorator evicts (ADR-026, ADR-040).
 
 ## Rationale
 - **The one thing that varies per aggregate is the one thing the module writes.** Load, concurrency
@@ -173,10 +236,13 @@ Ship the generic write side as four additive pieces plus a registration helper.
   ADR-034 records for the read side, on the other axis: what a caller may change is what the request
   exposes, and the applier is the only place that decides how far a request reaches into the
   aggregate.
-- **The default cache prefix is a convention, not a check.** `typeof(TEntity).FullName + ":"` is
-  correct only for a module keying its cached reads under the aggregate prefix. A module that keys
-  reads differently and does not set `CachePrefix` invalidates nothing, and nothing fails: the same
-  silent-staleness property the caching decorator has always had (ADR-026).
+- **The generic commands' default prefix is a convention, not a check.**
+  `EntityCachePrefix.For<TEntity>()` is correct only for a module keying its cached reads under the
+  aggregate prefix. A module that keys reads differently and does not set `CachePrefix` invalidates
+  nothing, and nothing fails: the same silent-staleness property the caching decorator has always
+  had (ADR-026). The cache-invalidation convention test checks hand-written commands, and the
+  generic ones are on its allow-list
+  (`CommonCacheInvalidationConventionTests.cs:21-25`).
 - **`AddEntityCrud` registers three handlers whether or not all three verbs are exposed.** An
   aggregate with no delete endpoint still gets a delete handler in the container. It is inert, and
   the alternative is three parameters that would be wrong more often than the extra registration is.
@@ -204,6 +270,15 @@ Ship the generic write side as four additive pieces plus a registration helper.
   were. An
   aggregate whose lifecycle is guarded rather than plain CRUD keeps its own handlers, and no
   migration is asked of anyone.
+- **A gated read cannot live on a `[PublicCachedReads]` controller.** The attribute matches an
+  override through its base definition and adds `[AllowAnonymous]` whenever the selector carries no
+  `IAllowAnonymous` (`Source/Presentation/MMCA.Common.API/Caching/PublicCachedReadsAttribute.cs:120-123`,
+  `:171-177`), and anonymous access wins over `[Authorize]` and over a permission attribute. So an
+  override that declares one is refused instead of being made public: the convention throws when the
+  application model is built (`:146-153`). The author either removes the attribute from the read,
+  adds `[AllowAnonymous]` to say the read is public, or moves the gated read to another controller.
+  Authorization declared on the controller class is not affected, which is the usual shape (gated
+  writes, public reads).
 
 ## Related
 [ADR-034](034-generic-entity-query-layer.md) (the read side plus create and delete this record

@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 141 ADRs</summary>
+        <summary>All 146 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -241,6 +241,11 @@
         <li><a href="139-passkeys-webauthn-opt-in-sign-in.html">139 · Passkeys (WebAuthn) as an Opt-In Sign-In and Second Factor</a></li>
         <li><a href="140-machine-clients-oauth-client-credentials.html">140 · Machine Clients Through OAuth Client Credentials Backed by Service Accounts</a></li>
         <li><a href="141-two-framework-lines-from-one-tree.html">141 · Two .NET Framework Lines From One Source Tree (net10.0 and net11.0)</a></li>
+        <li><a href="142-outbound-webhooks-and-delivery-lane.html">142 · Outbound Webhooks (Signed Delivery over Internal Commands, with a Dedicated Delivery Lane)</a></li>
+        <li><a href="143-process-manager-primitive.html">143 · Process-Manager Primitive (Consumer-Owned Process Aggregate, Timeouts over Internal Commands)</a></li>
+        <li><a href="144-offline-writes-and-delta-reads.html">144 · Offline Writes and Delta Reads (Client Write Queue, Server Change Feed with Tombstones)</a></li>
+        <li><a href="145-opt-in-cursor-paging.html">145 · Opt-In Cursor Paging on List Endpoints (Beside Offset Paging)</a></li>
+        <li><a href="146-ui-page-bases-and-list-shell.html">146 · UI Page Bases and the List Shell (Bases Own Plumbing, Pages Own Model and Service Call)</a></li>
           </ol>
         </nav>
       </details>
@@ -264,7 +269,10 @@
           enum, because the <code>MessageBusProvider</code> enum was replaced by a string with built-in values on
           <code>MessageBusProviders</code>.
           Revised 2026-10-28: anchors refreshed after the Shared and Infrastructure public-API baselines
-          moved; the eighteen shipped declarations are unchanged.</p>
+          moved; the eighteen shipped declarations are unchanged.
+          Revised 2026-11-12 (unreleased, on the <code>feat/fresh-eyes-wave</code> branch): MMCA.Helpdesk is the first adopter (<code>TicketLifecycle</code>, a domain type behind the
+          <code>TicketStatus</code> wire enum), and <code>EnumerationNameValueConverter&lt;T&gt;</code> is recorded beside the integer
+          converter (Context, Decision points 9, 11, 12 and 13, Trade-offs).</p>
           <h2 id="context">Context</h2>
           <p>A bounded set of named values shows up everywhere in this workspace: the state that triggered a
           domain event, an error category, a rate-limiting algorithm, a JWT signing algorithm. The framework answers that need with an ordinary CLR enum. <code>DomainEntityState</code>
@@ -288,14 +296,14 @@
           declares a per-module set. The remark on the type states the same three assertions and notes that
           the rule names no <code>record</code> and inspects no fields (<code>Enumeration.cs:26-34</code>), so nothing in it forbids
           the <code>public static readonly</code> field idiom the type exists for.</p>
-          <p><strong>Adoption is zero.</strong> A search of all four repos plus the samples finds no production type deriving
-          from <code>Enumeration&lt;T&gt;</code>: the only derivations anywhere are five private fixtures inside the three test
-          files. The bounded sets the framework and its consumers actually declare are plain C# enums. The
+          <p><strong>Adoption is one set, in the reference app.</strong> No production type in MMCA.Common, MMCA.Store or
+          MMCA.ADC derives from <code>Enumeration&lt;T&gt;</code>; the reference app MMCA.Helpdesk&#39;s ticket lifecycle does
+          (Decision point 13), and the only other derivations are five private fixtures inside the three test
+          files. Every other bounded set the framework and its consumers declare is a plain C# enum. The
           string-keyed sibling <code>RoleValue</code> (<code>MMCA.Common/Source/Core/MMCA.Common.Shared/Auth/RoleValue.cs:26</code>),
           which takes the same not-a-<code>ValueObject</code> trade-off for a closed string set, does have a production
           derivation in ADC (<code>MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Domain/Users/UserRole.cs:18</code>),
-          so the idiom is not foreign here; the integer-keyed base is simply not the shape any set has needed
-          yet.</p>
+          so the idiom is not foreign here, and the integer-keyed base now has its one production set too.</p>
           <p>That leaves two readings of the same code, and this record picks one. Either the choice between a
           plain enum and a smart enumeration is a decision worth writing down, with a stated rule for when
           each applies, or <code>Enumeration&lt;T&gt;</code> is dead public surface frozen by the ADR-015 public-API gate. This
@@ -357,12 +365,20 @@
           <code>[DataMember(Order = 2)] Value</code> (<code>:104</code>), and <code>AddAPI</code> registers
           <code>AddXmlDataContractSerializerFormatters()</code> (<code>DependencyInjection.cs:67</code>).</p>
           </li>
-          <li><p><strong>Persistence is a plain <code>int</code> column, through a shipped value-converter pair.</strong>
+          <li><p><strong>Persistence is a plain <code>int</code> column by default, or the member name where the column already
+          holds names.</strong>
           <code>EnumerationValueConverter&lt;TEnumeration&gt;</code> is a <code>ValueConverter&lt;TEnumeration, int&gt;</code> writing
           <code>member.Value</code> and reading through <code>FromValue</code>
           (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Conversions/EnumerationValueConverter.cs:33-45</code>),
           and <code>NullableEnumerationValueConverter&lt;TEnumeration&gt;</code> passes null through both legs so an absent
-          member stays NULL instead of collapsing onto the member valued zero (<code>:62-74</code>). Mapping through
+          member stays NULL instead of collapsing onto the member valued zero (<code>:100-111</code>). Beside them,
+          <code>EnumerationNameValueConverter&lt;TEnumeration&gt;</code> is a <code>ValueConverter&lt;TEnumeration, string&gt;</code> writing
+          <code>member.Name</code> and reading through <code>FromName</code> (<code>:71-83</code>). It fits a column that already holds
+          names, such as a CLR enum mapped with <code>HasConversion&lt;string&gt;()</code>: the column stays text with the
+          same stored values, so replacing that enum with a smart enumeration is neither a column type
+          change nor a data rewrite, while an <code>int</code> column takes the integer converter (<code>:49-53</code>). Its read
+          leg trusts the column the same way, and <code>FromName</code> matches case-insensitively (<code>:64-67</code>). It has
+          no nullable counterpart. Mapping through
           <code>HasConversion</code> rather than <code>OwnsOne</code> keeps the backing column a plain <code>int</code>, so replacing a CLR
           enum property with a smart enumeration is not a schema change (<code>:9-11</code>). Column facets stay at
           the call site by design (<code>:19-21</code>). The read leg trusts the column: a value no member declares
@@ -376,8 +392,8 @@
           (<code>.../ValueObjects/Serialization/EnumerationSerializationTests.cs:1-139</code>, 11 methods) covers both routes to the
           converter and pins the documented limitation that an unattributed enumeration under unconfigured
           options falls back to the default object shape (<code>:68-75</code>); <code>EnumerationValueConverterTests</code>
-          (<code>MMCA.Common/Tests/Core/MMCA.Common.Infrastructure.Tests/Persistence/Conversions/EnumerationValueConverterTests.cs:1-100</code>,
-          7 methods) covers both converters including the null pass-through (<code>:70-78</code>).</p>
+          (<code>MMCA.Common/Tests/Core/MMCA.Common.Infrastructure.Tests/Persistence/Conversions/EnumerationValueConverterTests.cs:1-226</code>,
+          14 methods) covers both converters including the null pass-through (<code>:70-78</code>).</p>
           </li>
           <li><p><strong>The rule for choosing.</strong> Use a plain C# enum when the members are names for states or options
           and every decision about them is made by the code that reads them: it is the cheaper type, it
@@ -386,28 +402,51 @@
           <code>Enumeration&lt;T&gt;</code> when a member must carry data or behavior (a rate, a policy, a display rule, a
           per-member override), when the same <code>switch</code> over the set is about to appear in a third place,
           or when the set needs <code>Result</code>-shaped parsing at a boundary. Declare the concrete type sealed
-          with private constructors and <code>public static readonly</code> members, and map it with the shipped
-          value converter.</p>
+          with private constructors and <code>public static readonly</code> members, and map it with the framework
+          value converter that matches the column: the integer converter for an <code>int</code> column, the name
+          converter for one that already holds names (Decision point 9).</p>
           </li>
           <li><p><strong>The surface is frozen public API.</strong> Every member of the base and the factory is in
           <code>MMCA.Common.Shared</code>&#39;s shipped baseline
           (<code>MMCA.Common/Source/Core/MMCA.Common.Shared/PublicAPI.Shipped.txt:578-583</code>, <code>:780-784</code>,
           <code>:1016-1018</code>), and both converters are in Infrastructure&#39;s
           (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/PublicAPI.Shipped.txt:347-348</code>, <code>:351-352</code>).
-          Under
+          The name converter is not yet shipped: it sits in Infrastructure&#39;s unshipped baseline
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/PublicAPI.Unshipped.txt:4-5</code>) until the
+          next release promotes it. Under
           ADR-015&#39;s RS0016/RS0017 gate, removing or reshaping any of it is a reviewable text diff and a
           breaking change to the package surface, which is precisely why leaving an unadopted capability
           in place is a decision rather than an oversight.</p>
           </li>
-          <li><p><strong>Adoption is zero and this record says so.</strong> No production type in MMCA.Common, MMCA.Store,
-          MMCA.ADC or MMCA.Helpdesk derives from <code>Enumeration&lt;T&gt;</code>. The only
+          <li><p><strong>Adoption is one set, in the reference app, and this record says so.</strong> No production type in
+          MMCA.Common, MMCA.Store or MMCA.ADC derives from <code>Enumeration&lt;T&gt;</code>. MMCA.Helpdesk, the reference
+          app and template source, declares one: <code>TicketLifecycle</code>
+          (<code>MMCA.Helpdesk/Source/Modules/Tickets/MMCA.Helpdesk.Tickets.Domain/Tickets/TicketLifecycle.cs:21</code>),
+          the ticket aggregate&#39;s status type (<code>MMCA.Helpdesk/Source/Modules/Tickets/MMCA.Helpdesk.Tickets.Domain/Tickets/Ticket.cs:34</code>).
+          Its four members carry the lifecycle rule as data (<code>IsLocked</code>, true for <code>Closed</code> only,
+          <code>TicketLifecycle.cs:23-26</code>, <code>:31-35</code>), and each member&#39;s value and name equal those of the
+          <code>TicketStatus</code> enum
+          (<code>MMCA.Helpdesk/Source/Modules/Tickets/MMCA.Helpdesk.Tickets.Shared/Tickets/TicketStatus.cs:6</code>,
+          <code>TicketLifecycle.cs:16-17</code>). That enum stays the wire contract on purpose, so requests,
+          responses, the UI and the cache keep sending numbers rather than the names the enumeration&#39;s
+          JSON converter would write (<code>TicketLifecycle.cs:12-16</code>). The two meet at two points only:
+          <code>FromContract</code> (<code>:40</code>) in the status handler
+          (<code>MMCA.Helpdesk/Source/Modules/Tickets/MMCA.Helpdesk.Tickets.Application/Tickets/UseCases/ChangeStatus/ChangeTicketStatusHandler.cs:57</code>)
+          and <code>ToContract</code> (<code>TicketLifecycle.cs:44</code>) in the DTO mapper and projector
+          (<code>MMCA.Helpdesk/Source/Modules/Tickets/MMCA.Helpdesk.Tickets.Application/Tickets/DTOs/TicketDTOMapper.cs:40</code>,
+          <code>TicketDTOProjector.cs:41</code>). The column is stored by name through the name converter with a
+          32-character limit
+          (<code>MMCA.Helpdesk/Source/Modules/Tickets/MMCA.Helpdesk.Tickets.Infrastructure/Persistence/EntityConfiguration/TicketConfiguration.cs:44-47</code>),
+          the text it held when the property was the enum (<code>:42-43</code>), so the adoption needed no
+          migration: the newest migration in the Tickets migrations project
+          (<code>20261112163619_AddWebhookSubscriptions</code>) names no status column. Within MMCA.Common, the only
           code that references it is the base file itself, the EF converters, the <code>AddAPI</code> registration
           of its JSON converter factory (<code>DependencyInjection.cs:19</code>, <code>:59</code>) and the three test files.
           Everywhere else it appears only as text, in comments and in one <code>SuppressMessage</code>
           justification string, as the precedent the strongly typed identifiers and the entity base cite
-          (for example <code>IStronglyTypedId.cs:54</code>, <code>BaseEntity.cs:31</code>, <code>:50</code>). The only derivations are the five private
+          (for example <code>IStronglyTypedId.cs:54</code>, <code>BaseEntity.cs:31</code>, <code>:50</code>). Besides Helpdesk&#39;s set, the only derivations are the five private
           fixtures in those tests (<code>EnumerationTests.cs:122</code>, <code>:134</code>,
-          <code>EnumerationSerializationTests.cs:111</code>, <code>:122</code>, <code>EnumerationValueConverterTests.cs:89</code>).</p>
+          <code>EnumerationSerializationTests.cs:111</code>, <code>:122</code>, <code>EnumerationValueConverterTests.cs:215</code>).</p>
           </li>
           </ol>
           <h2 id="rationale">Rationale</h2>
@@ -439,15 +478,16 @@
           </ul>
           <h2 id="trade-offs">Trade-offs</h2>
           <ul>
-          <li><strong>A capability nobody uses is a capability nobody has stress-tested.</strong> The contract is pinned by
-          33 test methods against private fixtures, not by a production set with real members, real
-          migrations and a real wire history. Its ergonomics are asserted rather than demonstrated, exactly
-          as ADR-101 says of the metapackage.</li>
+          <li><strong>A capability adopted only by the reference app is lightly stress-tested.</strong> The framework
+          contract is pinned by 40 test methods against private fixtures, and its one production set is a
+          four-member status in a sample app that keeps the enum on the wire (Decision point 13), so the
+          JSON leg has no production user and no set has a long wire or migration history. Its ergonomics
+          are demonstrated once rather than at scale.</li>
           <li><strong>Two answers to one question.</strong> A reader now has to choose between a plain enum and
           <code>Enumeration&lt;T&gt;</code>, and the rule in Decision point 11 is prose, not a fitness function. Nothing
           fails a build when a set that would benefit from behavior stays a <code>switch</code>, and nothing fails when
           a trivial set is declared as a smart enumeration.</li>
-          <li><strong>Public API surface with no consumer.</strong> Eighteen shipped declarations across two packages
+          <li><strong>Public API surface with one consumer.</strong> Eighteen shipped declarations across two packages
           (<code>Shared/PublicAPI.Shipped.txt:578-583</code>, <code>:780-784</code>, <code>:1016-1018</code>;
           <code>Infrastructure/PublicAPI.Shipped.txt:347-348</code>, <code>:351-352</code>) are frozen under ADR-015 and can only
           be removed as a breaking change.</li>

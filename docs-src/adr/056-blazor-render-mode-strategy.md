@@ -25,7 +25,10 @@ source. Revised 2026-10-26: recorded the third anti-double-fetch mechanism (ADC'
 session and speaker detail pages persist their prerendered DTO through `[PersistentState]`, so the
 session and speaker pages no longer skip the prerender fetch), noted that those prerender fetches carry
 no prerender timeout, and re-anchored the citations to current source. Revised 2026-10-28: anchors
-refreshed against current source; no decision, count or adoption changed.
+refreshed against current source; no decision, count or adoption changed. Revised 2026-11-12: recorded
+the composed `AddMmcaBlazorWebHost` / `UseMmcaBlazorWebPipeline` web-host calls (render-mode registration
+stays per head), the framework-owned `E2eRenderMode` switch both heads now call, and the page bases'
+`PageToken`; re-anchored the citations in the touched bullets.
 
 ## Context
 Both web applications are Blazor Web Apps: a static server-rendered (SSR) prerender pass produces the
@@ -55,7 +58,7 @@ layer rather than by weakening the render mode.
 
 - **The mode is set once, at the root, on the shared router.** Each app's `App.razor` applies the same
   mode expression to `HeadOutlet` and to `Routes`
-  (`MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Components/App.razor:45`, `App.razor:49`;
+  (`MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Components/App.razor:46`, `App.razor:50`;
   `MMCA.Store/Source/Hosts/UI/MMCA.Store.UI.Web/Components/App.razor:23`, `App.razor:27`), and `Routes`
   is the single framework-owned router shared by both apps
   (`MMCA.Common/Source/Presentation/MMCA.Common.UI/Routes.razor:12-56`). **No page or component in either app
@@ -65,13 +68,34 @@ layer rather than by weakening the render mode.
   The workspace also carries local sample solutions that are `InteractiveServer`-only heads of the same
   shape; they are outside this ADR's scope and are not counted here.
 - **`InteractiveAuto` is the default for both web heads.** Each `App.razor` resolves an `AppRenderMode`
-  property that returns `InteractiveAuto` unless an E2E flag is set
-  (`MMCA.ADC/.../App.razor:71-82`, `MMCA.Store/.../App.razor:46-49`). Both hosts register both runtimes on
-  both sides of the pipeline: `AddInteractiveServerComponents()` + `AddInteractiveWebAssemblyComponents()`
-  at service registration and `AddInteractiveServerRenderMode()` + `AddInteractiveWebAssemblyRenderMode()`
-  on `MapRazorComponents<App>()`
-  (`MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs:78-80`, `Program.cs:337-339`;
-  `MMCA.Store/Source/Hosts/UI/MMCA.Store.UI.Web/Program.cs:84-86`, `Program.cs:286-288`).
+  property through the framework's `E2eRenderMode.Resolve`, which returns `InteractiveAuto` unless an E2E
+  flag is set (`MMCA.ADC/.../App.razor:73`, `MMCA.Store/.../App.razor:45`;
+  `MMCA.Common/Source/Presentation/MMCA.Common.UI.Web/Hosting/E2eRenderMode.cs:33-45`). Both hosts register
+  both runtimes on both sides of the pipeline: `AddInteractiveServerComponents()` inside the composed
+  `AddMmcaBlazorWebHost` call (`MMCA.Common/Source/Presentation/MMCA.Common.UI.Web/Hosting/BlazorWebHostExtensions.cs:80-81`),
+  `AddInteractiveWebAssemblyComponents()` passed by each head through that call's `ConfigureRazorComponents`
+  callback (`BlazorWebHostExtensions.cs:82`; `MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs:54`,
+  `MMCA.Store/Source/Hosts/UI/MMCA.Store.UI.Web/Program.cs:52`), and `AddInteractiveServerRenderMode()` +
+  `AddInteractiveWebAssemblyRenderMode()` on each head's own `MapRazorComponents<App>()` chain
+  (`MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs:167-170`;
+  `MMCA.Store/Source/Hosts/UI/MMCA.Store.UI.Web/Program.cs:102-105`).
+- **The shared web-host registrations and pipeline are one composed call; render-mode registration stays
+  per head.** On the `feat/fresh-eyes-wave` branch (unreleased), `MMCA.Common.UI.Web` carries
+  `AddMmcaBlazorWebHost` and `UseMmcaBlazorWebPipeline`
+  (`BlazorWebHostExtensions.cs:64`, `BlazorWebHostExtensions.cs:146`). The first owns the registration
+  order, from the configuration-source callback and Serilog through the server-side interactive
+  components, bounded circuits, MudBlazor, the shared UI services, session-cookie authentication, the
+  same-origin proxy and the CSP ahead of the security headers (`BlazorWebHostExtensions.cs:71-123`); the
+  second owns the pipeline order, from forwarded headers through the static-asset and service-worker
+  endpoints (`BlazorWebHostExtensions.cs:150-178`). Which render modes a head adds stays the head's own
+  code or a head callback: the WebAssembly components arrive through `ConfigureRazorComponents`,
+  WebAssembly debugging through `DevelopmentPipeline` (`BlazorWebHostExtensions.cs:154-157`;
+  `MMCA.Store/.../Program.cs:82`), and the head maps its own `MapRazorComponents<App>()` chain after the
+  pipeline call, passing `GetMmcaRazorComponentAssemblies` as the additional assemblies
+  (`BlazorWebHostExtensions.cs:140-141`, `BlazorWebHostExtensions.cs:190-207`). The type's summary records
+  that split and that it keeps the package free of a WebAssembly server dependency
+  (`BlazorWebHostExtensions.cs:27-33`). Both web heads adopt it (`MMCA.ADC/.../Program.cs:26`,
+  `MMCA.Store/.../Program.cs:28`).
 - **Prerendering stays enabled.** No host anywhere in the workspace passes `prerender: false` or
   constructs a render mode with prerendering disabled; every render mode in use is the stock static
   instance. Prerender is what ADR-022's SSR cookie scheme exists to serve, so it is kept and its cost is
@@ -145,13 +169,22 @@ layer rather than by weakening the render mode.
   from a dedicated prerender branch (`PublicSessionDetail.razor.cs:125-140`); the event page has no
   prerender branch, runs its full load on both passes, and writes the pair on every successful load so
   the interactive pass reuses the event instead of fetching it again (`PublicEventDetail.razor.cs:120-122`,
-  `PublicEventDetail.razor.cs:139-140`). The session and speaker fetches pass the page's lifetime token
-  (`MMCA.Common/Source/Presentation/MMCA.Common.UI/Pages/Common/DetailPageBase.cs:38`,
+  `PublicEventDetail.razor.cs:139-140`). The session and speaker fetches pass the page's `PageToken`
+  (`MMCA.Common/Source/Presentation/MMCA.Common.UI/Pages/Common/CancellablePageBase.cs:27`,
   `PublicSessionDetail.razor.cs:129`, `PublicSpeakerDetail.razor.cs:107`); the event fetch passes the
   per-load token its `BeginLoad` call issues (`PublicEventDetail.razor.cs:110`, `:122`), which comes
   from a fresh `CancellationTokenSource` per load
   (`MMCA.Common/Source/Presentation/MMCA.Common.UI/Common/LatestLoadGuard.cs:55-58`). None of the three
   applies a prerender timeout.
+- **A page base's token ends with the page instance, render-mode handover included.**
+  `CancellablePageBase` exposes `PageToken`, cancelled when the page is disposed, so a navigation away or
+  an `InteractiveAuto` render-mode transition cancels the in-flight work instead of completing into a
+  component that is gone (`CancellablePageBase.cs:21-27`, `CancellablePageBase.cs:41-55`). `DetailPageBase`
+  and `CreatePageBase` derive from it (`DetailPageBase.cs:27`, `CreatePageBase.cs:21`); `CreatePageBase`
+  passes it to its save (`MMCA.Common/Source/Presentation/MMCA.Common.UI/Pages/Common/CreatePageBase.cs:85`),
+  and the detail base states as a convention, which nothing enforces, that a derived page passes it to
+  every awaited call outside its guarded load (`DetailPageBase.cs:16-20`).
+  The page bases themselves are ADR-146 (`146-ui-page-bases-and-list-shell.md`).
 - **One further page outside the grid family repeats the list-page pattern by hand.** Store's `CatalogBrowse`
   persists its prerendered products, categories and filter tuple and rehydrates them when the interactive
   pass starts on the same filter combination
@@ -161,11 +194,12 @@ layer rather than by weakening the render mode.
   explicit-render-mode form the base needs. It is a copy of the policy, not an instance of it.
 - **Because any page may run in either runtime, both runtimes register the same services.** Each WASM
   client `Program.cs` mirrors its server host's registrations (MudBlazor, `AddUIShared`, browser device
-  capabilities, the auth trio, the same conditional per-module UI registrations)
+  capabilities, the auth trio, the same conditional per-module UI registrations), which on the server
+  side come from the composed call plus the head's own module registrations
   (`MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web.Client/Program.cs:33-76` against
-  `MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs:78-184`;
+  `BlazorWebHostExtensions.cs:87-117` and `MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs:94-112`;
   `MMCA.Store/Source/Hosts/UI/MMCA.Store.UI.Web.Client/Program.cs:31-64` against
-  `MMCA.Store/Source/Hosts/UI/MMCA.Store.UI.Web/Program.cs:84-173`), and each client bootstraps its thread
+  `MMCA.Store/Source/Hosts/UI/MMCA.Store.UI.Web/Program.cs:61-74`), and each client bootstraps its thread
   culture from the same cookie before running so hydration does not disagree with the prerender
   (`MMCA.ADC/.../MMCA.ADC.UI.Web.Client/Program.cs:83`,
   `MMCA.Store/.../MMCA.Store.UI.Web.Client/Program.cs:71`, ADR-027).
@@ -177,23 +211,25 @@ layer rather than by weakening the render mode.
   whose `HttpContext` cascading parameter cannot exist in the WASM-safe package
   (`MMCA.Common/Source/Presentation/MMCA.Common.UI.Web/Components/Pages/Error.razor:12-21`, `Error.razor:52-53`).
 - **`InteractiveServer` is pinned only under E2E configuration flags, never in production or local dev.**
-  `E2E:ForceServer` returns `InteractiveServer`; ADC additionally honors `E2E:ForceWebAssembly`, which
-  returns `InteractiveWebAssembly` and wins if both are set (`MMCA.ADC/.../App.razor:71-82`,
-  `MMCA.Store/.../App.razor:46-49`). Those config keys are injected only through the AppHosts, and only when
-  the matching environment variable is present. ADC reads `E2E_FORCE_WASM` and sets
-  `E2E__ForceWebAssembly` itself (`MMCA.ADC/Source/Hosting/MMCA.ADC.AppHost/Program.cs:421-425`); for
-  `E2E__ForceServer` both AppHosts call the shared `WithE2eForceServer` extension, ADC passing
-  `unlessAlso: forceWasm` so the WebAssembly flag wins
-  (`MMCA.ADC/Source/Hosting/MMCA.ADC.AppHost/Program.cs:433`,
-  `MMCA.Store/Source/Hosting/MMCA.Store.AppHost/Program.cs:432`), and that extension forwards the key
-  only when `E2E_FORCE_SERVER` is `true`
-  (`MMCA.Common/Source/Hosting/MMCA.Common.Aspire.Hosting/Extensions.cs:442-455`). In CI only `E2E_FORCE_SERVER` is
-  exported (`MMCA.ADC/.github/workflows/e2e.yml:241`, `MMCA.Store/.github/workflows/e2e.yml:229`);
-  ADC's workflow deliberately does **not** set `E2E_FORCE_WASM` and records why
-  (`MMCA.ADC/.github/workflows/e2e.yml:226-233`). Both `App.razor` comments cite the same trace evidence:
-  under `InteractiveAuto` each test's second page load switched to the background-downloaded WASM bundle,
-  whose runtime boot on a shared 2-core runner exceeded every suite wait while the download starved the
-  live circuits.
+  The switch is the framework's `E2eRenderMode`: `Resolve` returns `InteractiveWebAssembly` when
+  `E2E:ForceWebAssembly` is true, otherwise `InteractiveServer` when `E2E:ForceServer` is true, otherwise
+  `InteractiveAuto`, so WebAssembly wins when both are set and the switch is inert when neither is
+  (`E2eRenderMode.cs:18`, `E2eRenderMode.cs:24`, `E2eRenderMode.cs:33-45`). Both web heads call it from
+  `App.razor` (`MMCA.ADC/.../App.razor:73`, `MMCA.Store/.../App.razor:45`), so both honor both keys. Those
+  config keys are injected only through the AppHosts, and only when the matching environment variable is
+  present: the shared `WithE2eForceWebAssembly` forwards `E2E__ForceWebAssembly` only when
+  `E2E_FORCE_WASM` is true, and `WithE2eForceServer` forwards `E2E__ForceServer` only when
+  `E2E_FORCE_SERVER` is true and `E2E_FORCE_WASM` is not, so the AppHost applies the same precedence
+  (`MMCA.Common/Source/Hosting/MMCA.Common.Aspire.Hosting/Extensions.cs:443-452`, `Extensions.cs:467-474`).
+  Both AppHosts call both extensions unconditionally
+  (`MMCA.ADC/Source/Hosting/MMCA.ADC.AppHost/Program.cs:405`, `Program.cs:413`;
+  `MMCA.Store/Source/Hosting/MMCA.Store.AppHost/Program.cs:418`, `Program.cs:423`). In CI only
+  `E2E_FORCE_SERVER` is exported (`MMCA.ADC/.github/workflows/e2e.yml:245`,
+  `MMCA.Store/.github/workflows/e2e.yml:234`); ADC's workflow deliberately does **not** set
+  `E2E_FORCE_WASM` and records why (`MMCA.ADC/.github/workflows/e2e.yml:230-237`). The
+  `WithE2eForceServer` summary records the reason for the pin: under `InteractiveAuto` the post-login second
+  page load switches to the background-downloaded WASM runtime, whose boot on a shared 2-core CI runner
+  exceeds every suite wait (`Extensions.cs:430-434`).
 - **Adoption is not uniform: two hosts are `InteractiveServer`-only and hardcode it.** MMCA.Helpdesk pins
   the literal mode on `HeadOutlet` and `Routes`
   (`MMCA.Helpdesk/Source/Hosts/UI/MMCA.Helpdesk.UI.Web/Components/App.razor:23`, `App.razor:27`) and
@@ -234,7 +270,11 @@ layer rather than by weakening the render mode.
   only inflate the HTML.
 - **The E2E pin is a runner concession, not a product decision.** Pinning `InteractiveServer` is confined
   to a config flag that only the AppHost sets and only CI exports, so the production and local-dev path
-  is unchanged by it, and the flag's justification (with run ids) lives next to the code that reads it.
+  is unchanged by it, and the flag's justification lives with the AppHost extension that forwards it and
+  the workflow that exports it (`Extensions.cs:430-434`, `MMCA.ADC/.github/workflows/e2e.yml:239-245`).
+  Because the selector is one framework type, both web heads that call it resolve the flags with the
+  same precedence (`E2eRenderMode.cs:7-11`); Helpdesk does not call it and hardcodes `InteractiveServer`
+  (`MMCA.Helpdesk/Source/Hosts/UI/MMCA.Helpdesk.UI.Web/Components/App.razor:23`, `:27`).
 
 ## Trade-offs
 - **Everything shared has to run in both runtimes.** The WASM-compatibility layer rule
@@ -242,16 +282,17 @@ layer rather than by weakening the render mode.
   Application, Infrastructure or API, so anything server-only needs a second package
   (`MMCA.Common.UI.Web`) and an explicit `AddAdditionalAssemblies` entry in every app host (the
   component gallery adds only `MMCA.Common.UI`, `MMCA.Common/Tests/Presentation/MMCA.Common.UI.Gallery/GalleryHost.cs:140`).
-- **Service registration is duplicated per head and can drift.** The WASM client and the server host
-  register the same MudBlazor, `AddUIShared`, capability and per-module services in two separate
-  `Program.cs` files; nothing checks that the two lists agree, so a service added to one and not the other
-  fails only in the runtime that missed it.
+- **Service registration is duplicated per head and can drift.** The WASM client registers MudBlazor,
+  `AddUIShared`, capability and per-module services in its own `Program.cs`, while the server host takes
+  the shared ones from the composed call (`BlazorWebHostExtensions.cs:87-97`) and the per-module ones from
+  its own `Program.cs`; nothing checks that the two lists agree, so a service added to one and not the
+  other fails only in the runtime that missed it.
 - **The double-fetch fix is opt-in per page, not a framework guarantee.** Only pages that inherit
   `DataGridListPageBase`, hand-roll the pattern (`CatalogBrowse`), declare `[PersistentState]` (the three
   ADC public detail pages) or take the `RendererInfo.IsInteractive` guard avoid the duplicate work; a new
   page that does none of the four silently fetches twice on every load. No test or analyzer flags that.
 - **Only the list-page prerender fetch is time-bounded.** The detail pages that fetch during prerender
-  pass either the page's lifetime token (`DetailPageBase.cs:38`, `PublicSessionDetail.razor.cs:129`,
+  pass either the page's `PageToken` (`CancellablePageBase.cs:27`, `PublicSessionDetail.razor.cs:129`,
   `PublicSpeakerDetail.razor.cs:107`) or, on the event page, a per-load token
   (`PublicEventDetail.razor.cs:110`), with no `CancelAfter` on either, so a cold or unreachable backend can hold
   their prerender, which is the hazard `ADCHome` skips its fetch to avoid and `PrerenderFetchTimeoutMs`
@@ -404,4 +445,5 @@ the WASM-side culture bootstrap both clients run), ADR-028 (the theme faces the 
 problem and records the residual `InteractiveAuto` flash), ADR-051 (the client token lifecycle whose three
 storage stories exist because of this split, and whose "the UI code above them never branches on render
 mode" invariant this root-level choice makes possible), ADR-042 (the MAUI head, which hosts the same
-components in a BlazorWebView and therefore sits outside the render-mode model entirely).
+components in a BlazorWebView and therefore sits outside the render-mode model entirely), ADR-146 (the
+UI page bases, including the `CancellablePageBase` whose `PageToken` ends with the page instance).

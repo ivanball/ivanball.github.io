@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 141 ADRs</summary>
+        <summary>All 146 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -241,6 +241,11 @@
         <li><a href="139-passkeys-webauthn-opt-in-sign-in.html">139 · Passkeys (WebAuthn) as an Opt-In Sign-In and Second Factor</a></li>
         <li><a href="140-machine-clients-oauth-client-credentials.html">140 · Machine Clients Through OAuth Client Credentials Backed by Service Accounts</a></li>
         <li><a href="141-two-framework-lines-from-one-tree.html">141 · Two .NET Framework Lines From One Source Tree (net10.0 and net11.0)</a></li>
+        <li><a href="142-outbound-webhooks-and-delivery-lane.html">142 · Outbound Webhooks (Signed Delivery over Internal Commands, with a Dedicated Delivery Lane)</a></li>
+        <li><a href="143-process-manager-primitive.html">143 · Process-Manager Primitive (Consumer-Owned Process Aggregate, Timeouts over Internal Commands)</a></li>
+        <li><a href="144-offline-writes-and-delta-reads.html">144 · Offline Writes and Delta Reads (Client Write Queue, Server Change Feed with Tombstones)</a></li>
+        <li><a href="145-opt-in-cursor-paging.html">145 · Opt-In Cursor Paging on List Endpoints (Beside Offset Paging)</a></li>
+        <li><a href="146-ui-page-bases-and-list-shell.html">146 · UI Page Bases and the List Shell (Bases Own Plumbing, Pages Own Model and Service Call)</a></li>
           </ol>
         </nav>
       </details>
@@ -269,7 +274,18 @@
           factory-built client (not the JwtBearer backchannel or a missed self-request warm-up, which a caller&#39;s
           factory-built client sees and retries once for idempotent verbs), and the <code>redis</code> PING check is cited at its
           real registration in <code>AddInfrastructureHealthChecks</code>, which adds it only for a connection string named
-          <code>redis</code>.</p>
+          <code>redis</code>. Revised 2026-11-12 (unreleased, on the <code>feat/fresh-eyes-wave</code> branch): the readiness and liveness semantics recorded here are asserted under a
+          real dependency outage by the AppHost tier&#39;s <code>DependencyOutageTestBase</code>
+          (<a href="117-apphost-integration-test-base.html">ADR-117</a>): a database outage fails <code>/health</code> and
+          <code>/health/ready</code>, a broker or cache outage fails <code>/health</code> only, and <code>/alive</code> answers 200 at the baseline and at one
+          read during the outage, without being polled
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Testing.Aspire/Outages/OutageExpectation.cs:18-20</code>,
+          <code>MMCA.Common/Source/Hosting/MMCA.Common.Testing.Aspire/Outages/DependencyOutageTestBase.cs:105</code>,
+          <code>:120-127</code>).
+          Every infrastructure check runs under <code>HealthChecks:CheckTimeoutSeconds</code> (5 seconds by default, 1 to
+          60), so a dependency that does not answer turns the report unhealthy instead of leaving the last one in
+          place (<code>Source/Hosting/MMCA.Common.Aspire/Extensions.Health.cs:50-53</code>, default at
+          <code>Source/Hosting/MMCA.Common.Aspire/Health/HealthReportCacheOptions.cs:55</code>).</p>
           <h2 id="context">Context</h2>
           <p>On the Azure Container Apps Consumption plan a replica that has been idle is CPU-throttled, and a
           scale-from-zero or scaled-out replica starts cold. The first authenticated request on such a replica

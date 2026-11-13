@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 141 ADRs</summary>
+        <summary>All 146 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -241,6 +241,11 @@
         <li><a href="139-passkeys-webauthn-opt-in-sign-in.html">139 · Passkeys (WebAuthn) as an Opt-In Sign-In and Second Factor</a></li>
         <li><a href="140-machine-clients-oauth-client-credentials.html">140 · Machine Clients Through OAuth Client Credentials Backed by Service Accounts</a></li>
         <li><a href="141-two-framework-lines-from-one-tree.html">141 · Two .NET Framework Lines From One Source Tree (net10.0 and net11.0)</a></li>
+        <li><a href="142-outbound-webhooks-and-delivery-lane.html">142 · Outbound Webhooks (Signed Delivery over Internal Commands, with a Dedicated Delivery Lane)</a></li>
+        <li><a href="143-process-manager-primitive.html">143 · Process-Manager Primitive (Consumer-Owned Process Aggregate, Timeouts over Internal Commands)</a></li>
+        <li><a href="144-offline-writes-and-delta-reads.html">144 · Offline Writes and Delta Reads (Client Write Queue, Server Change Feed with Tombstones)</a></li>
+        <li><a href="145-opt-in-cursor-paging.html">145 · Opt-In Cursor Paging on List Endpoints (Beside Offset Paging)</a></li>
+        <li><a href="146-ui-page-bases-and-list-shell.html">146 · UI Page Bases and the List Shell (Bases Own Plumbing, Pages Own Model and Service Call)</a></li>
           </ol>
         </nav>
       </details>
@@ -272,6 +277,12 @@
           <p>Revised 2026-10-28: decision 8 records that the runtime boundary test covers a subset of the
           compile-time rule and that its trailing-dot <code>MMCA.Common.Aspire.</code> entry matches nothing, so the
           Aspire ban rests on the compile-time gate; anchors are refreshed.</p>
+          <p>Revised 2026-11-12 (unreleased, on the <code>feat/fresh-eyes-wave</code> branch): the package carries
+          <code>DependencyOutageTestBase&lt;TFixture&gt;</code>, which stops and starts a dependency through the orchestrator
+          and asserts readiness, liveness, the full health report and, when a scenario names an outbox
+          database, an outbox drain (decision 11); MMCA.Common&#39;s <code>apphost-testing</code> job runs an outage scenario
+          over SQL Server and RabbitMQ containers; MMCA.ADC&#39;s adoption branch adds an opt-in AppHost outage
+          tier, which its workflow can build only once the base is released and ADC&#39;s pin moves to it; the rejected outbox-drain helper is revisited; anchors are refreshed (see Revision (2026-11-12)).</p>
           <h2 id="context">Context</h2>
           <p>The AppHost is the only file that states how a whole stack fits together: which project resources
           exist, which database each one owns, which broker they share, where JWKS discovery points, and the
@@ -359,9 +370,10 @@
           (<code>.../DeveloperCertificateAvailability.cs:61-75</code>). Installing or trusting a certificate is a
           machine-level act a test fixture has no business performing silently; a CI job that needs one runs
           <code>dotnet dev-certs https --trust</code> as an explicit step. The framework&#39;s own <code>apphost-testing</code> job
-          needs none, because its sample AppHost serves cleartext only, and its header says a consumer stack
-          with an https launch profile adds that step (<code>MMCA.Common/.github/workflows/ci.yml:1021</code>,
-          <code>:1034-1037</code>).</p>
+          needs none, because neither of its sample scenarios needs a development certificate, and its
+          header says a consumer stack with an https launch profile adds that step
+          (<code>MMCA.Common/.github/workflows/ci.yml:1069</code>, <code>:1086-1089</code>). ADC&#39;s outage workflow is such a
+          stack and runs the step (<code>MMCA.ADC/.github/workflows/apphost-tests.yml:64-65</code>).</p>
           </li>
           <li><p><strong>The RS256 keypair is minted when the environment has none.</strong> <code>EphemeralRsaKeyPair.Create()</code>
           (<code>.../Preconditions/EphemeralRsaKeyPair.cs:42</code>) generates an RSA-2048 pair and the fixture pushes
@@ -387,7 +399,12 @@
           prove something already proven: the database resource has its own Aspire health check and the
           fixture waited for the service that references it to become healthy. What is NOT otherwise proven,
           and what this does assert, is that the routing key the multi-database resolver reads is the one
-          the AppHost wrote. A typo in a logical name is invisible to a build and to every in-process tier.</p>
+          the AppHost wrote. A typo in a logical name is invisible to a build and to every in-process tier.
+          The package does reference one provider directly, for one purpose: the outage base&#39;s outbox count
+          (decision 11) uses <code>Microsoft.Data.SqlClient</code> for SQL Server only and leaves any other engine to an
+          override (<code>.../Outages/DependencyOutageTestBase.cs:5</code>, <code>:310-342</code>). That provider is already in
+          the graph through <code>MMCA.Common.Testing</code>; the direct reference exists because the package&#39;s own code
+          calls it (<code>.../MMCA.Common.Testing.Aspire.csproj:25-27</code>, <code>:35</code>).</p>
           </li>
           <li><p><strong>The package&#39;s layer ceiling is <code>MMCA.Common.Testing</code>, enforced at compile time, with a runtime gate for part of it.</strong> It reuses
           <code>JwtTokenGenerator</code> and reaches Application and API only through that one edge. The compile-time
@@ -429,10 +446,11 @@
           </li>
           <li><p><strong>The tier runs in CI, blocking, against an in-repo sample.</strong> The <code>apphost-testing</code> job carries
           no <code>continue-on-error</code>, so a red fails the run, but it is not a required merge check
-          (<code>MMCA.Common/.github/workflows/ci.yml:1021</code>, <code>:1026-1027</code>).
-          <code>Tests/Hosting/MMCA.Common.Testing.Aspire.AppHostTests</code> boots a sample AppHost with a SQLite file
-          and ONE sample service project declared as TWO resources, so it needs no container runtime, and
-          asserts every helper against it. The two resources are the two cleartext protocol profiles,
+          (<code>MMCA.Common/.github/workflows/ci.yml:1069</code>, <code>:1074-1075</code>).
+          <code>Tests/Hosting/MMCA.Common.Testing.Aspire.AppHostTests</code> boots, in its default scenario, a sample
+          AppHost with a SQLite file and ONE sample service project declared as TWO resources, so that
+          scenario needs no container runtime (<code>ci.yml:1082-1084</code>), and asserts every helper against it.
+          The two resources are the two cleartext protocol profiles,
           because a cleartext Kestrel endpoint serves one or the other: <code>sample</code> runs <code>HttpProtocols.Http1</code>
           for the ordinary probes, and <code>sample-h2c</code> runs <code>HttpProtocols.Http2</code> alone, which is what h2c
           prior knowledge requires (without TLS there is no ALPN, so an <code>Http1AndHttp2</code> endpoint answers
@@ -440,6 +458,18 @@
           <code>WithH2cHealthCheck()</code> rather than Aspire&#39;s stock HTTP probe, so the tier proves that helper end
           to end as well: the stock probe speaks HTTP/1.1, and nothing else could have turned that resource
           healthy.</p>
+          <p>The same project carries an outage scenario. <code>SampleOutageTests</code> derives
+          <code>DependencyOutageTestBase&lt;SampleOutageAppHostFixture&gt;</code>
+          (<code>MMCA.Common/Tests/Hosting/MMCA.Common.Testing.Aspire.AppHostTests/SampleOutageTests.cs:23-24</code>)
+          over a SQL Server container (<code>sql</code>) and a RabbitMQ container (<code>rabbitmq</code>)
+          (<code>.../SampleOutageAppHostFixture.cs:15</code>, <code>:21</code>), and runs a database outage, a broker outage
+          that parks one outbox row and asserts it drains, and a raw stop-and-start
+          (<code>SampleOutageTests.cs:30</code>, <code>:46</code>, <code>:66</code>). It stops and starts real containers, so the job needs
+          Docker and its budget is 40 minutes (<code>ci.yml:1073</code>, <code>:1084-1086</code>). Because a SQL Server container
+          with no data volume comes back from a stop and start with no tables, the sample service keeps its
+          own schema: <code>SampleSchemaKeeper</code>, a background service, calls <code>EnsureCreatedAsync</code> once a second
+          (<code>MMCA.Common/Tests/Hosting/MMCA.Common.Testing.Aspire.AppHostTests.SampleService/SampleSchemaKeeper.cs:8-15</code>,
+          <code>:23</code>, <code>:41</code>).</p>
           <p><strong>What the AppHost tier cannot prove, learned from the first real run:</strong> that a SERVICE refuses
           HTTP/1.1. Aspire fronts a project resource with its own endpoint proxy, so the protocol a client
           observes there is the proxy&#39;s, and the proxy serves HTTP/1.1 itself even when the service behind
@@ -452,9 +482,57 @@
           committed from Windows fails the solution&#39;s locked-mode restore on an ubuntu runner, and the fast
           solution-wide unit loop must not build or discover an orchestrator.</p>
           </li>
+          <li><p><strong>A dependency outage is a scenario the base runs, not a script each consumer writes.</strong>
+          <code>DependencyOutageTestBase&lt;TFixture&gt;</code>
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Testing.Aspire/Outages/DependencyOutageTestBase.cs:35</code>)
+          derives <code>AppHostTestBase&lt;TFixture&gt;</code>, and <code>RunOutageAsync</code> (<code>:82</code>) runs one scenario end to end. It
+          opens with a baseline, <code>/health/ready</code> and <code>/alive</code> both 200, so a previous scenario must have
+          recovered (<code>:102-106</code>). It stops the dependency through the orchestrator&#39;s stop command and waits
+          for <code>Exited</code> or <code>Finished</code> (<code>StopResourceAsync</code>, <code>:177-200</code>, the command at <code>:181</code>), then polls
+          until the full report and readiness answer what the outage kind prescribes (<code>:115-118</code>): a
+          database outage fails both, while a broker or cache outage fails <code>/health</code> and keeps
+          <code>/health/ready</code> at 200 (<code>.../Outages/OutageExpectation.cs:18-20</code>), which is the <code>optional</code>
+          tagging of <a href="025-startup-warmup-readiness.html">ADR-025</a>. Once those answers are reached, one GET of
+          <code>/alive</code> must return 200 (<code>:120-127</code>); liveness is not polled during the outage wait, the start
+          or the recovery. It then runs the scenario&#39;s own work, starts the dependency again through the start
+          command and waits for it to report healthy (<code>StartResourceAsync</code>, <code>:211-233</code>), and asserts
+          recovery: <code>/health</code> and <code>/health/ready</code> back at 200 (<code>:156-160</code>). A failure while the dependency
+          is down still issues the start command once, best effort, so one red scenario does not take the
+          next one down (<code>:148-154</code>, <code>:391-394</code>). No startup waits on readiness: the baseline polls
+          <code>/health/ready</code> for at most the <code>Probe</code> budget and fails the test rather than hanging when it
+          does not reach 200 (<code>:103</code>, <code>:290-298</code>), and readiness is otherwise asserted (<code>:29-30</code>), which
+          keeps decision 2 and the liveness rule in Context. A probe that fails with an
+          <code>HttpRequestException</code> or does not answer within 10 seconds counts as &quot;not yet&quot;, never as a pass
+          (<code>:52</code>, <code>:245-270</code>, the two catches at <code>:262</code> and <code>:266</code>); any other exception, for example from
+          creating the client (<code>:251</code>), fails the test,
+          and the waits spend three budgets, <code>StateChange</code>, <code>Probe</code> and <code>Drain</code> (<code>:183</code> and <code>:217</code>, <code>:290</code>, <code>:353</code>;
+          defaults at <code>.../Outages/DependencyOutageBudget.cs:16</code>). The outage answers depend on the
+          framework&#39;s per-check timeout, <code>HealthChecks:CheckTimeoutSeconds</code> (5 seconds by default, 1 to
+          60): a check still running when it expires is reported with its failure status, so a dependency
+          that does not answer turns <code>/health</code> unhealthy instead of leaving the last report in place
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Extensions.Health.cs:50-53</code>;
+          <code>MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Health/HealthReportCacheOptions.cs:55</code>).</p>
+          <p><strong>The outbox drain is asserted by a helper the package carries.</strong> A broker scenario may name the database
+          resource that holds the outbox (any other outage kind that does is refused, <code>:89-96</code>); the base
+          then asserts at least one row is pending while the broker is down (<code>:134-143</code>) and, after
+          recovery, polls <code>AssertOutboxDrainedAsync</code> (<code>:351-369</code>) until the pending count reaches zero. The
+          count is the virtual <code>CountPendingOutboxMessagesAsync</code> (<code>:320-342</code>), which resolves the
+          resource&#39;s connection string and counts, through <code>Microsoft.Data.SqlClient</code>, the rows of
+          <code>OutboxTableName</code> (default <code>dbo.OutboxMessages</code>, <code>:64</code>) whose <code>ProcessedOn</code> is null; another
+          engine overrides it (<code>:310-315</code>).</p>
+          <p><strong>Data survival is the consumer&#39;s problem, and the base cannot see it.</strong> Starting a stopped
+          Aspire container resource recreates the container, so a database container with no data volume
+          comes back empty. The base&#39;s documentation states it, with the condition a database outage needs
+          to recover (a data volume, a persistent lifetime, or a service that rebuilds its own schema;
+          <code>:23-27</code>, <code>:70-72</code>). The base asserts probe status codes only, and a readiness check can pass as
+          soon as the database exists, up to one schema-keeper tick before its tables do
+          (<code>MMCA.Common/Tests/Hosting/MMCA.Common.Testing.Aspire.AppHostTests/SampleOutageTests.cs:118-120</code>),
+          so a recovered readiness does not distinguish a database that kept its data from one that came
+          back empty.</p>
+          </li>
           </ol>
           <h2 id="rationale">Rationale</h2>
-          <p>Six shapes were weighed, and each rejection is a property the package keeps:</p>
+          <p>Six shapes were weighed. Five rejections are properties the package keeps; the sixth was revisited:</p>
           <ul>
           <li><strong>Leave it as a per-repo copy.</strong> Rejected: that is what produced roughly a hundred lines of budget
           and poll-loop code in ADC guarding one assertion, and it puts the same copy in every other repo
@@ -477,33 +555,46 @@
           readiness endpoint aggregates downstream and warm-up checks, so a startup gate on it can deadlock
           the dependency graph. <code>/alive</code> is the startup signal; readiness is something a test asserts about a
           service, never something a startup gate waits on.</li>
-          <li><strong>Add a generic outbox-drain helper.</strong> Considered and left out: there is no engine-agnostic HTTP
+          <li><strong>Add a generic outbox-drain helper.</strong> Left out at first, because there is no engine-agnostic HTTP
           signal for &quot;the outbox has drained&quot;, so any helper would either poll a database (an ADO provider
-          per engine, see decision 7) or poll a consumer-specific endpoint. A consumer that needs it writes
-          four lines over the existing <code>TestPolling.PollUntilAsync</code>.</li>
+          per engine, see decision 7) or poll a consumer-specific endpoint. Revisited on 2026-11-12 and
+          adopted in a narrower shape: the outage tier exists to prove that rows parked during a broker
+          outage drain, so the base carries <code>AssertOutboxDrainedAsync</code> over a virtual SQL Server count, the
+          engine both the sample and ADC hold that outbox on
+          (<code>MMCA.Common/Tests/Hosting/MMCA.Common.Testing.Aspire.AppHostTests/SampleOutageAppHostFixture.cs:15-18</code>;
+          <code>MMCA.ADC/Tests/Integration/MMCA.ADC.AppHost.OutageTests/AdcOutageAppHostFixture.cs:21-31</code>), and
+          leaves every other engine to an override (decision 11). The engine-agnostic HTTP signal still does
+          not exist.</li>
           </ul>
           <h2 id="trade-offs">Trade-offs</h2>
           <ul>
-          <li><strong>A consumer&#39;s AppHost tier is a subclass, and neither consumer carries one today.</strong> While both
-          consumers ran the tier (2026-09-11 to 2026-10-07), each was a fixture plus a test class over the
+          <li><strong>A consumer&#39;s AppHost tier is a subclass; MMCA.ADC carries one, an outage tier.</strong> While both
+          consumers ran a smoke tier (2026-09-11 to 2026-10-07), each was a fixture plus a test class over the
           package: ADC&#39;s was two files, a fixture whose body was three overrides (<code>RequiredEnvironment</code>,
           <code>Budget</code> with twelve minutes startup and eight readiness, and <code>ResourcesToAwait</code>) and a test class
-          over <code>AppHostTestBase&lt;AdcAppHostFixture&gt;</code>, and Store&#39;s had the same shape. Both projects, and the
-          <code>apphost-smoke</code> job that ran them, are removed. Each consumer&#39;s real AppHost composition is exercised
-          instead by its <code>e2e.yml</code>, which boots the AppHost for every E2E run, including the deploy&#39;s chromium
-          <code>e2e-gate</code> (<code>MMCA.ADC/.github/workflows/e2e.yml:34-36</code>, <code>:242</code>;
-          <code>MMCA.Store/.github/workflows/e2e.yml:252</code>), and the base itself by MMCA.Common&#39;s own tier
-          (<code>MMCA.ADC/AGENTS.md:79</code>, <code>MMCA.Store/AGENTS.md:78</code>). The package is unchanged, so a consumer that
-          wants the wiring assertions back writes the subclass again rather than a harness.</li>
+          over <code>AppHostTestBase&lt;AdcAppHostFixture&gt;</code>, and Store&#39;s had the same shape. Both smoke projects, and
+          the <code>apphost-smoke</code> job that ran them, are removed. Each consumer&#39;s real AppHost composition is
+          exercised instead by its <code>e2e.yml</code>, which boots the AppHost for every E2E run, including the
+          deploy&#39;s chromium <code>e2e-gate</code> (<code>MMCA.ADC/.github/workflows/e2e.yml:34-36</code>, <code>:242</code>;
+          <code>MMCA.Store/.github/workflows/e2e.yml:252</code>). ADC&#39;s outage tier has the same shape again: a fixture
+          with those three overrides plus a builder hook
+          (<code>MMCA.ADC/Tests/Integration/MMCA.ADC.AppHost.OutageTests/AdcOutageAppHostFixture.cs:16</code>, <code>:59-62</code>,
+          <code>:68-69</code>, <code>:75-76</code>, <code>:85</code>) and a test class over
+          <code>DependencyOutageTestBase&lt;AdcOutageAppHostFixture&gt;</code> (<code>AdcDependencyOutageTests.cs:22-23</code>); see the
+          Revision (2026-11-12).</li>
           <li><strong>Cost: this is the slowest tier per assertion, and it blocks the CI run without being a required
           merge check.</strong> The <code>apphost-testing</code> job has no <code>continue-on-error</code>, so a red fails the MMCA.Common
-          CI run, but it is not a required merge check (<code>MMCA.Common/.github/workflows/ci.yml:1026-1027</code>).</li>
-          <li><strong>A consumer&#39;s real stack still needs Docker on the runner.</strong> The in-repo sample avoids containers
-          on purpose, so the framework&#39;s own CI does not pay for image pulls, but ADC&#39;s AppHost starts SQL
-          Server, Redis, RabbitMQ and MailDev. That is why <code>AppHostEnvironmentRequirement.Docker</code> is part of
-          the inherited default and the sample fixture opts OUT of it
-          (<code>MMCA.Common/Tests/Hosting/MMCA.Common.Testing.Aspire.AppHostTests/SampleAppHostFixture.cs:42</code>)
-          rather than the other way round.</li>
+          CI run, but it is not a required merge check (<code>MMCA.Common/.github/workflows/ci.yml:1074-1075</code>).
+          ADC&#39;s outage tier runs from its own workflow, which is neither a required check nor a deploy gate
+          (<code>MMCA.ADC/.github/workflows/apphost-tests.yml:10-11</code>).</li>
+          <li><strong>A real stack, and the framework&#39;s outage scenario, need Docker on the runner.</strong> The default
+          sample scenario avoids containers on purpose, and its fixture opts OUT of the inherited
+          <code>AppHostEnvironmentRequirement.Docker</code>
+          (<code>MMCA.Common/Tests/Hosting/MMCA.Common.Testing.Aspire.AppHostTests/SampleAppHostFixture.cs:42-43</code>)
+          rather than the other way round. The outage fixture keeps the inherited opt-in plus Docker,
+          because it stops real containers (<code>.../SampleOutageAppHostFixture.cs:9</code>), so the framework&#39;s own job
+          now pays for SQL Server and RabbitMQ image pulls (<code>ci.yml:1084-1086</code>). ADC&#39;s AppHost starts SQL
+          Server, Redis, RabbitMQ and MailDev (<code>AdcOutageAppHostFixture.cs:10-11</code>).</li>
           <li><strong>The framework carries one more package</strong> (<code>MMCA.Common.Testing.Aspire</code>, listed with the current
           count in <code>MMCA.Common/FACTS.md:43</code>), and every <code>MMCA.Common.*</code> pin
           in each consumer&#39;s <code>Directory.Packages.props</code> moves together at the next release
@@ -634,6 +725,69 @@
           &quot;No AppHost smoke project&quot; rule at <code>MMCA.ADC/AGENTS.md:79</code> and <code>MMCA.Store/AGENTS.md:78</code>
           (Trade-offs). The anchors inside earlier revisions stay as written.</li>
           </ol>
+          <h2 id="revision-2026-11-12">Revision (2026-11-12)</h2>
+          <p>The decisions above stand; one is added (decision 11), the Common tier gains an outage scenario,
+          MMCA.ADC&#39;s adoption branch adds an AppHost tier again, and one rejected alternative is revisited. The Revision
+          (2026-10-07) stays as written: its removal of the consumer smoke projects still holds, and ADC&#39;s new
+          tier is an outage tier, not the smoke project returning.</p>
+          <ol>
+          <li><strong>The package carries an outage base.</strong> <code>DependencyOutageTestBase&lt;TFixture&gt;</code>
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Testing.Aspire/Outages/DependencyOutageTestBase.cs:35</code>)
+          stops and starts a dependency through the orchestrator&#39;s commands (<code>:181</code>, <code>:215</code>) and asserts
+          readiness, liveness, the full report and, when a scenario names the outbox database, an outbox
+          drain (<code>:134</code>, <code>:162</code>). Decision 11
+          records it.</li>
+          <li><strong>The Common tier runs it.</strong> <code>SampleOutageTests</code>
+          (<code>MMCA.Common/Tests/Hosting/MMCA.Common.Testing.Aspire.AppHostTests/SampleOutageTests.cs:23-24</code>)
+          runs a database, a broker and a stop-and-start scenario over SQL Server and RabbitMQ containers, so
+          the <code>apphost-testing</code> job needs Docker and runs under a 40-minute budget
+          (<code>MMCA.Common/.github/workflows/ci.yml:1073</code>, <code>:1084-1086</code>). The sample service rebuilds its
+          schema in <code>SampleSchemaKeeper</code> because a recreated container comes back empty
+          (<code>.../SampleService/SampleSchemaKeeper.cs:12-15</code>). Decision 10 and Trade-offs now say so.</li>
+          <li><strong>ADC&#39;s AppHost tier returns as an opt-in outage tier.</strong>
+          <code>Tests/Integration/MMCA.ADC.AppHost.OutageTests</code> boots the real ADC AppHost and runs two scenarios
+          on the Notification service&#39;s probes: a Redis (cache) outage and a RabbitMQ (broker) outage
+          (<code>MMCA.ADC/Tests/Integration/MMCA.ADC.AppHost.OutageTests/AdcDependencyOutageTests.cs:26</code>, <code>:45</code>;
+          <code>AdcOutageAppHostFixture.cs:37</code>). The broker scenario registers an attendee through the gateway
+          while the broker is down and asserts that Identity&#39;s outbox drains afterwards
+          (<code>AdcDependencyOutageTests.cs:58-59</code>, <code>:73-97</code>). It runs on throwaway containers: the fixture moves
+          every container the AppHost declares persistent to the session lifetime and refuses to start,
+          throwing, if any container still reads as persistent (<code>AdcOutageAppHostFixture.cs:111-127</code>, the
+          check at <code>:136-147</code>). There is deliberately no SQL Server scenario: a recreated SQL Server comes
+          back with empty databases and the services migrate only at start, so a recovered readiness would be
+          asserted over services whose schema is gone (<code>AdcDependencyOutageTests.cs:14-19</code>). The fixture
+          requires the opt-in variable, Docker and a development certificate
+          (<code>AdcOutageAppHostFixture.cs:59-62</code>); the certificate gate checks only that one is present and not
+          expired in the current user&#39;s store, never that it is trusted
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Testing.Aspire/Preconditions/DeveloperCertificateAvailability.cs:30-35</code>,
+          <code>:44-53</code>), and each test skips with the gate&#39;s reason when one is
+          missing (<code>AdcDependencyOutageTests.cs:28-31</code>); the opt-in is <code>MMCA_APPHOST_TESTS</code>, which the
+          workflow sets (<code>MMCA.ADC/.github/workflows/apphost-tests.yml:74</code>). The project sits outside
+          <code>MMCA.ADC.slnx</code> and both solution filters (<code>apphost-tests.yml:11-12</code>). It takes
+          <code>MMCA.Common.Testing.Aspire</code> as a package
+          (<code>MMCA.ADC/Tests/Integration/MMCA.ADC.AppHost.OutageTests/MMCA.ADC.AppHost.OutageTests.csproj:14</code>)
+          pinned at 1.288.0 (<code>MMCA.ADC/Directory.Packages.props:183</code>), a release that predates the outage
+          base, so it builds only in local source mode until MMCA.Common releases the base and ADC&#39;s pin
+          moves to that release; the workflow below cannot build it before then.</li>
+          <li><strong>ADC runs it from a non-required workflow.</strong> <code>apphost-tests.yml</code> triggers on <code>workflow_dispatch</code>,
+          on a weekly schedule (<code>cron: &quot;0 7 * * 2&quot;</code>, Tuesdays about 07:00 UTC) and on a pull request that
+          touches <code>Source/Hosting/MMCA.ADC.AppHost/**</code>, <code>Source/Services/**</code>,
+          <code>Tests/Integration/MMCA.ADC.AppHost.OutageTests/**</code> or <code>Directory.Packages.props</code>
+          (<code>apphost-tests.yml:15-25</code>). It is not a required check and not in <code>deploy.needs</code> (<code>:10-11</code>), it
+          tries to trust the development certificate first and, when trusting fails, only creates an
+          untrusted one (<code>dotnet dev-certs https --trust || dotnet dev-certs https</code>, <code>:64-65</code>), which the
+          presence-only gate accepts, and <code>--minimum-expected-tests 1</code> keeps a run
+          that discovered nothing red (<code>:13</code>, <code>:72</code>).</li>
+          <li><strong>The outbox-drain helper is revisited.</strong> The Rationale&#39;s &quot;Add a generic outbox-drain helper&quot;
+          item now records the 2026-11-12 adoption of <code>AssertOutboxDrainedAsync</code> over a virtual SQL Server
+          count (<code>DependencyOutageTestBase.cs:320-342</code>, <code>:351-369</code>), and decision 7 notes the one ADO
+          provider that brings.</li>
+          <li><strong>Anchors re-verified against current source:</strong> <code>apphost-testing</code> job at
+          <code>MMCA.Common/.github/workflows/ci.yml:1069</code>, the BLOCKING, not-a-required-merge-check comment at
+          <code>:1074-1075</code>, the default-scenario, outage-scenario and consumer <code>dotnet dev-certs https --trust</code>
+          header at <code>:1082-1089</code> (decisions 4 and 10, Trade-offs). The anchors inside earlier revisions stay
+          as written.</li>
+          </ol>
           <h2 id="related">Related</h2>
           <p><a href="098-aspire-orchestration-not-testing-or-dashboards.html">ADR-098</a> (the orchestration posture this tier
           tests without changing),
@@ -641,7 +795,8 @@
           this record follows),
           <a href="016-lockstep-versioning-masstransit-pin.html">ADR-016</a> (the lockstep release this package joins),
           <a href="025-startup-warmup-readiness.html">ADR-025</a> (why a startup gate probes liveness and a test probes
-          readiness),
+          readiness, and the <code>optional</code> tagging the outage base asserts),
+          <a href="003-outbox-dual-dispatch.html">ADR-003</a> (the outbox whose drain the outage base asserts),
           <a href="012-grpc-host-transport.html">ADR-012</a> (the h2c listener the exact-HTTP/2 probe exists for).</p>
           
         <div class="doc-foot btn-row">
@@ -664,6 +819,7 @@
             <li><a href="#revision-2026-10-21">Revision (2026-10-21)</a></li>
             <li><a href="#revision-2026-10-26">Revision (2026-10-26)</a></li>
             <li><a href="#revision-2026-10-28">Revision (2026-10-28)</a></li>
+            <li><a href="#revision-2026-11-12">Revision (2026-11-12)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

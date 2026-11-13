@@ -10,6 +10,7 @@ Revised 2026-10-07: the consumers' lockstep `MMCA.Common.Shared` pin is now 1.23
 Revised 2026-10-21: the OpenAPI base gains an opt-in committed-baseline breaking-change diff that all seven OpenAPI subclasses adopt, the decorator pipeline is now sealed against late registration through the framework helpers, the lockstep pin is 1.250.0, and anchors are refreshed; see the Revision (2026-10-21) below.
 Revised 2026-10-26: anchors refreshed after the v1.261.0 consumer sweep (the lockstep `MMCA.Common.Shared` pin is now 1.261.0 and the ADC pin anchor moved to `Directory.Packages.props:108`), with the `MiddlewarePipelineOrderTestsBase` and ADR-015 / ADR-046 cross-reference anchors re-pointed; see the Revision (2026-10-26) below.
 Revised 2026-10-28: the lockstep `MMCA.Common.Shared` pin is now 1.265.1, and the inventory of MMCA.Common's own conformance self-tests names the tenancy-base and breaking-change-detector tests; see the Revision (2026-10-28) below.
+Amended 2026-11-12 (unreleased, on the `feat/fresh-eyes-wave` branch): the test tier gains `ServiceHostTestFactory` and `ReplaceWithFake`, and the structural package gains the cache-invalidation and process-timeout convention bases; see the Revision (2026-11-12) below.
 
 ## Context
 ADR-015 turned the architecture invariants into build-gating tests, and drew its own boundary
@@ -536,6 +537,58 @@ conformance tests now names every file in that folder.
    `CorePublicResources` (`:71`) anchors in `OpenApiContractTestsBase.cs` are current, which
    supersedes the `:38` and `:51` the 2026-09-25 Revision cites (`:51` now declares
    `OpenApiDocumentPath`).
+
+## Revision (2026-11-12): a service-host test factory, a fake-swap helper, and two convention bases
+
+The seven contract bases and their subclass inventory above are unchanged. The packaged test tier
+gains two helpers in `MMCA.Common.Testing`, and the structural package gains two convention bases.
+None of the four is counted among the seven.
+
+- **`ServiceHostTestFactory<TProgram>`**
+  (`MMCA.Common/Source/Hosting/MMCA.Common.Testing/Fixtures/ServiceHostTestFactory.cs:31`) is a
+  `WebApplicationFactory` base whose sealed `ConfigureWebHost` (`:52`) applies the test defaults in a
+  fixed order: the `Testing` environment (`:35`, `:81`), `RequireHttpsMetadata` set to `false`
+  (`:82`), then the `ConfigureHost` hook (`:64`, `:84`), then one test-services callback that
+  re-points the `Bearer` scheme at the committed test key when `Audience` is set (`:43`, `:90-95`),
+  neutralizes the global rate limiter under `RateLimiterPartitionName` (default
+  `integration-tests`, `:49`, `:97-100`) and last calls `ConfigureTestServices` (`:73`, `:102`), so a
+  fake registered there wins over the host's own registration. It never overrides `CreateHost` and
+  touches no environment variable (`:26-27`).
+- **`ReplaceWithFake`**
+  (`MMCA.Common/Source/Hosting/MMCA.Common.Testing/Support/ServiceCollectionFakeExtensions.cs:24`,
+  `:44`, `:64`) removes every unkeyed registration of a service and adds the fake, by default with
+  the lifetime of the last registration (`:28`), with an explicit lifetime, or as a singleton
+  instance; keyed registrations are left alone (`:81`, `:97`). When the host never registered the
+  service it throws `InvalidOperationException` naming the fake as stale and leaves the collection
+  unchanged (`:87-89`).
+- **`CacheInvalidationConventionTestsBase`**
+  (`MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Bases/Cqrs/CacheInvalidationConventionTestsBase.cs:20`)
+  asserts that every `ICacheInvalidating` type in the mapped Application assemblies implements
+  `ICacheInvalidating<TEntity>` with no `CachePrefix` of its own, or is allow-listed (`:10-12`).
+  Subclassed by MMCA.ADC
+  (`MMCA.ADC/Tests/Architecture/MMCA.ADC.Architecture.Tests/Cqrs/CacheInvalidationConventionTests.cs:14`),
+  MMCA.Store
+  (`MMCA.Store/Tests/Architecture/MMCA.Store.Architecture.Tests/Caching/CacheInvalidationConventionTests.cs:17`)
+  and MMCA.Helpdesk
+  (`MMCA.Helpdesk/Tests/Architecture/MMCA.Helpdesk.Architecture.Tests/Caching/HelpdeskCacheInvalidationConventionTests.cs:11`),
+  and by the framework's own architecture tests
+  (`MMCA.Common/Tests/Architecture/MMCA.Common.Architecture.Tests/Cqrs/Caching/CommonCacheInvalidationConventionTests.cs:11`).
+- **`ProcessTimeoutConventionTestsBase`**
+  (`MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Bases/ProcessManagers/ProcessTimeoutConventionTestsBase.cs:18`)
+  asserts that every concrete `IProcessTimeoutCommand<T>` declares a stable `[InternalCommandName]`
+  and is handled by exactly one `ProcessTimeoutHandlerBase` subclass (`:4-7`), for the process-manager
+  primitive of [ADR-143](143-process-manager-primitive.md). Among consumers, subclassed by MMCA.Store only
+  (`MMCA.Store/Tests/Architecture/MMCA.Store.Architecture.Tests/Cqrs/ProcessTimeoutConventionTests.cs:14`);
+  the framework's self-test subclasses it privately
+  (`MMCA.Common/Tests/Architecture/MMCA.Common.Architecture.Tests/ProcessManagers/ProcessTimeoutConventionFixtureTests.cs:126`,
+  `:131`, `:136`).
+
+The two convention bases are structural (ADR-015), not runtime suites; they are recorded here because
+they were added in the same pass as the two helpers.
+
+The same pass added a dependency-outage base to the AppHost test tier, `DependencyOutageTestBase<TFixture>`
+(`MMCA.Common/Source/Hosting/MMCA.Common.Testing.Aspire/Outages/DependencyOutageTestBase.cs:35`). It
+belongs to that tier, so it is recorded in [ADR-117](117-apphost-integration-test-base.md), not here.
 
 ## Related
 ADR-015 (the structural / registration fitness layer this complements; its stated non-goal, "not

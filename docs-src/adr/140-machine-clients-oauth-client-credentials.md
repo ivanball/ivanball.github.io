@@ -6,6 +6,11 @@ Accepted (2026-11-08). Ships in MMCA.Common v1.281.0. Off unless the host calls
 `MachineClients:Enabled`
 (`MMCA.Common/Source/Core/MMCA.Common.Application/Auth/MachineClients/MachineClientSettings.cs:35-36`,
 default false).
+Amended 2026-11-12: MMCA.ADC is the first consumer to carry machine clients, on its adoption branch,
+switched off in its production configuration as passkeys are
+([ADR-139](139-passkeys-webauthn-opt-in-sign-in.md)); MMCA.Common's unreleased
+`[RefuseMachineClients]` keeps machine clients off the endpoints where a person takes part, and ADC
+declares it on eight controllers (see Consequences).
 
 ## Context
 Only a person could obtain a token: every token-issuing path in the framework is an interactive
@@ -136,8 +141,8 @@ writes the soft-deleted marker, and a role that could escalate can never back a 
 
 ## Trade-offs
 - **Turning it on needs consumer code:** the provisioner, the `IsServiceAccount` answer on the app's
-  user type and the view-as resolver flag (`MMCA.Common/UPGRADING.md:39-52`). No consumer turns it on
-  in v1.281.0, so only Common's tests exercise it.
+  user type and the view-as resolver flag (`MMCA.Common/UPGRADING.md:304-317`). MMCA.ADC is the first
+  consumer to carry that code (see Consequences).
 - **A machine identity is a user row.** It shows up wherever the app lists users unless the app
   filters on `IsServiceAccount`.
 - **Revocation takes effect through the marker's cache.** Outstanding tokens are refused within the
@@ -163,7 +168,87 @@ writes the soft-deleted marker, and a role that could escalate can never back a 
 ## Consequences
 - A consumer that opts in implements the provisioner, calls `AddMachineClients`, adds the
   `MachineClients` migration on its Identity database, routes the two controller subclasses, and grants
-  `clients:manage` to an operator role that no client can hold (`MMCA.Common/UPGRADING.md:39-52`).
+  `clients:manage` to an operator role that no client can hold (`MMCA.Common/UPGRADING.md:304-317`).
+- MMCA.ADC is the first consumer to carry machine clients, on its adoption branch
+  `feat/fresh-eyes-wave`. Its Identity service calls `AddMachineClients`
+  (`MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:176-183`), and it carries the
+  feature switched off in production configuration, exactly as it carries passkeys
+  ([ADR-139](139-passkeys-webauthn-opt-in-sign-in.md)): the service's base `appsettings.json` sets
+  `MachineClients:Enabled` false with `AccessTokenMinutes` 15
+  (`MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/appsettings.json:140-152`, `Enabled` at
+  `:149`), so `auth/token` and every `Admin/MachineClients` route answer 404 there. Only local
+  development turns it on: `appsettings.Development.json`
+  (`MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/appsettings.Development.json:36-41`) and the
+  AppHost's `MachineClients__Enabled`
+  (`MMCA.ADC/Source/Hosting/MMCA.ADC.AppHost/Program.cs:489-494`). Nothing under `MMCA.ADC/infra/` or
+  `MMCA.ADC/.github/` names the feature (no match for "machine client" in either). The Identity
+  design-time factory still sets `EnableMachineClients`, so the schema carries the `MachineClients`
+  table either way
+  (`MMCA.ADC/Source/Hosting/MMCA.ADC.Migrations.SqlServer.Identity/DesignTimeSQLServerDbContextFactory.cs:59-63`).
+  `ServiceAccountProvisioner` implements the provisioner over ADC's
+  own `User`
+  (`MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Application/Users/Administration/ServiceAccountProvisioner.cs:25-52`),
+  creating the account through `User.CreateServiceAccount`, which raises no registration event,
+  accepts any valid ADC role and sets `IsServiceAccount`
+  (`MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Domain/Users/User.cs:371-400`). The
+  cross-module attendee-id query does not count a service account: it admits an Attendee-role user only when
+  it is not a service account
+  (`MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Application/Users/AttendeeQueryService.cs:24`).
+- In ADC the token endpoint is a sealed `MachineTokenControllerBase` subclass routed at `auth/token`
+  (`MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.API/Controllers/MachineClients/MachineTokenController.cs:18-20`),
+  and the gateway routes `/Auth/token` on the `auth-tight` policy, as it does login and register
+  (`MMCA.ADC/Source/Hosts/MMCA.ADC.Gateway/appsettings.json:104-111`). Administration is a sealed
+  `MachineClientsControllerBase` subclass routed at `Admin/MachineClients`
+  (`MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.API/Controllers/MachineClients/AdminMachineClientsController.cs:18-20`),
+  and ADC grants `clients:manage` to Organizer and no other role
+  (`MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Shared/Authorization/IdentityPermissionGrants.cs:20`,
+  `:43-49`), which `IdentityPermissionGrantsTests` pins
+  (`MMCA.ADC/Tests/Modules/Identity/MMCA.ADC.Identity.Shared.Tests/Authorization/IdentityPermissionGrantsTests.cs:24-34`,
+  `:39`). The Organizer-only page at `/users/machine-clients` renders the framework's
+  `MachineClientAdmin`
+  (`MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.UI/Pages/Users/MachineClients.razor:1-2`,
+  `:11`), reached from an Organizer-only Admin menu entry that also requires `clients:manage`
+  (`MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.UI/IdentityUIModule.cs:43`). The entry and the
+  page stay with the feature off: the framework's `MachineClientAdmin` then renders one "not enabled"
+  notice in place of the create form and the list, because its list load answers not found
+  (`MMCA.Common/Source/Presentation/MMCA.Common.UI/Pages/Administration/MachineClientAdmin.razor.cs:56-61`;
+  `MMCA.Common/Source/Presentation/MMCA.Common.UI/Pages/Administration/MachineClientAdmin.razor:7-13`;
+  unreleased, `MMCA.Common/CHANGELOG.md:61`). The
+  `AddMachineClients` migration adds `Identity.User.IsServiceAccount` (default false), creates the
+  `MachineClients` table and a unique index on `ServiceAccountUserId` filtered to undeleted rows
+  (`MMCA.ADC/Source/Hosting/MMCA.ADC.Migrations.SqlServer.Identity/Migrations/20261112192549_AddMachineClients.cs:14-55`).
+- **Endpoints where a person takes part refuse machine clients.** A machine client holds what its
+  backing role holds, so an endpoint that asks only for a signed-in caller (casting a vote, saving a
+  bookmark, checking in) is open to every machine client whatever role backs it. Choosing the backing
+  role cannot close that, and the framework refuses only the four permissions of point 9 while ADC's
+  factory takes any valid role (`User.cs:372-374`), so the endpoint itself has to say its caller is a
+  person. MMCA.Common's unreleased `[RefuseMachineClients]` is that statement: an authorization filter
+  for a controller or an action that answers 403 with the error code `MachineClients.EndpointRefused`
+  to a request whose token carries `token_use` = `machine` and lets every other caller through;
+  declared on a controller it covers every action, the permission-gated ones included, and it adds
+  nothing to the API description
+  (`MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/RefuseMachineClientsAttribute.cs:13-37`,
+  check at `:44-49`; `MMCA.Common/CHANGELOG.md:22`). ADC declares it at class level on eight
+  controllers: Engagement's `BookmarksController`, `CheckInsController`, `LivePollVotingController`,
+  `PointsController`, `SessionQuestionsController` and `TicketsController`
+  (`MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.API/Controllers/BookmarksController.cs:35`,
+  `CheckInsController.cs:39`, `LivePollVotingController.cs:36`, `PointsController.cs:36`,
+  `SessionQuestionsController.cs:38`, `TicketsController.cs:41`), and Conference's
+  `SessionQuestionAnswersController` and `EventQuestionAnswersController`
+  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/Sessions/SessionQuestionAnswersController.cs:80`,
+  `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/Events/EventQuestionAnswersController.cs:80`).
+  `MachineClientParticipationTests` pins the classification: every concrete Engagement controller is
+  either one of the six participation controllers carrying the attribute or on an allow-list with a
+  reason, and the two Conference controllers carry it
+  (`MMCA.ADC/Tests/Architecture/MMCA.ADC.Architecture.Tests/Api/MachineClientParticipationTests.cs:38-54`,
+  allow-list at `:62-73`, classification fact at `:90-91`). This settles whether an Attendee-backed
+  machine client may earn points or check in: it may not.
+- **Accepted limit: the attribute is declared at class level,** so it also refuses a machine client
+  on the organizer actions inside those eight controllers
+  (`RefuseMachineClientsAttribute.cs:28-30`).
+- **Precondition for turning machine clients on in a production environment:** creating a machine
+  client does not require a recent interactive sign-in (no step-up, as passkey registration requires
+  through `auth_time`).
 - Machine activity is audited under a named service account.
 - The *Enterprise-scale register* of [the Common backlog](../governance/common-RemediationBacklog.md)
   no longer holds client credentials; webhooks and versioned OpenAPI with Sunset stay there.

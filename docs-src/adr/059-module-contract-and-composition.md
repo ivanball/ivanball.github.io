@@ -6,6 +6,7 @@ Revised 2026-10-19: ADC Conference and Engagement gain module conformance tests,
 Revised 2026-10-21: ADC `ConferenceModule` registers three stubs (adding the `IUserConferenceExportService` export stub), `DisabledEventLiveValidationService` fails open across five members, the empty-export stub list names the Conference and Store Catalog export stubs, and host anchors are refreshed.
 Revised 2026-10-26: service-host anchors refreshed after the host Program.cs files moved (no behavior change).
 Revised 2026-10-28: the Trade-offs list of undeclared cross-module gRPC edges grows from two to five consuming modules (ADC Engagement, Notification and Identity join ADC Conference and Store Identity), the ADR-008 reading is corrected (only `ModuleLoader` is its Context; the `Disabled*` stubs belong to its Strangler Fig step), and anchors are refreshed.
+Amended 2026-11-12: the composed service-host call (`AddMmcaServiceHost` / `UseMmcaServiceHostAsync`, package `MMCA.Common.ServiceHost`, unreleased) owns the host registration order around `AddMmcaApplicationPipeline`, every Store and ADC service host calls it on the `feat/fresh-eyes-wave` branch, and the host anchors are re-pointed into its options.
 
 ## Context
 The framework's headline claim is that an application is built as a modular monolith and later
@@ -54,18 +55,83 @@ rather than by absence.
 - **A host names one marker assembly per module it runs.** `AddModuleHost` takes that list as its
   first parameter and hands it to the loader it builds
   (`MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/ModuleHostExtensions.cs:51-53,84-90`),
-  which is how the service hosts pass it: Store
-  (`MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:131-133`,
-  `MMCA.Store.Identity.Service/Program.cs:126-128`, `MMCA.Store.Sales.Service/Program.cs:139-141`) and
-  ADC (`MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:273-275`,
-  `MMCA.ADC.Conference.Service/Program.cs:379-381`, `MMCA.ADC.Engagement.Service/Program.cs:220-222`,
-  `MMCA.ADC.Notification.Service/Program.cs:202-204`) each name the single assembly of the one module
+  and its `RegisterModules` step runs `DiscoverAndRegister` over exactly that list
+  (`MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/ModuleHostContext.cs:66-76`). The service
+  hosts pass the list as `MmcaServiceHostOptions.ModuleAssemblies`, which the composed call hands to
+  `AddModuleHost` and refuses when empty
+  (`MMCA.Common/Source/Hosting/MMCA.Common.ServiceHost/ServiceHostBuilderExtensions.cs:67-72,100-102`):
+  Store (`MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:41`,
+  `MMCA.Store.Identity.Service/Program.cs:43`, `MMCA.Store.Sales.Service/Program.cs:59`) and
+  ADC (`MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:86`,
+  `MMCA.ADC.Conference.Service/Program.cs:88`, `MMCA.ADC.Engagement.Service/Program.cs:64`,
+  `MMCA.ADC.Notification.Service/Program.cs:64`) each name the single assembly of the one module
   that host enables, so an extracted service's scan surface equals its own module. Helpdesk calls
   `DiscoverAndRegister` with its one module assembly inside a `Register` step of its
   `AddMmcaApplicationPipeline` call
-  (`MMCA.Helpdesk/Source/Hosts/MMCA.Helpdesk.Web/Program.cs:125-133`), and the unit tests name their
-  own assembly the same way
+  (`MMCA.Helpdesk/Source/Hosts/MMCA.Helpdesk.Web/Program.cs:138`, the step at `:142-150`), and the
+  unit tests name their own assembly the same way
   (`MMCA.Common/Tests/Core/MMCA.Common.Application.Tests/Modules/ModuleLoaderTests.cs:42-49`).
+- **A composed service-host call owns the host registration order.** `AddMmcaServiceHost`
+  (`MMCA.Common/Source/Hosting/MMCA.Common.ServiceHost/ServiceHostBuilderExtensions.cs:63`) runs, in
+  this order: the `ConfigureConfigurationSources` callback first, so every eager bind sees a vault
+  value (`:74-77`); the Kestrel endpoints with the health-probe listener (`:79`); Serilog, then the
+  service defaults, then the `AfterServiceDefaults` callback (`:82-84`); Redis caching, the optional
+  Redis output cache and the two-level cache (`:89-95`); the module host, whose loader logs through
+  a bootstrap logger factory (`:99-102`); the infrastructure health checks with a database required
+  (`:104`); CORS, API versioning and rate limiting (`:106-108`); the output cache with a no-cache base
+  policy, then the `ConfigureOutputCache` callback (`:110-114`); response compression, the OpenAPI
+  3.1 pin on the `v1` document and `AddCommonOpenApi()` (`:116-128`); forwarded JWT validation, or
+  in-process validation when the host selects `ServiceHostAuthentication.TokenIssuer` (`:130-141`);
+  the exception handlers, `AddInfrastructure` and `AddAPI` (`:143-145`); the `ConfigureServices`
+  callback (`:147`); the `RegisterBrokerTransports` callback, because `AddBrokerMessaging` picks its
+  transport while it registers (`:149-150`); `AddMmcaApplicationPipeline` (`:152`); and last the gRPC
+  service defaults and the per-module health checks, which can only see the modules discovery found
+  (`:154-157`). The pipeline BODY stays the host's: the call passes the required `ConfigurePipeline`
+  callback, with the module host, into `AddMmcaApplicationPipeline` (`:152`,
+  `MMCA.Common/Source/Hosting/MMCA.Common.ServiceHost/MmcaServiceHostOptions.cs:30-35`), so the
+  module scans, `moduleHost.RegisterModules` (and through it `ModuleLoader.DiscoverAndRegister`), the
+  typed gRPC clients and the broker registration run inside the pipeline in the order the host writes
+  (`MMCA.Store/Source/Services/MMCA.Store.Sales.Service/Program.cs:105-115`). The decorators-last
+  rule is therefore unchanged: the pipeline still runs the decorators after that body and seals, and
+  the composed call documents that nothing registered after it may add a command or query handler
+  (`ServiceHostBuilderExtensions.cs:53-57`). `UseMmcaServiceHostAsync`
+  (`MMCA.Common/Source/Hosting/MMCA.Common.ServiceHost/ServiceHostApplicationExtensions.cs:43`)
+  applies the matching middleware and endpoint order: the OpenAPI registration check (`:50`),
+  database migration and seeding before anything is mapped (`:53`), the health endpoints (`:55`), the
+  shared middleware pipeline (`:56`), the OpenAPI document (`:57`), the gRPC reflection service in
+  Development only (`:59-64`), and disposal of the bootstrap logger factory on `ApplicationStopped`
+  (`:68`); the host maps its own gRPC services, hubs and MCP endpoint after it (`:12-13`).
+- **The composed call deliberately leaves two things to the host.** It does not register the OpenAPI
+  document: the host keeps its own `builder.Services.AddOpenApi();` line, because the XML-comment
+  generator attaches a project's controller summaries only at an `AddOpenApi` call site compiled in
+  that project (`ServiceHostBuilderExtensions.cs:118-128`), and `UseMmcaServiceHostAsync` fails
+  startup with `InvalidOperationException` when no `v1` document is registered
+  (`MMCA.Common/Source/Hosting/MMCA.Common.ServiceHost/ServiceHostOpenApi.cs:24-37`); every adopter
+  keeps the line (`MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:33`). And it makes
+  no vendor call: Key Vault, the Azure Monitor exporter and a cloud broker transport enter only
+  through the callbacks (`ServiceHostBuilderExtensions.cs:20-25`, `MmcaServiceHostOptions.cs:62-84`),
+  under the boundary ADR-134 records.
+- **The composed call is opt-in.** It is one package over the same registrations, and a host that
+  keeps calling `AddModuleHost`, the individual registrations and `AddMmcaApplicationPipeline` in
+  that order is still correct. Helpdesk composes by hand without `AddModuleHost`: it builds its own
+  `ModuleLoader` and calls `DiscoverAndRegister` inside its own pipeline
+  (`MMCA.Helpdesk/Source/Hosts/MMCA.Helpdesk.Web/Program.cs:124-128`, `:138`, `:142`), with its own
+  `AddForwardedJwtBearer` call (`:53`), and has no `AddModuleHost` or `AddMmcaServiceHost` call. Every
+  Store and ADC service host calls it on that branch, one citation each: Store
+  Catalog (`MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:35`), Identity
+  (`MMCA.Store/Source/Services/MMCA.Store.Identity.Service/Program.cs:37`) and Sales
+  (`MMCA.Store/Source/Services/MMCA.Store.Sales.Service/Program.cs:52`); ADC Identity
+  (`MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:79`), Conference
+  (`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:81`), Engagement
+  (`MMCA.ADC/Source/Services/MMCA.ADC.Engagement.Service/Program.cs:57`) and Notification
+  (`MMCA.ADC/Source/Services/MMCA.ADC.Notification.Service/Program.cs:57`). `IModule`,
+  `ModuleLoader` and the `Disabled*` stubs are untouched by it. The forwarded-JWT audience rule
+  counts a composed host that does not select `ServiceHostAuthentication.TokenIssuer` as a
+  forwarded-JWT host, since the composed call makes the guarded `AddForwardedJwtBearer` call itself
+  (`MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Rules/Api/ArchitectureRules.ForwardedJwt.cs:8,10,20-23`,
+  `MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Bases/Api/ForwardedJwtAudienceTestsBase.cs:7-11`);
+  the two token issuers select it (`MMCA.Store/Source/Services/MMCA.Store.Identity.Service/Program.cs:59`,
+  `MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:117`).
 - **Registration order is a Kahn topological sort over the declared names.** The loader sorts before
   it registers anything (`ModuleLoader.cs:108`); the sort builds an in-degree map plus a reverse
   adjacency list, seeds a queue with the zero-in-degree modules, and drains it
@@ -176,8 +242,8 @@ Catalog enables `Catalog` and disables both peers with no remote declarations
 (`MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/appsettings.json:20-24`); Store Sales enables
 `Sales` and declares `["Catalog", "Identity"]` as `RemoteDependencies`
 (`MMCA.Store/Source/Services/MMCA.Store.Sales.Service/appsettings.json:27-34`), then registers typed
-gRPC clients for the two contracts after the loader returns
-(`MMCA.Store/Source/Services/MMCA.Store.Sales.Service/Program.cs:252,258-259`); because the host names
+gRPC clients for the two contracts in the pipeline steps after `moduleHost.RegisterModules`
+(`MMCA.Store/Source/Services/MMCA.Store.Sales.Service/Program.cs:106,110-111`); because the host names
 only its own module assembly, the peer modules are never discovered there and their stubs are never
 registered. ADC Engagement declares
 `["Conference"]` remote (`MMCA.ADC/Source/Services/MMCA.ADC.Engagement.Service/appsettings.json:38-46`,
@@ -188,13 +254,13 @@ while ADC Conference and ADC Identity each enable one module and declare nothing
 `MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/appsettings.json:30-33`). Those declarations
 cover only the peers a module lists in `Dependencies`. Every ADC host also wires at least one peer
 gRPC client it declares nowhere: Conference wires Engagement's `IBookmarkCountService`
-(`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:431`), Engagement wires
+(`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:335`), Engagement wires
 Notification's live-channel client
-(`MMCA.ADC/Source/Services/MMCA.ADC.Engagement.Service/Program.cs:303`), Notification wires
+(`MMCA.ADC/Source/Services/MMCA.ADC.Engagement.Service/Program.cs:206`), Notification wires
 Conference's event-live validation client
-(`MMCA.ADC/Source/Services/MMCA.ADC.Notification.Service/Program.cs:242`), and Identity wires the
+(`MMCA.ADC/Source/Services/MMCA.ADC.Notification.Service/Program.cs:113`), and Identity wires the
 Engagement, Notification and Conference export clients
-(`MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:342-344`). The Trade-offs record
+(`MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:267-269`). The Trade-offs record
 those undeclared edges.
 
 ## Rationale
@@ -211,7 +277,7 @@ those undeclared edges.
   branch for "peer not present", which is precisely why a module's non-hosting layers are identical
   in-process and extracted (`ModuleLoader.cs:119`, `CatalogModule.cs:31-32`). An extracted host,
   which never discovers its peers, registers a real cross-process adapter for the same contract
-  instead (`Sales.Service/Program.cs:258-259`).
+  instead (`Sales.Service/Program.cs:110-111`).
 - **Two strictness levels, chosen per module.** A module that genuinely cannot function without a
   peer opts into `RequiresDependencies = true` and fails fast (`SalesModule.cs:37`,
   `EngagementModule.cs:23`, `NotificationModule.cs:24`); everything else tolerates a missing peer and
@@ -229,7 +295,7 @@ those undeclared edges.
 - **The composition root has to name every module assembly.** Discovery scans exactly the list it is
   handed (`ModuleLoader.cs:59-65`), so adding a module to a host is a third edit beside the project
   reference and the `Modules` configuration entry: the assembly list in that host's `Program.cs`
-  (`MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:131-133`). An assembly left out
+  (`MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:41`). An assembly left out
   of the list contributes nothing, and the module surfaces as "disabled" (absence equals disabled,
   `ModulesSettings.cs:18-19`), not as an error. The trade is deliberate: an ambient scan would make
   the same omission depend on whether some code path happened to load the assembly first
@@ -255,20 +321,20 @@ those undeclared edges.
   (`DependencyInjection.cs:229-236`, `ModuleLoader.cs:334-335,343-344`).
 - **The dependency graph is a hand-written declaration, not a derived fact.** Five modules consume a
   peer over gRPC without listing it in `Dependencies`. ADC Conference consumes Engagement's
-  `IBookmarkCountService` (`ConferenceModule.cs:16-32` versus `Conference.Service/Program.cs:431`).
+  `IBookmarkCountService` (`ConferenceModule.cs:16-32` versus `Conference.Service/Program.cs:335`).
   ADC Engagement declares only `["Conference"]` yet its host wires Notification's live-channel client
   (`EngagementModule.cs:20` versus
-  `MMCA.ADC/Source/Services/MMCA.ADC.Engagement.Service/Program.cs:303`). ADC Notification declares
+  `MMCA.ADC/Source/Services/MMCA.ADC.Engagement.Service/Program.cs:206`). ADC Notification declares
   only `["Identity"]`, and lists only Identity under `RemoteDependencies`, yet its host wires
   Conference's event-live validation client (`NotificationModule.cs:21` versus
-  `MMCA.ADC/Source/Services/MMCA.ADC.Notification.Service/Program.cs:242`,
+  `MMCA.ADC/Source/Services/MMCA.ADC.Notification.Service/Program.cs:113`,
   `MMCA.ADC/Source/Services/MMCA.ADC.Notification.Service/appsettings.json:31-34`). ADC
   `IdentityModule` declares no `Dependencies` yet its host wires the Engagement, Notification and
   Conference export clients (`MMCA.ADC.Identity.API/IdentityModule.cs:13-25` versus
-  `MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:342-344`). Store Identity consumes
+  `MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:267-269`). Store Identity consumes
   the Sales and Catalog export services while its `IdentityModule` declares no `Dependencies` at all
   (`MMCA.Store.Identity.API/IdentityModule.cs:16-47` versus
-  `MMCA.Store/Source/Services/MMCA.Store.Identity.Service/Program.cs:284,295`). Neither the
+  `MMCA.Store/Source/Services/MMCA.Store.Identity.Service/Program.cs:111-112`). Neither the
   topological sort nor the `RequiresDependencies` check knows about those edges. Nothing derives
   `Dependencies` from the interfaces a module actually resolves. What is pinned is the declaration
   against a written expectation: `ModuleConformanceTestsBase<TModule>` asserts `Name`, `Dependencies`,
@@ -485,6 +551,8 @@ module enabled" is a statement about `ModuleLoader`, cited there as pre-existing
 `Disabled*` stubs its Strangler Fig step relies on), ADR-006 (the database axis of the same split;
 a module's data source is orthogonal to its composition), ADR-007 (the typed gRPC clients that replace a disabled module's stubs at the host
 level), ADR-014 (`AddApplicationDecorators()` must run after every module's handler scan, which is why
-module registration is a distinct, ordered startup step), ADR-015 (the module-isolation fitness
+module registration is a distinct, ordered startup step, and the step the composed
+`AddMmcaServiceHost` call keeps as a host callback), ADR-134 (the cloud vendor boundary that keeps
+vendor registrations out of the composed service-host call and in its callbacks), ADR-015 (the module-isolation fitness
 functions that keep cross-module traffic on the `*.Shared` contracts this model registers,
 `MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Bases/Layering/ModuleIsolationTestsBase.cs:8-40`).

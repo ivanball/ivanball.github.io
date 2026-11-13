@@ -37,6 +37,7 @@ Revised 2026-10-07: anchors refreshed after the v1.233.0 release.
 Revised 2026-10-21: anchors refreshed after the Common and Store changes that moved `DbContextFactory`, `OutboxProcessor`, `appsettings.json` and `main.bicep` lines.
 Revised 2026-10-26: anchors refreshed after the Common and Store changes that moved `DomainEventSaveChangesInterceptor`, `OutboxProcessor`, `CheckOutHandler`, `appsettings.json`, `main.bicep`, `ProcessPaymentWebhookHandler` and `VerifyPaymentHandler` lines.
 Revised 2026-10-28: the checkout deadline is now armed through `PlacedOrderFinalizer`, shared by the customer and guest checkouts, rather than by `CheckOutHandler` calling `CheckOutDeadlineScheduler` directly; both expiry paths cancel with `OrderCancellationReason.PaymentExpired`, which rides `OrderCancelled` to pick the cancellation email; the Context names the guest checkout's transaction; `CheckOutHandler`, `Order`, `OrderConfiguration`, `SalesModule`, the Sales infrastructure registration and `UploadSessionAssetHandler` anchors are refreshed.
+Revised 2026-11-12 (unreleased, on the `feat/fresh-eyes-wave` branch): Store's unpaid-order deadline and its stock compensation now ride the process-manager bases of [ADR-143](143-process-manager-primitive.md): the "still unpaid and due" re-derivation lives on the aggregate in `Order.DecideTimeout`, `OrderCancelledSagaHandler` is a process step, the queued payload is unchanged, no migration or table came with it, and the reconciliation sweep is unchanged; the compensation bullets and trade-offs are re-anchored. See the Revision below.
 
 ## Context
 Checkout spans a boundary no transaction covers. `CheckOutHandler` commits the order insert, the cart
@@ -86,34 +87,41 @@ saga-timeout backstop for steps that depend on an external system.
   saga step because a saga step runs *after* the commit and could only discover the money once the
   order was already `Cancelled` and a manual refund was the only remedy left. Everything that
   compensates after the fact is still its own handler: restoring stock is
-  `OrderCancelledSagaHandler : IDomainEventHandler<OrderCancelled>`
-  (`.../Orders/Saga/OrderCancelledSagaHandler.cs:40-42`) and notifying the customer of a failed
-  payment is `OrderPaymentFailedSagaHandler` (`.../Orders/Saga/OrderPaymentFailedSagaHandler.cs:22-24`).
+  `OrderCancelledSagaHandler`, a step of the order process that derives
+  `ProcessDomainEventHandlerBase<OrderCancelled, Order, OrderIdentifierType>`
+  ([ADR-143](143-process-manager-primitive.md); `.../Orders/Saga/OrderCancelledSagaHandler.cs:49-52`),
+  and notifying the customer of a failed payment is `OrderPaymentFailedSagaHandler`, which stays a
+  plain `IDomainEventHandler<OrderPaymentFailed>` (`.../Orders/Saga/OrderPaymentFailedSagaHandler.cs:23-25`).
   A new compensating action is a new handler unless it has to decide whether the commit may happen
   at all.
 - **Each handler runs in its own DI scope.** Domain-event handlers are registered as singletons
   (`MMCA.Common/Source/Core/MMCA.Common.Application/DependencyInjection.ModuleScanning.cs:54-56`), so every one
-  opens its own scope through `IServiceScopeFactory` (`OrderCancelledSagaHandler.cs:49`,
-  `OrderPaymentFailedSagaHandler.cs:31`,
-  `.../Infrastructure/Payments/Reconciliation/PaymentReconciliationService.cs:235,254,300`), and the ones that persist
-  resolve their own `IUnitOfWork` inside it (`OrderCancelledSagaHandler.cs:50`,
+  opens its own scope through `IServiceScopeFactory`: `OrderCancelledSagaHandler` through the step
+  base, which opens one async scope per event
+  (`MMCA.Common/Source/Core/MMCA.Common.Application/ProcessManagers/ProcessDomainEventHandlerBase.cs:47`),
+  `OrderPaymentFailedSagaHandler` itself (`OrderPaymentFailedSagaHandler.cs:32`), and the sweep
+  (`.../Infrastructure/Payments/Reconciliation/PaymentReconciliationService.cs:235,254,300`). The ones that persist
+  resolve their own `IUnitOfWork` inside it (`ProcessDomainEventHandlerBase.cs:50`, handed to the step
+  as `context.UnitOfWork` at `OrderCancelledSagaHandler.cs:108`;
   `PaymentReconciliationService.cs:236,255,301`). `OrderPaymentFailedSagaHandler` is the exception that
-  shows the rule: it resolves the internal-command scheduler and little else in its scope
-  (`OrderPaymentFailedSagaHandler.cs:32`) and writes no aggregate of its own, because both halves of
+  shows the rule: it resolves the internal-command scheduler, the expiry settings and the clock in its
+  scope (`OrderPaymentFailedSagaHandler.cs:33,73,83-84`) and writes no aggregate of its own, because both halves of
   its compensation (the "your payment did not go through" notification and the re-armed payment
   deadline) are queue rows the scheduler persists. Compensation that does write therefore commits on its own, after the originating
   save, rather than joining the transaction it is compensating for.
 - **Idempotency is a persisted marker committed in the SAME transaction as the compensating
-  writes.** `Order.InventoryRestored` (`.../Domain/Orders/Order.cs:190`) is the marker;
+  writes.** `Order.InventoryRestored` (`.../Domain/Orders/Order.cs:216`) is the marker;
   `MarkInventoryRestored` refuses a second call and refuses a non-cancelled order
-  (`Order.cs:899-922`). The whole restoration runs as one `ExecuteInTransactionAsync` delegate
-  (`OrderCancelledSagaHandler.cs:55-57`). The handler checks the marker first
-  (`OrderCancelledSagaHandler.cs:84-88`) and validates the increases through a pure domain service
+  (`Order.cs:942-965`). The whole restoration runs as the step base's one `ExecuteInTransactionAsync`
+  delegate, which loads the order tracked and hands it to the step
+  (`ProcessDomainEventHandlerBase.cs:52-71`), with the order's lines included
+  (`OrderCancelledSagaHandler.cs:55`). The step checks the marker first
+  (`OrderCancelledSagaHandler.cs:113-117`) and validates the increases through a pure domain service
   (`.../Domain/Inventory/InventoryRestorationDomainService.cs:24-51`) against a non-tracking snapshot
-  whose in-memory increase is never saved (`OrderCancelledSagaHandler.cs:93-108`). It then saves the
+  whose in-memory increase is never saved (`OrderCancelledSagaHandler.cs:119-137`). It then saves the
   marker first, so a concurrent delivery fails on the order row before it touches any stock
-  (`OrderCancelledSagaHandler.cs:130-139`), and moves the stock through
-  `IInventoryAllocationService.IncrementAsync` (`OrderCancelledSagaHandler.cs:141-156`), a relative
+  (`OrderCancelledSagaHandler.cs:159-168`), and moves the stock through
+  `IInventoryAllocationService.IncrementAsync` (`OrderCancelledSagaHandler.cs:170-185`), a relative
   atomic `ExecuteUpdate` (`.../Infrastructure/Inventory/InventoryAllocationService.cs:97,127`). A failed
   `Result` from the delegate rolls the whole unit back, marker included
   (`MMCA.Common/.../DbContexts/Factory/DbContextFactory.cs:641-647`). Same database, one transaction: the marker
@@ -132,12 +140,12 @@ saga-timeout backstop for steps that depend on an external system.
   (`MMCA.Common/Tests/Core/MMCA.Common.Application.Tests/DomainEvents/SafeDomainEventHandlerTests.cs:124`).
   A handler whose work is a pure side effect and must not force a redelivery therefore owns that
   decision alone: `OrderPaymentFailedSagaHandler` implements
-  `IDomainEventHandler<OrderPaymentFailed>` directly (`OrderPaymentFailedSagaHandler.cs:22-24`) and
+  `IDomainEventHandler<OrderPaymentFailed>` directly (`OrderPaymentFailedSagaHandler.cs:23-25`) and
   turns each of its two failure modes into a log line rather than a throw: an Error when the
-  notification could not be scheduled (`OrderPaymentFailedSagaHandler.cs:38-41`, message at
-  `OrderPaymentFailedSagaHandler.cs:100-103`) and a Warning when the payment deadline could not be
-  re-armed (`OrderPaymentFailedSagaHandler.cs:86-90`, message at
-  `OrderPaymentFailedSagaHandler.cs:108-111`).
+  notification could not be scheduled (`OrderPaymentFailedSagaHandler.cs:39-42`, message at
+  `OrderPaymentFailedSagaHandler.cs:105-108`) and a Warning when the payment deadline could not be
+  re-armed (`OrderPaymentFailedSagaHandler.cs:91-95`, message at
+  `OrderPaymentFailedSagaHandler.cs:113-116`).
 - **Concurrent redeliveries are serialized by the `RowVersion` concurrency token.** Every auditable
   entity carries one (`MMCA.Common/.../Entities/AuditableBaseEntity.cs:53`), configured as a
   concurrency token on every non-owned auditable type
@@ -166,7 +174,7 @@ saga-timeout backstop for steps that depend on an external system.
   to `Cancelled` through `MarkAsCancelled` (`PaymentReconciliationService.cs:274`), the terminal state
   `OrderCancelledSagaHandler` already listens on, so the compensation and its marker return the stock
   exactly once. It passes `OrderCancellationReason.PaymentExpired`, which rides the `OrderCancelled`
-  event only (`.../Domain/Orders/Order.cs:879,887`, `.../Orders/DomainEvents/OrderCancelled.cs:16`)
+  event only (`.../Domain/Orders/Order.cs:922,930`, `.../Orders/DomainEvents/OrderCancelled.cs:16`)
   and picks the payment-expired wording of the customer's cancellation email
   (`.../LifecycleEmails/SendOrderCancelledEmailInternalCommandHandler.cs:54`); the stock restoration
   does not depend on it. `Cancelled` rather than `PaymentFailed` because `PaymentFailed` is retryable, so such
@@ -265,24 +273,27 @@ is the framework's stated answer to cross-boundary consistency, not because it i
   (`InventoryRestorationDomainService.cs:33-38`), but the skip is not silent: the unmatched variant
   ids are collected and returned to the caller (`InventoryRestorationDomainService.cs:28,37,50`), and
   the handler logs them at Warning naming each one
-  (`OrderCancelledSagaHandler.cs:117-123`, message at `OrderCancelledSagaHandler.cs:171`). The marker
+  (`OrderCancelledSagaHandler.cs:146-152`, message at `OrderCancelledSagaHandler.cs:200-201`). The marker
   still commits anyway, so that quantity is never restored and nothing retries it: withholding the
   marker would re-apply every matched increase on the next redelivery, which is a double restore
-  (`OrderCancelledSagaHandler.cs:125-129`). The miss is narrow because the handler reads inventory with
-  `ignoreQueryFilters: true` (`OrderCancelledSagaHandler.cs:103`), so a soft-deleted row still counts
+  (`OrderCancelledSagaHandler.cs:154-158`). The miss is narrow because the handler reads inventory with
+  `ignoreQueryFilters: true` (`OrderCancelledSagaHandler.cs:132`), so a soft-deleted row still counts
   and a missing row means the row never existed. The stock is still lost; what changed is that the
   loss is recorded rather than invisible.
 - **An invariant rejection abandons the compensation instead of retrying it.** When any matched
   increase is refused by an inventory invariant, `RestoreInventory` returns a failure carrying every
   rejected error (`InventoryRestorationDomainService.cs:41-49`), and the handler returns early with
   nothing saved: the rejected codes go to a Warning, and neither a partial restoration nor the marker
-  reaches the database (`OrderCancelledSagaHandler.cs:109-115`, message at
-  `OrderCancelledSagaHandler.cs:174`). A refused `MarkInventoryRestored` ends the same way
-  (`OrderCancelledSagaHandler.cs:130-135`). A failed `IncrementAsync` after the marker save also
-  returns a failed `Result` with a Warning (`OrderCancelledSagaHandler.cs:148-155`), which rolls the
+  reaches the database (`OrderCancelledSagaHandler.cs:138-144`, message at
+  `OrderCancelledSagaHandler.cs:203-204`). A refused `MarkInventoryRestored` ends the same way
+  (`OrderCancelledSagaHandler.cs:159-164`). A failed `IncrementAsync` after the marker save also
+  returns a failed `Result` with a Warning (`OrderCancelledSagaHandler.cs:179-184`), which rolls the
   marker back with the transaction (`DbContextFactory.cs:641-647`). All three are returns, not throws:
-  the handler discards the transaction's `Result` (`OrderCancelledSagaHandler.cs:55`), so the event
-  counts as handled and its outbox row is marked processed. Nothing redelivers it, and that order's
+  after the rollback the step base hands the failure to `OnStepFailed`
+  (`ProcessDomainEventHandlerBase.cs:73-76`), whose default throws so the outbox redelivers
+  (`ProcessDomainEventHandlerBase.cs:120-124`), and `OrderCancelledSagaHandler` overrides it to return
+  normally (`OrderCancelledSagaHandler.cs:83-87`), so the event counts as handled and its outbox row
+  is marked processed. Nothing redelivers it, and that order's
   stock stays unrestored until someone acts on the Warning.
 - **Redelivery re-runs every handler of the event, not the failed one.** The dispatcher iterates
   handlers sequentially with no per-handler isolation
@@ -529,6 +540,64 @@ arms the deadline, the reason both expiry paths now attach to the cancellation, 
    and `:124-131`, `ScheduleOrphanCleanupAsync` at `:176-193`). The citations inside the dated
    Revisions above keep the line numbers of their dates.
 
+## Revision (2026-11-12): the deadline and the compensation ride the process-manager bases
+
+The order is now its own process aggregate under MMCA.Common's behaviour-only process-manager
+primitive, recorded in [ADR-143](143-process-manager-primitive.md). The saga state is unchanged:
+`Order` derives `ProcessManagerAggregateRoot<OrderIdentifierType>`
+(`MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Domain/Orders/Order.cs:47`), its remarks still name
+`Status` plus `InventoryRestored` as the payment saga's state (`Order.cs:40-43`), and the base declares
+no property and no field (`MMCA.Common/Source/Core/MMCA.Common.Domain/ProcessManagers/ProcessManagerAggregateRoot.cs:10-11`).
+
+1. **The "still unpaid and due" re-derivation lives on the aggregate.** `Order.DecideTimeout`
+   (`Order.cs:984-1004`) answers not-applicable for any other timeout name or for an order no longer in
+   `PendingPayment`/`PaymentFailed` (`:988-992`), not-yet-due while the window measured from the last
+   stored transition is still open (`:994-998`), and otherwise cancels with
+   `OrderCancellationReason.PaymentExpired` (`:1000-1003`). `ExpireUnpaidOrderInternalCommandHandler`
+   derives `ProcessTimeoutHandlerBase<ExpireUnpaidOrderInternalCommand, Order, OrderIdentifierType>`
+   (`.../Orders/InternalCommands/ExpireUnpaidOrderInternalCommandHandler.cs:39-48`), supplies the
+   window from `UnpaidOrderExpirySettings.Minutes` (`:51-52`) and maps each outcome to its log line
+   (`:60-93`). The base loads the order, asks it to decide at the clock's now, completes the row with
+   success for every outcome but a save fault, and treats a concurrency conflict as a lost race
+   (`MMCA.Common/Source/Core/MMCA.Common.Application/ProcessManagers/ProcessTimeoutHandlerBase.cs:53-97`).
+   The Revision (2026-09-11) statement that the re-derivation lives in the handler at
+   `ExpireUnpaidOrderInternalCommandHandler.cs:41-98`, its sub-anchors, and the Revision (2026-10-28)
+   anchor `ExpireUnpaidOrderInternalCommandHandler.cs:78` no longer hold and are left as the record of
+   their dates.
+2. **The queued payload is unchanged.** The command is still
+   `ExpireUnpaidOrderInternalCommand(OrderIdentifierType OrderId)` under
+   `[InternalCommandName("Sales.ExpireUnpaidOrder")]` (`ExpireUnpaidOrderInternalCommand.cs:32-33`); it
+   implements `IProcessTimeoutCommand<OrderIdentifierType>.ProcessId` explicitly (`:36`), which is not
+   serialized, so the stored payload stays the order id alone (`:23-28`). The Revision (2026-09-11)
+   anchor `ExpireUnpaidOrderInternalCommand.cs:23-24` now falls inside those remarks.
+3. **Both arming sites construct the timeout scheduler rather than resolving it.**
+   `CheckOutDeadlineScheduler` builds `new ProcessTimeoutScheduler(...)` over its injected
+   `IInternalCommandScheduler` and `TimeProvider` (`.../CheckOut/CheckOutDeadlineScheduler.cs:31-37`)
+   and arms through it (`ArmAsync` at `:55-72`, the arm at `:63-66`); `OrderPaymentFailedSagaHandler`
+   does the same over its scope's services (`OrderPaymentFailedSagaHandler.cs:82-89`). Neither
+   resolves the `IProcessTimeoutScheduler` that the Sales Application DI registers through
+   `AddProcessManagers()` (`.../MMCA.Store.Sales.Application/DependencyInjection.cs:55`,
+   `MMCA.Common/Source/Core/MMCA.Common.Application/DependencyInjection.ProcessManagers.cs:26`). The
+   scheduler makes one `ScheduleAsync` call at the clock's now plus the window
+   (`MMCA.Common/Source/Core/MMCA.Common.Application/ProcessManagers/ProcessTimeoutScheduler.cs:38`),
+   the same row a direct call wrote. `OrderPaymentFailedSagaHandler` remains a plain
+   `IDomainEventHandler<OrderPaymentFailed>` (`OrderPaymentFailedSagaHandler.cs:23-25`) and does not
+   derive the step base; its re-arm is `:68-98`.
+4. **The compensation is a process step.** `OrderCancelledSagaHandler` derives
+   `ProcessDomainEventHandlerBase<OrderCancelled, Order, OrderIdentifierType>`
+   (`OrderCancelledSagaHandler.cs:49-52`); the base owns the scope and the one transaction
+   (`ProcessDomainEventHandlerBase.cs:47-71`), and the override of `OnStepFailed` that returns normally
+   (`OrderCancelledSagaHandler.cs:83-87`) keeps a failed restoration handled, as the discarded
+   transaction `Result` did before. The Decision and Trade-offs bullets are re-anchored.
+5. **No migration and no new table.** The primitive is "no table, no migration and no configuration
+   key" (`MMCA.Common/UPGRADING.md:241`), and the Store change set adds no file under its migrations
+   projects.
+6. **The reconciliation sweep is unchanged.** `PaymentReconciliationService` is not part of this
+   change, so its citations in the sweep bullets hold. `Order` anchors are re-anchored
+   (`InventoryRestored` at `Order.cs:216`, `MarkInventoryRestored` at `:942-965`, `MarkAsCancelled` at
+   `:922`, the `OrderCancelled` event at `:930`), as are the `OrderPaymentFailedSagaHandler` log
+   anchors.
+
 ## Related
 ADR-003 (the outbox delivery and retry this leans on for compensation redelivery; this record says
 what the redelivered handler must do), ADR-006 (which accepts "no cross-database transaction" as a
@@ -540,5 +609,7 @@ race to a webhook), ADR-014 (the command pipeline whose commit compensation runs
 poll instead of a queue drain), ADR-013 (the `Result`-returning guarded transitions both the sweep and the
 per-order deadline reuse rather than bypassing), ADR-114 (the durable internal-command queue the
 per-order unpaid-order deadline is scheduled on), [ADR-086](086-process-manager-deferred.md) (the orchestrated alternative to
-the choreography decided here: deferred, with the shape it would take and the trigger that would build
-it, and with this record's reconciliation sweep remaining underneath it).
+the choreography decided here: resolved for state that fits one aggregate by ADR-143, and still
+deferred, with its shape and trigger, for state that fits no aggregate, with this record's
+reconciliation sweep remaining underneath it), [ADR-143](143-process-manager-primitive.md) (the
+behaviour-only process-manager bases Store's unpaid-order deadline and stock compensation ride).

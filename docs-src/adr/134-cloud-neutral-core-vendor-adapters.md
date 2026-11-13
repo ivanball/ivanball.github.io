@@ -23,7 +23,11 @@ below reads as the current state; the options weighed on 2026-10-25 are added to
 rejected. Revised 2026-10-26: the MassTransit pins behind the SQS and PostgreSQL transports read
 8.5.12 after v1.260.0, and anchors refreshed against v1.261.0. Revised 2026-10-28: the
 `MMCA.Common.Testing.Azure` pin of the type-level vendor rule is recorded beside the three adapter
-pins, and anchors refreshed after v1.265.1.
+pins, and anchors refreshed after v1.265.1. Revised 2026-11-12 (unreleased,
+`MMCA.Common/CHANGELOG.md:7`): the Azure start-up calls ship in a fourth adapter package,
+MMCA.Common.Azure.Startup (`:46`, `:67`); the composed service host takes vendor calls only as
+callbacks; MMCA.Common.Aws gains an OpenTelemetry exporter and MMCA.Common.Azure gains PostgreSQL
+Entra token login, each with its startup tripwire; and anchors refreshed.
 
 ## Context
 Before v1.255.0 the core packages carried the Azure SDKs themselves: MMCA.Common.Infrastructure,
@@ -44,21 +48,58 @@ integrations had no equivalent: their SDKs were unconditional references of the 
 ## Decision
 **The core packages reference no cloud SDK. Each vendor integration ships in an adapter package that
 references the core, and a host opts in with one registration call per capability.** The framework
-guide states the rule (`MMCA.Common/AGENTS.md:147`).
+guide states the rule (`MMCA.Common/AGENTS.md:151`).
 
-- **Three cloud adapter packages and one test adapter.** Every call is opt-in and a no-op until its
-  gate key is set (`MMCA.Common/CHANGELOG.md:116`, `:121`).
-  - `MMCA.Common.Azure`: Key Vault as a configuration source, `AddAzureKeyVaultConfiguration()`
-    (`MMCA.Common/Source/Hosting/MMCA.Common.Azure/AzureKeyVaultConfigurationExtensions.cs:23`, `:80`);
+- **Four cloud adapter packages and one test adapter.** Azure ships as two packages, the AWS and
+  Google Cloud adapters as one each; the authoritative package list is `MMCA.Common/FACTS.md`
+  (`MMCA.Common.Azure.Startup` at `:42`, the two Azure packages' references at `:79-80`). Every call
+  is opt-in and a no-op until its gate key is set (`MMCA.Common/CHANGELOG.md:547`, `:552`).
+  - `MMCA.Common.Azure.Startup`: the Azure start-up calls, with no EF Core or MassTransit
+    dependency, so a gateway or any host that needs only start-up wiring takes them without EF Core,
+    MassTransit, Service Bus, Notification Hubs or the Blob file storage adapter; it keeps the Blob
+    SDK, because the key ring is stored in a blob
+    (`MMCA.Common/Source/Hosting/MMCA.Common.Azure.Startup/MMCA.Common.Azure.Startup.csproj:4`,
+    `:14-19`, `:21`, `:24`; `MMCA.Common/CHANGELOG.md:46`, `:61`). Key Vault as a configuration source,
+    `AddAzureKeyVaultConfiguration()`
+    (`MMCA.Common/Source/Hosting/MMCA.Common.Azure.Startup/AzureKeyVaultConfigurationExtensions.cs:23`, `:80`);
     the Blob plus Key Vault DataProtection key ring, `AddAzureDataProtection()`
-    (`MMCA.Common/Source/Hosting/MMCA.Common.Azure/AzureDataProtectionExtensions.cs:20`, `:53`); the Azure
-    Monitor exporter, `AddAzureMonitorExporter()`
-    (`MMCA.Common/Source/Hosting/MMCA.Common.Azure/AzureMonitorExporterExtensions.cs:12`, `:42`, calling
-    `UseAzureMonitor()` at `:63`); Blob file storage, `AddAzureBlobFileStorage(configuration)`
+    (`MMCA.Common/Source/Hosting/MMCA.Common.Azure.Startup/AzureDataProtectionExtensions.cs:20`, `:53`); and
+    the Azure Monitor exporter, `AddAzureMonitorExporter()`
+    (`MMCA.Common/Source/Hosting/MMCA.Common.Azure.Startup/AzureMonitorExporterExtensions.cs:12`, `:42`,
+    calling `UseAzureMonitor()` at `:63`). The three types keep the `MMCA.Common.Azure` namespace
+    (`MMCA.Common.Azure.Startup.csproj:5-7`). The package carries only the Key Vault configuration,
+    DataProtection, Blob storage, Azure.Identity and Azure Monitor SDKs (`:20-28`, the direct
+    `Azure.Storage.Blobs` reference at `:24`) and references MMCA.Common.Aspire alone, for the
+    `HostIntegrationMarker` receipt (`:35-36`), which brings that package's health-check, Npgsql,
+    SqlClient and Redis references with it
+    (`MMCA.Common/Source/Hosting/MMCA.Common.Aspire/MMCA.Common.Aspire.csproj:17-41`); the `EnforceAzureStartupBoundary`
+    build target holds it to an allow-list of MMCA.Common.Aspire and MMCA.Common.Shared
+    (`MMCA.Common/Source/Build/MMCA.Common.LayerEnforcement.targets:296-314`).
+  - `MMCA.Common.Azure`: references MMCA.Common.Azure.Startup, so a host on the full adapter still
+    gets the three start-up calls
+    (`MMCA.Common/Source/Hosting/MMCA.Common.Azure/MMCA.Common.Azure.csproj:44`), and forwards the
+    three moved types so a host compiled against an older binary resolves them without a rebuild
+    (`MMCA.Common/Source/Hosting/MMCA.Common.Azure/TypeForwards.cs:3-8`; `MMCA.Common/CHANGELOG.md:67`).
+    What stays here is everything beyond start-up: Blob file storage,
+    `AddAzureBlobFileStorage(configuration)`
     (`MMCA.Common/Source/Hosting/MMCA.Common.Azure/AzureServiceCollectionExtensions.cs:41`); Notification
-    Hubs native push, `AddAzureNotificationHubsPush(configuration)` (`:83`); and the Service Bus
-    transport, `AddAzureServiceBusTransport()` (`:117-118`). The Entra ID SQL authentication provider
-    (`Microsoft.Data.SqlClient.Extensions.Azure`) arrives by referencing the package, with no call
+    Hubs native push, `AddAzureNotificationHubsPush(configuration)` (`:85`); the Service Bus
+    transport, `AddAzureServiceBusTransport()` (`:119-120`); and Entra token login for Azure Database
+    for PostgreSQL, `AddAzurePostgreSqlEntraAuthentication(configuration)` (`:146`), gated on the
+    boolean `AzurePostgreSql:EntraAuthentication:Enabled` (`:124`, `:150-156`; section at
+    `MMCA.Common/Source/Hosting/MMCA.Common.Azure/PostgreSql/AzurePostgreSqlEntraAuthenticationSettings.cs:13`).
+    The login is one more configurator registered through `AddNpgsqlDataSourceConfigurator`
+    (`AzureServiceCollectionExtensions.cs:172`;
+    `MMCA.Common/Source/Hosting/MMCA.Common.Azure/PostgreSql/AzurePostgreSqlEntraAuthenticationConfigurator.cs:23`):
+    Npgsql's periodic password provider sends a `DefaultAzureCredential` token for the
+    `https://ossrdbms-aad.database.windows.net/.default` scope (`AzureServiceCollectionExtensions.cs:123-128`;
+    `MMCA.Common/Source/Hosting/MMCA.Common.Azure/PostgreSql/AzurePostgreSqlAccessTokenSource.cs:15`),
+    refreshed every four minutes (`AzurePostgreSqlEntraAuthenticationConfigurator.cs:26`), and a
+    configured PostgreSQL connection string that does not require TLS fails registration, because the
+    token travels as the password (`AzureServiceCollectionExtensions.cs:132-135`, `:158-160`). It has
+    not been tried against a live Azure Database for PostgreSQL server. The Entra ID SQL
+    authentication provider (`Microsoft.Data.SqlClient.Extensions.Azure`,
+    `MMCA.Common.Azure.csproj:35`) arrives by referencing the package, with no call
     (`MMCA.Common/CHANGELOG.md:158`).
   - `MMCA.Common.Aws`: S3-compatible storage, `AddS3FileStorage(configuration)`, and the SQS/SNS
     transport, `AddAmazonSqsTransport()`
@@ -76,7 +117,23 @@ guide states the rule (`MMCA.Common/AGENTS.md:147`).
     `Rds:IamAuthentication` section
     (`MMCA.Common/Source/Hosting/MMCA.Common.Aws/Rds/RdsIamAuthenticationSettings.cs:11`) with the
     token refreshed every 10 minutes
-    (`MMCA.Common/Source/Hosting/MMCA.Common.Aws/Rds/RdsIamAuthenticationConfigurator.cs:24`).
+    (`MMCA.Common/Source/Hosting/MMCA.Common.Aws/Rds/RdsIamAuthenticationConfigurator.cs:24`); and
+    the OpenTelemetry exporter, `AddAwsTelemetryExporter()`
+    (`MMCA.Common/Source/Hosting/MMCA.Common.Aws/AwsTelemetryExporterExtensions.cs:89`), gated on
+    `AwsTelemetry:Region` (`:47`, `:103-108`), which must follow `AddServiceDefaults()` (`:91-99`)
+    and sends traces to X-Ray and, when `AwsTelemetry:LogGroup` and `AwsTelemetry:LogStream` are both
+    set, logs to CloudWatch Logs, over OTLP/HTTP signed with AWS Signature Version 4 (`:40-41`,
+    `:50-51`). It exports no metrics: one request is capped at 1,000 data points and the
+    OpenTelemetry .NET SDK cannot split one metric, so metrics go through an ADOT collector
+    (`:66-69`). Without static keys, the default credential chain is warmed by a hosted service while
+    the host starts, never at registration, and a failed warm-up is logged without failing the host
+    (`:57-62`, `:128-136`;
+    `MMCA.Common/Source/Hosting/MMCA.Common.Aws/Telemetry/AwsTelemetryCredentialWarmup.cs:19-21`). The
+    signature covers a fixed header set: `host`, `content-type`, the `x-amz-*` headers the signer
+    adds and, on a logs request, `x-aws-log-group` and `x-aws-log-stream`; every other header goes out
+    unsigned (`MMCA.Common/Source/Hosting/MMCA.Common.Aws/Telemetry/AwsSigV4ExportHandler.cs:16-18`).
+    The exporter is tested against the SDK signer and a loopback receiver and has not been exercised
+    against live X-Ray or CloudWatch Logs endpoints (`AwsTelemetryExporterExtensions.cs:72-74`).
   - `MMCA.Common.Gcp`, over Application Default Credentials throughout (`MMCA.Common/CHANGELOG.md:121`):
     Cloud Storage, `AddGoogleCloudStorage(configuration)`
     (`MMCA.Common/Source/Hosting/MMCA.Common.Gcp/GcpServiceCollectionExtensions.cs:26`, `:48`), gated
@@ -179,37 +236,47 @@ guide states the rule (`MMCA.Common/AGENTS.md:147`).
   services, is deliberately not checked (`:22-26`); a host that lost its storage adapter fails each
   upload with `FileStorage.NotConfigured` instead (v1.256.0, `MMCA.Common/CHANGELOG.md:144-152`).
   `HostIntegrationTripwire`
-  (`MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Integrations/HostIntegrationTripwire.cs:15`, `:59`,
+  (`MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Integrations/HostIntegrationTripwire.cs:15`, `:69`,
   registered by `AddServiceDefaults()` at `MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Extensions.cs:44-46`)
   checks one gate key per host-level adapter call: `APPLICATIONINSIGHTS_CONNECTION_STRING`,
-  `KeyVault:Uri` and `DataProtection:BlobStorageUri` (`:20`, `:23`, `:26`), `SecretsManager:NamePrefix`
-  and `DataProtection:SsmParameterPrefix` (`:29`, `:32`), and `GoogleSecretManager:NamePrefix`,
-  `DataProtection:GcsObjectUri` and `GoogleCloudTelemetry:ProjectId` (`:40`, `:43`, `:46`; the checks
-  at `:63-102`), against the `HostIntegrationMarker` each adapter call registers
+  `KeyVault:Uri` and `DataProtection:BlobStorageUri` (`:20`, `:23`, `:26`), `SecretsManager:NamePrefix`,
+  `DataProtection:SsmParameterPrefix` and `AwsTelemetry:Region` (`:29`, `:32`, `:49`), and
+  `GoogleSecretManager:NamePrefix`, `DataProtection:GcsObjectUri` and `GoogleCloudTelemetry:ProjectId`
+  (`:40`, `:43`, `:46`; the checks at `:73-117`), against the `HostIntegrationMarker` each adapter call
+  registers
   (`MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Integrations/HostIntegrationMarker.cs:10`,
-  names at `HostIntegrationNames.cs:17`, `:20`, `:23`, `:26`, `:29`, `:32`, `:35`, `:38`; registered at
+  names at `HostIntegrationNames.cs:17`, `:20`, `:23`, `:26`, `:29`, `:32`, `:35`, `:38`, `:41`; registered at
   `AzureKeyVaultConfigurationExtensions.cs:84`, `AzureDataProtectionExtensions.cs:57`,
   `AzureMonitorExporterExtensions.cs:56`, `AwsSecretsManagerConfigurationExtensions.cs:125`,
-  `AwsDataProtectionExtensions.cs:72`, `GoogleSecretManagerConfigurationExtensions.cs:116`,
-  `GoogleCloudDataProtectionExtensions.cs:102`, `GoogleCloudTelemetryExporterExtensions.cs:127`). It
-  also fails a host that sets more than one of the three key-ring gates, since two rings split cookies
-  across replicas (`HostIntegrationTripwire.cs:49-54`, `:104-112`). A section holding only blank
-  placeholders stays silent (`:125`).
+  `AwsDataProtectionExtensions.cs:72`, `AwsTelemetryExporterExtensions.cs:122`,
+  `GoogleSecretManagerConfigurationExtensions.cs:116`, `GoogleCloudDataProtectionExtensions.cs:102`,
+  `GoogleCloudTelemetryExporterExtensions.cs:127`). The three Azure start-up messages name
+  MMCA.Common.Azure.Startup, or MMCA.Common.Azure, which includes it (`HostIntegrationTripwire.cs:76`,
+  `:81`, `:86`). `AzurePostgreSql:EntraAuthentication:Enabled` is a boolean gate (`:51-56`): true
+  without `AddAzurePostgreSqlEntraAuthentication(configuration)` fails, and so does a value that is
+  neither blank nor a boolean (`:119-132`, read at `:162-171`; name at `HostIntegrationNames.cs:43-44`,
+  registered at `AzureServiceCollectionExtensions.cs:169`). It also fails a host that sets more than
+  one of the three key-ring gates, since two rings split cookies across replicas
+  (`HostIntegrationTripwire.cs:58-64`, `:134-142`). A section holding only blank placeholders stays
+  silent (`:155`).
 - **The boundary is gated twice, matched on package id.** The `EnforceCloudVendorBoundary` build target
   fails a core project whose `PackageReference` is an Azure, AWS or Google Cloud package (an
   `Azure.*`, `Microsoft.Azure.*`, `AWSSDK.*` or `Google.*` id, `FirebaseAdmin` or `Grpc.Auth`), a vendor
-  MassTransit transport, or whose `ProjectReference` names an adapter project, `MMCA.Common.Gcp` included
-  (`MMCA.Common/Source/Build/MMCA.Common.LayerEnforcement.targets:109-115`, adapters at `:128`,
-  target at `:130`, patterns at `:138-147`, adapter references at `:149`, errors at `:151` and
-  `:153`). `CloudVendorIsolationTestsBase`
-  (`MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Bases/Layering/CloudVendorIsolationTestsBase.cs:15`)
+  MassTransit transport, or whose `ProjectReference` names an adapter project, `MMCA.Common.Gcp` and
+  `MMCA.Common.Azure.Startup` included
+  (`MMCA.Common/Source/Build/MMCA.Common.LayerEnforcement.targets:110-114`, adapters at `:129`,
+  target at `:131`, patterns at `:139-148`, adapter references at `:149-150`, errors at `:152` and
+  `:154`). `CloudVendorIsolationTestsBase`
+  (`MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Bases/Layering/CloudVendorIsolationTestsBase.cs:16`)
   fails a core assembly that names a vendor type or references a vendor or adapter assembly
-  (`:28-29`, `:32-33`), against the namespace roots `Azure`, `Microsoft.Azure`, `Amazon`, `Google`,
+  (`:28-30`, `:32-34`), against the namespace roots `Azure`, `Microsoft.Azure`, `Amazon`, `Google`,
   `FirebaseAdmin` and `Grpc.Auth` plus the vendor transports and adapters
-  (`MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Rules/Layering/ArchitectureRules.CloudVendors.cs:25-41`)
-  and the matching assembly-name prefixes (`:48-62`). The roots carry no trailing dot because
-  NetArchTest matches whole namespace segments and an entry ending in a dot matches nothing
-  (`:27-28`); each cloud adapter test project (Azure, Aws, Gcp) pins that with a `CloudVendorRulesTests` case naming its own
+  (`MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Rules/Layering/ArchitectureRules.CloudVendors.cs:30-41`)
+  and the matching assembly-name prefixes (`:51-62`). The `MMCA.Common.Azure` entries (`:38`, `:59`)
+  also cover MMCA.Common.Azure.Startup, whose types keep that namespace
+  (`MMCA.Common.Azure.Startup.csproj:7`) and whose assembly name starts with that prefix. The roots
+  carry no trailing dot because NetArchTest matches whole namespace segments and an entry ending in a
+  dot matches nothing (`ArchitectureRules.CloudVendors.cs:28-29`); each cloud adapter test project (Azure, Aws, Gcp) pins that with a `CloudVendorRulesTests` case naming its own
   SDK
   (`MMCA.Common/Tests/Hosting/MMCA.Common.Azure.Tests/CloudVendorRulesTests.cs:22`,
   `MMCA.Common/Tests/Hosting/MMCA.Common.Aws.Tests/CloudVendorRulesTests.cs:21`,
@@ -223,8 +290,19 @@ guide states the rule (`MMCA.Common/AGENTS.md:147`).
   framework's data engines and brings `Microsoft.Azure.Cosmos` transitively, so that namespace is
   allowed in Infrastructure alone; and `Aspire.Hosting.Azure.CosmosDB` in MMCA.Common.Aspire.Hosting,
   the AppHost-side emulator resource that never reaches a service process
-  (`MMCA.Common.LayerEnforcement.targets:117-124`, exemptions at `:134-135`;
-  `CloudVendorIsolationTestsBase.cs:21`). The Google Cloud additions added no exemption.
+  (`MMCA.Common.LayerEnforcement.targets:118-125`, exemptions at `:135-136`;
+  `CloudVendorIsolationTestsBase.cs:21-26`). Neither the Google Cloud additions nor
+  MMCA.Common.Azure.Startup added an exemption.
+- **The composed service host takes vendor calls only as callbacks.** MMCA.Common.ServiceHost
+  references API, Aspire and Grpc, and its one package reference is MinVer
+  (`MMCA.Common/Source/Hosting/MMCA.Common.ServiceHost/MMCA.Common.ServiceHost.csproj:12`, `:22-24`);
+  `EnforceCloudVendorBoundary` covers it like any core project (`MMCA.Common.LayerEnforcement.targets:274-275`).
+  A host passes its vendor registrations into `AddMmcaServiceHost` through `MmcaServiceHostOptions`
+  (`MMCA.Common/Source/Hosting/MMCA.Common.ServiceHost/MmcaServiceHostOptions.cs:12`, `:16`):
+  `ConfigureConfigurationSources` runs first, for Key Vault for example (`:62-66`);
+  `AfterServiceDefaults` runs right after `AddServiceDefaults()`, for an exporter such as Azure
+  Monitor and the shared key ring (`:68-72`); and `RegisterBrokerTransports` runs immediately before
+  the application pipeline, for the Service Bus transport for example (`:80-84`).
 - **S3-compatible, not S3-only.** `AddS3FileStorage` targets Amazon S3, Cloudflare R2, MinIO and the
   GCS XML API from one `FileStorage` section (`MMCA.Common/CHANGELOG.md:159`;
   `MMCA.Common/Source/Hosting/MMCA.Common.Aws/Storage/S3FileStorageSettings.cs:13`,
@@ -280,7 +358,7 @@ guide states the rule (`MMCA.Common/AGENTS.md:147`).
 - **The Cosmos engine still brings an Azure assembly into Infrastructure.** `Microsoft.Azure.Cosmos`
   arrives transitively through `Microsoft.EntityFrameworkCore.Cosmos`, so the core is cloud-neutral in
   its cloud-service integrations, not free of every Azure assembly
-  (`MMCA.Common.LayerEnforcement.targets:119-122`).
+  (`MMCA.Common.LayerEnforcement.targets:120-123`).
 - **SQS redelivery is shorter than the framework default.** The framework default is
   `[60, 600, 3600]` (`MessageBusSettings.cs:217`); SQS cannot delay an hour, so its default stops at
   900 seconds (`AmazonSqsTransport.cs:55`).
@@ -297,6 +375,12 @@ guide states the rule (`MMCA.Common/AGENTS.md:147`).
 - **Google Cloud metrics need a collector.** `AddGoogleCloudTelemetryExporter()` ships traces and
   logs; metrics reach Google only through the Google-built OpenTelemetry Collector
   (`GoogleCloudTelemetryExporterExtensions.cs:78-88`).
+- **AWS metrics need a collector too.** `AddAwsTelemetryExporter()` ships traces and logs; metrics
+  reach AWS only through an ADOT collector (`AwsTelemetryExporterExtensions.cs:66-69`).
+- **Two capabilities have not run against the live cloud.** The AWS exporter is proven against the
+  SDK signer and a loopback receiver only (`AwsTelemetryExporterExtensions.cs:72-74`), and the Azure
+  PostgreSQL Entra login has not been tried on a live Azure Database for PostgreSQL server. Both are
+  open items.
 - **The Google push adapter takes FCM tokens only.** An APNs-platform registration fails validation,
   so an iOS client registers an FCM token (`MMCA.Common/CHANGELOG.md:125`).
 - **Neither managed SQL Server offers IAM database authentication.** RDS for SQL Server keeps a password connection
@@ -318,7 +402,14 @@ Weighed and rejected on 2026-10-24.
   the dual-registry release publishes and versions in lockstep, and the maintenance that comes with
   each. One package per vendor with one call per capability keeps the opt-in at the call while the
   package count stays at one per cloud. Revisit if one capability's SDK becomes heavy enough that
-  hosts using the others object to carrying it.
+  hosts using the others object to carrying it. Revisited on 2026-11-12 for Azure alone: a gateway
+  needs only Key Vault configuration, the exporter and the key ring, and should not carry EF Core,
+  MassTransit, Service Bus, Notification Hubs or the Blob file storage adapter for them (the Blob SDK
+  stays, for the key ring), so those three calls moved
+  to MMCA.Common.Azure.Startup
+  (`MMCA.Common/Source/Hosting/MMCA.Common.Azure.Startup/MMCA.Common.Azure.Startup.csproj:14-19`;
+  `MMCA.Common.LayerEnforcement.targets:296-302`). The split is by host shape, not by capability:
+  the rest of the Azure adapter stays one package, and so does every other cloud.
 
 Weighed and rejected on 2026-10-25.
 - **A hand-written MassTransit transport for Google Pub/Sub.** It would give Google Cloud a native
