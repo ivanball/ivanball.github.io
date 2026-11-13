@@ -127,37 +127,31 @@
           <p class="eyebrow doc-kicker">Guides &amp; specifications</p>
           <h1 id="module-dependency-graphs">Module Dependency Graphs</h1>
           <p><em>Generated from the committed project files of MMCA.ADC, MMCA.Store and MMCA.Helpdesk. Do not hand-edit: regenerate it instead.</em></p>
-          <p>How the modules of each application depend on one another, at two levels:</p>
+          <p>How the modules of each application depend on one another, drawn as two graphs per application with one arrow per pair of modules:</p>
           <ul>
-          <li><strong>Compile-time references</strong> (solid arrows): a <code>ProjectReference</code> from one module&#39;s project to another module&#39;s project. Each repository pins this exact list in its <code>CrossModuleReferenceTests</code> (the <code>CrossModuleReferenceTestsBase</code> fitness function in MMCA.Common), so adding or removing one is a reviewed change to that test. The label counts the project references behind the arrow.</li>
-          <li><strong>Runtime calls</strong> (dashed arrows): a service host that references a peer module&#39;s <code>*.Contracts</code> project wires that peer&#39;s gRPC client, so the module calls the peer across the process boundary when the modules run as separate services. The table beside each graph says whether the calling module lists the peer in its <code>IModule.Dependencies</code>; a &quot;no&quot; is a runtime edge the module loader&#39;s ordering and <code>RequiresDependencies</code> check do not know about (<a href="../adr/059-module-contract-and-composition.html">ADR-059</a>, Trade-offs).</li>
+          <li><strong>Compile-time references</strong> (solid arrows): a <code>ProjectReference</code> from one module&#39;s project to another module&#39;s project. The label says what the arrow reaches: the peer&#39;s <code>Shared</code> project (its contracts) or its <code>UI</code>. Each repository pins the exact list in its <code>CrossModuleReferenceTests</code> (the <code>CrossModuleReferenceTestsBase</code> fitness function in MMCA.Common), so adding or removing one is a reviewed change to that test. The table under the graph lists every reference project by project.</li>
+          <li><strong>Runtime calls</strong> (dashed arrows): a service host that references a peer module&#39;s <code>*.Contracts</code> project wires that peer&#39;s gRPC client, so the module calls the peer across the process boundary when the modules run as separate services. The label names the clients the calling service registers. The table says whether the calling module lists the peer in its <code>IModule.Dependencies</code>; a &quot;no&quot; is a runtime edge the module loader&#39;s ordering and <code>RequiresDependencies</code> check do not know about (<a href="../adr/059-module-contract-and-composition.html">ADR-059</a>, Trade-offs).</li>
+          <li><strong>Grey arrows</strong> are the two cross-cutting dependencies. A grey compile-time arrow points into the Identity module&#39;s contracts: the user identifier, the role and permission names and the user integration events that every module shares. A grey runtime arrow carries only the data-subject export, in which the Identity module collects each module&#39;s part of a user&#39;s data. The blue arrows are the module-specific dependencies.</li>
           </ul>
-          <p>Cross-module references target a peer&#39;s <code>Shared</code> (contracts) project, except UI composing another module&#39;s UI; the IL-level isolation rules (<a href="../adr/059-module-contract-and-composition.html">ADR-059</a>) and this project-level list together cover the boundary.</p>
           <h2 id="mmcaadc">MMCA.ADC</h2>
           <p>4 modules: Conference, Engagement, Identity, Notification. 20 compile-time cross-module references, 9 runtime gRPC edges.</p>
+          <h3 id="compile-time-references">Compile-time references</h3>
           <pre class="mermaid">flowchart LR
     Conference[Conference]
     Engagement[Engagement]
     Identity[Identity]
     Notification[Notification]
-    Conference --&gt;|2 refs| Engagement
-    Conference --&gt;|5 refs| Identity
-    Engagement --&gt;|3 refs| Conference
-    Engagement --&gt;|4 refs| Identity
-    Identity --&gt;|1 ref| Conference
-    Identity --&gt;|1 ref| Engagement
-    Identity --&gt;|1 ref| Notification
-    Notification --&gt;|3 refs| Identity
-    Conference -. gRPC .-&gt; Engagement
-    Engagement -. gRPC .-&gt; Conference
-    Engagement -. gRPC .-&gt; Identity
-    Engagement -. gRPC .-&gt; Notification
-    Identity -. gRPC .-&gt; Conference
-    Identity -. gRPC .-&gt; Engagement
-    Identity -. gRPC .-&gt; Notification
-    Notification -. gRPC .-&gt; Conference
-    Notification -. gRPC .-&gt; Identity</pre>
-          <h3 id="compile-time-references">Compile-time references</h3>
+    Conference --&gt;|contracts| Engagement
+    Conference --&gt;|contracts| Identity
+    Conference --&gt;|UI| Identity
+    Engagement --&gt;|contracts| Conference
+    Engagement --&gt;|UI| Conference
+    Engagement --&gt;|contracts| Identity
+    Identity --&gt;|contracts| Conference
+    Identity --&gt;|contracts| Engagement
+    Identity --&gt;|contracts| Notification
+    Notification --&gt;|contracts| Identity
+    linkStyle 1,5,9 stroke:#94a3b8</pre>
           <div class="table-wrap"><table>
           <thead>
           <tr>
@@ -247,78 +241,101 @@
           </tr>
           </tbody></table></div>
           <h3 id="runtime-calls-and-declared-dependencies">Runtime calls and declared dependencies</h3>
+          <pre class="mermaid">flowchart LR
+    Conference[Conference]
+    Engagement[Engagement]
+    Identity[Identity]
+    Notification[Notification]
+    Conference -.-&gt;|bookmark count| Engagement
+    Engagement -.-&gt;|event live validation, session validation| Conference
+    Engagement -.-&gt;|verified user lookup| Identity
+    Engagement -.-&gt;|live channel| Notification
+    Identity -.-&gt;|user export| Conference
+    Identity -.-&gt;|user export| Engagement
+    Identity -.-&gt;|user export| Notification
+    Notification -.-&gt;|event live validation| Conference
+    Notification -.-&gt;|attendee| Identity
+    linkStyle 4,5,6 stroke:#94a3b8</pre>
           <div class="table-wrap"><table>
           <thead>
           <tr>
           <th>Calling module</th>
           <th>Called module</th>
+          <th>gRPC clients</th>
           <th>In the caller&#39;s <code>Dependencies</code></th>
           </tr>
           </thead>
           <tbody><tr>
           <td>Conference</td>
           <td>Engagement</td>
+          <td>bookmark count</td>
           <td>no</td>
           </tr>
           <tr>
           <td>Engagement</td>
           <td>Conference</td>
+          <td>event live validation, session validation</td>
           <td>yes</td>
           </tr>
           <tr>
           <td>Engagement</td>
           <td>Identity</td>
+          <td>verified user lookup</td>
           <td>no</td>
           </tr>
           <tr>
           <td>Engagement</td>
           <td>Notification</td>
+          <td>live channel</td>
           <td>no</td>
           </tr>
           <tr>
           <td>Identity</td>
           <td>Conference</td>
+          <td>user export</td>
           <td>no</td>
           </tr>
           <tr>
           <td>Identity</td>
           <td>Engagement</td>
+          <td>user export</td>
           <td>no</td>
           </tr>
           <tr>
           <td>Identity</td>
           <td>Notification</td>
+          <td>user export</td>
           <td>no</td>
           </tr>
           <tr>
           <td>Notification</td>
           <td>Conference</td>
+          <td>event live validation</td>
           <td>no</td>
           </tr>
           <tr>
           <td>Notification</td>
           <td>Identity</td>
+          <td>attendee</td>
           <td>yes</td>
           </tr>
           </tbody></table></div>
           <p>Declared <code>IModule.Dependencies</code>: Conference (none); Engagement (Conference); Identity (none); Notification (Identity).</p>
           <h2 id="mmcastore">MMCA.Store</h2>
           <p>3 modules: Catalog, Identity, Sales. 12 compile-time cross-module references, 4 runtime gRPC edges.</p>
+          <h3 id="compile-time-references-1">Compile-time references</h3>
           <pre class="mermaid">flowchart LR
     Catalog[Catalog]
     Identity[Identity]
     Sales[Sales]
-    Catalog --&gt;|3 refs| Identity
-    Catalog --&gt;|2 refs| Sales
-    Identity --&gt;|1 ref| Catalog
-    Identity --&gt;|1 ref| Sales
-    Sales --&gt;|2 refs| Catalog
-    Sales --&gt;|3 refs| Identity
-    Identity -. gRPC .-&gt; Catalog
-    Identity -. gRPC .-&gt; Sales
-    Sales -. gRPC .-&gt; Catalog
-    Sales -. gRPC .-&gt; Identity</pre>
-          <h3 id="compile-time-references-1">Compile-time references</h3>
+    Catalog --&gt;|contracts| Identity
+    Catalog --&gt;|contracts| Sales
+    Catalog --&gt;|UI| Sales
+    Identity --&gt;|contracts| Catalog
+    Identity --&gt;|contracts| Sales
+    Sales --&gt;|contracts| Catalog
+    Sales --&gt;|contracts| Identity
+    linkStyle 0,6 stroke:#94a3b8</pre>
           <div class="table-wrap"><table>
           <thead>
           <tr>
@@ -376,40 +393,52 @@
           </tr>
           </tbody></table></div>
           <h3 id="runtime-calls-and-declared-dependencies-1">Runtime calls and declared dependencies</h3>
+          <pre class="mermaid">flowchart LR
+    Catalog[Catalog]
+    Identity[Identity]
+    Sales[Sales]
+    Identity -.-&gt;|user export| Catalog
+    Identity -.-&gt;|user export| Sales
+    Sales -.-&gt;|product variant| Catalog
+    Sales -.-&gt;|customer| Identity
+    linkStyle 0,1 stroke:#94a3b8</pre>
           <div class="table-wrap"><table>
           <thead>
           <tr>
           <th>Calling module</th>
           <th>Called module</th>
+          <th>gRPC clients</th>
           <th>In the caller&#39;s <code>Dependencies</code></th>
           </tr>
           </thead>
           <tbody><tr>
           <td>Identity</td>
           <td>Catalog</td>
+          <td>user export</td>
           <td>no</td>
           </tr>
           <tr>
           <td>Identity</td>
           <td>Sales</td>
+          <td>user export</td>
           <td>no</td>
           </tr>
           <tr>
           <td>Sales</td>
           <td>Catalog</td>
+          <td>product variant</td>
           <td>yes</td>
           </tr>
           <tr>
           <td>Sales</td>
           <td>Identity</td>
+          <td>customer</td>
           <td>yes</td>
           </tr>
           </tbody></table></div>
           <p>Declared <code>IModule.Dependencies</code>: Catalog (none); Identity (none); Sales (Catalog, Identity).</p>
           <h2 id="mmcahelpdesk">MMCA.Helpdesk</h2>
           <p>1 module: Tickets. 0 compile-time cross-module references, 0 runtime gRPC edges.</p>
-          <pre class="mermaid">flowchart LR
-    Tickets[Tickets]</pre>
           <h3 id="compile-time-references-2">Compile-time references</h3>
           <p>None: no module project references another module&#39;s project.</p>
           <h3 id="runtime-calls-and-declared-dependencies-2">Runtime calls and declared dependencies</h3>

@@ -2,16 +2,17 @@
 
 _Generated from the committed project files of MMCA.ADC, MMCA.Store and MMCA.Helpdesk. Do not hand-edit: regenerate it instead._
 
-How the modules of each application depend on one another, at two levels:
+How the modules of each application depend on one another, drawn as two graphs per application with one arrow per pair of modules:
 
-- **Compile-time references** (solid arrows): a `ProjectReference` from one module's project to another module's project. Each repository pins this exact list in its `CrossModuleReferenceTests` (the `CrossModuleReferenceTestsBase` fitness function in MMCA.Common), so adding or removing one is a reviewed change to that test. The label counts the project references behind the arrow.
-- **Runtime calls** (dashed arrows): a service host that references a peer module's `*.Contracts` project wires that peer's gRPC client, so the module calls the peer across the process boundary when the modules run as separate services. The table beside each graph says whether the calling module lists the peer in its `IModule.Dependencies`; a "no" is a runtime edge the module loader's ordering and `RequiresDependencies` check do not know about ([ADR-059](../adr/059-module-contract-and-composition.md), Trade-offs).
-
-Cross-module references target a peer's `Shared` (contracts) project, except UI composing another module's UI; the IL-level isolation rules ([ADR-059](../adr/059-module-contract-and-composition.md)) and this project-level list together cover the boundary.
+- **Compile-time references** (solid arrows): a `ProjectReference` from one module's project to another module's project. The label says what the arrow reaches: the peer's `Shared` project (its contracts) or its `UI`. Each repository pins the exact list in its `CrossModuleReferenceTests` (the `CrossModuleReferenceTestsBase` fitness function in MMCA.Common), so adding or removing one is a reviewed change to that test. The table under the graph lists every reference project by project.
+- **Runtime calls** (dashed arrows): a service host that references a peer module's `*.Contracts` project wires that peer's gRPC client, so the module calls the peer across the process boundary when the modules run as separate services. The label names the clients the calling service registers. The table says whether the calling module lists the peer in its `IModule.Dependencies`; a "no" is a runtime edge the module loader's ordering and `RequiresDependencies` check do not know about ([ADR-059](../adr/059-module-contract-and-composition.md), Trade-offs).
+- **Grey arrows** are the two cross-cutting dependencies. A grey compile-time arrow points into the Identity module's contracts: the user identifier, the role and permission names and the user integration events that every module shares. A grey runtime arrow carries only the data-subject export, in which the Identity module collects each module's part of a user's data. The blue arrows are the module-specific dependencies.
 
 ## MMCA.ADC
 
 4 modules: Conference, Engagement, Identity, Notification. 20 compile-time cross-module references, 9 runtime gRPC edges.
+
+### Compile-time references
 
 ```mermaid
 flowchart LR
@@ -19,26 +20,18 @@ flowchart LR
     Engagement[Engagement]
     Identity[Identity]
     Notification[Notification]
-    Conference -->|2 refs| Engagement
-    Conference -->|5 refs| Identity
-    Engagement -->|3 refs| Conference
-    Engagement -->|4 refs| Identity
-    Identity -->|1 ref| Conference
-    Identity -->|1 ref| Engagement
-    Identity -->|1 ref| Notification
-    Notification -->|3 refs| Identity
-    Conference -. gRPC .-> Engagement
-    Engagement -. gRPC .-> Conference
-    Engagement -. gRPC .-> Identity
-    Engagement -. gRPC .-> Notification
-    Identity -. gRPC .-> Conference
-    Identity -. gRPC .-> Engagement
-    Identity -. gRPC .-> Notification
-    Notification -. gRPC .-> Conference
-    Notification -. gRPC .-> Identity
+    Conference -->|contracts| Engagement
+    Conference -->|contracts| Identity
+    Conference -->|UI| Identity
+    Engagement -->|contracts| Conference
+    Engagement -->|UI| Conference
+    Engagement -->|contracts| Identity
+    Identity -->|contracts| Conference
+    Identity -->|contracts| Engagement
+    Identity -->|contracts| Notification
+    Notification -->|contracts| Identity
+    linkStyle 1,5,9 stroke:#94a3b8
 ```
-
-### Compile-time references
 
 | From | To |
 |---|---|
@@ -65,17 +58,35 @@ flowchart LR
 
 ### Runtime calls and declared dependencies
 
-| Calling module | Called module | In the caller's `Dependencies` |
-|---|---|---|
-| Conference | Engagement | no |
-| Engagement | Conference | yes |
-| Engagement | Identity | no |
-| Engagement | Notification | no |
-| Identity | Conference | no |
-| Identity | Engagement | no |
-| Identity | Notification | no |
-| Notification | Conference | no |
-| Notification | Identity | yes |
+```mermaid
+flowchart LR
+    Conference[Conference]
+    Engagement[Engagement]
+    Identity[Identity]
+    Notification[Notification]
+    Conference -.->|bookmark count| Engagement
+    Engagement -.->|event live validation, session validation| Conference
+    Engagement -.->|verified user lookup| Identity
+    Engagement -.->|live channel| Notification
+    Identity -.->|user export| Conference
+    Identity -.->|user export| Engagement
+    Identity -.->|user export| Notification
+    Notification -.->|event live validation| Conference
+    Notification -.->|attendee| Identity
+    linkStyle 4,5,6 stroke:#94a3b8
+```
+
+| Calling module | Called module | gRPC clients | In the caller's `Dependencies` |
+|---|---|---|---|
+| Conference | Engagement | bookmark count | no |
+| Engagement | Conference | event live validation, session validation | yes |
+| Engagement | Identity | verified user lookup | no |
+| Engagement | Notification | live channel | no |
+| Identity | Conference | user export | no |
+| Identity | Engagement | user export | no |
+| Identity | Notification | user export | no |
+| Notification | Conference | event live validation | no |
+| Notification | Identity | attendee | yes |
 
 Declared `IModule.Dependencies`: Conference (none); Engagement (Conference); Identity (none); Notification (Identity).
 
@@ -83,24 +94,22 @@ Declared `IModule.Dependencies`: Conference (none); Engagement (Conference); Ide
 
 3 modules: Catalog, Identity, Sales. 12 compile-time cross-module references, 4 runtime gRPC edges.
 
+### Compile-time references
+
 ```mermaid
 flowchart LR
     Catalog[Catalog]
     Identity[Identity]
     Sales[Sales]
-    Catalog -->|3 refs| Identity
-    Catalog -->|2 refs| Sales
-    Identity -->|1 ref| Catalog
-    Identity -->|1 ref| Sales
-    Sales -->|2 refs| Catalog
-    Sales -->|3 refs| Identity
-    Identity -. gRPC .-> Catalog
-    Identity -. gRPC .-> Sales
-    Sales -. gRPC .-> Catalog
-    Sales -. gRPC .-> Identity
+    Catalog -->|contracts| Identity
+    Catalog -->|contracts| Sales
+    Catalog -->|UI| Sales
+    Identity -->|contracts| Catalog
+    Identity -->|contracts| Sales
+    Sales -->|contracts| Catalog
+    Sales -->|contracts| Identity
+    linkStyle 0,6 stroke:#94a3b8
 ```
-
-### Compile-time references
 
 | From | To |
 |---|---|
@@ -119,23 +128,30 @@ flowchart LR
 
 ### Runtime calls and declared dependencies
 
-| Calling module | Called module | In the caller's `Dependencies` |
-|---|---|---|
-| Identity | Catalog | no |
-| Identity | Sales | no |
-| Sales | Catalog | yes |
-| Sales | Identity | yes |
+```mermaid
+flowchart LR
+    Catalog[Catalog]
+    Identity[Identity]
+    Sales[Sales]
+    Identity -.->|user export| Catalog
+    Identity -.->|user export| Sales
+    Sales -.->|product variant| Catalog
+    Sales -.->|customer| Identity
+    linkStyle 0,1 stroke:#94a3b8
+```
+
+| Calling module | Called module | gRPC clients | In the caller's `Dependencies` |
+|---|---|---|---|
+| Identity | Catalog | user export | no |
+| Identity | Sales | user export | no |
+| Sales | Catalog | product variant | yes |
+| Sales | Identity | customer | yes |
 
 Declared `IModule.Dependencies`: Catalog (none); Identity (none); Sales (Catalog, Identity).
 
 ## MMCA.Helpdesk
 
 1 module: Tickets. 0 compile-time cross-module references, 0 runtime gRPC edges.
-
-```mermaid
-flowchart LR
-    Tickets[Tickets]
-```
 
 ### Compile-time references
 

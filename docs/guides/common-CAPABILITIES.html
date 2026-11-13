@@ -141,8 +141,8 @@
           <td>NuGet packages, lockstep versioned</td>
           </tr>
           <tr>
-          <td><strong>173</strong></td>
-          <td>architecture fitness methods (69 bases)</td>
+          <td><strong>174</strong></td>
+          <td>architecture fitness methods (70 bases)</td>
           </tr>
           <tr>
           <td><strong>146</strong></td>
@@ -686,8 +686,8 @@
           <p>The framework ships its own enforcement: adopters subclass, and drift fails the build.</p>
           <h3 id="architecture-fitness-functions">Architecture fitness functions</h3>
           <ul>
-          <li><strong>173 test methods across 69 abstract bases</strong> (as <code>FACTS.md</code> counts them). Most are parameterized by your <code>IArchitectureMap</code> and are a three-line subclass per repo; the rest take an allow-list, a resource assembly, a package-version file, a module type, a source tree, infrastructure files, or a frozen snapshot, with non-vacuity floors so a renamed folder cannot pass with zero findings. The rule bodies live in a 44-file <code>ArchitectureRules</code> library you can also call directly, and <code>CallGraphIndex</code> walks IL so rules catch what signatures cannot: a domain event handler reaching <code>SaveChanges</code>, a hard delete outside the allow-list, raw <code>IQueryable</code> in Application. The families:<ul>
-          <li>Layer pairs and layer-map completeness, per-module layer overrides, module isolation across the full internal cross product, module Shared purity, namespace acyclicity</li>
+          <li><strong>174 test methods across 70 abstract bases</strong> (as <code>FACTS.md</code> counts them). Most are parameterized by your <code>IArchitectureMap</code> and are a three-line subclass per repo; the rest take an allow-list, a resource assembly, a package-version file, a module type, a source tree, infrastructure files, or a frozen snapshot, with non-vacuity floors so a renamed folder cannot pass with zero findings. The rule bodies live in a 44-file <code>ArchitectureRules</code> library you can also call directly, and <code>CallGraphIndex</code> walks IL so rules catch what signatures cannot: a domain event handler reaching <code>SaveChanges</code>, a hard delete outside the allow-list, raw <code>IQueryable</code> in Application. The families:<ul>
+          <li>Layer pairs and layer-map completeness, per-module layer overrides, module isolation across the full internal cross product, module Shared purity, namespace acyclicity, and a cross-module <code>ProjectReference</code> allowlist read from the project files (<code>CrossModuleReferenceTestsBase</code>), which sees couplings that leave no IL reference</li>
           <li>Domain and Shared framework purity, Application free of EF Core and ASP.NET Core, transport containment, AI and cloud-vendor isolation in both directions, service contract purity and non-public implementations</li>
           <li>Entity and aggregate conventions, factory-returns-Result, immutability of DTOs, commands, queries, events, and value objects, naming and sealing across ten type families, domain throw discipline</li>
           <li>Handler placement, handler-injection bans, constructor arity ceiling, handler result typing, vertical slice cohesion, command validator coverage, cancellation-token conventions, generic cache-invalidation prefixes, process timeout commands (a stable name and exactly one handler)</li>
