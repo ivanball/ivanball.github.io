@@ -289,7 +289,7 @@
           <code>mmca-command</code> row now lists the validator and the cache-invalidation test builder the slice ships.
           Revised 2026-10-28: the seed measurements were re-taken at MMCA.Helpdesk <code>c41fc93</code> (148 files,
           12,597 lines, 57 pins) and the required-check anchor was re-pointed.
-          Revised 2026-11-12 (unreleased, on the <code>feat/fresh-eyes-wave</code> branch): the seed, and so a generated app, now carries one strongly typed identifier,
+          Revised 2026-11-12: the seed, and so a generated app, now carries one strongly typed identifier,
           one domain enumeration, opt-in outbound webhooks and a ticket audit-history endpoint; the
           <code>mmca-module</code> host wire-up and <code>build/add-module.ps1</code> add the new module&#39;s Shared assembly to the
           <code>AddStronglyTypedIds</code> list. The seed measurements in the Context were not re-taken.</p>
@@ -416,8 +416,10 @@
           <code>:22</code>, <code>:29-30</code>), over the audit trail (<a href="075-audit-trail.html">ADR-075</a>). The two new types follow
           the shape flags: the wrapper and its tests are listed with the child files <code>--flat</code> drops
           (<code>MMCA.Helpdesk/.template.config/template.json:372</code>, <code>:384</code>), the enumeration and its tests with
-          the status files <code>--no-status</code> drops (<code>:392</code>, <code>:397</code>), and the alias line naming the wrapper sits
-          inside the child region (<code>MMCA.Helpdesk.Tickets.GlobalUsings.IdentifierType.cs:5-9</code>). <code>mmca-module</code>
+          the status files <code>--no-status</code> drops (<code>:392</code>, <code>:397</code>). The wrapper has no alias line for a flag to
+          drop: a strongly typed identifier takes no alias (ADR-115, Decision point 13), so the alias file
+          declares the primitive ticket alias alone (<code>MMCA.Helpdesk.Tickets.GlobalUsings.IdentifierType.cs:8</code>)
+          and a second module&#39;s alias file never names a type of the first. <code>mmca-module</code>
           excludes the audit-history and webhook-subscription controllers
           (<code>templates/mmca-module/.template.config/template.json:263-264</code>), so a second module does not
           declare a second copy of either.</p>

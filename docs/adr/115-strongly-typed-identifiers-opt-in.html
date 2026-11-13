@@ -263,10 +263,11 @@
           2026-10-21: the alias count is 49 (47 <code>int</code>), <code>StronglyTypedIdMappings</code> ships two conversions
           rather than four, and the public API surface is 53 declarations rather than 55. Revised
           2026-10-26: anchors refreshed after <code>AddStronglyTypedIds</code> moved within the Infrastructure
-          <code>DependencyInjection.cs</code>. Revised 2026-11-12 (unreleased, on the <code>feat/fresh-eyes-wave</code> branch): MMCA.Helpdesk is the first adopter (one
-          identifier, <code>TicketCommentId</code>), the design-time option <code>AddStronglyTypedIdAssembly</code> and the
-          model-cache key joined the capability, and Decision points 12, 13 and 14 were amended and point 15
-          added accordingly.
+          <code>DependencyInjection.cs</code>. Revised 2026-11-12: MMCA.Helpdesk is the first adopter (one
+          identifier, <code>TicketCommentId</code>, which takes no alias and is named directly), the design-time option
+          <code>AddStronglyTypedIdAssembly</code> and the model-cache key joined the capability, and Decision points 12,
+          13 and 14 were amended and point 15 added accordingly; the alias count is 50 (48 <code>int</code>), see the
+          Revision (2026-11-12) at the end.
           <strong>Revisits <a href="048-primitive-identifier-type-aliases.html">ADR-048</a> and
           <a href="085-identifier-type-aliases-revisited.html">ADR-085</a></strong> by adding the capability those records deferred,
           without a workspace-wide migration. ADR-048&#39;s decision (every entity identity is a primitive named through a
@@ -474,12 +475,16 @@
           (<code>MMCA.Helpdesk/Source/Modules/Tickets/MMCA.Helpdesk.Tickets.Shared/Tickets/TicketCommentId.cs:19</code>,
           factory at <code>:22</code>). It also carries <code>[JsonConverter(typeof(StronglyTypedIdJsonConverterFactory))]</code>
           (<code>:18</code>), because the UI&#39;s typed HttpClient and the cache register no converter factory and must
-          still write the bare integer (<code>:12-14</code>). The module&#39;s alias now names the wrapper
-          (<code>MMCA.Helpdesk/Source/Modules/Tickets/MMCA.Helpdesk.Tickets.Shared/MMCA.Helpdesk.Tickets.GlobalUsings.IdentifierType.cs:8</code>)
-          while the ticket id stays the primitive (<code>:10</code>), so one module shows both styles side by side
-          (<code>:6-7</code>); the entity and its DTO keep reading the alias
-          (<code>MMCA.Helpdesk/Source/Modules/Tickets/MMCA.Helpdesk.Tickets.Domain/Tickets/TicketComment.cs:16</code>,
-          <code>MMCA.Helpdesk/Source/Modules/Tickets/MMCA.Helpdesk.Tickets.Shared/Tickets/TicketCommentDTO.cs:10</code>).
+          still write the bare integer (<code>:12-14</code>). The wrapper takes no alias. The module&#39;s alias file is
+          linked into every project of the solution, so an alias in it may only name a type every project
+          can see, and a wrapper is a type of its own module that another module&#39;s projects cannot
+          reference
+          (<code>MMCA.Helpdesk/Source/Modules/Tickets/MMCA.Helpdesk.Tickets.Shared/MMCA.Helpdesk.Tickets.GlobalUsings.IdentifierType.cs:3-7</code>).
+          The file therefore declares the primitive ticket alias alone (<code>:8</code>), and the entity and its DTO
+          name <code>TicketCommentId</code> directly
+          (<code>MMCA.Helpdesk/Source/Modules/Tickets/MMCA.Helpdesk.Tickets.Domain/Tickets/TicketComment.cs:17</code>,
+          <code>MMCA.Helpdesk/Source/Modules/Tickets/MMCA.Helpdesk.Tickets.Shared/Tickets/TicketCommentDTO.cs:8</code>,
+          <code>:10</code>), so one module shows both styles side by side.
           The web host opts in with one call over the module&#39;s Shared assembly
           (<code>MMCA.Helpdesk/Source/Hosts/MMCA.Helpdesk.Web/Program.cs:82-86</code>). The adoption needed no
           migration, as point 8 predicts: the column stays the <code>int</code> it was, and the newest migration in
@@ -487,8 +492,8 @@
           The only other implementations anywhere are fixtures in the framework&#39;s own test files, among
           them the design-time wrapper <code>DesignWrappedId</code>
           (<code>MMCA.Common/Tests/Core/MMCA.Common.Infrastructure.Tests/Persistence/DataSources/DesignTimeDbContextHelperTests.cs:514</code>).
-          Of the 49 aliases in force across the four repositories on 2026-10-21 (47 <code>int</code>, two
-          <code>System.Guid</code>), Helpdesk&#39;s <code>TicketCommentIdentifierType</code> is the one that now names a wrapper, and
+          Of the 50 aliases in force across the four repositories on 2026-11-12 (48 <code>int</code>, two
+          <code>System.Guid</code>), none names a wrapper, and
           no consumer needs a version-bump behaviour change:
           without a call to <code>AddStronglyTypedIds</code>, every framework site that reads the registry treats its
           absence as &quot;no wrappers in use&quot;.</p>
@@ -767,6 +772,36 @@
           <code>TryAddSingleton</code> at <code>:410</code>. Decision point 6 now carries these anchors (the Revision
           (2026-10-21) item 5 anchors stay as recorded). <code>StronglyTypedIdRegistry.cs:22</code> still holds.</li>
           </ol>
+          <h2 id="revision-2026-11-12">Revision (2026-11-12)</h2>
+          <p>Re-verified against current source. The decision is unchanged: the framework still ships the
+          capability and the aliases are still the default. Adoption is one identifier, in the reference app,
+          and that identifier takes no alias.</p>
+          <ol>
+          <li><strong>A strongly typed identifier takes no alias.</strong> A module&#39;s alias file is linked into every
+          project of the solution, the other modules&#39; projects included, so an alias in it may only name a
+          type every project can see: a primitive. A wrapper is a type of its own module, which another
+          module&#39;s projects cannot reference, so an alias naming it stops the first module compiling as
+          soon as a second module exists. Helpdesk&#39;s alias file states the rule
+          (<code>MMCA.Helpdesk/Source/Modules/Tickets/MMCA.Helpdesk.Tickets.Shared/MMCA.Helpdesk.Tickets.GlobalUsings.IdentifierType.cs:3-7</code>)
+          and declares <code>TicketIdentifierType = int</code> alone (<code>:8</code>); the module generator carries the same
+          rule (<code>MMCA.Helpdesk/build/templates/overlay/mmca-app/build/add-module.ps1:719-721</code>). Code names
+          <code>TicketCommentId</code> directly
+          (<code>MMCA.Helpdesk/Source/Modules/Tickets/MMCA.Helpdesk.Tickets.Domain/Tickets/TicketComment.cs:17</code>,
+          <code>MMCA.Helpdesk/Source/Modules/Tickets/MMCA.Helpdesk.Tickets.Shared/Tickets/TicketCommentDTO.cs:8</code>).
+          Decision point 13 is updated.</li>
+          <li><strong>The alias count is 50, 48 of them <code>int</code>.</strong> Recounted directly from the ten
+          <code>GlobalUsings.*IdentifierType.cs</code> files: Common Domain 1, Common Shared 2, Store Catalog 6, Store
+          Identity 2, Store Sales 3, ADC Conference 19, ADC Engagement 13, ADC Identity 1, ADC
+          Notification 2, Helpdesk Tickets 1. ADC Engagement gained <code>TicketIdentifierType</code> and
+          <code>TicketImportRunIdentifierType</code>
+          (<code>MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Shared/MMCA.ADC.Engagement.GlobalUsings.IdentifierType.cs:14-15</code>),
+          taking it to 13 (<code>:4-16</code>), and Helpdesk Tickets declares one alias, not two. The two
+          <code>System.Guid</code> aliases are unmoved (<code>MMCA.ADC.Conference.GlobalUsings.IdentifierType.cs:17</code> and
+          <code>:23</code>). Decision point 13 now carries 50; the Context keeps its dated 2026-10-21 census.</li>
+          <li>Anchors re-verified against current source: <code>TicketCommentId.cs:19</code> (factory <code>:22</code>, converter
+          attribute <code>:18</code>) and the web host&#39;s opt-in at
+          <code>MMCA.Helpdesk/Source/Hosts/MMCA.Helpdesk.Web/Program.cs:82-86</code> still hold.</li>
+          </ol>
           
         <div class="doc-foot btn-row">
           <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
@@ -788,6 +823,7 @@
             <li><a href="#revision-2026-10-06">Revision (2026-10-06)</a></li>
             <li><a href="#revision-2026-10-21">Revision (2026-10-21)</a></li>
             <li><a href="#revision-2026-10-26">Revision (2026-10-26)</a></li>
+            <li><a href="#revision-2026-11-12">Revision (2026-11-12)</a></li>
             </ul>
           </nav>
         </aside>

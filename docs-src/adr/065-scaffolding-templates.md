@@ -36,7 +36,7 @@ the failure prints the live value, and the seed measurements were re-taken at MM
 `mmca-command` row now lists the validator and the cache-invalidation test builder the slice ships.
 Revised 2026-10-28: the seed measurements were re-taken at MMCA.Helpdesk `c41fc93` (148 files,
 12,597 lines, 57 pins) and the required-check anchor was re-pointed.
-Revised 2026-11-12 (unreleased, on the `feat/fresh-eyes-wave` branch): the seed, and so a generated app, now carries one strongly typed identifier,
+Revised 2026-11-12: the seed, and so a generated app, now carries one strongly typed identifier,
 one domain enumeration, opt-in outbound webhooks and a ticket audit-history endpoint; the
 `mmca-module` host wire-up and `build/add-module.ps1` add the new module's Shared assembly to the
 `AddStronglyTypedIds` list. The seed measurements in the Context were not re-taken.
@@ -157,8 +157,10 @@ Outbound webhooks through `AddWebhooks` (`Program.cs:97-107`,
 `:22`, `:29-30`), over the audit trail ([ADR-075](075-audit-trail.md)). The two new types follow
 the shape flags: the wrapper and its tests are listed with the child files `--flat` drops
 (`MMCA.Helpdesk/.template.config/template.json:372`, `:384`), the enumeration and its tests with
-the status files `--no-status` drops (`:392`, `:397`), and the alias line naming the wrapper sits
-inside the child region (`MMCA.Helpdesk.Tickets.GlobalUsings.IdentifierType.cs:5-9`). `mmca-module`
+the status files `--no-status` drops (`:392`, `:397`). The wrapper has no alias line for a flag to
+drop: a strongly typed identifier takes no alias (ADR-115, Decision point 13), so the alias file
+declares the primitive ticket alias alone (`MMCA.Helpdesk.Tickets.GlobalUsings.IdentifierType.cs:8`)
+and a second module's alias file never names a type of the first. `mmca-module`
 excludes the audit-history and webhook-subscription controllers
 (`templates/mmca-module/.template.config/template.json:263-264`), so a second module does not
 declare a second copy of either.
