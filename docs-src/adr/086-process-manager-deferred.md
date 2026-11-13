@@ -18,7 +18,7 @@ PostgreSQL built in, Azure Service Bus and Amazon SQS as adapters), so the EF sa
 a sixth pinned package; the deferral stands. Revised 2026-10-28: the unpaid-order deadline is now
 armed by `PlacedOrderFinalizer`, shared by customer and guest checkout, and a second independent
 `OrderCancelled` handler schedules the cancellation notice; the deferral stands.
-Revised 2026-11-12 (unreleased, on the `feat/fresh-eyes-wave` branch): the deferral was revisited and is resolved for a flow whose state fits ONE
+Revised 2026-11-12: the deferral was revisited and is resolved for a flow whose state fits ONE
 aggregate, by the behaviour-only process-manager primitive of
 [ADR-143](143-process-manager-primitive.md) (no framework state table, no correlation store, no
 package; MMCA.Store's order flow is its first adopter). The MassTransit saga state machine below, its

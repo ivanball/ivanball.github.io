@@ -6,21 +6,21 @@
   <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#0e151f" media="(prefers-color-scheme: dark)">
   <title>ADR-146: UI Page Bases and the List Shell (Bases Own Plumbing, Pages Own Model and Service Call) · MMCA · Ivan Ball-llovera</title>
-  <meta name="description" content="Accepted (2026-11-12). Unreleased: listed under [Unreleased] in MMCA.Common/CHANGELOG.md:7 (entries at :38 to :41), and the adopting pages are on the…">
+  <meta name="description" content="Accepted (2026-11-12). Released in MMCA.Common v1.289.0 (MMCA.Common/CHANGELOG.md:7, entries at :38 to :41); the adopting pages are in MMCA.ADC and…">
   <link rel="canonical" href="https://ivanball.github.io/docs/adr/146-ui-page-bases-and-list-shell.html">
   <link rel="icon" href="../../assets/img/favicon.svg" type="image/svg+xml">
   <link rel="alternate" type="application/rss+xml" title="Ivan Ball-llovera: deep dives on enterprise .NET" href="https://ivanball.github.io/feed.xml">
   <meta property="og:type" content="article">
   <meta property="og:site_name" content="Ivan Ball-llovera">
   <meta property="og:title" content="ADR-146: UI Page Bases and the List Shell (Bases Own Plumbing, Pages Own Model and Service Call)">
-  <meta property="og:description" content="Accepted (2026-11-12). Unreleased: listed under [Unreleased] in MMCA.Common/CHANGELOG.md:7 (entries at :38 to :41), and the adopting pages are on the…">
+  <meta property="og:description" content="Accepted (2026-11-12). Released in MMCA.Common v1.289.0 (MMCA.Common/CHANGELOG.md:7, entries at :38 to :41); the adopting pages are in MMCA.ADC and…">
   <meta property="og:url" content="https://ivanball.github.io/docs/adr/146-ui-page-bases-and-list-shell.html">
   <meta property="og:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <meta property="og:image:alt" content="Ivan Ball-llovera, Principal Software Architect">
   <meta property="og:locale" content="en_US">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="ADR-146: UI Page Bases and the List Shell (Bases Own Plumbing, Pages Own Model and Service Call)">
-  <meta name="twitter:description" content="Accepted (2026-11-12). Unreleased: listed under [Unreleased] in MMCA.Common/CHANGELOG.md:7 (entries at :38 to :41), and the adopting pages are on the…">
+  <meta name="twitter:description" content="Accepted (2026-11-12). Released in MMCA.Common v1.289.0 (MMCA.Common/CHANGELOG.md:7, entries at :38 to :41); the adopting pages are in MMCA.ADC and…">
   <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Platform","item":"https://ivanball.github.io/platform.html"},{"@type":"ListItem","position":2,"name":"Reference","item":"https://ivanball.github.io/docs/index.html"},{"@type":"ListItem","position":3,"name":"Architecture Decision Records","item":"https://ivanball.github.io/docs/adr/index.html"},{"@type":"ListItem","position":4,"name":"146 · UI Page Bases and the List Shell (Bases Own Plumbing, Pages Own Model and Service Call)","item":"https://ivanball.github.io/docs/adr/146-ui-page-bases-and-list-shell.html"}]}</script>
   <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);if(localStorage.getItem('mmca-rail')==='hidden')document.documentElement.setAttribute('data-rail','hidden');if(localStorage.getItem('mmca-cites')==='shown')document.documentElement.setAttribute('data-cites','shown');}catch(e){}})();</script>
@@ -254,7 +254,7 @@
           <p class="eyebrow doc-kicker">Architecture Decision Record</p>
           <h1 id="adr-146-ui-page-bases-and-the-list-shell-bases-own-plumbing-pages-own-model-and-service-call">ADR-146: UI Page Bases and the List Shell (Bases Own Plumbing, Pages Own Model and Service Call)</h1>
           <h2 id="status">Status</h2>
-          <p>Accepted (2026-11-12). Unreleased: listed under <code>[Unreleased]</code> in <code>MMCA.Common/CHANGELOG.md:7</code> (entries at <code>:38</code> to <code>:41</code>), and the adopting pages are on the <code>feat/fresh-eyes-wave</code> branches of MMCA.ADC and MMCA.Store.</p>
+          <p>Accepted (2026-11-12). Released in MMCA.Common v1.289.0 (<code>MMCA.Common/CHANGELOG.md:7</code>, entries at <code>:38</code> to <code>:41</code>); the adopting pages are in MMCA.ADC and MMCA.Store.</p>
           <h2 id="context">Context</h2>
           <p>An admin create form and an admin list page in a consumer are mostly plumbing that is the same on every page: a page-scoped cancellation source and its dispose method, a dirty flag for the unsaved-changes guard, the failed save <code>Result</code> kept for the error summary, a submit sequence (validate, pre-check, save, clear the dirty flag, navigate, always end the saving state), the delegate that feeds the phone list, and the list chrome (header, cancel-loading button, search row, grid or phone list, empty and failure content, pager, delete confirmation). Both production consumers, MMCA.ADC and MMCA.Store, carry these pages, so a fix to any of those steps written into the page itself lands page by page in two repos.</p>
           <p>The cost is visible in what a consumer deletes when a create form moves onto the base: <code>_cts</code>, <code>IsSaving</code>, <code>_isDirty</code>, <code>MarkDirty</code>, <code>_saveResult</code>, <code>_form</code>, the injected <code>IToastService</code> and the <code>Dispose</code> methods, plus the hand-written submit body (<code>MMCA.Common/UPGRADING.md:122-125</code>). The detail page already had a base that owned its cancellation and edit lifecycle (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI/Pages/Common/DetailPageBase.cs:7-27</code>), and the list page already had <code>DataGridListPageBase&lt;TDto&gt;</code> owning paging, filter, sort and loading state (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI/Pages/Common/DataGridListPageBase.cs:24</code>); the create form had no base and the list markup had no shared component.</p>

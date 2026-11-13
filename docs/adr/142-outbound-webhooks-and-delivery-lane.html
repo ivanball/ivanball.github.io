@@ -6,21 +6,21 @@
   <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#0e151f" media="(prefers-color-scheme: dark)">
   <title>ADR-142: Outbound Webhooks (Signed Delivery over Internal Commands, with a Dedicated Delivery Lane) · MMCA · Ivan Ball-llovera</title>
-  <meta name="description" content="Accepted (2026-11-12). Listed under [Unreleased] in MMCA.Common/CHANGELOG.md:7 (entries at :42 and :75). Off unless the host calls…">
+  <meta name="description" content="Accepted (2026-11-12). Released in v1.289.0, MMCA.Common/CHANGELOG.md:7 (entries at :42 and :75). Off unless the host calls AddWebhooks(configuration)…">
   <link rel="canonical" href="https://ivanball.github.io/docs/adr/142-outbound-webhooks-and-delivery-lane.html">
   <link rel="icon" href="../../assets/img/favicon.svg" type="image/svg+xml">
   <link rel="alternate" type="application/rss+xml" title="Ivan Ball-llovera: deep dives on enterprise .NET" href="https://ivanball.github.io/feed.xml">
   <meta property="og:type" content="article">
   <meta property="og:site_name" content="Ivan Ball-llovera">
   <meta property="og:title" content="ADR-142: Outbound Webhooks (Signed Delivery over Internal Commands, with a Dedicated Delivery Lane)">
-  <meta property="og:description" content="Accepted (2026-11-12). Listed under [Unreleased] in MMCA.Common/CHANGELOG.md:7 (entries at :42 and :75). Off unless the host calls…">
+  <meta property="og:description" content="Accepted (2026-11-12). Released in v1.289.0, MMCA.Common/CHANGELOG.md:7 (entries at :42 and :75). Off unless the host calls AddWebhooks(configuration)…">
   <meta property="og:url" content="https://ivanball.github.io/docs/adr/142-outbound-webhooks-and-delivery-lane.html">
   <meta property="og:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <meta property="og:image:alt" content="Ivan Ball-llovera, Principal Software Architect">
   <meta property="og:locale" content="en_US">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="ADR-142: Outbound Webhooks (Signed Delivery over Internal Commands, with a Dedicated Delivery Lane)">
-  <meta name="twitter:description" content="Accepted (2026-11-12). Listed under [Unreleased] in MMCA.Common/CHANGELOG.md:7 (entries at :42 and :75). Off unless the host calls…">
+  <meta name="twitter:description" content="Accepted (2026-11-12). Released in v1.289.0, MMCA.Common/CHANGELOG.md:7 (entries at :42 and :75). Off unless the host calls AddWebhooks(configuration)…">
   <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Platform","item":"https://ivanball.github.io/platform.html"},{"@type":"ListItem","position":2,"name":"Reference","item":"https://ivanball.github.io/docs/index.html"},{"@type":"ListItem","position":3,"name":"Architecture Decision Records","item":"https://ivanball.github.io/docs/adr/index.html"},{"@type":"ListItem","position":4,"name":"142 · Outbound Webhooks (Signed Delivery over Internal Commands, with a Dedicated Delivery Lane)","item":"https://ivanball.github.io/docs/adr/142-outbound-webhooks-and-delivery-lane.html"}]}</script>
   <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);if(localStorage.getItem('mmca-rail')==='hidden')document.documentElement.setAttribute('data-rail','hidden');if(localStorage.getItem('mmca-cites')==='shown')document.documentElement.setAttribute('data-cites','shown');}catch(e){}})();</script>
@@ -254,7 +254,7 @@
           <p class="eyebrow doc-kicker">Architecture Decision Record</p>
           <h1 id="adr-142-outbound-webhooks-signed-delivery-over-internal-commands-with-a-dedicated-delivery-lane">ADR-142: Outbound Webhooks (Signed Delivery over Internal Commands, with a Dedicated Delivery Lane)</h1>
           <h2 id="status">Status</h2>
-          <p>Accepted (2026-11-12). Listed under <code>[Unreleased]</code> in <code>MMCA.Common/CHANGELOG.md:7</code> (entries at <code>:42</code>
+          <p>Accepted (2026-11-12). Released in v1.289.0, <code>MMCA.Common/CHANGELOG.md:7</code> (entries at <code>:42</code>
           and <code>:75</code>). Off unless the host calls <code>AddWebhooks(configuration)</code> and sets <code>Webhooks:Enabled</code>
           (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Webhooks/WebhookSettings.cs:16-17</code>, default false).</p>
           <h2 id="context">Context</h2>

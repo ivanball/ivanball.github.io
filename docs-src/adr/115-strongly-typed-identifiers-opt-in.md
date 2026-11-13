@@ -297,8 +297,8 @@ framework pushes a consumer toward a wrapper.**
     (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/DataSourceModelCacheKeyFactory.cs:30`).
     Two contexts that declare different wrappers never share a cached model, and two registries
     over the same types do, because the key is the content rather than the registry instance
-    (`ApplicationDbContext.cs:213-214`). Both design-time members are public API not yet shipped
-    (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/PublicAPI.Unshipped.txt:2-3`).
+    (`ApplicationDbContext.cs:213-214`). Both design-time members are shipped public API
+    (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/PublicAPI.Shipped.txt:500`, `:526`).
 
 ## Rationale
 - **The gap was the plumbing, not the type.** A `readonly record struct` wrapping an `int` is four
@@ -376,11 +376,12 @@ framework pushes a consumer toward a wrapper.**
   THAN and BETWEEN are refused with a 400 where the same column as a primitive accepted them. That
   is a deliberate narrowing, and it is a behaviour difference a client would notice if a column
   changed type.
-- **Public API surface with one consumer.** The 53 declarations these types add across Shared,
+- **Public API surface with one consumer.** The 55 declarations these types add across Shared,
   Infrastructure, API and Testing.Architecture are in the shipped baselines (`PublicAPI.Shipped.txt`
   in each of the four packages) and are frozen under
   [ADR-015](015-architecture-fitness-functions.md)'s RS0016/RS0017 gate; the two design-time
-  members of Decision point 15 are unshipped and join them at the next release.
+  members of Decision point 15 shipped with v1.289.0
+  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/PublicAPI.Shipped.txt:500`, `:526`).
   Removing any of it later is a breaking change to the package surface.
 - **EF discovery needs the type list up front.** The mapping has to be declared pre-convention, and
   at `ConfigureConventions` time no entity type exists yet, so the framework cannot discover wrappers
@@ -562,3 +563,8 @@ and that identifier takes no alias.
 3. Anchors re-verified against current source: `TicketCommentId.cs:19` (factory `:22`, converter
    attribute `:18`) and the web host's opt-in at
    `MMCA.Helpdesk/Source/Hosts/MMCA.Helpdesk.Web/Program.cs:82-86` still hold.
+4. **The public API surface is 55 declarations, all shipped.** v1.289.0 promoted the two
+   design-time members of Decision point 15 into Infrastructure's shipped baseline
+   (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/PublicAPI.Shipped.txt:500`, `:526`), taking
+   Infrastructure's `StronglyTyped` lines to 12; Shared carries 32, API 6 and Testing.Architecture 5.
+   The Trade-offs bullet now says 55.

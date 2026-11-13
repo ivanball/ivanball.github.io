@@ -1,7 +1,7 @@
 # ADR-146: UI Page Bases and the List Shell (Bases Own Plumbing, Pages Own Model and Service Call)
 
 ## Status
-Accepted (2026-11-12). Unreleased: listed under `[Unreleased]` in `MMCA.Common/CHANGELOG.md:7` (entries at `:38` to `:41`), and the adopting pages are on the `feat/fresh-eyes-wave` branches of MMCA.ADC and MMCA.Store.
+Accepted (2026-11-12). Released in MMCA.Common v1.289.0 (`MMCA.Common/CHANGELOG.md:7`, entries at `:38` to `:41`); the adopting pages are in MMCA.ADC and MMCA.Store.
 
 ## Context
 

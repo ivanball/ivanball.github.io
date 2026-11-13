@@ -40,7 +40,7 @@ v1.254.0), so the HTTP half of Decision point 1 now rests on the global Aspire
 
 Revised 2026-10-28: anchors refreshed after the v1.265.1 release.
 
-Revised 2026-11-12 (unreleased, on the `feat/fresh-eyes-wave` branch): Decision point 1 names the
+Revised 2026-11-12: Decision point 1 names the
 two factory-created clients deliberately outside the standard handler (the outbound webhook client
 and the gateway's downstream health-probe client) and no longer counts the YARP forwarder among the
 factory-created clients, and the infrastructure health checks, the gateway's

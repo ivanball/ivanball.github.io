@@ -330,7 +330,7 @@
           (<code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs:167-170</code>;
           <code>MMCA.Store/Source/Hosts/UI/MMCA.Store.UI.Web/Program.cs:102-105</code>).</li>
           <li><strong>The shared web-host registrations and pipeline are one composed call; render-mode registration stays
-          per head.</strong> On the <code>feat/fresh-eyes-wave</code> branch (unreleased), <code>MMCA.Common.UI.Web</code> carries
+          per head.</strong> <code>MMCA.Common.UI.Web</code> carries
           <code>AddMmcaBlazorWebHost</code> and <code>UseMmcaBlazorWebPipeline</code>
           (<code>BlazorWebHostExtensions.cs:64</code>, <code>BlazorWebHostExtensions.cs:146</code>). The first owns the registration
           order, from the configuration-source callback and Serilog through the server-side interactive

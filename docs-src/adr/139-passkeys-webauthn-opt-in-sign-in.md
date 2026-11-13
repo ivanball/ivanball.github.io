@@ -6,7 +6,7 @@ Accepted (2026-11-08). Ships in MMCA.Common v1.281.0 as a new package, `MMCA.Com
 `AddPasskeys` and sets `Passkeys:Enabled`
 (`MMCA.Common/Source/Core/MMCA.Common.Application/Auth/Passkeys/PasskeySettings.cs:24-25`, default
 false).
-Amended 2026-11-12: MMCA.ADC is the first consumer to carry the code path, on its adoption branch,
+Amended 2026-11-12: MMCA.ADC is the first consumer to carry the code path,
 switched off in production (see Consequences).
 
 ## Context
@@ -190,8 +190,8 @@ claim. Web heads only.**
   `AddPasskeys`, setting the RP id, name and origins, adding the `PasskeyCredentials` migration with
   `EnablePasskeys`, routing a `PasskeysControllerBase` subclass, setting `SignIn:OfferPasskeys` and
   placing `PasskeysPanel` on the profile page (`MMCA.Common/UPGRADING.md:54-70`).
-- MMCA.ADC is the first consumer to carry the code path, on its adoption branch
-  `feat/fresh-eyes-wave`, and carries it switched OFF in production. Its Identity service references
+- MMCA.ADC is the first consumer to carry the code path, and carries it switched OFF in
+  production. Its Identity service references
   the package (`MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/MMCA.ADC.Identity.Service.csproj:35`)
   and calls `AddPasskeys` (`MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:170-174`),
   but its base `appsettings.json` sets `Passkeys:Enabled` false

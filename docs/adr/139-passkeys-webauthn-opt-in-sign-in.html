@@ -259,7 +259,7 @@
           <code>AddPasskeys</code> and sets <code>Passkeys:Enabled</code>
           (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Auth/Passkeys/PasskeySettings.cs:24-25</code>, default
           false).
-          Amended 2026-11-12: MMCA.ADC is the first consumer to carry the code path, on its adoption branch,
+          Amended 2026-11-12: MMCA.ADC is the first consumer to carry the code path,
           switched off in production (see Consequences).</p>
           <h2 id="context">Context</h2>
           <p>A password plus a TOTP code is phishable: a convincing proxy page collects both and replays them
@@ -447,8 +447,8 @@
           <code>AddPasskeys</code>, setting the RP id, name and origins, adding the <code>PasskeyCredentials</code> migration with
           <code>EnablePasskeys</code>, routing a <code>PasskeysControllerBase</code> subclass, setting <code>SignIn:OfferPasskeys</code> and
           placing <code>PasskeysPanel</code> on the profile page (<code>MMCA.Common/UPGRADING.md:54-70</code>).</li>
-          <li>MMCA.ADC is the first consumer to carry the code path, on its adoption branch
-          <code>feat/fresh-eyes-wave</code>, and carries it switched OFF in production. Its Identity service references
+          <li>MMCA.ADC is the first consumer to carry the code path, and carries it switched OFF in
+          production. Its Identity service references
           the package (<code>MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/MMCA.ADC.Identity.Service.csproj:35</code>)
           and calls <code>AddPasskeys</code> (<code>MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:170-174</code>),
           but its base <code>appsettings.json</code> sets <code>Passkeys:Enabled</code> false

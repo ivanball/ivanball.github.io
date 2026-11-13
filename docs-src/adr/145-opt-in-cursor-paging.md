@@ -1,7 +1,7 @@
 # ADR-145: Opt-In Cursor Paging on List Endpoints (Beside Offset Paging)
 
 ## Status
-Accepted (2026-11-12). Listed under `[Unreleased]` / Added in the MMCA.Common changelog
+Accepted (2026-11-12). Released in MMCA.Common v1.289.0
 (`MMCA.Common/CHANGELOG.md:7`, `:24`). Off for every controller unless it carries
 `[SupportsCursorPaging]`
 (`MMCA.Common/Source/Presentation/MMCA.Common.API/Pagination/SupportsCursorPagingAttribute.cs:3-14`).

@@ -183,8 +183,7 @@ Ship the generic write side as four additive pieces plus a registration helper.
    (`.../Controllers/Events/EventsController.cs:196-213`).
 
 8. **Read caching and eviction are declared on the controller.** `[PublicCachedReads(policyName)]`
-   (unreleased, on the `feat/fresh-eyes-wave` branch;
-   `Source/Presentation/MMCA.Common.API/Caching/PublicCachedReadsAttribute.cs:42`) is a controller
+   (`Source/Presentation/MMCA.Common.API/Caching/PublicCachedReadsAttribute.cs:42`) is a controller
    model convention that marks the base reads of an `EntityControllerBase` (`GetAllAsync`,
    `GetAllForLookupAsync`, `GetByIdAsync`, `:45-50`), whether inherited or overridden (a read is
    matched through its base definition, `:171-177`), anonymous and output-cached under the named

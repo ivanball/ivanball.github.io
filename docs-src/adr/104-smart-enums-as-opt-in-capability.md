@@ -17,7 +17,7 @@ enum, because the `MessageBusProvider` enum was replaced by a string with built-
 `MessageBusProviders`.
 Revised 2026-10-28: anchors refreshed after the Shared and Infrastructure public-API baselines
 moved; the eighteen shipped declarations are unchanged.
-Revised 2026-11-12 (unreleased, on the `feat/fresh-eyes-wave` branch): MMCA.Helpdesk is the first adopter (`TicketLifecycle`, a domain type behind the
+Revised 2026-11-12: MMCA.Helpdesk is the first adopter (`TicketLifecycle`, a domain type behind the
 `TicketStatus` wire enum), and `EnumerationNameValueConverter<T>` is recorded beside the integer
 converter (Context, Decision points 9, 11, 12 and 13, Trade-offs).
 
@@ -161,12 +161,10 @@ whose members need behavior or data, and nothing in the framework pushes a consu
 
 12. **The surface is frozen public API.** Every member of the base and the factory is in
     `MMCA.Common.Shared`'s shipped baseline
-    (`MMCA.Common/Source/Core/MMCA.Common.Shared/PublicAPI.Shipped.txt:578-583`, `:780-784`,
-    `:1016-1018`), and both converters are in Infrastructure's
-    (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/PublicAPI.Shipped.txt:347-348`, `:351-352`).
-    The name converter is not yet shipped: it sits in Infrastructure's unshipped baseline
-    (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/PublicAPI.Unshipped.txt:4-5`) until the
-    next release promotes it. Under
+    (`MMCA.Common/Source/Core/MMCA.Common.Shared/PublicAPI.Shipped.txt:965-970`, `:1318-1322`,
+    `:1622-1624`), and the three converters are in Infrastructure's
+    (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/PublicAPI.Shipped.txt:372-375`, `:378-379`):
+    the name converter shipped with v1.289.0 (`:372-373`). Under
     ADR-015's RS0016/RS0017 gate, removing or reshaping any of it is a reviewable text diff and a
     breaking change to the package surface, which is precisely why leaving an unadopted capability
     in place is a decision rather than an oversight.

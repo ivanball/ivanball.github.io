@@ -11,7 +11,7 @@ Revised 2026-10-21: Context now lists ADC's Identity -> Conference export edge, 
 Revised 2026-10-23: the east-west gRPC values moved into `HttpResilienceDefaults` (`Grpc`-prefixed) with their own 8s/20s timeouts instead of reusing the outbound-HTTP 30s/90s, and `AddTypedGrpcClient` gained a per-client override.
 Revised 2026-10-26: anchors refreshed across both apps' Program.cs, AppHost and Bicep files after line shifts in recent releases; no decision or value changed.
 Revised 2026-10-28: anchors refreshed across ADC's and Store's Bicep files and two ADC Program.cs files after line shifts in recent releases; no decision or value changed.
-Amended 2026-11-12 (unreleased, on the `feat/fresh-eyes-wave` branch): the local Aspire startup probe for each service resource is selected by `WithMmcaServiceInfrastructure` from an explicit `ServiceEndpointProfile` value (the first 2026-08-29 update below).
+Amended 2026-11-12: the local Aspire startup probe for each service resource is selected by `WithMmcaServiceInfrastructure` from an explicit `ServiceEndpointProfile` value (the first 2026-08-29 update below).
 ## Update (2026-06-22): Store converged to Profile A
 Store originally chose Profile B, but its cross-service gRPC failed in Azure Container Apps. With
 `Http1AndHttp2` Kestrel + `transport: 'auto'` ingress on a **cleartext** endpoint there is no ALPN, so

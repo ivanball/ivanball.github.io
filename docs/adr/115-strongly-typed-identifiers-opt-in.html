@@ -543,8 +543,8 @@
           (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/DataSourceModelCacheKeyFactory.cs:30</code>).
           Two contexts that declare different wrappers never share a cached model, and two registries
           over the same types do, because the key is the content rather than the registry instance
-          (<code>ApplicationDbContext.cs:213-214</code>). Both design-time members are public API not yet shipped
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/PublicAPI.Unshipped.txt:2-3</code>).</p>
+          (<code>ApplicationDbContext.cs:213-214</code>). Both design-time members are shipped public API
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/PublicAPI.Shipped.txt:500</code>, <code>:526</code>).</p>
           </li>
           </ol>
           <h2 id="rationale">Rationale</h2>
@@ -626,11 +626,12 @@
           THAN and BETWEEN are refused with a 400 where the same column as a primitive accepted them. That
           is a deliberate narrowing, and it is a behaviour difference a client would notice if a column
           changed type.</li>
-          <li><strong>Public API surface with one consumer.</strong> The 53 declarations these types add across Shared,
+          <li><strong>Public API surface with one consumer.</strong> The 55 declarations these types add across Shared,
           Infrastructure, API and Testing.Architecture are in the shipped baselines (<code>PublicAPI.Shipped.txt</code>
           in each of the four packages) and are frozen under
           <a href="015-architecture-fitness-functions.html">ADR-015</a>&#39;s RS0016/RS0017 gate; the two design-time
-          members of Decision point 15 are unshipped and join them at the next release.
+          members of Decision point 15 shipped with v1.289.0
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/PublicAPI.Shipped.txt:500</code>, <code>:526</code>).
           Removing any of it later is a breaking change to the package surface.</li>
           <li><strong>EF discovery needs the type list up front.</strong> The mapping has to be declared pre-convention, and
           at <code>ConfigureConventions</code> time no entity type exists yet, so the framework cannot discover wrappers
@@ -801,6 +802,11 @@
           <li>Anchors re-verified against current source: <code>TicketCommentId.cs:19</code> (factory <code>:22</code>, converter
           attribute <code>:18</code>) and the web host&#39;s opt-in at
           <code>MMCA.Helpdesk/Source/Hosts/MMCA.Helpdesk.Web/Program.cs:82-86</code> still hold.</li>
+          <li><strong>The public API surface is 55 declarations, all shipped.</strong> v1.289.0 promoted the two
+          design-time members of Decision point 15 into Infrastructure&#39;s shipped baseline
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/PublicAPI.Shipped.txt:500</code>, <code>:526</code>), taking
+          Infrastructure&#39;s <code>StronglyTyped</code> lines to 12; Shared carries 32, API 6 and Testing.Architecture 5.
+          The Trade-offs bullet now says 55.</li>
           </ol>
           
         <div class="doc-foot btn-row">

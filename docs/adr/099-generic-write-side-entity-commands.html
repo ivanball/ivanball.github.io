@@ -433,8 +433,7 @@
           (<code>.../Controllers/Events/EventsController.cs:196-213</code>).</p>
           </li>
           <li><p><strong>Read caching and eviction are declared on the controller.</strong> <code>[PublicCachedReads(policyName)]</code>
-          (unreleased, on the <code>feat/fresh-eyes-wave</code> branch;
-          <code>Source/Presentation/MMCA.Common.API/Caching/PublicCachedReadsAttribute.cs:42</code>) is a controller
+          (<code>Source/Presentation/MMCA.Common.API/Caching/PublicCachedReadsAttribute.cs:42</code>) is a controller
           model convention that marks the base reads of an <code>EntityControllerBase</code> (<code>GetAllAsync</code>,
           <code>GetAllForLookupAsync</code>, <code>GetByIdAsync</code>, <code>:45-50</code>), whether inherited or overridden (a read is
           matched through its base definition, <code>:171-177</code>), anonymous and output-cached under the named
