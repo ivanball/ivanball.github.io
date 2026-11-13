@@ -7,7 +7,7 @@ Everything an adopting team gets from the MMCA.Common framework: a .NET 10 packa
 | Figure | What it counts |
 |---|---|
 | **30** | NuGet packages, lockstep versioned |
-| **173** | architecture fitness methods (69 bases) |
+| **174** | architecture fitness methods (70 bases) |
 | **146** | ADRs documenting every pattern |
 | **18** | named middleware steps, order under test |
 | **24** | device capability contracts, web and native |
@@ -360,8 +360,8 @@ The framework ships its own enforcement: adopters subclass, and drift fails the 
 
 ### Architecture fitness functions
 
-- **173 test methods across 69 abstract bases** (as `FACTS.md` counts them). Most are parameterized by your `IArchitectureMap` and are a three-line subclass per repo; the rest take an allow-list, a resource assembly, a package-version file, a module type, a source tree, infrastructure files, or a frozen snapshot, with non-vacuity floors so a renamed folder cannot pass with zero findings. The rule bodies live in a 44-file `ArchitectureRules` library you can also call directly, and `CallGraphIndex` walks IL so rules catch what signatures cannot: a domain event handler reaching `SaveChanges`, a hard delete outside the allow-list, raw `IQueryable` in Application. The families:
-  - Layer pairs and layer-map completeness, per-module layer overrides, module isolation across the full internal cross product, module Shared purity, namespace acyclicity
+- **174 test methods across 70 abstract bases** (as `FACTS.md` counts them). Most are parameterized by your `IArchitectureMap` and are a three-line subclass per repo; the rest take an allow-list, a resource assembly, a package-version file, a module type, a source tree, infrastructure files, or a frozen snapshot, with non-vacuity floors so a renamed folder cannot pass with zero findings. The rule bodies live in a 44-file `ArchitectureRules` library you can also call directly, and `CallGraphIndex` walks IL so rules catch what signatures cannot: a domain event handler reaching `SaveChanges`, a hard delete outside the allow-list, raw `IQueryable` in Application. The families:
+  - Layer pairs and layer-map completeness, per-module layer overrides, module isolation across the full internal cross product, module Shared purity, namespace acyclicity, and a cross-module `ProjectReference` allowlist read from the project files (`CrossModuleReferenceTestsBase`), which sees couplings that leave no IL reference
   - Domain and Shared framework purity, Application free of EF Core and ASP.NET Core, transport containment, AI and cloud-vendor isolation in both directions, service contract purity and non-public implementations
   - Entity and aggregate conventions, factory-returns-Result, immutability of DTOs, commands, queries, events, and value objects, naming and sealing across ten type families, domain throw discipline
   - Handler placement, handler-injection bans, constructor arity ceiling, handler result typing, vertical slice cohesion, command validator coverage, cancellation-token conventions, generic cache-invalidation prefixes, process timeout commands (a stable name and exactly one handler)
