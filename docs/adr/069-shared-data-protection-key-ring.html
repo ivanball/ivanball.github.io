@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 141 ADRs</summary>
+        <summary>All 146 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -241,6 +241,11 @@
         <li><a href="139-passkeys-webauthn-opt-in-sign-in.html">139 · Passkeys (WebAuthn) as an Opt-In Sign-In and Second Factor</a></li>
         <li><a href="140-machine-clients-oauth-client-credentials.html">140 · Machine Clients Through OAuth Client Credentials Backed by Service Accounts</a></li>
         <li><a href="141-two-framework-lines-from-one-tree.html">141 · Two .NET Framework Lines From One Source Tree (net10.0 and net11.0)</a></li>
+        <li><a href="142-outbound-webhooks-and-delivery-lane.html">142 · Outbound Webhooks (Signed Delivery over Internal Commands, with a Dedicated Delivery Lane)</a></li>
+        <li><a href="143-process-manager-primitive.html">143 · Process-Manager Primitive (Consumer-Owned Process Aggregate, Timeouts over Internal Commands)</a></li>
+        <li><a href="144-offline-writes-and-delta-reads.html">144 · Offline Writes and Delta Reads (Client Write Queue, Server Change Feed with Tombstones)</a></li>
+        <li><a href="145-opt-in-cursor-paging.html">145 · Opt-In Cursor Paging on List Endpoints (Beside Offset Paging)</a></li>
+        <li><a href="146-ui-page-bases-and-list-shell.html">146 · UI Page Bases and the List Shell (Bases Own Plumbing, Pages Own Model and Service Call)</a></li>
           </ol>
         </nav>
       </details>
@@ -261,7 +266,8 @@
           Revised 2026-10-24: the call is <code>AddAzureDataProtection()</code> in MMCA.Common.Azure, configuration keys unchanged (<a href="134-cloud-neutral-core-vendor-adapters.html">ADR-134</a>); framework anchors in the Decision corrected in place. See Revision (2026-10-24) at the end.
           Revised 2026-10-25: three key-ring adapters (Azure Blob + Key Vault, AWS Parameter Store, Google Cloud Storage with optional Cloud KMS), and the startup tripwire fails when more than one key-ring gate is set; the Decision is restated across the three, the package bullet corrected, and Google&#39;s prerelease packages recorded as a rejected alternative. See Revision (2026-10-25) at the end.
           Revised 2026-10-26: the consumer call sites name <code>AddAzureKeyVaultConfiguration()</code> and <code>AddAzureDataProtection()</code>, <code>AddAzureMonitorExporter()</code> now sits between <code>AddServiceDefaults()</code> and the registration (so Store&#39;s &quot;only an ADR-069 comment block between them&quot; is retired), and anchors refreshed across both hosts, templates and deploy workflows.
-          Revised 2026-10-28: anchors refreshed after the ADC and Store host <code>Program.cs</code> files and both infrastructure templates moved.</p>
+          Revised 2026-10-28: anchors refreshed after the ADC and Store host <code>Program.cs</code> files and both infrastructure templates moved.
+          Amended 2026-11-12: <code>AddAzureDataProtection()</code> and its two DataProtection packages now live in <code>MMCA.Common.Azure.Startup</code>, which <code>MMCA.Common.Azure</code> references and type-forwards, so the call and its keys are unchanged; the Decision&#39;s Azure path, package bullet and citations are corrected in place (<a href="134-cloud-neutral-core-vendor-adapters.html">ADR-134</a>).</p>
           <h2 id="context">Context</h2>
           <p>ASP.NET Core&#39;s DataProtection default keeps the key ring <strong>in memory, per process</strong>. That is correct
           for a single-process host and wrong for a scaled-out one: every replica generates its own keys, so an
@@ -286,8 +292,9 @@
           <h2 id="decision">Decision</h2>
           <p>Persist the key ring through one opt-in registration call per cloud, so every replica of a host shares
           one ring, and let a host keep exactly one ring. Three adapters exist: <code>AddAzureDataProtection</code>
-          (MMCA.Common.Azure) persists it to a single Azure blob with optional Key Vault protection
-          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Azure/AzureDataProtectionExtensions.cs:53</code>),
+          (MMCA.Common.Azure.Startup, also reached through MMCA.Common.Azure) persists it to a single Azure blob
+          with optional Key Vault protection
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Azure.Startup/AzureDataProtectionExtensions.cs:53</code>),
           <code>AddAwsDataProtection</code> (MMCA.Common.Aws) to Systems Manager Parameter Store
           (<code>MMCA.Common/Source/Hosting/MMCA.Common.Aws/AwsDataProtectionExtensions.cs:57</code>), and
           <code>AddGoogleCloudDataProtection</code> (MMCA.Common.Gcp) to one Cloud Storage object with optional Cloud KMS
@@ -388,9 +395,19 @@
           repository, so services that disagree on the order would mint payloads the others cannot decrypt
           (<code>:104</code>-<code>:106</code>).</li>
           <li><strong>Each cloud&#39;s dependencies live in its own adapter package.</strong>
-          <code>Azure.Extensions.AspNetCore.DataProtection.Blobs</code> and <code>.Keys</code> are referenced by <code>MMCA.Common.Azure</code>
-          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Azure/MMCA.Common.Azure.csproj:16</code>-<code>:17</code>, pinned at
-          <code>MMCA.Common/Directory.Packages.props:209</code>-<code>:210</code>), <code>Amazon.AspNetCore.DataProtection.SSM</code> by
+          <code>Azure.Extensions.AspNetCore.DataProtection.Blobs</code> and <code>.Keys</code> are referenced by
+          <code>MMCA.Common.Azure.Startup</code>
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Azure.Startup/MMCA.Common.Azure.Startup.csproj:21</code>, <code>:25</code>,
+          pinned at <code>MMCA.Common/Directory.Packages.props:271</code>-<code>:272</code>), the package that also carries
+          <code>AddAzureDataProtection()</code> itself
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Azure.Startup/AzureDataProtectionExtensions.cs:20</code>, <code>:53</code>)
+          with no persistence or messaging dependency (its only project reference is MMCA.Common.Aspire,
+          <code>MMCA.Common.Azure.Startup.csproj:4</code>, <code>:36</code>). <code>MMCA.Common.Azure</code> references it
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Azure/MMCA.Common.Azure.csproj:44</code>) and type-forwards the
+          call (<code>MMCA.Common/Source/Hosting/MMCA.Common.Azure/TypeForwards.cs:8</code>), in the same <code>MMCA.Common.Azure</code>
+          namespace (<code>AzureDataProtectionExtensions.cs:7</code>), so a host on the full adapter writes the same call.
+          A host that needs only start-up plumbing (for example a gateway) references <code>MMCA.Common.Azure.Startup</code>
+          alone. <code>Amazon.AspNetCore.DataProtection.SSM</code> by
           <code>MMCA.Common.Aws</code> (above), and <code>Google.Cloud.Kms.V1</code> by <code>MMCA.Common.Gcp</code>
           (<code>MMCA.Common/Source/Hosting/MMCA.Common.Gcp/MMCA.Common.Gcp.csproj:23</code>, pinned at
           <code>Directory.Packages.props:192</code>), so a host references only the cloud it runs on.</li>

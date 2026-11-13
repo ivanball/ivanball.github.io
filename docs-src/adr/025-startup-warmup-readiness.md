@@ -21,7 +21,18 @@ recorded as absorbing a lazy retry on the warming host's own hop only for a depe
 factory-built client (not the JwtBearer backchannel or a missed self-request warm-up, which a caller's
 factory-built client sees and retries once for idempotent verbs), and the `redis` PING check is cited at its
 real registration in `AddInfrastructureHealthChecks`, which adds it only for a connection string named
-`redis`.
+`redis`. Revised 2026-11-12 (unreleased, on the `feat/fresh-eyes-wave` branch): the readiness and liveness semantics recorded here are asserted under a
+real dependency outage by the AppHost tier's `DependencyOutageTestBase`
+([ADR-117](117-apphost-integration-test-base.md)): a database outage fails `/health` and
+`/health/ready`, a broker or cache outage fails `/health` only, and `/alive` answers 200 at the baseline and at one
+read during the outage, without being polled
+(`MMCA.Common/Source/Hosting/MMCA.Common.Testing.Aspire/Outages/OutageExpectation.cs:18-20`,
+`MMCA.Common/Source/Hosting/MMCA.Common.Testing.Aspire/Outages/DependencyOutageTestBase.cs:105`,
+`:120-127`).
+Every infrastructure check runs under `HealthChecks:CheckTimeoutSeconds` (5 seconds by default, 1 to
+60), so a dependency that does not answer turns the report unhealthy instead of leaving the last one in
+place (`Source/Hosting/MMCA.Common.Aspire/Extensions.Health.cs:50-53`, default at
+`Source/Hosting/MMCA.Common.Aspire/Health/HealthReportCacheOptions.cs:55`).
 
 ## Context
 On the Azure Container Apps Consumption plan a replica that has been idle is CPU-throttled, and a

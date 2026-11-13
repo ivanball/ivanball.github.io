@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 141 ADRs</summary>
+        <summary>All 146 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -241,6 +241,11 @@
         <li><a href="139-passkeys-webauthn-opt-in-sign-in.html">139 · Passkeys (WebAuthn) as an Opt-In Sign-In and Second Factor</a></li>
         <li><a href="140-machine-clients-oauth-client-credentials.html">140 · Machine Clients Through OAuth Client Credentials Backed by Service Accounts</a></li>
         <li><a href="141-two-framework-lines-from-one-tree.html">141 · Two .NET Framework Lines From One Source Tree (net10.0 and net11.0)</a></li>
+        <li><a href="142-outbound-webhooks-and-delivery-lane.html">142 · Outbound Webhooks (Signed Delivery over Internal Commands, with a Dedicated Delivery Lane)</a></li>
+        <li><a href="143-process-manager-primitive.html">143 · Process-Manager Primitive (Consumer-Owned Process Aggregate, Timeouts over Internal Commands)</a></li>
+        <li><a href="144-offline-writes-and-delta-reads.html">144 · Offline Writes and Delta Reads (Client Write Queue, Server Change Feed with Tombstones)</a></li>
+        <li><a href="145-opt-in-cursor-paging.html">145 · Opt-In Cursor Paging on List Endpoints (Beside Offset Paging)</a></li>
+        <li><a href="146-ui-page-bases-and-list-shell.html">146 · UI Page Bases and the List Shell (Bases Own Plumbing, Pages Own Model and Service Call)</a></li>
           </ol>
         </nav>
       </details>
@@ -283,7 +288,11 @@
           <code>5fd74de</code> (143 files, 12,571 lines, 57 pins) with the staging guard and README anchors re-pointed; the
           <code>mmca-command</code> row now lists the validator and the cache-invalidation test builder the slice ships.
           Revised 2026-10-28: the seed measurements were re-taken at MMCA.Helpdesk <code>c41fc93</code> (148 files,
-          12,597 lines, 57 pins) and the required-check anchor was re-pointed.</p>
+          12,597 lines, 57 pins) and the required-check anchor was re-pointed.
+          Revised 2026-11-12 (unreleased, on the <code>feat/fresh-eyes-wave</code> branch): the seed, and so a generated app, now carries one strongly typed identifier,
+          one domain enumeration, opt-in outbound webhooks and a ticket audit-history endpoint; the
+          <code>mmca-module</code> host wire-up and <code>build/add-module.ps1</code> add the new module&#39;s Shared assembly to the
+          <code>AddStronglyTypedIds</code> list. The seed measurements in the Context were not re-taken.</p>
           <h2 id="context">Context</h2>
           <p><a href="../guides/common-BUILD-BY-HAND.html">Build by hand</a> is accurate and complete, and phases 1 through 6
           of it are transcription work (<code>common-BUILD-BY-HAND.md:98</code> through <code>:1299</code>). Its own instruction for
@@ -388,12 +397,39 @@
           file path, writes the live contract as paste-ready literals on the next run
           (<code>IntegrationEventContractTestsBase.cs:27</code>, <code>:40-52</code>), and the README gives the adopter that same
           variable with a paste-ready command (<code>README.md:137-144</code>).</p>
+          <p><strong>What the seed carries is what a generated app starts with.</strong> Beyond the module, the hosts and
+          the fitness map, the seed adopts the opt-in capabilities listed here, so a generated app arrives
+          with each already wired. The web host&#39;s opt-in block calls <code>AddAuditTrail</code>, <code>AddScheduledJobs</code> and
+          <code>AddMultiTenancy</code> (<code>Source/Hosts/MMCA.Helpdesk.Web/Program.cs:104-106</code>), beside the following.
+          One strongly typed identifier, the ticket comment id
+          (<code>Source/Modules/Tickets/MMCA.Helpdesk.Tickets.Shared/Tickets/TicketCommentId.cs:19</code>), registered
+          through <code>AddStronglyTypedIds</code> (<code>Source/Hosts/MMCA.Helpdesk.Web/Program.cs:80-86</code>) and named to the
+          design-time factory
+          (<code>Source/Hosting/MMCA.Helpdesk.Migrations.SqlServer.Tickets/DesignTimeSQLServerDbContextFactory.cs:52</code>),
+          while the ticket id stays a primitive alias (ADR-115). One domain enumeration, <code>TicketLifecycle</code>,
+          behind the <code>TicketStatus</code> wire enum
+          (<code>Source/Modules/Tickets/MMCA.Helpdesk.Tickets.Domain/Tickets/TicketLifecycle.cs:21</code>, ADR-104).
+          Outbound webhooks through <code>AddWebhooks</code> (<code>Program.cs:97-107</code>,
+          <a href="142-outbound-webhooks-and-delivery-lane.html">ADR-142</a>). And an audit-history endpoint for tickets,
+          <code>GET Admin/AuditHistory/{entity}/{key}</code>
+          (<code>Source/Modules/Tickets/MMCA.Helpdesk.Tickets.API/Controllers/AuditHistoryController.cs:12</code>,
+          <code>:22</code>, <code>:29-30</code>), over the audit trail (<a href="075-audit-trail.html">ADR-075</a>). The two new types follow
+          the shape flags: the wrapper and its tests are listed with the child files <code>--flat</code> drops
+          (<code>MMCA.Helpdesk/.template.config/template.json:372</code>, <code>:384</code>), the enumeration and its tests with
+          the status files <code>--no-status</code> drops (<code>:392</code>, <code>:397</code>), and the alias line naming the wrapper sits
+          inside the child region (<code>MMCA.Helpdesk.Tickets.GlobalUsings.IdentifierType.cs:5-9</code>). <code>mmca-module</code>
+          excludes the audit-history and webhook-subscription controllers
+          (<code>templates/mmca-module/.template.config/template.json:263-264</code>), so a second module does not
+          declare a second copy of either.</p>
           <p><code>mmca-module</code> additionally prints seven numbered wire-ups <code>dotnet new</code> cannot perform
-          (<code>templates/mmca-module/.template.config/template.json:261-277</code>): the solution entries for the eight
+          (<code>templates/mmca-module/.template.config/template.json:272</code>, entries at <code>:276</code> and <code>:279</code>): the
+          solution entries for the eight
           new projects, the host and architecture-test project references, the identifier-alias
-          <code>&lt;Compile Include ... Link&gt;</code> block, the five <code>IArchitectureMap</code> lines, two host edits (the module
+          <code>&lt;Compile Include ... Link&gt;</code> block, the five <code>IArchitectureMap</code> lines, three host edits (the module
           assembly joins the list handed to <code>ModuleLoader.DiscoverAndRegister</code>, then the
-          <code>AddErrorResources&lt;&gt;</code> call; step 5 in both entries, <code>template.json:268</code>, <code>:271</code>), the module&#39;s own database (the AppHost <code>AddDatabase</code> /
+          <code>AddErrorResources&lt;&gt;</code> call, then the module&#39;s Shared assembly joins the list handed to
+          <code>AddStronglyTypedIds</code>, because the generated child identifier is a wrapper and EF has no converter
+          for its key without it; step 5 in both entries), the module&#39;s own database (the AppHost <code>AddDatabase</code> /
           <code>WithSQLServerDataSource</code> pair, the <code>appsettings.json</code> <code>Modules</code> / <code>DataSources</code> / <code>Outbox</code> entries,
           and the removal of the now-conflicting top-level <code>SQLServerMigrationsAssembly</code>), and the first EF
           migration. That text now opens by telling anyone whose solution came from <code>mmca-app</code> to run
@@ -476,12 +512,15 @@
           <li><strong><code>mmca-module</code> alone cannot finish the job.</strong> Seven edits are beyond it because <code>dotnet new</code>
           cannot patch existing files. For a solution generated by <code>mmca-app</code> that is no longer manual: the
           overlay ships <code>build/add-module.ps1</code> (<code>build/templates/overlay/mmca-app/build/add-module.ps1</code>,
-          declared <code>copyOnly</code> at <code>MMCA.Helpdesk/.template.config/template.json:345</code> and exempted from the
+          declared <code>copyOnly</code> at <code>MMCA.Helpdesk/.template.config/template.json:360</code> and exempted from the
           smoke&#39;s rename sweeps at <code>smoke.ps1:144</code>), which runs
           <code>dotnet new mmca-module</code> and then performs all seven, plus an eighth the printed list does not
           carry (the new module&#39;s integration event joins <code>ExpectedContract</code>, so a second module does not
           turn the adopter&#39;s next test run red: <code>build/add-module.ps1:42</code>), plus the first migration, on the
-          same code path CI exercises. The manual path survives only for a solution the template did not
+          same code path CI exercises. Its host step appends the new module&#39;s Shared assembly to the
+          <code>AddStronglyTypedIds</code> list in the web host&#39;s <code>Program.cs</code>, anchored on the seed&#39;s existing entry,
+          skipped when already present, and harmless for a <code>-Flat</code> module that declares no wrapper
+          (<code>build/templates/overlay/mmca-app/build/add-module.ps1:807-819</code>). The manual path survives only for a solution the template did not
           generate, where the printed instructions are the fallback and a new module is not usable until a
           human applies them.</li>
           <li><strong>The template lags a framework release by one step.</strong> <code>--framework-version</code> defaults to whatever

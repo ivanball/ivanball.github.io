@@ -10,7 +10,7 @@ three repos, both consumers own an AppHost smoke project, and each of them subcl
 one app's; the ADC bicep and workflow anchors are re-pinned to their current lines. Revised
 2026-10-01: the per-PR framework AppHost test job and the extra telemetry cuts are recorded. Revised
 2026-10-06: the ADC AppHost's broker is described as selectable (RabbitMQ or the Service Bus
-emulator) rather than RabbitMQ only. Revised 2026-10-07: the consumer AppHost smoke projects and their nightly job are removed, so the bounded exception is MMCA.Common's blocking framework tier alone (see Revision below). Revised 2026-10-07: anchors refreshed after the v1.233.0 release. Revised 2026-10-21: anchors refreshed after the Common `ci.yml` and the ADC and Store infrastructure templates moved. Revised 2026-10-26: the App Insights export path is named as MMCA.Common.Azure's `AddAzureMonitorExporter` rather than a bare `UseAzureMonitor` call, and live anchors are refreshed after the Common `ci.yml`, `Directory.Packages.props`, `Extensions.cs` and messaging registration and settings, the ADC AppHost, `e2e.yml`, `deploy.yml` and infrastructure template moved. Revised 2026-10-28: anchors refreshed after the Common `ci.yml`, the ADC and Store `AGENTS.md`, the integration-test rework plan and the ADC infrastructure template moved. Records two
+emulator) rather than RabbitMQ only. Revised 2026-10-07: the consumer AppHost smoke projects and their nightly job are removed, so the bounded exception is MMCA.Common's blocking framework tier alone (see Revision below). Revised 2026-10-07: anchors refreshed after the v1.233.0 release. Revised 2026-10-21: anchors refreshed after the Common `ci.yml` and the ADC and Store infrastructure templates moved. Revised 2026-10-26: the App Insights export path is named as MMCA.Common.Azure's `AddAzureMonitorExporter` rather than a bare `UseAzureMonitor` call, and live anchors are refreshed after the Common `ci.yml`, `Directory.Packages.props`, `Extensions.cs` and messaging registration and settings, the ADC AppHost, `e2e.yml`, `deploy.yml` and infrastructure template moved. Revised 2026-10-28: anchors refreshed after the Common `ci.yml`, the ADC and Store `AGENTS.md`, the integration-test rework plan and the ADC infrastructure template moved. Amended 2026-11-12: Context inventories the shared AppHost helpers (`WithMmcaServiceInfrastructure`, `WithUiLinks`, `WithIssuer` and the two E2E render-mode switches) and their adopters. Records two
 standing divergences from the default .NET Aspire path as
 decisions rather than as gaps. Both parts describe what the four repos already do, with the single
 bounded exception recorded in Decision 1, and the value of writing them down is that a reader (or a
@@ -28,6 +28,30 @@ services, the Gateway and the Blazor UI
 `:98`); `MMCA.Store/Source/Hosting/MMCA.Store.AppHost/Program.cs:1-14`
 is the same shape over its three services. Service discovery and health-based startup ordering come from Aspire's resource
 model rather than from hand-written wiring.
+
+The repeated per-resource wiring is a set of `MMCA.Common.Aspire.Hosting` helpers:
+
+- `WithMmcaServiceInfrastructure`
+  (`MMCA.Common/Source/Hosting/MMCA.Common.Aspire.Hosting/ServiceInfrastructureExtensions.cs:51`)
+  gives a service its own database through `WithSQLServerDataSource` (reference, wait and
+  `DataSources__{logicalName}__SQLServerConnectionString`,
+  `MMCA.Common/Source/Hosting/MMCA.Common.Aspire.Hosting/Extensions.cs:547-550`), a reference to the
+  cache, the selected broker, waits on the cache and the mail server, the liveness probe its explicit
+  `ServiceEndpointProfile` selects (ADR-012) and external HTTP endpoints
+  (`ServiceInfrastructureExtensions.cs:67-80`); it references no project resource, so cross-service
+  edges stay in each AppHost (`:33-36`). Adopters: every service resource in both AppHosts
+  (`MMCA.ADC/Source/Hosting/MMCA.ADC.AppHost/Program.cs:134`, `:154`, `:191`, `:214`;
+  `MMCA.Store/Source/Hosting/MMCA.Store.AppHost/Program.cs:166`, `:189`, `:246`).
+- `WithUiLinks`
+  (`MMCA.Common/Source/Hosting/MMCA.Common.Aspire.Hosting/IdentityLinkExtensions.cs:73`) sets the
+  Identity resource's OAuth UI base URL and its password-reset, email-confirmation and sign-in links
+  from the UI's `https` endpoint, adding no reference and no wait (`:80-90`); ADC adopts it
+  (`MMCA.ADC/Source/Hosting/MMCA.ADC.AppHost/Program.cs:483`).
+- `WithIssuer` (`IdentityLinkExtensions.cs:99`) sets the Identity resource's `Jwt__Issuer` to the
+  gateway's `https` endpoint (`:104`); ADC adopts it
+  (`MMCA.ADC/Source/Hosting/MMCA.ADC.AppHost/Program.cs:368`).
+- `WithE2eForceServer` and `WithE2eForceWebAssembly` (`Extensions.cs:443`, `:467`) forward the E2E
+  render-mode switches to the UI resource; [ADR-056](056-blazor-render-mode-strategy.md) describes them.
 
 **Service defaults.** Every host calls `AddServiceDefaults`
 (`MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Extensions.cs:33`), which wires OpenTelemetry, the

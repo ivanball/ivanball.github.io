@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 141 ADRs</summary>
+        <summary>All 146 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -241,6 +241,11 @@
         <li><a href="139-passkeys-webauthn-opt-in-sign-in.html">139 · Passkeys (WebAuthn) as an Opt-In Sign-In and Second Factor</a></li>
         <li><a href="140-machine-clients-oauth-client-credentials.html">140 · Machine Clients Through OAuth Client Credentials Backed by Service Accounts</a></li>
         <li><a href="141-two-framework-lines-from-one-tree.html">141 · Two .NET Framework Lines From One Source Tree (net10.0 and net11.0)</a></li>
+        <li><a href="142-outbound-webhooks-and-delivery-lane.html">142 · Outbound Webhooks (Signed Delivery over Internal Commands, with a Dedicated Delivery Lane)</a></li>
+        <li><a href="143-process-manager-primitive.html">143 · Process-Manager Primitive (Consumer-Owned Process Aggregate, Timeouts over Internal Commands)</a></li>
+        <li><a href="144-offline-writes-and-delta-reads.html">144 · Offline Writes and Delta Reads (Client Write Queue, Server Change Feed with Tombstones)</a></li>
+        <li><a href="145-opt-in-cursor-paging.html">145 · Opt-In Cursor Paging on List Endpoints (Beside Offset Paging)</a></li>
+        <li><a href="146-ui-page-bases-and-list-shell.html">146 · UI Page Bases and the List Shell (Bases Own Plumbing, Pages Own Model and Service Call)</a></li>
           </ol>
         </nav>
       </details>
@@ -293,7 +298,17 @@
           dispatched one at a time with each failure logged at Error (see the Revision (2026-10-26) at the
           end).
           Revised 2026-10-28: anchors refreshed after later MMCA.Common releases moved them (see the Revision
-          (2026-10-28) at the end).</p>
+          (2026-10-28) at the end).
+          Revised 2026-11-12 (unreleased, on the <code>feat/fresh-eyes-wave</code> branch): draining after a dependency
+          outage is asserted end to end by the AppHost outage tier
+          (<a href="117-apphost-integration-test-base.html">ADR-117</a>). In a broker-outage scenario the test&#39;s own
+          during-outage callback writes an integration event while the broker is down
+          (<code>MMCA.Common/Tests/Hosting/MMCA.Common.Testing.Aspire.AppHostTests/SampleOutageTests.cs:59</code>,
+          <code>:125-146</code>); the base then asserts that the pending outbox count is above zero and, once the broker
+          is back, polls <code>AssertOutboxDrainedAsync</code>, which the base carries, until no outbox row has a null
+          <code>ProcessedOn</code>
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Testing.Aspire/Outages/DependencyOutageTestBase.cs:134-143</code>,
+          <code>:162-165</code>, <code>:351-369</code>; the SQL Server count, overridable per engine, at <code>:310-342</code>).</p>
           <h2 id="context">Context</h2>
           <p>Domain events must be reliably published after aggregate changes are persisted. Two failure modes exist:</p>
           <ol>

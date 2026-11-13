@@ -10,6 +10,7 @@ Revised 2026-10-06: the RowVersion mapping and the PostgreSQL/SQLite re-stamp ar
 Revised 2026-10-07: MMCA.Helpdesk also subclasses `ConcurrencyConventionTestsBase` (three consumers), MMCA.Common's own subclass is recorded as vacuous (its map declares no module layer), and stale anchors were refreshed against current source.
 Revised 2026-10-21: the set-based `ExecuteUpdateAsync` path is recorded as re-stamping the client-stamped `RowVersion` itself (it bypasses the audit interceptor), and stale anchors were refreshed.
 Revised 2026-10-26: concurrency conflicts are counted by `ConcurrencyConflictMetrics` in both the `[SupportsIfMatch]` filter and the global handler, the constructor-dependency trade-off records that this metric took the static-dependency route while the problem helper resolves its services from the request, and stale repository, filter and `DbUpdateExceptionHandler` anchors were refreshed.
+Revised 2026-11-12: `SetConcurrencyETag` is recorded on `ApiControllerBase`, `[SupportsIfMatch]` declares its own 412 and 428 response metadata for OpenAPI, the conditional-write helpers on `ApiControllerBase` are recorded as the standard action body that answers a successful update with a weak `ETag`, and the filter anchors were refreshed.
 ## Context
 Every mutable aggregate in the framework is edited through a load-modify-save handler: the update use
 case fetches the tracked entity, applies the request, and calls `SaveChangesAsync`. With one shared
@@ -62,53 +63,80 @@ stale update fails inside the UPDATE statement.
   client can be rendered with its version. An update request implements nothing of the kind: the
   precondition travels in the header alone (`:9-14`).
 - **The read emits a weak `ETag`.** `EntityControllerBase.GetByIdAsync`
-  (`MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/EntityControllerBase.cs:361`) calls
-  `SetConcurrencyETag(result.Value)` (`:382`), which (`:417`) renders the served row's token as
-  `W/"<base64>"` (formatted by `ConcurrencyETag.Format`,
+  (`MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/EntityControllerBase.cs:360`) calls
+  `SetConcurrencyETag(result.Value)` (`:381`). The helper lives on `ApiControllerBase`, the base of
+  the entity and use-case controllers
+  (`MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/ApiControllerBase.cs:97`; the OAuth and
+  service-info bases derive `ControllerBase` directly, `OAuthControllerBase.cs:60`,
+  `ServiceInfoControllerBase.cs:30`), and
+  renders the served row's token as `W/"<base64>"` (formatted by `ConcurrencyETag.Format`,
   `MMCA.Common/Source/Core/MMCA.Common.Shared/Http/ConcurrencyETag.cs:40`, and written to the
-  response at `:425`). Weak is the honest
+  response at `ApiControllerBase.cs:105`). Weak is the honest
   strength: the tag identifies the row's version, not a byte-exact representation, and the same row
   legitimately serializes differently under a `fields=` projection. Those shaped responses are seen
-  through rather than skipped: `ReadRowVersion` (`:434`) reads the typed property when the payload is
-  the DTO and falls back to a dictionary lookup keyed by JSON name when it is a projection
-  (`:439-442`). The property is resolved once per closed controller type (`:391`), and a DTO type
-  with no token makes the method a no-op (`:419-420`). It is `protected` so a hand-written read
-  action can emit the same header instead of re-implementing the format, which is where the two
-  would drift and a precondition would quietly stop working.
+  through rather than skipped: `ReadRowVersion` (`:211`) reads the `rowVersion` (else `RowVersion`)
+  entry when the payload is a projection dictionary (`:213-215`) and the typed `RowVersion` property
+  otherwise (`:220-221`). The property is resolved once per runtime type (`:23-28`), and a row with
+  no token, or an empty one, gets no header (`:102-103`). It is `protected` so a hand-written read
+  action, or a conditional write answering with the refreshed value, can emit the same header
+  instead of re-implementing the format (`:90-95`), which is where the two would drift and a
+  precondition would quietly stop working.
 - **`[SupportsIfMatch]` decodes the header, and nothing else carries the token.**
   `SupportsIfMatchAttribute`
-  (`MMCA.Common/Source/Presentation/MMCA.Common.API/Concurrency/SupportsIfMatchAttribute.cs:49`) is a
+  (`MMCA.Common/Source/Presentation/MMCA.Common.API/Concurrency/SupportsIfMatchAttribute.cs:58`) is a
   sealed `Attribute` implementing `IAsyncActionFilter` directly, so unlike `[Idempotent]` (a
   `ServiceFilterAttribute` resolving from DI, ADR-017) it is self-contained and needs no registration
   by a host. Before the action runs it parses `If-Match` with `ConcurrencyETag.TryParse`
   (`ConcurrencyETag.cs:62`) and places the decoded bytes in `HttpContext.Items` under `TokenItemKey`
-  (`:57`, written at `:122`). The action reads them back through
-  `SupportsIfMatchAttribute.RequiredToken(HttpContext)` (`:68`) and passes the token to its command,
+  (`:66`, written at `:171`). The action reads them back through
+  `SupportsIfMatchAttribute.RequiredToken(HttpContext)` (`:81`) and passes the token to its command,
   as the generic PUT does
-  (`MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/CrudEntityControllerBase.cs:90` for
-  the attribute, `:103` for the read). No bound argument is written to, so no request model has to
+  (`MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/CrudEntityControllerBase.cs:91` for
+  the attribute, `:104` for the read). No bound argument is written to, so no request model has to
   loosen its immutability to receive a token.
+- **The attribute owns its response metadata.** It is also an action and controller model
+  convention (`SupportsIfMatchAttribute.cs:58`): at startup it appends a `ProblemDetails`-typed 412
+  and 428 to the action's response types, each only when neither the action nor its controller
+  already declares that status (`:96-110`), and applied to a controller it does so for every action
+  (`:117-125`). An action therefore declares only the statuses its own body produces and OpenAPI
+  still documents both precondition answers; an action that states them by hand, as the generic PUT
+  still does (`CrudEntityControllerBase.cs:96-97`), is left as it is.
+- **The conditional-write helpers are the standard action body.** `ApiControllerBase` carries the
+  body a conditional action would otherwise hand-write: read the decoded token, build the command,
+  dispatch it, map a failure. `HandleConditionalCommandWithResponseAsync`
+  (`ApiControllerBase.cs:156`) reads the token through `RequiredToken` (`:165`), answers a failure
+  through `HandleFailure` and a success with 200, the value and the value's weak `ETag`
+  (`:194-202`), so a client can condition its next write without re-reading.
+  `HandleConditionalCommandAsync` (`:125`, token at `:135`) is the form for a command whose value
+  is discarded and answers 204 with no `ETag` (`:177-184`). Both await an optional success
+  follow-up before answering (`:118-119`, `:149-150`), and both throw before the handler runs when
+  the action carries no `[SupportsIfMatch]`, because no token was decoded (`:123-124`, `:154-155`).
+  A stale token still surfaces as a `DbUpdateConcurrencyException` or a 409 result, which the
+  filter turns into 412 exactly as it does for a hand-written body. ADC runs most of its
+  conditional actions through them
+  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/Activities/ActivitiesController.cs:165`,
+  `:171`).
 - **Three status codes, one problem-details shape.**
   - **A request that states no precondition is `428 Precondition Required`** and the action never
-    runs (`SupportsIfMatchAttribute.cs:109-114`). A blank header and `*` are both no precondition:
+    runs (`SupportsIfMatchAttribute.cs:158-162`). A blank header and `*` are both no precondition:
     the wildcard names no particular version, so honouring it would be a last-write-wins write
     wearing a conditional request's clothes.
-  - **A malformed tag is `400 Bad Request`** (`:116-120`): a precondition the server cannot read is a
+  - **A malformed tag is `400 Bad Request`** (`:165-168`): a precondition the server cannot read is a
     client error, and running the write would ignore a precondition the caller did state.
   - **A stale token is `412 Precondition Failed`**, produced after the action by
-    `RewriteConflictToPreconditionFailed` (`:130`). A `DbUpdateConcurrencyException` is answered in
-    the filter rather than left to the global handler (`:132-141`), and an already-produced 409
+    `RewriteConflictToPreconditionFailed` (`:179`). A `DbUpdateConcurrencyException` is answered in
+    the filter rather than left to the global handler (`:181-190`), and an already-produced 409
     result has its status and its `ProblemDetails.Status` rewritten in place with the body otherwise
-    untouched (`:143-160`). Because the filter marks that exception handled, the global handler
+    untouched (`:192-205`). Because the filter marks that exception handled, the global handler
     never sees it, so the filter counts the conflict itself through `ConcurrencyConflictMetrics`
-    (`:137`), the same counter the global handler increments for an unconditioned
-    `DbUpdateConcurrencyException` (`DbUpdateExceptionHandler.cs:36-39`).
+    (`:186`), the same counter the global handler increments for an unconditioned
+    `DbUpdateConcurrencyException` (`DbUpdateExceptionHandler.cs:38`).
 
-  All three are RFC 9457 problem details built by one helper (`:206`) through the registered
+  All three are RFC 9457 problem details built by one helper (`:255`) through the registered
   `ProblemDetailsFactory`, so they carry the same `traceId`/`requestId` diagnostics as every other
   problem response on the surface, and each carries the standard `errors` extension with a stable
-  code: `Concurrency.PreconditionRequired` (`:171`), `Concurrency.MalformedIfMatch` (`:183`),
-  `Concurrency.PreconditionFailed` (`:195`).
+  code: `Concurrency.PreconditionRequired` (`:220`), `Concurrency.MalformedIfMatch` (`:232`),
+  `Concurrency.PreconditionFailed` (`:244`).
 - **`SetOriginalRowVersion` is the persistence extension point.**
   `IWriteRepository.SetOriginalRowVersion(TEntity, byte[])`
   (`MMCA.Common/Source/Core/MMCA.Common.Application/Interfaces/Infrastructure/Persistence/IRepository.cs:396`)
@@ -196,9 +224,9 @@ stale update fails inside the UPDATE statement.
 
 ## Trade-offs
 - **The rewrite keys on the conflict outcome, not on its cause.** The filter turns any 409 result
-  the action returns under an `If-Match` request into a 412 (`SupportsIfMatchAttribute.cs:143-160`),
+  the action returns under an `If-Match` request into a 412 (`SupportsIfMatchAttribute.cs:192-205`),
   including a non-concurrency conflict a handler reports through the `Result` channel. A thrown
-  `DbUpdateException` other than `DbUpdateConcurrencyException` (`:132`) is not touched: it leaves
+  `DbUpdateException` other than `DbUpdateConcurrencyException` (`:181`) is not touched: it leaves
   the filter unhandled and the global `DbUpdateExceptionHandler`
   (`MMCA.Common/Source/Presentation/MMCA.Common.API/DependencyInjection.cs:161`) still answers 409
   (`DbUpdateExceptionHandler.cs:41`). The response keeps its original problem details
@@ -210,9 +238,9 @@ stale update fails inside the UPDATE statement.
   dependency arrives by one of three routes: a rewrite to `ServiceFilterAttribute`, a lookup from
   `HttpContext.RequestServices`, or a static dependency. The problem helper already uses the
   lookup: it resolves `ProblemDetailsFactory` and `IErrorLocalizer` from the request's services
-  (`SupportsIfMatchAttribute.cs:208-209`, `:219`), so a host-registered factory or localizer does
+  (`SupportsIfMatchAttribute.cs:257-259`, `:268`), so a host-registered factory or localizer does
   shape the 428, 400 and 412 bodies. The conflict metric took the static route: the filter calls
-  `ConcurrencyConflictMetrics.RecordConflict` (`:137`), an internal static class over a
+  `ConcurrencyConflictMetrics.RecordConflict` (`:186`), an internal static class over a
   process-wide `Meter`
   (`MMCA.Common/Source/Presentation/MMCA.Common.API/Concurrency/ConcurrencyConflictMetrics.cs:24`,
   `RecordConflict` at `:46`), which no host can replace or reconfigure.

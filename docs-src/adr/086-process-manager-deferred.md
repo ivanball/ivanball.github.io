@@ -18,6 +18,12 @@ PostgreSQL built in, Azure Service Bus and Amazon SQS as adapters), so the EF sa
 a sixth pinned package; the deferral stands. Revised 2026-10-28: the unpaid-order deadline is now
 armed by `PlacedOrderFinalizer`, shared by customer and guest checkout, and a second independent
 `OrderCancelled` handler schedules the cancellation notice; the deferral stands.
+Revised 2026-11-12 (unreleased, on the `feat/fresh-eyes-wave` branch): the deferral was revisited and is resolved for a flow whose state fits ONE
+aggregate, by the behaviour-only process-manager primitive of
+[ADR-143](143-process-manager-primitive.md) (no framework state table, no correlation store, no
+package; MMCA.Store's order flow is its first adopter). The MassTransit saga state machine below, its
+correlation store and its trigger remain deferred for workflow state that fits no aggregate. See the
+Revision below.
 
 ## Context
 [ADR-054](054-saga-compensation-and-reconciliation.md) decided how this workspace achieves
@@ -70,8 +76,12 @@ cross-service workflow arriving with no recorded design, and being answered with
 column.
 
 ## Decision
-Defer the process manager, and record its shape so the deferral is a design decision rather than an
-omission.
+Defer the orchestrated process manager (a coordinator that owns workflow state outside any
+aggregate), and record its shape so the deferral is a design decision rather than an omission. A flow
+whose whole state fits on one aggregate is not deferred: that aggregate is the process, under the
+behaviour-only primitive of [ADR-143](143-process-manager-primitive.md), which adds no state row
+(`MMCA.Common/Source/Core/MMCA.Common.Domain/ProcessManagers/ProcessManagerAggregateRoot.cs:10-11,17`).
+Everything below describes the coordinator that stays deferred.
 
 ### The shape it would take
 A durable multi-step workflow coordinator in this workspace is a **MassTransit v8 saga state
@@ -359,6 +369,47 @@ Revisions are kept as written.
    2026-10-21) and `:178` with the scheduler at `:45` (2026-10-26); `CheckOutHandler.cs` now has 244
    lines and `:226-229` falls inside an unrelated inventory fetch.
 
+## Revision (2026-11-12): the deferral is revisited, and resolved for single-aggregate state
+
+The deferral was revisited on 2026-11-12. For a flow whose state fits one aggregate it is resolved,
+not by the coordinator this record describes, but by the behaviour-only primitive recorded in
+[ADR-143](143-process-manager-primitive.md); for state that fits no aggregate it stands unchanged.
+
+1. **What the primitive adds is behaviour, not state.** `ProcessManagerAggregateRoot<TIdentifierType>` derives
+   `AuditableAggregateRootEntity<TIdentifierType>` and declares no property and no field
+   (`MMCA.Common/Source/Core/MMCA.Common.Domain/ProcessManagers/ProcessManagerAggregateRoot.cs:10-11,17`);
+   its `DecideTimeout` answers not-applicable by default (`:43-44`). Timeouts are consumer-owned
+   internal commands on ADR-114's queue, run by `ProcessTimeoutHandlerBase`
+   (`MMCA.Common/Source/Core/MMCA.Common.Application/ProcessManagers/ProcessTimeoutHandlerBase.cs:36-43`),
+   and each event step runs through `ProcessDomainEventHandlerBase`
+   (`.../ProcessManagers/ProcessDomainEventHandlerBase.cs:31-35`). `AddProcessManagers()` registers
+   only the scoped `IProcessTimeoutScheduler` and a fallback clock
+   (`MMCA.Common/Source/Core/MMCA.Common.Application/DependencyInjection.ProcessManagers.cs:26-27`),
+   and the primitive brings no table, no migration and no configuration key
+   (`MMCA.Common/UPGRADING.md:241`). There is no correlation store and no new package.
+2. **It is the case this record's Rationale already called correct for choreography.** The state
+   stays on the aggregate: `Order` derives the base
+   (`MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Domain/Orders/Order.cs:47`), still names
+   `Status` plus `InventoryRestored` as the saga state (`Order.cs:40-43`), and decides its own payment
+   deadline in `DecideTimeout` (`Order.cs:984-1004`).
+   `ExpireUnpaidOrderInternalCommandHandler` derives the timeout base
+   (`MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Application/Orders/InternalCommands/ExpireUnpaidOrderInternalCommandHandler.cs:39-48`),
+   `OrderCancelledSagaHandler` derives the step base (`.../Orders/Saga/OrderCancelledSagaHandler.cs:49-52`),
+   and `OrderPaymentFailedSagaHandler` remains a plain `IDomainEventHandler<OrderPaymentFailed>`
+   (`.../Orders/Saga/OrderPaymentFailedSagaHandler.cs:23-25`). Both arming sites construct
+   `new ProcessTimeoutScheduler(...)` rather than resolving `IProcessTimeoutScheduler`:
+   `CheckOutDeadlineScheduler` over its injected internal-command scheduler and clock, and
+   `OrderPaymentFailedSagaHandler` over its scope's services
+   (`.../ShoppingCarts/UseCases/CheckOut/CheckOutDeadlineScheduler.cs:31-37`,
+   `OrderPaymentFailedSagaHandler.cs:82-84`). The 2026-09-11 Revision's handler anchor
+   `ExpireUnpaidOrderInternalCommandHandler.cs:61-74` no longer holds: the re-derivation is
+   `Order.cs:988-998`.
+3. **What stays deferred.** The MassTransit v8 saga state machine, its correlation row and the
+   trigger in the Decision are unchanged: they answer state that fits no aggregate, which the
+   primitive does not cover. A per-repo content sweep of the four `Source` trees for
+   `MassTransitStateMachine`, `SagaStateMachineInstance`, `ISaga`, `InMemorySagaRepository` and
+   `MassTransit.EntityFrameworkCore` still returns no match.
+
 ## Related
 [ADR-054](054-saga-compensation-and-reconciliation.md) (the accepted mechanism this record defers an
 alternative to: choreographed compensation, the persisted aggregate marker, and the reconciliation
@@ -375,4 +426,5 @@ reconciliation sweep belongs to, and the in-process alternative a per-instance d
 [ADR-084](084-stripe-webhook-ingress.md) (the third-party ingress whose unreliability is the specific
 thing no coordinator can fix), [ADR-114](114-internal-commands-durable-job-queue.md) (the durable internal-command
 queue that carries the first per-instance deadline, one aggregate id at a time, without a
-coordinator).
+coordinator), [ADR-143](143-process-manager-primitive.md) (the process-manager primitive that
+resolves this deferral for a flow whose state fits one aggregate).

@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 141 ADRs</summary>
+        <summary>All 146 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -241,6 +241,11 @@
         <li><a href="139-passkeys-webauthn-opt-in-sign-in.html">139 · Passkeys (WebAuthn) as an Opt-In Sign-In and Second Factor</a></li>
         <li><a href="140-machine-clients-oauth-client-credentials.html">140 · Machine Clients Through OAuth Client Credentials Backed by Service Accounts</a></li>
         <li><a href="141-two-framework-lines-from-one-tree.html">141 · Two .NET Framework Lines From One Source Tree (net10.0 and net11.0)</a></li>
+        <li><a href="142-outbound-webhooks-and-delivery-lane.html">142 · Outbound Webhooks (Signed Delivery over Internal Commands, with a Dedicated Delivery Lane)</a></li>
+        <li><a href="143-process-manager-primitive.html">143 · Process-Manager Primitive (Consumer-Owned Process Aggregate, Timeouts over Internal Commands)</a></li>
+        <li><a href="144-offline-writes-and-delta-reads.html">144 · Offline Writes and Delta Reads (Client Write Queue, Server Change Feed with Tombstones)</a></li>
+        <li><a href="145-opt-in-cursor-paging.html">145 · Opt-In Cursor Paging on List Endpoints (Beside Offset Paging)</a></li>
+        <li><a href="146-ui-page-bases-and-list-shell.html">146 · UI Page Bases and the List Shell (Bases Own Plumbing, Pages Own Model and Service Call)</a></li>
           </ol>
         </nav>
       </details>
@@ -258,7 +263,8 @@
           Revised 2026-10-21: Context now lists ADC&#39;s Identity -&gt; Conference export edge, and anchors refreshed across both apps&#39; Program.cs, AppHost and Bicep files.
           Revised 2026-10-23: the east-west gRPC values moved into <code>HttpResilienceDefaults</code> (<code>Grpc</code>-prefixed) with their own 8s/20s timeouts instead of reusing the outbound-HTTP 30s/90s, and <code>AddTypedGrpcClient</code> gained a per-client override.
           Revised 2026-10-26: anchors refreshed across both apps&#39; Program.cs, AppHost and Bicep files after line shifts in recent releases; no decision or value changed.
-          Revised 2026-10-28: anchors refreshed across ADC&#39;s and Store&#39;s Bicep files and two ADC Program.cs files after line shifts in recent releases; no decision or value changed.</p>
+          Revised 2026-10-28: anchors refreshed across ADC&#39;s and Store&#39;s Bicep files and two ADC Program.cs files after line shifts in recent releases; no decision or value changed.
+          Amended 2026-11-12 (unreleased, on the <code>feat/fresh-eyes-wave</code> branch): the local Aspire startup probe for each service resource is selected by <code>WithMmcaServiceInfrastructure</code> from an explicit <code>ServiceEndpointProfile</code> value (the first 2026-08-29 update below).</p>
           <h2 id="update-2026-06-22-store-converged-to-profile-a">Update (2026-06-22): Store converged to Profile A</h2>
           <p>Store originally chose Profile B, but its cross-service gRPC failed in Azure Container Apps. With
           <code>Http1AndHttp2</code> Kestrel + <code>transport: &#39;auto&#39;</code> ingress on a <strong>cleartext</strong> endpoint there is no ALPN, so
@@ -622,8 +628,24 @@
           (<code>MMCA.Common/Source/Hosting/MMCA.Common.Aspire.Hosting/H2cHealthCheckExtensions.cs:110</code>, whose
           <code>DefaultProbePath</code> is <code>&quot;/alive&quot;</code> at <code>:53</code>): an AppHost-side health check that issues the same GET
           over HTTP/2 exact version against the resource&#39;s existing endpoint, exactly the profile the
-          gateway&#39;s downstream probe already speaks. Both AppHosts chain it on their Profile A resources,
-          probing <strong><code>/alive</code> (liveness), not <code>/health/ready</code></strong>: service readiness includes the warm-up gate,
+          gateway&#39;s downstream probe already speaks. Neither the MMCA.ADC nor the MMCA.Store AppHost picks the
+          probe per service by hand (the framework&#39;s own sample AppHost does,
+          <code>MMCA.Common/Tests/Hosting/MMCA.Common.Testing.Aspire.AppHostTests.SampleAppHost/Program.cs:55</code>,
+          <code>:67</code>, <code>:80</code>): each
+          service resource states its cleartext profile as an explicit <code>ServiceEndpointProfile</code> value
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Aspire.Hosting/ServiceEndpointProfile.cs:7</code>) passed to
+          <code>WithMmcaServiceInfrastructure</code> (ADR-098;
+          <code>MMCA.Common/Source/Hosting/MMCA.Common.Aspire.Hosting/ServiceInfrastructureExtensions.cs:51</code>,
+          <code>:57</code>), and that value selects the probe (<code>:74-78</code>). <code>Http2Only</code> (<code>ServiceEndpointProfile.cs:13</code>)
+          registers <code>WithH2cHealthCheck</code> on the named endpoint, or on <code>DefaultEndpointName</code> <code>&quot;http&quot;</code>
+          (<code>H2cHealthCheckExtensions.cs:59</code>) when none is named; <code>Mixed</code> (<code>ServiceEndpointProfile.cs:19</code>), the
+          mixed-endpoint profile&#39;s <code>Http1AndHttp2</code> default endpoint, registers Aspire&#39;s stock
+          <code>WithHttpHealthCheck</code>. Both probe <code>DefaultProbePath</code> (<code>ServiceInfrastructureExtensions.cs:75</code>, <code>:77</code>).
+          ADC passes <code>Http2Only</code> for Identity, Conference and Engagement and <code>Mixed</code> for Notification
+          (<code>MMCA.ADC/Source/Hosting/MMCA.ADC.AppHost/Program.cs:214</code>, <code>:191</code>, <code>:154</code>, <code>:134</code>); Store passes
+          <code>Http2Only</code> for Catalog and Identity and <code>Mixed</code> for Sales, naming its <code>http</code> endpoint
+          (<code>MMCA.Store/Source/Hosting/MMCA.Store.AppHost/Program.cs:166</code>, <code>:189</code>, <code>:246-247</code>). Every probe
+          targets <strong><code>/alive</code> (liveness), not <code>/health/ready</code></strong>: service readiness includes the warm-up gate,
           whose OIDC metadata task fetches through the gateway, and the gateway <code>WaitFor</code>s the services, so a
           readiness startup gate is a cycle (each service retries against the not-yet-started gateway until
           warm-up fails open at ~90s). Liveness proves what a <code>WaitFor</code> needs, a live Kestrel serving the

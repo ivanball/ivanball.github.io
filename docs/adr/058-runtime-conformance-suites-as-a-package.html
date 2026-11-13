@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 141 ADRs</summary>
+        <summary>All 146 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -241,6 +241,11 @@
         <li><a href="139-passkeys-webauthn-opt-in-sign-in.html">139 · Passkeys (WebAuthn) as an Opt-In Sign-In and Second Factor</a></li>
         <li><a href="140-machine-clients-oauth-client-credentials.html">140 · Machine Clients Through OAuth Client Credentials Backed by Service Accounts</a></li>
         <li><a href="141-two-framework-lines-from-one-tree.html">141 · Two .NET Framework Lines From One Source Tree (net10.0 and net11.0)</a></li>
+        <li><a href="142-outbound-webhooks-and-delivery-lane.html">142 · Outbound Webhooks (Signed Delivery over Internal Commands, with a Dedicated Delivery Lane)</a></li>
+        <li><a href="143-process-manager-primitive.html">143 · Process-Manager Primitive (Consumer-Owned Process Aggregate, Timeouts over Internal Commands)</a></li>
+        <li><a href="144-offline-writes-and-delta-reads.html">144 · Offline Writes and Delta Reads (Client Write Queue, Server Change Feed with Tombstones)</a></li>
+        <li><a href="145-opt-in-cursor-paging.html">145 · Opt-In Cursor Paging on List Endpoints (Beside Offset Paging)</a></li>
+        <li><a href="146-ui-page-bases-and-list-shell.html">146 · UI Page Bases and the List Shell (Bases Own Plumbing, Pages Own Model and Service Call)</a></li>
           </ol>
         </nav>
       </details>
@@ -257,7 +262,8 @@
           Revised 2026-10-07: the consumers&#39; lockstep <code>MMCA.Common.Shared</code> pin is now 1.233.0 and the ADC pin anchor moved to <code>Directory.Packages.props:101</code>; see the Revision (2026-10-07) below.
           Revised 2026-10-21: the OpenAPI base gains an opt-in committed-baseline breaking-change diff that all seven OpenAPI subclasses adopt, the decorator pipeline is now sealed against late registration through the framework helpers, the lockstep pin is 1.250.0, and anchors are refreshed; see the Revision (2026-10-21) below.
           Revised 2026-10-26: anchors refreshed after the v1.261.0 consumer sweep (the lockstep <code>MMCA.Common.Shared</code> pin is now 1.261.0 and the ADC pin anchor moved to <code>Directory.Packages.props:108</code>), with the <code>MiddlewarePipelineOrderTestsBase</code> and ADR-015 / ADR-046 cross-reference anchors re-pointed; see the Revision (2026-10-26) below.
-          Revised 2026-10-28: the lockstep <code>MMCA.Common.Shared</code> pin is now 1.265.1, and the inventory of MMCA.Common&#39;s own conformance self-tests names the tenancy-base and breaking-change-detector tests; see the Revision (2026-10-28) below.</p>
+          Revised 2026-10-28: the lockstep <code>MMCA.Common.Shared</code> pin is now 1.265.1, and the inventory of MMCA.Common&#39;s own conformance self-tests names the tenancy-base and breaking-change-detector tests; see the Revision (2026-10-28) below.
+          Amended 2026-11-12 (unreleased, on the <code>feat/fresh-eyes-wave</code> branch): the test tier gains <code>ServiceHostTestFactory</code> and <code>ReplaceWithFake</code>, and the structural package gains the cache-invalidation and process-timeout convention bases; see the Revision (2026-11-12) below.</p>
           <h2 id="context">Context</h2>
           <p>ADR-015 turned the architecture invariants into build-gating tests, and drew its own boundary
           explicitly: the fitness suite asserts &quot;<strong>structure / registration</strong>, not runtime behavior&quot;
@@ -767,6 +773,55 @@
           supersedes the <code>:38</code> and <code>:51</code> the 2026-09-25 Revision cites (<code>:51</code> now declares
           <code>OpenApiDocumentPath</code>).</li>
           </ol>
+          <h2 id="revision-2026-11-12-a-service-host-test-factory-a-fake-swap-helper-and-two-convention-bases">Revision (2026-11-12): a service-host test factory, a fake-swap helper, and two convention bases</h2>
+          <p>The seven contract bases and their subclass inventory above are unchanged. The packaged test tier
+          gains two helpers in <code>MMCA.Common.Testing</code>, and the structural package gains two convention bases.
+          None of the four is counted among the seven.</p>
+          <ul>
+          <li><strong><code>ServiceHostTestFactory&lt;TProgram&gt;</code></strong>
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Testing/Fixtures/ServiceHostTestFactory.cs:31</code>) is a
+          <code>WebApplicationFactory</code> base whose sealed <code>ConfigureWebHost</code> (<code>:52</code>) applies the test defaults in a
+          fixed order: the <code>Testing</code> environment (<code>:35</code>, <code>:81</code>), <code>RequireHttpsMetadata</code> set to <code>false</code>
+          (<code>:82</code>), then the <code>ConfigureHost</code> hook (<code>:64</code>, <code>:84</code>), then one test-services callback that
+          re-points the <code>Bearer</code> scheme at the committed test key when <code>Audience</code> is set (<code>:43</code>, <code>:90-95</code>),
+          neutralizes the global rate limiter under <code>RateLimiterPartitionName</code> (default
+          <code>integration-tests</code>, <code>:49</code>, <code>:97-100</code>) and last calls <code>ConfigureTestServices</code> (<code>:73</code>, <code>:102</code>), so a
+          fake registered there wins over the host&#39;s own registration. It never overrides <code>CreateHost</code> and
+          touches no environment variable (<code>:26-27</code>).</li>
+          <li><strong><code>ReplaceWithFake</code></strong>
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Testing/Support/ServiceCollectionFakeExtensions.cs:24</code>,
+          <code>:44</code>, <code>:64</code>) removes every unkeyed registration of a service and adds the fake, by default with
+          the lifetime of the last registration (<code>:28</code>), with an explicit lifetime, or as a singleton
+          instance; keyed registrations are left alone (<code>:81</code>, <code>:97</code>). When the host never registered the
+          service it throws <code>InvalidOperationException</code> naming the fake as stale and leaves the collection
+          unchanged (<code>:87-89</code>).</li>
+          <li><strong><code>CacheInvalidationConventionTestsBase</code></strong>
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Bases/Cqrs/CacheInvalidationConventionTestsBase.cs:20</code>)
+          asserts that every <code>ICacheInvalidating</code> type in the mapped Application assemblies implements
+          <code>ICacheInvalidating&lt;TEntity&gt;</code> with no <code>CachePrefix</code> of its own, or is allow-listed (<code>:10-12</code>).
+          Subclassed by MMCA.ADC
+          (<code>MMCA.ADC/Tests/Architecture/MMCA.ADC.Architecture.Tests/Cqrs/CacheInvalidationConventionTests.cs:14</code>),
+          MMCA.Store
+          (<code>MMCA.Store/Tests/Architecture/MMCA.Store.Architecture.Tests/Caching/CacheInvalidationConventionTests.cs:17</code>)
+          and MMCA.Helpdesk
+          (<code>MMCA.Helpdesk/Tests/Architecture/MMCA.Helpdesk.Architecture.Tests/Caching/HelpdeskCacheInvalidationConventionTests.cs:11</code>),
+          and by the framework&#39;s own architecture tests
+          (<code>MMCA.Common/Tests/Architecture/MMCA.Common.Architecture.Tests/Cqrs/Caching/CommonCacheInvalidationConventionTests.cs:11</code>).</li>
+          <li><strong><code>ProcessTimeoutConventionTestsBase</code></strong>
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Bases/ProcessManagers/ProcessTimeoutConventionTestsBase.cs:18</code>)
+          asserts that every concrete <code>IProcessTimeoutCommand&lt;T&gt;</code> declares a stable <code>[InternalCommandName]</code>
+          and is handled by exactly one <code>ProcessTimeoutHandlerBase</code> subclass (<code>:4-7</code>), for the process-manager
+          primitive of <a href="143-process-manager-primitive.html">ADR-143</a>. Among consumers, subclassed by MMCA.Store only
+          (<code>MMCA.Store/Tests/Architecture/MMCA.Store.Architecture.Tests/Cqrs/ProcessTimeoutConventionTests.cs:14</code>);
+          the framework&#39;s self-test subclasses it privately
+          (<code>MMCA.Common/Tests/Architecture/MMCA.Common.Architecture.Tests/ProcessManagers/ProcessTimeoutConventionFixtureTests.cs:126</code>,
+          <code>:131</code>, <code>:136</code>).</li>
+          </ul>
+          <p>The two convention bases are structural (ADR-015), not runtime suites; they are recorded here because
+          they were added in the same pass as the two helpers.</p>
+          <p>The same pass added a dependency-outage base to the AppHost test tier, <code>DependencyOutageTestBase&lt;TFixture&gt;</code>
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Testing.Aspire/Outages/DependencyOutageTestBase.cs:35</code>). It
+          belongs to that tier, so it is recorded in <a href="117-apphost-integration-test-base.html">ADR-117</a>, not here.</p>
           <h2 id="related">Related</h2>
           <p>ADR-015 (the structural / registration fitness layer this complements; its stated non-goal, &quot;not
           runtime behavior&quot;, is exactly this ADR&#39;s scope, and the two tiers ship as two separate packages),
@@ -805,6 +860,7 @@
             <li><a href="#revision-2026-10-21">Revision (2026-10-21)</a></li>
             <li><a href="#revision-2026-10-26">Revision (2026-10-26)</a></li>
             <li><a href="#revision-2026-10-28">Revision (2026-10-28)</a></li>
+            <li><a href="#revision-2026-11-12-a-service-host-test-factory-a-fake-swap-helper-and-two-convention-bases">Revision (2026-11-12): a service-host test factory, a fake-swap helper, and two convention bases</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

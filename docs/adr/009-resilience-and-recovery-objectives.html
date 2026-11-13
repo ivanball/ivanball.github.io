@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 141 ADRs</summary>
+        <summary>All 146 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -241,6 +241,11 @@
         <li><a href="139-passkeys-webauthn-opt-in-sign-in.html">139 · Passkeys (WebAuthn) as an Opt-In Sign-In and Second Factor</a></li>
         <li><a href="140-machine-clients-oauth-client-credentials.html">140 · Machine Clients Through OAuth Client Credentials Backed by Service Accounts</a></li>
         <li><a href="141-two-framework-lines-from-one-tree.html">141 · Two .NET Framework Lines From One Source Tree (net10.0 and net11.0)</a></li>
+        <li><a href="142-outbound-webhooks-and-delivery-lane.html">142 · Outbound Webhooks (Signed Delivery over Internal Commands, with a Dedicated Delivery Lane)</a></li>
+        <li><a href="143-process-manager-primitive.html">143 · Process-Manager Primitive (Consumer-Owned Process Aggregate, Timeouts over Internal Commands)</a></li>
+        <li><a href="144-offline-writes-and-delta-reads.html">144 · Offline Writes and Delta Reads (Client Write Queue, Server Change Feed with Tombstones)</a></li>
+        <li><a href="145-opt-in-cursor-paging.html">145 · Opt-In Cursor Paging on List Endpoints (Beside Offset Paging)</a></li>
+        <li><a href="146-ui-page-bases-and-list-shell.html">146 · UI Page Bases and the List Shell (Bases Own Plumbing, Pages Own Model and Service Call)</a></li>
           </ol>
         </nav>
       </details>
@@ -278,6 +283,12 @@
           v1.254.0), so the HTTP half of Decision point 1 now rests on the global Aspire
           <code>ConfigureHttpClientDefaults</code> handler alone; other anchors refreshed.</p>
           <p>Revised 2026-10-28: anchors refreshed after the v1.265.1 release.</p>
+          <p>Revised 2026-11-12 (unreleased, on the <code>feat/fresh-eyes-wave</code> branch): Decision point 1 names the
+          two factory-created clients deliberately outside the standard handler (the outbound webhook client
+          and the gateway&#39;s downstream health-probe client) and no longer counts the YARP forwarder among the
+          factory-created clients, and the infrastructure health checks, the gateway&#39;s
+          opt-in connect-failure retry and the executable outage tier are recorded. See the Revision
+          (2026-11-12) at the end.</p>
           <h2 id="context">Context</h2>
           <p>The framework already supplies the <em>mechanisms</em> for surviving partial failure: a standard Polly
           resilience handler (timeout / retry / circuit breaker), the outbox for at-least-once delivery
@@ -294,9 +305,22 @@
           <ol>
           <li><strong>Resilience is a framework invariant, not a per-call choice.</strong> Every outbound <code>HttpClient</code>
           created through <code>IHttpClientFactory</code> in a host that calls <code>AddServiceDefaults</code> (typed clients,
-          named clients, the YARP forwarder), and every gRPC client registered through
+          named clients), and every gRPC client registered through
           <code>AddTypedGrpcClient</code>, wires the <strong>standard resilience handler</strong>. A client constructed by hand with
-          <code>new HttpClient(...)</code> is outside this default and owns its own bounds. The HTTP default is the
+          <code>new HttpClient(...)</code> is outside this default and owns its own bounds, and so is the YARP
+          forwarder&#39;s client, which YARP&#39;s own forwarder client factory builds
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Gateway/Forwarding/GatewayRetryForwarderHttpClientFactory.cs:12</code>;
+          <a href="088-gateway-edge-responsibilities.html">ADR-088</a> records no Polly pipeline on that hop). Two
+          factory-created clients are outside it on purpose. The outbound webhook client clears every
+          additional handler a host default adds, the resilience pipeline included
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Webhooks/WebhookServiceCollectionExtensions.cs:101</code>,
+          reasoning at <code>:48-50</code>), because its retries are the internal-command attempts of the webhook
+          delivery lane rather than Polly retries, and it is bounded by its own <code>Webhooks:TimeoutSeconds</code>
+          (<code>:87-88</code>); <a href="142-outbound-webhooks-and-delivery-lane.html">ADR-142</a> owns the lane&#39;s rules. The
+          gateway&#39;s downstream health-probe client removes every resilience handler, because a retry inside
+          its probe budget would turn a healthy downstream into a timed-out one
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Gateway/GatewayHealthCheckExtensions.cs:190</code>,
+          <code>:204-221</code>). The HTTP default is the
           global <code>ConfigureHttpClientDefaults</code> registration
           (<code>MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Extensions.cs:50-108</code>, scoped by its comment at
           <code>:48-49</code>, the handler at <code>:60-85</code>), which takes its timeouts, retry budget and sampling window from
@@ -684,6 +708,60 @@
           <code>ShouldHandle</code> predicates through <code>IsTransientFailure</code> at <code>:87</code> and <code>:101</code> unchanged. Citations
           inside the earlier Revision sections are left as recorded.</li>
           </ol>
+          <h2 id="revision-2026-11-12">Revision (2026-11-12)</h2>
+          <p>The Decision&#39;s second and third points, the reference objectives, the outbox breaker, the database
+          posture and the Stripe single-retry-owner pipeline stand as recorded. Decision point 1 stands with
+          two named exceptions, and three parts of the posture this record could not previously point at are
+          recorded.</p>
+          <ol>
+          <li><strong>The two factory-created clients outside the standard handler.</strong> The outbound webhook client
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Webhooks/WebhookServiceCollectionExtensions.cs:87-102</code>)
+          clears the host&#39;s additional handlers (<code>:101</code>), so the global <code>ConfigureHttpClientDefaults</code>
+          handler (<code>MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Extensions.cs:60-85</code>) never reaches it.
+          That is deliberate: the internal-command queue is its only retry and its only failure policy
+          (<code>WebhookServiceCollectionExtensions.cs:48-50</code>), and a Polly retry underneath would multiply
+          every delivery attempt. The gateway&#39;s downstream health-probe client
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Gateway/GatewayHealthCheckExtensions.cs:190</code>)
+          removes every resilience handler (<code>:204-221</code>), so a refused attempt reaches the check at once and
+          a probe is not retried inside its own budget. Decision point 1 now names both, and
+          <a href="142-outbound-webhooks-and-delivery-lane.html">ADR-142</a> records the webhook lane&#39;s own budget.</li>
+          <li><strong>Infrastructure health checks are bounded.</strong> <code>AddInfrastructureHealthChecks</code> registers every
+          check it adds with the timeout <code>HealthChecks:CheckTimeoutSeconds</code>
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Extensions.Health.cs:50-53</code>, resolved once at
+          <code>:78</code> and handed to the database checks at <code>:80</code>, the Redis check at <code>:94-99</code> and the RabbitMQ
+          check at <code>:118-122</code>). The setting defaults to 5 seconds and accepts 1 to 60
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Health/HealthReportCacheOptions.cs:54-55</code>, bounds
+          at <code>:32</code> and <code>:35</code>); <code>CheckTimeout</code> throws at registration on a value outside that range
+          (<code>Extensions.Health.cs:279-291</code>, the message at <code>:287-288</code>). A check still running at the timeout
+          is cancelled and reported with its failure status, so a dependency that does not answer turns
+          <code>/health</code> unhealthy rather than leaving the last report in place (<code>:50-53</code>). The RabbitMQ check
+          needs more than the registration timeout, because the health-check package calls its connection
+          factory without a token (<code>:107-115</code>): it probes through ONE reused connection held by
+          <code>RabbitMqHealthConnection</code>, created single flight under a token cancelled at the same timeout, the
+          wait abandoned at that timeout even if the client ignores the token, and a failed creation not kept
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Health/RabbitMqHealthConnection.cs:5-16</code>,
+          constructed with the check timeout at <code>Extensions.Health.cs:116</code>).</li>
+          <li><strong>The gateway has an opt-in connect-failure retry.</strong> A gateway host that sets
+          <code>MmcaGateway:Retry:Enabled</code> (off by default,
+          <code>MMCA.Common/Source/Hosting/MMCA.Common.Gateway/GatewaySettings.cs:64</code>) retries a proxied body-less
+          GET or HEAD whose attempt failed with a name-resolution, connect or TLS handshake error, the same
+          before-send rule as the gRPC predicate in Decision point 1
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Gateway/Forwarding/GatewayConnectRetryHandler.cs:36-38</code>,
+          <code>:41-44</code>), at most <code>MaxRetryAttempts</code> times (default 1, range 1 to 3) after <code>Delay</code> (default 200
+          ms, at most 5 s) (<code>GatewaySettings.cs:66-72</code>). It is not a Polly pipeline: it is a handler on the
+          clients YARP&#39;s own forwarder client factory builds
+          (<code>.../Forwarding/GatewayRetryForwarderHttpClientFactory.cs:12</code>), not on a factory-created
+          client, so the standard handler&#39;s retry budget does not apply to that hop; no request with a body
+          and no other method is ever retried. <a href="088-gateway-edge-responsibilities.html">ADR-088</a> records it in full, as an exception
+          to its delegation of proxy-hop retries.</li>
+          <li><strong>The objectives have an executable outage tier.</strong> <code>DependencyOutageTestBase</code>
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Testing.Aspire/Outages/DependencyOutageTestBase.cs:35</code>)
+          stops a dependency of a running AppHost, asserts that readiness follows a database and never a
+          broker or a cache while liveness follows nothing, restarts it, and asserts recovery, including an
+          outbox drain after a broker outage whose scenario names the outbox database (<code>:11-21</code>, <code>:134</code>,
+          <code>:162</code>). <a href="117-apphost-integration-test-base.html">ADR-117</a>
+          owns the test base.</li>
+          </ol>
           
         <div class="doc-foot btn-row">
           <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
@@ -708,6 +786,7 @@
             <li><a href="#revision-2026-10-21">Revision (2026-10-21)</a></li>
             <li><a href="#revision-2026-10-26">Revision (2026-10-26)</a></li>
             <li><a href="#revision-2026-10-28">Revision (2026-10-28)</a></li>
+            <li><a href="#revision-2026-11-12">Revision (2026-11-12)</a></li>
             </ul>
           </nav>
         </aside>

@@ -1,0 +1,630 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#0e151f" media="(prefers-color-scheme: dark)">
+  <title>ADR-142: Outbound Webhooks (Signed Delivery over Internal Commands, with a Dedicated Delivery Lane) · MMCA · Ivan Ball-llovera</title>
+  <meta name="description" content="Accepted (2026-11-12). Listed under [Unreleased] in MMCA.Common/CHANGELOG.md:7 (entries at :42 and :75). Off unless the host calls…">
+  <link rel="canonical" href="https://ivanball.github.io/docs/adr/142-outbound-webhooks-and-delivery-lane.html">
+  <link rel="icon" href="../../assets/img/favicon.svg" type="image/svg+xml">
+  <link rel="alternate" type="application/rss+xml" title="Ivan Ball-llovera: deep dives on enterprise .NET" href="https://ivanball.github.io/feed.xml">
+  <meta property="og:type" content="article">
+  <meta property="og:site_name" content="Ivan Ball-llovera">
+  <meta property="og:title" content="ADR-142: Outbound Webhooks (Signed Delivery over Internal Commands, with a Dedicated Delivery Lane)">
+  <meta property="og:description" content="Accepted (2026-11-12). Listed under [Unreleased] in MMCA.Common/CHANGELOG.md:7 (entries at :42 and :75). Off unless the host calls…">
+  <meta property="og:url" content="https://ivanball.github.io/docs/adr/142-outbound-webhooks-and-delivery-lane.html">
+  <meta property="og:image" content="https://ivanball.github.io/assets/img/og-image.png">
+  <meta property="og:image:alt" content="Ivan Ball-llovera, Principal Software Architect">
+  <meta property="og:locale" content="en_US">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="ADR-142: Outbound Webhooks (Signed Delivery over Internal Commands, with a Dedicated Delivery Lane)">
+  <meta name="twitter:description" content="Accepted (2026-11-12). Listed under [Unreleased] in MMCA.Common/CHANGELOG.md:7 (entries at :42 and :75). Off unless the host calls…">
+  <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Platform","item":"https://ivanball.github.io/platform.html"},{"@type":"ListItem","position":2,"name":"Reference","item":"https://ivanball.github.io/docs/index.html"},{"@type":"ListItem","position":3,"name":"Architecture Decision Records","item":"https://ivanball.github.io/docs/adr/index.html"},{"@type":"ListItem","position":4,"name":"142 · Outbound Webhooks (Signed Delivery over Internal Commands, with a Dedicated Delivery Lane)","item":"https://ivanball.github.io/docs/adr/142-outbound-webhooks-and-delivery-lane.html"}]}</script>
+  <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);if(localStorage.getItem('mmca-rail')==='hidden')document.documentElement.setAttribute('data-rail','hidden');if(localStorage.getItem('mmca-cites')==='shown')document.documentElement.setAttribute('data-cites','shown');}catch(e){}})();</script>
+  <link rel="preload" href="../../assets/fonts/inter-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="../../assets/fonts/jetbrains-mono-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="../../assets/css/styles.css">
+  <link rel="stylesheet" href="../../assets/css/docs.css">
+  <script defer src="../../assets/js/main.js"></script>
+  <script defer src="../../assets/js/search.js"></script>
+  <script defer src="../../assets/js/analytics.js"></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+
+  <header class="site-header">
+    <div class="container nav">
+      <a class="brand" href="../../index.html">
+        <span class="brand-mark" aria-hidden="true">IB</span>
+        <span>Ivan Ball-llovera</span>
+      </a>
+      <nav aria-label="Primary">
+        <ul class="nav-links" id="nav-links">
+          <li><a href="../../index.html">Home</a></li>
+          <li><a href="../../resume.html">Résumé</a></li>
+          <li><a href="../../platform.html">Platform</a></li>
+          <li><a href="../../docs/index.html" aria-current="page">Reference</a></li>
+          <li><a href="../../writing.html">Writing</a></li>
+          <li><a href="../../speaking.html">Speaking</a></li>
+          <li><a href="../../contact.html">Contact</a></li>
+        </ul>
+      </nav>
+      <div class="nav-tools">
+        <button class="icon-btn search-open" type="button" aria-label="Search the site" data-search-open>
+          <span aria-hidden="true">⌕</span>
+        </button>
+        <button class="icon-btn theme-toggle" type="button" aria-label="Switch color theme">
+          <span class="sun" aria-hidden="true">☀</span><span class="moon" aria-hidden="true">☾</span>
+        </button>
+        <button class="icon-btn nav-toggle" type="button" aria-label="Toggle navigation menu" aria-expanded="false" aria-controls="nav-links">☰</button>
+      </div>
+    </div>
+  </header>
+  <dialog class="search-dialog" id="site-search" aria-label="Search this site">
+    <form class="search-box" method="dialog" role="search">
+      <span class="search-icon" aria-hidden="true">⌕</span>
+      <input class="search-input" type="search" id="site-search-input" placeholder="Search ADRs, guides, chapters, articles…"
+             autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
+             aria-controls="site-search-results" aria-describedby="site-search-status">
+      <button class="btn btn--ghost search-close" type="button" data-search-close>Esc</button>
+    </form>
+    <p class="search-status" id="site-search-status" role="status" aria-live="polite"></p>
+    <ul class="search-results" id="site-search-results"></ul>
+    <p class="search-foot">
+      <span><kbd>↑</kbd><kbd>↓</kbd> to navigate</span>
+      <span><kbd>Enter</kbd> to open</span>
+      <span><kbd>"…"</kbd> all these words</span>
+      <span><kbd>AND</kbd><kbd>OR</kbd> to combine</span>
+    </p>
+  </dialog>
+
+  <main id="main">
+    <div class="container doc-container">
+      <nav class="doc-breadcrumb" aria-label="Breadcrumb">
+        <a href="../../platform.html">Platform</a>
+        <span aria-hidden="true">/</span>
+        <a href="../../docs/index.html">Reference</a>
+        <span aria-hidden="true">/</span>
+        <a href="../../docs/adr/index.html">Architecture Decision Records</a>
+        <span aria-hidden="true">/</span>
+        <span class="current">142 · Outbound Webhooks (Signed Delivery over Internal Commands, with a Dedicated Delivery Lane)</span>
+        <button class="rail-toggle" type="button" data-rail-toggle aria-expanded="true" aria-controls="doc-rail">On this page</button>
+      </nav>
+      <div class="doc-layout doc-layout--toc">
+      <aside class="doc-sidebar">
+      <details class="doc-sidebar-details" open>
+        <summary>All 146 ADRs</summary>
+        <nav class="doc-nav" aria-label="Architecture Decision Records">
+          <ol>
+        <li><a href="index.html">Overview</a></li>
+        <li><a href="001-manual-dto-mapping.html">001 · Manual DTO Mapping over AutoMapper</a></li>
+        <li><a href="002-navigation-populators.html">002 · NavigationPopulators for Cross-Container Loading</a></li>
+        <li><a href="003-outbox-dual-dispatch.html">003 · Outbox Pattern with Dual Dispatch</a></li>
+        <li><a href="004-authentication-dual-fetch.html">004 · Cross-Service Token Validation via JWKS / OIDC Discovery</a></li>
+        <li><a href="005-soft-delete-vs-erasure.html">005 · Soft-Delete vs. Right-to-Erasure</a></li>
+        <li><a href="006-database-per-service.html">006 · Database per Service</a></li>
+        <li><a href="007-grpc-extraction.html">007 · Synchronous Cross-Service Calls via gRPC Contracts</a></li>
+        <li><a href="008-service-extraction-topology.html">008 · Extraction of the Modular Monolith into Per-Module Services + Gateway</a></li>
+        <li><a href="009-resilience-and-recovery-objectives.html">009 · Resilience Policies &amp; Recovery Objectives</a></li>
+        <li><a href="010-integration-event-schema-versioning.html">010 · Integration-Event Schema Versioning &amp; Upcaster Policy</a></li>
+        <li><a href="011-single-locale-i18n.html">011 · Single-Locale by Design (No Internationalization)</a></li>
+        <li><a href="012-grpc-host-transport.html">012 · gRPC-Host Transport Convention (Http2-only h2c vs. Http1AndHttp2 + ALPN)</a></li>
+        <li><a href="013-result-pattern.html">013 · Result Pattern over Exceptions for Flow Control</a></li>
+        <li><a href="014-cqrs-decorator-pipeline.html">014 · CQRS Handlers with a Decorator Pipeline</a></li>
+        <li><a href="015-architecture-fitness-functions.html">015 · Architecture Invariants Enforced as Fitness Functions</a></li>
+        <li><a href="016-lockstep-versioning-masstransit-pin.html">016 · Lockstep Package Versioning and the MassTransit-v8 Pin</a></li>
+        <li><a href="017-request-idempotency.html">017 · HTTP Request Idempotency via Client-Supplied Keys</a></li>
+        <li><a href="018-polyglot-persistence.html">018 · Polyglot Persistence (Multiple Storage Engines Behind One Model)</a></li>
+        <li><a href="019-rate-limiting.html">019 · Layered Rate Limiting with an Authenticated-Only Global Limiter</a></li>
+        <li><a href="020-permission-based-authorization.html">020 · Permission-Based Authorization Layered over Roles</a></li>
+        <li><a href="021-consumer-inbox-idempotency.html">021 · Consumer-Side Inbox for Integration-Event Idempotency</a></li>
+        <li><a href="022-browser-session-cookie-auth.html">022 · Browser Session-Cookie Authentication for Blazor SSR</a></li>
+        <li><a href="023-security-response-headers.html">023 · Centralized Security-Response-Headers Middleware with a Pluggable CSP</a></li>
+        <li><a href="024-push-notifications.html">024 · Two-Channel User Notifications (Transient SignalR Push + Durable Inbox)</a></li>
+        <li><a href="025-startup-warmup-readiness.html">025 · Startup Warm-Up and Readiness Gating for Cold-Start Mitigation</a></li>
+        <li><a href="026-caching-strategy.html">026 · Two-Tier Caching: a Swappable ICacheService Substrate plus an HTTP Output-Cache Edge</a></li>
+        <li><a href="027-multi-locale-i18n.html">027 · Multi-Locale Internationalization (Supersedes ADR-011)</a></li>
+        <li><a href="028-dark-theme-mode.html">028 · Day/Dark Theme Mode</a></li>
+        <li><a href="029-authentication-brute-force-protection.html">029 · Authentication Brute-Force Protection and Registration Throttling</a></li>
+        <li><a href="030-startup-sole-migrator.html">030 · Each Service Self-Applies Its Migrations at Startup (Sole Migrator)</a></li>
+        <li><a href="031-feature-flag-management.html">031 · Config-Driven Feature Flags with Dual-Surface Enforcement</a></li>
+        <li><a href="032-password-hashing.html">032 · Password Hashing (PBKDF2-HMAC-SHA512) with Legacy-Hash Backward Compatibility</a></li>
+        <li><a href="033-resource-ownership-authorization.html">033 · Resource-Ownership Authorization (Row-Level + Action Filter)</a></li>
+        <li><a href="034-generic-entity-query-layer.html">034 · Generic Entity Controllers with a Dynamic Query Contract</a></li>
+        <li><a href="035-optimistic-concurrency.html">035 · Optimistic Concurrency via RowVersion Round-Trip</a></li>
+        <li><a href="036-external-oauth-login.html">036 · External OAuth Login (Federated Google/GitHub/Apple) with Local-JWT Exchange</a></li>
+        <li><a href="037-field-level-encryption-at-rest.html">037 · Field-Level Encryption at Rest (AES-256-GCM EF Converter)</a></li>
+        <li><a href="038-supply-chain-provenance.html">038 · Supply-Chain Provenance (SBOM Release Gate + Lock Files + Vulnerability Audit)</a></li>
+        <li><a href="039-live-channel-push.html">039 · Live channel push (ephemeral events over the notification hub)</a></li>
+        <li><a href="040-authenticated-output-caching-for-public-reads.html">040 · Authenticated output caching for public reads</a></li>
+        <li><a href="041-observability-and-telemetry.html">041 · Observability and Telemetry Strategy</a></li>
+        <li><a href="042-device-capability-abstraction.html">042 · Device Capability Abstraction (MAUI Blazor Hybrid)</a></li>
+        <li><a href="043-mobile-deep-links-and-native-oauth-callback.html">043 · Mobile Deep Links, App Association, and the Native OAuth Callback</a></li>
+        <li><a href="044-native-push-delivery.html">044 · Native Push Delivery (the Third Notification Channel)</a></li>
+        <li><a href="045-managed-file-storage-and-avatars.html">045 · Managed File Storage and User Avatars</a></li>
+        <li><a href="046-http-api-versioning.html">046 · HTTP API Versioning Strategy</a></li>
+        <li><a href="047-soft-deleted-user-session-revocation.html">047 · Runtime Revocation of Soft-Deleted Users&#39; Active Sessions</a></li>
+        <li><a href="048-primitive-identifier-type-aliases.html">048 · Primitive Identifier Type Aliases over Strongly-Typed ID Structs</a></li>
+        <li><a href="049-library-configureawait-policy.html">049 · Library-Scoped ConfigureAwait(false) Policy (CA2007)</a></li>
+        <li><a href="050-jwt-refresh-token-rotation.html">050 · JWT Access Tokens with a Single Rotating Refresh Token and Reuse Detection</a></li>
+        <li><a href="051-client-auth-token-lifecycle.html">051 · Client-Side Authentication Token Lifecycle Across Render Modes</a></li>
+        <li><a href="052-background-job-execution.html">052 · Background Job Execution (Bounded Queue plus Hosted Drain)</a></li>
+        <li><a href="053-dual-registry-package-publishing.html">053 · Dual-Registry Package Publishing (nuget.org plus GitHub Packages)</a></li>
+        <li><a href="054-saga-compensation-and-reconciliation.html">054 · Choreographed Saga Compensation with a Reconciliation Backstop</a></li>
+        <li><a href="055-repository-and-specification-contract.html">055 · Repository plus Specification as the Data-Access Contract</a></li>
+        <li><a href="056-blazor-render-mode-strategy.html">056 · Blazor Render-Mode Strategy for the Web Heads</a></li>
+        <li><a href="057-expand-contract-schema-evolution-gate.html">057 · Expand/Contract Schema Evolution Enforced as a CI Gate</a></li>
+        <li><a href="058-runtime-conformance-suites-as-a-package.html">058 · Runtime Conformance Suites Shipped as a Package</a></li>
+        <li><a href="059-module-contract-and-composition.html">059 · The IModule Contract and Reflection-Based Module Composition</a></li>
+        <li><a href="060-performance-regression-gate.html">060 · Performance-Regression Gate (Committed Benchmark Baseline in CI)</a></li>
+        <li><a href="061-runtime-secret-management.html">061 · Runtime Secret Management via Key Vault References and Managed Identity</a></li>
+        <li><a href="062-slo-alerting-as-code.html">062 · SLO Alerting as Code with an Alert-to-Runbook Build Gate</a></li>
+        <li><a href="063-accessibility-conformance-gate.html">063 · WCAG 2.1 AA Accessibility as a Shipped Test Contract and CI Gate</a></li>
+        <li><a href="064-deploy-recency-gates.html">064 · Deploy Preconditions as Proof-of-Recency Gates</a></li>
+        <li><a href="065-scaffolding-templates.html">065 · Scaffolding templates derived from the reference app</a></li>
+        <li><a href="066-broker-transport-selection.html">066 · Broker Transport Selection and Dev/Prod Parity</a></li>
+        <li><a href="067-ui-module-shell-composition.html">067 · Shared Blazor Application Shell and IUIModule Composition</a></li>
+        <li><a href="068-value-objects-as-validated-primitives.html">068 · Value Objects as Validated Domain Primitives</a></li>
+        <li><a href="069-shared-data-protection-key-ring.html">069 · Shared DataProtection Key Ring for Scaled-Out Hosts</a></li>
+        <li><a href="070-fail-fast-configuration-contract.html">070 · Fail-Fast Configuration Contract</a></li>
+        <li><a href="071-barcode-scanning-and-qr-display.html">071 · Device Capability Pattern for Barcode Scanning and QR Display</a></li>
+        <li><a href="072-qr-badge-check-in-and-points.html">072 · QR Badge Check-In and Points Gamification in ADC</a></li>
+        <li><a href="073-multi-tenancy-model.html">073 · Multi-Tenancy (Shared-Schema Query Filter plus DB-per-Tenant Routing)</a></li>
+        <li><a href="074-recurring-job-scheduler.html">074 · Recurring Job Scheduler (Persistent Cron Jobs on the Outbox Claim-Lease Pattern)</a></li>
+        <li><a href="075-audit-trail.html">075 · Audit Trail (Same-Transaction Field-Level Change History)</a></li>
+        <li><a href="076-data-subject-export.html">076 · Data-Subject Export (DSAR) as a Framework Contract</a></li>
+        <li><a href="077-hybridcache-substrate.html">077 · HybridCache as an Opt-In ICacheService Substrate (Amends ADR-026)</a></li>
+        <li><a href="078-csv-export-endpoint.html">078 · CSV Export as a Dedicated Endpoint, Not Content Negotiation</a></li>
+        <li><a href="079-shared-http-middleware-pipeline.html">079 · One Shared, Ordered HTTP Middleware Pipeline for Every Service Host</a></li>
+        <li><a href="080-deploy-rollout-revision-rollback.html">080 · Production Rollout with Automatic Revision-Only Rollback</a></li>
+        <li><a href="081-cost-baseline-deploy-gate.html">081 · The Cost Baseline as a Hard Deploy Gate</a></li>
+        <li><a href="082-two-tier-cors-posture.html">082 · Two-Tier Cross-Origin Posture: Allow-Listed Service Policies, an Any-Header Gateway Policy</a></li>
+        <li><a href="083-crud-lifecycle-event-taxonomy.html">083 · One CRUD Lifecycle Event per Entity with a State Discriminator</a></li>
+        <li><a href="084-stripe-webhook-ingress.html">084 · Stripe Webhook Ingress (Acceptance-Coded Responses and Startup Self-Registration)</a></li>
+        <li><a href="085-identifier-type-aliases-revisited.html">085 · Identifier Type Aliases Revisited (Wrapper Structs Deferred Again, With Triggers)</a></li>
+        <li><a href="086-process-manager-deferred.html">086 · A Process Manager Is Deferred, Not Absent (Relates to ADR-054)</a></li>
+        <li><a href="087-broker-poison-message-handling.html">087 · Broker Poison-Message Handling: Second-Level Redelivery and Fault Observability</a></li>
+        <li><a href="088-gateway-edge-responsibilities.html">088 · Gateway Edge Responsibilities (and the Three It Declines)</a></li>
+        <li><a href="089-gateway-topology-owned-by-configuration.html">089 · Gateway Topology Owned by Configuration</a></li>
+        <li><a href="090-event-upcaster-registration.html">090 · Event Upcaster Registration Extension Point</a></li>
+        <li><a href="091-cache-backed-password-reset.html">091 · Cache-Backed Password Reset</a></li>
+        <li><a href="092-web-vitals-budget-gate.html">092 · Core Web Vitals Budget as a Shipped Test Contract and Deploy Gate</a></li>
+        <li><a href="093-container-image-posture.html">093 · Container Image Build and Runtime Posture</a></li>
+        <li><a href="094-client-entity-data-access.html">094 · Client-Side Entity Data-Access Contract</a></li>
+        <li><a href="095-soft-delete-unique-indexes.html">095 · Uniqueness Under Soft Delete (Filtered Unique Indexes)</a></li>
+        <li><a href="096-best-effort-side-effects.html">096 · Best-Effort Side-Effect Contract</a></li>
+        <li><a href="097-multi-device-refresh-sessions.html">097 · Multi-Device Refresh Sessions (Hashed, Rotating, Per Device)</a></li>
+        <li><a href="098-aspire-orchestration-not-testing-or-dashboards.html">098 · Aspire for Orchestration, Not for Testing or Production Dashboards</a></li>
+        <li><a href="099-generic-write-side-entity-commands.html">099 · Generic Write-Side Entity Commands (Create, Update, Delete Without a Handler per Aggregate)</a></li>
+        <li><a href="100-outbox-opt-in-resolved-from-messaging-mode.html">100 · The Outbox Is Resolved from the Messaging Mode, Not Always On</a></li>
+        <li><a href="101-common-metapackage.html">101 · An MMCA.Common Metapackage for the Core Six</a></li>
+        <li><a href="102-pbkdf2-only-password-hashing.html">102 · PBKDF2-Only Password Hashing</a></li>
+        <li><a href="103-bunit-component-test-tier.html">103 · bUnit Component-Test Tier as a Shipped Package</a></li>
+        <li><a href="104-smart-enums-as-opt-in-capability.html">104 · Plain Enums by Default, Enumeration&lt;T&gt; as the Opt-In Smart-Enum Base</a></li>
+        <li><a href="105-data-residency-build-gate.html">105 · The Published Data-Residency Claim as a Build Gate</a></li>
+        <li><a href="106-extension-members-as-public-di-surface.html">106 · C# Extension Members as the Public DI Registration Surface</a></li>
+        <li><a href="107-transaction-execution-contract.html">107 · Transaction Execution and Commit-Ambiguity Contract</a></li>
+        <li><a href="108-distributed-lock-primitive.html">108 · Cross-Replica Mutual Exclusion via IDistributedLock</a></li>
+        <li><a href="109-feature-by-folder-convention.html">109 · Feature-by-Folder Layout as an Enforced Convention</a></li>
+        <li><a href="110-rubric-v2-category-realignment.html">110 · Rubric Version 2, Category Realignment at 34</a></li>
+        <li><a href="111-ai-session-scoring-governance.html">111 · AI Session Scoring Governance</a></li>
+        <li><a href="112-catalog-owned-effective-pricing.html">112 · Catalog Owns Effective Pricing; Sales Snapshots It at Checkout</a></li>
+        <li><a href="113-postgresql-as-a-first-class-engine.html">113 · PostgreSQL as a First-Class Engine</a></li>
+        <li><a href="114-internal-commands-durable-job-queue.html">114 · Internal Commands, a Job Queue Built on the Outbox&#39;s Machinery</a></li>
+        <li><a href="115-strongly-typed-identifiers-opt-in.html">115 · Strongly Typed Identifiers as an Opt-In Capability, Aliases Still the Default</a></li>
+        <li><a href="116-identity-completions-opt-in.html">116 · Identity Completions Ship as Opt-In Base Classes, Not as Framework Features</a></li>
+        <li><a href="117-apphost-integration-test-base.html">117 · AppHost Integration Testing as a Shipped Package</a></li>
+        <li><a href="118-message-transport-library-policy.html">118 · Message Transport Library Policy (MassTransit v8 Pin and Exit Strategy)</a></li>
+        <li><a href="119-restrict-delete-by-default.html">119 · Delete Behavior Is an Explicit Business Rule (Restrict by Default)</a></li>
+        <li><a href="120-governed-chat-client-boundary.html">120 · Governed Language-Model Boundary (MMCA.Common.AI)</a></li>
+        <li><a href="121-ephemeral-in-process-work-queue.html">121 · Ephemeral In-Process Work Queue (Bounded Channel plus Hosted Drain)</a></li>
+        <li><a href="122-dev-only-relaxations-fail-closed.html">122 · Dev-Only Relaxations Are Environment-Gated and Fail Closed</a></li>
+        <li><a href="123-speaker-session-assets.html">123 · Speaker-Published Session Materials</a></li>
+        <li><a href="124-blazor-circuit-ceiling-ui-edge.html">124 · The Server-Rendered UI Host Is Its Own Hardened Edge</a></li>
+        <li><a href="125-parameterized-sql-only.html">125 · Parameterized SQL Only, Enforced by a Fitness Gate</a></li>
+        <li><a href="126-event-sourcing-not-adopted.html">126 · Event Sourcing Is Not Adopted</a></li>
+        <li><a href="127-actor-model-not-adopted.html">127 · The Actor Model Is Not Adopted</a></li>
+        <li><a href="128-time-as-an-input.html">128 · Time as an Input (No Ambient Clock Reads in Domain and Application)</a></li>
+        <li><a href="129-tactical-aggregate-contract.html">129 · The Tactical Aggregate Contract</a></li>
+        <li><a href="130-per-engine-data-source-strategy.html">130 · Per-Engine Data Source Strategy (Engine Facts Instead of Branching on the Enum)</a></li>
+        <li><a href="131-same-origin-api-proxy.html">131 · Same-Origin API Proxy (a Backend-for-Frontend That Keeps Tokens Out of Browser Script)</a></li>
+        <li><a href="132-build-strictness-analyzer-policy.html">132 · Build Strictness: Analyzers at Error Severity, a Shared Baseline, and CI Test Floors</a></li>
+        <li><a href="133-versioned-password-hash-work-factor.html">133 · Versioned Password Hash Work Factor</a></li>
+        <li><a href="134-cloud-neutral-core-vendor-adapters.html">134 · Cloud-Neutral Core With Vendor Adapter Packages</a></li>
+        <li><a href="135-application-namespace-keyspace-isolation.html">135 · One Application Namespace Isolates Shared Infrastructure Keyspaces</a></li>
+        <li><a href="136-installable-web-app-service-worker.html">136 · Installable Web App Through a Framework Service Worker That Never Caches a Page</a></li>
+        <li><a href="137-read-only-view-as-support-access.html">137 · Read-Only View-As Support Access (Reasoned, 15 Minutes, Visible to the User)</a></li>
+        <li><a href="138-mcp-endpoint-over-module-queries.html">138 · MCP Endpoint Over Module Queries (Opt-In, Read-Only, Governed Per Tool)</a></li>
+        <li><a href="139-passkeys-webauthn-opt-in-sign-in.html">139 · Passkeys (WebAuthn) as an Opt-In Sign-In and Second Factor</a></li>
+        <li><a href="140-machine-clients-oauth-client-credentials.html">140 · Machine Clients Through OAuth Client Credentials Backed by Service Accounts</a></li>
+        <li><a href="141-two-framework-lines-from-one-tree.html">141 · Two .NET Framework Lines From One Source Tree (net10.0 and net11.0)</a></li>
+        <li><a href="142-outbound-webhooks-and-delivery-lane.html" aria-current="page">142 · Outbound Webhooks (Signed Delivery over Internal Commands, with a Dedicated Delivery Lane)</a></li>
+        <li><a href="143-process-manager-primitive.html">143 · Process-Manager Primitive (Consumer-Owned Process Aggregate, Timeouts over Internal Commands)</a></li>
+        <li><a href="144-offline-writes-and-delta-reads.html">144 · Offline Writes and Delta Reads (Client Write Queue, Server Change Feed with Tombstones)</a></li>
+        <li><a href="145-opt-in-cursor-paging.html">145 · Opt-In Cursor Paging on List Endpoints (Beside Offset Paging)</a></li>
+        <li><a href="146-ui-page-bases-and-list-shell.html">146 · UI Page Bases and the List Shell (Bases Own Plumbing, Pages Own Model and Service Call)</a></li>
+          </ol>
+        </nav>
+      </details>
+    </aside>
+        <article class="doc-content">
+          <p class="eyebrow doc-kicker">Architecture Decision Record</p>
+          <h1 id="adr-142-outbound-webhooks-signed-delivery-over-internal-commands-with-a-dedicated-delivery-lane">ADR-142: Outbound Webhooks (Signed Delivery over Internal Commands, with a Dedicated Delivery Lane)</h1>
+          <h2 id="status">Status</h2>
+          <p>Accepted (2026-11-12). Listed under <code>[Unreleased]</code> in <code>MMCA.Common/CHANGELOG.md:7</code> (entries at <code>:42</code>
+          and <code>:75</code>). Off unless the host calls <code>AddWebhooks(configuration)</code> and sets <code>Webhooks:Enabled</code>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Webhooks/WebhookSettings.cs:16-17</code>, default false).</p>
+          <h2 id="context">Context</h2>
+          <p>An integration event leaves its aggregate through the outbox (<a href="003-outbox-dual-dispatch.html">ADR-003</a>,
+          <a href="100-outbox-opt-in-resolved-from-messaging-mode.html">ADR-100</a>) and reaches two kinds of receiver: the
+          in-process integration event handlers of the host and, under broker messaging, the consumers of other
+          services, which dedupe through the inbox (<a href="021-consumer-inbox-idempotency.html">ADR-021</a>). Both are code the
+          operator deploys. A third party (a tenant&#39;s ticketing tool, a chat integration, a partner&#39;s server) had no
+          way to hear about an event without polling an API.</p>
+          <p>Five forces shaped the decision:</p>
+          <ul>
+          <li><strong>A receiver is untrusted and unreliable.</strong> Its URL is operator input, so a naive client can be pointed
+          at the host&#39;s own network (server-side request forgery). Its response time is unbounded, and it can be
+          down for days.</li>
+          <li><strong>Durable deferred work already exists.</strong> Internal commands (<a href="114-internal-commands-durable-job-queue.html">ADR-114</a>)
+          give a durable row per unit of work, retry with backoff, dead-letter and an operator console. A
+          delivery is exactly one such unit.</li>
+          <li><strong>The internal-command queue is shared.</strong> Business commands run on the same queue, so a slow or dead
+          receiver must not delay them.</li>
+          <li><strong>Tenancy is per request</strong> (<a href="073-multi-tenancy-model.html">ADR-073</a>), and a subscription must belong to the
+          tenant that created it, including in a host that never resolves a tenant.</li>
+          <li><strong>Secrets must survive replicas.</strong> A signing secret written by one replica must be readable by another,
+          which is the job of the shared data-protection key ring (<a href="069-shared-data-protection-key-ring.html">ADR-069</a>).</li>
+          </ul>
+          <h2 id="decision">Decision</h2>
+          <p><strong>MMCA.Common ships opt-in outbound webhooks: subscriptions stored per host, HMAC-signed delivery
+          scheduled as internal commands, an outbound address policy enforced at validation time and again at
+          connect time, and a dedicated delivery lane so deliveries never delay other internal commands.</strong></p>
+          <ol>
+          <li><p><strong>Opt-in registration in three calls.</strong> <code>AddWebhooks(configuration)</code> binds the <code>Webhooks</code> section with
+          data-annotation validation at startup and registers the store, the administration service, the target
+          validator, the sender, the secret protector, the DNS resolver and the event catalog
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Webhooks/WebhookServiceCollectionExtensions.cs:67-108</code>).
+          <code>AddWebhookEvent&lt;TEvent&gt;(eventType)</code> publishes one integration event contract under one webhook type
+          name and registers its fan-out handler
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/DependencyInjection.Webhooks.cs:17-83</code>); the name is
+          lower case, dot, dash or underscore separated, at most 100 characters
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Webhooks/WebhookEventCatalog.cs:12-13</code>, <code>:55-60</code>), and
+          the WHOLE event is the published payload, so only the terminal contract is registered
+          (<code>DependencyInjection.Webhooks.cs:21-25</code>). <code>pipeline.AddWebhookDelivery()</code> inside
+          <code>AddMmcaApplicationPipeline</code> registers the delivery handler so every decorator wraps it, plus a startup
+          check that fails, naming <code>AddWebhooks</code>, when no subscription store is registered
+          (<code>DependencyInjection.Webhooks.cs:88-102</code>;
+          <code>MMCA.Common/Source/Core/MMCA.Common.Application/Webhooks/WebhookRegistrationValidator.cs:17-22</code>). With
+          <code>Webhooks:Enabled</code> false the fan-out stays inert, every administration endpoint answers 404 and no
+          context maps the table (<code>WebhookServiceCollectionExtensions.cs:33-40</code>). Under broker messaging the
+          fan-out runs only in a host that consumes the event (<code>DependencyInjection.Webhooks.cs:38-39</code>).</p>
+          </li>
+          <li><p><strong>One subscription entity, scoped by its own store.</strong> <code>WebhookSubscription</code> holds the target URL (at
+          most 2048 characters, absolute http or https, no user info, no fragment), an optional description (200),
+          1 to 20 event types or <code>*</code>, a nullable <code>TenantId</code>, the protected current and previous secrets, and the
+          last-outcome columns
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Domain/Webhooks/WebhookSubscription.cs:40-62</code>, <code>:70-101</code>,
+          <code>:273-281</code>). The table is mapped only where the host opts in, in the data source
+          <code>Webhooks:DataSourceName</code> names (default <code>&quot;Default&quot;</code>, <code>WebhookSettings.cs:19-23</code>;
+          <code>WebhookSubscription.cs:11-13</code>). <code>TenantId</code> is a plain column stamped at create, deliberately not the
+          <code>ITenantEntity</code> marker (<code>WebhookSubscription.cs:21-24</code>): the marker&#39;s interceptor refuses an untenanted
+          insert from an untenanted scope, and webhooks must work in a host that never resolves a tenant. The
+          store filters every read on <code>TenantId == tenantId</code> explicitly, null matching only null
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Webhooks/EFWebhookSubscriptionStore.cs:45</code>,
+          <code>:55</code>, <code>:63</code>, <code>:67</code>), and the tenancy architecture rule lists the entity as its one exemption with that
+          reason (<code>MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Rules/Domain/ArchitectureRules.Tenancy.cs:15-20</code>).
+          Administration goes through <code>WebhookSubscriptionsControllerBase</code>: list, event types, create, update,
+          rotate secret, disable, enable and delete, each answering 404 while webhooks are off
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/Webhooks/WebhookSubscriptionsControllerBase.cs:43-58</code>,
+          <code>:67-73</code>, <code>:79</code>, <code>:106</code>, <code>:134</code>, <code>:155</code>, <code>:176</code>, <code>:197</code>), behind the permission <code>webhooks:manage</code>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Shared/Auth/Permissions/AdministrationPermissions.cs:54</code>).</p>
+          </li>
+          <li><p><strong>Standard Webhooks signatures with a rotation window.</strong> A secret is <code>whsec_</code> plus Base64 of 32 random
+          bytes; a signature is <code>v1,</code> plus Base64 HMAC-SHA256 over <code>{id}.{timestamp}.{body}</code>, sent in the
+          <code>webhook-id</code>, <code>webhook-timestamp</code> and <code>webhook-signature</code> headers
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Webhooks/Delivery/WebhookSignature.cs:8-33</code>, <code>:61-69</code>).
+          <code>WebhookSignature.Verify</code> gives receivers a tolerance-bounded, constant-time check (<code>:71-108</code>). The
+          plaintext secret is generated, stored only protected and returned once, at create or rotate
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Webhooks/Subscriptions/WebhookSubscriptionService.cs:81-87</code>,
+          <code>:143-146</code>). After a rotation the previous secret keeps signing beside the new one for
+          <code>PreviousSecretGraceHours</code> (default 24, range 0 to 168, <code>WebhookSettings.cs:58-60</code>;
+          <code>WebhookSubscription.cs:183-198</code>), so a delivery carries two space-separated signatures during the
+          window. Secrets are protected by the host&#39;s data-protection key ring under the fixed purpose
+          <code>MMCA.Common.Webhooks.Secret.v1</code>; an unreadable secret is a <code>Webhooks.SecretUnreadable</code> result, never an
+          exception
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Webhooks/DataProtectionWebhookSecretProtector.cs:9-19</code>,
+          <code>:31-50</code>). An unreadable current secret means nothing is sent; an unreadable previous one is dropped
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Webhooks/HttpWebhookSender.cs:54-59</code>, <code>:114-136</code>).</p>
+          </li>
+          <li><p><strong>At-least-once delivery over internal commands, with a deterministic delivery id.</strong> The fan-out handler
+          lists the enabled subscriptions of the event&#39;s tenant, keeps those that list the event type (or <code>*</code>), and
+          schedules one <code>DeliverWebhookInternalCommand</code> per match inside ONE transaction
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Webhooks/Delivery/WebhookFanOutHandler.cs:60-115</code>). A
+          failed schedule throws so the outbox or the broker redelivers the event (<code>:117-123</code>), and an event over
+          <code>MaxPayloadBytes</code> (default 65536, range 1024 to 1048576, <code>WebhookSettings.cs:51-56</code>) is skipped with one
+          warning (<code>WebhookFanOutHandler.cs:80-86</code>). The <code>webhook-id</code> is the first 16 bytes of SHA-256 over the
+          event id and the subscription id
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Webhooks/Delivery/WebhookDeliveryId.cs:11-27</code>), so a
+          redelivered event schedules the same id and a receiver dedupes on it. The row is the delivery history,
+          under the stable name <code>MMCA.Webhooks.Deliver.v1</code>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Webhooks/Delivery/DeliverWebhookInternalCommand.cs:5-23</code>),
+          and retries come from the <code>InternalCommands:*</code> settings (<code>WebhookSettings.cs:8-9</code>). The handler maps the
+          outcome (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Webhooks/Delivery/DeliverWebhookInternalCommandHandler.cs:73-124</code>):
+          2xx completes the row; 410 Gone records the failure, disables the subscription and completes the row; a
+          refused target records a fixed reason and completes the row, since retrying cannot change it; any other
+          status (redirects included), a transport failure (timeouts included) or an unreadable secret fails the
+          row so it retries with backoff and dead-letters after <code>MaxAttempts</code>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Webhooks/Delivery/WebhookSendStatus.cs:6-25</code>). A
+          missing, deleted or disabled subscription completes the row without sending
+          (<code>DeliverWebhookInternalCommandHandler.cs:52-57</code>). The handler is not <code>ITransactional</code>: the outcome is
+          recorded on its own save (<code>:12-16</code>).</p>
+          </li>
+          <li><p><strong>The outbound address policy, enforced twice.</strong> <code>OutboundAddressPolicy.IsPublicAddress</code> denies, for
+          IPv4, <code>0/8</code>, <code>10/8</code>, <code>100.64/10</code>, <code>127/8</code>, <code>169.254/16</code>, <code>172.16/12</code>, <code>192.0.0/24</code>, <code>192.168/16</code>,
+          <code>198.18/15</code>, <code>224/4</code>, <code>240/4</code> and the single cloud host address <code>168.63.129.16</code>. IPv6 is an allow-list,
+          not a deny-list: only global unicast <code>2000::/3</code> is public, and inside it Teredo <code>2001::/32</code>, 6to4
+          <code>2002::/16</code> and the documentation prefixes <code>2001:db8::/32</code> and <code>3fff::/20</code> are still denied. Everything
+          outside <code>2000::/3</code> is therefore refused without being listed (<code>::</code>, <code>::1</code>, IPv4-compatible <code>::/96</code>, both
+          NAT64 prefixes, <code>fc00::/7</code>, <code>fe80::/10</code>, <code>fec0::/10</code>, <code>ff00::/8</code>), as is a range added to the address
+          architecture later. An IPv4-mapped IPv6 address is judged as its IPv4 form, and any other address family
+          is not public (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Http/OutboundAddressPolicy.cs:13-90</code>).
+          <code>IsAcceptableTargetUri</code> requires https, a host that is not <code>localhost</code> or <code>*.localhost</code>, and a public
+          address for an IP literal (<code>:92-130</code>). At create and update the target validator applies that rule,
+          resolves the host and refuses when the answer is empty or ANY address is not public
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Webhooks/DnsWebhookTargetValidator.cs:11-55</code>;
+          <code>WebhookSubscriptionService.cs:250</code>). That answer is early feedback only. The authoritative check is the
+          delivery client&#39;s connect callback: it resolves the host itself, refuses BEFORE opening a socket when any
+          resolved address is not public, and dials only the addresses it checked, so the policy holds against DNS
+          rebinding and against any handler that rewrites the request URI
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Webhooks/WebhookConnectCallback.cs:7-71</code>). The
+          sender re-applies the scheme rule at send time, so a stored <code>http://</code> row never goes out in plaintext
+          on a production host (<code>HttpWebhookSender.cs:43-52</code>). <code>AllowInsecureTargetsInDevelopment</code> lifts these
+          rules only when the environment is Development and is otherwise ignored with one startup warning
+          (<code>WebhookSettings.cs:69-73</code>; <code>WebhookServiceCollectionExtensions.cs:104</code>).</p>
+          </li>
+          <li><p><strong>A client that runs its own handler and nothing else.</strong> The <code>MMCA.Webhooks</code> client&#39;s primary handler
+          follows no redirect, uses no proxy, keeps no cookies, propagates no activity headers and connects through
+          the callback above; every additional handler a host default adds is cleared and its default loggers are
+          removed (<code>WebhookServiceCollectionExtensions.cs:87-102</code>). The reasons are in the registration
+          (<code>:41-55</code>): a host-wide resilience pipeline would add a second retry policy beside the queue&#39;s, which
+          stays the only one (<a href="009-resilience-and-recovery-objectives.html">ADR-009</a> still governs the host&#39;s other
+          clients); the client loggers would write the target URL, which often carries the receiver&#39;s token in its
+          path; and <code>traceparent</code>, <code>tracestate</code> and <code>baggage</code> would leak internal trace context to a third party.
+          The request timeout is <code>TimeoutSeconds</code> (default 10, range 1 to 30, <code>WebhookSettings.cs:25-34</code>;
+          <code>WebhookServiceCollectionExtensions.cs:87-88</code>), and the response body is never read
+          (<code>HttpWebhookSender.cs:14-19</code>).</p>
+          </li>
+          <li><p><strong>A dedicated delivery lane.</strong> On a host where the lane is registered, delivery rows are drained by
+          their own <code>InternalCommandLaneProcessor</code> and never by the shared loop
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Webhooks/WebhookDeliveryLane.cs:14-19</code>). The lane
+          and its registry are registered only when <code>Webhooks:Enabled</code> and <code>InternalCommands:Enabled</code> are both
+          true (<code>WebhookDeliveryLane.cs:51-80</code>). A host that drains the queue with webhooks disabled registers no
+          lane, so its shared loop still picks up a delivery row
+          (<code>MMCA.Common/Tests/Core/MMCA.Common.Infrastructure.Tests/Persistence/InternalCommands/Processing/InternalCommandProcessorTests.cs:575</code>):
+          every replica that drains a queue holding delivery rows needs the same <code>Webhooks:Enabled</code> value.</p>
+          <ul>
+          <li><strong>One guarded predicate on the shared loop.</strong> The registry <code>InternalCommandLanes</code> exists only together
+          with the lane (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/InternalCommands/Processing/InternalCommandLanes.cs:3-13</code>).
+          The shared processor reads it once and, only when it is registered, adds <code>CommandType != excluded</code> to
+          its fetch and its count
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/InternalCommands/Processing/InternalCommandProcessor.cs:246-259</code>,
+          <code>:288-301</code>, <code>:320-324</code>). A host without the lane polls exactly the pending predicate it polled before.</li>
+          <li><strong>The same row code.</strong> The lane polls with the shared pending predicate, order, batch size and loop,
+          and claims, renews and runs rows through the shared processor&#39;s row methods, so a delivery executes,
+          retries and dead-letters through the same code as any other row
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/InternalCommands/Processing/InternalCommandLaneProcessor.cs:18-25</code>).</li>
+          <li><strong>Bounded concurrency, never two rows for one receiver.</strong> Up to <code>DeliveryConcurrency</code> rows of a claimed
+          batch run at once per replica (default 4, range 1 to 16, <code>WebhookSettings.cs:36-41</code>); a row whose
+          receiver already has a row running is passed over, earliest first
+          (<code>InternalCommandLaneProcessor.cs:340-375</code>). The receiver key is the subscription id
+          (<code>WebhookDeliveryLane.cs:40-47</code>).</li>
+          <li><strong>The receiver cooldown CHARGES an attempt without sending.</strong> A failed real attempt cools its receiver
+          down on this replica, from the instant the attempt failed; a success closes the cooldown
+          (<code>InternalCommandLaneProcessor.cs:491-513</code>, <code>:556-572</code>). While a receiver cools down, each of its rows
+          whose turn comes is not sent and its handler is not invoked: it is charged one failed attempt through
+          the unchanged failure path, with the error code <code>InternalCommands.ReceiverCoolingDown</code> and the message
+          &quot;Receiver cooling down after a failed delivery.&quot; (<code>:60-64</code>, <code>:367-370</code>, <code>:515-536</code>), so it keeps the
+          normal retry timeline and dead-letters on the normal attempt budget (<code>:35-42</code>). The configured
+          <code>ReceiverCooldownSeconds</code> (default 60, range 5 to 120, <code>WebhookSettings.cs:43-49</code>) is clamped to
+          <code>min(configured, S - TimeoutSeconds - 1 s)</code>, never below 1 second, where <code>S</code> is the shortest span from
+          a row&#39;s first attempt to its last (when <code>S</code> is zero, which is <code>InternalCommands:MaxAttempts</code> 1, the
+          cooldown is off); that is what guarantees a receiver answering from the moment a row
+          is scheduled at least one real attempt on that row before it can dead-letter, on any number of
+          replicas, unless the floor applied (<code>:89-116</code>). A clamp and a too-short retry span each log one startup
+          warning (<code>:159-174</code>). The cooldown state is in memory, per replica
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/InternalCommands/Processing/ReceiverCooldowns.cs:3-12</code>).</li>
+          <li><strong>The start budget.</strong> No row of a batch starts once <code>TimeoutSeconds</code> has elapsed since the batch&#39;s
+          first start; when every running row has finished, the rows that never started are released uncharged
+          and are due again at once (<code>InternalCommandLaneProcessor.cs:31-33</code>, <code>:373</code>, <code>:378-380</code>, <code>:538-554</code>;
+          <code>WebhookDeliveryLane.cs:48</code>).</li>
+          <li><strong>Visibility.</strong> The lane emits the <code>lane</code> tag <code>webhooks</code> (<code>WebhookDeliveryLane.cs:22-23</code>), its own
+          depth gauge (<code>InternalCommandLaneProcessor.cs:147</code>), a short-circuit counter for charged rows (<code>:535</code>),
+          a cooldown-opened counter (<code>:569</code>) and a released counter (<code>:458</code>).</li>
+          </ul>
+          </li>
+          <li><p><strong>The gates that keep it true.</strong> In <code>MMCA.Common/Tests/</code>: the shared loop carries no command-type
+          predicate without a lane and skips only lane rows with one
+          (<code>Core/MMCA.Common.Infrastructure.Tests/Persistence/InternalCommands/Processing/InternalCommandProcessorTests.cs:557</code>,
+          <code>:575</code>, <code>:593</code>, <code>:629</code>); the lane claims only its type, charges a cooling receiver&#39;s row without renew
+          or handler, retries it on the normal backoff, dead-letters it on its last attempt and never opens or
+          extends a cooldown from a charge
+          (<code>.../InternalCommandLaneProcessorTests.cs:65</code>, <code>:271</code>, <code>:295</code>, <code>:318</code>, <code>:341</code>); host default handlers
+          never wrap or replace the webhook client while still wrapping other clients, and the webhook client has
+          no logging handler (<code>Core/MMCA.Common.Infrastructure.Tests/Webhooks/WebhookClientCompositionTests.cs:23</code>,
+          <code>:39</code>, <code>:54</code>, <code>:73</code>, <code>:85</code>); the delivery handler stays decorated and a missing store fails startup
+          naming <code>AddWebhooks</code> (<code>Core/MMCA.Common.Application.Tests/Webhooks/AddWebhookDeliveryTests.cs:26</code>,
+          <code>:59</code>); the design-time model excludes the table by default
+          (<code>Core/MMCA.Common.Infrastructure.Tests/Webhooks/WebhookSubscriptionModelGateTests.cs:140</code>).</p>
+          </li>
+          </ol>
+          <h2 id="rationale">Rationale</h2>
+          <ul>
+          <li><strong>Internal commands give delivery for free what a webhook system needs.</strong> Durable rows, backoff,
+          dead-letter and requeue already exist and are operated through one console
+          (<a href="114-internal-commands-durable-job-queue.html">ADR-114</a>); a delivery is one row
+          (<code>DeliverWebhookInternalCommand.cs:5-8</code>), and the handler runs inside the full decorator pipeline
+          (<code>DependencyInjection.Webhooks.cs:88-91</code>).</li>
+          <li><strong>The deterministic delivery id turns at-least-once into dedupable.</strong> The outbox and the broker can both
+          redeliver an event; the same (event, subscription) pair always yields the same <code>webhook-id</code>
+          (<code>WebhookDeliveryId.cs:5-8</code>), which is the receiver-side equivalent of the inbox
+          (<a href="021-consumer-inbox-idempotency.html">ADR-021</a>).</li>
+          <li><strong>The policy is checked where the socket opens.</strong> A check at validation time alone is defeated by a DNS
+          answer that changes after the check; the connect callback judges the addresses it actually dials
+          (<code>WebhookConnectCallback.cs:7-14</code>).</li>
+          <li><strong>The lane isolates the shared queue with the smallest change to it.</strong> One SQL predicate, present only
+          when the lane is registered, moves the shared fetch window past every delivery row
+          (<code>InternalCommandProcessor.cs:246-259</code>). The rest of the change to the shared processor is access, not
+          behaviour: the row methods and the settings became internal so the lane can call them, and the row
+          runner takes an optional failed-attempt callback that the shared loop never passes (<code>:72</code>, <code>:413</code>,
+          <code>:476</code>).</li>
+          <li><strong>The charged cooldown bounds a dead receiver&#39;s cost.</strong> A failing receiver costs one real attempt per
+          cooldown window per replica; every other due row of that receiver costs one database write and one
+          attempt, so its backlog drains on the normal retry budget instead of accumulating
+          (<code>InternalCommandLaneProcessor.cs:35-42</code>). Only HTTP 410 disables a subscription
+          (<code>DeliverWebhookInternalCommandHandler.cs:105-110</code>), so nothing else would bound that backlog.</li>
+          <li><strong>The subscription keeps its own tenant filter</strong> because the marker&#39;s interceptor would refuse it in an
+          untenanted host (<code>ArchitectureRules.Tenancy.cs:16-19</code>).</li>
+          </ul>
+          <h2 id="trade-offs">Trade-offs</h2>
+          <ul>
+          <li><strong>Many distinct failing receivers still consume slots.</strong> Each gets a real attempt per cooldown window per
+          replica, and a receiver that hangs holds a slot for up to <code>TimeoutSeconds</code> (<code>WebhookSettings.cs:26-31</code>),
+          so <code>DeliveryConcurrency</code> or more such receivers can fill the lane. One tenant can hold up to
+          <code>MaxSubscriptionsPerTenant</code> subscriptions (default 25, range 1 to 500, a soft limit that concurrent
+          creates can exceed, <code>WebhookSettings.cs:62-67</code>), so one tenant CAN dominate other tenants&#39; delivery
+          latency. It cannot delay the shared queue.</li>
+          <li><strong>A slow but succeeding receiver never cools down.</strong> A success closes the cooldown
+          (<code>InternalCommandLaneProcessor.cs:509-512</code>), and one receiver never runs two rows at once, so its backlog
+          drains at one row per response time per replica.</li>
+          <li><strong>The cooldown is per replica.</strong> It lives in memory (<code>ReceiverCooldowns.cs:3-7</code>), so R replicas each
+          spend a real attempt per window on a failing receiver.</li>
+          <li><strong>Targets are drained through the shared <code>PollingLoop.DrainAllAsync</code></strong> (<code>InternalCommandLaneProcessor.cs:136-145</code>),
+          so under database per tenant one tenant database&#39;s batch precedes the next one&#39;s in each cycle.</li>
+          <li><strong>Recovery after an outage costs a window.</strong> Because a cooling receiver&#39;s rows are charged, a row is
+          delivered after an outage only if the outage ends at least one cooldown before that row&#39;s last attempt
+          (<code>InternalCommandLaneProcessor.cs:35-42</code>, <code>:89-98</code>). This is the stated price of the charged fail-fast.</li>
+          <li><strong>The shared predicate scans past pending delivery rows.</strong> <code>CommandType != X</code>
+          (<code>InternalCommandProcessor.cs:257-259</code>) has no index of its own; the charged cooldown keeps that backlog
+          bounded by event rate times the retry span. Adding <code>CommandType</code> to the pending index would be a
+          migration in every adopter, because the internal-command table is mapped unconditionally.</li>
+          <li><strong>The client trace still records the URL path.</strong> Loggers and trace headers are removed, but the HTTP
+          client span is not, so a host that exports traces to a shared backend filters the <code>MMCA.Webhooks</code> spans
+          itself (<code>WebhookServiceCollectionExtensions.cs:53-54</code>).</li>
+          <li><strong>The whole event is the payload.</strong> There is no projection step; a contract registered with
+          <code>AddWebhookEvent</code> is sent in full (<code>DependencyInjection.Webhooks.cs:21-25</code>).</li>
+          </ul>
+          <h2 id="alternatives-rejected">Alternatives rejected</h2>
+          <p>Each was weighed on 2026-11-12, against these tests: the shared queue is not delayed by deliveries, one
+          dead endpoint cannot starve other receivers, no schema change, unchanged behaviour without opt-in, and a
+          dead receiver&#39;s backlog stays bounded.</p>
+          <ul>
+          <li><strong>A separate delivery worker or table.</strong> A separate table is a migration for every adopter plus a
+          second processor, retention sweep and operator surface, and the existing console would not see a
+          dead-lettered delivery. Revisit if deliveries need retention or administration that the
+          internal-command console cannot give.</li>
+          <li><strong>A wall-time or row budget for delivery rows inside the shared loop.</strong> The shared batch is ordered by
+          <code>ScheduledOn</code>, so a delivery row ahead of a business command still runs first and delays it up to
+          <code>TimeoutSeconds</code> per cycle; and the rows the budget skipped stay due at the head of the oldest-first
+          window, so a backlog of <code>BatchSize</code> delivery rows keeps every other command from being fetched. Revisit
+          if the shared loop ever fetches per command type (an indexed partition key), which removes the window
+          problem.</li>
+          <li><strong>Parallel execution of delivery rows in the shared loop.</strong> A shared batch ends only when its slowest row
+          ends, so a dead endpoint holds the next fetch for <code>TimeoutSeconds</code>, and delivery rows still compete for
+          the shared window. Running ALL commands in parallel would run every adopter&#39;s handlers concurrently on
+          one replica for the first time. Bounded concurrency is kept, inside the lane only. Revisit if the shared
+          loop adopts concurrent execution for its own reasons.</li>
+          <li><strong>Free deferral during a cooldown.</strong> Deferring a cooling receiver&#39;s rows without charging an attempt
+          leaves a permanently dead receiver one real attempt per cooldown per replica, so at a 60-second cooldown
+          and the default five attempts
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/InternalCommands/Administration/InternalCommandsSettings.cs:39</code>)
+          its rows dead-letter at about 0.2 per minute; a subscription receiving more events
+          than that accumulates pending rows forever, each one more row the shared predicate scans past. Revisit
+          if a subscription is ever disabled on sustained failure (today only 410 does it,
+          <code>DeliverWebhookInternalCommandHandler.cs:105-110</code>), which would bound the backlog another way.</li>
+          <li><strong>A public &quot;any command names a lane&quot; API.</strong> It needs a public attribute or key with validation, a
+          registry several callers write, a receiver-key notion only webhooks have, and per-lane metric
+          documentation. The lane is an internal record
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/InternalCommands/Processing/InternalCommandLane.cs:23-29</code>),
+          so a second lane is additive. Revisit when a second command type needs isolation from the shared queue
+          (the long scoring pass of <a href="052-background-job-execution.html">ADR-052</a> is the obvious candidate).</li>
+          </ul>
+          <h2 id="consequences">Consequences</h2>
+          <ul>
+          <li><strong>What an adopter adds.</strong> MMCA.Helpdesk is the worked example: <code>services.AddWebhooks(builder.Configuration)</code>
+          (<code>MMCA.Helpdesk/Source/Hosts/MMCA.Helpdesk.Web/Program.cs:107</code>), <code>.AddWebhookDelivery()</code> inside the
+          pipeline (<code>:160</code>), one <code>AddWebhookEvent&lt;TicketOpenedIntegrationEvent&gt;(&quot;ticket.opened&quot;)</code> in the Tickets
+          module (<code>MMCA.Helpdesk/Source/Modules/Tickets/MMCA.Helpdesk.Tickets.Application/DependencyInjection.cs:60</code>),
+          <code>&quot;Webhooks&quot;: { &quot;Enabled&quot;: true }</code> (<code>MMCA.Helpdesk/Source/Hosts/MMCA.Helpdesk.Web/appsettings.json:29-31</code>)
+          with <code>AllowInsecureTargetsInDevelopment</code> set only in the Development file
+          (<code>MMCA.Helpdesk/Source/Hosts/MMCA.Helpdesk.Web/appsettings.Development.json:10-12</code>), and a sealed
+          <code>WebhookSubscriptionsController</code> deriving from the base that redeclares <code>webhooks:manage</code>
+          (<code>MMCA.Helpdesk/Source/Modules/Tickets/MMCA.Helpdesk.Tickets.API/Controllers/WebhookSubscriptionsController.cs:25-26</code>),
+          pinned by <code>MMCA.Helpdesk/Tests/Architecture/MMCA.Helpdesk.Architecture.Tests/Tickets/WebhookSubscriptionsControllerTests.cs:37</code>.</li>
+          <li><strong>The migration.</strong> The table is created on the <code>Webhooks:DataSourceName</code> database by setting
+          <code>DesignTimeDbContextOptions.EnableWebhooks</code>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/Design/DesignTimeDbContextOptions.cs:157</code>);
+          Helpdesk sets it in its design-time factory
+          (<code>MMCA.Helpdesk/Source/Hosting/MMCA.Helpdesk.Migrations.SqlServer.Tickets/DesignTimeSQLServerDbContextFactory.cs:46</code>)
+          and ships <code>AddWebhookSubscriptions</code>
+          (<code>MMCA.Helpdesk/Source/Hosting/MMCA.Helpdesk.Migrations.SqlServer.Tickets/Migrations/20261112163619_AddWebhookSubscriptions.cs:9</code>).
+          The lane needs no migration: it reuses the internal-command table.</li>
+          <li><strong>Multi-replica hosts need the shared key ring</strong> (<a href="069-shared-data-protection-key-ring.html">ADR-069</a>), or
+          a replica cannot read a secret another wrote; that surfaces as <code>Webhooks.SecretUnreadable</code> and a retried
+          row, never as an exception (<code>DataProtectionWebhookSecretProtector.cs:9-14</code>).</li>
+          <li><strong>The lane needs the queue.</strong> With <code>InternalCommands:Enabled</code> false no lane is registered
+          (<code>WebhookDeliveryLane.cs:64-67</code>) and no delivery is drained in that host.</li>
+          <li><strong>What to watch.</strong> The lane&#39;s short-circuit, cooldown and released counters and its depth gauge
+          (Decision 7) show a failing receiver before its rows dead-letter.</li>
+          <li><strong>What is not verified.</strong> Nothing here has been exercised against real third-party receivers or a
+          Standard Webhooks library on the receiving side; the evidence is the unit and integration tiers named in
+          Decision 8.</li>
+          </ul>
+          
+        <div class="doc-foot btn-row">
+          <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
+          <a class="btn btn--ghost" href="https://github.com/ivanball/ivanball.github.io/blob/main/docs-src/adr/142-outbound-webhooks-and-delivery-lane.md" target="_blank" rel="noopener">View source on GitHub ↗</a>
+        </div>
+        </article>
+        <aside class="doc-aside" id="doc-rail">
+          <nav class="doc-toc" aria-label="On this page">
+            <p class="doc-toc-title">On this page</p>
+            <ul>
+            <li><a href="#status">Status</a></li>
+            <li><a href="#context">Context</a></li>
+            <li><a href="#decision">Decision</a></li>
+            <li><a href="#rationale">Rationale</a></li>
+            <li><a href="#trade-offs">Trade-offs</a></li>
+            <li><a href="#alternatives-rejected">Alternatives rejected</a></li>
+            <li><a href="#consequences">Consequences</a></li>
+            </ul>
+          </nav>
+        </aside>
+      </div>
+    </div>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container">
+      <div class="footer-grid">
+        <p class="footer-meta mb-0"><strong>Ivan Ball-llovera</strong> · Principal Software Architect · Douglasville, GA</p>
+        <ul class="footer-links">
+          <li><a href="../../resume.html">Résumé</a></li>
+          <li><a href="../../platform.html">Platform</a></li>
+          <li><a href="../../docs/index.html">Reference</a></li>
+          <li><a href="../../writing.html">Writing</a></li>
+          <li><a href="../../speaking.html">Speaking</a></li>
+          <li><a href="../../contact.html">Contact</a></li>
+          <li><a href="https://github.com/ivanball" target="_blank" rel="me noopener">GitHub</a></li>
+          <li><a href="https://www.linkedin.com/in/ivan-ball-llovera-6549a911" target="_blank" rel="me noopener">LinkedIn</a></li>
+        </ul>
+      </div>
+      <p class="footer-meta" style="margin-top:1rem">© <span class="js-year">2026</span> Ivan Ball-llovera. Reference docs generated from source.</p>
+    </div>
+  </footer>
+
+</body>
+</html>

@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 141 ADRs</summary>
+        <summary>All 146 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -241,6 +241,11 @@
         <li><a href="139-passkeys-webauthn-opt-in-sign-in.html">139 · Passkeys (WebAuthn) as an Opt-In Sign-In and Second Factor</a></li>
         <li><a href="140-machine-clients-oauth-client-credentials.html">140 · Machine Clients Through OAuth Client Credentials Backed by Service Accounts</a></li>
         <li><a href="141-two-framework-lines-from-one-tree.html">141 · Two .NET Framework Lines From One Source Tree (net10.0 and net11.0)</a></li>
+        <li><a href="142-outbound-webhooks-and-delivery-lane.html">142 · Outbound Webhooks (Signed Delivery over Internal Commands, with a Dedicated Delivery Lane)</a></li>
+        <li><a href="143-process-manager-primitive.html">143 · Process-Manager Primitive (Consumer-Owned Process Aggregate, Timeouts over Internal Commands)</a></li>
+        <li><a href="144-offline-writes-and-delta-reads.html">144 · Offline Writes and Delta Reads (Client Write Queue, Server Change Feed with Tombstones)</a></li>
+        <li><a href="145-opt-in-cursor-paging.html">145 · Opt-In Cursor Paging on List Endpoints (Beside Offset Paging)</a></li>
+        <li><a href="146-ui-page-bases-and-list-shell.html">146 · UI Page Bases and the List Shell (Bases Own Plumbing, Pages Own Model and Service Call)</a></li>
           </ol>
         </nav>
       </details>
@@ -258,7 +263,7 @@
           one app&#39;s; the ADC bicep and workflow anchors are re-pinned to their current lines. Revised
           2026-10-01: the per-PR framework AppHost test job and the extra telemetry cuts are recorded. Revised
           2026-10-06: the ADC AppHost&#39;s broker is described as selectable (RabbitMQ or the Service Bus
-          emulator) rather than RabbitMQ only. Revised 2026-10-07: the consumer AppHost smoke projects and their nightly job are removed, so the bounded exception is MMCA.Common&#39;s blocking framework tier alone (see Revision below). Revised 2026-10-07: anchors refreshed after the v1.233.0 release. Revised 2026-10-21: anchors refreshed after the Common <code>ci.yml</code> and the ADC and Store infrastructure templates moved. Revised 2026-10-26: the App Insights export path is named as MMCA.Common.Azure&#39;s <code>AddAzureMonitorExporter</code> rather than a bare <code>UseAzureMonitor</code> call, and live anchors are refreshed after the Common <code>ci.yml</code>, <code>Directory.Packages.props</code>, <code>Extensions.cs</code> and messaging registration and settings, the ADC AppHost, <code>e2e.yml</code>, <code>deploy.yml</code> and infrastructure template moved. Revised 2026-10-28: anchors refreshed after the Common <code>ci.yml</code>, the ADC and Store <code>AGENTS.md</code>, the integration-test rework plan and the ADC infrastructure template moved. Records two
+          emulator) rather than RabbitMQ only. Revised 2026-10-07: the consumer AppHost smoke projects and their nightly job are removed, so the bounded exception is MMCA.Common&#39;s blocking framework tier alone (see Revision below). Revised 2026-10-07: anchors refreshed after the v1.233.0 release. Revised 2026-10-21: anchors refreshed after the Common <code>ci.yml</code> and the ADC and Store infrastructure templates moved. Revised 2026-10-26: the App Insights export path is named as MMCA.Common.Azure&#39;s <code>AddAzureMonitorExporter</code> rather than a bare <code>UseAzureMonitor</code> call, and live anchors are refreshed after the Common <code>ci.yml</code>, <code>Directory.Packages.props</code>, <code>Extensions.cs</code> and messaging registration and settings, the ADC AppHost, <code>e2e.yml</code>, <code>deploy.yml</code> and infrastructure template moved. Revised 2026-10-28: anchors refreshed after the Common <code>ci.yml</code>, the ADC and Store <code>AGENTS.md</code>, the integration-test rework plan and the ADC infrastructure template moved. Amended 2026-11-12: Context inventories the shared AppHost helpers (<code>WithMmcaServiceInfrastructure</code>, <code>WithUiLinks</code>, <code>WithIssuer</code> and the two E2E render-mode switches) and their adopters. Records two
           standing divergences from the default .NET Aspire path as
           decisions rather than as gaps. Both parts describe what the four repos already do, with the single
           bounded exception recorded in Decision 1, and the value of writing them down is that a reader (or a
@@ -274,6 +279,30 @@
           <code>:98</code>); <code>MMCA.Store/Source/Hosting/MMCA.Store.AppHost/Program.cs:1-14</code>
           is the same shape over its three services. Service discovery and health-based startup ordering come from Aspire&#39;s resource
           model rather than from hand-written wiring.</p>
+          <p>The repeated per-resource wiring is a set of <code>MMCA.Common.Aspire.Hosting</code> helpers:</p>
+          <ul>
+          <li><code>WithMmcaServiceInfrastructure</code>
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Aspire.Hosting/ServiceInfrastructureExtensions.cs:51</code>)
+          gives a service its own database through <code>WithSQLServerDataSource</code> (reference, wait and
+          <code>DataSources__{logicalName}__SQLServerConnectionString</code>,
+          <code>MMCA.Common/Source/Hosting/MMCA.Common.Aspire.Hosting/Extensions.cs:547-550</code>), a reference to the
+          cache, the selected broker, waits on the cache and the mail server, the liveness probe its explicit
+          <code>ServiceEndpointProfile</code> selects (ADR-012) and external HTTP endpoints
+          (<code>ServiceInfrastructureExtensions.cs:67-80</code>); it references no project resource, so cross-service
+          edges stay in each AppHost (<code>:33-36</code>). Adopters: every service resource in both AppHosts
+          (<code>MMCA.ADC/Source/Hosting/MMCA.ADC.AppHost/Program.cs:134</code>, <code>:154</code>, <code>:191</code>, <code>:214</code>;
+          <code>MMCA.Store/Source/Hosting/MMCA.Store.AppHost/Program.cs:166</code>, <code>:189</code>, <code>:246</code>).</li>
+          <li><code>WithUiLinks</code>
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Aspire.Hosting/IdentityLinkExtensions.cs:73</code>) sets the
+          Identity resource&#39;s OAuth UI base URL and its password-reset, email-confirmation and sign-in links
+          from the UI&#39;s <code>https</code> endpoint, adding no reference and no wait (<code>:80-90</code>); ADC adopts it
+          (<code>MMCA.ADC/Source/Hosting/MMCA.ADC.AppHost/Program.cs:483</code>).</li>
+          <li><code>WithIssuer</code> (<code>IdentityLinkExtensions.cs:99</code>) sets the Identity resource&#39;s <code>Jwt__Issuer</code> to the
+          gateway&#39;s <code>https</code> endpoint (<code>:104</code>); ADC adopts it
+          (<code>MMCA.ADC/Source/Hosting/MMCA.ADC.AppHost/Program.cs:368</code>).</li>
+          <li><code>WithE2eForceServer</code> and <code>WithE2eForceWebAssembly</code> (<code>Extensions.cs:443</code>, <code>:467</code>) forward the E2E
+          render-mode switches to the UI resource; <a href="056-blazor-render-mode-strategy.html">ADR-056</a> describes them.</li>
+          </ul>
           <p><strong>Service defaults.</strong> Every host calls <code>AddServiceDefaults</code>
           (<code>MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Extensions.cs:33</code>), which wires OpenTelemetry, the
           default health checks, warm-up readiness (ADR-025), service discovery and the Polly HTTP defaults

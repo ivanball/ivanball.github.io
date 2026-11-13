@@ -415,6 +415,7 @@
         Users[&quot;/users&lt;br/&gt;User Management&quot;]
         UserDetail[&quot;/users/:Id&lt;br/&gt;User Detail&quot;]
         SupportAccess[&quot;/users/support-access&lt;br/&gt;Support Access Log&quot;]
+        MachineClients[&quot;/users/machine-clients&lt;br/&gt;Machine Clients&quot;]
         Roles[&quot;/roles&lt;br/&gt;Role Administration&quot;]
         RoleEdit[&quot;/roles/:Role&lt;br/&gt;Role Permission Editor&quot;]
     end
@@ -518,6 +519,7 @@
     Home --&gt;|Administration, Attendees and Access| Users
     Users --&gt;|row click| UserDetail
     Home --&gt;|Administration, Attendees and Access| SupportAccess
+    Home --&gt;|Administration, Attendees and Access| MachineClients
     Home --&gt;|Administration, Attendees and Access| Roles
     Roles --&gt;|edit role| RoleEdit
     RoleEdit --&gt;|back| Roles
@@ -1110,6 +1112,11 @@
           <td>Organizer</td>
           </tr>
           <tr>
+          <td><code>/users/machine-clients</code></td>
+          <td>MachineClients</td>
+          <td>Organizer</td>
+          </tr>
+          <tr>
           <td><code>/users/support-access</code></td>
           <td>SupportAccess</td>
           <td>Organizer</td>
@@ -1159,6 +1166,7 @@
           <li><strong>Notification pages:</strong> ADC enables the framework notification UI (<code>AddNotificationUI()</code>, <code>MMCA.ADC.UI.Web/Program.cs:183-184</code>), so it serves <code>/notifications/inbox</code> and <code>/notifications/inbox/{Id:int}</code> (any signed-in caller, <code>NotificationInbox.razor:1-2</code>, <code>:7</code>) with a &quot;Notification Inbox&quot; item in the <em>User</em> section, and <code>/notifications</code> plus <code>/notifications/send</code> (the <code>notifications:manage</code> permission, <code>NotificationList.razor:9</code>, <code>NotificationSend.razor:10</code>) with a &quot;Push Notifications&quot; item in the <em>Admin</em> section&#39;s &quot;Notifications&quot; group (<code>NotificationUIModule.cs:19-20</code>). Happening Now links to the inbox from its &quot;View announcements&quot; button.</li>
           <li><strong><code>/forbidden</code> and <code>/not-found</code>:</strong> anonymous framework pages (<code>Forbidden.razor:1</code>, <code>NotFound.razor:1</code>); the shared router renders them for an authenticated caller without the page&#39;s role and for an unknown or malformed route.</li>
           <li><strong><code>/users/{Id:int}</code> (user detail):</strong> an ADC page rather than a framework one (<code>UserDetail.razor:1</code>, <code>[Authorize(Roles = &quot;Organizer&quot;)]</code> at <code>:2</code>), listed here because the roster it is reached from comes from the framework&#39;s shared <code>UserAdminList</code> (<code>UserList.razor:8</code>). The detail route is typed <code>{Id:int}</code> and is reached by a row click on <code>/users</code>.</li>
+          <li><strong><code>/users/machine-clients</code> (machine clients):</strong> an ADC page (<code>MachineClients.razor:1</code>, <code>[Authorize(Roles = RoleNames.Organizer)]</code> at <code>:2</code>) that renders the framework&#39;s <code>MachineClientAdmin</code> component (<code>:11</code>; <a href="../adr/140-machine-clients-oauth-client-credentials.html">ADR-140</a>): the list of client credentials that programs sign in with at <code>auth/token</code>, the create form, rotate, promote and revoke, with a new secret shown once. It reads the Identity service&#39;s <code>Admin/MachineClients</code> endpoints, which require <code>clients:manage</code>. Its &quot;Machine clients&quot; item sits in Administration &gt; Attendees and Access after Roles and requires both the <code>Organizer</code> role and <code>clients:manage</code> (<code>IdentityUIModule.cs:43</code>, <code>Order = 5</code>), so the entry never opens a list whose read is refused. The feature is switched off in the Identity service&#39;s base settings (<code>MachineClients:Enabled</code> false in <code>appsettings.json</code>, on only in <code>appsettings.Development.json</code> and the AppHost), so outside local development those endpoints answer 404 and the page shows the framework&#39;s &quot;not enabled&quot; notice in place of the create form and the list (<code>MachineClientAdmin.razor:7-13</code>). The page guard is the Organizer role, like the user list beside it, so its Route Contract row reads <code>Organizer</code>.</li>
           <li><strong><code>/users/support-access</code> (support access log):</strong> an ADC page (<code>SupportAccess.razor:1</code>, <code>[Authorize(Roles = RoleNames.Organizer)]</code> at <code>:2</code>) that renders the framework&#39;s <code>SupportAccessLog</code> component (<code>:10</code>; MMCA.Common v1.280.0, <a href="../adr/137-read-only-view-as-support-access.html">ADR-137</a>), listing every read-only view-as grant (who viewed whom, why, when, and how it ended) through the Identity service&#39;s <code>Admin/ViewAsGrants</code> endpoint, which requires <code>users:manage</code>. Its &quot;Support access&quot; item sits in Administration &gt; Attendees and Access right after Users and requires both the <code>Organizer</code> role and <code>users:manage</code> (<code>IdentityUIModule.cs:38</code>, <code>Order = 3</code>), so the entry never opens a log whose read is refused. The page guard is the Organizer role, like the user list beside it, so its Route Contract row reads <code>Organizer</code>.</li>
           </ul>
           <h3 id="crud-pattern-organizer">CRUD Pattern (Organizer)</h3>

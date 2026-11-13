@@ -14,6 +14,7 @@ Revised 2026-10-24: the call is `AddAzureDataProtection()` in MMCA.Common.Azure,
 Revised 2026-10-25: three key-ring adapters (Azure Blob + Key Vault, AWS Parameter Store, Google Cloud Storage with optional Cloud KMS), and the startup tripwire fails when more than one key-ring gate is set; the Decision is restated across the three, the package bullet corrected, and Google's prerelease packages recorded as a rejected alternative. See Revision (2026-10-25) at the end.
 Revised 2026-10-26: the consumer call sites name `AddAzureKeyVaultConfiguration()` and `AddAzureDataProtection()`, `AddAzureMonitorExporter()` now sits between `AddServiceDefaults()` and the registration (so Store's "only an ADR-069 comment block between them" is retired), and anchors refreshed across both hosts, templates and deploy workflows.
 Revised 2026-10-28: anchors refreshed after the ADC and Store host `Program.cs` files and both infrastructure templates moved.
+Amended 2026-11-12: `AddAzureDataProtection()` and its two DataProtection packages now live in `MMCA.Common.Azure.Startup`, which `MMCA.Common.Azure` references and type-forwards, so the call and its keys are unchanged; the Decision's Azure path, package bullet and citations are corrected in place ([ADR-134](134-cloud-neutral-core-vendor-adapters.md)).
 
 ## Context
 ASP.NET Core's DataProtection default keeps the key ring **in memory, per process**. That is correct
@@ -42,8 +43,9 @@ decides that, and it records which repos have adopted it.
 ## Decision
 Persist the key ring through one opt-in registration call per cloud, so every replica of a host shares
 one ring, and let a host keep exactly one ring. Three adapters exist: `AddAzureDataProtection`
-(MMCA.Common.Azure) persists it to a single Azure blob with optional Key Vault protection
-(`MMCA.Common/Source/Hosting/MMCA.Common.Azure/AzureDataProtectionExtensions.cs:53`),
+(MMCA.Common.Azure.Startup, also reached through MMCA.Common.Azure) persists it to a single Azure blob
+with optional Key Vault protection
+(`MMCA.Common/Source/Hosting/MMCA.Common.Azure.Startup/AzureDataProtectionExtensions.cs:53`),
 `AddAwsDataProtection` (MMCA.Common.Aws) to Systems Manager Parameter Store
 (`MMCA.Common/Source/Hosting/MMCA.Common.Aws/AwsDataProtectionExtensions.cs:57`), and
 `AddGoogleCloudDataProtection` (MMCA.Common.Gcp) to one Cloud Storage object with optional Cloud KMS
@@ -144,9 +146,19 @@ The bullets up to the AWS one describe the Azure adapter, the one both deployed 
   repository, so services that disagree on the order would mint payloads the others cannot decrypt
   (`:104`-`:106`).
 - **Each cloud's dependencies live in its own adapter package.**
-  `Azure.Extensions.AspNetCore.DataProtection.Blobs` and `.Keys` are referenced by `MMCA.Common.Azure`
-  (`MMCA.Common/Source/Hosting/MMCA.Common.Azure/MMCA.Common.Azure.csproj:16`-`:17`, pinned at
-  `MMCA.Common/Directory.Packages.props:209`-`:210`), `Amazon.AspNetCore.DataProtection.SSM` by
+  `Azure.Extensions.AspNetCore.DataProtection.Blobs` and `.Keys` are referenced by
+  `MMCA.Common.Azure.Startup`
+  (`MMCA.Common/Source/Hosting/MMCA.Common.Azure.Startup/MMCA.Common.Azure.Startup.csproj:21`, `:25`,
+  pinned at `MMCA.Common/Directory.Packages.props:271`-`:272`), the package that also carries
+  `AddAzureDataProtection()` itself
+  (`MMCA.Common/Source/Hosting/MMCA.Common.Azure.Startup/AzureDataProtectionExtensions.cs:20`, `:53`)
+  with no persistence or messaging dependency (its only project reference is MMCA.Common.Aspire,
+  `MMCA.Common.Azure.Startup.csproj:4`, `:36`). `MMCA.Common.Azure` references it
+  (`MMCA.Common/Source/Hosting/MMCA.Common.Azure/MMCA.Common.Azure.csproj:44`) and type-forwards the
+  call (`MMCA.Common/Source/Hosting/MMCA.Common.Azure/TypeForwards.cs:8`), in the same `MMCA.Common.Azure`
+  namespace (`AzureDataProtectionExtensions.cs:7`), so a host on the full adapter writes the same call.
+  A host that needs only start-up plumbing (for example a gateway) references `MMCA.Common.Azure.Startup`
+  alone. `Amazon.AspNetCore.DataProtection.SSM` by
   `MMCA.Common.Aws` (above), and `Google.Cloud.Kms.V1` by `MMCA.Common.Gcp`
   (`MMCA.Common/Source/Hosting/MMCA.Common.Gcp/MMCA.Common.Gcp.csproj:23`, pinned at
   `Directory.Packages.props:192`), so a host references only the cloud it runs on.

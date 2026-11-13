@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 141 ADRs</summary>
+        <summary>All 146 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -241,6 +241,11 @@
         <li><a href="139-passkeys-webauthn-opt-in-sign-in.html">139 · Passkeys (WebAuthn) as an Opt-In Sign-In and Second Factor</a></li>
         <li><a href="140-machine-clients-oauth-client-credentials.html">140 · Machine Clients Through OAuth Client Credentials Backed by Service Accounts</a></li>
         <li><a href="141-two-framework-lines-from-one-tree.html">141 · Two .NET Framework Lines From One Source Tree (net10.0 and net11.0)</a></li>
+        <li><a href="142-outbound-webhooks-and-delivery-lane.html">142 · Outbound Webhooks (Signed Delivery over Internal Commands, with a Dedicated Delivery Lane)</a></li>
+        <li><a href="143-process-manager-primitive.html">143 · Process-Manager Primitive (Consumer-Owned Process Aggregate, Timeouts over Internal Commands)</a></li>
+        <li><a href="144-offline-writes-and-delta-reads.html">144 · Offline Writes and Delta Reads (Client Write Queue, Server Change Feed with Tombstones)</a></li>
+        <li><a href="145-opt-in-cursor-paging.html">145 · Opt-In Cursor Paging on List Endpoints (Beside Offset Paging)</a></li>
+        <li><a href="146-ui-page-bases-and-list-shell.html">146 · UI Page Bases and the List Shell (Bases Own Plumbing, Pages Own Model and Service Call)</a></li>
           </ol>
         </nav>
       </details>
@@ -257,7 +262,8 @@
           Revised 2026-10-06: the RowVersion mapping and the PostgreSQL/SQLite re-stamp are selected by the engine&#39;s declared <code>RowVersionStrategy</code> capability rather than by provider, and stale citations were refreshed.
           Revised 2026-10-07: MMCA.Helpdesk also subclasses <code>ConcurrencyConventionTestsBase</code> (three consumers), MMCA.Common&#39;s own subclass is recorded as vacuous (its map declares no module layer), and stale anchors were refreshed against current source.
           Revised 2026-10-21: the set-based <code>ExecuteUpdateAsync</code> path is recorded as re-stamping the client-stamped <code>RowVersion</code> itself (it bypasses the audit interceptor), and stale anchors were refreshed.
-          Revised 2026-10-26: concurrency conflicts are counted by <code>ConcurrencyConflictMetrics</code> in both the <code>[SupportsIfMatch]</code> filter and the global handler, the constructor-dependency trade-off records that this metric took the static-dependency route while the problem helper resolves its services from the request, and stale repository, filter and <code>DbUpdateExceptionHandler</code> anchors were refreshed.</p>
+          Revised 2026-10-26: concurrency conflicts are counted by <code>ConcurrencyConflictMetrics</code> in both the <code>[SupportsIfMatch]</code> filter and the global handler, the constructor-dependency trade-off records that this metric took the static-dependency route while the problem helper resolves its services from the request, and stale repository, filter and <code>DbUpdateExceptionHandler</code> anchors were refreshed.
+          Revised 2026-11-12: <code>SetConcurrencyETag</code> is recorded on <code>ApiControllerBase</code>, <code>[SupportsIfMatch]</code> declares its own 412 and 428 response metadata for OpenAPI, the conditional-write helpers on <code>ApiControllerBase</code> are recorded as the standard action body that answers a successful update with a weak <code>ETag</code>, and the filter anchors were refreshed.</p>
           <h2 id="context">Context</h2>
           <p>Every mutable aggregate in the framework is edited through a load-modify-save handler: the update use
           case fetches the tracked entity, applies the request, and calls <code>SaveChangesAsync</code>. With one shared
@@ -309,56 +315,85 @@
           precondition travels in the header alone (<code>:9-14</code>).</p>
           </li>
           <li><p><strong>The read emits a weak <code>ETag</code>.</strong> <code>EntityControllerBase.GetByIdAsync</code>
-          (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/EntityControllerBase.cs:361</code>) calls
-          <code>SetConcurrencyETag(result.Value)</code> (<code>:382</code>), which (<code>:417</code>) renders the served row&#39;s token as
-          <code>W/&quot;&lt;base64&gt;&quot;</code> (formatted by <code>ConcurrencyETag.Format</code>,
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/EntityControllerBase.cs:360</code>) calls
+          <code>SetConcurrencyETag(result.Value)</code> (<code>:381</code>). The helper lives on <code>ApiControllerBase</code>, the base of
+          the entity and use-case controllers
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/ApiControllerBase.cs:97</code>; the OAuth and
+          service-info bases derive <code>ControllerBase</code> directly, <code>OAuthControllerBase.cs:60</code>,
+          <code>ServiceInfoControllerBase.cs:30</code>), and
+          renders the served row&#39;s token as <code>W/&quot;&lt;base64&gt;&quot;</code> (formatted by <code>ConcurrencyETag.Format</code>,
           <code>MMCA.Common/Source/Core/MMCA.Common.Shared/Http/ConcurrencyETag.cs:40</code>, and written to the
-          response at <code>:425</code>). Weak is the honest
+          response at <code>ApiControllerBase.cs:105</code>). Weak is the honest
           strength: the tag identifies the row&#39;s version, not a byte-exact representation, and the same row
           legitimately serializes differently under a <code>fields=</code> projection. Those shaped responses are seen
-          through rather than skipped: <code>ReadRowVersion</code> (<code>:434</code>) reads the typed property when the payload is
-          the DTO and falls back to a dictionary lookup keyed by JSON name when it is a projection
-          (<code>:439-442</code>). The property is resolved once per closed controller type (<code>:391</code>), and a DTO type
-          with no token makes the method a no-op (<code>:419-420</code>). It is <code>protected</code> so a hand-written read
-          action can emit the same header instead of re-implementing the format, which is where the two
-          would drift and a precondition would quietly stop working.</p>
+          through rather than skipped: <code>ReadRowVersion</code> (<code>:211</code>) reads the <code>rowVersion</code> (else <code>RowVersion</code>)
+          entry when the payload is a projection dictionary (<code>:213-215</code>) and the typed <code>RowVersion</code> property
+          otherwise (<code>:220-221</code>). The property is resolved once per runtime type (<code>:23-28</code>), and a row with
+          no token, or an empty one, gets no header (<code>:102-103</code>). It is <code>protected</code> so a hand-written read
+          action, or a conditional write answering with the refreshed value, can emit the same header
+          instead of re-implementing the format (<code>:90-95</code>), which is where the two would drift and a
+          precondition would quietly stop working.</p>
           </li>
           <li><p><strong><code>[SupportsIfMatch]</code> decodes the header, and nothing else carries the token.</strong>
           <code>SupportsIfMatchAttribute</code>
-          (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Concurrency/SupportsIfMatchAttribute.cs:49</code>) is a
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Concurrency/SupportsIfMatchAttribute.cs:58</code>) is a
           sealed <code>Attribute</code> implementing <code>IAsyncActionFilter</code> directly, so unlike <code>[Idempotent]</code> (a
           <code>ServiceFilterAttribute</code> resolving from DI, ADR-017) it is self-contained and needs no registration
           by a host. Before the action runs it parses <code>If-Match</code> with <code>ConcurrencyETag.TryParse</code>
           (<code>ConcurrencyETag.cs:62</code>) and places the decoded bytes in <code>HttpContext.Items</code> under <code>TokenItemKey</code>
-          (<code>:57</code>, written at <code>:122</code>). The action reads them back through
-          <code>SupportsIfMatchAttribute.RequiredToken(HttpContext)</code> (<code>:68</code>) and passes the token to its command,
+          (<code>:66</code>, written at <code>:171</code>). The action reads them back through
+          <code>SupportsIfMatchAttribute.RequiredToken(HttpContext)</code> (<code>:81</code>) and passes the token to its command,
           as the generic PUT does
-          (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/CrudEntityControllerBase.cs:90</code> for
-          the attribute, <code>:103</code> for the read). No bound argument is written to, so no request model has to
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/CrudEntityControllerBase.cs:91</code> for
+          the attribute, <code>:104</code> for the read). No bound argument is written to, so no request model has to
           loosen its immutability to receive a token.</p>
+          </li>
+          <li><p><strong>The attribute owns its response metadata.</strong> It is also an action and controller model
+          convention (<code>SupportsIfMatchAttribute.cs:58</code>): at startup it appends a <code>ProblemDetails</code>-typed 412
+          and 428 to the action&#39;s response types, each only when neither the action nor its controller
+          already declares that status (<code>:96-110</code>), and applied to a controller it does so for every action
+          (<code>:117-125</code>). An action therefore declares only the statuses its own body produces and OpenAPI
+          still documents both precondition answers; an action that states them by hand, as the generic PUT
+          still does (<code>CrudEntityControllerBase.cs:96-97</code>), is left as it is.</p>
+          </li>
+          <li><p><strong>The conditional-write helpers are the standard action body.</strong> <code>ApiControllerBase</code> carries the
+          body a conditional action would otherwise hand-write: read the decoded token, build the command,
+          dispatch it, map a failure. <code>HandleConditionalCommandWithResponseAsync</code>
+          (<code>ApiControllerBase.cs:156</code>) reads the token through <code>RequiredToken</code> (<code>:165</code>), answers a failure
+          through <code>HandleFailure</code> and a success with 200, the value and the value&#39;s weak <code>ETag</code>
+          (<code>:194-202</code>), so a client can condition its next write without re-reading.
+          <code>HandleConditionalCommandAsync</code> (<code>:125</code>, token at <code>:135</code>) is the form for a command whose value
+          is discarded and answers 204 with no <code>ETag</code> (<code>:177-184</code>). Both await an optional success
+          follow-up before answering (<code>:118-119</code>, <code>:149-150</code>), and both throw before the handler runs when
+          the action carries no <code>[SupportsIfMatch]</code>, because no token was decoded (<code>:123-124</code>, <code>:154-155</code>).
+          A stale token still surfaces as a <code>DbUpdateConcurrencyException</code> or a 409 result, which the
+          filter turns into 412 exactly as it does for a hand-written body. ADC runs most of its
+          conditional actions through them
+          (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/Activities/ActivitiesController.cs:165</code>,
+          <code>:171</code>).</p>
           </li>
           <li><p><strong>Three status codes, one problem-details shape.</strong></p>
           <ul>
           <li><strong>A request that states no precondition is <code>428 Precondition Required</code></strong> and the action never
-          runs (<code>SupportsIfMatchAttribute.cs:109-114</code>). A blank header and <code>*</code> are both no precondition:
+          runs (<code>SupportsIfMatchAttribute.cs:158-162</code>). A blank header and <code>*</code> are both no precondition:
           the wildcard names no particular version, so honouring it would be a last-write-wins write
           wearing a conditional request&#39;s clothes.</li>
-          <li><strong>A malformed tag is <code>400 Bad Request</code></strong> (<code>:116-120</code>): a precondition the server cannot read is a
+          <li><strong>A malformed tag is <code>400 Bad Request</code></strong> (<code>:165-168</code>): a precondition the server cannot read is a
           client error, and running the write would ignore a precondition the caller did state.</li>
           <li><strong>A stale token is <code>412 Precondition Failed</code></strong>, produced after the action by
-          <code>RewriteConflictToPreconditionFailed</code> (<code>:130</code>). A <code>DbUpdateConcurrencyException</code> is answered in
-          the filter rather than left to the global handler (<code>:132-141</code>), and an already-produced 409
+          <code>RewriteConflictToPreconditionFailed</code> (<code>:179</code>). A <code>DbUpdateConcurrencyException</code> is answered in
+          the filter rather than left to the global handler (<code>:181-190</code>), and an already-produced 409
           result has its status and its <code>ProblemDetails.Status</code> rewritten in place with the body otherwise
-          untouched (<code>:143-160</code>). Because the filter marks that exception handled, the global handler
+          untouched (<code>:192-205</code>). Because the filter marks that exception handled, the global handler
           never sees it, so the filter counts the conflict itself through <code>ConcurrencyConflictMetrics</code>
-          (<code>:137</code>), the same counter the global handler increments for an unconditioned
-          <code>DbUpdateConcurrencyException</code> (<code>DbUpdateExceptionHandler.cs:36-39</code>).</li>
+          (<code>:186</code>), the same counter the global handler increments for an unconditioned
+          <code>DbUpdateConcurrencyException</code> (<code>DbUpdateExceptionHandler.cs:38</code>).</li>
           </ul>
-          <p>All three are RFC 9457 problem details built by one helper (<code>:206</code>) through the registered
+          <p>All three are RFC 9457 problem details built by one helper (<code>:255</code>) through the registered
           <code>ProblemDetailsFactory</code>, so they carry the same <code>traceId</code>/<code>requestId</code> diagnostics as every other
           problem response on the surface, and each carries the standard <code>errors</code> extension with a stable
-          code: <code>Concurrency.PreconditionRequired</code> (<code>:171</code>), <code>Concurrency.MalformedIfMatch</code> (<code>:183</code>),
-          <code>Concurrency.PreconditionFailed</code> (<code>:195</code>).</p>
+          code: <code>Concurrency.PreconditionRequired</code> (<code>:220</code>), <code>Concurrency.MalformedIfMatch</code> (<code>:232</code>),
+          <code>Concurrency.PreconditionFailed</code> (<code>:244</code>).</p>
           </li>
           <li><p><strong><code>SetOriginalRowVersion</code> is the persistence extension point.</strong>
           <code>IWriteRepository.SetOriginalRowVersion(TEntity, byte[])</code>
@@ -454,9 +489,9 @@
           <h2 id="trade-offs">Trade-offs</h2>
           <ul>
           <li><strong>The rewrite keys on the conflict outcome, not on its cause.</strong> The filter turns any 409 result
-          the action returns under an <code>If-Match</code> request into a 412 (<code>SupportsIfMatchAttribute.cs:143-160</code>),
+          the action returns under an <code>If-Match</code> request into a 412 (<code>SupportsIfMatchAttribute.cs:192-205</code>),
           including a non-concurrency conflict a handler reports through the <code>Result</code> channel. A thrown
-          <code>DbUpdateException</code> other than <code>DbUpdateConcurrencyException</code> (<code>:132</code>) is not touched: it leaves
+          <code>DbUpdateException</code> other than <code>DbUpdateConcurrencyException</code> (<code>:181</code>) is not touched: it leaves
           the filter unhandled and the global <code>DbUpdateExceptionHandler</code>
           (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/DependencyInjection.cs:161</code>) still answers 409
           (<code>DbUpdateExceptionHandler.cs:41</code>). The response keeps its original problem details
@@ -468,9 +503,9 @@
           dependency arrives by one of three routes: a rewrite to <code>ServiceFilterAttribute</code>, a lookup from
           <code>HttpContext.RequestServices</code>, or a static dependency. The problem helper already uses the
           lookup: it resolves <code>ProblemDetailsFactory</code> and <code>IErrorLocalizer</code> from the request&#39;s services
-          (<code>SupportsIfMatchAttribute.cs:208-209</code>, <code>:219</code>), so a host-registered factory or localizer does
+          (<code>SupportsIfMatchAttribute.cs:257-259</code>, <code>:268</code>), so a host-registered factory or localizer does
           shape the 428, 400 and 412 bodies. The conflict metric took the static route: the filter calls
-          <code>ConcurrencyConflictMetrics.RecordConflict</code> (<code>:137</code>), an internal static class over a
+          <code>ConcurrencyConflictMetrics.RecordConflict</code> (<code>:186</code>), an internal static class over a
           process-wide <code>Meter</code>
           (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Concurrency/ConcurrencyConflictMetrics.cs:24</code>,
           <code>RecordConflict</code> at <code>:46</code>), which no host can replace or reconfigure.</li>

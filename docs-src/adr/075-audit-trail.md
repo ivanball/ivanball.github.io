@@ -17,6 +17,7 @@ Revised 2026-10-07: the key fix-up issues one filtered `UPDATE` per pending row 
 Revised 2026-10-21: redaction also covers `[Sensitive]` properties, `IAuthUser` credentials and encrypted columns, the reverse `[Pii]` rule lives in the shared `PiiConventionTestsBase` that Store, ADC and Helpdesk subclass, a fixed-up key equal to the captured one skips its `UPDATE`, and anchors are refreshed.
 Revised 2026-10-26: the key fix-up writes the resolved key to the tracked trail row after each `UPDATE` and syncs its snapshot so that write is not saved again, and the reader and interceptor anchors are refreshed.
 Revised 2026-10-28: anchors refreshed after later ADC and Store `infra/main.bicep` changes moved the SQL-auditing anchors, and ADC's `User` `[IdValueGenerated]` anchor moved one line.
+Revised 2026-11-12: the framework ships an opt-in viewer (the `AuditHistoryControllerBase` endpoint, the `audit:view` permission and the `AuditHistoryPanel`), the read DTO moved to Shared as `AuditHistoryEntryDTO`, and the earlier "no controller and no UI" position is recorded under Alternatives rejected as revisited.
 ## Context
 The framework already answers "who touched this row last". Every `AuditableBaseEntity` carries
 `CreatedOn/By` and `LastModifiedOn/By`, stamped by `AuditSaveChangesInterceptor` on the way into
@@ -156,15 +157,93 @@ mechanism. There is no fallback: the job runs only when the host also calls `Add
 inert and pruning is the operator's job
 (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.Jobs.cs:97-101`).
 
-### The read surface is one interface
+### The read surface is one interface, exposed by an opt-in endpoint and panel
 `IAuditTrailReader` (Application) with an Infrastructure implementation querying by
-`(EntityType, EntityKey)`, which is exactly the index. No controller and no UI ship in v1: a change
-history is a surface with real authorization and presentation opinions, and consumers hold those opinions.
+`(EntityType, EntityKey)`, which is exactly the index. It returns one page of `AuditHistoryEntryDTO`,
+newest first, with `page` 1-based and `pageSize` clamped to 1..500
+(`MMCA.Common/Source/Core/MMCA.Common.Application/Interfaces/IAuditTrailReader.cs:17`, `:33-37`, `:40`).
+The DTO lives in Shared (`MMCA.Common/Source/Core/MMCA.Common.Shared/Auditing/AuditHistoryEntryDTO.cs:1`,
+`:12`), the same type the UI panel renders
+(`MMCA.Common/Source/Presentation/MMCA.Common.UI/Components/Auditing/AuditHistoryPanel.razor.cs:5`, `:24`),
+and carries the trail row's columns except `TenantId` (`AuditHistoryEntryDTO.cs:15-48`). It replaces
+`MMCA.Common.Application.Auditing.AuditTrailEntryDTO`, a Breaking entry (`MMCA.Common/CHANGELOG.md:11`)
+with its mechanical fix in `MMCA.Common/UPGRADING.md:68-78`.
+
+Exposure is opt-in in three further pieces, each of which a host can leave out:
+
+- **Endpoint.** `AuditHistoryControllerBase`
+  (`MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/Administration/AuditHistoryControllerBase.cs:48`)
+  serves `GET {prefix}/{entity}/{key}?page=&pageSize=`, where `entity` is the entity's simple type name,
+  case-insensitive, and the 200 body is a bare array with no total (`:29-32`, `:93`); `page` is at least 1
+  and `pageSize` 1 to 500, default 50 (`:102-103`). A host derives it in one line, supplying the route,
+  the API version and the entity types it serves (`:19-27`, constructor `:69`). Only audited entities can
+  be served: a type that does not implement `IAuditedEntity`, or two types sharing a simple name, throws
+  `ArgumentException` at construction (`:142-146`). A request naming an entity the controller does not
+  serve answers 404 `AuditHistory.UnknownEntity`, and a blank key 400 `AuditHistory.KeyRequired`, neither
+  reaching the reader (`:51`, `:54`, `:106-122`). The class carries
+  `[HasPermission(AdministrationPermissions.ViewAuditTrail)]` (`:47`), so every derived controller
+  inherits the gate. The reader reads the host's Default database, so each database-per-service host
+  mounts its own controller for the entities it owns (`:41-44`).
+- **Permission.** `audit:view` is a framework permission
+  (`MMCA.Common/Source/Core/MMCA.Common.Shared/Auth/Permissions/AdministrationPermissions.cs:46`) that a
+  host grants the way it grants its own, through `PermissionRegistryBuilder.Grant` or a stored grant row
+  (`:3-7`); a host that mounts the endpoint but grants the permission to no role serves an endpoint that
+  denies everyone (`:10-13`).
+- **Panel.** `AuditHistoryPanel` (`AuditHistoryPanel.razor.cs:22`) renders the entries as a table over a
+  required `FetchPage` delegate, 20 rows a page with "Load more" (`:11-20`, `:40-45`). It checks no
+  permission itself: its contract is that the page places it inside an authorization check on the audit
+  permission (`:12-13`). `AddAuditHistoryUI()` registers its client, `IAuditHistoryUIService`
+  (`MMCA.Common/Source/Presentation/MMCA.Common.UI/DependencyInjection.cs:388-390`;
+  `MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/Auditing/IAuditHistoryUIService.cs:11`, `:24`),
+  and nothing else in the framework calls it (`DependencyInjection.cs:383-384`).
+
+A host that adopts none of the three exposes no audit endpoint and renders no history; the reader stays
+an injectable read a consumer may wrap in its own query instead (`IAuditTrailReader.cs:11-14`).
 
 Adoption in the consumer sweep is seven relational sources, each with its own migration: ADC's Identity,
 Conference and Engagement services (its Notification service does not call `AddAuditTrail` and has no
 trail migration), Store's Catalog, Sales and Identity services (Store is database-per-service, so each
 adopts separately rather than sharing one database), and Helpdesk's Tickets.
+
+The viewer is adopted in all three consumers:
+
+- **Store** mounts one `AuditHistoryController` per service: Catalog serves `Product` and `ProductReview`
+  (`MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.API/Controllers/AuditHistoryController.cs:18`,
+  `:21`), Sales `Order` and `ShoppingCart`
+  (`MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.API/Controllers/AuditHistoryController.cs:18`, `:21`)
+  and Identity `User` and `Customer`
+  (`MMCA.Store/Source/Modules/Identity/MMCA.Store.Identity.API/Controllers/AuditHistoryController.cs:18`,
+  `:21`). It grants `audit:view` to Admin only
+  (`MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.Shared/Authorization/CatalogPermissionGrants.cs:31`,
+  `MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Shared/Authorization/SalesPermissionGrants.cs:31`,
+  `MMCA.Store/Source/Modules/Identity/MMCA.Store.Identity.Shared/Authorization/IdentityPermissionGrants.cs:35-37`;
+  pinned, Admin yes and Customer no, by
+  `MMCA.Store/Tests/Architecture/MMCA.Store.Architecture.Tests/Api/AuditHistoryPermissionTests.cs:30`,
+  `:35`) and renders the panel on the product and order detail pages behind a permission-claim check
+  (`MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.UI/Pages/Products/ProductDetail.razor:217`, check
+  `ProductDetail.razor.cs:129`;
+  `MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.UI/Pages/Orders/OrderDetail.razor:100`, check
+  `OrderDetail.razor.cs:142`).
+- **ADC** mounts one per service: Identity serves `User`
+  (`MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.API/Controllers/AuditHistory/AuditHistoryController.cs:17`,
+  `:20`), Conference `Event`, `Session` and `Speaker`
+  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/AuditHistory/AuditHistoryController.cs:19`,
+  `:22`) and Engagement `CheckIn`, `PointsEntry` and `Ticket`
+  (`MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.API/Controllers/AuditHistoryController.cs:19`,
+  `:22`). It grants `audit:view` to Organizer only, never ContentEditor, once, in the map the
+  token-minting host reads
+  (`MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Shared/Authorization/IdentityPermissionGrants.cs:33-35`,
+  `:42-50`; the test pins that Organizer holds it and Attendee does not, and has no fact for
+  ContentEditor,
+  `MMCA.ADC/Tests/Architecture/MMCA.ADC.Architecture.Tests/Api/AuditViewGrantTests.cs:20-36`), and renders
+  the panel on the event and session detail pages
+  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/Pages/Events/EventDetail.razor:209-212`,
+  `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/Pages/Sessions/SessionDetail.razor:205-208`).
+- **Helpdesk** mounts the endpoint only, for `Ticket`
+  (`MMCA.Helpdesk/Source/Modules/Tickets/MMCA.Helpdesk.Tickets.API/Controllers/AuditHistoryController.cs:22`,
+  `:29-30`). The seed ships without an identity issuer, so the controller is `[AllowAnonymous]` until one
+  is added, since the inherited gate would otherwise deny every caller (`:24-28`), and its UI renders no
+  panel.
 
 ## Rationale
 - **`IAuditableEntity` is a statement about a business row, and an audit row is not one.** The interface
@@ -219,9 +298,23 @@ adopts separately rather than sharing one database), and Helpdesk's Tickets.
   path in v1, so the answer to a question older than the window is that there is no answer.
 - **Cosmos-backed sources get no trail at all.** The engine that cannot join the transaction is simply
   skipped, so a consumer's audit coverage is decided by ADR-018 placement rather than by intent.
-- **No shipped read surface means the capability is invisible until someone builds one.** Rows accumulate
-  from the day `AddAuditTrail` is called; nobody sees them until a consumer writes a page or an endpoint
-  over `IAuditTrailReader`.
+- **An opt-in viewer means the capability is invisible until a host adopts it.** Rows accumulate from the
+  day `AddAuditTrail` is called; nobody sees them until the host derives an `AuditHistoryControllerBase`
+  controller, grants `audit:view` to a role and renders `AuditHistoryPanel` on a page, or writes its own
+  surface over `IAuditTrailReader`.
+- **The panel leaves authorization to its page.** It checks no permission itself
+  (`AuditHistoryPanel.razor.cs:12-13`), so a page that renders it unguarded shows an empty, failing panel
+  to a user the endpoint refuses; the endpoint's class-level gate (`AuditHistoryControllerBase.cs:47`), not
+  the panel, is what protects the data.
+
+## Alternatives rejected
+- **Ship no controller and no UI, leaving the read surface to each consumer** (the original position: a
+  change history carries real authorization and presentation opinions, and consumers hold those
+  opinions). Revisited on 2026-11-12: every consumer that wanted to see the trail would write the same
+  read-only, paged, permission-gated endpoint over the same reader, so the framework now ships that
+  endpoint, its permission and a panel, each opt-in (see the Decision). The authorization opinion stays
+  with the consumer: the framework names one permission and the host decides which roles hold it, or
+  none (`AdministrationPermissions.cs:9-13`).
 
 ## Revision (2026-09-07)
 Two additions from the 2026-09-07 security review.

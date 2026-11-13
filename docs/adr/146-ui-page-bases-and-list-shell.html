@@ -1,0 +1,374 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#0e151f" media="(prefers-color-scheme: dark)">
+  <title>ADR-146: UI Page Bases and the List Shell (Bases Own Plumbing, Pages Own Model and Service Call) · MMCA · Ivan Ball-llovera</title>
+  <meta name="description" content="Accepted (2026-11-12). Unreleased: listed under [Unreleased] in MMCA.Common/CHANGELOG.md:7 (entries at :38 to :41), and the adopting pages are on the…">
+  <link rel="canonical" href="https://ivanball.github.io/docs/adr/146-ui-page-bases-and-list-shell.html">
+  <link rel="icon" href="../../assets/img/favicon.svg" type="image/svg+xml">
+  <link rel="alternate" type="application/rss+xml" title="Ivan Ball-llovera: deep dives on enterprise .NET" href="https://ivanball.github.io/feed.xml">
+  <meta property="og:type" content="article">
+  <meta property="og:site_name" content="Ivan Ball-llovera">
+  <meta property="og:title" content="ADR-146: UI Page Bases and the List Shell (Bases Own Plumbing, Pages Own Model and Service Call)">
+  <meta property="og:description" content="Accepted (2026-11-12). Unreleased: listed under [Unreleased] in MMCA.Common/CHANGELOG.md:7 (entries at :38 to :41), and the adopting pages are on the…">
+  <meta property="og:url" content="https://ivanball.github.io/docs/adr/146-ui-page-bases-and-list-shell.html">
+  <meta property="og:image" content="https://ivanball.github.io/assets/img/og-image.png">
+  <meta property="og:image:alt" content="Ivan Ball-llovera, Principal Software Architect">
+  <meta property="og:locale" content="en_US">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="ADR-146: UI Page Bases and the List Shell (Bases Own Plumbing, Pages Own Model and Service Call)">
+  <meta name="twitter:description" content="Accepted (2026-11-12). Unreleased: listed under [Unreleased] in MMCA.Common/CHANGELOG.md:7 (entries at :38 to :41), and the adopting pages are on the…">
+  <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Platform","item":"https://ivanball.github.io/platform.html"},{"@type":"ListItem","position":2,"name":"Reference","item":"https://ivanball.github.io/docs/index.html"},{"@type":"ListItem","position":3,"name":"Architecture Decision Records","item":"https://ivanball.github.io/docs/adr/index.html"},{"@type":"ListItem","position":4,"name":"146 · UI Page Bases and the List Shell (Bases Own Plumbing, Pages Own Model and Service Call)","item":"https://ivanball.github.io/docs/adr/146-ui-page-bases-and-list-shell.html"}]}</script>
+  <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);if(localStorage.getItem('mmca-rail')==='hidden')document.documentElement.setAttribute('data-rail','hidden');if(localStorage.getItem('mmca-cites')==='shown')document.documentElement.setAttribute('data-cites','shown');}catch(e){}})();</script>
+  <link rel="preload" href="../../assets/fonts/inter-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="../../assets/fonts/jetbrains-mono-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="../../assets/css/styles.css">
+  <link rel="stylesheet" href="../../assets/css/docs.css">
+  <script defer src="../../assets/js/main.js"></script>
+  <script defer src="../../assets/js/search.js"></script>
+  <script defer src="../../assets/js/analytics.js"></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+
+  <header class="site-header">
+    <div class="container nav">
+      <a class="brand" href="../../index.html">
+        <span class="brand-mark" aria-hidden="true">IB</span>
+        <span>Ivan Ball-llovera</span>
+      </a>
+      <nav aria-label="Primary">
+        <ul class="nav-links" id="nav-links">
+          <li><a href="../../index.html">Home</a></li>
+          <li><a href="../../resume.html">Résumé</a></li>
+          <li><a href="../../platform.html">Platform</a></li>
+          <li><a href="../../docs/index.html" aria-current="page">Reference</a></li>
+          <li><a href="../../writing.html">Writing</a></li>
+          <li><a href="../../speaking.html">Speaking</a></li>
+          <li><a href="../../contact.html">Contact</a></li>
+        </ul>
+      </nav>
+      <div class="nav-tools">
+        <button class="icon-btn search-open" type="button" aria-label="Search the site" data-search-open>
+          <span aria-hidden="true">⌕</span>
+        </button>
+        <button class="icon-btn theme-toggle" type="button" aria-label="Switch color theme">
+          <span class="sun" aria-hidden="true">☀</span><span class="moon" aria-hidden="true">☾</span>
+        </button>
+        <button class="icon-btn nav-toggle" type="button" aria-label="Toggle navigation menu" aria-expanded="false" aria-controls="nav-links">☰</button>
+      </div>
+    </div>
+  </header>
+  <dialog class="search-dialog" id="site-search" aria-label="Search this site">
+    <form class="search-box" method="dialog" role="search">
+      <span class="search-icon" aria-hidden="true">⌕</span>
+      <input class="search-input" type="search" id="site-search-input" placeholder="Search ADRs, guides, chapters, articles…"
+             autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
+             aria-controls="site-search-results" aria-describedby="site-search-status">
+      <button class="btn btn--ghost search-close" type="button" data-search-close>Esc</button>
+    </form>
+    <p class="search-status" id="site-search-status" role="status" aria-live="polite"></p>
+    <ul class="search-results" id="site-search-results"></ul>
+    <p class="search-foot">
+      <span><kbd>↑</kbd><kbd>↓</kbd> to navigate</span>
+      <span><kbd>Enter</kbd> to open</span>
+      <span><kbd>"…"</kbd> all these words</span>
+      <span><kbd>AND</kbd><kbd>OR</kbd> to combine</span>
+    </p>
+  </dialog>
+
+  <main id="main">
+    <div class="container doc-container">
+      <nav class="doc-breadcrumb" aria-label="Breadcrumb">
+        <a href="../../platform.html">Platform</a>
+        <span aria-hidden="true">/</span>
+        <a href="../../docs/index.html">Reference</a>
+        <span aria-hidden="true">/</span>
+        <a href="../../docs/adr/index.html">Architecture Decision Records</a>
+        <span aria-hidden="true">/</span>
+        <span class="current">146 · UI Page Bases and the List Shell (Bases Own Plumbing, Pages Own Model and Service Call)</span>
+        <button class="rail-toggle" type="button" data-rail-toggle aria-expanded="true" aria-controls="doc-rail">On this page</button>
+      </nav>
+      <div class="doc-layout doc-layout--toc">
+      <aside class="doc-sidebar">
+      <details class="doc-sidebar-details" open>
+        <summary>All 146 ADRs</summary>
+        <nav class="doc-nav" aria-label="Architecture Decision Records">
+          <ol>
+        <li><a href="index.html">Overview</a></li>
+        <li><a href="001-manual-dto-mapping.html">001 · Manual DTO Mapping over AutoMapper</a></li>
+        <li><a href="002-navigation-populators.html">002 · NavigationPopulators for Cross-Container Loading</a></li>
+        <li><a href="003-outbox-dual-dispatch.html">003 · Outbox Pattern with Dual Dispatch</a></li>
+        <li><a href="004-authentication-dual-fetch.html">004 · Cross-Service Token Validation via JWKS / OIDC Discovery</a></li>
+        <li><a href="005-soft-delete-vs-erasure.html">005 · Soft-Delete vs. Right-to-Erasure</a></li>
+        <li><a href="006-database-per-service.html">006 · Database per Service</a></li>
+        <li><a href="007-grpc-extraction.html">007 · Synchronous Cross-Service Calls via gRPC Contracts</a></li>
+        <li><a href="008-service-extraction-topology.html">008 · Extraction of the Modular Monolith into Per-Module Services + Gateway</a></li>
+        <li><a href="009-resilience-and-recovery-objectives.html">009 · Resilience Policies &amp; Recovery Objectives</a></li>
+        <li><a href="010-integration-event-schema-versioning.html">010 · Integration-Event Schema Versioning &amp; Upcaster Policy</a></li>
+        <li><a href="011-single-locale-i18n.html">011 · Single-Locale by Design (No Internationalization)</a></li>
+        <li><a href="012-grpc-host-transport.html">012 · gRPC-Host Transport Convention (Http2-only h2c vs. Http1AndHttp2 + ALPN)</a></li>
+        <li><a href="013-result-pattern.html">013 · Result Pattern over Exceptions for Flow Control</a></li>
+        <li><a href="014-cqrs-decorator-pipeline.html">014 · CQRS Handlers with a Decorator Pipeline</a></li>
+        <li><a href="015-architecture-fitness-functions.html">015 · Architecture Invariants Enforced as Fitness Functions</a></li>
+        <li><a href="016-lockstep-versioning-masstransit-pin.html">016 · Lockstep Package Versioning and the MassTransit-v8 Pin</a></li>
+        <li><a href="017-request-idempotency.html">017 · HTTP Request Idempotency via Client-Supplied Keys</a></li>
+        <li><a href="018-polyglot-persistence.html">018 · Polyglot Persistence (Multiple Storage Engines Behind One Model)</a></li>
+        <li><a href="019-rate-limiting.html">019 · Layered Rate Limiting with an Authenticated-Only Global Limiter</a></li>
+        <li><a href="020-permission-based-authorization.html">020 · Permission-Based Authorization Layered over Roles</a></li>
+        <li><a href="021-consumer-inbox-idempotency.html">021 · Consumer-Side Inbox for Integration-Event Idempotency</a></li>
+        <li><a href="022-browser-session-cookie-auth.html">022 · Browser Session-Cookie Authentication for Blazor SSR</a></li>
+        <li><a href="023-security-response-headers.html">023 · Centralized Security-Response-Headers Middleware with a Pluggable CSP</a></li>
+        <li><a href="024-push-notifications.html">024 · Two-Channel User Notifications (Transient SignalR Push + Durable Inbox)</a></li>
+        <li><a href="025-startup-warmup-readiness.html">025 · Startup Warm-Up and Readiness Gating for Cold-Start Mitigation</a></li>
+        <li><a href="026-caching-strategy.html">026 · Two-Tier Caching: a Swappable ICacheService Substrate plus an HTTP Output-Cache Edge</a></li>
+        <li><a href="027-multi-locale-i18n.html">027 · Multi-Locale Internationalization (Supersedes ADR-011)</a></li>
+        <li><a href="028-dark-theme-mode.html">028 · Day/Dark Theme Mode</a></li>
+        <li><a href="029-authentication-brute-force-protection.html">029 · Authentication Brute-Force Protection and Registration Throttling</a></li>
+        <li><a href="030-startup-sole-migrator.html">030 · Each Service Self-Applies Its Migrations at Startup (Sole Migrator)</a></li>
+        <li><a href="031-feature-flag-management.html">031 · Config-Driven Feature Flags with Dual-Surface Enforcement</a></li>
+        <li><a href="032-password-hashing.html">032 · Password Hashing (PBKDF2-HMAC-SHA512) with Legacy-Hash Backward Compatibility</a></li>
+        <li><a href="033-resource-ownership-authorization.html">033 · Resource-Ownership Authorization (Row-Level + Action Filter)</a></li>
+        <li><a href="034-generic-entity-query-layer.html">034 · Generic Entity Controllers with a Dynamic Query Contract</a></li>
+        <li><a href="035-optimistic-concurrency.html">035 · Optimistic Concurrency via RowVersion Round-Trip</a></li>
+        <li><a href="036-external-oauth-login.html">036 · External OAuth Login (Federated Google/GitHub/Apple) with Local-JWT Exchange</a></li>
+        <li><a href="037-field-level-encryption-at-rest.html">037 · Field-Level Encryption at Rest (AES-256-GCM EF Converter)</a></li>
+        <li><a href="038-supply-chain-provenance.html">038 · Supply-Chain Provenance (SBOM Release Gate + Lock Files + Vulnerability Audit)</a></li>
+        <li><a href="039-live-channel-push.html">039 · Live channel push (ephemeral events over the notification hub)</a></li>
+        <li><a href="040-authenticated-output-caching-for-public-reads.html">040 · Authenticated output caching for public reads</a></li>
+        <li><a href="041-observability-and-telemetry.html">041 · Observability and Telemetry Strategy</a></li>
+        <li><a href="042-device-capability-abstraction.html">042 · Device Capability Abstraction (MAUI Blazor Hybrid)</a></li>
+        <li><a href="043-mobile-deep-links-and-native-oauth-callback.html">043 · Mobile Deep Links, App Association, and the Native OAuth Callback</a></li>
+        <li><a href="044-native-push-delivery.html">044 · Native Push Delivery (the Third Notification Channel)</a></li>
+        <li><a href="045-managed-file-storage-and-avatars.html">045 · Managed File Storage and User Avatars</a></li>
+        <li><a href="046-http-api-versioning.html">046 · HTTP API Versioning Strategy</a></li>
+        <li><a href="047-soft-deleted-user-session-revocation.html">047 · Runtime Revocation of Soft-Deleted Users&#39; Active Sessions</a></li>
+        <li><a href="048-primitive-identifier-type-aliases.html">048 · Primitive Identifier Type Aliases over Strongly-Typed ID Structs</a></li>
+        <li><a href="049-library-configureawait-policy.html">049 · Library-Scoped ConfigureAwait(false) Policy (CA2007)</a></li>
+        <li><a href="050-jwt-refresh-token-rotation.html">050 · JWT Access Tokens with a Single Rotating Refresh Token and Reuse Detection</a></li>
+        <li><a href="051-client-auth-token-lifecycle.html">051 · Client-Side Authentication Token Lifecycle Across Render Modes</a></li>
+        <li><a href="052-background-job-execution.html">052 · Background Job Execution (Bounded Queue plus Hosted Drain)</a></li>
+        <li><a href="053-dual-registry-package-publishing.html">053 · Dual-Registry Package Publishing (nuget.org plus GitHub Packages)</a></li>
+        <li><a href="054-saga-compensation-and-reconciliation.html">054 · Choreographed Saga Compensation with a Reconciliation Backstop</a></li>
+        <li><a href="055-repository-and-specification-contract.html">055 · Repository plus Specification as the Data-Access Contract</a></li>
+        <li><a href="056-blazor-render-mode-strategy.html">056 · Blazor Render-Mode Strategy for the Web Heads</a></li>
+        <li><a href="057-expand-contract-schema-evolution-gate.html">057 · Expand/Contract Schema Evolution Enforced as a CI Gate</a></li>
+        <li><a href="058-runtime-conformance-suites-as-a-package.html">058 · Runtime Conformance Suites Shipped as a Package</a></li>
+        <li><a href="059-module-contract-and-composition.html">059 · The IModule Contract and Reflection-Based Module Composition</a></li>
+        <li><a href="060-performance-regression-gate.html">060 · Performance-Regression Gate (Committed Benchmark Baseline in CI)</a></li>
+        <li><a href="061-runtime-secret-management.html">061 · Runtime Secret Management via Key Vault References and Managed Identity</a></li>
+        <li><a href="062-slo-alerting-as-code.html">062 · SLO Alerting as Code with an Alert-to-Runbook Build Gate</a></li>
+        <li><a href="063-accessibility-conformance-gate.html">063 · WCAG 2.1 AA Accessibility as a Shipped Test Contract and CI Gate</a></li>
+        <li><a href="064-deploy-recency-gates.html">064 · Deploy Preconditions as Proof-of-Recency Gates</a></li>
+        <li><a href="065-scaffolding-templates.html">065 · Scaffolding templates derived from the reference app</a></li>
+        <li><a href="066-broker-transport-selection.html">066 · Broker Transport Selection and Dev/Prod Parity</a></li>
+        <li><a href="067-ui-module-shell-composition.html">067 · Shared Blazor Application Shell and IUIModule Composition</a></li>
+        <li><a href="068-value-objects-as-validated-primitives.html">068 · Value Objects as Validated Domain Primitives</a></li>
+        <li><a href="069-shared-data-protection-key-ring.html">069 · Shared DataProtection Key Ring for Scaled-Out Hosts</a></li>
+        <li><a href="070-fail-fast-configuration-contract.html">070 · Fail-Fast Configuration Contract</a></li>
+        <li><a href="071-barcode-scanning-and-qr-display.html">071 · Device Capability Pattern for Barcode Scanning and QR Display</a></li>
+        <li><a href="072-qr-badge-check-in-and-points.html">072 · QR Badge Check-In and Points Gamification in ADC</a></li>
+        <li><a href="073-multi-tenancy-model.html">073 · Multi-Tenancy (Shared-Schema Query Filter plus DB-per-Tenant Routing)</a></li>
+        <li><a href="074-recurring-job-scheduler.html">074 · Recurring Job Scheduler (Persistent Cron Jobs on the Outbox Claim-Lease Pattern)</a></li>
+        <li><a href="075-audit-trail.html">075 · Audit Trail (Same-Transaction Field-Level Change History)</a></li>
+        <li><a href="076-data-subject-export.html">076 · Data-Subject Export (DSAR) as a Framework Contract</a></li>
+        <li><a href="077-hybridcache-substrate.html">077 · HybridCache as an Opt-In ICacheService Substrate (Amends ADR-026)</a></li>
+        <li><a href="078-csv-export-endpoint.html">078 · CSV Export as a Dedicated Endpoint, Not Content Negotiation</a></li>
+        <li><a href="079-shared-http-middleware-pipeline.html">079 · One Shared, Ordered HTTP Middleware Pipeline for Every Service Host</a></li>
+        <li><a href="080-deploy-rollout-revision-rollback.html">080 · Production Rollout with Automatic Revision-Only Rollback</a></li>
+        <li><a href="081-cost-baseline-deploy-gate.html">081 · The Cost Baseline as a Hard Deploy Gate</a></li>
+        <li><a href="082-two-tier-cors-posture.html">082 · Two-Tier Cross-Origin Posture: Allow-Listed Service Policies, an Any-Header Gateway Policy</a></li>
+        <li><a href="083-crud-lifecycle-event-taxonomy.html">083 · One CRUD Lifecycle Event per Entity with a State Discriminator</a></li>
+        <li><a href="084-stripe-webhook-ingress.html">084 · Stripe Webhook Ingress (Acceptance-Coded Responses and Startup Self-Registration)</a></li>
+        <li><a href="085-identifier-type-aliases-revisited.html">085 · Identifier Type Aliases Revisited (Wrapper Structs Deferred Again, With Triggers)</a></li>
+        <li><a href="086-process-manager-deferred.html">086 · A Process Manager Is Deferred, Not Absent (Relates to ADR-054)</a></li>
+        <li><a href="087-broker-poison-message-handling.html">087 · Broker Poison-Message Handling: Second-Level Redelivery and Fault Observability</a></li>
+        <li><a href="088-gateway-edge-responsibilities.html">088 · Gateway Edge Responsibilities (and the Three It Declines)</a></li>
+        <li><a href="089-gateway-topology-owned-by-configuration.html">089 · Gateway Topology Owned by Configuration</a></li>
+        <li><a href="090-event-upcaster-registration.html">090 · Event Upcaster Registration Extension Point</a></li>
+        <li><a href="091-cache-backed-password-reset.html">091 · Cache-Backed Password Reset</a></li>
+        <li><a href="092-web-vitals-budget-gate.html">092 · Core Web Vitals Budget as a Shipped Test Contract and Deploy Gate</a></li>
+        <li><a href="093-container-image-posture.html">093 · Container Image Build and Runtime Posture</a></li>
+        <li><a href="094-client-entity-data-access.html">094 · Client-Side Entity Data-Access Contract</a></li>
+        <li><a href="095-soft-delete-unique-indexes.html">095 · Uniqueness Under Soft Delete (Filtered Unique Indexes)</a></li>
+        <li><a href="096-best-effort-side-effects.html">096 · Best-Effort Side-Effect Contract</a></li>
+        <li><a href="097-multi-device-refresh-sessions.html">097 · Multi-Device Refresh Sessions (Hashed, Rotating, Per Device)</a></li>
+        <li><a href="098-aspire-orchestration-not-testing-or-dashboards.html">098 · Aspire for Orchestration, Not for Testing or Production Dashboards</a></li>
+        <li><a href="099-generic-write-side-entity-commands.html">099 · Generic Write-Side Entity Commands (Create, Update, Delete Without a Handler per Aggregate)</a></li>
+        <li><a href="100-outbox-opt-in-resolved-from-messaging-mode.html">100 · The Outbox Is Resolved from the Messaging Mode, Not Always On</a></li>
+        <li><a href="101-common-metapackage.html">101 · An MMCA.Common Metapackage for the Core Six</a></li>
+        <li><a href="102-pbkdf2-only-password-hashing.html">102 · PBKDF2-Only Password Hashing</a></li>
+        <li><a href="103-bunit-component-test-tier.html">103 · bUnit Component-Test Tier as a Shipped Package</a></li>
+        <li><a href="104-smart-enums-as-opt-in-capability.html">104 · Plain Enums by Default, Enumeration&lt;T&gt; as the Opt-In Smart-Enum Base</a></li>
+        <li><a href="105-data-residency-build-gate.html">105 · The Published Data-Residency Claim as a Build Gate</a></li>
+        <li><a href="106-extension-members-as-public-di-surface.html">106 · C# Extension Members as the Public DI Registration Surface</a></li>
+        <li><a href="107-transaction-execution-contract.html">107 · Transaction Execution and Commit-Ambiguity Contract</a></li>
+        <li><a href="108-distributed-lock-primitive.html">108 · Cross-Replica Mutual Exclusion via IDistributedLock</a></li>
+        <li><a href="109-feature-by-folder-convention.html">109 · Feature-by-Folder Layout as an Enforced Convention</a></li>
+        <li><a href="110-rubric-v2-category-realignment.html">110 · Rubric Version 2, Category Realignment at 34</a></li>
+        <li><a href="111-ai-session-scoring-governance.html">111 · AI Session Scoring Governance</a></li>
+        <li><a href="112-catalog-owned-effective-pricing.html">112 · Catalog Owns Effective Pricing; Sales Snapshots It at Checkout</a></li>
+        <li><a href="113-postgresql-as-a-first-class-engine.html">113 · PostgreSQL as a First-Class Engine</a></li>
+        <li><a href="114-internal-commands-durable-job-queue.html">114 · Internal Commands, a Job Queue Built on the Outbox&#39;s Machinery</a></li>
+        <li><a href="115-strongly-typed-identifiers-opt-in.html">115 · Strongly Typed Identifiers as an Opt-In Capability, Aliases Still the Default</a></li>
+        <li><a href="116-identity-completions-opt-in.html">116 · Identity Completions Ship as Opt-In Base Classes, Not as Framework Features</a></li>
+        <li><a href="117-apphost-integration-test-base.html">117 · AppHost Integration Testing as a Shipped Package</a></li>
+        <li><a href="118-message-transport-library-policy.html">118 · Message Transport Library Policy (MassTransit v8 Pin and Exit Strategy)</a></li>
+        <li><a href="119-restrict-delete-by-default.html">119 · Delete Behavior Is an Explicit Business Rule (Restrict by Default)</a></li>
+        <li><a href="120-governed-chat-client-boundary.html">120 · Governed Language-Model Boundary (MMCA.Common.AI)</a></li>
+        <li><a href="121-ephemeral-in-process-work-queue.html">121 · Ephemeral In-Process Work Queue (Bounded Channel plus Hosted Drain)</a></li>
+        <li><a href="122-dev-only-relaxations-fail-closed.html">122 · Dev-Only Relaxations Are Environment-Gated and Fail Closed</a></li>
+        <li><a href="123-speaker-session-assets.html">123 · Speaker-Published Session Materials</a></li>
+        <li><a href="124-blazor-circuit-ceiling-ui-edge.html">124 · The Server-Rendered UI Host Is Its Own Hardened Edge</a></li>
+        <li><a href="125-parameterized-sql-only.html">125 · Parameterized SQL Only, Enforced by a Fitness Gate</a></li>
+        <li><a href="126-event-sourcing-not-adopted.html">126 · Event Sourcing Is Not Adopted</a></li>
+        <li><a href="127-actor-model-not-adopted.html">127 · The Actor Model Is Not Adopted</a></li>
+        <li><a href="128-time-as-an-input.html">128 · Time as an Input (No Ambient Clock Reads in Domain and Application)</a></li>
+        <li><a href="129-tactical-aggregate-contract.html">129 · The Tactical Aggregate Contract</a></li>
+        <li><a href="130-per-engine-data-source-strategy.html">130 · Per-Engine Data Source Strategy (Engine Facts Instead of Branching on the Enum)</a></li>
+        <li><a href="131-same-origin-api-proxy.html">131 · Same-Origin API Proxy (a Backend-for-Frontend That Keeps Tokens Out of Browser Script)</a></li>
+        <li><a href="132-build-strictness-analyzer-policy.html">132 · Build Strictness: Analyzers at Error Severity, a Shared Baseline, and CI Test Floors</a></li>
+        <li><a href="133-versioned-password-hash-work-factor.html">133 · Versioned Password Hash Work Factor</a></li>
+        <li><a href="134-cloud-neutral-core-vendor-adapters.html">134 · Cloud-Neutral Core With Vendor Adapter Packages</a></li>
+        <li><a href="135-application-namespace-keyspace-isolation.html">135 · One Application Namespace Isolates Shared Infrastructure Keyspaces</a></li>
+        <li><a href="136-installable-web-app-service-worker.html">136 · Installable Web App Through a Framework Service Worker That Never Caches a Page</a></li>
+        <li><a href="137-read-only-view-as-support-access.html">137 · Read-Only View-As Support Access (Reasoned, 15 Minutes, Visible to the User)</a></li>
+        <li><a href="138-mcp-endpoint-over-module-queries.html">138 · MCP Endpoint Over Module Queries (Opt-In, Read-Only, Governed Per Tool)</a></li>
+        <li><a href="139-passkeys-webauthn-opt-in-sign-in.html">139 · Passkeys (WebAuthn) as an Opt-In Sign-In and Second Factor</a></li>
+        <li><a href="140-machine-clients-oauth-client-credentials.html">140 · Machine Clients Through OAuth Client Credentials Backed by Service Accounts</a></li>
+        <li><a href="141-two-framework-lines-from-one-tree.html">141 · Two .NET Framework Lines From One Source Tree (net10.0 and net11.0)</a></li>
+        <li><a href="142-outbound-webhooks-and-delivery-lane.html">142 · Outbound Webhooks (Signed Delivery over Internal Commands, with a Dedicated Delivery Lane)</a></li>
+        <li><a href="143-process-manager-primitive.html">143 · Process-Manager Primitive (Consumer-Owned Process Aggregate, Timeouts over Internal Commands)</a></li>
+        <li><a href="144-offline-writes-and-delta-reads.html">144 · Offline Writes and Delta Reads (Client Write Queue, Server Change Feed with Tombstones)</a></li>
+        <li><a href="145-opt-in-cursor-paging.html">145 · Opt-In Cursor Paging on List Endpoints (Beside Offset Paging)</a></li>
+        <li><a href="146-ui-page-bases-and-list-shell.html" aria-current="page">146 · UI Page Bases and the List Shell (Bases Own Plumbing, Pages Own Model and Service Call)</a></li>
+          </ol>
+        </nav>
+      </details>
+    </aside>
+        <article class="doc-content">
+          <p class="eyebrow doc-kicker">Architecture Decision Record</p>
+          <h1 id="adr-146-ui-page-bases-and-the-list-shell-bases-own-plumbing-pages-own-model-and-service-call">ADR-146: UI Page Bases and the List Shell (Bases Own Plumbing, Pages Own Model and Service Call)</h1>
+          <h2 id="status">Status</h2>
+          <p>Accepted (2026-11-12). Unreleased: listed under <code>[Unreleased]</code> in <code>MMCA.Common/CHANGELOG.md:7</code> (entries at <code>:38</code> to <code>:41</code>), and the adopting pages are on the <code>feat/fresh-eyes-wave</code> branches of MMCA.ADC and MMCA.Store.</p>
+          <h2 id="context">Context</h2>
+          <p>An admin create form and an admin list page in a consumer are mostly plumbing that is the same on every page: a page-scoped cancellation source and its dispose method, a dirty flag for the unsaved-changes guard, the failed save <code>Result</code> kept for the error summary, a submit sequence (validate, pre-check, save, clear the dirty flag, navigate, always end the saving state), the delegate that feeds the phone list, and the list chrome (header, cancel-loading button, search row, grid or phone list, empty and failure content, pager, delete confirmation). Both production consumers, MMCA.ADC and MMCA.Store, carry these pages, so a fix to any of those steps written into the page itself lands page by page in two repos.</p>
+          <p>The cost is visible in what a consumer deletes when a create form moves onto the base: <code>_cts</code>, <code>IsSaving</code>, <code>_isDirty</code>, <code>MarkDirty</code>, <code>_saveResult</code>, <code>_form</code>, the injected <code>IToastService</code> and the <code>Dispose</code> methods, plus the hand-written submit body (<code>MMCA.Common/UPGRADING.md:122-125</code>). The detail page already had a base that owned its cancellation and edit lifecycle (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI/Pages/Common/DetailPageBase.cs:7-27</code>), and the list page already had <code>DataGridListPageBase&lt;TDto&gt;</code> owning paging, filter, sort and loading state (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI/Pages/Common/DataGridListPageBase.cs:24</code>); the create form had no base and the list markup had no shared component.</p>
+          <p>This ADR builds on <a href="067-ui-module-shell-composition.html">ADR-067</a> (the shared Blazor shell and <code>IUIModule</code> composition the pages live in), <a href="056-blazor-render-mode-strategy.html">ADR-056</a> (the render-mode transitions the page token cancels across), <a href="094-client-entity-data-access.html">ADR-094</a> (the client services a page calls), <a href="013-result-pattern.html">ADR-013</a> (the <code>Result</code> a save returns), <a href="063-accessibility-conformance-gate.html">ADR-063</a> (the accessibility contract the row link serves) and <a href="015-architecture-fitness-functions.html">ADR-015</a> (rule bodies shipped once in <code>MMCA.Common.Testing.Architecture</code> and subclassed per repo).</p>
+          <h2 id="decision">Decision</h2>
+          <p><strong>MMCA.Common.UI provides the page plumbing as bases and components. A consumer page declares its model and its service call and inherits the rest.</strong></p>
+          <h3 id="the-shared-cancellation-base">The shared cancellation base</h3>
+          <p><code>CancellablePageBase</code> (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI/Pages/Common/CancellablePageBase.cs:16</code>) owns one page-scoped <code>CancellationTokenSource</code> (<code>:18</code>) and exposes it as <code>PageToken</code> (<code>:27</code>), which returns an already-cancelled token after dispose instead of throwing (<code>:22-26</code>). <code>Dispose(bool)</code> cancels and disposes the source exactly once (<code>:41-55</code>); a page with further disposables overrides it and calls the base (<code>:12-15</code>). Both <code>DetailPageBase</code> (<code>DetailPageBase.cs:27</code>) and <code>CreatePageBase</code> (<code>CreatePageBase.cs:21</code>) derive from it, so the create and detail pages share one cancellation contract. <code>DetailPageBase</code> adds the route-load guard and load state on top (<code>DetailPageBase.cs:34</code>, <code>:41</code>).</p>
+          <h3 id="the-create-page-base-and-its-submit-sequence">The create-page base and its submit sequence</h3>
+          <p><code>CreatePageBase</code> (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI/Pages/Common/CreatePageBase.cs:21</code>) owns the injected <code>Toast</code> (<code>:24</code>), the <code>Form</code> the page binds with <code>@ref=&quot;Form&quot;</code> (<code>:27</code>), <code>IsSaving</code> (<code>:30</code>), <code>IsDirty</code> (<code>:33</code>), <code>SaveResult</code> (<code>:36</code>) and <code>MarkDirty()</code> (<code>:39</code>). The page still writes its model, its fields (the adopters render a sibling <code>*FormFields</code> component and pass it <code>OnFieldChanged=&quot;MarkDirty&quot;</code>, as in <code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/Pages/Sponsors/SponsorCreate.razor:26-27</code> and <code>MMCA.Store/Source/Modules/Identity/MMCA.Store.Identity.UI/Pages/Customers/CustomerCreate.razor:28-29</code>), its <code>UnsavedChangesGuard</code> and <code>ErrorSummary</code> markup, and one <code>SubmitAsync</code> call carrying its service call and its success step (<code>:15-20</code>).</p>
+          <p><code>SubmitAsync&lt;TCreated&gt;(saveAsync, onCreated, options)</code> (<code>:53-56</code>) runs a fixed sequence:</p>
+          <ol>
+          <li>It returns <code>false</code> when there is no form or a save is already in flight (<code>:61-64</code>).</li>
+          <li>It clears <code>SaveResult</code> and validates the form; an invalid form raises a warning toast with <code>ErrorMessages.ValidationError</code> and stops (<code>:67-73</code>).</li>
+          <li>It runs the optional pre-check; a non-null message is shown as a warning toast and stops the submit (<code>:75-80</code>).</li>
+          <li>It sets <code>IsSaving</code>, calls the page&#39;s <code>saveAsync</code> with <code>PageToken</code> (<code>:82-85</code>).</li>
+          <li>On success it clears <code>SaveResult</code>, clears <code>IsDirty</code> BEFORE calling <code>onCreated</code>, so the guard does not block the navigation the success step performs, and returns <code>true</code> (<code>:86-91</code>).</li>
+          <li>On failure it keeps the result in <code>SaveResult</code> for the error summary and, unless told not to, raises the composed failure toast through <code>NotifyOnFailure</code> (<code>:94-100</code>).</li>
+          <li>A cancellation returns <code>false</code> (<code>:102-105</code>), and <code>IsSaving</code> is always reset in <code>finally</code> (<code>:106-109</code>).</li>
+          </ol>
+          <p><code>CreateSubmitOptions</code> (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI/Pages/Common/CreateSubmitOptions.cs:8</code>) is the per-call options record: <code>PreCheck</code>, a <code>Func&lt;string?&gt;</code> that returns a warning to stop or <code>null</code> to continue (<code>:14</code>); <code>ToastOnFailure</code>, defaulting to <code>true</code> (<code>:20</code>); and <code>Localizer</code>, passed to <code>NotifyOnFailure</code> (<code>:26</code>).</p>
+          <p>A consumer create page is then one call. MMCA.Store&#39;s customer form submits through it (<code>MMCA.Store/Source/Modules/Identity/MMCA.Store.Identity.UI/Pages/Customers/CustomerCreate.razor.cs:52</code>), and MMCA.ADC&#39;s sponsor form passes a pre-check for a missing event (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/Pages/Sponsors/SponsorCreate.razor.cs:82</code>, <code>:92</code>).</p>
+          <h3 id="the-list-page-base-the-before-fetch-hook-and-the-phone-fetcher">The list-page base: the before-fetch hook and the phone fetcher</h3>
+          <p><code>DataGridListPageBase&lt;TDto&gt;</code> gains two members.</p>
+          <ul>
+          <li><code>OnBeforeFetchAsync(CancellationToken)</code> is a virtual hook that does nothing by default (<code>DataGridListPageBase.cs:792</code>). Every loader of the base and every delegate <code>MobilePageFetcher</code> builds awaits it before building the filter bag (the one exception is the persisted pre-render shortcut, which returns its cached rows without calling the hook, <code>:790</code>, <code>:869-883</code>), so a page that must wait for state its filter callback reads (a picker&#39;s options) writes the wait once instead of at the top of each fetch method (<code>:779-784</code>). MMCA.ADC&#39;s event-filtered list base overrides it to wait for the events list (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/Pages/Common/EventFilteredListPageBase.cs:213</code>).</li>
+          <li><code>MobilePageFetcher(fetchAsync, additionalFilters, defaultSortColumn, defaultSortDirection, afterFetchAsync)</code> (<code>DataGridListPageBase.cs:816-822</code>) turns the grid&#39;s fetch delegate plus its filter callback into the phone list&#39;s page delegate, so one fetch method and one filter callback serve both. The delegate awaits the hook (<code>:836</code>), runs the filter callback on a fresh ordinal bag, so grid column filters are never sent (<code>:800-802</code>, <code>:838-839</code>), maps the sort direction to <code>&quot;desc&quot;</code> or <code>&quot;asc&quot;</code> only when a sort column is given (<code>:826-832</code>), calls the fetch (<code>:841</code>), runs the optional after-fetch step only on success (<code>:842-844</code>), and returns the <code>Result</code> unchanged with no toast and no page state change, because the phone list owns retry and error display (<code>:810-815</code>). Adopters: <code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/Pages/Activities/ActivityList.razor.cs:71</code>, <code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/Pages/Sponsors/SponsorList.razor.cs:69</code>, <code>MMCA.Store/Source/Modules/Identity/MMCA.Store.Identity.UI/Pages/Customers/CustomerList.razor.cs:38</code>, and a descending sort in <code>MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.UI/Pages/Reviews/ReviewList.razor.cs:63</code>.</li>
+          </ul>
+          <h3 id="the-list-shell-and-the-row-link-cell">The list shell and the row-link cell</h3>
+          <p><code>ListPageShell&lt;TItem&gt;</code> (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI/Components/Lists/ListPageShell.razor:1</code>) is the rendering half of an admin list page and holds no paging, filter, sort, loading or persistence state: every such value arrives as a parameter from the page&#39;s <code>DataGridListPageBase</code> (<code>:3-6</code>). It renders the page header with the cancel-loading button while <code>IsLoading</code> (<code>:7-16</code>), the search row and the page&#39;s <code>Filters</code> (<code>:18-31</code>), the <code>MobileInfiniteScrollList</code> fed by <code>MobileFetch</code> on a phone (<code>:33-42</code>) or a <code>MudDataGrid</code> fed by <code>ServerData</code> otherwise (<code>:45-71</code>), the shared no-records content with retry (<code>:64</code>), the pager (<code>:68</code>) and the delete confirmation (<code>:74-77</code>). The page supplies its columns through <code>Columns</code> (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI/Components/Lists/ListPageShell.razor.cs:103</code>) and its phone card through <code>CardTemplate</code> (<code>:75</code>); defaults are <code>ShowSearch = true</code> (<code>:50</code>), <code>MobilePageSize = 10</code> (<code>:81</code>), <code>RowsPerPage = 10</code> (<code>:95</code>), <code>Dense = true</code> (<code>:98</code>) and <code>ShowDeleteConfirmation = true</code> (<code>:121</code>).</p>
+          <p><code>RowLinkCell</code> (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI/Components/Lists/RowLinkCell.razor:4</code>) wraps a grid cell&#39;s text in a <code>MudLink</code> to the row&#39;s detail page, in the row&#39;s own colour with no underline, so a keyboard, pointer or screen-reader user reaches the record through a real link (<code>:1-3</code>). It takes exactly two parameters, the required <code>Href</code> (<code>:8</code>) and <code>ChildContent</code> (<code>:11</code>). Adopters: <code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/Pages/Activities/ActivityList.razor:10</code> (shell) and <code>:52</code> (cell), <code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/Pages/Sponsors/SponsorList.razor:10</code> and <code>:52</code>. The shell is adopted by MMCA.ADC&#39;s nine admin list pages and by six of MMCA.Store&#39;s list pages: <code>CategoryList</code>, <code>ProductList</code> and <code>ReviewList</code> in Catalog (<code>MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.UI/Pages/Categories/CategoryList.razor:10</code>, <code>MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.UI/Pages/Products/ProductList.razor:10</code>, <code>MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.UI/Pages/Reviews/ReviewList.razor:11</code>), <code>CustomerList</code> in Identity (<code>MMCA.Store/Source/Modules/Identity/MMCA.Store.Identity.UI/Pages/Customers/CustomerList.razor:10</code>), and <code>InventoryItemList</code> and <code>ShoppingCartList</code> in Sales (<code>MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.UI/Pages/Inventory/InventoryItemList.razor:10</code>, <code>MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.UI/Pages/ShoppingCarts/ShoppingCartList.razor:10</code>). Each reads the shell&#39;s grid as its <code>GridRef</code> (<code>MMCA.Store/Source/Modules/Identity/MMCA.Store.Identity.UI/Pages/Customers/CustomerList.razor.cs:23-24</code>). Five of the six link their cells with <code>RowLinkCell</code> (for example <code>CustomerList.razor:36</code>, <code>:41</code>, <code>:47</code>); <code>ReviewList</code> uses none. Three pass <code>ShowSearch=&quot;false&quot;</code> (<code>CustomerList.razor:13</code>, <code>InventoryItemList.razor:13</code>, <code>ShoppingCartList.razor:13</code>), and two of those also pass <code>ShowDeleteConfirmation=&quot;false&quot;</code> (<code>InventoryItemList.razor:13</code>, <code>ShoppingCartList.razor:13</code>). Four MMCA.Store <code>*List.razor</code> files are not on the shell, each for a reason in the file: <code>OrderList</code> swaps its whole body by viewer, cards for a customer and its own <code>MudDataGrid</code> and pager for staff, and the shell has no slot for that (<code>MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.UI/Pages/Orders/OrderList.razor:24</code>, grid at <code>:84</code>, pager at <code>:187</code>); <code>CustomerOrderList</code> is a child card component with no route, not a list page (<code>MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.UI/Pages/Orders/CustomerOrderList.razor:1-8</code>); <code>RoleList</code> and <code>UserList</code> are thin wrappers over the framework&#39;s <code>RoleAdminList</code> and <code>UserAdminList</code> (<code>MMCA.Store/Source/Modules/Identity/MMCA.Store.Identity.UI/Pages/Roles/RoleList.razor:10</code>, <code>MMCA.Store/Source/Modules/Identity/MMCA.Store.Identity.UI/Pages/Users/UserList/UserList.razor:12</code>).</p>
+          <h3 id="the-gate">The gate</h3>
+          <p><code>FormsConventionTestsBase</code> (<code>MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Bases/Ui/FormsConventionTestsBase.cs:30</code>) is re-run as a thin subclass in each repo. It discovers every <code>*Create.razor</code> under the repo&#39;s <code>Source/Modules</code>, skipping <code>obj</code> and <code>bin</code>, and fails when fewer than <code>MinimumCreateForms</code> are found (<code>:284-299</code>, default <code>1</code> at <code>:56</code>). Two facts hold the convention:</p>
+          <ul>
+          <li><code>AdminCreateForms_InheritCreatePageBase</code> (<code>:178-196</code>) requires each form to derive from <code>CreatePageBase</code>: an <code>@inherits</code> line naming the base in the markup, or <code>: CreatePageBase</code> / <code>, CreatePageBase</code> in the code-behind class declaration, with Razor, HTML and C# comments stripped first so a base named only in a comment does not count (<code>:159-169</code>, regexes at <code>:362</code> and <code>:365</code>). It checks the declaration only: nothing in the fact checks that the form calls <code>SubmitAsync</code> or has dropped its private members.</li>
+          <li><code>AdminCreateForms_KeepUnsavedChangesGuardAndValidation</code> (<code>:198-215</code>) requires the ten literal markers of <code>RequiredMarkers</code> (<code>:73-85</code>), which name the base&#39;s members: <code>IsDirtyAccessor=&quot;() =&gt; IsDirty&quot;</code>, <code>@ref=&quot;Form&quot;</code>, <code>Result=&quot;SaveResult&quot;</code> and <code>Messages=&quot;Form?.Errors&quot;</code> among them.</li>
+          </ul>
+          <p><code>RequiredMarkers</code> is virtual, so a repo can override it, but the inheritance fact never reads it: a form that does not declare <code>CreatePageBase</code> fails <code>AdminCreateForms_InheritCreatePageBase</code> whatever its marker list says, so overriding the markers cannot stand in for declaring the base (<code>MMCA.Common/UPGRADING.md:135-136</code>). A form that does declare the base passes that fact even if it keeps its own private plumbing and a hand-written submit (see Trade-offs).</p>
+          <h2 id="rationale">Rationale</h2>
+          <ul>
+          <li><strong>One fix lands once.</strong> The submit sequence, the cancellation contract and the list chrome each live in one Common type. A correction to the sequence (for example the order of clearing the dirty flag against navigating, <code>CreatePageBase.cs:86-91</code>) reaches every create form in both consumers with the package bump: all nine in MMCA.ADC (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/Pages/Sponsors/SponsorCreate.razor:8</code>) and all four in MMCA.Store (<code>MMCA.Store/Source/Modules/Identity/MMCA.Store.Identity.UI/Pages/Customers/CustomerCreate.razor:2</code>) declare the base. A correction to the list chrome reaches the nine MMCA.ADC admin list pages and the six MMCA.Store list pages on the shell (<code>MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.UI/Pages/Categories/CategoryList.razor:10</code>), but not MMCA.Store&#39;s <code>OrderList</code>, which keeps its own grid and pager (<code>MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.UI/Pages/Orders/OrderList.razor:84</code>, <code>:187</code>).</li>
+          <li><strong>The page keeps what differs.</strong> The base takes the service call and the success step as delegates (<code>CreatePageBase.cs:53-56</code>) and the shell takes the columns and card as fragments (<code>ListPageShell.razor.cs:75</code>, <code>:103</code>), so the model, the fields, the client service and the navigation target stay in the page where a reader expects them. This is the same split <code>DetailPageBase</code> already used (<code>DetailPageBase.cs:15-21</code>).</li>
+          <li><strong>One fetch serves two layouts.</strong> <code>MobilePageFetcher</code> reuses the grid&#39;s fetch delegate and the page&#39;s own filter callback (<code>DataGridListPageBase.cs:794-797</code>), so the page&#39;s search and filter state reach both layouts through one method. The grid&#39;s column filters and its current sort are not shared (see Trade-offs).</li>
+          <li><strong>A test, not a convention document, holds the line.</strong> Per ADR-015 the rule body ships once and each repo subclasses it; the inheritance fact turns &quot;declare the base&quot; into a red build rather than a review comment. Whether the page then uses the base&#39;s submit sequence is not tested (see Trade-offs).</li>
+          </ul>
+          <h2 id="trade-offs">Trade-offs</h2>
+          <ul>
+          <li><strong>The base fixes the submit sequence.</strong> A page whose sequence differs keeps its own code around or instead of the base call. MMCA.ADC&#39;s room form checks its missing-event precondition before calling <code>SubmitAsync</code>, so an invalid form with no event gets the specific message rather than the generic validation toast (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/Pages/Rooms/RoomCreate.razor.cs:70</code>, then <code>SubmitAsync</code> at <code>:77</code> with its own <code>PreCheck</code> at <code>:87</code>).</li>
+          <li><strong>The hook is all-or-nothing per page.</strong> A page whose wait must sit at a different point than the hook keeps its own wait. MMCA.ADC&#39;s public sessions list awaits its event scope itself: on the grid path before entering the base loader, so a load superseded during the wait is still tracked (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/Pages/Public/Sessions/PublicSessionList.razor.cs:225-229</code>, <code>:236</code>), and at the top of its phone fetch (<code>:343</code>). Its comment keeps the wait out of <code>OnBeforeFetchAsync</code> because a second <code>EnsureEventScopeAsync</code> within the same grid load could re-issue a failed lookup (<code>:337-340</code>).</li>
+          <li><strong>The phone list does not see the grid&#39;s column filters or sort.</strong> The delegate <code>MobilePageFetcher</code> builds fills a fresh bag from the page&#39;s filter callback only, so grid column filters are never sent (<code>DataGridListPageBase.cs:800-802</code>, <code>:838-839</code>), and its sort is the fixed default column the page passes in (<code>:826-832</code>). The shell turns column filtering on (<code>ListPageShell.razor:55</code>) and adopters mark columns filterable (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/Pages/Activities/ActivityList.razor:50</code>), so a column filter or a re-sort set on the grid has no counterpart on a phone.</li>
+          <li><strong>The gate checks the declaration, not the use.</strong> <code>InheritsCreatePageBase</code> matches an <code>@inherits</code> line or a class declaration naming the base (<code>FormsConventionTestsBase.cs:159-169</code>), and no fact checks for a <code>SubmitAsync</code> call. A form that declares the base but keeps private plumbing and a hand-written submit passes the inheritance fact; only review catches it.</li>
+          <li><strong>The row-link cell takes no extra attributes.</strong> <code>RowLinkCell</code> accepts only <code>Href</code> and <code>ChildContent</code> (<code>RowLinkCell.razor:8</code>, <code>:11</code>), so a link that needs an <code>aria-label</code> stays a plain <code>MudLink</code>, as in MMCA.ADC&#39;s question list required-flag cell (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/Pages/Questions/QuestionList.razor:76</code>).</li>
+          <li><strong>The shell fixes the grid&#39;s settings.</strong> <code>AllowUnsorted=&quot;false&quot;</code>, filtering, hover and striping are set in the shell (<code>ListPageShell.razor:53-59</code>); a page needing different grid behaviour does not use the shell.</li>
+          <li><strong>The shell hands the page no grid while the phone layout is showing.</strong> <code>Grid</code> answers <code>null</code> whenever <code>IsMobile</code> is set (<code>ListPageShell.razor.cs:127</code>, <code>IsMobile</code> at <code>:65</code>), and every adopting page in both consumers reads its <code>GridRef</code> from it (<code>MMCA.Store/Source/Modules/Identity/MMCA.Store.Identity.UI/Pages/Customers/CustomerList.razor.cs:24</code>). The base pushes restored page, page size and sort into a grid only when <code>GridRef</code> returns one (<code>DataGridListPageBase.cs:610</code>, <code>:660</code>, <code>:681</code>), so list state restored on a phone is not pushed into a grid that is not rendered, and a window widened from the phone layout to the desktop layout makes its first fetch with the restored sort while the grid header shows the default.</li>
+          <li><strong>Breaking for consumers.</strong> The fitness test turns red in a consumer until every create form moves (<code>MMCA.Common/UPGRADING.md:109-113</code>).</li>
+          </ul>
+          <h2 id="alternatives-rejected">Alternatives rejected</h2>
+          <p>Weighed 2026-11-12.</p>
+          <ul>
+          <li><strong>A code generator that emits create and list pages.</strong> Rejected: a generated page is copied plumbing again, and a fix to the sequence would need every page regenerated in both consumers; the pages also differ in fields, pickers and pre-checks that a generator template would have to parameterize. Revisit if the number of create and list pages grows to the point that the per-page model and service call are themselves boilerplate.</li>
+          <li><strong>One universal page component configured by parameters.</strong> Rejected: field layout, filters, cards and success navigation differ per aggregate, so the parameter surface would grow until it restated each page, and a page with a different sequence (the room form above) would need a switch for it. The bases plus the shell keep the page&#39;s own markup and code. Revisit if a family of pages emerges whose markup is identical apart from the model type.</li>
+          <li><strong>Leaving the convention to documentation alone.</strong> Rejected: a documented pattern lets a new create form re-implement the sequence and still pass review, and the markers check alone accepts private members that mirror the base&#39;s names. The inheritance fact (<code>FormsConventionTestsBase.cs:178-196</code>) makes the base declaration checkable. Revisit only if the fitness test proves too coarse for a legitimate form shape, in which case narrow the discovery glob rather than drop the fact.</li>
+          </ul>
+          <h2 id="consequences">Consequences</h2>
+          <ul>
+          <li><strong>Two components are removed</strong> (<code>MMCA.Common/UPGRADING.md:49-56</code>). <code>PageStateScope</code>, with its <code>OnRestore</code> parameter and <code>OnPageRestoredAsync</code> callback, has no replacement: delete the element, and reload in <code>OnParametersSetAsync</code> where a page needs a refresh after back navigation (<code>:54</code>, <code>:58-59</code>). <code>MobileCardList&lt;TItem&gt;</code> is replaced by <code>MobileInfiniteScrollList&lt;TItem&gt;</code>: rename the element, keep <code>CardTemplate</code>, <code>OnCardClick</code>, <code>EmptyMessage</code>, <code>EmptyIcon</code> and <code>PageSize</code>, drop the paging parameters and pass <code>FetchPageResult</code>, which <code>MobilePageFetcher</code> builds (<code>:56</code>, <code>:61-66</code>). The <code>registerBfcacheHandler</code> and <code>unregisterBfcacheHandler</code> functions of <code>_content/MMCA.Common.UI/nav-interop.js</code> are removed with them, with no replacement (<code>:55</code>).</li>
+          <li><strong>Per create page</strong>, an adopter derives from <code>CreatePageBase</code> (dropping <code>IDisposable</code>), deletes the private cancellation, dirty, saving, save-result, form and toast members and the <code>Dispose</code> methods, renames the markup bindings (<code>_isDirty</code> to <code>IsDirty</code>, <code>_form</code> to <code>Form</code>, <code>_saveResult</code> to <code>SaveResult</code>, <code>_cts.LifetimeToken()</code> to <code>PageToken</code>) and replaces the submit body with one <code>SubmitAsync</code> call (<code>MMCA.Common/UPGRADING.md:115-133</code>).</li>
+          <li><strong>Per list page</strong>, an MMCA.ADC admin list replaces its header, search, grid, phone list, pager and delete markup with <code>ListPageShell</code>, wraps cell text in <code>RowLinkCell</code>, builds the phone delegate with <code>MobilePageFetcher</code>, and moves any pre-fetch wait into <code>OnBeforeFetchAsync</code>. MMCA.Store&#39;s six list pages on the shell take the same shape, <code>CustomerList</code> among them (<code>MMCA.Store/Source/Modules/Identity/MMCA.Store.Identity.UI/Pages/Customers/CustomerList.razor:10</code>, phone delegate at <code>MMCA.Store/Source/Modules/Identity/MMCA.Store.Identity.UI/Pages/Customers/CustomerList.razor.cs:38</code>); MMCA.Store&#39;s <code>OrderList</code> keeps its own grid and pager markup (<code>MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.UI/Pages/Orders/OrderList.razor:84</code>, <code>:187</code>) and builds the phone delegate with <code>MobilePageFetcher</code> (<code>MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.UI/Pages/Orders/OrderList.razor.cs:161</code>).</li>
+          <li><strong>Adopters declare the base in the markup.</strong> Every adopter puts <code>@inherits MMCA.Common.UI.Pages.Common.CreatePageBase</code> in the <code>.razor</code> file (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/Pages/Sponsors/SponsorCreate.razor:8</code>, <code>MMCA.Store/Source/Modules/Identity/MMCA.Store.Identity.UI/Pages/Customers/CustomerCreate.razor:2</code>), and its code-behind partial class names no base (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/Pages/Rooms/RoomCreate.razor.cs:10</code>, <code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/Pages/Sponsors/SponsorCreate.razor.cs:16</code>). The fitness test accepts either location (<code>FormsConventionTestsBase.cs:159-169</code>, code-behind branch at <code>:168</code>).</li>
+          <li><strong>Adopter columns name both type parameters.</strong> Every <code>PropertyColumn</code> in the MMCA.ADC pages on the shell names both <code>T</code> and <code>TProperty</code> (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/Pages/Activities/ActivityList.razor:50</code>, <code>:55</code>). The page supplies them through the <code>Columns</code> fragment (<code>ListPageShell.razor.cs:103</code>), rendered inside the shell&#39;s own <code>MudDataGrid</code> (<code>ListPageShell.razor:60-62</code>), and the shell declares its item type as <code>TItem</code> with no <code>CascadingTypeParameter</code> (<code>ListPageShell.razor:1</code>, <code>ListPageShell.razor.cs:23</code>).</li>
+          <li><strong>What to watch.</strong> A new create form that cannot fit the sequence is a signal to extend <code>CreateSubmitOptions</code>, not to fork the sequence in the page, once a second page needs the same variation.</li>
+          </ul>
+          
+        <div class="doc-foot btn-row">
+          <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
+          <a class="btn btn--ghost" href="https://github.com/ivanball/ivanball.github.io/blob/main/docs-src/adr/146-ui-page-bases-and-list-shell.md" target="_blank" rel="noopener">View source on GitHub ↗</a>
+        </div>
+        </article>
+        <aside class="doc-aside" id="doc-rail">
+          <nav class="doc-toc" aria-label="On this page">
+            <p class="doc-toc-title">On this page</p>
+            <ul>
+            <li><a href="#status">Status</a></li>
+            <li><a href="#context">Context</a></li>
+            <li><a href="#decision">Decision</a></li>
+            <li><a href="#rationale">Rationale</a></li>
+            <li><a href="#trade-offs">Trade-offs</a></li>
+            <li><a href="#alternatives-rejected">Alternatives rejected</a></li>
+            <li><a href="#consequences">Consequences</a></li>
+            </ul>
+          </nav>
+        </aside>
+      </div>
+    </div>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container">
+      <div class="footer-grid">
+        <p class="footer-meta mb-0"><strong>Ivan Ball-llovera</strong> · Principal Software Architect · Douglasville, GA</p>
+        <ul class="footer-links">
+          <li><a href="../../resume.html">Résumé</a></li>
+          <li><a href="../../platform.html">Platform</a></li>
+          <li><a href="../../docs/index.html">Reference</a></li>
+          <li><a href="../../writing.html">Writing</a></li>
+          <li><a href="../../speaking.html">Speaking</a></li>
+          <li><a href="../../contact.html">Contact</a></li>
+          <li><a href="https://github.com/ivanball" target="_blank" rel="me noopener">GitHub</a></li>
+          <li><a href="https://www.linkedin.com/in/ivan-ball-llovera-6549a911" target="_blank" rel="me noopener">LinkedIn</a></li>
+        </ul>
+      </div>
+      <p class="footer-meta" style="margin-top:1rem">© <span class="js-year">2026</span> Ivan Ball-llovera. Reference docs generated from source.</p>
+    </div>
+  </footer>
+
+</body>
+</html>

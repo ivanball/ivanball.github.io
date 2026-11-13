@@ -6,6 +6,8 @@ Accepted (2026-11-08). Ships in MMCA.Common v1.281.0 as a new package, `MMCA.Com
 `AddPasskeys` and sets `Passkeys:Enabled`
 (`MMCA.Common/Source/Core/MMCA.Common.Application/Auth/Passkeys/PasskeySettings.cs:24-25`, default
 false).
+Amended 2026-11-12: MMCA.ADC is the first consumer to carry the code path, on its adoption branch,
+switched off in production (see Consequences).
 
 ## Context
 A password plus a TOTP code is phishable: a convincing proxy page collects both and replays them
@@ -127,7 +129,7 @@ claim. Web heads only.**
     browser implementation over `passkeys.js`
     (`MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/Capabilities/DependencyInjection.cs:57-59`,
     `:113-114`). The login page offers passkeys only when `SignIn:OfferPasskeys` is true and the
-    capability is available (`MMCA.Common/Source/Presentation/MMCA.Common.UI/Pages/Auth/Login.razor.cs:101-106`),
+    capability is available (`MMCA.Common/Source/Presentation/MMCA.Common.UI/Pages/Auth/Login.razor.cs:105-108`),
     and browser autofill asks for a challenge only where conditional mediation is available
     (`MMCA.Common/Source/Presentation/MMCA.Common.UI/wwwroot/passkeys.js:137-143`).
 12. **Service accounts never sign in with a passkey.** `SignInWithPasskeyAsync` treats an account
@@ -188,8 +190,33 @@ claim. Web heads only.**
   `AddPasskeys`, setting the RP id, name and origins, adding the `PasskeyCredentials` migration with
   `EnablePasskeys`, routing a `PasskeysControllerBase` subclass, setting `SignIn:OfferPasskeys` and
   placing `PasskeysPanel` on the profile page (`MMCA.Common/UPGRADING.md:54-70`).
-- MMCA.ADC ships the code path off: it overrides `HasExternalLoginAsync` but adds no migration, no
-  configuration and no UI wiring, pending a decision on its production domain (recorded in
+- MMCA.ADC is the first consumer to carry the code path, on its adoption branch
+  `feat/fresh-eyes-wave`, and carries it switched OFF in production. Its Identity service references
+  the package (`MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/MMCA.ADC.Identity.Service.csproj:35`)
+  and calls `AddPasskeys` (`MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:170-174`),
+  but its base `appsettings.json` sets `Passkeys:Enabled` false
+  (`MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/appsettings.json:133-134`). Only the
+  service's `appsettings.Development.json` (`:33-34` of that file) and the AppHost
+  (`MMCA.ADC/Source/Hosting/MMCA.ADC.AppHost/Program.cs:490`) turn it on, and no file under
+  `MMCA.ADC/infra/` sets `Passkeys` or `SignIn:OfferPasskeys`, so in production every passkey route
+  answers 404 (`PasskeysControllerBase.cs:53-54`, `:71-73`). `SignIn:OfferPasskeys` is true only in
+  the web head's Development settings
+  (`MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/appsettings.Development.json:13`) and through the
+  AppHost (`MMCA.ADC/Source/Hosting/MMCA.ADC.AppHost/Program.cs:492`); the web head hands it to the
+  browser (`MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs:195-199`), so the framework login
+  page's passkey button and ADC's profile Passkeys card
+  (`MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.UI/Pages/Users/Profile/Profile.razor:110`)
+  never render where it is false; the login button also needs an available passkey capability and a
+  registered passkey UI service (`Login.razor.cs:105-108`). The controller is a sealed `PasskeysControllerBase` subclass routed
+  at `auth/passkeys`
+  (`MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.API/Controllers/Passkeys/PasskeysController.cs:19-21`).
+  The `AddPasskeyCredentials` migration creates the one `PasskeyCredentials` table with a unique
+  index on `CredentialId` and an index on `UserId`
+  (`MMCA.ADC/Source/Hosting/MMCA.ADC.Migrations.SqlServer.Identity/Migrations/20261112192534_AddPasskeyCredentials.cs:14-45`),
+  so once the migration runs the table exists, unused, while the switch is off (`Program.cs:171-173` of the Identity
+  service). ADC also overrides `HasExternalLoginAsync`. Turning passkeys on in production waits on a
+  decision about ADC's production domain, because a passkey is bound to the relying-party id
+  (`appsettings.json:129-130` of the Identity service; recorded in
   [the ADC backlog](../governance/adc-RemediationBacklog.md)). Store and Helpdesk leave it off.
 - `MMCA.Common/FACTS.md` lists the new package.
 

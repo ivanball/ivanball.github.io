@@ -63,6 +63,7 @@ Revised 2026-10-24: OTLP is the only built-in exporter; Azure Monitor moved to t
 Revised 2026-10-25: a second vendor exporter, `AddGoogleCloudTelemetryExporter()` in MMCA.Common.Gcp, sends traces and logs to the Google Cloud Telemetry API; metrics go through the Google-built Collector, and the collector-free metrics path is recorded as a rejected alternative. See Revision (2026-10-25) at the end.
 Revised 2026-10-26: the meter chain carries eleven subscriptions (ten `MMCA.Common.*` plus `Polly`) now that `MMCA.Common.Persistence` and its `persistence.concurrency.conflict` counter are subscribed, superseding the ten-meter count of the 2026-09-19 entry, and the `Extensions.Telemetry.cs`, `OutboxProcessor.cs` and bicep anchors in the live sections are refreshed. See Revision (2026-10-26) at the end.
 Revised 2026-10-28: records alerting the earlier re-verifications omitted (ADC has carried the same 401/429 auth-failure alert as Store since 2026-10-19, and both apps carry a 403 forbidden-burst alert at severity 3, Store since 2026-09-07 and ADC since 2026-10-19), and the bicep, host `Program.cs` and `DbUpdateExceptionHandler` anchors the dated sections keep are given their current locations. See Revision (2026-10-28) at the end.
+Revised 2026-11-12 (unreleased, on the `feat/fresh-eyes-wave` branch): `AddAzureMonitorExporter()` lives in the new `MMCA.Common.Azure.Startup` package (call name unchanged), a third vendor exporter, `AddAwsTelemetryExporter()` in MMCA.Common.Aws, sends traces and logs (never metrics) to AWS, and the `MMCA.Common.InternalCommands` meter carries five `internal_commands.lane.*` instruments for the webhook delivery lane ([ADR-142](142-outbound-webhooks-and-delivery-lane.md)); the Decision's exporter bullet is corrected in place. See Revision (2026-11-12) at the end.
 
 ## Context
 The framework is a modular monolith whose modules extract into standalone services (ADR-008), so
@@ -207,10 +208,17 @@ for the CQRS and outbox paths, and expose cost knobs with fail-safe defaults.
   sets it, exporter wired at `:170`), and OTLP is the only exporter the framework wires. A vendor
   backend is one adapter call made after `AddServiceDefaults()`, and each adapter refuses to run before
   it, because the poll-span and probe filter processors must sit ahead of the vendor exporter (the core
-  leaves its `ServiceDefaultsTelemetry` marker at `Extensions.Telemetry.cs:147`). Two adapters exist.
+  leaves its `ServiceDefaultsTelemetry` marker at `Extensions.Telemetry.cs:147`). Three adapters exist.
   Azure Monitor is `AddAzureMonitorExporter()`
-  (`MMCA.Common/Source/Hosting/MMCA.Common.Azure/AzureMonitorExporterExtensions.cs:42`, `UseAzureMonitor`
-  at `:63`), for a host whose cloud deployment sets `APPLICATIONINSIGHTS_CONNECTION_STRING`. Google
+  (`MMCA.Common/Source/Hosting/MMCA.Common.Azure.Startup/AzureMonitorExporterExtensions.cs:42`,
+  `UseAzureMonitor` at `:63`), in the `MMCA.Common.Azure.Startup` package that `MMCA.Common.Azure`
+  references and type-forwards (`MMCA.Common/Source/Hosting/MMCA.Common.Azure/TypeForwards.cs:7`), for a
+  host whose cloud deployment sets `APPLICATIONINSIGHTS_CONNECTION_STRING`. AWS is
+  `AddAwsTelemetryExporter()`
+  (`MMCA.Common/Source/Hosting/MMCA.Common.Aws/AwsTelemetryExporterExtensions.cs:89`, order check at
+  `:91`-`:99`), gated on `AwsTelemetry:Region` (`:47`, a no-op when blank at `:105`-`:108`), which sends
+  traces to X-Ray and, only when a log group and stream are both set, logs to CloudWatch Logs
+  (`:148`-`:161`), and no metrics (`:66`-`:69`); the Revision (2026-11-12) at the end records it. Google
   Cloud is `AddGoogleCloudTelemetryExporter()`
   (`MMCA.Common/Source/Hosting/MMCA.Common.Gcp/GoogleCloudTelemetryExporterExtensions.cs:101`, order
   check at `:103`-`:111`), gated on `GoogleCloudTelemetry:ProjectId` (`:23`, read at `:113`, a no-op
@@ -937,3 +945,60 @@ anchors the dated sections keep as written.
    `RecordConflict` `:38`, 409 `:41`; the framework sampling comment
    `Extensions.Telemetry.cs:133`-`:138` (the "when unsampled" text `:136`-`:137`), the
    `ParentBasedSampler` `:140`, `ConfigureAspNetCoreMetrics` `:351` (called at `:241`).
+
+## Revision (2026-11-12)
+One exporter moves package, one exporter is new, and one meter gains a family of instruments. The
+instrumentation, sampling, cost knobs, poll-span filtering and built-in OTLP exporter the Decision
+describes are unchanged.
+
+1. **The Azure Monitor exporter moved package, not name.** `AddAzureMonitorExporter()` now lives in
+   `MMCA.Common.Azure.Startup`
+   (`MMCA.Common/Source/Hosting/MMCA.Common.Azure.Startup/AzureMonitorExporterExtensions.cs:12`, `:42`;
+   the order check at `:44`-`:52`, the tripwire marker at `:56`, `UseAzureMonitor` at `:63`), a package
+   whose only project reference is MMCA.Common.Aspire
+   (`MMCA.Common/Source/Hosting/MMCA.Common.Azure.Startup/MMCA.Common.Azure.Startup.csproj:36`).
+   `MMCA.Common.Azure` references it
+   (`MMCA.Common/Source/Hosting/MMCA.Common.Azure/MMCA.Common.Azure.csproj:44`) and forwards the type
+   (`MMCA.Common/Source/Hosting/MMCA.Common.Azure/TypeForwards.cs:7`), and the namespace stays
+   `MMCA.Common.Azure` (`AzureMonitorExporterExtensions.cs:6`), so the call a host writes is unchanged.
+   [ADR-134](134-cloud-neutral-core-vendor-adapters.md) records the package split. The Decision's
+   exporter bullet is corrected in place; the `MMCA.Common.Azure/AzureMonitorExporterExtensions.cs`
+   anchors in the Revision (2026-10-24) are left as recorded.
+2. **A third vendor exporter, `AddAwsTelemetryExporter()`.** It is the AWS twin of the Azure and Google
+   calls (`MMCA.Common/Source/Hosting/MMCA.Common.Aws/AwsTelemetryExporterExtensions.cs:17`-`:20`) and
+   follows the same rule: it runs after `AddServiceDefaults()` and throws otherwise (`:77`-`:81`, check at
+   `:91`-`:99`). Gated on `AwsTelemetry:Region` (`:47`, a no-op when blank at `:105`-`:108`), it exports
+   traces to X-Ray through its own batch processor (`:148`-`:150`) and logs to CloudWatch Logs only when
+   `AwsTelemetry:LogGroup` and `AwsTelemetry:LogStream` are both set (`:50`-`:51`, `:152`-`:161`), over
+   OTLP http/protobuf with every request signed by `AwsSigV4ExportHandler` (`:244`-`:258`). The exporter
+   options clear their headers, so an `OTEL_EXPORTER_OTLP_HEADERS` value meant for the vendor-neutral
+   exporter never reaches AWS (`:248`, reason at `:230`-`:232`). The call stamps `cloud.provider` and
+   `cloud.region` on the shared resource (`:143`-`:147`). Without static keys the default credential
+   chain is resolved by a hosted service while the host starts, and a failure there is one Warning, not
+   a failed start (`:57`-`:62`, `:128`-`:136`). **It exports traces and logs only, never metrics**: one
+   request is capped at 1,000 data points and the OpenTelemetry .NET SDK has no supported way to split
+   one metric's points across requests, so metrics reach AWS through an ADOT collector named by
+   `OTEL_EXPORTER_OTLP_ENDPOINT` (`:66`-`:69`), the same shape the Google adapter takes. Its tests run
+   against the SDK signer and a loopback receiver; it has not been exercised against live X-Ray or
+   CloudWatch Logs endpoints (`:72`-`:74`). `AwsTelemetry:Region` set without the call fails startup,
+   as for the other two adapters (`:120`-`:122`; [ADR-134](134-cloud-neutral-core-vendor-adapters.md)).
+3. **The internal-command meter carries the webhook delivery lane.** Five instruments on the same
+   `MMCA.Common.InternalCommands` meter
+   (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/InternalCommands/Processing/InternalCommandMetrics.cs:20`,
+   `:22`) report the dedicated lane [ADR-142](142-outbound-webhooks-and-delivery-lane.md) runs:
+
+   | Instrument | Kind | Unit | Tags | Declared |
+   | --- | --- | --- | --- | --- |
+   | `internal_commands.lane.short_circuited.count` | counter | commands | `lane` | `:128`-`:131` |
+   | `internal_commands.lane.released.count` | counter | commands | `lane` | `:137`-`:140` |
+   | `internal_commands.lane.receiver_cooldowns.count` | counter | receivers | `lane` | `:143`-`:146` |
+   | `internal_commands.lane.pending.depth` | observable gauge | commands | `lane` | `:152`-`:156` (tag `:191`) |
+   | `internal_commands.lane.oldest_due.age` | observable gauge | s | `lane`, `data_source` | `:159`-`:163` (tags `:201`-`:202`) |
+
+   A short-circuited row is a due row charged a failed attempt without being sent because its receiver
+   was cooling down (`:123`-`:127`), and a released row is a claimed row returned uncharged because it
+   never started before the batch start budget elapsed (`:133`-`:136`). Both gauges report what one lane
+   instance last observed. Because the meter name is the one the Aspire defaults already subscribe
+   (`InternalCommandMetrics.cs:9`-`:11`), no new literal is needed to export them. The same type also
+   declares two non-lane gauges the Revision (2026-09-11) did not list, `internal_commands.pending.depth`
+   (`:92`-`:96`) and `internal_commands.oldest_due.age`, tagged `data_source` (`:104`-`:108`).

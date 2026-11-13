@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 141 ADRs</summary>
+        <summary>All 146 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -241,6 +241,11 @@
         <li><a href="139-passkeys-webauthn-opt-in-sign-in.html">139 · Passkeys (WebAuthn) as an Opt-In Sign-In and Second Factor</a></li>
         <li><a href="140-machine-clients-oauth-client-credentials.html">140 · Machine Clients Through OAuth Client Credentials Backed by Service Accounts</a></li>
         <li><a href="141-two-framework-lines-from-one-tree.html">141 · Two .NET Framework Lines From One Source Tree (net10.0 and net11.0)</a></li>
+        <li><a href="142-outbound-webhooks-and-delivery-lane.html">142 · Outbound Webhooks (Signed Delivery over Internal Commands, with a Dedicated Delivery Lane)</a></li>
+        <li><a href="143-process-manager-primitive.html">143 · Process-Manager Primitive (Consumer-Owned Process Aggregate, Timeouts over Internal Commands)</a></li>
+        <li><a href="144-offline-writes-and-delta-reads.html">144 · Offline Writes and Delta Reads (Client Write Queue, Server Change Feed with Tombstones)</a></li>
+        <li><a href="145-opt-in-cursor-paging.html">145 · Opt-In Cursor Paging on List Endpoints (Beside Offset Paging)</a></li>
+        <li><a href="146-ui-page-bases-and-list-shell.html">146 · UI Page Bases and the List Shell (Bases Own Plumbing, Pages Own Model and Service Call)</a></li>
           </ol>
         </nav>
       </details>
@@ -263,7 +268,9 @@
           (2026-10-25) at the end. Revised 2026-10-26: decision 4 corrected (SQLite quotes outbox filter
           columns with double quotes like PostgreSQL, and only SQL Server and Cosmos answer brackets), decision
           9 gains the periodic-password-provider test, and anchors refreshed after the v1.257.0 and v1.261.0
-          releases. Revised 2026-10-28: anchors refreshed after the v1.265.1 release.</p>
+          releases. Revised 2026-10-28: anchors refreshed after the v1.265.1 release. Revised 2026-11-12:
+          decision 10 gains a third user, the Azure Entra token login (<code>AddAzurePostgreSqlEntraAuthentication</code>,
+          opt-in, not tried against a live server; <a href="134-cloud-neutral-core-vendor-adapters.html">ADR-134</a>).</p>
           <h2 id="context">Context</h2>
           <p>The framework has shipped three database engines since its first release: SQL Server, Azure Cosmos DB
           and SQLite. Every one of them is reached the same way, because <a href="006-database-per-service.html">ADR-006</a>
@@ -423,7 +430,7 @@
           in the unit tier. A further test authenticates through a periodic password provider on the
           configured data source (<code>PostgreSQLPersistenceTests.cs:254-255</code>, decision 10).</p>
           </li>
-          <li><p><strong>Connection customization is one extension point, and cloud IAM authentication is its two users.</strong>
+          <li><p><strong>Connection customization is one extension point, and cloud token authentication is its three users.</strong>
           <code>INpgsqlDataSourceConfigurator</code>
           (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/INpgsqlDataSourceConfigurator.cs:23</code>,
           <code>Configure</code> at <code>:27</code>) is registered through <code>AddNpgsqlDataSourceConfigurator</code>
@@ -437,7 +444,25 @@
           (<code>NpgsqlDataSources.cs:29-32</code>). With none registered nothing is built and every path keeps the raw
           connection string (<code>INpgsqlDataSourceConfigurator.cs:12-13</code>, <code>NpgsqlDataSources.cs:15-16</code>); SQL
           Server, SQLite and Cosmos sources never reach a configurator (<code>INpgsqlDataSourceConfigurator.cs:19-20</code>).
-          Two adapter calls register one: <code>AddAwsRdsIamAuthentication</code>
+          Three adapter calls register one. The Azure one is an opt-in capability of the Azure adapter
+          (<a href="134-cloud-neutral-core-vendor-adapters.html">ADR-134</a>): <code>AddAzurePostgreSqlEntraAuthentication(configuration)</code>
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Azure/AzureServiceCollectionExtensions.cs:146</code>) is gated on
+          the boolean <code>AzurePostgreSql:EntraAuthentication:Enabled</code> (<code>:124</code>, read at <code>:150</code>-<code>:156</code>, registering
+          nothing when absent or false) and registers its configurator through <code>AddNpgsqlDataSourceConfigurator</code>
+          (<code>:172</code>). That configurator sends a Microsoft Entra access token for the <code>ossrdbms-aad</code> scope, from
+          <code>DefaultAzureCredential</code>, as the password through Npgsql&#39;s periodic password provider
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Azure/PostgreSql/AzurePostgreSqlEntraAuthenticationConfigurator.cs:10</code>-<code>:14</code>,
+          <code>:34</code>-<code>:35</code>, <code>:54</code>), refreshed every four minutes, inside the credential&#39;s five-minute refresh margin,
+          and retried 30 seconds after a failed request (<code>:17</code>-<code>:21</code>, <code>:26</code>, <code>:29</code>). Because the token is the
+          password, a configured PostgreSQL connection string below <code>SSL Mode=Require</code> (or <code>VerifyCA</code> /
+          <code>VerifyFull</code>) fails registration naming its key, and one supplied later fails when its data source is
+          built (<code>AzureServiceCollectionExtensions.cs:158</code>-<code>:160</code>; <code>AzurePostgreSqlEntraAuthenticationConfigurator.cs:50</code>-<code>:52</code>,
+          <code>:65</code>-<code>:81</code>, <code>:95</code>-<code>:106</code>). The gate set true without the call, or set to a value that is not a
+          boolean, fails startup
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Integrations/HostIntegrationTripwire.cs:56</code>,
+          <code>:119</code>-<code>:131</code>; the call&#39;s marker at <code>AzureServiceCollectionExtensions.cs:162</code>-<code>:170</code>). Its limit: it
+          has not been tried against a live Azure Database for PostgreSQL server (ADR-134). The other two are
+          <code>AddAwsRdsIamAuthentication</code>
           (<code>MMCA.Common/Source/Hosting/MMCA.Common.Aws/AwsServiceCollectionExtensions.cs:107</code>, gated on
           <code>Rds:IamAuthentication:Enabled</code>, <code>MMCA.Common/Source/Hosting/MMCA.Common.Aws/Rds/RdsIamAuthenticationSettings.cs:11</code>, <code>:14</code>)
           and <code>AddCloudSqlIamAuthentication</code>
