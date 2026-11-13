@@ -12,6 +12,7 @@ The narrative documentation for the MMCA platform: adoption guides, business spe
 - [Build MMCA.ECommerce](common-ECOMMERCE-SAMPLE.md): the two-module store sample (Products + Orders) built end to end from the templates, with the minimum hand-written code.
 - [Templates](common-TEMPLATES.md): every parameter of `mmca-app`, `mmca-module`, `mmca-command`, and `mmca-query`.
 - [Building by Hand](common-BUILD-BY-HAND.md): the same solution phase by phase, for retrofitting an existing solution or understanding what the scaffold generated (MMCA.Helpdesk is the worked companion).
+- [Module Dependency Graphs](common-MODULE-GRAPHS.md): how the modules of ADC, Store and Helpdesk depend on one another, compile-time project references and runtime gRPC calls, generated from the committed project files.
 - [Versioning & Breaking-Change Policy](common-VERSIONING.md)
 - [Accessibility](common-ACCESSIBILITY.md)
 - [Resilience & Business Continuity](common-RESILIENCE.md)
