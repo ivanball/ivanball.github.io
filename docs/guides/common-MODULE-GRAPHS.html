@@ -1,0 +1,485 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#0e151f" media="(prefers-color-scheme: dark)">
+  <title>Module Dependency Graphs · MMCA · Ivan Ball-llovera</title>
+  <meta name="description" content="Generated from the committed project files of MMCA.ADC, MMCA.Store and MMCA.Helpdesk. Do not hand-edit: regenerate it instead.">
+  <link rel="canonical" href="https://ivanball.github.io/docs/guides/common-MODULE-GRAPHS.html">
+  <link rel="icon" href="../../assets/img/favicon.svg" type="image/svg+xml">
+  <link rel="alternate" type="application/rss+xml" title="Ivan Ball-llovera: deep dives on enterprise .NET" href="https://ivanball.github.io/feed.xml">
+  <meta property="og:type" content="article">
+  <meta property="og:site_name" content="Ivan Ball-llovera">
+  <meta property="og:title" content="Module Dependency Graphs">
+  <meta property="og:description" content="Generated from the committed project files of MMCA.ADC, MMCA.Store and MMCA.Helpdesk. Do not hand-edit: regenerate it instead.">
+  <meta property="og:url" content="https://ivanball.github.io/docs/guides/common-MODULE-GRAPHS.html">
+  <meta property="og:image" content="https://ivanball.github.io/assets/img/og-image.png">
+  <meta property="og:image:alt" content="Ivan Ball-llovera, Principal Software Architect">
+  <meta property="og:locale" content="en_US">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Module Dependency Graphs">
+  <meta name="twitter:description" content="Generated from the committed project files of MMCA.ADC, MMCA.Store and MMCA.Helpdesk. Do not hand-edit: regenerate it instead.">
+  <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Platform","item":"https://ivanball.github.io/platform.html"},{"@type":"ListItem","position":2,"name":"Reference","item":"https://ivanball.github.io/docs/index.html"},{"@type":"ListItem","position":3,"name":"Guides & Specifications","item":"https://ivanball.github.io/docs/guides/index.html"},{"@type":"ListItem","position":4,"name":"Common · Module Dependency Graphs","item":"https://ivanball.github.io/docs/guides/common-MODULE-GRAPHS.html"}]}</script>
+  <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);if(localStorage.getItem('mmca-rail')==='hidden')document.documentElement.setAttribute('data-rail','hidden');if(localStorage.getItem('mmca-cites')==='shown')document.documentElement.setAttribute('data-cites','shown');}catch(e){}})();</script>
+  <link rel="preload" href="../../assets/fonts/inter-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="../../assets/fonts/jetbrains-mono-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="../../assets/css/styles.css">
+  <link rel="stylesheet" href="../../assets/css/docs.css">
+  <script defer src="../../assets/js/main.js"></script>
+  <script defer src="../../assets/js/search.js"></script>
+  <script defer src="../../assets/js/analytics.js"></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+
+  <header class="site-header">
+    <div class="container nav">
+      <a class="brand" href="../../index.html">
+        <span class="brand-mark" aria-hidden="true">IB</span>
+        <span>Ivan Ball-llovera</span>
+      </a>
+      <nav aria-label="Primary">
+        <ul class="nav-links" id="nav-links">
+          <li><a href="../../index.html">Home</a></li>
+          <li><a href="../../resume.html">Résumé</a></li>
+          <li><a href="../../platform.html">Platform</a></li>
+          <li><a href="../../docs/index.html" aria-current="page">Reference</a></li>
+          <li><a href="../../writing.html">Writing</a></li>
+          <li><a href="../../speaking.html">Speaking</a></li>
+          <li><a href="../../contact.html">Contact</a></li>
+        </ul>
+      </nav>
+      <div class="nav-tools">
+        <button class="icon-btn search-open" type="button" aria-label="Search the site" data-search-open>
+          <span aria-hidden="true">⌕</span>
+        </button>
+        <button class="icon-btn theme-toggle" type="button" aria-label="Switch color theme">
+          <span class="sun" aria-hidden="true">☀</span><span class="moon" aria-hidden="true">☾</span>
+        </button>
+        <button class="icon-btn nav-toggle" type="button" aria-label="Toggle navigation menu" aria-expanded="false" aria-controls="nav-links">☰</button>
+      </div>
+    </div>
+  </header>
+  <dialog class="search-dialog" id="site-search" aria-label="Search this site">
+    <form class="search-box" method="dialog" role="search">
+      <span class="search-icon" aria-hidden="true">⌕</span>
+      <input class="search-input" type="search" id="site-search-input" placeholder="Search ADRs, guides, chapters, articles…"
+             autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
+             aria-controls="site-search-results" aria-describedby="site-search-status">
+      <button class="btn btn--ghost search-close" type="button" data-search-close>Esc</button>
+    </form>
+    <p class="search-status" id="site-search-status" role="status" aria-live="polite"></p>
+    <ul class="search-results" id="site-search-results"></ul>
+    <p class="search-foot">
+      <span><kbd>↑</kbd><kbd>↓</kbd> to navigate</span>
+      <span><kbd>Enter</kbd> to open</span>
+      <span><kbd>"…"</kbd> all these words</span>
+      <span><kbd>AND</kbd><kbd>OR</kbd> to combine</span>
+    </p>
+  </dialog>
+
+  <main id="main">
+    <div class="container doc-container">
+      <nav class="doc-breadcrumb" aria-label="Breadcrumb">
+        <a href="../../platform.html">Platform</a>
+        <span aria-hidden="true">/</span>
+        <a href="../../docs/index.html">Reference</a>
+        <span aria-hidden="true">/</span>
+        <a href="../../docs/guides/index.html">Guides &amp; Specifications</a>
+        <span aria-hidden="true">/</span>
+        <span class="current">Common · Module Dependency Graphs</span>
+      </nav>
+      <div class="doc-layout">
+      <aside class="doc-sidebar">
+      <details class="doc-sidebar-details" open>
+        <summary>All guides</summary>
+        <nav class="doc-nav" aria-label="Guides &amp; Specifications">
+          <ol>
+        <li><a href="index.html">Overview</a></li>
+        <li><a href="adc-ACCESSIBILITY-SCREENREADER-PASS.html">ADC · Manual Screen-Reader Pass: Runbook (§21 Accessibility)</a></li>
+        <li><a href="adc-IntegrationTestReworkPlan.html">ADC · Integration-Test Tier Rework Plan (RemediationBacklog #14)</a></li>
+        <li><a href="adc-NavigationFlow.html">ADC · Navigation Flow</a></li>
+        <li><a href="adc-specifications.html">ADC · Business Specifications</a></li>
+        <li><a href="common-ACCESSIBILITY.html">Common · Accessibility (rubric §21)</a></li>
+        <li><a href="common-BUILD-BY-HAND.html">Common · Building on MMCA.Common by Hand</a></li>
+        <li><a href="common-CAPABILITIES.html">Common · MMCA.Common Capability Catalog</a></li>
+        <li><a href="common-COST.html">Common · Cost &amp; FinOps Notes (rubric §31)</a></li>
+        <li><a href="common-ECOMMERCE-SAMPLE.html">Common · Build MMCA.ECommerce: a Two-Module Store from the Templates</a></li>
+        <li><a href="common-GETTING-STARTED.html">Common · Getting Started: Build a New App on MMCA.Common</a></li>
+        <li><a href="common-MODULE-GRAPHS.html" aria-current="page">Common · Module Dependency Graphs</a></li>
+        <li><a href="common-RESILIENCE.html">Common · Resilience &amp; Business Continuity (rubric §29)</a></li>
+        <li><a href="common-RESPONSIVE.html">Common · Responsive Design &amp; Cross-Browser Support (rubric §22)</a></li>
+        <li><a href="common-SMALL-APPS.html">Common · Small Apps: the lowest floor MMCA.Common has</a></li>
+        <li><a href="common-TEMPLATES.html">Common · Templates: scaffolding an MMCA app</a></li>
+        <li><a href="common-VERSIONING.html">Common · Versioning &amp; Breaking-Change Policy</a></li>
+        <li><a href="store-ACCESSIBILITY-SCREENREADER-PASS.html">Store · Manual Screen-Reader Pass: Runbook (§21 Accessibility)</a></li>
+        <li><a href="store-BusinessWorkflows.html">Store · Business Workflow Analysis</a></li>
+        <li><a href="store-NavigationFlow.html">Store · Navigation Flow</a></li>
+        <li><a href="store-Specification.html">Store · Business Specification Document</a></li>
+          </ol>
+        </nav>
+      </details>
+    </aside>
+        <article class="doc-content">
+          <p class="eyebrow doc-kicker">Guides &amp; specifications</p>
+          <h1 id="module-dependency-graphs">Module Dependency Graphs</h1>
+          <p><em>Generated from the committed project files of MMCA.ADC, MMCA.Store and MMCA.Helpdesk. Do not hand-edit: regenerate it instead.</em></p>
+          <p>How the modules of each application depend on one another, at two levels:</p>
+          <ul>
+          <li><strong>Compile-time references</strong> (solid arrows): a <code>ProjectReference</code> from one module&#39;s project to another module&#39;s project. Each repository pins this exact list in its <code>CrossModuleReferenceTests</code> (the <code>CrossModuleReferenceTestsBase</code> fitness function in MMCA.Common), so adding or removing one is a reviewed change to that test. The label counts the project references behind the arrow.</li>
+          <li><strong>Runtime calls</strong> (dashed arrows): a service host that references a peer module&#39;s <code>*.Contracts</code> project wires that peer&#39;s gRPC client, so the module calls the peer across the process boundary when the modules run as separate services. The table beside each graph says whether the calling module lists the peer in its <code>IModule.Dependencies</code>; a &quot;no&quot; is a runtime edge the module loader&#39;s ordering and <code>RequiresDependencies</code> check do not know about (<a href="../adr/059-module-contract-and-composition.html">ADR-059</a>, Trade-offs).</li>
+          </ul>
+          <p>Cross-module references target a peer&#39;s <code>Shared</code> (contracts) project, except UI composing another module&#39;s UI; the IL-level isolation rules (<a href="../adr/059-module-contract-and-composition.html">ADR-059</a>) and this project-level list together cover the boundary.</p>
+          <h2 id="mmcaadc">MMCA.ADC</h2>
+          <p>4 modules: Conference, Engagement, Identity, Notification. 20 compile-time cross-module references, 9 runtime gRPC edges.</p>
+          <pre class="mermaid">flowchart LR
+    Conference[Conference]
+    Engagement[Engagement]
+    Identity[Identity]
+    Notification[Notification]
+    Conference --&gt;|2 refs| Engagement
+    Conference --&gt;|5 refs| Identity
+    Engagement --&gt;|3 refs| Conference
+    Engagement --&gt;|4 refs| Identity
+    Identity --&gt;|1 ref| Conference
+    Identity --&gt;|1 ref| Engagement
+    Identity --&gt;|1 ref| Notification
+    Notification --&gt;|3 refs| Identity
+    Conference -. gRPC .-&gt; Engagement
+    Engagement -. gRPC .-&gt; Conference
+    Engagement -. gRPC .-&gt; Identity
+    Engagement -. gRPC .-&gt; Notification
+    Identity -. gRPC .-&gt; Conference
+    Identity -. gRPC .-&gt; Engagement
+    Identity -. gRPC .-&gt; Notification
+    Notification -. gRPC .-&gt; Conference
+    Notification -. gRPC .-&gt; Identity</pre>
+          <h3 id="compile-time-references">Compile-time references</h3>
+          <div class="table-wrap"><table>
+          <thead>
+          <tr>
+          <th>From</th>
+          <th>To</th>
+          </tr>
+          </thead>
+          <tbody><tr>
+          <td><code>Conference.API</code></td>
+          <td><code>Identity.Shared</code></td>
+          </tr>
+          <tr>
+          <td><code>Conference.Application</code></td>
+          <td><code>Engagement.Shared</code></td>
+          </tr>
+          <tr>
+          <td><code>Conference.Application</code></td>
+          <td><code>Identity.Shared</code></td>
+          </tr>
+          <tr>
+          <td><code>Conference.Shared</code></td>
+          <td><code>Identity.Shared</code></td>
+          </tr>
+          <tr>
+          <td><code>Conference.UI</code></td>
+          <td><code>Engagement.Shared</code></td>
+          </tr>
+          <tr>
+          <td><code>Conference.UI</code></td>
+          <td><code>Identity.Shared</code></td>
+          </tr>
+          <tr>
+          <td><code>Conference.UI</code></td>
+          <td><code>Identity.UI</code></td>
+          </tr>
+          <tr>
+          <td><code>Engagement.API</code></td>
+          <td><code>Identity.Shared</code></td>
+          </tr>
+          <tr>
+          <td><code>Engagement.Application</code></td>
+          <td><code>Conference.Shared</code></td>
+          </tr>
+          <tr>
+          <td><code>Engagement.Application</code></td>
+          <td><code>Identity.Shared</code></td>
+          </tr>
+          <tr>
+          <td><code>Engagement.Shared</code></td>
+          <td><code>Identity.Shared</code></td>
+          </tr>
+          <tr>
+          <td><code>Engagement.UI</code></td>
+          <td><code>Conference.Shared</code></td>
+          </tr>
+          <tr>
+          <td><code>Engagement.UI</code></td>
+          <td><code>Conference.UI</code></td>
+          </tr>
+          <tr>
+          <td><code>Engagement.UI</code></td>
+          <td><code>Identity.Shared</code></td>
+          </tr>
+          <tr>
+          <td><code>Identity.Application</code></td>
+          <td><code>Conference.Shared</code></td>
+          </tr>
+          <tr>
+          <td><code>Identity.Application</code></td>
+          <td><code>Engagement.Shared</code></td>
+          </tr>
+          <tr>
+          <td><code>Identity.Application</code></td>
+          <td><code>Notification.Shared</code></td>
+          </tr>
+          <tr>
+          <td><code>Notification.API</code></td>
+          <td><code>Identity.Shared</code></td>
+          </tr>
+          <tr>
+          <td><code>Notification.Application</code></td>
+          <td><code>Identity.Shared</code></td>
+          </tr>
+          <tr>
+          <td><code>Notification.Shared</code></td>
+          <td><code>Identity.Shared</code></td>
+          </tr>
+          </tbody></table></div>
+          <h3 id="runtime-calls-and-declared-dependencies">Runtime calls and declared dependencies</h3>
+          <div class="table-wrap"><table>
+          <thead>
+          <tr>
+          <th>Calling module</th>
+          <th>Called module</th>
+          <th>In the caller&#39;s <code>Dependencies</code></th>
+          </tr>
+          </thead>
+          <tbody><tr>
+          <td>Conference</td>
+          <td>Engagement</td>
+          <td>no</td>
+          </tr>
+          <tr>
+          <td>Engagement</td>
+          <td>Conference</td>
+          <td>yes</td>
+          </tr>
+          <tr>
+          <td>Engagement</td>
+          <td>Identity</td>
+          <td>no</td>
+          </tr>
+          <tr>
+          <td>Engagement</td>
+          <td>Notification</td>
+          <td>no</td>
+          </tr>
+          <tr>
+          <td>Identity</td>
+          <td>Conference</td>
+          <td>no</td>
+          </tr>
+          <tr>
+          <td>Identity</td>
+          <td>Engagement</td>
+          <td>no</td>
+          </tr>
+          <tr>
+          <td>Identity</td>
+          <td>Notification</td>
+          <td>no</td>
+          </tr>
+          <tr>
+          <td>Notification</td>
+          <td>Conference</td>
+          <td>no</td>
+          </tr>
+          <tr>
+          <td>Notification</td>
+          <td>Identity</td>
+          <td>yes</td>
+          </tr>
+          </tbody></table></div>
+          <p>Declared <code>IModule.Dependencies</code>: Conference (none); Engagement (Conference); Identity (none); Notification (Identity).</p>
+          <h2 id="mmcastore">MMCA.Store</h2>
+          <p>3 modules: Catalog, Identity, Sales. 12 compile-time cross-module references, 4 runtime gRPC edges.</p>
+          <pre class="mermaid">flowchart LR
+    Catalog[Catalog]
+    Identity[Identity]
+    Sales[Sales]
+    Catalog --&gt;|3 refs| Identity
+    Catalog --&gt;|2 refs| Sales
+    Identity --&gt;|1 ref| Catalog
+    Identity --&gt;|1 ref| Sales
+    Sales --&gt;|2 refs| Catalog
+    Sales --&gt;|3 refs| Identity
+    Identity -. gRPC .-&gt; Catalog
+    Identity -. gRPC .-&gt; Sales
+    Sales -. gRPC .-&gt; Catalog
+    Sales -. gRPC .-&gt; Identity</pre>
+          <h3 id="compile-time-references-1">Compile-time references</h3>
+          <div class="table-wrap"><table>
+          <thead>
+          <tr>
+          <th>From</th>
+          <th>To</th>
+          </tr>
+          </thead>
+          <tbody><tr>
+          <td><code>Catalog.Application</code></td>
+          <td><code>Identity.Shared</code></td>
+          </tr>
+          <tr>
+          <td><code>Catalog.Application</code></td>
+          <td><code>Sales.Shared</code></td>
+          </tr>
+          <tr>
+          <td><code>Catalog.Shared</code></td>
+          <td><code>Identity.Shared</code></td>
+          </tr>
+          <tr>
+          <td><code>Catalog.UI</code></td>
+          <td><code>Identity.Shared</code></td>
+          </tr>
+          <tr>
+          <td><code>Catalog.UI</code></td>
+          <td><code>Sales.UI</code></td>
+          </tr>
+          <tr>
+          <td><code>Identity.Application</code></td>
+          <td><code>Catalog.Shared</code></td>
+          </tr>
+          <tr>
+          <td><code>Identity.Application</code></td>
+          <td><code>Sales.Shared</code></td>
+          </tr>
+          <tr>
+          <td><code>Sales.Application</code></td>
+          <td><code>Catalog.Shared</code></td>
+          </tr>
+          <tr>
+          <td><code>Sales.Application</code></td>
+          <td><code>Identity.Shared</code></td>
+          </tr>
+          <tr>
+          <td><code>Sales.Shared</code></td>
+          <td><code>Identity.Shared</code></td>
+          </tr>
+          <tr>
+          <td><code>Sales.UI</code></td>
+          <td><code>Catalog.Shared</code></td>
+          </tr>
+          <tr>
+          <td><code>Sales.UI</code></td>
+          <td><code>Identity.Shared</code></td>
+          </tr>
+          </tbody></table></div>
+          <h3 id="runtime-calls-and-declared-dependencies-1">Runtime calls and declared dependencies</h3>
+          <div class="table-wrap"><table>
+          <thead>
+          <tr>
+          <th>Calling module</th>
+          <th>Called module</th>
+          <th>In the caller&#39;s <code>Dependencies</code></th>
+          </tr>
+          </thead>
+          <tbody><tr>
+          <td>Identity</td>
+          <td>Catalog</td>
+          <td>no</td>
+          </tr>
+          <tr>
+          <td>Identity</td>
+          <td>Sales</td>
+          <td>no</td>
+          </tr>
+          <tr>
+          <td>Sales</td>
+          <td>Catalog</td>
+          <td>yes</td>
+          </tr>
+          <tr>
+          <td>Sales</td>
+          <td>Identity</td>
+          <td>yes</td>
+          </tr>
+          </tbody></table></div>
+          <p>Declared <code>IModule.Dependencies</code>: Catalog (none); Identity (none); Sales (Catalog, Identity).</p>
+          <h2 id="mmcahelpdesk">MMCA.Helpdesk</h2>
+          <p>1 module: Tickets. 0 compile-time cross-module references, 0 runtime gRPC edges.</p>
+          <pre class="mermaid">flowchart LR
+    Tickets[Tickets]</pre>
+          <h3 id="compile-time-references-2">Compile-time references</h3>
+          <p>None: no module project references another module&#39;s project.</p>
+          <h3 id="runtime-calls-and-declared-dependencies-2">Runtime calls and declared dependencies</h3>
+          <p>None: no service host wires a peer module&#39;s gRPC client.</p>
+          <p>Declared <code>IModule.Dependencies</code>: Tickets (none).</p>
+          
+        <div class="doc-foot btn-row">
+          <a class="btn btn--ghost" href="../../docs/guides/index.html">← Back to Guides &amp; Specifications</a>
+          <a class="btn btn--ghost" href="https://github.com/ivanball/ivanball.github.io/blob/main/docs-src/guides/common-MODULE-GRAPHS.md" target="_blank" rel="noopener">View source on GitHub ↗</a>
+        </div>
+        </article>
+
+      </div>
+    </div>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container">
+      <div class="footer-grid">
+        <p class="footer-meta mb-0"><strong>Ivan Ball-llovera</strong> · Principal Software Architect · Douglasville, GA</p>
+        <ul class="footer-links">
+          <li><a href="../../resume.html">Résumé</a></li>
+          <li><a href="../../platform.html">Platform</a></li>
+          <li><a href="../../docs/index.html">Reference</a></li>
+          <li><a href="../../writing.html">Writing</a></li>
+          <li><a href="../../speaking.html">Speaking</a></li>
+          <li><a href="../../contact.html">Contact</a></li>
+          <li><a href="https://github.com/ivanball" target="_blank" rel="me noopener">GitHub</a></li>
+          <li><a href="https://www.linkedin.com/in/ivan-ball-llovera-6549a911" target="_blank" rel="me noopener">LinkedIn</a></li>
+        </ul>
+      </div>
+      <p class="footer-meta" style="margin-top:1rem">© <span class="js-year">2026</span> Ivan Ball-llovera. Reference docs generated from source.</p>
+    </div>
+  </footer>
+  <script defer src="../../assets/js/mermaid.min.js"></script>
+  <script>
+    window.addEventListener("load", function () {
+      if (!window.mermaid) { return; }
+      var root = document.documentElement;
+      var dark = root.getAttribute("data-theme") === "dark" ||
+        (!root.getAttribute("data-theme") && window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches);
+      try {
+        // Diagrams are static, first-party content, so "loose" is safe here and
+        // lets the flowchart labels keep their <br/> / <i> formatting.
+        // themeVariables pin the diagram palette to the site's own tokens: the
+        // stock mermaid themes ship a lavender/beige scheme that read as a
+        // foreign object dropped into the page.
+        var themeVariables = dark ? {
+          background: "#131e2b", primaryColor: "#17263f", primaryTextColor: "#e9eff7",
+          primaryBorderColor: "#3b4e64", lineColor: "#7aa5ff", secondaryColor: "#10303a",
+          tertiaryColor: "#1b2837", mainBkg: "#17263f", nodeBorder: "#3b4e64",
+          clusterBkg: "#111b28", clusterBorder: "#2a3a4d", titleColor: "#e9eff7",
+          edgeLabelBackground: "#131e2b", textColor: "#e9eff7"
+        } : {
+          background: "#ffffff", primaryColor: "#e6edfd", primaryTextColor: "#101a25",
+          primaryBorderColor: "#1a4fd6", lineColor: "#1a4fd6", secondaryColor: "#ddf0f2",
+          tertiaryColor: "#f4f7fb", mainBkg: "#e6edfd", nodeBorder: "#1a4fd6",
+          clusterBkg: "#f4f7fb", clusterBorder: "#dbe3ec", titleColor: "#101a25",
+          edgeLabelBackground: "#ffffff", textColor: "#101a25"
+        };
+        window.mermaid.initialize({
+          startOnLoad: false,
+          securityLevel: "loose",
+          theme: "base",
+          fontFamily: '"Inter Variable", -apple-system, "Segoe UI", Roboto, sans-serif',
+          themeVariables: themeVariables
+        });
+        window.mermaid.run({ querySelector: "pre.mermaid" });
+      } catch (e) { /* leave the diagram source visible on failure */ }
+    });
+  </script>
+</body>
+</html>
