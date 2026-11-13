@@ -270,7 +270,7 @@
           <code>MessageBusProviders</code>.
           Revised 2026-10-28: anchors refreshed after the Shared and Infrastructure public-API baselines
           moved; the eighteen shipped declarations are unchanged.
-          Revised 2026-11-12 (unreleased, on the <code>feat/fresh-eyes-wave</code> branch): MMCA.Helpdesk is the first adopter (<code>TicketLifecycle</code>, a domain type behind the
+          Revised 2026-11-12: MMCA.Helpdesk is the first adopter (<code>TicketLifecycle</code>, a domain type behind the
           <code>TicketStatus</code> wire enum), and <code>EnumerationNameValueConverter&lt;T&gt;</code> is recorded beside the integer
           converter (Context, Decision points 9, 11, 12 and 13, Trade-offs).</p>
           <h2 id="context">Context</h2>
@@ -408,12 +408,10 @@
           </li>
           <li><p><strong>The surface is frozen public API.</strong> Every member of the base and the factory is in
           <code>MMCA.Common.Shared</code>&#39;s shipped baseline
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Shared/PublicAPI.Shipped.txt:578-583</code>, <code>:780-784</code>,
-          <code>:1016-1018</code>), and both converters are in Infrastructure&#39;s
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/PublicAPI.Shipped.txt:347-348</code>, <code>:351-352</code>).
-          The name converter is not yet shipped: it sits in Infrastructure&#39;s unshipped baseline
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/PublicAPI.Unshipped.txt:4-5</code>) until the
-          next release promotes it. Under
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Shared/PublicAPI.Shipped.txt:965-970</code>, <code>:1318-1322</code>,
+          <code>:1622-1624</code>), and the three converters are in Infrastructure&#39;s
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/PublicAPI.Shipped.txt:372-375</code>, <code>:378-379</code>):
+          the name converter shipped with v1.289.0 (<code>:372-373</code>). Under
           ADR-015&#39;s RS0016/RS0017 gate, removing or reshaping any of it is a reviewable text diff and a
           breaking change to the package surface, which is precisely why leaving an unadopted capability
           in place is a decision rather than an oversight.</p>

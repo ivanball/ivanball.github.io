@@ -6,21 +6,21 @@
   <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#0e151f" media="(prefers-color-scheme: dark)">
   <title>ADR-145: Opt-In Cursor Paging on List Endpoints (Beside Offset Paging) · MMCA · Ivan Ball-llovera</title>
-  <meta name="description" content="Accepted (2026-11-12). Listed under [Unreleased] / Added in the MMCA.Common changelog (MMCA.Common/CHANGELOG.md:7, :24). Off for every controller…">
+  <meta name="description" content="Accepted (2026-11-12). Released in MMCA.Common v1.289.0 (MMCA.Common/CHANGELOG.md:7, :24). Off for every controller unless it carries…">
   <link rel="canonical" href="https://ivanball.github.io/docs/adr/145-opt-in-cursor-paging.html">
   <link rel="icon" href="../../assets/img/favicon.svg" type="image/svg+xml">
   <link rel="alternate" type="application/rss+xml" title="Ivan Ball-llovera: deep dives on enterprise .NET" href="https://ivanball.github.io/feed.xml">
   <meta property="og:type" content="article">
   <meta property="og:site_name" content="Ivan Ball-llovera">
   <meta property="og:title" content="ADR-145: Opt-In Cursor Paging on List Endpoints (Beside Offset Paging)">
-  <meta property="og:description" content="Accepted (2026-11-12). Listed under [Unreleased] / Added in the MMCA.Common changelog (MMCA.Common/CHANGELOG.md:7, :24). Off for every controller…">
+  <meta property="og:description" content="Accepted (2026-11-12). Released in MMCA.Common v1.289.0 (MMCA.Common/CHANGELOG.md:7, :24). Off for every controller unless it carries…">
   <meta property="og:url" content="https://ivanball.github.io/docs/adr/145-opt-in-cursor-paging.html">
   <meta property="og:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <meta property="og:image:alt" content="Ivan Ball-llovera, Principal Software Architect">
   <meta property="og:locale" content="en_US">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="ADR-145: Opt-In Cursor Paging on List Endpoints (Beside Offset Paging)">
-  <meta name="twitter:description" content="Accepted (2026-11-12). Listed under [Unreleased] / Added in the MMCA.Common changelog (MMCA.Common/CHANGELOG.md:7, :24). Off for every controller…">
+  <meta name="twitter:description" content="Accepted (2026-11-12). Released in MMCA.Common v1.289.0 (MMCA.Common/CHANGELOG.md:7, :24). Off for every controller unless it carries…">
   <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Platform","item":"https://ivanball.github.io/platform.html"},{"@type":"ListItem","position":2,"name":"Reference","item":"https://ivanball.github.io/docs/index.html"},{"@type":"ListItem","position":3,"name":"Architecture Decision Records","item":"https://ivanball.github.io/docs/adr/index.html"},{"@type":"ListItem","position":4,"name":"145 · Opt-In Cursor Paging on List Endpoints (Beside Offset Paging)","item":"https://ivanball.github.io/docs/adr/145-opt-in-cursor-paging.html"}]}</script>
   <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);if(localStorage.getItem('mmca-rail')==='hidden')document.documentElement.setAttribute('data-rail','hidden');if(localStorage.getItem('mmca-cites')==='shown')document.documentElement.setAttribute('data-cites','shown');}catch(e){}})();</script>
@@ -254,7 +254,7 @@
           <p class="eyebrow doc-kicker">Architecture Decision Record</p>
           <h1 id="adr-145-opt-in-cursor-paging-on-list-endpoints-beside-offset-paging">ADR-145: Opt-In Cursor Paging on List Endpoints (Beside Offset Paging)</h1>
           <h2 id="status">Status</h2>
-          <p>Accepted (2026-11-12). Listed under <code>[Unreleased]</code> / Added in the MMCA.Common changelog
+          <p>Accepted (2026-11-12). Released in MMCA.Common v1.289.0
           (<code>MMCA.Common/CHANGELOG.md:7</code>, <code>:24</code>). Off for every controller unless it carries
           <code>[SupportsCursorPaging]</code>
           (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Pagination/SupportsCursorPagingAttribute.cs:3-14</code>).</p>

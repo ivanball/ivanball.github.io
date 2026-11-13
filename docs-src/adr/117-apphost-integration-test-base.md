@@ -34,12 +34,12 @@ Revised 2026-10-28: decision 8 records that the runtime boundary test covers a s
 compile-time rule and that its trailing-dot `MMCA.Common.Aspire.` entry matches nothing, so the
 Aspire ban rests on the compile-time gate; anchors are refreshed.
 
-Revised 2026-11-12 (unreleased, on the `feat/fresh-eyes-wave` branch): the package carries
+Revised 2026-11-12: the package carries
 `DependencyOutageTestBase<TFixture>`, which stops and starts a dependency through the orchestrator
 and asserts readiness, liveness, the full health report and, when a scenario names an outbox
 database, an outbox drain (decision 11); MMCA.Common's `apphost-testing` job runs an outage scenario
-over SQL Server and RabbitMQ containers; MMCA.ADC's adoption branch adds an opt-in AppHost outage
-tier, which its workflow can build only once the base is released and ADC's pin moves to it; the rejected outbox-drain helper is revisited; anchors are refreshed (see Revision (2026-11-12)).
+over SQL Server and RabbitMQ containers; MMCA.ADC adds an opt-in AppHost outage
+tier; the rejected outbox-drain helper is revisited; anchors are refreshed (see Revision (2026-11-12)).
 
 ## Context
 The AppHost is the only file that states how a whole stack fits together: which project resources
@@ -493,7 +493,7 @@ anchors.
 
 ## Revision (2026-11-12)
 The decisions above stand; one is added (decision 11), the Common tier gains an outage scenario,
-MMCA.ADC's adoption branch adds an AppHost tier again, and one rejected alternative is revisited. The Revision
+MMCA.ADC adds an AppHost tier again, and one rejected alternative is revisited. The Revision
 (2026-10-07) stays as written: its removal of the consumer smoke projects still holds, and ADC's new
 tier is an outage tier, not the smoke project returning.
 

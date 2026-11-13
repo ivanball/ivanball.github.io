@@ -23,7 +23,7 @@ below reads as the current state; the options weighed on 2026-10-25 are added to
 rejected. Revised 2026-10-26: the MassTransit pins behind the SQS and PostgreSQL transports read
 8.5.12 after v1.260.0, and anchors refreshed against v1.261.0. Revised 2026-10-28: the
 `MMCA.Common.Testing.Azure` pin of the type-level vendor rule is recorded beside the three adapter
-pins, and anchors refreshed after v1.265.1. Revised 2026-11-12 (unreleased,
+pins, and anchors refreshed after v1.265.1. Revised 2026-11-12 (v1.289.0,
 `MMCA.Common/CHANGELOG.md:7`): the Azure start-up calls ship in a fourth adapter package,
 MMCA.Common.Azure.Startup (`:46`, `:67`); the composed service host takes vendor calls only as
 callbacks; MMCA.Common.Aws gains an OpenTelemetry exporter and MMCA.Common.Azure gains PostgreSQL

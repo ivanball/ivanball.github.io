@@ -1,10 +1,10 @@
 # ADR-143: Process-Manager Primitive (Consumer-Owned Process Aggregate, Timeouts over Internal Commands)
 
 ## Status
-Accepted (2026-11-12). The primitive is listed under `[Unreleased]` in MMCA.Common
-(`MMCA.Common/CHANGELOG.md:7,43`) and ships in the next release; it is opt-in, with no table, no
+Accepted (2026-11-12). The primitive ships in MMCA.Common v1.289.0
+(`MMCA.Common/CHANGELOG.md:7,43`); it is opt-in, with no table, no
 migration and no configuration key (`MMCA.Common/UPGRADING.md:240-241`). MMCA.Store is its first
-adopter, through the consumer version bump that follows that release.
+adopter.
 
 ## Context
 A long-running flow (a process that spans several events and has a deadline) had no framework shape.

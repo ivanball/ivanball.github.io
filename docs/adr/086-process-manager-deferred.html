@@ -271,7 +271,7 @@
           a sixth pinned package; the deferral stands. Revised 2026-10-28: the unpaid-order deadline is now
           armed by <code>PlacedOrderFinalizer</code>, shared by customer and guest checkout, and a second independent
           <code>OrderCancelled</code> handler schedules the cancellation notice; the deferral stands.
-          Revised 2026-11-12 (unreleased, on the <code>feat/fresh-eyes-wave</code> branch): the deferral was revisited and is resolved for a flow whose state fits ONE
+          Revised 2026-11-12: the deferral was revisited and is resolved for a flow whose state fits ONE
           aggregate, by the behaviour-only process-manager primitive of
           <a href="143-process-manager-primitive.html">ADR-143</a> (no framework state table, no correlation store, no
           package; MMCA.Store&#39;s order flow is its first adopter). The MassTransit saga state machine below, its

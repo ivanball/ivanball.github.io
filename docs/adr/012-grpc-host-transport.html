@@ -264,7 +264,7 @@
           Revised 2026-10-23: the east-west gRPC values moved into <code>HttpResilienceDefaults</code> (<code>Grpc</code>-prefixed) with their own 8s/20s timeouts instead of reusing the outbound-HTTP 30s/90s, and <code>AddTypedGrpcClient</code> gained a per-client override.
           Revised 2026-10-26: anchors refreshed across both apps&#39; Program.cs, AppHost and Bicep files after line shifts in recent releases; no decision or value changed.
           Revised 2026-10-28: anchors refreshed across ADC&#39;s and Store&#39;s Bicep files and two ADC Program.cs files after line shifts in recent releases; no decision or value changed.
-          Amended 2026-11-12 (unreleased, on the <code>feat/fresh-eyes-wave</code> branch): the local Aspire startup probe for each service resource is selected by <code>WithMmcaServiceInfrastructure</code> from an explicit <code>ServiceEndpointProfile</code> value (the first 2026-08-29 update below).</p>
+          Amended 2026-11-12: the local Aspire startup probe for each service resource is selected by <code>WithMmcaServiceInfrastructure</code> from an explicit <code>ServiceEndpointProfile</code> value (the first 2026-08-29 update below).</p>
           <h2 id="update-2026-06-22-store-converged-to-profile-a">Update (2026-06-22): Store converged to Profile A</h2>
           <p>Store originally chose Profile B, but its cross-service gRPC failed in Azure Container Apps. With
           <code>Http1AndHttp2</code> Kestrel + <code>transport: &#39;auto&#39;</code> ingress on a <strong>cleartext</strong> endpoint there is no ALPN, so

@@ -6,9 +6,9 @@ Accepted (2026-11-08). Ships in MMCA.Common v1.281.0. Off unless the host calls
 `MachineClients:Enabled`
 (`MMCA.Common/Source/Core/MMCA.Common.Application/Auth/MachineClients/MachineClientSettings.cs:35-36`,
 default false).
-Amended 2026-11-12: MMCA.ADC is the first consumer to carry machine clients, on its adoption branch,
+Amended 2026-11-12: MMCA.ADC is the first consumer to carry machine clients,
 switched off in its production configuration as passkeys are
-([ADR-139](139-passkeys-webauthn-opt-in-sign-in.md)); MMCA.Common's unreleased
+([ADR-139](139-passkeys-webauthn-opt-in-sign-in.md)); MMCA.Common's
 `[RefuseMachineClients]` keeps machine clients off the endpoints where a person takes part, and ADC
 declares it on eight controllers (see Consequences).
 
@@ -169,8 +169,8 @@ writes the soft-deleted marker, and a role that could escalate can never back a 
 - A consumer that opts in implements the provisioner, calls `AddMachineClients`, adds the
   `MachineClients` migration on its Identity database, routes the two controller subclasses, and grants
   `clients:manage` to an operator role that no client can hold (`MMCA.Common/UPGRADING.md:304-317`).
-- MMCA.ADC is the first consumer to carry machine clients, on its adoption branch
-  `feat/fresh-eyes-wave`. Its Identity service calls `AddMachineClients`
+- MMCA.ADC is the first consumer to carry machine clients. Its Identity service calls
+  `AddMachineClients`
   (`MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:176-183`), and it carries the
   feature switched off in production configuration, exactly as it carries passkeys
   ([ADR-139](139-passkeys-webauthn-opt-in-sign-in.md)): the service's base `appsettings.json` sets
@@ -213,7 +213,7 @@ writes the soft-deleted marker, and a role that could escalate can never back a 
   notice in place of the create form and the list, because its list load answers not found
   (`MMCA.Common/Source/Presentation/MMCA.Common.UI/Pages/Administration/MachineClientAdmin.razor.cs:56-61`;
   `MMCA.Common/Source/Presentation/MMCA.Common.UI/Pages/Administration/MachineClientAdmin.razor:7-13`;
-  unreleased, `MMCA.Common/CHANGELOG.md:61`). The
+  `MMCA.Common/CHANGELOG.md:61`). The
   `AddMachineClients` migration adds `Identity.User.IsServiceAccount` (default false), creates the
   `MachineClients` table and a unique index on `ServiceAccountUserId` filtered to undeleted rows
   (`MMCA.ADC/Source/Hosting/MMCA.ADC.Migrations.SqlServer.Identity/Migrations/20261112192549_AddMachineClients.cs:14-55`).
@@ -222,7 +222,7 @@ writes the soft-deleted marker, and a role that could escalate can never back a 
   bookmark, checking in) is open to every machine client whatever role backs it. Choosing the backing
   role cannot close that, and the framework refuses only the four permissions of point 9 while ADC's
   factory takes any valid role (`User.cs:372-374`), so the endpoint itself has to say its caller is a
-  person. MMCA.Common's unreleased `[RefuseMachineClients]` is that statement: an authorization filter
+  person. MMCA.Common's `[RefuseMachineClients]` is that statement: an authorization filter
   for a controller or an action that answers 403 with the error code `MachineClients.EndpointRefused`
   to a request whose token carries `token_use` = `machine` and lets every other caller through;
   declared on a controller it covers every action, the permission-gated ones included, and it adds

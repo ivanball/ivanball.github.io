@@ -1,7 +1,7 @@
 # ADR-144: Offline Writes and Delta Reads (Client Write Queue, Server Change Feed with Tombstones)
 
 ## Status
-Accepted (2026-11-12). Unreleased: listed under `[Unreleased]` in `MMCA.Common/CHANGELOG.md:7`, and the reference adopter is on MMCA.ADC's `feat/fresh-eyes-wave` branch.
+Accepted (2026-11-12). Released in MMCA.Common v1.289.0 (`MMCA.Common/CHANGELOG.md:7`); the reference adopter is MMCA.ADC.
 
 ## Context
 The framework already lets a client read while offline: `ILocalCacheStore` keeps JSON documents on the device, over `localStorage` in the browser (`MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/Capabilities/DeviceStorage/BrowserLocalCacheStore.cs:6`) and as files in an `mmca-cache` folder under the app data directory on MAUI (`MMCA.Common/Source/Presentation/MMCA.Common.UI.Maui/Capabilities/DeviceStorage/MauiLocalCacheStore.cs:7`). Writes had no such path. A client write is an HTTP call through `HttpResultExecutor`, which turns a request that never got an answer into an `Http.TransportFailure` or `Http.Timeout` failure ([ADR-013](013-result-pattern.md)); with the device offline, every write failed and the user's intent was lost. The reference adopter makes this concrete: an attendee in a conference hall with no signal taps the star on a session and the bookmark never reaches the server.

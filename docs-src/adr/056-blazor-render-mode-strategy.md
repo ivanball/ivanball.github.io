@@ -80,7 +80,7 @@ layer rather than by weakening the render mode.
   (`MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs:167-170`;
   `MMCA.Store/Source/Hosts/UI/MMCA.Store.UI.Web/Program.cs:102-105`).
 - **The shared web-host registrations and pipeline are one composed call; render-mode registration stays
-  per head.** On the `feat/fresh-eyes-wave` branch (unreleased), `MMCA.Common.UI.Web` carries
+  per head.** `MMCA.Common.UI.Web` carries
   `AddMmcaBlazorWebHost` and `UseMmcaBlazorWebPipeline`
   (`BlazorWebHostExtensions.cs:64`, `BlazorWebHostExtensions.cs:146`). The first owns the registration
   order, from the configuration-source callback and Serilog through the server-side interactive

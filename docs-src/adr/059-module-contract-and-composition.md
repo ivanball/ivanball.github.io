@@ -6,7 +6,7 @@ Revised 2026-10-19: ADC Conference and Engagement gain module conformance tests,
 Revised 2026-10-21: ADC `ConferenceModule` registers three stubs (adding the `IUserConferenceExportService` export stub), `DisabledEventLiveValidationService` fails open across five members, the empty-export stub list names the Conference and Store Catalog export stubs, and host anchors are refreshed.
 Revised 2026-10-26: service-host anchors refreshed after the host Program.cs files moved (no behavior change).
 Revised 2026-10-28: the Trade-offs list of undeclared cross-module gRPC edges grows from two to five consuming modules (ADC Engagement, Notification and Identity join ADC Conference and Store Identity), the ADR-008 reading is corrected (only `ModuleLoader` is its Context; the `Disabled*` stubs belong to its Strangler Fig step), and anchors are refreshed.
-Amended 2026-11-12: the composed service-host call (`AddMmcaServiceHost` / `UseMmcaServiceHostAsync`, package `MMCA.Common.ServiceHost`, unreleased) owns the host registration order around `AddMmcaApplicationPipeline`, every Store and ADC service host calls it on the `feat/fresh-eyes-wave` branch, and the host anchors are re-pointed into its options.
+Amended 2026-11-12: the composed service-host call (`AddMmcaServiceHost` / `UseMmcaServiceHostAsync`, package `MMCA.Common.ServiceHost`) owns the host registration order around `AddMmcaApplicationPipeline`, every Store and ADC service host calls it, and the host anchors are re-pointed into its options.
 
 ## Context
 The framework's headline claim is that an application is built as a modular monolith and later

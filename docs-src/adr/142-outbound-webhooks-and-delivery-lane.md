@@ -1,7 +1,7 @@
 # ADR-142: Outbound Webhooks (Signed Delivery over Internal Commands, with a Dedicated Delivery Lane)
 
 ## Status
-Accepted (2026-11-12). Listed under `[Unreleased]` in `MMCA.Common/CHANGELOG.md:7` (entries at `:42`
+Accepted (2026-11-12). Released in v1.289.0, `MMCA.Common/CHANGELOG.md:7` (entries at `:42`
 and `:75`). Off unless the host calls `AddWebhooks(configuration)` and sets `Webhooks:Enabled`
 (`MMCA.Common/Source/Core/MMCA.Common.Application/Webhooks/WebhookSettings.cs:16-17`, default false).
 

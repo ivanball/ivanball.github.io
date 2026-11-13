@@ -46,7 +46,7 @@ dispatched one at a time with each failure logged at Error (see the Revision (20
 end).
 Revised 2026-10-28: anchors refreshed after later MMCA.Common releases moved them (see the Revision
 (2026-10-28) at the end).
-Revised 2026-11-12 (unreleased, on the `feat/fresh-eyes-wave` branch): draining after a dependency
+Revised 2026-11-12: draining after a dependency
 outage is asserted end to end by the AppHost outage tier
 ([ADR-117](117-apphost-integration-test-base.md)). In a broker-outage scenario the test's own
 during-outage callback writes an integration event while the broker is down

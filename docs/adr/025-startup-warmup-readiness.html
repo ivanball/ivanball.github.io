@@ -274,7 +274,7 @@
           factory-built client (not the JwtBearer backchannel or a missed self-request warm-up, which a caller&#39;s
           factory-built client sees and retries once for idempotent verbs), and the <code>redis</code> PING check is cited at its
           real registration in <code>AddInfrastructureHealthChecks</code>, which adds it only for a connection string named
-          <code>redis</code>. Revised 2026-11-12 (unreleased, on the <code>feat/fresh-eyes-wave</code> branch): the readiness and liveness semantics recorded here are asserted under a
+          <code>redis</code>. Revised 2026-11-12: the readiness and liveness semantics recorded here are asserted under a
           real dependency outage by the AppHost tier&#39;s <code>DependencyOutageTestBase</code>
           (<a href="117-apphost-integration-test-base.html">ADR-117</a>): a database outage fails <code>/health</code> and
           <code>/health/ready</code>, a broker or cache outage fails <code>/health</code> only, and <code>/alive</code> answers 200 at the baseline and at one

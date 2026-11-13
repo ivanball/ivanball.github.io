@@ -21,7 +21,7 @@ recorded as absorbing a lazy retry on the warming host's own hop only for a depe
 factory-built client (not the JwtBearer backchannel or a missed self-request warm-up, which a caller's
 factory-built client sees and retries once for idempotent verbs), and the `redis` PING check is cited at its
 real registration in `AddInfrastructureHealthChecks`, which adds it only for a connection string named
-`redis`. Revised 2026-11-12 (unreleased, on the `feat/fresh-eyes-wave` branch): the readiness and liveness semantics recorded here are asserted under a
+`redis`. Revised 2026-11-12: the readiness and liveness semantics recorded here are asserted under a
 real dependency outage by the AppHost tier's `DependencyOutageTestBase`
 ([ADR-117](117-apphost-integration-test-base.md)): a database outage fails `/health` and
 `/health/ready`, a broker or cache outage fails `/health` only, and `/alive` answers 200 at the baseline and at one

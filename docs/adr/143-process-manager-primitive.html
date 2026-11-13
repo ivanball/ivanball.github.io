@@ -6,21 +6,21 @@
   <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#0e151f" media="(prefers-color-scheme: dark)">
   <title>ADR-143: Process-Manager Primitive (Consumer-Owned Process Aggregate, Timeouts over Internal Commands) · MMCA · Ivan Ball-llovera</title>
-  <meta name="description" content="Accepted (2026-11-12). The primitive is listed under [Unreleased] in MMCA.Common (MMCA.Common/CHANGELOG.md:7,43) and ships in the next release; it is…">
+  <meta name="description" content="Accepted (2026-11-12). The primitive ships in MMCA.Common v1.289.0 (MMCA.Common/CHANGELOG.md:7,43); it is opt-in, with no table, no migration and no…">
   <link rel="canonical" href="https://ivanball.github.io/docs/adr/143-process-manager-primitive.html">
   <link rel="icon" href="../../assets/img/favicon.svg" type="image/svg+xml">
   <link rel="alternate" type="application/rss+xml" title="Ivan Ball-llovera: deep dives on enterprise .NET" href="https://ivanball.github.io/feed.xml">
   <meta property="og:type" content="article">
   <meta property="og:site_name" content="Ivan Ball-llovera">
   <meta property="og:title" content="ADR-143: Process-Manager Primitive (Consumer-Owned Process Aggregate, Timeouts over Internal Commands)">
-  <meta property="og:description" content="Accepted (2026-11-12). The primitive is listed under [Unreleased] in MMCA.Common (MMCA.Common/CHANGELOG.md:7,43) and ships in the next release; it is…">
+  <meta property="og:description" content="Accepted (2026-11-12). The primitive ships in MMCA.Common v1.289.0 (MMCA.Common/CHANGELOG.md:7,43); it is opt-in, with no table, no migration and no…">
   <meta property="og:url" content="https://ivanball.github.io/docs/adr/143-process-manager-primitive.html">
   <meta property="og:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <meta property="og:image:alt" content="Ivan Ball-llovera, Principal Software Architect">
   <meta property="og:locale" content="en_US">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="ADR-143: Process-Manager Primitive (Consumer-Owned Process Aggregate, Timeouts over Internal Commands)">
-  <meta name="twitter:description" content="Accepted (2026-11-12). The primitive is listed under [Unreleased] in MMCA.Common (MMCA.Common/CHANGELOG.md:7,43) and ships in the next release; it is…">
+  <meta name="twitter:description" content="Accepted (2026-11-12). The primitive ships in MMCA.Common v1.289.0 (MMCA.Common/CHANGELOG.md:7,43); it is opt-in, with no table, no migration and no…">
   <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Platform","item":"https://ivanball.github.io/platform.html"},{"@type":"ListItem","position":2,"name":"Reference","item":"https://ivanball.github.io/docs/index.html"},{"@type":"ListItem","position":3,"name":"Architecture Decision Records","item":"https://ivanball.github.io/docs/adr/index.html"},{"@type":"ListItem","position":4,"name":"143 · Process-Manager Primitive (Consumer-Owned Process Aggregate, Timeouts over Internal Commands)","item":"https://ivanball.github.io/docs/adr/143-process-manager-primitive.html"}]}</script>
   <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);if(localStorage.getItem('mmca-rail')==='hidden')document.documentElement.setAttribute('data-rail','hidden');if(localStorage.getItem('mmca-cites')==='shown')document.documentElement.setAttribute('data-cites','shown');}catch(e){}})();</script>
@@ -254,10 +254,10 @@
           <p class="eyebrow doc-kicker">Architecture Decision Record</p>
           <h1 id="adr-143-process-manager-primitive-consumer-owned-process-aggregate-timeouts-over-internal-commands">ADR-143: Process-Manager Primitive (Consumer-Owned Process Aggregate, Timeouts over Internal Commands)</h1>
           <h2 id="status">Status</h2>
-          <p>Accepted (2026-11-12). The primitive is listed under <code>[Unreleased]</code> in MMCA.Common
-          (<code>MMCA.Common/CHANGELOG.md:7,43</code>) and ships in the next release; it is opt-in, with no table, no
+          <p>Accepted (2026-11-12). The primitive ships in MMCA.Common v1.289.0
+          (<code>MMCA.Common/CHANGELOG.md:7,43</code>); it is opt-in, with no table, no
           migration and no configuration key (<code>MMCA.Common/UPGRADING.md:240-241</code>). MMCA.Store is its first
-          adopter, through the consumer version bump that follows that release.</p>
+          adopter.</p>
           <h2 id="context">Context</h2>
           <p>A long-running flow (a process that spans several events and has a deadline) had no framework shape.
           Each flow kept its state and its deadlines ad hoc on its own aggregate and its own handlers, and the

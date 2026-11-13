@@ -6,21 +6,21 @@
   <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#0e151f" media="(prefers-color-scheme: dark)">
   <title>ADR-144: Offline Writes and Delta Reads (Client Write Queue, Server Change Feed with Tombstones) · MMCA · Ivan Ball-llovera</title>
-  <meta name="description" content="Accepted (2026-11-12). Unreleased: listed under [Unreleased] in MMCA.Common/CHANGELOG.md:7, and the reference adopter is on MMCA.ADC&#39;s…">
+  <meta name="description" content="Accepted (2026-11-12). Released in MMCA.Common v1.289.0 (MMCA.Common/CHANGELOG.md:7); the reference adopter is MMCA.ADC.">
   <link rel="canonical" href="https://ivanball.github.io/docs/adr/144-offline-writes-and-delta-reads.html">
   <link rel="icon" href="../../assets/img/favicon.svg" type="image/svg+xml">
   <link rel="alternate" type="application/rss+xml" title="Ivan Ball-llovera: deep dives on enterprise .NET" href="https://ivanball.github.io/feed.xml">
   <meta property="og:type" content="article">
   <meta property="og:site_name" content="Ivan Ball-llovera">
   <meta property="og:title" content="ADR-144: Offline Writes and Delta Reads (Client Write Queue, Server Change Feed with Tombstones)">
-  <meta property="og:description" content="Accepted (2026-11-12). Unreleased: listed under [Unreleased] in MMCA.Common/CHANGELOG.md:7, and the reference adopter is on MMCA.ADC&#39;s…">
+  <meta property="og:description" content="Accepted (2026-11-12). Released in MMCA.Common v1.289.0 (MMCA.Common/CHANGELOG.md:7); the reference adopter is MMCA.ADC.">
   <meta property="og:url" content="https://ivanball.github.io/docs/adr/144-offline-writes-and-delta-reads.html">
   <meta property="og:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <meta property="og:image:alt" content="Ivan Ball-llovera, Principal Software Architect">
   <meta property="og:locale" content="en_US">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="ADR-144: Offline Writes and Delta Reads (Client Write Queue, Server Change Feed with Tombstones)">
-  <meta name="twitter:description" content="Accepted (2026-11-12). Unreleased: listed under [Unreleased] in MMCA.Common/CHANGELOG.md:7, and the reference adopter is on MMCA.ADC&#39;s…">
+  <meta name="twitter:description" content="Accepted (2026-11-12). Released in MMCA.Common v1.289.0 (MMCA.Common/CHANGELOG.md:7); the reference adopter is MMCA.ADC.">
   <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Platform","item":"https://ivanball.github.io/platform.html"},{"@type":"ListItem","position":2,"name":"Reference","item":"https://ivanball.github.io/docs/index.html"},{"@type":"ListItem","position":3,"name":"Architecture Decision Records","item":"https://ivanball.github.io/docs/adr/index.html"},{"@type":"ListItem","position":4,"name":"144 · Offline Writes and Delta Reads (Client Write Queue, Server Change Feed with Tombstones)","item":"https://ivanball.github.io/docs/adr/144-offline-writes-and-delta-reads.html"}]}</script>
   <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);if(localStorage.getItem('mmca-rail')==='hidden')document.documentElement.setAttribute('data-rail','hidden');if(localStorage.getItem('mmca-cites')==='shown')document.documentElement.setAttribute('data-cites','shown');}catch(e){}})();</script>
@@ -254,7 +254,7 @@
           <p class="eyebrow doc-kicker">Architecture Decision Record</p>
           <h1 id="adr-144-offline-writes-and-delta-reads-client-write-queue-server-change-feed-with-tombstones">ADR-144: Offline Writes and Delta Reads (Client Write Queue, Server Change Feed with Tombstones)</h1>
           <h2 id="status">Status</h2>
-          <p>Accepted (2026-11-12). Unreleased: listed under <code>[Unreleased]</code> in <code>MMCA.Common/CHANGELOG.md:7</code>, and the reference adopter is on MMCA.ADC&#39;s <code>feat/fresh-eyes-wave</code> branch.</p>
+          <p>Accepted (2026-11-12). Released in MMCA.Common v1.289.0 (<code>MMCA.Common/CHANGELOG.md:7</code>); the reference adopter is MMCA.ADC.</p>
           <h2 id="context">Context</h2>
           <p>The framework already lets a client read while offline: <code>ILocalCacheStore</code> keeps JSON documents on the device, over <code>localStorage</code> in the browser (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/Capabilities/DeviceStorage/BrowserLocalCacheStore.cs:6</code>) and as files in an <code>mmca-cache</code> folder under the app data directory on MAUI (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI.Maui/Capabilities/DeviceStorage/MauiLocalCacheStore.cs:7</code>). Writes had no such path. A client write is an HTTP call through <code>HttpResultExecutor</code>, which turns a request that never got an answer into an <code>Http.TransportFailure</code> or <code>Http.Timeout</code> failure (<a href="013-result-pattern.html">ADR-013</a>); with the device offline, every write failed and the user&#39;s intent was lost. The reference adopter makes this concrete: an attendee in a conference hall with no signal taps the star on a session and the bookmark never reaches the server.</p>
           <p>A client that keeps a local copy also needs to bring it up to date cheaply when it reconnects. The list endpoints answer &quot;what exists now&quot;, which forces a full re-read and cannot report a row that was deleted, because the soft-delete query filter hides it (<a href="005-soft-delete-vs-erasure.html">ADR-005</a>).</p>

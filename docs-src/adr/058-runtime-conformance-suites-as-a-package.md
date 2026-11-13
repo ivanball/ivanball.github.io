@@ -10,7 +10,7 @@ Revised 2026-10-07: the consumers' lockstep `MMCA.Common.Shared` pin is now 1.23
 Revised 2026-10-21: the OpenAPI base gains an opt-in committed-baseline breaking-change diff that all seven OpenAPI subclasses adopt, the decorator pipeline is now sealed against late registration through the framework helpers, the lockstep pin is 1.250.0, and anchors are refreshed; see the Revision (2026-10-21) below.
 Revised 2026-10-26: anchors refreshed after the v1.261.0 consumer sweep (the lockstep `MMCA.Common.Shared` pin is now 1.261.0 and the ADC pin anchor moved to `Directory.Packages.props:108`), with the `MiddlewarePipelineOrderTestsBase` and ADR-015 / ADR-046 cross-reference anchors re-pointed; see the Revision (2026-10-26) below.
 Revised 2026-10-28: the lockstep `MMCA.Common.Shared` pin is now 1.265.1, and the inventory of MMCA.Common's own conformance self-tests names the tenancy-base and breaking-change-detector tests; see the Revision (2026-10-28) below.
-Amended 2026-11-12 (unreleased, on the `feat/fresh-eyes-wave` branch): the test tier gains `ServiceHostTestFactory` and `ReplaceWithFake`, and the structural package gains the cache-invalidation and process-timeout convention bases; see the Revision (2026-11-12) below.
+Amended 2026-11-12: the test tier gains `ServiceHostTestFactory` and `ReplaceWithFake`, and the structural package gains the cache-invalidation and process-timeout convention bases; see the Revision (2026-11-12) below.
 
 ## Context
 ADR-015 turned the architecture invariants into build-gating tests, and drew its own boundary

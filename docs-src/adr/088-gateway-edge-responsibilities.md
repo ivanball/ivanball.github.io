@@ -55,7 +55,7 @@ Revised 2026-10-07: anchors refreshed after the v1.233.0 release; see the Revisi
 Revised 2026-10-21: `AddMmcaGateway` now fail-fast validates the nested gateway settings on both overloads, ADC's route-table comment now agrees with its no-fallback host, and anchors are refreshed after the v1.250.0 release; see the Revision (2026-10-21) below.
 Revised 2026-10-26: edge 429s now carry a `Retry-After` header when the rejecting limiter has a hint, a gateway host takes a third framework package (`MMCA.Common.Azure`), and anchors are refreshed after the v1.261.0 release; see the Revision (2026-10-26) below.
 Revised 2026-10-28: the Store gateway's source comments now match its five package references, its Azure calls and its disabled active probe, and anchors are refreshed after the v1.265.1 release; see the Revision (2026-10-28) below.
-Revised 2026-11-12 (unreleased, on the `feat/fresh-eyes-wave` branch): `AddMmcaGateway` can install an opt-in connect-failure retry confined to a body-less GET or HEAD that never reached its destination, so the proxy-hop retry delegation now names its one exception, and the `Wire` anchors are refreshed; see What the edge delegates below.
+Revised 2026-11-12: `AddMmcaGateway` can install an opt-in connect-failure retry confined to a body-less GET or HEAD that never reached its destination, so the proxy-hop retry delegation now names its one exception, and the `Wire` anchors are refreshed; see What the edge delegates below.
 
 ## Context
 [ADR-008](008-service-extraction-topology.md) made the Gateway the only client entry point and gave it
