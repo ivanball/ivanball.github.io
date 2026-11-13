@@ -10,10 +10,11 @@ rationale was corrected, since `System.String` does implement `IParsable<string>
 2026-10-21: the alias count is 49 (47 `int`), `StronglyTypedIdMappings` ships two conversions
 rather than four, and the public API surface is 53 declarations rather than 55. Revised
 2026-10-26: anchors refreshed after `AddStronglyTypedIds` moved within the Infrastructure
-`DependencyInjection.cs`. Revised 2026-11-12 (unreleased, on the `feat/fresh-eyes-wave` branch): MMCA.Helpdesk is the first adopter (one
-identifier, `TicketCommentId`), the design-time option `AddStronglyTypedIdAssembly` and the
-model-cache key joined the capability, and Decision points 12, 13 and 14 were amended and point 15
-added accordingly.
+`DependencyInjection.cs`. Revised 2026-11-12: MMCA.Helpdesk is the first adopter (one
+identifier, `TicketCommentId`, which takes no alias and is named directly), the design-time option
+`AddStronglyTypedIdAssembly` and the model-cache key joined the capability, and Decision points 12,
+13 and 14 were amended and point 15 added accordingly; the alias count is 50 (48 `int`), see the
+Revision (2026-11-12) at the end.
 **Revisits [ADR-048](048-primitive-identifier-type-aliases.md) and
 [ADR-085](085-identifier-type-aliases-revisited.md)** by adding the capability those records deferred,
 without a workspace-wide migration. ADR-048's decision (every entity identity is a primitive named through a
@@ -228,12 +229,16 @@ framework pushes a consumer toward a wrapper.**
     (`MMCA.Helpdesk/Source/Modules/Tickets/MMCA.Helpdesk.Tickets.Shared/Tickets/TicketCommentId.cs:19`,
     factory at `:22`). It also carries `[JsonConverter(typeof(StronglyTypedIdJsonConverterFactory))]`
     (`:18`), because the UI's typed HttpClient and the cache register no converter factory and must
-    still write the bare integer (`:12-14`). The module's alias now names the wrapper
-    (`MMCA.Helpdesk/Source/Modules/Tickets/MMCA.Helpdesk.Tickets.Shared/MMCA.Helpdesk.Tickets.GlobalUsings.IdentifierType.cs:8`)
-    while the ticket id stays the primitive (`:10`), so one module shows both styles side by side
-    (`:6-7`); the entity and its DTO keep reading the alias
-    (`MMCA.Helpdesk/Source/Modules/Tickets/MMCA.Helpdesk.Tickets.Domain/Tickets/TicketComment.cs:16`,
-    `MMCA.Helpdesk/Source/Modules/Tickets/MMCA.Helpdesk.Tickets.Shared/Tickets/TicketCommentDTO.cs:10`).
+    still write the bare integer (`:12-14`). The wrapper takes no alias. The module's alias file is
+    linked into every project of the solution, so an alias in it may only name a type every project
+    can see, and a wrapper is a type of its own module that another module's projects cannot
+    reference
+    (`MMCA.Helpdesk/Source/Modules/Tickets/MMCA.Helpdesk.Tickets.Shared/MMCA.Helpdesk.Tickets.GlobalUsings.IdentifierType.cs:3-7`).
+    The file therefore declares the primitive ticket alias alone (`:8`), and the entity and its DTO
+    name `TicketCommentId` directly
+    (`MMCA.Helpdesk/Source/Modules/Tickets/MMCA.Helpdesk.Tickets.Domain/Tickets/TicketComment.cs:17`,
+    `MMCA.Helpdesk/Source/Modules/Tickets/MMCA.Helpdesk.Tickets.Shared/Tickets/TicketCommentDTO.cs:8`,
+    `:10`), so one module shows both styles side by side.
     The web host opts in with one call over the module's Shared assembly
     (`MMCA.Helpdesk/Source/Hosts/MMCA.Helpdesk.Web/Program.cs:82-86`). The adoption needed no
     migration, as point 8 predicts: the column stays the `int` it was, and the newest migration in
@@ -241,8 +246,8 @@ framework pushes a consumer toward a wrapper.**
     The only other implementations anywhere are fixtures in the framework's own test files, among
     them the design-time wrapper `DesignWrappedId`
     (`MMCA.Common/Tests/Core/MMCA.Common.Infrastructure.Tests/Persistence/DataSources/DesignTimeDbContextHelperTests.cs:514`).
-    Of the 49 aliases in force across the four repositories on 2026-10-21 (47 `int`, two
-    `System.Guid`), Helpdesk's `TicketCommentIdentifierType` is the one that now names a wrapper, and
+    Of the 50 aliases in force across the four repositories on 2026-11-12 (48 `int`, two
+    `System.Guid`), none names a wrapper, and
     no consumer needs a version-bump behaviour change:
     without a call to `AddStronglyTypedIds`, every framework site that reads the registry treats its
     absence as "no wrappers in use".
@@ -527,3 +532,33 @@ point moved within its file; its behavior is the same.
    `StronglyTypedIdTypeConverters.Register` (`:408`), and registers the singleton through
    `TryAddSingleton` at `:410`. Decision point 6 now carries these anchors (the Revision
    (2026-10-21) item 5 anchors stay as recorded). `StronglyTypedIdRegistry.cs:22` still holds.
+
+## Revision (2026-11-12)
+Re-verified against current source. The decision is unchanged: the framework still ships the
+capability and the aliases are still the default. Adoption is one identifier, in the reference app,
+and that identifier takes no alias.
+
+1. **A strongly typed identifier takes no alias.** A module's alias file is linked into every
+   project of the solution, the other modules' projects included, so an alias in it may only name a
+   type every project can see: a primitive. A wrapper is a type of its own module, which another
+   module's projects cannot reference, so an alias naming it stops the first module compiling as
+   soon as a second module exists. Helpdesk's alias file states the rule
+   (`MMCA.Helpdesk/Source/Modules/Tickets/MMCA.Helpdesk.Tickets.Shared/MMCA.Helpdesk.Tickets.GlobalUsings.IdentifierType.cs:3-7`)
+   and declares `TicketIdentifierType = int` alone (`:8`); the module generator carries the same
+   rule (`MMCA.Helpdesk/build/templates/overlay/mmca-app/build/add-module.ps1:719-721`). Code names
+   `TicketCommentId` directly
+   (`MMCA.Helpdesk/Source/Modules/Tickets/MMCA.Helpdesk.Tickets.Domain/Tickets/TicketComment.cs:17`,
+   `MMCA.Helpdesk/Source/Modules/Tickets/MMCA.Helpdesk.Tickets.Shared/Tickets/TicketCommentDTO.cs:8`).
+   Decision point 13 is updated.
+2. **The alias count is 50, 48 of them `int`.** Recounted directly from the ten
+   `GlobalUsings.*IdentifierType.cs` files: Common Domain 1, Common Shared 2, Store Catalog 6, Store
+   Identity 2, Store Sales 3, ADC Conference 19, ADC Engagement 13, ADC Identity 1, ADC
+   Notification 2, Helpdesk Tickets 1. ADC Engagement gained `TicketIdentifierType` and
+   `TicketImportRunIdentifierType`
+   (`MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Shared/MMCA.ADC.Engagement.GlobalUsings.IdentifierType.cs:14-15`),
+   taking it to 13 (`:4-16`), and Helpdesk Tickets declares one alias, not two. The two
+   `System.Guid` aliases are unmoved (`MMCA.ADC.Conference.GlobalUsings.IdentifierType.cs:17` and
+   `:23`). Decision point 13 now carries 50; the Context keeps its dated 2026-10-21 census.
+3. Anchors re-verified against current source: `TicketCommentId.cs:19` (factory `:22`, converter
+   attribute `:18`) and the web host's opt-in at
+   `MMCA.Helpdesk/Source/Hosts/MMCA.Helpdesk.Web/Program.cs:82-86` still hold.
