@@ -95,7 +95,7 @@
       <div class="doc-layout">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 146 ADRs</summary>
+        <summary>All 147 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html" aria-current="page">Overview</a></li>
@@ -245,6 +245,7 @@
         <li><a href="144-offline-writes-and-delta-reads.html">144 · Offline Writes and Delta Reads (Client Write Queue, Server Change Feed with Tombstones)</a></li>
         <li><a href="145-opt-in-cursor-paging.html">145 · Opt-In Cursor Paging on List Endpoints (Beside Offset Paging)</a></li>
         <li><a href="146-ui-page-bases-and-list-shell.html">146 · UI Page Bases and the List Shell (Bases Own Plumbing, Pages Own Model and Service Call)</a></li>
+        <li><a href="147-test-gaps-risk-ratchets-and-traceability.html">147 · Test Gaps Found by Risk Ratchets and Traceability Fitness Functions (Baselines Only Shrink)</a></li>
           </ol>
         </nav>
       </details>
@@ -254,7 +255,7 @@
           <h1 id="architecture-decision-records">Architecture Decision Records</h1>
           <p>Accepted ADRs explaining <em>why</em> the core cross-cutting patterns exist. Read these before changing a
           pattern they describe: they capture context and trade-offs that aren&#39;t obvious from the code.</p>
-          <p><strong>146 accepted ADRs</strong>, 001-146, numbered contiguously with one row per ADR in the table below.
+          <p><strong>147 accepted ADRs</strong>, 001-147, numbered contiguously with one row per ADR in the table below.
           This file owns the ADR count and range (<code>MMCA.Common/FACTS.md</code>): read them here rather than
           recounting, and when you add an ADR, update this line with its row. <code>tools/adr-index.ps1</code> in this
           repo re-derives both from the files and fails if this line, the table, or a link drifts from them;
@@ -996,6 +997,11 @@
           <td><a href="146-ui-page-bases-and-list-shell.html">146</a></td>
           <td>UI page bases and the list shell: bases own plumbing, pages own model and service call</td>
           <td><code>CancellablePageBase</code> owns the page-scoped cancellation token (<code>PageToken</code>) and disposal; <code>CreatePageBase</code> owns the dirty flag, the kept save result and one fixed submit sequence; <code>DataGridListPageBase&lt;TDto&gt;</code> gains a before-fetch hook and a phone fetcher so one fetch delegate serves the grid and the phone list; <code>ListPageShell&lt;TItem&gt;</code> and <code>RowLinkCell</code> own the list chrome (header, search row, grid or phone list, empty and failure content, pager, delete confirmation). A forms convention test fails a create form that does not declare the base; it does not check that the form uses the base&#39;s submit sequence. The create forms of MMCA.ADC and MMCA.Store are on the base; the list shell is used by MMCA.ADC&#39;s admin lists and six of MMCA.Store&#39;s list pages, and MMCA.Store&#39;s order list, which swaps its body by viewer, keeps its own grid and pager. The shell hands a page no grid while the phone layout shows, so state restored on a phone is not pushed into the grid. Breaking for consumers: <code>MobileCardList</code> and <code>PageStateScope</code> are removed (<code>UPGRADING.md</code>)</td>
+          </tr>
+          <tr>
+          <td><a href="147-test-gaps-risk-ratchets-and-traceability.html">147</a></td>
+          <td>Test gaps found by risk ratchets and traceability fitness functions</td>
+          <td>The shared <code>coverage-ratchet</code> action (MMCA.Common) reads Cobertura reports and fails only on NEW risk, against committed baselines that only shrink: <code>check: crap</code> fails a method above CRAP 30 that the baseline does not list, or a baselined one whose CRAP rose; <code>check: entrypoints</code> fails a controller, gRPC or integration-event handler method at 0% in the INTEGRATION report that the baseline does not list. Stale entries warn, missing input fails closed, and every <code>coverage-risk</code> job starts non-required, promoted after about ten green runs. Three fitness bases (<code>HandlerTestCoverageTestsBase</code>, <code>PageE2ECoverageTestsBase</code>, <code>ManualCaseTraitTestsBase</code>) tie handlers, <code>@page</code> routes and manual test cases to tests; a manual case is linked by <code>[Trait(&quot;Case&quot;, id)]</code> on the test, so a manual run repeats by hand only what CI has not verified. A complex but covered method is a refactor target, not a test target; an E2E-infeasible case moves to a lower tier; the opt-in <code>E2ERouteRecorder</code> logs paths only</td>
           </tr>
           </tbody></table></div>
           <h2 id="writing-a-new-adr">Writing a new ADR</h2>

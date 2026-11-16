@@ -145,7 +145,7 @@
           <td>architecture fitness methods (70 bases)</td>
           </tr>
           <tr>
-          <td><strong>146</strong></td>
+          <td><strong>147</strong></td>
           <td>ADRs documenting every pattern</td>
           </tr>
           <tr>
@@ -730,7 +730,7 @@
           </ul>
           <h2 id="governance-versioning-and-supply-chain">Governance, versioning, and supply chain</h2>
           <ul>
-          <li><strong>146 ADRs.</strong> Every framework pattern is documented as an architecture decision record with context and consequences, published publicly and indexed in one place; adopters inherit the reasoning, not just the code.</li>
+          <li><strong>147 ADRs.</strong> Every framework pattern is documented as an architecture decision record with context and consequences, published publicly and indexed in one place; adopters inherit the reasoning, not just the code.</li>
           <li><strong>Lockstep SemVer with a stated policy.</strong> All 30 packages release at one version from a git tag; consumers bump once per release, no phased rollout (<a href="../adr/016-lockstep-versioning-masstransit-pin.html">ADR-016</a>). Breaking changes ship as minor bumps inside 1.x with the call site named in the CHANGELOG, and there is no obsolete grace period, so read the entry at bump time.</li>
           <li><strong>An upgrade map for every breaking release.</strong> <code>UPGRADING.md</code> at the repo root carries one section per breaking release, newest first, with the old-to-new map and the mechanical fix (a namespace move is a <code>using</code> rewrite; a constructor change names the parameter to forward), kept identical to the CHANGELOG block so a consumer outside the workspace has the same recipe the in-workspace script applies.</li>
           <li><strong>The public API surface is a reviewable diff.</strong> Every packable project declares its shipped surface in <code>PublicAPI.Shipped.txt</code>, and the build fails on an undeclared public member or a disappeared declared one, so widening or breaking a package API is caught in review rather than by a consumer after release.</li>
@@ -757,7 +757,7 @@
           <li><strong><a href="common-RESILIENCE.html">Resilience and Business Continuity</a>.</strong> What a library can guarantee versus what the consumer&#39;s infrastructure owns, plus the restore-drill baseline.</li>
           <li><strong><a href="common-RESPONSIVE.html">Responsive Design and Cross-Browser Support</a>.</strong> The supported viewport, touch-target, and browser-engine matrix.</li>
           <li><strong><a href="common-COST.html">Cost and FinOps Notes</a>.</strong> The cost-relevant defaults the framework ships and the levers consumers should set.</li>
-          <li><strong><a href="../adr/index.html">ADRs</a>, <a href="../governance/index.html">governance</a>, <a href="../onboarding/index.html">onboarding</a>.</strong> 146 decision records with one-line summaries; the 34-category rubric with three scorecards and three backlogs; thirty-plus onboarding chapters walking every first-party type plus DevOps chapters for Aspire, CI/CD, infrastructure, runbooks, and testing. In the repo: <code>FACTS.md</code>, <code>CHANGELOG.md</code>, <code>UPGRADING.md</code>, <code>SECURITY.md</code>, and the deployment sample&#39;s <code>DEPLOYMENT.md</code>.</li>
+          <li><strong><a href="../adr/index.html">ADRs</a>, <a href="../governance/index.html">governance</a>, <a href="../onboarding/index.html">onboarding</a>.</strong> 147 decision records with one-line summaries; the 34-category rubric with three scorecards and three backlogs; thirty-plus onboarding chapters walking every first-party type plus DevOps chapters for Aspire, CI/CD, infrastructure, runbooks, and testing. In the repo: <code>FACTS.md</code>, <code>CHANGELOG.md</code>, <code>UPGRADING.md</code>, <code>SECURITY.md</code>, and the deployment sample&#39;s <code>DEPLOYMENT.md</code>.</li>
           </ul>
           <h2 id="enterprise-deployment-checklist">Enterprise deployment checklist</h2>
           <p>The framework&#39;s defaults suit one node and a small fleet. A host sized for many replicas and thousands of concurrent users turns on configuration the framework already ships; none of it needs code. Items that would need new code are held, each with its trigger, in the <em>Enterprise-scale register</em> of the <a href="../governance/common-RemediationBacklog.html">Common remediation backlog</a>.</p>
