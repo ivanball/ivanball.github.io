@@ -20,6 +20,8 @@ Revised 2026-10-21: the retry policy is recorded with its transport-failure arm 
 Revised 2026-10-26: the client retry policy and the shared Aspire handler are recorded as refusing a 429 whose `Retry-After` exceeds `MaxRetryAfterWait` (a shorter one is waited out in place of the backoff), the list-page base's superseded-load handling, `EmptyConfirmed` flag and aliased page-filter keys are recorded, and anchors are refreshed.
 Revised 2026-10-28: Store's new `BestSellerService` and `CheckoutApiService` raise the `IdempotentReadRetry` call sites to twelve across nine files and the direct `AuthenticatedServiceBase` count to twenty-three, and Store anchors are refreshed; `CheckoutApiService` mints one key per guest action (three) and `CartStateService` one per add request, merged guest-cart lines included.
 
+Amended 2026-11-17 (MMCA.Common v1.301.0): reads go straight through `SendGetAsync<T>`, because the optional client read cache is removed (ADR-026, Revision 2026-11-17), and `UpdateAsync` sends an `Idempotency-Key` minted once beside `If-Match`, so a retried update whose response was lost replays the stored 204 instead of answering 412. See the Revision (2026-11-17) at the end.
+
 ## Context
 ADR-034 decided the **server** half of entity data access: a generic controller base with a dynamic
 query contract, where filters arrive as `filters[Property].operator` / `filters[Property].value` query
@@ -79,22 +81,12 @@ Client-side entity data access goes through one hand-written base hierarchy in `
   missing entity is a `NotFound` failure, not a default value (`:155-158`): the caller tells it apart
   from a transport failure through `ResultUiExtensions.IsNotFound`
   (`.../MMCA.Common.UI/Common/ResultUiExtensions.cs:306`) rather than by asking for a null.
-- **Reads go through an optional client read cache.** The constructor takes an optional `IUiReadCache`
-  (`EntityServiceBase.cs:47`, exposed to subclasses as `ReadCache`, `:58`), the client half of
-  [ADR-040](040-authenticated-output-caching-for-public-reads.md). All four reads call `GetCachedAsync`
-  (`:253-284`, called at `:80`, `:123`, `:137` and `:158`) rather than dispatching directly. With no
-  cache registered, or with `bypassCache` set, it falls straight through to the normal dispatch
-  (`:260-263`); with one, a fresh entry answers the read with no HTTP call at all (`:265-268`), and
-  only a successful non-null response is stored (`:278-281`), so a transient outage or a 404 is not
-  pinned in front of the user for the whole TTL. The cache key is the request path plus its full
-  query string, stored verbatim so it matches the server-side output-cache key shape. After every
-  write, `InvalidateAfterWrite` (`:300-306`, calling `ReadCache?.InvalidatePrefix(Endpoint)`, invoked
-  from `AddAsync` at `:177`, `UpdateAsync` at `:199` and `DeleteAsync` at `:225`) drops this
-  endpoint's entries unless every error is a refusal issued before the server touched state
-  (`IsRejectedBeforeWrite`, `:309-314`: validation, unprocessable, unauthorized, forbidden, rate
-  limited). Those changed nothing, so they invalidate nothing; any other failure (a 412, 404 or 409
-  that may answer the retry of a write whose first attempt landed, a 5xx, a transport failure)
-  leaves the server state changed or unknown and invalidates like a success.
+- **Reads go straight to the API; there is no client read cache.** All four reads dispatch through
+  `SendGetAsync<T>` (`EntityServiceBase.cs:226-233`, called at `:64`, `:107`, `:121` and `:142`), a
+  GET through the same retry policy and `Result` dispatch as the writes, exposed as a protected
+  member so a derived service's own read (a storefront page, a filtered lookup) takes the same path
+  (`:213-217`). Caching stays on the server's two tiers (ADR-026, Revision 2026-11-17, records the
+  removal of the optional client tier), so a write carries no client-side invalidation step.
 - **Retry is owned by the client base, not by a resilience handler.** `RetryPolicy`
   (`AuthenticatedServiceBase.cs:30`, built by `BuildRetryPolicy`, `:239-255`) is a static Polly
   policy: three retries after the initial attempt (`:248`), on a retryable `HttpRequestException` or
@@ -131,29 +123,34 @@ Client-side entity data access goes through one hand-written base hierarchy in `
 - **The `Idempotency-Key` is minted client-side and survives retries.** `NewIdempotencyKey()` returns a
   compact GUID (`AuthenticatedServiceBase.cs:54`); the header name is the shared constant
   `IdempotencyHeaders.IdempotencyKey` (`MMCA.Common/Source/Core/MMCA.Common.Shared/Http/IdempotencyHeaders.cs:19`).
-  Only `AddAsync` supplies one (`EntityServiceBase.cs:171-175`, the mint at `:174`): creates are the
-  one CRUD verb that is not naturally idempotent, so reads, full `PUT` updates and deletes send no key
-  (`UpdateAsync`, `:188-201`; `DeleteAsync`, `:215-227`). The key is set as a **default header on the
-  single `HttpClient` that serves every attempt** (`CreateRequestClientAsync`, `:403-428`, the header
-  added at `:413`), which is what
-  makes the value constant across the retry burst and therefore dedupable by the ADR-017 filter. Both
-  properties are pinned by tests: the same key on every retry
-  (`MMCA.Common/Tests/Presentation/MMCA.Common.UI.Tests/Services/Api/EntityServiceBaseIdempotencyRetryTests.cs:96`),
-  no key on reads, updates or deletes (`:118,130,143`), and the 501-not-retried / 429-retried edges
-  (`:156,171`).
+  `AddAsync` and `UpdateAsync` supply one (`EntityServiceBase.cs:146-160`, the mint at `:158`;
+  `:169-185`, the mint at `:182` beside the `If-Match` value at `:183`); reads and deletes send none
+  (`SendGetAsync`, `:226-233`; `DeleteAsync`, `:199-208`). A create is not naturally idempotent, and
+  an update keyed once means a `PUT` whose first attempt landed and only lost its response is
+  replayed by the server's idempotency filter (the stored 204) instead of being re-run against the
+  version it just replaced, which would answer 412 (`:175-178`). The key is set as a **default header
+  on the single `HttpClient` that serves every attempt** (`CreateRequestClientAsync`, `:323-348`, the
+  header added at `:333`), which is what
+  makes the value constant across the retry burst and therefore dedupable by the ADR-017 filter.
+  These properties are pinned by tests
+  (`MMCA.Common/Tests/Presentation/MMCA.Common.UI.Tests/Services/Api/EntityServiceBaseIdempotencyRetryTests.cs`):
+  a key on creates and updates (`:111`, `:157`), the same key (and, for an update, the same
+  `If-Match`) on every retry (`:122`, `:174`), no key on reads or deletes (`:144`, `:197`), and the
+  501-not-retried / 429-retried edges (`:210`, `:225`).
 - **The `If-Match` precondition is set the same way, from the DTO's own concurrency token.**
   `UpdateAsync` is the only verb that sends one: it passes `ConcurrencyTagOf(entity)`
-  (`EntityServiceBase.cs:196`) into the dispatch, and that helper (`:209-212`) renders an
+  (`EntityServiceBase.cs:183`) into the dispatch, and that helper (`:193-196`) renders an
   `IConcurrencyAware` DTO's `RowVersion` as a weak entity tag and answers null when the DTO type
   carries no token. The header rides on the same per-operation `HttpClient` as the idempotency key
-  (`CreateRequestClientAsync`, `:416-425`, added at `:424` under the shared name
+  (`CreateRequestClientAsync`, `:336-345`, added at `:344` under the shared name
   `ConcurrencyETag.IfMatchHeaderName`), so every retry attempt states the same precondition rather
   than a later attempt succeeding against a version the caller never saw; when the first attempt
-  landed and only its response was lost, the retry answers 412 (or 404 for a soft-deleted row), which
-  is why such an outcome still invalidates the read cache (`:418-423`). This is the client end of
+  landed and only its response was lost, the idempotency key sent beside it lets the server replay
+  the stored outcome instead of re-checking the precondition against the version that attempt just
+  wrote (`:340-343`). This is the client end of
   [ADR-035](035-optimistic-concurrency.md): the `If-Match` header is the only route the token travels,
   and a DTO carrying none sends no header and is refused instead of overwriting another editor's
-  change (`:183-186`).
+  change (`:163-168`).
 - **The dispatch returns a `Result`; it does not throw** (2026-08-27, v1.164.0). `SendRequestAsync`
   wraps the whole send-and-read in `HttpResultExecutor.ExecuteAsync` and hands the response to
   `ProblemDetailsResultReader`, in both the value-returning overload
@@ -214,7 +211,7 @@ Client-side entity data access goes through one hand-written base hierarchy in `
   (`.../Pages/Catalog/CatalogBrowse.razor.cs:29,266`, `CatalogBrowse.Filters.razor.cs:124`).
   Helpdesk and the rest of Common do not call it.
   Writes are deliberately not offered: a write that needs retries goes through `EntityServiceBase`,
-  whose creates carry an `Idempotency-Key`.
+  whose creates and updates carry an `Idempotency-Key`.
 - **UI state is per circuit, never process-wide.** Blazor Server runs every user's circuit in one
   process, so client-side state lives in scoped services: UI assemblies declare no mutable static
   field and no settable static property, and no `*StateService` or `*StateContainer` type is
@@ -405,7 +402,7 @@ handoff and the `InteractiveAuto` registration) and inventories the same set of 
   field (`AuthenticatedServiceBase.cs:30`), so its counts and delays are compile-time constants shared
   by every service in the process. A per-endpoint or per-environment retry profile would need a change
   to the framework, not configuration.
-- **Only `AddAsync` gets an idempotency key automatically.** Any non-CRUD write (a hand-written POST on
+- **Only `AddAsync` and `UpdateAsync` get an idempotency key automatically.** Any non-CRUD write (a hand-written POST on
   a service deriving from `AuthenticatedServiceBase`, such as `CartStateService`) has to mint and
   attach the key itself, and nothing fails the build if it does
   not. The omission mostly costs resilience rather than correctness: `RetryPolicy` never replays a
@@ -637,6 +634,30 @@ moved, and Store anchors moved with them.
    anchors); ADC Identity's `UserService.cs:22` now also names its base clause at `:23`; and the
    inventory date is 2026-10-28.
 
+## Revision (2026-11-17)
+Two client behaviors changed in MMCA.Common v1.301.0 (MMCA.Common #758, the UI drift wave; plan in
+the workspace `Docs/Planning/Drift/UiProjects-plan.md`). The hierarchy, the retry policy, the
+list-page contract and the adoption counts are unchanged.
+
+1. **The client read cache is removed.** `EntityServiceBase` no longer takes an `IUiReadCache` and
+   has no `ReadCache`, `GetCachedAsync` or `InvalidateAfterWrite`; all four reads dispatch through
+   `SendGetAsync<T>`
+   (`MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/Api/EntityServiceBase.cs:226-233`,
+   called at `:64`, `:107`, `:121` and `:142`). Why the tier went, and what was deleted with it, is
+   recorded in ADR-026's Revision (2026-11-17). The Decision bullet that described the cache now
+   describes the direct read, the `If-Match` bullet no longer ties a lost-response 412 to cache
+   invalidation, and the ADR-040 entry under Related no longer names a client cache. Earlier
+   revisions that mention the cache record it as it stood on their dates.
+2. **`UpdateAsync` sends an `Idempotency-Key`.** The key is minted once, outside the retry, beside
+   the `If-Match` value (`EntityServiceBase.cs:175-183`), and rides the same per-operation client as a
+   default header (`:327-334`), so a `PUT` whose first attempt landed and only lost its response is
+   answered by the server's idempotency filter with the stored 204 rather than a 412 that would tell
+   the user someone else changed the item. The idempotency bullet no longer says updates send no
+   key; the tests pin a key on an update
+   (`MMCA.Common/Tests/Presentation/MMCA.Common.UI.Tests/Services/Api/EntityServiceBaseIdempotencyRetryTests.cs:157`)
+   and the same key and `If-Match` on every retry (`:174`). The `IdempotentReadRetry` bullet and the
+   idempotency-key trade-off now name updates beside creates.
+
 ## Related
 [ADR-034](034-generic-entity-query-layer.md) (the server surface this contract calls, and the filter
 grammar the client constructs), [ADR-017](017-request-idempotency.md) (the server-side filter whose
@@ -647,5 +668,6 @@ server-to-server resilience handler whose budget interacts with, but does not re
 retry), [ADR-056](056-blazor-render-mode-strategy.md) (the render-mode aspect of
 `DataGridListPageBase<TDto>`, including the pre-render data handoff and the same inheritor
 inventory), [ADR-035](035-optimistic-concurrency.md) (the concurrency token whose `If-Match` carriage
-this base owns), [ADR-040](040-authenticated-output-caching-for-public-reads.md) (the caching policy
-whose client-side read cache this base consults).
+this base owns), [ADR-040](040-authenticated-output-caching-for-public-reads.md) (the server-side
+output caching of public reads; this base keeps no client read cache, see
+[ADR-026](026-caching-strategy.md), Revision 2026-11-17).

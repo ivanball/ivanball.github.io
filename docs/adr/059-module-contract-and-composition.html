@@ -260,7 +260,8 @@
           Revised 2026-10-21: ADC <code>ConferenceModule</code> registers three stubs (adding the <code>IUserConferenceExportService</code> export stub), <code>DisabledEventLiveValidationService</code> fails open across five members, the empty-export stub list names the Conference and Store Catalog export stubs, and host anchors are refreshed.
           Revised 2026-10-26: service-host anchors refreshed after the host Program.cs files moved (no behavior change).
           Revised 2026-10-28: the Trade-offs list of undeclared cross-module gRPC edges grows from two to five consuming modules (ADC Engagement, Notification and Identity join ADC Conference and Store Identity), the ADR-008 reading is corrected (only <code>ModuleLoader</code> is its Context; the <code>Disabled*</code> stubs belong to its Strangler Fig step), and anchors are refreshed.
-          Amended 2026-11-12: the composed service-host call (<code>AddMmcaServiceHost</code> / <code>UseMmcaServiceHostAsync</code>, package <code>MMCA.Common.ServiceHost</code>) owns the host registration order around <code>AddMmcaApplicationPipeline</code>, every Store and ADC service host calls it, and the host anchors are re-pointed into its options.</p>
+          Amended 2026-11-12: the composed service-host call (<code>AddMmcaServiceHost</code> / <code>UseMmcaServiceHostAsync</code>, package <code>MMCA.Common.ServiceHost</code>) owns the host registration order around <code>AddMmcaApplicationPipeline</code>, every Store and ADC service host calls it, and the host anchors are re-pointed into its options.
+          Amended 2026-11-17: the UI heads read the same <code>Modules</code> switch with the same rule (a module missing from configuration is off), and the Blazor server head forwards its enabled flags to the WebAssembly client through <code>/client-config</code>, so one switch decides a module&#39;s UI on every head (MMCA.Common v1.301.0). See the Revision (2026-11-17) at the end.</p>
           <h2 id="context">Context</h2>
           <p>The framework&#39;s headline claim is that an application is built as a modular monolith and later
           extracted into services without rewriting business logic. ADR-008 states the extracted shape in one
@@ -401,6 +402,18 @@
           even though <code>ModuleSettings.Enabled</code> itself defaults to <code>true</code>
           (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Settings/ModuleSettings.cs:9</code>); <code>ModuleLoaderTests.cs:300-306</code>
           pins that behavior.</li>
+          <li><strong>The UI heads read the same switch with the same rule.</strong> A UI head registers a module&#39;s UI only
+          when <code>UIModuleConfiguration.IsModuleEnabled(configuration, name)</code> says so
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI/Common/Settings/UIModuleConfiguration.cs:28</code>), which
+          applies the service hosts&#39; rule: the <code>Modules:{name}</code> key must exist and its <code>Enabled</code> must not be
+          false (<code>:34</code>). The Blazor server head forwards the resolved flags (and nothing else from the section)
+          to the WebAssembly client as the <code>modules</code> section of <code>/client-config</code>
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI.Web/ClientConfig/ClientConfigEndpointExtensions.cs:86</code>,
+          built at <code>:104-105</code>), which the client loads into configuration before it registers modules, so the
+          interactive client registers exactly the modules its server head rendered. <code>Modules</code> is a reserved
+          client-config section name (<code>ClientConfigBuilder.cs:50</code>). A MAUI head has no server head and reads its
+          own <code>Modules</code> section. One difference remains: the UI rule reads <code>IConfiguration</code>, whose keys are
+          case-insensitive, while <code>ModulesSettings</code> is a plain dictionary (see Trade-offs).</li>
           <li><strong>Disabled means stubs, not absence.</strong> For a disabled module the loader calls
           <code>RegisterDisabledStubs</code> and never calls <code>Register</code>, snapshots the descriptors that call appended so
           they can be validated later, and records the name (<code>ModuleLoader.cs:112-123</code>). The stubs are
@@ -794,6 +807,23 @@
           (<code>MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:273-275</code>). The anchors in the
           2026-10-07 and 2026-10-26 revisions are left as written and are superseded by these.</li>
           </ol>
+          <h2 id="revision-2026-11-17">Revision (2026-11-17)</h2>
+          <p>The UI half of module enablement now follows this ADR&#39;s rule (MMCA.Common #758, the UI drift wave,
+          v1.301.0; plan in the workspace <code>Docs/Planning/Drift/UiProjects-plan.md</code>, item A10).</p>
+          <ol>
+          <li><strong>The rule was inverted on the UI side.</strong> Before this change <code>UIModuleConfiguration.IsModuleEnabled</code>
+          treated a module missing from configuration as enabled, the opposite of <code>ModulesSettings</code>, so the
+          same <code>Modules</code> section could mean two things depending on which host read it.</li>
+          <li><strong>The WebAssembly client never saw the server head&#39;s switch.</strong> It read its own static
+          <code>wwwroot/appsettings.json</code> (ADC&#39;s had no <code>Modules</code> section at all), and <code>/client-config</code> did not
+          forward the section, so a module disabled on the server head was rendered on prerender and came back
+          once the page went interactive. <code>/client-config</code> now carries the head&#39;s resolved flags, so the
+          client registers the same set.</li>
+          <li><strong>Consumers.</strong> ADC and Store list every module in each server and MAUI head; Store&#39;s redundant
+          WebAssembly <code>Modules</code> section is deleted. A UI head that gates registration on the switch must list
+          every module it registers, because a missing key is now off.</li>
+          <li><strong>Decision</strong> gains the bullet &quot;The UI heads read the same switch with the same rule&quot;.</li>
+          </ol>
           <h2 id="related">Related</h2>
           <p>ADR-008 (the extraction topology that consumes this model: &quot;Each service is the monolith with one
           module enabled&quot; is a statement about <code>ModuleLoader</code>, cited there as pre-existing context, plus the
@@ -827,6 +857,7 @@
             <li><a href="#revision-2026-10-21">Revision (2026-10-21)</a></li>
             <li><a href="#revision-2026-10-26">Revision (2026-10-26)</a></li>
             <li><a href="#revision-2026-10-28">Revision (2026-10-28)</a></li>
+            <li><a href="#revision-2026-11-17">Revision (2026-11-17)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

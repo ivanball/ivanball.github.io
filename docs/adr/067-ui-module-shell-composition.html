@@ -279,6 +279,12 @@
           <code>MainLayout</code> and <code>NavMenu</code> citations. Revised 2026-10-28: anchors refreshed after both Blazor Web
           hosts gained a <code>MapCommonServiceWorker()</code> call ahead of their assembly wiring. Revised 2026-11-04: records the <code>NavGroups</code> contract member and <code>NavItem.Order</code>, which let a
           module describe a nav group (icon, initially expanded, order) by key and order its items.</p>
+          <p>Amended 2026-11-17 (MMCA.Common v1.301.0): the notification-page gate is unconditional (a host that
+          registers no <code>NotificationUIModule</code> answers the notification routes with the not-found page, and the
+          <code>Layout:HideNotificationPagesWhenUnregistered</code> and <code>Layout:ClearToastsOnNavigation</code> flags are
+          removed), <code>IAppDialogService.ConfirmAsync</code> opens the Cancel-first <code>ConfirmationDialog</code> and gains a
+          <code>destructive</code> overload, and <code>MainLayout</code> wraps the page body in an <code>ErrorBoundary</code> recovered on
+          navigation. See the Revision (2026-11-17) at the end.</p>
           <h2 id="context">Context</h2>
           <p>ADR-059 decided how a module plugs into the <strong>server</strong>: an <code>IModule</code> implementation is discovered by
           reflection, registered in topological order, and a host composes an application out of those modules
@@ -327,10 +333,12 @@
           <code>Sessions.razor:1</code>), and the notification surfaces <code>/notifications</code>, <code>/notifications/inbox</code> (plus
           <code>/notifications/inbox/{Id:int}</code>), <code>/notifications/send</code>
           (<code>Pages/Notifications/NotificationList.razor:1</code>, <code>NotificationInbox.razor:1-2</code>, <code>NotificationSend.razor:1</code>).
-          A host that opts in with <code>Layout:HideNotificationPagesWhenUnregistered</code>
-          (<code>MMCA.Common.UI/Common/Settings/LayoutSettings.cs:49</code>) and registers no <code>NotificationUIModule</code> gets
-          the not-found page on those three routes instead (<code>Routes.razor:16</code>,
-          <code>MMCA.Common.UI/Notifications/NotificationPageGate.cs:22</code>).</p>
+          A host that registers no <code>NotificationUIModule</code> (it never called <code>AddNotificationUI()</code>) gets the
+          not-found page on those routes instead, with no flag to set: the router asks
+          <code>NotificationPageGate.Hides</code> before <code>AuthorizeRouteView</code> runs (<code>MMCA.Common.UI/Routes.razor:14-23</code>),
+          and the gate matches the three notification page types whenever no registered module is a
+          <code>NotificationUIModule</code> (<code>MMCA.Common.UI/Notifications/NotificationPageGate.cs:14</code>, <code>:20-21</code>,
+          <code>:26-27</code>); on a server render the answer carries a 404 status (<code>Routes.razor:21-22</code>).</p>
           </li>
           <li><p><strong>Unauthenticated and unauthorized both resolve inside the shell.</strong> <code>AuthorizeRouteView</code> sends an
           anonymous visitor through <code>RedirectToLogin</code> and an authenticated-but-unauthorized one to the
@@ -357,6 +365,15 @@
           <code>NotFoundContentType</code> in place of its default content (<code>MMCA.Common.UI/Pages/NotFound.razor:23-25</code>,
           <code>:47</code>).</p>
           </li>
+          <li><p><strong>The layout contains a failing page and clears stale toasts.</strong> <code>MainLayout</code> renders the page body
+          inside an <code>ErrorBoundary</code> (<code>MMCA.Common.UI/Layout/MainLayout.razor:97-109</code>), so a page that throws
+          while rendering shows a page-error state with a Retry button in its place (<code>:101-108</code>) instead of
+          ending the whole circuit. The router keeps the layout instance across navigations, so the layout
+          subscribes to <code>LocationChanged</code> (<code>:202</code>) and recovers the boundary on every navigation
+          (<code>:207-212</code>), giving the next page a fresh attempt. The layout also always renders
+          <code>StaleToastSweeper</code> (<code>:152-153</code>), which removes toasts left over from the page being left; no
+          setting turns it on or off.</p>
+          </li>
           <li><p><strong>Registration is one call.</strong> <code>AddUIModule&lt;TModule&gt;()</code> runs the Scrutor scan for the module&#39;s entity
           services and then registers the descriptor as a singleton <code>IUIModule</code>
           (<code>MMCA.Common.UI/DependencyInjection.cs:332-341</code>); modules with extra services register the
@@ -372,9 +389,15 @@
           (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI/Common/Interfaces/IToastService.cs</code>,
           <code>IAppDialogService.cs</code>, namespace <code>MMCA.Common.UI.Common.Interfaces</code>). <code>IToastService</code> carries the
           five severities every component library exposes and is fire-and-forget by design (during SSR
-          pre-render there is no toast host, so the call is a silent no-op); <code>IAppDialogService</code> is one
-          <code>ConfirmAsync</code>, where dismissing the prompt counts as declining, so a caller only ever branches on
-          <code>true</code>. Both facades are registered by one extracted call, <code>AddCommonUiFacades()</code>, which
+          pre-render there is no toast host, so the call is a silent no-op); <code>IAppDialogService</code> is
+          <code>ConfirmAsync</code> in two overloads, the second adding a <code>destructive</code> flag that draws the confirming
+          button in the error color for a delete, a lock or a sign-out
+          (<code>MMCA.Common.UI/Common/Interfaces/IAppDialogService.cs:30</code>, <code>:45</code>). Dismissing the prompt counts as
+          declining, so a caller only ever branches on <code>true</code>. Both overloads open <code>ConfirmationDialog</code>
+          (<code>MMCA.Common.UI/Services/MudAppDialogService.cs:16-21</code>), which renders Cancel first and focused, so
+          a stray Enter declines, and answers Escape and a backdrop dismissal as Cancel
+          (<code>MMCA.Common.UI/Components/Forms/ConfirmationDialog.razor:6</code>, <code>:14-15</code>, <code>:24-27</code>, <code>:92</code>).
+          Both facades are registered by one extracted call, <code>AddCommonUiFacades()</code>, which
           TryAdd-registers <code>MudToastService</code> and <code>MudAppDialogService</code> over MudBlazor&#39;s <code>ISnackbar</code> and
           <code>IDialogService</code> (<code>MMCA.Common.UI/DependencyInjection.cs:238-241</code>). The same call also
           TryAdd-registers <code>IPendingToastService</code> (<code>:242</code>), a toast parked in <code>sessionStorage</code> that survives
@@ -392,7 +415,9 @@
           The delete confirmation is the component-side exception: <code>DeleteWithConfirmationAsync</code> asks its
           question through the <code>DeleteConfirmation</code> component it is handed (<code>ListPageActions.cs:58</code>, <code>:72</code>),
           and that component injects MudBlazor&#39;s <code>IDialogService</code> directly rather than going through
-          <code>IAppDialogService</code> (<code>MMCA.Common.UI/Components/Forms/DeleteConfirmation.razor:2</code>, <code>:33</code>). Richer,
+          <code>IAppDialogService</code> (<code>MMCA.Common.UI/Components/Forms/DeleteConfirmation.razor:2</code>), though it opens
+          the same <code>ConfirmationDialog</code>, destructive and with its own <code>confirm-delete</code> test id (<code>:9</code>,
+          <code>:27-34</code>), so a delete prompt and a facade prompt have one shape. Richer,
           entity-specific dialogs are inline, visibility-bound <code>&lt;MudDialog @bind-Visible&gt;</code> components rather
           than either service (for example
           <code>MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.UI/Pages/Orders/ShipOrderDialog.razor:4-9</code>).</p>
@@ -634,6 +659,41 @@
           <p>Rejected: a group descriptor on <code>NavItem</code> itself, which every item of the group would repeat and two
           items could contradict; and per-host configuration, because the group shape belongs to the modules,
           which already own their items.</p>
+          <h2 id="revision-2026-11-17">Revision (2026-11-17)</h2>
+          <p>Three shell behaviors changed in MMCA.Common v1.301.0 (MMCA.Common #758, the UI drift wave; plan in
+          the workspace <code>Docs/Planning/Drift/UiProjects-plan.md</code>). The contract, the router and nav
+          composition, the vendor choice and the Helpdesk non-adoption are unchanged.</p>
+          <ol>
+          <li><strong>The notification-page gate is unconditional.</strong> <code>Layout:HideNotificationPagesWhenUnregistered</code>
+          is removed: a host that registers no <code>NotificationUIModule</code> answers <code>/notifications</code>,
+          <code>/notifications/inbox</code> (with <code>/notifications/inbox/{Id:int}</code>) and <code>/notifications/send</code> with the
+          not-found page
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI/Routes.razor:14-23</code>,
+          <code>MMCA.Common.UI/Notifications/NotificationPageGate.cs:20-21</code>, <code>:26-27</code>). The gate lives in the
+          shell&#39;s router, so it covers every head that uses that router, a MAUI head included, and a host
+          no longer has to remember a flag to stop serving pages whose services it never registered.
+          <code>Layout:ClearToastsOnNavigation</code> is removed too: <code>MainLayout</code> always renders <code>StaleToastSweeper</code>
+          (<code>MMCA.Common.UI/Layout/MainLayout.razor:152-153</code>). The Decision bullet that described the opt-in
+          now states the rule; the Revision (2026-10-01) and its anchors record the opt-in as it stood on
+          that date.</li>
+          <li><strong><code>IAppDialogService.ConfirmAsync</code> opens a Cancel-first dialog.</strong> <code>ConfirmationDialog</code>
+          (<code>MMCA.Common.UI/Components/Forms/ConfirmationDialog.razor</code>) replaces <code>DeleteConfirmationDialog</code>
+          and is the one confirmation shape: Cancel is rendered first and takes initial focus, so a stray
+          Enter declines, and Escape and a backdrop dismissal answer <code>false</code> (<code>:6</code>, <code>:14-15</code>, <code>:24-27</code>,
+          <code>:92</code>). <code>MudAppDialogService</code> opens it from both overloads (<code>MMCA.Common.UI/Services/MudAppDialogService.cs:16-21</code>),
+          and <code>DeleteConfirmation</code> opens it as a destructive prompt (<code>DeleteConfirmation.razor:27-34</code>).
+          The new overload <code>ConfirmAsync(title, message, confirmText, cancelText, destructive)</code>
+          (<code>MMCA.Common.UI/Common/Interfaces/IAppDialogService.cs:45</code>) draws the confirming button in the
+          error color; the four-argument overload (<code>:30</code>) is the non-destructive case
+          (<code>MudAppDialogService.cs:16-17</code>). <code>DeleteConfirmation</code> still injects MudBlazor&#39;s <code>IDialogService</code>
+          directly (<code>DeleteConfirmation.razor:2</code>), so the component-side exception and its Rationale
+          trade-off stand.</li>
+          <li><strong>The page body sits inside an <code>ErrorBoundary</code>.</strong> A page that throws while rendering shows a
+          page-error state with a Retry button instead of ending the circuit
+          (<code>MMCA.Common.UI/Layout/MainLayout.razor:97-109</code>), and the layout recovers the boundary on every
+          navigation (<code>:202</code>, <code>:207-212</code>), because the router keeps the same layout instance across pages.
+          The Decision gains a bullet for it and for the always-on toast sweeper.</li>
+          </ol>
           <h2 id="related">Related</h2>
           <p>ADR-059 (the server-side <code>IModule</code> contract this mirrors in the presentation layer), ADR-056 (the
           render-mode strategy for the web heads, which decides how these components render but not who supplies
@@ -662,6 +722,7 @@
             <li><a href="#revision-2026-10-27">Revision (2026-10-27)</a></li>
             <li><a href="#revision-2026-10-28">Revision (2026-10-28)</a></li>
             <li><a href="#revision-2026-11-04">Revision (2026-11-04)</a></li>
+            <li><a href="#revision-2026-11-17">Revision (2026-11-17)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

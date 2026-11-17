@@ -26,6 +26,13 @@ had not named (`FooterComponentTypes`, `NotFoundContentType`), and re-anchors th
 hosts gained a `MapCommonServiceWorker()` call ahead of their assembly wiring. Revised 2026-11-04: records the `NavGroups` contract member and `NavItem.Order`, which let a
 module describe a nav group (icon, initially expanded, order) by key and order its items.
 
+Amended 2026-11-17 (MMCA.Common v1.301.0): the notification-page gate is unconditional (a host that
+registers no `NotificationUIModule` answers the notification routes with the not-found page, and the
+`Layout:HideNotificationPagesWhenUnregistered` and `Layout:ClearToastsOnNavigation` flags are
+removed), `IAppDialogService.ConfirmAsync` opens the Cancel-first `ConfirmationDialog` and gains a
+`destructive` overload, and `MainLayout` wraps the page body in an `ErrorBoundary` recovered on
+navigation. See the Revision (2026-11-17) at the end.
+
 ## Context
 ADR-059 decided how a module plugs into the **server**: an `IModule` implementation is discovered by
 reflection, registered in topological order, and a host composes an application out of those modules
@@ -75,10 +82,12 @@ Ship the application shell in the framework package and let each module plug int
   `Sessions.razor:1`), and the notification surfaces `/notifications`, `/notifications/inbox` (plus
   `/notifications/inbox/{Id:int}`), `/notifications/send`
   (`Pages/Notifications/NotificationList.razor:1`, `NotificationInbox.razor:1-2`, `NotificationSend.razor:1`).
-  A host that opts in with `Layout:HideNotificationPagesWhenUnregistered`
-  (`MMCA.Common.UI/Common/Settings/LayoutSettings.cs:49`) and registers no `NotificationUIModule` gets
-  the not-found page on those three routes instead (`Routes.razor:16`,
-  `MMCA.Common.UI/Notifications/NotificationPageGate.cs:22`).
+  A host that registers no `NotificationUIModule` (it never called `AddNotificationUI()`) gets the
+  not-found page on those routes instead, with no flag to set: the router asks
+  `NotificationPageGate.Hides` before `AuthorizeRouteView` runs (`MMCA.Common.UI/Routes.razor:14-23`),
+  and the gate matches the three notification page types whenever no registered module is a
+  `NotificationUIModule` (`MMCA.Common.UI/Notifications/NotificationPageGate.cs:14`, `:20-21`,
+  `:26-27`); on a server render the answer carries a 404 status (`Routes.razor:21-22`).
 - **Unauthenticated and unauthorized both resolve inside the shell.** `AuthorizeRouteView` sends an
   anonymous visitor through `RedirectToLogin` and an authenticated-but-unauthorized one to the
   dedicated `Forbidden` page rather than a bare alert (`Routes.razor:29-52`, `RedirectToLogin` at `:43`,
@@ -101,6 +110,14 @@ Ship the application shell in the framework package and let each module plug int
   or a drawer without touching the layout. The not-found page renders the first registered
   `NotFoundContentType` in place of its default content (`MMCA.Common.UI/Pages/NotFound.razor:23-25`,
   `:47`).
+- **The layout contains a failing page and clears stale toasts.** `MainLayout` renders the page body
+  inside an `ErrorBoundary` (`MMCA.Common.UI/Layout/MainLayout.razor:97-109`), so a page that throws
+  while rendering shows a page-error state with a Retry button in its place (`:101-108`) instead of
+  ending the whole circuit. The router keeps the layout instance across navigations, so the layout
+  subscribes to `LocationChanged` (`:202`) and recovers the boundary on every navigation
+  (`:207-212`), giving the next page a fresh attempt. The layout also always renders
+  `StaleToastSweeper` (`:152-153`), which removes toasts left over from the page being left; no
+  setting turns it on or off.
 - **Registration is one call.** `AddUIModule<TModule>()` runs the Scrutor scan for the module's entity
   services and then registers the descriptor as a singleton `IUIModule`
   (`MMCA.Common.UI/DependencyInjection.cs:332-341`); modules with extra services register the
@@ -115,9 +132,15 @@ Ship the application shell in the framework package and let each module plug int
   (`MMCA.Common/Source/Presentation/MMCA.Common.UI/Common/Interfaces/IToastService.cs`,
   `IAppDialogService.cs`, namespace `MMCA.Common.UI.Common.Interfaces`). `IToastService` carries the
   five severities every component library exposes and is fire-and-forget by design (during SSR
-  pre-render there is no toast host, so the call is a silent no-op); `IAppDialogService` is one
-  `ConfirmAsync`, where dismissing the prompt counts as declining, so a caller only ever branches on
-  `true`. Both facades are registered by one extracted call, `AddCommonUiFacades()`, which
+  pre-render there is no toast host, so the call is a silent no-op); `IAppDialogService` is
+  `ConfirmAsync` in two overloads, the second adding a `destructive` flag that draws the confirming
+  button in the error color for a delete, a lock or a sign-out
+  (`MMCA.Common.UI/Common/Interfaces/IAppDialogService.cs:30`, `:45`). Dismissing the prompt counts as
+  declining, so a caller only ever branches on `true`. Both overloads open `ConfirmationDialog`
+  (`MMCA.Common.UI/Services/MudAppDialogService.cs:16-21`), which renders Cancel first and focused, so
+  a stray Enter declines, and answers Escape and a backdrop dismissal as Cancel
+  (`MMCA.Common.UI/Components/Forms/ConfirmationDialog.razor:6`, `:14-15`, `:24-27`, `:92`).
+  Both facades are registered by one extracted call, `AddCommonUiFacades()`, which
   TryAdd-registers `MudToastService` and `MudAppDialogService` over MudBlazor's `ISnackbar` and
   `IDialogService` (`MMCA.Common.UI/DependencyInjection.cs:238-241`). The same call also
   TryAdd-registers `IPendingToastService` (`:242`), a toast parked in `sessionStorage` that survives
@@ -135,7 +158,9 @@ Ship the application shell in the framework package and let each module plug int
   The delete confirmation is the component-side exception: `DeleteWithConfirmationAsync` asks its
   question through the `DeleteConfirmation` component it is handed (`ListPageActions.cs:58`, `:72`),
   and that component injects MudBlazor's `IDialogService` directly rather than going through
-  `IAppDialogService` (`MMCA.Common.UI/Components/Forms/DeleteConfirmation.razor:2`, `:33`). Richer,
+  `IAppDialogService` (`MMCA.Common.UI/Components/Forms/DeleteConfirmation.razor:2`), though it opens
+  the same `ConfirmationDialog`, destructive and with its own `confirm-delete` test id (`:9`,
+  `:27-34`), so a delete prompt and a facade prompt have one shape. Richer,
   entity-specific dialogs are inline, visibility-bound `<MudDialog @bind-Visible>` components rather
   than either service (for example
   `MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.UI/Pages/Orders/ShipOrderDialog.razor:4-9`).
@@ -376,6 +401,41 @@ items never changes which resource answers it. The nav logic moved to `NavMenu.r
 Rejected: a group descriptor on `NavItem` itself, which every item of the group would repeat and two
 items could contradict; and per-host configuration, because the group shape belongs to the modules,
 which already own their items.
+
+## Revision (2026-11-17)
+Three shell behaviors changed in MMCA.Common v1.301.0 (MMCA.Common #758, the UI drift wave; plan in
+the workspace `Docs/Planning/Drift/UiProjects-plan.md`). The contract, the router and nav
+composition, the vendor choice and the Helpdesk non-adoption are unchanged.
+
+1. **The notification-page gate is unconditional.** `Layout:HideNotificationPagesWhenUnregistered`
+   is removed: a host that registers no `NotificationUIModule` answers `/notifications`,
+   `/notifications/inbox` (with `/notifications/inbox/{Id:int}`) and `/notifications/send` with the
+   not-found page
+   (`MMCA.Common/Source/Presentation/MMCA.Common.UI/Routes.razor:14-23`,
+   `MMCA.Common.UI/Notifications/NotificationPageGate.cs:20-21`, `:26-27`). The gate lives in the
+   shell's router, so it covers every head that uses that router, a MAUI head included, and a host
+   no longer has to remember a flag to stop serving pages whose services it never registered.
+   `Layout:ClearToastsOnNavigation` is removed too: `MainLayout` always renders `StaleToastSweeper`
+   (`MMCA.Common.UI/Layout/MainLayout.razor:152-153`). The Decision bullet that described the opt-in
+   now states the rule; the Revision (2026-10-01) and its anchors record the opt-in as it stood on
+   that date.
+2. **`IAppDialogService.ConfirmAsync` opens a Cancel-first dialog.** `ConfirmationDialog`
+   (`MMCA.Common.UI/Components/Forms/ConfirmationDialog.razor`) replaces `DeleteConfirmationDialog`
+   and is the one confirmation shape: Cancel is rendered first and takes initial focus, so a stray
+   Enter declines, and Escape and a backdrop dismissal answer `false` (`:6`, `:14-15`, `:24-27`,
+   `:92`). `MudAppDialogService` opens it from both overloads (`MMCA.Common.UI/Services/MudAppDialogService.cs:16-21`),
+   and `DeleteConfirmation` opens it as a destructive prompt (`DeleteConfirmation.razor:27-34`).
+   The new overload `ConfirmAsync(title, message, confirmText, cancelText, destructive)`
+   (`MMCA.Common.UI/Common/Interfaces/IAppDialogService.cs:45`) draws the confirming button in the
+   error color; the four-argument overload (`:30`) is the non-destructive case
+   (`MudAppDialogService.cs:16-17`). `DeleteConfirmation` still injects MudBlazor's `IDialogService`
+   directly (`DeleteConfirmation.razor:2`), so the component-side exception and its Rationale
+   trade-off stand.
+3. **The page body sits inside an `ErrorBoundary`.** A page that throws while rendering shows a
+   page-error state with a Retry button instead of ending the circuit
+   (`MMCA.Common.UI/Layout/MainLayout.razor:97-109`), and the layout recovers the boundary on every
+   navigation (`:202`, `:207-212`), because the router keeps the same layout instance across pages.
+   The Decision gains a bullet for it and for the always-on toast sweeper.
 
 ## Related
 ADR-059 (the server-side `IModule` contract this mirrors in the presentation layer), ADR-056 (the
