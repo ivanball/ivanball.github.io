@@ -200,12 +200,14 @@ Store adopted on the 2026-07-28 drift wave with an **empty** `AllowedFiles`: its
 had zero raw-queryable uses at adoption, so unlike the other two it starts with no exemptions to
 ratchet down. MMCA.Helpdesk has no subclass, so its Application code is not scanned today. The
 rule also ships with a documented exemption list, `AllowedFiles`
-(`RawQueryableConventionTestsBase.cs:38`), used as an adoption ratchet (`:24-27`): MMCA.Common
+(`RawQueryableConventionTestsBase.cs:40`), used as an adoption ratchet (`:24-27`): MMCA.Common
 exempts six files, the generic query pipeline itself (`EntityQueryService.cs`, which builds its base
 query from `Table` / `TableNoTracking` at `EntityQueryService.cs:335` and `:591-593`) plus five Notifications
-handlers (`RawQueryableConventionTests.cs:26-36`), and MMCA.ADC exempts seven, the Engagement live
-layer and bookmark aggregations and the Notification GDPR export
-(`MMCA.ADC/.../RawQueryableConventionTests.cs:33-49`); no Identity file remains on its list.
+handlers (`RawQueryableConventionTests.cs:26-36`), and MMCA.ADC exempts six, the Engagement live
+layer, the bookmarks projection and the Notification GDPR export
+(`MMCA.ADC/.../RawQueryableConventionTests.cs:16-31`); no Identity file remains on its list. The
+ratchet only tightens: an entry that names no scanned file, or only files with no raw-queryable use
+left, fails the rule as stale (`RawQueryableConventionTestsBase.cs:36-37`, message at `:99`).
 
 The interface split is shipped and, since 2026-08-21, consumed. MMCA.ADC declares the narrow
 interfaces at fifty-three read-only sites across thirty-four files, thirty-three of them Application

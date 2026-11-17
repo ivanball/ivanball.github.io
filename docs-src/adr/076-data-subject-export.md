@@ -19,7 +19,13 @@ Revised 2026-10-26: anchors refreshed after MMCA.Common source moved the `Delete
 The implementation shipped in the MMCA.Common "enterprise capability wave" release.
 It is opt-in: an app subclasses `ExportUserDataHandlerBase` and registers its own
 `IUserDataExportSection` implementations, and the shipped controller base is subclassed and routed by
-the app. Nothing changes for a host that does not.
+the app. Nothing changes for a host that does not. One section ships with the framework:
+`AddInfrastructure` registers `RefreshSessionUserDataExportSection` (section name `SignInSessions`,
+`MMCA.Common/Source/Core/MMCA.Common.Application/Users/UseCases/ExportUserData/RefreshSessionUserDataExportSection.cs:28`,
+`:31`) beside the refresh-session store
+(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:174-178`), so every app with
+an export handler includes every session row, revoked and expired included, with its IP address, user
+agent and device fields, and never the token hashes (`RefreshSessionUserDataExportSection.cs:14-20`).
 
 ## Context
 A data-subject access request is a legal obligation with a clock on it: the person asks for a copy of the
@@ -284,7 +290,9 @@ Re-verified against current source. No decision, rationale or trade-off changed;
 controller base and Store's adoption are as described. ADC's adoption moved: it now contributes a
 third section, and several anchors recorded on 2026-10-06 as re-verified had drifted.
 1. ADC registers three export sections, not two: Engagement, Notifications, then Conference
-   (`MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Application/DependencyInjection.cs:63-65`).
+   (`MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Application/DependencyInjection.cs:74-76`),
+   alongside the framework's own `SignInSessions` section, so an ADC export carries four
+   (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:178`).
    The new one is `ConferenceUserDataExportSection` (`SectionName` "Conference",
    `MMCA.ADC/.../Identity.Application/Users/UseCases/ExportUserData/ConferenceUserDataExportSection.cs:19`,
    `:23`), backed by `IUserConferenceExportService`

@@ -472,8 +472,11 @@ decorator's role is read against its neighbours rather than in isolation. The ch
   (`MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Bases/Cqrs/CommandValidatorCoverageTestsBase.cs:22`)
   is the fitness gate that keeps the step from running empty: every data-carrying command handled in a
   module Application assembly needs its own `IValidator<TCommand>` or the `CommandRequestValidator`
-  bridge (`:9-15`), with an explicit allow-list and a non-vacuity floor (`:31`, `:38`, facts at
-  `:40-48`). ADC, Store and Helpdesk each subclass it
+  bridge (`:9-15`). A request validator shipped in `MMCA.Common.Application` counts, and the
+  framework's generic `DeleteEntityCommand<,>` is exempt without an entry (`:16-18`). An explicit
+  allow-list fails an entry that names no handled command, or only validated or exempt ones, as stale
+  (`:30-35`), and a non-vacuity floor (`:42`) backs it (facts at `:44-52`). ADC, Store and Helpdesk
+  each subclass it
   (`MMCA.ADC/Tests/Architecture/MMCA.ADC.Architecture.Tests/Cqrs/CommandValidatorCoverageTests.cs:18`,
   `MMCA.Store/Tests/Architecture/MMCA.Store.Architecture.Tests/Cqrs/CommandValidatorCoverageTests.cs:17`,
   `MMCA.Helpdesk/Tests/Architecture/MMCA.Helpdesk.Architecture.Tests/ArchitectureTests.cs:163`).
