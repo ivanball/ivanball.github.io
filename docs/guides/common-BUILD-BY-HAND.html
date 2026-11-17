@@ -651,19 +651,12 @@
           </ul>
           <p>Neither is registered by hand. Put a handler in the module&#39;s Application assembly and the convention
           scan finds it.</p>
-          <h3 id="3d-infrastructure-ef-configuration-the-abstract-module-context-no-concrete-per-module-context">3d. Infrastructure: EF configuration, the abstract module context, no concrete per-module context</h3>
-          <p>There is exactly <strong>one concrete</strong> context at runtime, the framework&#39;s sealed <code>SQLServerDbContext</code> (one
-          instance per database). Each module declares an <strong>abstract</strong> <code>ModuleApplicationDbContext : ApplicationDbContext</code> that <em>only</em> lists the module&#39;s <code>DbSet</code>s: it documents the module&#39;s entity set
-          and never gets instantiated. <strong>Never write a concrete per-module or per-app DbContext class</strong> (see
-          <a href="../adr/006-database-per-service.html">ADR-006</a> and the &quot;Don&#39;t split SQLServerDbContext&quot; rule):</p>
-          <pre class="doc-pre" tabindex="0" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-function"><span class="hljs-keyword">public</span> <span class="hljs-keyword">abstract</span> <span class="hljs-keyword">class</span> <span class="hljs-title">ModuleApplicationDbContext</span>(<span class="hljs-params">
-    DbContextOptions options, IServiceProvider serviceProvider,
-    IEntityConfigurationAssemblyProvider assemblyProvider, PhysicalDataSource physicalDataSource</span>)
-    : <span class="hljs-title">ApplicationDbContext</span>(<span class="hljs-params">options, serviceProvider, assemblyProvider, physicalDataSource</span>)</span>
-{
-    <span class="hljs-keyword">internal</span> DbSet&lt;Order&gt; Orders { <span class="hljs-keyword">get</span>; <span class="hljs-keyword">set</span>; }
-    <span class="hljs-keyword">internal</span> DbSet&lt;OrderComment&gt; OrderComments { <span class="hljs-keyword">get</span>; <span class="hljs-keyword">set</span>; }
-}</code></pre>
+          <h3 id="3d-infrastructure-ef-configuration-no-per-module-context">3d. Infrastructure: EF configuration, no per-module context</h3>
+          <p>There is exactly <strong>one</strong> context at runtime, the framework&#39;s sealed <code>SQLServerDbContext</code> (one
+          instance per database), and a module declares <strong>no DbContext class of its own</strong>, abstract or
+          concrete. The model is built from the entity configurations alone, so there is no <code>DbSet</code> list to
+          keep in step. <strong>Never write a per-module or per-app DbContext class</strong> (see
+          <a href="../adr/006-database-per-service.html">ADR-006</a> and the &quot;Don&#39;t split SQLServerDbContext&quot; rule).</p>
           <p>You supply EF configurations that inherit <code>EntityTypeConfigurationSQLServer&lt;TEntity, TId&gt;</code> (the base
           wires <code>Id</code>, <code>IsDeleted</code> + soft-delete query filter, audit fields, and the concurrency token):</p>
           <pre class="doc-pre" tabindex="0" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-keyword">internal</span> <span class="hljs-keyword">sealed</span> <span class="hljs-keyword">class</span> <span class="hljs-title">OrderConfiguration</span> : <span class="hljs-title">EntityTypeConfigurationSQLServer</span>&lt;<span class="hljs-title">Order</span>, <span class="hljs-title">OrderIdentifierType</span>&gt;

@@ -430,8 +430,7 @@ dotnet test  <span class="hljs-literal">--solution</span> MMCA.ECommerce.slnx</c
         builder.HasIndex(p =&gt; p.Name)
             .HasSoftDeleteFilter(DataSource.SQLServer);</code></pre>
           <p>The index is filtered with the framework&#39;s <code>HasSoftDeleteFilter</code>, never a SQL literal, so it stays
-          engine-aware and follows a renamed column. Nothing else in Infrastructure changes: <code>--flat</code> already
-          emitted a <code>ModuleApplicationDbContext</code> with one <code>DbSet</code>.</p>
+          engine-aware and follows a renamed column. Nothing else in Infrastructure changes.</p>
           <h3 id="45-api">4.5 API</h3>
           <p><code>Source/Modules/Products/MMCA.ECommerce.Products.API/Controllers/ProductsController.cs</code> needs no
           edit. The routes, the injected handlers, and the inherited list/paged reads are all unchanged.
@@ -766,8 +765,7 @@ dotnet test <span class="hljs-literal">--project</span> Tests/Modules/Products/M
           <p><code>builder.Ignore(p =&gt; p.Total)</code> states in the mapping that <code>Total</code> is a computed getter and never a
           column. <code>Status</code> stays persisted as a <strong>string</strong> (the scaffold&#39;s line, kept), so a later reordering of
           the enum cannot silently reinterpret stored rows, and <code>UnitPrice</code> gets an explicit <code>decimal(18,2)</code> so
-          a price never rounds on the way in. <code>ModuleApplicationDbContext</code> needs no edit: <code>-Child Item</code> already
-          declared <code>DbSet&lt;OrderItem&gt;</code> alongside <code>DbSet&lt;Order&gt;</code>.</p>
+          a price never rounds on the way in.</p>
           <h3 id="54-application">5.4 Application</h3>
           <p>An order is placed empty and grows lines afterwards, so the create payload is just a customer name,
           which is what <code>-NoDescription -NoOwner -Title CustomerName</code> already generated. Under

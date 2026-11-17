@@ -583,24 +583,13 @@ one of each so the distinction is visible in running code rather than only in pr
 Neither is registered by hand. Put a handler in the module's Application assembly and the convention
 scan finds it.
 
-### 3d. Infrastructure: EF configuration, the abstract module context, no concrete per-module context
+### 3d. Infrastructure: EF configuration, no per-module context
 
-There is exactly **one concrete** context at runtime, the framework's sealed `SQLServerDbContext` (one
-instance per database). Each module declares an **abstract** `ModuleApplicationDbContext :
-ApplicationDbContext` that *only* lists the module's `DbSet`s: it documents the module's entity set
-and never gets instantiated. **Never write a concrete per-module or per-app DbContext class** (see
-[ADR-006](../adr/006-database-per-service.md) and the "Don't split SQLServerDbContext" rule):
-
-```csharp
-public abstract class ModuleApplicationDbContext(
-    DbContextOptions options, IServiceProvider serviceProvider,
-    IEntityConfigurationAssemblyProvider assemblyProvider, PhysicalDataSource physicalDataSource)
-    : ApplicationDbContext(options, serviceProvider, assemblyProvider, physicalDataSource)
-{
-    internal DbSet<Order> Orders { get; set; }
-    internal DbSet<OrderComment> OrderComments { get; set; }
-}
-```
+There is exactly **one** context at runtime, the framework's sealed `SQLServerDbContext` (one
+instance per database), and a module declares **no DbContext class of its own**, abstract or
+concrete. The model is built from the entity configurations alone, so there is no `DbSet` list to
+keep in step. **Never write a per-module or per-app DbContext class** (see
+[ADR-006](../adr/006-database-per-service.md) and the "Don't split SQLServerDbContext" rule).
 
 You supply EF configurations that inherit `EntityTypeConfigurationSQLServer<TEntity, TId>` (the base
 wires `Id`, `IsDeleted` + soft-delete query filter, audit fields, and the concurrency token):
