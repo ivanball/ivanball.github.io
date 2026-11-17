@@ -349,9 +349,9 @@
           the design-time database skip) are plain <code>IsDevelopment()</code> checks, not fail-closed gates: the
           server-side ones read an environment the host always supplies, and the one UI-side check (the
           culture switcher offering the pseudo-locale) reads a nullable environment and treats null as not
-          Development. Two endpoint mappings sit outside the rule altogether: the OpenAPI document and the
-          Scalar reference UI are gated on <code>!IsProduction()</code> rather than on Development, so a Staging host
-          gets them (both expose API description, not data). And the inventory is manual: nothing fails a
+          Development. One endpoint mapping sits outside the rule altogether: the OpenAPI document is gated on
+          <code>!IsProduction()</code> (<code>OpenApiEndpointExtensions.cs:61</code>) rather than on Development, so a Staging host
+          gets it (it exposes API description, not data). And the inventory is manual: nothing fails a
           build when a new environment-conditional branch skips the rule.</p>
           </li>
           <li><p><strong>The invariants in this article fail the build.</strong> Executable tests run the real registration code

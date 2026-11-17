@@ -274,7 +274,10 @@
           Revised 2026-10-26: per-module <code>ModuleApplicationDbContext</code> declarations are scoped to modules that
           own their own aggregates (ADC Notification declares none); <code>infra/main.bicep</code> anchors refreshed.
           Revised 2026-10-28: anchors refreshed after Helpdesk #199 moved the no-per-module-context rule to
-          <code>MMCA.Helpdesk/AGENTS.md:62</code>.</p>
+          <code>MMCA.Helpdesk/AGENTS.md:62</code>.
+          Revised 2026-11-17: the abstract per-module <code>ModuleApplicationDbContext</code> DbSet holders were deleted
+          from ADC, Store and Helpdesk (nothing derived from or referenced them, and their <code>DbSet</code> lists had
+          drifted from the model); no module declares a DbContext class of any kind.</p>
           <h2 id="context">Context</h2>
           <p>When the modules were first extracted into independently-deployable services, all services in an
           app still pointed at a <strong>single shared SQL database</strong> with a single <code>OutboxMessages</code> table. That
@@ -290,15 +293,12 @@
           <code>OutboxMessages</code> table.</p>
           <ul>
           <li><strong>One sealed concrete context class <em>per engine</em>, one instance per database.</strong> We do <strong>not</strong>
-          introduce a per-module concrete (runtime) DbContext class. Each module may declare an abstract
-          <code>ModuleApplicationDbContext</code> that only lists its <code>DbSet</code>s (for example
-          <code>MMCA.Helpdesk/Source/Modules/Tickets/MMCA.Helpdesk.Tickets.Infrastructure/Persistence/DbContexts/ModuleApplicationDbContext.cs:14</code>),
-          but nothing subclasses it at runtime (rule stated at <code>MMCA.Helpdesk/AGENTS.md:62</code>). Only modules
-          that own their own aggregates declare one. ADC Notification still owns the <code>ADC_Notification</code>
-          database, but its <code>PushNotification</code> and <code>UserNotification</code> entities live in MMCA.Common
+          introduce a per-module DbContext class, concrete or abstract: the model is built from the
+          module&#39;s entity configurations alone (rule stated at <code>MMCA.Helpdesk/AGENTS.md:64</code>). ADC
+          Notification still owns the <code>ADC_Notification</code> database, but its <code>PushNotification</code> and
+          <code>UserNotification</code> entities live in MMCA.Common
           (<code>MMCA.ADC/Source/Services/MMCA.ADC.Notification.Service/Program.cs:269-270</code>), so its module
-          projects are API, Application and Shared only, with no Infrastructure project and no
-          <code>ModuleApplicationDbContext</code>. The default engine is SQL Server (<code>SQLServerDbContext</code>); ADR-018
+          projects are API, Application and Shared only, with no Infrastructure project. The default engine is SQL Server (<code>SQLServerDbContext</code>); ADR-018
           later added <code>SqliteDbContext</code> and <code>CosmosDbContext</code>, and ADR-113 added <code>PostgreSQLDbContext</code>, each
           a sealed subclass of the abstract <code>ApplicationDbContext</code>. The singleton <code>PhysicalDbContextFactory</code>
           creates a new raw context on every <code>Create(DataSourceKey)</code> call; the scoped <code>DbContextFactory</code>
@@ -441,6 +441,17 @@
           note at <code>MMCA.ADC/infra/main.bicep:1114</code> and the <code>serviceDatabaseLtr</code> policy at
           <code>MMCA.ADC/infra/main.bicep:1166</code> are unchanged.</li>
           </ol>
+          <h2 id="revision-2026-11-17">Revision (2026-11-17)</h2>
+          <p>The decision is unchanged: one sealed context class per engine, one instance per database, four
+          per-service <code>ADC_*</code> databases with PITR plus LTR as the only restore path. What changed is the
+          per-module holder. The abstract <code>ModuleApplicationDbContext</code> classes in ADC (Conference,
+          Engagement, Identity), Store (Catalog, Identity, Sales) and Helpdesk (Tickets) were deleted: no code
+          derived from or referenced any of them, the runtime model never read their <code>DbSet</code> lists, and those
+          lists had already drifted (ADC Conference lacked <code>SessionAiScore</code> and <code>SpeakerQuestionAnswer</code>,
+          Engagement lacked <code>TicketImportRun</code>, Store Catalog lacked <code>ProductVariant</code>). A module now declares no
+          DbContext class at all, and the rule is restated at <code>MMCA.Helpdesk/AGENTS.md:64</code>. The earlier
+          revisions keep the wording and anchors they recorded; their <code>ModuleApplicationDbContext</code> anchors are
+          superseded by this revision. Source: the 2026-11-17 Infrastructure-projects drift review (item A5).</p>
           
         <div class="doc-foot btn-row">
           <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
@@ -461,6 +472,7 @@
             <li><a href="#revision-2026-10-21">Revision (2026-10-21)</a></li>
             <li><a href="#revision-2026-10-26">Revision (2026-10-26)</a></li>
             <li><a href="#revision-2026-10-28">Revision (2026-10-28)</a></li>
+            <li><a href="#revision-2026-11-17">Revision (2026-11-17)</a></li>
             </ul>
           </nav>
         </aside>

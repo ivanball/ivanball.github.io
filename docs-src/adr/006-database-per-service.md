@@ -21,6 +21,9 @@ Revised 2026-10-26: per-module `ModuleApplicationDbContext` declarations are sco
 own their own aggregates (ADC Notification declares none); `infra/main.bicep` anchors refreshed.
 Revised 2026-10-28: anchors refreshed after Helpdesk #199 moved the no-per-module-context rule to
 `MMCA.Helpdesk/AGENTS.md:62`.
+Revised 2026-11-17: the abstract per-module `ModuleApplicationDbContext` DbSet holders were deleted
+from ADC, Store and Helpdesk (nothing derived from or referenced them, and their `DbSet` lists had
+drifted from the model); no module declares a DbContext class of any kind.
 
 ## Context
 When the modules were first extracted into independently-deployable services, all services in an
@@ -39,15 +42,12 @@ Adopt **database-per-service**: each service owns its own physical database with
 `OutboxMessages` table.
 
 - **One sealed concrete context class *per engine*, one instance per database.** We do **not**
-  introduce a per-module concrete (runtime) DbContext class. Each module may declare an abstract
-  `ModuleApplicationDbContext` that only lists its `DbSet`s (for example
-  `MMCA.Helpdesk/Source/Modules/Tickets/MMCA.Helpdesk.Tickets.Infrastructure/Persistence/DbContexts/ModuleApplicationDbContext.cs:14`),
-  but nothing subclasses it at runtime (rule stated at `MMCA.Helpdesk/AGENTS.md:62`). Only modules
-  that own their own aggregates declare one. ADC Notification still owns the `ADC_Notification`
-  database, but its `PushNotification` and `UserNotification` entities live in MMCA.Common
+  introduce a per-module DbContext class, concrete or abstract: the model is built from the
+  module's entity configurations alone (rule stated at `MMCA.Helpdesk/AGENTS.md:64`). ADC
+  Notification still owns the `ADC_Notification` database, but its `PushNotification` and
+  `UserNotification` entities live in MMCA.Common
   (`MMCA.ADC/Source/Services/MMCA.ADC.Notification.Service/Program.cs:269-270`), so its module
-  projects are API, Application and Shared only, with no Infrastructure project and no
-  `ModuleApplicationDbContext`. The default engine is SQL Server (`SQLServerDbContext`); ADR-018
+  projects are API, Application and Shared only, with no Infrastructure project. The default engine is SQL Server (`SQLServerDbContext`); ADR-018
   later added `SqliteDbContext` and `CosmosDbContext`, and ADR-113 added `PostgreSQLDbContext`, each
   a sealed subclass of the abstract `ApplicationDbContext`. The singleton `PhysicalDbContextFactory`
   creates a new raw context on every `Create(DataSourceKey)` call; the scoped `DbContextFactory`
@@ -186,3 +186,15 @@ written and is superseded by this revision).
    `MMCA.ADC/Source/Services/MMCA.ADC.Notification.Service/Program.cs:269-270`, the `AtlDevCon`
    note at `MMCA.ADC/infra/main.bicep:1114` and the `serviceDatabaseLtr` policy at
    `MMCA.ADC/infra/main.bicep:1166` are unchanged.
+
+## Revision (2026-11-17)
+The decision is unchanged: one sealed context class per engine, one instance per database, four
+per-service `ADC_*` databases with PITR plus LTR as the only restore path. What changed is the
+per-module holder. The abstract `ModuleApplicationDbContext` classes in ADC (Conference,
+Engagement, Identity), Store (Catalog, Identity, Sales) and Helpdesk (Tickets) were deleted: no code
+derived from or referenced any of them, the runtime model never read their `DbSet` lists, and those
+lists had already drifted (ADC Conference lacked `SessionAiScore` and `SpeakerQuestionAnswer`,
+Engagement lacked `TicketImportRun`, Store Catalog lacked `ProductVariant`). A module now declares no
+DbContext class at all, and the rule is restated at `MMCA.Helpdesk/AGENTS.md:64`. The earlier
+revisions keep the wording and anchors they recorded; their `ModuleApplicationDbContext` anchors are
+superseded by this revision. Source: the 2026-11-17 Infrastructure-projects drift review (item A5).

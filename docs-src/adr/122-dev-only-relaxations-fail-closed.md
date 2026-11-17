@@ -1,7 +1,7 @@
 # ADR-122: Dev-Only Relaxations Are Environment-Gated and Fail Closed
 
 ## Status
-Accepted (2026-09-11). Revised 2026-10-01: citations re-anchored. Revised 2026-10-06: the plain-check inventory adds the Development-only design-time database skip. Revised 2026-10-07: the inventory names the `!IsProduction()` OpenAPI and Scalar mappings as outside the rule, the UI-side null-aware pseudo-locale check, and the Serilog file sink as out of scope. Revised 2026-10-26: the session cookies now also set `Secure` on a Development HTTPS request, so only a plain-http Development run omits it, and the cookie bullet describes the session and culture cookies separately; CORS and pseudo-locale anchors refreshed.
+Accepted (2026-09-11). Revised 2026-10-01: citations re-anchored. Revised 2026-10-06: the plain-check inventory adds the Development-only design-time database skip. Revised 2026-10-07: the inventory names the `!IsProduction()` OpenAPI and Scalar mappings as outside the rule, the UI-side null-aware pseudo-locale check, and the Serilog file sink as out of scope. Revised 2026-10-26: the session cookies now also set `Secure` on a Development HTTPS request, so only a plain-http Development run omits it, and the cookie bullet describes the session and culture cookies separately; CORS and pseudo-locale anchors refreshed. Revised 2026-11-17: `MapCommonScalarUi` and the Scalar dependency are removed (no host called it), so `MapCommonOpenApi` is the one `!IsProduction()` mapping the inventory names outside the rule (MMCA.Common v1.300.0).
 
 ## Context
 Several capabilities are useful locally and dangerous in a deployed environment: EF Core rendering
@@ -80,14 +80,13 @@ guarantee their code does not make.
   (`.../Startup/DatabaseInitializationExtensions.cs:174-177`), so a build-time OpenAPI run does not
   touch a database.
 
-Two endpoint mappings are gated on `!IsProduction()` rather than on Development, so they do not
-follow this record's rule: in a host that calls them, Staging or any environment name other than
-`Production` gets them. `MapCommonOpenApi` maps the OpenAPI document with `AllowAnonymous()`
-(`.../Startup/Endpoints/OpenApiEndpointExtensions.cs:62`, `:74`), and the ADC and Store service
-hosts call it. `MapCommonScalarUi` maps the Scalar reference UI under the same check (`:91-93`); it
-is documented as opt-in (`:81-82`) and no consumer host calls it today. Both expose API
-description, not data. ADR-046 documents the OpenAPI document's posture; no ADR covers the Scalar
-UI. They are named here so the inventory states where the rule does not apply.
+One endpoint mapping is gated on `!IsProduction()` rather than on Development, so it does not
+follow this record's rule: in a host that calls it, Staging or any environment name other than
+`Production` gets it. `MapCommonOpenApi` maps the OpenAPI document with `AllowAnonymous()`
+(`.../Startup/Endpoints/OpenApiEndpointExtensions.cs:61`, `:73`), and the ADC and Store service
+hosts call it through the shared service-host start-up
+(`MMCA.Common/Source/Hosting/MMCA.Common.ServiceHost/ServiceHostApplicationExtensions.cs:57`). It exposes API description, not data. ADR-046 documents the OpenAPI document's
+posture. It is named here so the inventory states where the rule does not apply.
 
 The Serilog minimum level (`Debug` in Development, `Information` otherwise,
 `MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Logging/SerilogHostExtensions.cs:77`) and the
@@ -177,6 +176,20 @@ cookie bullet now describes the session and culture cookies separately.
    `MiddlewarePipelineBuilder.cs:98-100`, and the pseudo-locale supported-cultures branch and
    `/culture/set` check to `WebApplicationExtensions.cs:81-84` and `:120-123`; all other citations
    still hold.
+
+## Revision (2026-11-17)
+Re-verified against current source. The rule, the three fail-closed gates and the Development-gated
+inventory are unchanged; one of the two `!IsProduction()` mappings the inventory named is gone.
+
+1. `MapCommonScalarUi` and the `Scalar.AspNetCore` dependency are removed from `MMCA.Common.API`
+   because no host called it; they were removed in the API-projects drift review (MMCA.Common
+   v1.300.0). `MapCommonOpenApi` is now the only mapping the inventory names outside the rule, and
+   the paragraph describes it alone. The `MapCommonScalarUi` statement and its `:91-93` anchor in the
+   Revision (2026-10-07) are history and are superseded by this revision.
+2. Anchors re-verified against current source: the `!IsProduction()` check and the anonymous
+   `MapOpenApi()` call moved to `OpenApiEndpointExtensions.cs:61` and `:73`, and the paragraph now
+   cites the shared service-host call (`ServiceHostApplicationExtensions.cs:57`) through which the ADC
+   and Store service hosts map the document.
 
 ## Related
 [ADR-070](070-fail-fast-configuration-contract.md) (binds and validates settings at startup; this

@@ -226,9 +226,9 @@ The JWKS layer is the right model, but it is not free, and the rough edges are w
   the design-time database skip) are plain `IsDevelopment()` checks, not fail-closed gates: the
   server-side ones read an environment the host always supplies, and the one UI-side check (the
   culture switcher offering the pseudo-locale) reads a nullable environment and treats null as not
-  Development. Two endpoint mappings sit outside the rule altogether: the OpenAPI document and the
-  Scalar reference UI are gated on `!IsProduction()` rather than on Development, so a Staging host
-  gets them (both expose API description, not data). And the inventory is manual: nothing fails a
+  Development. One endpoint mapping sits outside the rule altogether: the OpenAPI document is gated on
+  `!IsProduction()` (`OpenApiEndpointExtensions.cs:61`) rather than on Development, so a Staging host
+  gets it (it exposes API description, not data). And the inventory is manual: nothing fails a
   build when a new environment-conditional branch skips the rule.
 - **The invariants in this article fail the build.** Executable tests run the real registration code
   and read the produced options back: the forwarded bearer handler's `ValidAlgorithms` must stay
@@ -310,7 +310,12 @@ pattern, or `dotnet add package MMCA.Common.API` and try it.*
 
 *Tags: .NET, C Sharp, Software Architecture, Microservices, Authentication*
 
-*Notes (evidence audit, 2026-10-29, MMCA.Common v1.265.1, `MMCA.Common/FACTS.md:14`): Re-verified this
+*Notes (evidence audit, 2026-11-17, MMCA.Common v1.300.0, read from the `chore/api-drift` branch ahead of its
+tag): the trade-offs bullet on environment checks names one non-Production mapping, the OpenAPI document
+(`MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/Endpoints/OpenApiEndpointExtensions.cs:61`),
+because the opt-in Scalar reference UI mapping and its package left the framework (no host called it);
+nothing else was re-read this run. Earlier entry (evidence audit, 2026-10-29, MMCA.Common v1.265.1,
+`MMCA.Common/FACTS.md:14`): Re-verified this
 run against the same-day audit; one body anchor moved and no claim changed. The Store service-token
 adoption anchors moved and are corrected in place in the body and in the entry below:
 `AddServiceTokenAuthentication` at `MMCA.Store/Source/Services/MMCA.Store.Identity.Service/Program.cs:179`

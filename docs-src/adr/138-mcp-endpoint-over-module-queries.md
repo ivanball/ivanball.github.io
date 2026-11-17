@@ -8,6 +8,7 @@ Revised 2026-11-08 (MMCA.Common v1.281.0): a machine client's token now satisfie
 for server-to-server callers, OAuth 2.1 for desktop clients stays deferred, and ADC's tools are
 scoped to one event with a `list_events` tool. See the Revision (2026-11-08) at the end.
 Revised 2026-11-08 (MMCA.Common v1.282.0): a tool now declares `[McpToolPublic]` or `[McpToolPermission]`, enforced at test time; the runtime rule is unchanged. See the Revision (2026-11-08, access declaration) at the end.
+Revised 2026-11-17 (MMCA.Common v1.300.0): the `mcp` policy no longer sits beside a `UserPolicy`, which was removed with `FixedPolicy` because no consumer named them; `auth-ip` and `mcp` are the only named rate-limit policies, and the rate-limit anchors are refreshed. See the Revision (2026-11-17) at the end.
 
 ## Context
 AI clients (Claude Code, Claude Desktop, any Model Context Protocol client) can query an application
@@ -82,12 +83,16 @@ when any description hides text.**
    - The filters read `IOptionsMonitor<McpSettings>.CurrentValue` on every request (`:32`, `:61`), and a
      changed permit count starts a fresh window (`McpToolRateLimiter.cs:13-18`).
 5. **The endpoint is metered as a whole too.** `AddCommonRateLimiting` registers the `mcp` policy beside
-   `UserPolicy` (`MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/WebApplicationBuilderExtensions.RateLimiting.cs:57`,
-   `:482-485`): one bucket per user id, then name, then client IP, at `RateLimiting:McpPermitLimit`
-   requests per minute (default 60, `[Range(1, 1_000_000)]`,
-   `MMCA.Common/Source/Presentation/MMCA.Common.API/RateLimiting/RateLimitingSettings.cs:54-55`), so an
-   anonymous caller of a public tool is metered, unlike under the global limiter (`:52-55`). A caller
-   with no user and no IP gets no limiter, the same fail-open choice as the `auth-ip` policy (`:224-249`).
+   the global limiter (`MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/WebApplicationBuilderExtensions.RateLimiting.cs:57`,
+   `:439`), and `MapCommonMcp` requires it on the mapped endpoint
+   (`MMCA.Common/Source/Presentation/MMCA.Common.Mcp/McpHostingExtensions.cs:132`): one bucket per user
+   id, then name, then client IP (`WebApplicationBuilderExtensions.RateLimiting.cs:208-224`), at
+   `RateLimiting:McpPermitLimit` requests per minute (default 60, `[Range(1, 1_000_000)]`,
+   `MMCA.Common/Source/Presentation/MMCA.Common.API/RateLimiting/RateLimitingSettings.cs:42-43`), so an
+   anonymous caller of a public tool is metered, unlike under the global limiter, which exempts
+   anonymous traffic outside the hub paths (`WebApplicationBuilderExtensions.RateLimiting.cs:102`). A
+   caller with no user and no IP gets no limiter (`:215`), the same fail-open choice as the `auth-ip`
+   policy (`:345`).
 6. **Startup refuses hidden text (R023).** Before mapping, `MapCommonMcp` runs
    `ToolDescriptionInspector.ThrowIfHiddenText` over the server instructions, title and description, and
    over every tool's name, title, annotation title, description and each string of its input and output
@@ -230,6 +235,24 @@ cannot pass having inspected nothing. The runtime rule in the Decision above is 
   two attributes before that test passes.
 - The declaration is enforced by the test, not at runtime: a host that does not subclass the base keeps the
   old behaviour.
+
+## Revision (2026-11-17)
+
+**Context.** The framework's opt-in `FixedPolicy` and `UserPolicy` rate-limit policies, the
+`UserPolicyRateLimitPartition` selector and the `PermitLimit`, `QueueLimit` and `PerUserPermitLimit`
+settings were removed in the API-projects drift review (MMCA.Common v1.300.0) because no consumer
+named them (ADR-019, Revision (2026-11-17)).
+
+**Decision.** The `mcp` policy is unchanged: same partition key, same `McpPermitLimit` default of 60,
+same fail-open rule for a caller with no user and no IP, and still distributed when
+`RateLimiting:Distributed` is set (`allowDistributed: true`,
+`MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/WebApplicationBuilderExtensions.RateLimiting.cs:223`).
+Point 5 now names its registration beside the global limiter (`:439`) rather than beside `UserPolicy`,
+and its anchors are re-verified against current source.
+
+**Consequences.**
+- `auth-ip` and `mcp` are the only named policies `AddCommonRateLimiting` registers; a host that wants
+  a general per-user tightening policy registers its own.
 
 ## Related
 [ADR-014](014-cqrs-decorator-pipeline.md) (the decorator pipeline every tool call goes through),

@@ -261,7 +261,8 @@
           Revised 2026-11-08 (MMCA.Common v1.281.0): a machine client&#39;s token now satisfies permissioned tools
           for server-to-server callers, OAuth 2.1 for desktop clients stays deferred, and ADC&#39;s tools are
           scoped to one event with a <code>list_events</code> tool. See the Revision (2026-11-08) at the end.
-          Revised 2026-11-08 (MMCA.Common v1.282.0): a tool now declares <code>[McpToolPublic]</code> or <code>[McpToolPermission]</code>, enforced at test time; the runtime rule is unchanged. See the Revision (2026-11-08, access declaration) at the end.</p>
+          Revised 2026-11-08 (MMCA.Common v1.282.0): a tool now declares <code>[McpToolPublic]</code> or <code>[McpToolPermission]</code>, enforced at test time; the runtime rule is unchanged. See the Revision (2026-11-08, access declaration) at the end.
+          Revised 2026-11-17 (MMCA.Common v1.300.0): the <code>mcp</code> policy no longer sits beside a <code>UserPolicy</code>, which was removed with <code>FixedPolicy</code> because no consumer named them; <code>auth-ip</code> and <code>mcp</code> are the only named rate-limit policies, and the rate-limit anchors are refreshed. See the Revision (2026-11-17) at the end.</p>
           <h2 id="context">Context</h2>
           <p>AI clients (Claude Code, Claude Desktop, any Model Context Protocol client) can query an application
           through tools a server exposes. A consumer that wants to offer its data to such a client had no
@@ -336,12 +337,16 @@
           </ul>
           </li>
           <li><strong>The endpoint is metered as a whole too.</strong> <code>AddCommonRateLimiting</code> registers the <code>mcp</code> policy beside
-          <code>UserPolicy</code> (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/WebApplicationBuilderExtensions.RateLimiting.cs:57</code>,
-          <code>:482-485</code>): one bucket per user id, then name, then client IP, at <code>RateLimiting:McpPermitLimit</code>
-          requests per minute (default 60, <code>[Range(1, 1_000_000)]</code>,
-          <code>MMCA.Common/Source/Presentation/MMCA.Common.API/RateLimiting/RateLimitingSettings.cs:54-55</code>), so an
-          anonymous caller of a public tool is metered, unlike under the global limiter (<code>:52-55</code>). A caller
-          with no user and no IP gets no limiter, the same fail-open choice as the <code>auth-ip</code> policy (<code>:224-249</code>).</li>
+          the global limiter (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/WebApplicationBuilderExtensions.RateLimiting.cs:57</code>,
+          <code>:439</code>), and <code>MapCommonMcp</code> requires it on the mapped endpoint
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.Mcp/McpHostingExtensions.cs:132</code>): one bucket per user
+          id, then name, then client IP (<code>WebApplicationBuilderExtensions.RateLimiting.cs:208-224</code>), at
+          <code>RateLimiting:McpPermitLimit</code> requests per minute (default 60, <code>[Range(1, 1_000_000)]</code>,
+          <code>MMCA.Common/Source/Presentation/MMCA.Common.API/RateLimiting/RateLimitingSettings.cs:42-43</code>), so an
+          anonymous caller of a public tool is metered, unlike under the global limiter, which exempts
+          anonymous traffic outside the hub paths (<code>WebApplicationBuilderExtensions.RateLimiting.cs:102</code>). A
+          caller with no user and no IP gets no limiter (<code>:215</code>), the same fail-open choice as the <code>auth-ip</code>
+          policy (<code>:345</code>).</li>
           <li><strong>Startup refuses hidden text (R023).</strong> Before mapping, <code>MapCommonMcp</code> runs
           <code>ToolDescriptionInspector.ThrowIfHiddenText</code> over the server instructions, title and description, and
           over every tool&#39;s name, title, annotation title, description and each string of its input and output
@@ -489,6 +494,22 @@
           <li>The declaration is enforced by the test, not at runtime: a host that does not subclass the base keeps the
           old behaviour.</li>
           </ul>
+          <h2 id="revision-2026-11-17">Revision (2026-11-17)</h2>
+          <p><strong>Context.</strong> The framework&#39;s opt-in <code>FixedPolicy</code> and <code>UserPolicy</code> rate-limit policies, the
+          <code>UserPolicyRateLimitPartition</code> selector and the <code>PermitLimit</code>, <code>QueueLimit</code> and <code>PerUserPermitLimit</code>
+          settings were removed in the API-projects drift review (MMCA.Common v1.300.0) because no consumer
+          named them (ADR-019, Revision (2026-11-17)).</p>
+          <p><strong>Decision.</strong> The <code>mcp</code> policy is unchanged: same partition key, same <code>McpPermitLimit</code> default of 60,
+          same fail-open rule for a caller with no user and no IP, and still distributed when
+          <code>RateLimiting:Distributed</code> is set (<code>allowDistributed: true</code>,
+          <code>MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/WebApplicationBuilderExtensions.RateLimiting.cs:223</code>).
+          Point 5 now names its registration beside the global limiter (<code>:439</code>) rather than beside <code>UserPolicy</code>,
+          and its anchors are re-verified against current source.</p>
+          <p><strong>Consequences.</strong></p>
+          <ul>
+          <li><code>auth-ip</code> and <code>mcp</code> are the only named policies <code>AddCommonRateLimiting</code> registers; a host that wants
+          a general per-user tightening policy registers its own.</li>
+          </ul>
           <h2 id="related">Related</h2>
           <p><a href="014-cqrs-decorator-pipeline.html">ADR-014</a> (the decorator pipeline every tool call goes through),
           <a href="020-permission-based-authorization.html">ADR-020</a> (the <code>perm:</code> policy the permission attribute reuses),
@@ -515,6 +536,7 @@
             <li><a href="#consequences">Consequences</a></li>
             <li><a href="#revision-2026-11-08-machine-tokens-and-event-scoped-adc-tools">Revision (2026-11-08): machine tokens and event-scoped ADC tools</a></li>
             <li><a href="#revision-2026-11-08-access-declaration">Revision (2026-11-08, access declaration)</a></li>
+            <li><a href="#revision-2026-11-17">Revision (2026-11-17)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

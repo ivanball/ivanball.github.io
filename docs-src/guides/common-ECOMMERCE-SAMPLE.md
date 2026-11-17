@@ -301,8 +301,7 @@ additions after the `Description` property:
 ```
 
 The index is filtered with the framework's `HasSoftDeleteFilter`, never a SQL literal, so it stays
-engine-aware and follows a renamed column. Nothing else in Infrastructure changes: `--flat` already
-emitted a `ModuleApplicationDbContext` with one `DbSet`.
+engine-aware and follows a renamed column. Nothing else in Infrastructure changes.
 
 ### 4.5 API
 
@@ -564,8 +563,7 @@ Under `Source/Modules/Orders/MMCA.ECommerce.Orders.Infrastructure/Persistence/En
 `builder.Ignore(p => p.Total)` states in the mapping that `Total` is a computed getter and never a
 column. `Status` stays persisted as a **string** (the scaffold's line, kept), so a later reordering of
 the enum cannot silently reinterpret stored rows, and `UnitPrice` gets an explicit `decimal(18,2)` so
-a price never rounds on the way in. `ModuleApplicationDbContext` needs no edit: `-Child Item` already
-declared `DbSet<OrderItem>` alongside `DbSet<Order>`.
+a price never rounds on the way in.
 
 ### 5.4 Application
 

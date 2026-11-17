@@ -37,7 +37,7 @@
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/adr/index.html</loc>
-    <lastmod>2026-11-16</lastmod>
+    <lastmod>2026-11-17</lastmod>
     <priority>0.8</priority>
   </url>
   <url>
@@ -67,7 +67,7 @@
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/adr/006-database-per-service.html</loc>
-    <lastmod>2026-10-29</lastmod>
+    <lastmod>2026-11-17</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
@@ -132,7 +132,7 @@
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/adr/019-rate-limiting.html</loc>
-    <lastmod>2026-10-29</lastmod>
+    <lastmod>2026-11-17</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
@@ -647,7 +647,7 @@
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/adr/122-dev-only-relaxations-fail-closed.html</loc>
-    <lastmod>2026-10-26</lastmod>
+    <lastmod>2026-11-17</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
@@ -727,7 +727,7 @@
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/adr/138-mcp-endpoint-over-module-queries.html</loc>
-    <lastmod>2026-11-08</lastmod>
+    <lastmod>2026-11-17</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
@@ -1052,12 +1052,12 @@
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/guides/common-BUILD-BY-HAND.html</loc>
-    <lastmod>2026-10-28</lastmod>
+    <lastmod>2026-11-17</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/guides/common-CAPABILITIES.html</loc>
-    <lastmod>2026-11-16</lastmod>
+    <lastmod>2026-11-17</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
@@ -1067,7 +1067,7 @@
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/guides/common-ECOMMERCE-SAMPLE.html</loc>
-    <lastmod>2026-10-28</lastmod>
+    <lastmod>2026-11-17</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
@@ -1207,7 +1207,7 @@
   </url>
   <url>
     <loc>https://ivanball.github.io/articles/jwks-cross-service-auth.html</loc>
-    <lastmod>2026-10-29</lastmod>
+    <lastmod>2026-11-17</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
@@ -1227,7 +1227,7 @@
   </url>
   <url>
     <loc>https://ivanball.github.io/articles/problem-details-http-grpc.html</loc>
-    <lastmod>2026-10-29</lastmod>
+    <lastmod>2026-11-17</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
@@ -1277,7 +1277,7 @@
   </url>
   <url>
     <loc>https://ivanball.github.io/articles/rate-limiting-brute-force-protection.html</loc>
-    <lastmod>2026-10-29</lastmod>
+    <lastmod>2026-11-17</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
