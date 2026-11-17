@@ -307,7 +307,12 @@
           resolving <code>ICacheService</code> throws when a distributed cache has no hybrid cache over it. The Decision and
           Trade-offs describe that state; the dated revisions below that name <code>DistributedCacheService</code>,
           <code>RedisPrefixScanner</code> or SCAN record the removed design as it stood on their date. See the Revision
-          (2026-11-04) at the end.</p>
+          (2026-11-04) at the end.
+          Amended 2026-11-17: <strong>the optional client tier is removed</strong> (MMCA.Common v1.301.0). <code>IUiReadCache</code>,
+          <code>UiReadCache</code> and <code>UiReadCacheOptions</code> are deleted; the one consumer that adopted the tier withdrew it
+          the same day after stale reads failed its end-to-end gate, and none adopted it since. Caching is two
+          server tiers again, which is what this ADR always decided. The dated revisions that describe the
+          client tier record it as it stood on their date. See the Revision (2026-11-17) at the end.</p>
           <h2 id="context">Context</h2>
           <p>The framework needs caching in two distinct places. Inside the application pipeline, query results
           are memoized and invalidated on mutation (the Caching decorators of ADR-014, keyed by
@@ -464,50 +469,24 @@
           that both tiers ride the same Redis instance: Tier 1 through <code>IDistributedCache</code>, Tier 2 through the
           output-cache store.</li>
           </ul>
-          <h3 id="an-optional-third-tier-on-the-client-amended-2026-09-01">An optional third tier on the client (amended 2026-09-01)</h3>
-          <p>Two tiers are what this ADR decides. A third one exists in the framework as a capability a UI host may
-          switch on, and it is recorded here so a reader is not surprised by it in the UI package.</p>
+          <h3 id="the-client-tier-was-removed-amended-2026-11-17">The client tier was removed (amended 2026-11-17)</h3>
+          <p>From 2026-09-01 to 2026-11-17 the framework shipped an optional third tier, <code>IUiReadCache</code>, a
+          per-circuit read-through cache over the API client keyed by the relative URL. It was opt-in per UI
+          service through an optional <code>EntityServiceBase</code> constructor parameter, and it is gone as of MMCA.Common
+          v1.301.0:</p>
           <ul>
-          <li><strong><code>IUiReadCache</code> caches in front of the API client, not in front of a handler.</strong> The interface
-          (<code>MMCA.Common.UI/Services/Caching/IUiReadCache.cs:32</code>) is <code>Generation</code> (<code>:40</code>), <code>TryGetFresh</code>
-          (<code>:50</code>), <code>Set</code> (<code>:59</code>, plus a generation-checked overload at <code>:70</code>), <code>InvalidatePrefix</code> (<code>:78</code>) and
-          <code>Clear</code> (<code>:85</code>); the default implementation
-          (<code>MMCA.Common.UI/Services/Caching/UiReadCache.cs:18</code>) is a lock-guarded dictionary with lazy expiry,
-          registered scoped by <code>AddUIShared</code> (<code>MMCA.Common.UI/DependencyInjection.cs:77</code>, <code>TryAddScoped</code>),
-          which is one instance per Blazor Server circuit and one per app lifetime on WebAssembly and MAUI.</li>
-          <li><strong>The key is the relative URL, path plus the full query, deliberately the same key shape Tier 2
-          uses.</strong> <code>PublicEndpointOutputCachePolicy</code> sets <code>CacheVaryByRules.QueryKeys = &quot;*&quot;</code>
-          (<code>MMCA.Common.API/Caching/PublicEndpointOutputCachePolicy.cs:101</code>), so mirroring it means the two
-          layers agree on what &quot;the same read&quot; is: a filter, page or sort change misses on both sides instead
-          of being answered stale by one of them (<code>MMCA.Common.UI/Services/Api/EntityServiceBase.cs:239-241</code>).</li>
-          <li><strong>Freshness is stated in configuration.</strong> <code>UiReadCacheOptions</code>
-          (<code>MMCA.Common.UI/Common/Settings/UiReadCacheOptions.cs:13</code>, bound from the <code>UiReadCache</code> section,
-          <code>:16</code>) carries an <code>Enabled</code> kill switch (<code>:24</code>), a 60-second <code>DefaultTtl</code> (<code>:32</code>) and per-route-prefix
-          TTL overrides (<code>:41</code>). The longest matching prefix wins (<code>UiReadCache.cs:163-178</code>, the length
-          comparison at <code>:170</code>), so a nested route can state a stricter budget than the endpoint above it
-          whatever order configuration enumerates in.</li>
-          <li><strong>Successes only, prefix invalidation after any write that may have landed, clear on sign-out.</strong>
-          <code>GetCachedAsync</code> (<code>MMCA.Common.UI/Services/Api/EntityServiceBase.cs:253</code>) stores a value only when
-          the read succeeded (<code>:278-281</code>, through the generation-checked <code>Set</code> at <code>:280</code>), so a transient
-          outage or a 404 is never pinned in front of the user. A write drops this endpoint&#39;s whole prefix
-          (<code>InvalidateAfterWrite</code>, <code>:300</code>, calling <code>InvalidatePrefix(Endpoint)</code> at <code>:304</code>) on success and on
-          every failure except one the server refused before touching state (<code>:302</code>): only validation,
-          unprocessable-entity, unauthorized, forbidden and too-many-requests failures skip it (<code>:309-314</code>),
-          so a 412, 404, 409, 5xx or transport failure, whose write may have landed, invalidates too. A read
-          still in flight when that write lands is not re-cached, because the store is generation-checked (the
-          generation is captured before the GET at <code>:273</code> and <code>UiReadCache.Set</code> drops the value if
-          <code>InvalidatePrefix</code> or <code>Clear</code> moved it, <code>UiReadCache.cs:119-122</code>); and <code>AuthUIService</code> empties the
-          cache on sign-out and on an unrefreshable session
-          (<code>MMCA.Common.UI/Services/Auth/AuthUIService.cs:393</code>, inside the private <code>SignOutLocallyAsync</code> at
-          <code>:379</code> that both logout and revoke-all-sessions reach, and <code>:190</code>), which is what
-          keeps one account&#39;s reads from outliving its session where the scope does.</li>
-          <li><strong>Shipped and registered, adopted by no app.</strong> <code>EntityServiceBase</code> takes the cache as an optional
-          constructor parameter defaulting to <code>null</code> (<code>MMCA.Common.UI/Services/Api/EntityServiceBase.cs:47</code>,
-          exposed as the protected <code>ReadCache</code> property at <code>:58</code>); with <code>null</code> every read goes to the API and
-          the class behaves exactly as it did before the cache existed (<code>:260-263</code>). No UI service in ADC, Store or
-          Helpdesk passes it: a search of all four repositories finds <code>IUiReadCache</code> only inside MMCA.Common&#39;s
-          own source and tests. This tier is therefore a capability the framework offers, not a posture the
-          apps are in.</li>
+          <li><strong>It failed the one adoption it had.</strong> Store opted all six of its UI services in with v1.175.0 and
+          withdrew them the same day (Store #110): child-entity writes did not invalidate the parent&#39;s prefix
+          (a variant edit re-read a stale product) and cross-service journeys (profile, checkout) read values
+          up to 60 seconds old, which failed four end-to-end workflows and skipped the deploy. No consumer
+          opted in afterwards.</li>
+          <li><strong>What replaced it is a plain read.</strong> <code>EntityServiceBase.SendGetAsync&lt;T&gt;(url, cancellationToken)</code>
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/Api/EntityServiceBase.cs:226</code>) is the GET
+          through the retry pipeline that the cache path wrapped; the former <code>GetCachedAsync</code> callers call it.
+          The <code>UiReadCache</code> configuration section is ignored, and sign-out no longer has a client cache to clear.</li>
+          <li><strong>Client-side staleness stays an application decision.</strong> A UI that needs to avoid re-reading hot
+          reference data memoizes it in a purpose-built lookup service with its own invalidation (ADC&#39;s event
+          and speaker lookups do), where the invalidation rules match the one read pattern they serve.</li>
           </ul>
           <h2 id="rationale">Rationale</h2>
           <ul>
@@ -600,13 +579,11 @@
           half the decision: the store behind it is per-replica memory unless the service registers the shared
           Redis output-cache store (Tier 2 above), which is what a multi-replica adopter needs for tag eviction
           to reach every replica (ADR-040).</li>
-          <li><strong>The optional client tier is an inventory item, and the inventory is empty.</strong> <code>IUiReadCache</code> is
-          registered wherever a host calls <code>AddUIShared</code> (<code>MMCA.Common.UI/DependencyInjection.cs:77</code>), but a UI
-          service reads through it only if its own constructor forwards the optional parameter
-          (<code>MMCA.Common.UI/Services/Api/EntityServiceBase.cs:47</code>), so registration on its own changes nothing and
-          no build, test or startup notices the difference. That is Tier 2&#39;s audit-the-inventory caveat one
-          layer further out, and it is the intended posture rather than a gap to sweep: client-side staleness
-          is visible to the user, so each UI service opts in on its own read pattern or does not opt in at all.</li>
+          <li><strong>No client tier, by decision.</strong> The framework offers no client-side read cache (removed
+          2026-11-17), so every UI read reaches Tier 2 or the handler. The cost is a round trip per read on a
+          hot page; the gain is that a user never sees a value older than the server&#39;s own caches allow, and
+          an application that measures a hot reference read memoizes that one read where its invalidation is
+          obvious.</li>
           </ul>
           <h2 id="revision-2026-09-07">Revision (2026-09-07)</h2>
           <p>Four changes from the 2026-09-07 security review. The tiers themselves are unchanged.</p>
@@ -1404,6 +1381,28 @@
           2026-10-28 Revision records them. The dated revisions above that name <code>DistributedCacheService</code>,
           <code>RedisPrefixScanner</code>, <code>ScanAndDeleteAsync</code> or SCAN describe the design this revision removes.</li>
           </ol>
+          <h2 id="revision-2026-11-17">Revision (2026-11-17)</h2>
+          <p>The optional client tier recorded by the Revision (2026-09-01) is removed in MMCA.Common v1.301.0
+          (MMCA.Common #758, the UI drift wave; plan in the workspace <code>Docs/Planning/Drift/UiProjects-plan.md</code>,
+          item C5). Neither server tier changes.</p>
+          <ol>
+          <li><strong>Why.</strong> The tier had one adoption, and it failed: Store opted all six UI services in with v1.175.0
+          and withdrew them the same day (Store #110) after its end-to-end gate failed four workflows on reads
+          up to 60 seconds stale (child-entity writes did not invalidate the parent prefix; cross-service
+          journeys read old values). No consumer adopted it in the eleven weeks after, and adopting it safely
+          needs per-service invalidation rules nobody designed. Shipping an inert capability whose one known
+          use broke the gate is the opposite of keeping the framework simple.</li>
+          <li><strong>What was removed.</strong> <code>IUiReadCache</code>, <code>UiReadCache</code>, <code>UiReadCacheOptions</code> (the <code>UiReadCache</code>
+          configuration section), the optional <code>readCache</code> constructor parameter of <code>EntityServiceBase</code>,
+          <code>AuthUIService</code> and <code>JwtAuthenticationStateProvider</code>, <code>EntityServiceBase.ReadCache</code> and
+          <code>GetCachedAsync&lt;T&gt;(url, cancellationToken, bypassCache)</code>.</li>
+          <li><strong>What callers use instead.</strong> <code>EntityServiceBase.SendGetAsync&lt;T&gt;(url, cancellationToken)</code>
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/Api/EntityServiceBase.cs:226</code>), the same
+          GET through the retry pipeline; Store&#39;s three <code>GetCachedAsync</code> call sites moved to it.</li>
+          <li><strong>The Decision and Trade-offs</strong> now describe the removal (Decision &quot;The client tier was removed&quot;,
+          Trade-offs &quot;No client tier, by decision&quot;). The Revisions dated 2026-09-01, 2026-10-01 and
+          2026-10-06 describe the tier as it stood on their date and are left as written.</li>
+          </ol>
           
         <div class="doc-foot btn-row">
           <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
@@ -1441,6 +1440,7 @@
             <li><a href="#revision-2026-10-26">Revision (2026-10-26)</a></li>
             <li><a href="#revision-2026-10-28">Revision (2026-10-28)</a></li>
             <li><a href="#revision-2026-11-04">Revision (2026-11-04)</a></li>
+            <li><a href="#revision-2026-11-17">Revision (2026-11-17)</a></li>
             </ul>
           </nav>
         </aside>
