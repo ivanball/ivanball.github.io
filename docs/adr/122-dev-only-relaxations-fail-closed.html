@@ -255,7 +255,7 @@
           <p class="eyebrow doc-kicker">Architecture Decision Record</p>
           <h1 id="adr-122-dev-only-relaxations-are-environment-gated-and-fail-closed">ADR-122: Dev-Only Relaxations Are Environment-Gated and Fail Closed</h1>
           <h2 id="status">Status</h2>
-          <p>Accepted (2026-09-11). Revised 2026-10-01: citations re-anchored. Revised 2026-10-06: the plain-check inventory adds the Development-only design-time database skip. Revised 2026-10-07: the inventory names the <code>!IsProduction()</code> OpenAPI and Scalar mappings as outside the rule, the UI-side null-aware pseudo-locale check, and the Serilog file sink as out of scope. Revised 2026-10-26: the session cookies now also set <code>Secure</code> on a Development HTTPS request, so only a plain-http Development run omits it, and the cookie bullet describes the session and culture cookies separately; CORS and pseudo-locale anchors refreshed.</p>
+          <p>Accepted (2026-09-11). Revised 2026-10-01: citations re-anchored. Revised 2026-10-06: the plain-check inventory adds the Development-only design-time database skip. Revised 2026-10-07: the inventory names the <code>!IsProduction()</code> OpenAPI and Scalar mappings as outside the rule, the UI-side null-aware pseudo-locale check, and the Serilog file sink as out of scope. Revised 2026-10-26: the session cookies now also set <code>Secure</code> on a Development HTTPS request, so only a plain-http Development run omits it, and the cookie bullet describes the session and culture cookies separately; CORS and pseudo-locale anchors refreshed. Revised 2026-11-17: <code>MapCommonScalarUi</code> and the Scalar dependency are removed (no host called it), so <code>MapCommonOpenApi</code> is the one <code>!IsProduction()</code> mapping the inventory names outside the rule (MMCA.Common v1.300.0).</p>
           <h2 id="context">Context</h2>
           <p>Several capabilities are useful locally and dangerous in a deployed environment: EF Core rendering
           parameter values into logs and exception messages, an SMTP session that skips TLS, prompt and
@@ -330,14 +330,13 @@
           (<code>.../Startup/DatabaseInitializationExtensions.cs:174-177</code>), so a build-time OpenAPI run does not
           touch a database.</li>
           </ul>
-          <p>Two endpoint mappings are gated on <code>!IsProduction()</code> rather than on Development, so they do not
-          follow this record&#39;s rule: in a host that calls them, Staging or any environment name other than
-          <code>Production</code> gets them. <code>MapCommonOpenApi</code> maps the OpenAPI document with <code>AllowAnonymous()</code>
-          (<code>.../Startup/Endpoints/OpenApiEndpointExtensions.cs:62</code>, <code>:74</code>), and the ADC and Store service
-          hosts call it. <code>MapCommonScalarUi</code> maps the Scalar reference UI under the same check (<code>:91-93</code>); it
-          is documented as opt-in (<code>:81-82</code>) and no consumer host calls it today. Both expose API
-          description, not data. ADR-046 documents the OpenAPI document&#39;s posture; no ADR covers the Scalar
-          UI. They are named here so the inventory states where the rule does not apply.</p>
+          <p>One endpoint mapping is gated on <code>!IsProduction()</code> rather than on Development, so it does not
+          follow this record&#39;s rule: in a host that calls it, Staging or any environment name other than
+          <code>Production</code> gets it. <code>MapCommonOpenApi</code> maps the OpenAPI document with <code>AllowAnonymous()</code>
+          (<code>.../Startup/Endpoints/OpenApiEndpointExtensions.cs:61</code>, <code>:73</code>), and the ADC and Store service
+          hosts call it through the shared service-host start-up
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.ServiceHost/ServiceHostApplicationExtensions.cs:57</code>). It exposes API description, not data. ADR-046 documents the OpenAPI document&#39;s
+          posture. It is named here so the inventory states where the rule does not apply.</p>
           <p>The Serilog minimum level (<code>Debug</code> in Development, <code>Information</code> otherwise,
           <code>MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Logging/SerilogHostExtensions.cs:77</code>) and the
           rolling file sink (written outside Production, <code>ShouldWriteFileSink</code> at <code>:87-88</code>, see ADR-041) are
@@ -427,6 +426,20 @@
           <code>/culture/set</code> check to <code>WebApplicationExtensions.cs:81-84</code> and <code>:120-123</code>; all other citations
           still hold.</li>
           </ol>
+          <h2 id="revision-2026-11-17">Revision (2026-11-17)</h2>
+          <p>Re-verified against current source. The rule, the three fail-closed gates and the Development-gated
+          inventory are unchanged; one of the two <code>!IsProduction()</code> mappings the inventory named is gone.</p>
+          <ol>
+          <li><code>MapCommonScalarUi</code> and the <code>Scalar.AspNetCore</code> dependency are removed from <code>MMCA.Common.API</code>
+          because no host called it; they were removed in the API-projects drift review (MMCA.Common
+          v1.300.0). <code>MapCommonOpenApi</code> is now the only mapping the inventory names outside the rule, and
+          the paragraph describes it alone. The <code>MapCommonScalarUi</code> statement and its <code>:91-93</code> anchor in the
+          Revision (2026-10-07) are history and are superseded by this revision.</li>
+          <li>Anchors re-verified against current source: the <code>!IsProduction()</code> check and the anonymous
+          <code>MapOpenApi()</code> call moved to <code>OpenApiEndpointExtensions.cs:61</code> and <code>:73</code>, and the paragraph now
+          cites the shared service-host call (<code>ServiceHostApplicationExtensions.cs:57</code>) through which the ADC
+          and Store service hosts map the document.</li>
+          </ol>
           <h2 id="related">Related</h2>
           <p><a href="070-fail-fast-configuration-contract.html">ADR-070</a> (binds and validates settings at startup; this
           record governs when a validated setting may be honored),
@@ -457,6 +470,7 @@
             <li><a href="#revision-2026-10-06">Revision (2026-10-06)</a></li>
             <li><a href="#revision-2026-10-07">Revision (2026-10-07)</a></li>
             <li><a href="#revision-2026-10-26">Revision (2026-10-26)</a></li>
+            <li><a href="#revision-2026-11-17">Revision (2026-11-17)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

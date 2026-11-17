@@ -292,7 +292,11 @@
           Revised 2026-10-26: anchors refreshed after the source moves since 2026-10-21, and Related names
           ADR-135 as the record that owns the application-namespace decision the Redis partition key follows.
           Revised 2026-10-28: anchors refreshed after the Bicep, UI host and Identity service source moves
-          since 2026-10-26.</p>
+          since 2026-10-26.
+          Revised 2026-11-17: the opt-in <code>FixedPolicy</code> and <code>UserPolicy</code> named policies, their partition
+          selector and their <code>PermitLimit</code>, <code>QueueLimit</code> and <code>PerUserPermitLimit</code> settings are removed because
+          no consumer named them, so <code>auth-ip</code> and <code>mcp</code> are the only named policies (MMCA.Common v1.300.0).
+          See the Revision (2026-11-17).</p>
           <h2 id="context">Context</h2>
           <p>Every service exposes read and write endpoints to the public internet through the gateway (ADR-008).
           Abusive or runaway clients (scrapers, credential stuffing, retry storms, a buggy SPA stuck in a loop)
@@ -337,7 +341,7 @@
           <li><strong>A per-IP cap on the anonymous authentication endpoints, on by default.</strong> <code>AddCommonRateLimiting</code>
           also registers the named policy <code>RateLimitPolicyAuthIp</code> (<code>&quot;auth-ip&quot;</code>): a fixed one-minute window
           keyed on the client IP, <code>authIpPermitLimit</code> (default 30) requests, overage rejected with <code>429</code>.
-          Unlike the other named policies it is not left to each app to attach. <code>AuthControllerBase</code>
+          It is not left to each app to attach. <code>AuthControllerBase</code>
           (<code>MMCA.Common.API</code>) decorates <code>LoginAsync</code> and <code>RegisterAsync</code>, and
           <code>PasswordResetAuthControllerBase</code> decorates the <code>forgot-password</code> and <code>reset-password</code> actions,
           and <code>EmailConfirmationControllerBase</code> decorates the two anonymous email-confirmation actions,
@@ -367,13 +371,21 @@
           rather than sharing one bucket with every other such request (a deliberate difference from the
           global limiter, which puts an unattributable authenticated request in one shared <code>&quot;authenticated&quot;</code>
           bucket and an unattributable anonymous hub request in one shared <code>&quot;anonymous-hub&quot;</code> bucket,
-          <code>MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/WebApplicationBuilderExtensions.RateLimiting.cs:87</code>,
-          <code>:177</code>, <code>:330-331</code>); and the default is 30 rather than a tighter 10 for the same shared-IP reason,
+          <code>MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/WebApplicationBuilderExtensions.RateLimiting.cs:186</code>,
+          <code>:96</code>, while <code>auth-ip</code> returns <code>NoLimiter</code> at <code>:345</code>); and the default is 30 rather than a tighter 10 for the same shared-IP reason,
           since every Server-circuit user&#39;s login leaves from the UI host&#39;s address.</li>
-          <li><strong>The remaining named policies are opt-in, per-endpoint tightening.</strong> <code>AddCommonRateLimiting</code> also
-          registers <code>FixedPolicy</code> and <code>UserPolicy</code>, which a specific action can apply with
-          <code>[EnableRateLimiting(...)]</code> when it needs a tighter cap than the global default. Nothing in either
-          app applies those two today.</li>
+          <li><strong>The only other named policy belongs to the MCP endpoint.</strong> <code>AddCommonRateLimiting</code> also
+          registers <code>RateLimitPolicyMcp</code> (<code>&quot;mcp&quot;</code>,
+          <code>MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/WebApplicationBuilderExtensions.RateLimiting.cs:57</code>,
+          registered at <code>:439</code>), one window per user id, then name, then client IP (<code>:208-224</code>) at
+          <code>McpPermitLimit</code> requests per minute (default 60,
+          <code>MMCA.Common/Source/Presentation/MMCA.Common.API/RateLimiting/RateLimitingSettings.cs:42-43</code>). It
+          is inert until an endpoint names it, and <code>MapCommonMcp</code> is the one caller that does
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.Mcp/McpHostingExtensions.cs:132</code>, ADR-138). The
+          framework registers no general-purpose tightening policy: an action that needs a tighter cap than
+          the global default needs a policy its host registers. The two opt-in policies that once filled
+          that role were removed because no consumer named them (see the Revision
+          (2026-11-17)).</li>
           <li><strong>The client IP these partitions key on is whatever the edge forwards, and that is trusted from any
           proxy.</strong> Both IP-keyed decisions above (the <code>auth-ip</code> window, and the global limiter&#39;s third-choice
           fallback key) read <code>HttpContext.Connection.RemoteIpAddress</code>, which <code>UseForwardedHeaders</code> has
@@ -429,12 +441,14 @@
           partitions the request, so the limiter&#39;s placement relative to authentication in the request
           pipeline is load-bearing: move it and the partition sees a different (or empty) principal.</li>
           <li><strong>Defaults are deployment-agnostic.</strong> 300 requests/min/user is a coarse backstop, not a tuned SLO;
-          a service with heavier legitimate per-user traffic must raise it, and a stricter endpoint must opt
-          into a named policy.</li>
+          a service with heavier legitimate per-user traffic must raise it, and a stricter endpoint needs a
+          policy its host registers, since the framework ships none for that purpose.</li>
           <li><strong>In-process counters, where a limiter is not distributed.</strong> A local limiter&#39;s state is
           per-instance, so across N replicas its effective ceiling is roughly N times the configured limit.
-          This holds for <code>auth-ip</code> and <code>FixedPolicy</code> (always in-memory), for the gateway limiters, and for
-          the global, per-user and hub windows in any host that leaves <code>Distributed</code> unset (see the Revision
+          This holds for <code>auth-ip</code> (always in-memory, <code>allowDistributed: false</code> at
+          <code>MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/WebApplicationBuilderExtensions.RateLimiting.cs:353</code>),
+          for the gateway limiters, and for the global, hub and <code>mcp</code> windows (<code>allowDistributed: true</code> at
+          <code>:195</code>, <code>:101</code>, <code>:223</code>) in any host that leaves <code>Distributed</code> unset (see the Revision
           (2026-08-18)). ADC production sets <code>RateLimiting__Distributed=true</code> on all four services
           (<code>MMCA.ADC/infra/main.bicep:1949</code>, <code>:2190</code>, <code>:2327</code>, <code>:2481</code>; the AppHost does the same only in its
           opt-in multi-replica run, when <code>ADC_REPLICAS</code> is greater than 1,
@@ -804,6 +818,33 @@
           <code>GatewayRateLimiting</code> section is at <code>MMCA.Store/Source/Hosts/UI/MMCA.Store.UI.Web/appsettings.json:47</code>,
           with <code>TrustedCallerHeaderName</code> at <code>:48</code>.</li>
           </ol>
+          <h2 id="revision-2026-11-17">Revision (2026-11-17)</h2>
+          <p>The layering is unchanged: the global limiter is still authenticated-only, infrastructure and
+          anonymous traffic outside the hub paths are still exempt, and <code>auth-ip</code> still covers the anonymous
+          credential endpoints by default. What changed is the set of named policies, removed in the
+          API-projects drift review (MMCA.Common v1.300.0) because no consumer named them.</p>
+          <ol>
+          <li><strong><code>FixedPolicy</code> and <code>UserPolicy</code> are gone.</strong> <code>AddCommonRateLimiting(RateLimitingSettings)</code>
+          registers the global limiter and the <code>mcp</code> policy
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/WebApplicationBuilderExtensions.RateLimiting.cs:434</code>,
+          <code>:439</code>) plus <code>auth-ip</code> (<code>:449</code>); the <code>UserPolicyRateLimitPartition</code> selector went with them. The
+          int overload is now <code>AddCommonRateLimiting(int globalPermitLimit = 300, int authIpPermitLimit = 30)</code>
+          (<code>:385</code>).</li>
+          <li><strong>Their settings are gone.</strong> <code>RateLimitingSettings</code> no longer carries <code>PermitLimit</code>, <code>QueueLimit</code>
+          or <code>PerUserPermitLimit</code>; it keeps <code>GlobalPermitLimit</code> 300
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/RateLimiting/RateLimitingSettings.cs:28</code>),
+          <code>AuthIpPermitLimit</code> 30 (<code>:35</code>), <code>McpPermitLimit</code> 60 (<code>:43</code>), <code>Algorithm</code> (<code>:49</code>),
+          <code>SegmentsPerWindow</code> 4 (<code>:58</code>), <code>Distributed</code> (<code>:68</code>) and <code>AnonymousHubPermitLimit</code> 60 (<code>:95</code>).</li>
+          <li><strong><code>Distributed</code> now names the windows it actually reaches.</strong> It moves the global limiter, the
+          anonymous hub partition and the <code>mcp</code> policy onto <code>RedisFixedWindowRateLimiter</code>
+          (<code>RateLimitingSettings.cs:60-68</code>;
+          <code>MMCA.Common/Source/Presentation/MMCA.Common.API/RateLimiting/RedisFixedWindowRateLimiter.cs:9-14</code>);
+          <code>auth-ip</code> stays in memory (<code>WebApplicationBuilderExtensions.RateLimiting.cs:353</code>).</li>
+          </ol>
+          <p>Decision item 4 and the Trade-offs now describe that set. The <code>FixedPolicy</code>, <code>UserPolicy</code>,
+          <code>PermitLimit</code>, <code>QueueLimit</code> and <code>PerUserPermitLimit</code> statements and anchors in the earlier revisions
+          (2026-08-18 items 1 and 3 and its in-memory paragraphs, and the later anchor lists) are history and
+          are superseded by this revision.</p>
           <h2 id="related">Related</h2>
           <p>ADR-004 (the JWKS/discovery traffic the limiter exempts, and the authenticated principal it keys on),
           ADR-008 (the gateway edge this protects), ADR-017 (request idempotency, the other inbound-edge
@@ -842,6 +883,7 @@
             <li><a href="#revision-2026-10-21">Revision (2026-10-21)</a></li>
             <li><a href="#revision-2026-10-26">Revision (2026-10-26)</a></li>
             <li><a href="#revision-2026-10-28">Revision (2026-10-28)</a></li>
+            <li><a href="#revision-2026-11-17">Revision (2026-11-17)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

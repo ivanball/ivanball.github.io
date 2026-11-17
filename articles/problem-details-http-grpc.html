@@ -298,9 +298,8 @@
           <ul>
           <li><strong>The contract snapshot is guarded at two levels, on purpose.</strong> The framework generates an OpenAPI
           document: the host registers it with ASP.NET Core&#39;s built-in <code>AddOpenApi()</code>, <code>AddCommonOpenApi()</code>
-          layers the framework&#39;s transformers onto every registered document, <code>MapCommonOpenApi()</code> serves
-          <code>/openapi/v1.json</code> outside Production (and fails at startup when no <code>v1</code> document is registered), and
-          an opt-in <code>MapCommonScalarUi()</code> renders the Scalar reference UI from that document.
+          layers the framework&#39;s transformers onto every registered document, and <code>MapCommonOpenApi()</code> serves
+          <code>/openapi/v1.json</code> outside Production (and fails at startup when no <code>v1</code> document is registered).
           <code>OpenApiBaselineTests</code> closes the loop in the framework&#39;s own CI: it boots an in-memory host over that
           exact registration path (<code>AddCommonApiVersioning()</code> + <code>AddOpenApi()</code> + <code>AddCommonOpenApi()</code> +
           <code>MapCommonOpenApi()</code>), fetches <code>/openapi/v1.json</code>, normalizes it (the

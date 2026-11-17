@@ -165,9 +165,8 @@ contract. The first two are the honest notes below.
 
 - **The contract snapshot is guarded at two levels, on purpose.** The framework generates an OpenAPI
   document: the host registers it with ASP.NET Core's built-in `AddOpenApi()`, `AddCommonOpenApi()`
-  layers the framework's transformers onto every registered document, `MapCommonOpenApi()` serves
-  `/openapi/v1.json` outside Production (and fails at startup when no `v1` document is registered), and
-  an opt-in `MapCommonScalarUi()` renders the Scalar reference UI from that document.
+  layers the framework's transformers onto every registered document, and `MapCommonOpenApi()` serves
+  `/openapi/v1.json` outside Production (and fails at startup when no `v1` document is registered).
   `OpenApiBaselineTests` closes the loop in the framework's own CI: it boots an in-memory host over that
   exact registration path (`AddCommonApiVersioning()` + `AddOpenApi()` + `AddCommonOpenApi()` +
   `MapCommonOpenApi()`), fetches `/openapi/v1.json`, normalizes it (the
@@ -245,6 +244,13 @@ included), or `dotnet add package MMCA.Common.API` and try it.*
 - The full 34-category scorecard, §9 included, lives in `Website/docs-src/governance/common-ArchitectureScorecard.md` in the docs site.
 
 *Tags: .NET, C Sharp, Software Architecture, gRPC, API Design*
+
+*Notes (2026-11-17 refresh against MMCA.Common v1.300.0, read from the `chore/api-drift` branch ahead of
+its tag; only the anchors this run touched were re-read). The opt-in Scalar reference UI mapping and its
+`Scalar.AspNetCore` dependency left the framework (no host called it), so the contract-snapshot trade-off
+ends at `MapCommonOpenApi()` serving `/openapi/v1.json`; the 2026-10-02 entry's OpenAPI anchors were
+repointed (`OpenApiEndpointExtensions.cs:59`, non-Production guard `:61`, missing-`v1` startup throw `:66`,
+`AllowAnonymous` `:73`) and its `MapCommonScalarUi()` anchor dropped.*
 
 *Notes (2026-10-29 refresh against MMCA.Common v1.265.1; the anchors this run touched were re-read, the
 rest carried from the 2026-10-22 pass). The body no longer says one table is reused on both transports:
@@ -345,8 +351,8 @@ name the framework's own `RpcException.ToResult` decoder. OpenAPI:
 `AddCommonOpenApi()` (`MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/WebApplicationBuilderExtensions.cs:101-115`,
 doc `:87-100`) registers no document; it installs the parameter backfill and the strongly-typed-id
 transformers, and the host calls `AddOpenApi()` itself. `MapCommonOpenApi()` at
-`.../Startup/Endpoints/OpenApiEndpointExtensions.cs:60` (non-Production guard `:62`, missing-`v1`
-startup throw `:67`, `AllowAnonymous` `:74`); `MapCommonScalarUi()` at `:89`. Baseline gate:
+`.../Startup/Endpoints/OpenApiEndpointExtensions.cs:59` (non-Production guard `:61`, missing-`v1`
+startup throw `:66`, `AllowAnonymous` `:73`). Baseline gate:
 `MMCA.Common/Tests/Presentation/MMCA.Common.API.Tests/OpenApi/OpenApiProbeHost.cs` (`CreateAsync` `:28`,
 `AddCommonApiVersioning()` `:39`, host `AddOpenApi()` `:40`, `AddCommonOpenApi()` `:41`,
 `MapCommonOpenApi()` `:61`, class doc `:15-16`). Contract purity:
