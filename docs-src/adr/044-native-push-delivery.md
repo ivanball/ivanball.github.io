@@ -37,7 +37,30 @@ may not exist when the code ships.
   `:26`) and `IPushDeviceRegistrar`
   (installation upsert/delete,
   `MMCA.Common/Source/Core/MMCA.Common.Application/Interfaces/Infrastructure/Notifications/IPushDeviceRegistrar.cs:11`,
-  `UpsertAsync` at `:29`, `DeleteAsync` at `:48`). `AddInfrastructure` TryAdds no-op defaults.
+  `UpsertAsync` at `:29`, `DeleteAsync` at `:48`, and `DeleteAllForUserAsync` at `:65`, which removes
+  every installation one user holds). `AddInfrastructure` TryAdds no-op defaults.
+- **Account erasure removes the user's devices.** `DeleteUserHandlerBase` takes an optional
+  `IInternalCommandScheduler`
+  (`MMCA.Common/Source/Core/MMCA.Common.Application/Users/UseCases/DeleteUser/DeleteUserHandlerBase.cs:103`)
+  and, when one is supplied, schedules `DeleteUserPushInstallationsInternalCommand` in the erasure's
+  unit of work (`:195-198`; the command at `DeleteUserPushInstallationsInternalCommand.cs:18`). Its
+  handler calls `DeleteAllForUserAsync` (`DeleteUserPushInstallationsInternalCommandHandler.cs:31`), so
+  a failure retries as a durable internal command (`IPushDeviceRegistrar.cs:62-63`). Every registrar
+  implements it: the Null default
+  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Notifications/Push/NullPushDeviceRegistrar.cs:25`),
+  Azure Notification Hubs by listing the user's installations
+  (`MMCA.Common/Source/Hosting/MMCA.Common.Azure/Notifications/AzureNotificationHubDeviceRegistrar.cs:122-135`),
+  SNS through the `UserId` index
+  (`MMCA.Common/Source/Hosting/MMCA.Common.Aws/Notifications/SnsPushDeviceRegistrar.cs:123-128`) and FCM
+  through its Firestore registry query
+  (`MMCA.Common/Source/Hosting/MMCA.Common.Gcp/Notifications/FcmPushDeviceRegistrar.cs:102-107`). ADC
+  runs erasure on its Identity service, which registers `AddAzureNotificationHubsPush` so the
+  registrar reaches the hub devices register in
+  (`MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:210-214`), and its `DeleteUserHandler`
+  forwards the scheduler
+  (`MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Application/Users/UseCases/DeleteUser/DeleteUserHandler.cs:44`).
+  Store forwards it too
+  (`MMCA.Store/Source/Modules/Identity/MMCA.Store.Identity.Application/Users/UseCases/DeleteUser/DeleteUserHandler.cs:41-42`).
 - **Three delivery adapters, one registration call each.** Each call implements both abstractions
   and swaps them in only when `NativePush:Enabled` is true AND its own section is complete, so hosts
   call it unconditionally and deployments flip the channel on by configuration alone:

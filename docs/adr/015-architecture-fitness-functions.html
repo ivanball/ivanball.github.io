@@ -458,12 +458,14 @@
           which the rule documents as being for cases where adding the parameter would break a shipped public
           API, with the reason recorded beside the entry (<code>:30-34</code>, and the base&#39;s own wording at
           <code>Bases/Cqrs/CancellationTokenConventionTestsBase.cs:21-26</code>).</p>
-          <p>The suite found exactly two real violations, both on <code>NotificationHub</code>
-          (<code>.../Cqrs/CancellationTokenConventionTests.cs:23-27</code>), and they are the interesting case because the
+          <p>The suite found exactly two real violations, both on <code>NotificationHub</code>, and the base exempts them
+          itself: its <code>FrameworkExemptMethods</code> (<code>Bases/Cqrs/CancellationTokenConventionTestsBase.cs:31-35</code>) is
+          merged with each subclass&#39;s <code>CancellationTokenExemptMethods</code> (<code>:46</code>, <code>:50</code>), so every consumer
+          inherits both entries. They are the interesting case because the
           exemption is not a waiver. A SignalR hub method signature <strong>is</strong> the client-visible RPC contract, bound
           by name and argument list by the dispatcher, and every shipped consumer&#39;s client already invokes
-          <code>JoinChannelAsync</code> / <code>LeaveChannelAsync</code> (the two exemption entries, <code>:25-26</code>) with one argument, so
-          adding a parameter would break the wire contract (<code>:14-22</code>). The work was made cancellable anyway: both methods pass <code>Context.ConnectionAborted</code> straight
+          <code>JoinChannelAsync</code> / <code>LeaveChannelAsync</code> (the two exemption entries, <code>:33-34</code>) with one argument, so
+          adding a parameter would break the wire contract (<code>:24</code>). The work was made cancellable anyway: both methods pass <code>Context.ConnectionAborted</code> straight
           into their group calls, so the token is there, just not through a parameter reflection can see. The
           exemption records a genuine blind spot in the rule rather than an accepted defect.</p>
           <h3 id="a-third-enforcement-layer-the-public-api-surface-gate">A third enforcement layer: the public API surface gate</h3>
@@ -813,7 +815,7 @@
           the first 2026-08-18 entry.</p>
           <p><strong>The hub exemptions are keyed by C# name; the wire names are shorter.</strong> The exemption entries are
           <code>NotificationHub.JoinChannelAsync</code> and <code>NotificationHub.LeaveChannelAsync</code>
-          (<code>.../Cqrs/CancellationTokenConventionTests.cs:25-26</code>), which is the form the rule matches. The names a
+          (<code>Bases/Cqrs/CancellationTokenConventionTestsBase.cs:33-34</code>), which is the form the rule matches. The names a
           client invokes are <code>JoinChannel</code> and <code>LeaveChannel</code>, set through <code>[HubMethodName]</code>
           (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Notifications/NotificationHub.cs:36</code>, <code>:39</code>,
           <code>:118</code>, <code>:135</code>) and used by the framework&#39;s own client

@@ -273,7 +273,13 @@
           The implementation shipped in the MMCA.Common &quot;enterprise capability wave&quot; release.
           It is opt-in: an app subclasses <code>ExportUserDataHandlerBase</code> and registers its own
           <code>IUserDataExportSection</code> implementations, and the shipped controller base is subclassed and routed by
-          the app. Nothing changes for a host that does not.</p>
+          the app. Nothing changes for a host that does not. One section ships with the framework:
+          <code>AddInfrastructure</code> registers <code>RefreshSessionUserDataExportSection</code> (section name <code>SignInSessions</code>,
+          <code>MMCA.Common/Source/Core/MMCA.Common.Application/Users/UseCases/ExportUserData/RefreshSessionUserDataExportSection.cs:28</code>,
+          <code>:31</code>) beside the refresh-session store
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:174-178</code>), so every app with
+          an export handler includes every session row, revoked and expired included, with its IP address, user
+          agent and device fields, and never the token hashes (<code>RefreshSessionUserDataExportSection.cs:14-20</code>).</p>
           <h2 id="context">Context</h2>
           <p>A data-subject access request is a legal obligation with a clock on it: the person asks for a copy of the
           personal data held about them, and the operator has a deadline to hand one over.
@@ -524,7 +530,9 @@
           third section, and several anchors recorded on 2026-10-06 as re-verified had drifted.</p>
           <ol>
           <li>ADC registers three export sections, not two: Engagement, Notifications, then Conference
-          (<code>MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Application/DependencyInjection.cs:63-65</code>).
+          (<code>MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Application/DependencyInjection.cs:74-76</code>),
+          alongside the framework&#39;s own <code>SignInSessions</code> section, so an ADC export carries four
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:178</code>).
           The new one is <code>ConferenceUserDataExportSection</code> (<code>SectionName</code> &quot;Conference&quot;,
           <code>MMCA.ADC/.../Identity.Application/Users/UseCases/ExportUserData/ConferenceUserDataExportSection.cs:19</code>,
           <code>:23</code>), backed by <code>IUserConferenceExportService</code>

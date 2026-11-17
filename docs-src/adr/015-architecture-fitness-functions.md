@@ -215,12 +215,14 @@ which the rule documents as being for cases where adding the parameter would bre
 API, with the reason recorded beside the entry (`:30-34`, and the base's own wording at
 `Bases/Cqrs/CancellationTokenConventionTestsBase.cs:21-26`).
 
-The suite found exactly two real violations, both on `NotificationHub`
-(`.../Cqrs/CancellationTokenConventionTests.cs:23-27`), and they are the interesting case because the
+The suite found exactly two real violations, both on `NotificationHub`, and the base exempts them
+itself: its `FrameworkExemptMethods` (`Bases/Cqrs/CancellationTokenConventionTestsBase.cs:31-35`) is
+merged with each subclass's `CancellationTokenExemptMethods` (`:46`, `:50`), so every consumer
+inherits both entries. They are the interesting case because the
 exemption is not a waiver. A SignalR hub method signature **is** the client-visible RPC contract, bound
 by name and argument list by the dispatcher, and every shipped consumer's client already invokes
-`JoinChannelAsync` / `LeaveChannelAsync` (the two exemption entries, `:25-26`) with one argument, so
-adding a parameter would break the wire contract (`:14-22`). The work was made cancellable anyway: both methods pass `Context.ConnectionAborted` straight
+`JoinChannelAsync` / `LeaveChannelAsync` (the two exemption entries, `:33-34`) with one argument, so
+adding a parameter would break the wire contract (`:24`). The work was made cancellable anyway: both methods pass `Context.ConnectionAborted` straight
 into their group calls, so the token is there, just not through a parameter reflection can see. The
 exemption records a genuine blind spot in the rule rather than an accepted defect.
 
@@ -606,7 +608,7 @@ the first 2026-08-18 entry.
 
 **The hub exemptions are keyed by C# name; the wire names are shorter.** The exemption entries are
 `NotificationHub.JoinChannelAsync` and `NotificationHub.LeaveChannelAsync`
-(`.../Cqrs/CancellationTokenConventionTests.cs:25-26`), which is the form the rule matches. The names a
+(`Bases/Cqrs/CancellationTokenConventionTestsBase.cs:33-34`), which is the form the rule matches. The names a
 client invokes are `JoinChannel` and `LeaveChannel`, set through `[HubMethodName]`
 (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Notifications/NotificationHub.cs:36`, `:39`,
 `:118`, `:135`) and used by the framework's own client

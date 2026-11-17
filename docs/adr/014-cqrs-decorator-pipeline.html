@@ -709,8 +709,11 @@
           (<code>MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Bases/Cqrs/CommandValidatorCoverageTestsBase.cs:22</code>)
           is the fitness gate that keeps the step from running empty: every data-carrying command handled in a
           module Application assembly needs its own <code>IValidator&lt;TCommand&gt;</code> or the <code>CommandRequestValidator</code>
-          bridge (<code>:9-15</code>), with an explicit allow-list and a non-vacuity floor (<code>:31</code>, <code>:38</code>, facts at
-          <code>:40-48</code>). ADC, Store and Helpdesk each subclass it
+          bridge (<code>:9-15</code>). A request validator shipped in <code>MMCA.Common.Application</code> counts, and the
+          framework&#39;s generic <code>DeleteEntityCommand&lt;,&gt;</code> is exempt without an entry (<code>:16-18</code>). An explicit
+          allow-list fails an entry that names no handled command, or only validated or exempt ones, as stale
+          (<code>:30-35</code>), and a non-vacuity floor (<code>:42</code>) backs it (facts at <code>:44-52</code>). ADC, Store and Helpdesk
+          each subclass it
           (<code>MMCA.ADC/Tests/Architecture/MMCA.ADC.Architecture.Tests/Cqrs/CommandValidatorCoverageTests.cs:18</code>,
           <code>MMCA.Store/Tests/Architecture/MMCA.Store.Architecture.Tests/Cqrs/CommandValidatorCoverageTests.cs:17</code>,
           <code>MMCA.Helpdesk/Tests/Architecture/MMCA.Helpdesk.Architecture.Tests/ArchitectureTests.cs:163</code>).</li>

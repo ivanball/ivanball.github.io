@@ -107,12 +107,12 @@
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/adr/014-cqrs-decorator-pipeline.html</loc>
-    <lastmod>2026-11-07</lastmod>
+    <lastmod>2026-11-17</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/adr/015-architecture-fitness-functions.html</loc>
-    <lastmod>2026-10-29</lastmod>
+    <lastmod>2026-11-17</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
@@ -157,7 +157,7 @@
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/adr/024-push-notifications.html</loc>
-    <lastmod>2026-10-29</lastmod>
+    <lastmod>2026-11-17</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
@@ -257,7 +257,7 @@
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/adr/044-native-push-delivery.html</loc>
-    <lastmod>2026-11-07</lastmod>
+    <lastmod>2026-11-17</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
@@ -312,7 +312,7 @@
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/adr/055-repository-and-specification-contract.html</loc>
-    <lastmod>2026-10-29</lastmod>
+    <lastmod>2026-11-17</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
@@ -417,7 +417,7 @@
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/adr/076-data-subject-export.html</loc>
-    <lastmod>2026-10-26</lastmod>
+    <lastmod>2026-11-17</lastmod>
     <priority>0.6</priority>
   </url>
   <url>

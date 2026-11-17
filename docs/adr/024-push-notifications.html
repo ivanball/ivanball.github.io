@@ -473,8 +473,15 @@
           takes <code>IEmailSender</code> as a primary-constructor dependency and dispatches the reset mail, swallowing
           and logging a send failure so a delivery problem is never reported back to the caller (<code>:83-96</code>,
           which would turn the response into an account-existence oracle). The email-confirmation workflow
-          takes the same dependency on the same base-class shape (<code>SendEmailConfirmationHandlerBase.cs:43</code>),
-          and two Identity modules in two repos inherit those bases and pass their own sender through
+          takes the same dependency on the same base-class shape (<code>SendEmailConfirmationHandlerBase.cs:54</code>)
+          and swallows a send failure the same way on the HTTP path (<code>:116-123</code>), except when it runs as a
+          scheduled internal command: there <code>InternalCommandExecution.IsActive</code> is true (the ambient marker
+          <code>InternalCommandProcessor</code> opens around every dispatch,
+          <code>MMCA.Common/Source/Core/MMCA.Common.Application/InternalCommands/InternalCommandExecution.cs:21</code>,
+          <code>:30</code>, <code>:38</code>; opened at
+          <code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/InternalCommands/Processing/InternalCommandProcessor.cs:556</code>),
+          so a send failure propagates and a throttle refusal returns its failure
+          (<code>SendEmailConfirmationHandlerBase.cs:99-103</code>) and the row is retried instead of acked (<code>:31-37</code>). Two Identity modules in two repos inherit those bases and pass their own sender through
           (<code>MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Application/Users/UseCases/ForgotPassword/ForgotPasswordHandler.cs:24</code>,
           <code>MMCA.Store/Source/Modules/Identity/MMCA.Store.Identity.Application/Users/UseCases/ForgotPassword/ForgotPasswordHandler.cs:25</code>).
           The app-level call sites are the Store Sales order emails, and they no longer send from a domain
@@ -502,7 +509,9 @@
           <code>InternalCommands</code> row and the ADR-114 processor retries it with backoff and eventually
           dead-letters it, while a missing order or customer returns success because redelivery would reach
           the same conclusion forever (<code>:49-63</code>). The password-reset path keeps the opposite policy by
-          design: it swallows the failure rather than retrying it.</li>
+          design: it swallows the failure rather than retrying it. The email-confirmation path splits by
+          caller: its HTTP request swallows like password reset, and its scheduled internal-command run
+          propagates like the order emails (<code>SendEmailConfirmationHandlerBase.cs:99-103</code>, <code>:116</code>).</li>
           <li><strong>Accepted as-is.</strong> Email stays a direct-send primitive outside this ADR&#39;s channel model, used by
           the framework&#39;s user workflows and by app code. Pulling it under this ADR&#39;s model (durable record,
           null default, opt-in registration, one dispatching handler) is not justified by the call sites
