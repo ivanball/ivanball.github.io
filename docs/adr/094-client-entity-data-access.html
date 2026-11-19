@@ -356,9 +356,11 @@
           backoff (<code>RetryDelay</code>, <code>:212-220</code>, used at <code>:249</code>), while a 5xx, and a 429 with no <code>Retry-After</code>,
           keeps the backoff (<code>:217-220</code>). The exception arm
           sees no request, so <code>AuthDelegatingHandler</code>, the outermost of the handlers <code>AddUIShared</code> registers
-          on <code>&quot;APIClient&quot;</code> (on a host that calls <code>AddServiceDefaults</code> the default resilience and
-          service-discovery handlers wrap it, <code>MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Extensions.cs:60</code>,
-          <code>:86</code>), stamps each transport failure that passes through it with the request&#39;s replay safety
+          on <code>&quot;APIClient&quot;</code> (on a host that calls <code>AddServiceDefaults</code> the service-discovery handler wraps
+          it, <code>MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Extensions.cs:87</code>; the default resilience
+          handler that call adds to every factory client, <code>:61</code>, is taken back off this one client by
+          <code>AddMmcaBlazorWebHost</code>, <code>MMCA.Common/Source/Presentation/MMCA.Common.UI.Web/Hosting/BlazorWebHostExtensions.cs:101</code>,
+          so every render mode runs one 90 s <code>HttpClient.Timeout</code> under these retries), stamps each transport failure that passes through it with the request&#39;s replay safety
           (<code>.../MMCA.Common.UI/Services/Auth/AuthDelegatingHandler.cs:38</code>, through <code>MarkReplaySafety</code>,
           <code>AuthenticatedServiceBase.cs:177-178</code>, under <code>ReplaySafeDataKey</code>, <code>:167</code>). <code>IsRetryableException</code>
           (<code>:188-192</code>, wired at <code>:245</code>) then resends a keyless POST or PATCH only when it failed before it

@@ -108,9 +108,11 @@ Client-side entity data access goes through one hand-written base hierarchy in `
   backoff (`RetryDelay`, `:212-220`, used at `:249`), while a 5xx, and a 429 with no `Retry-After`,
   keeps the backoff (`:217-220`). The exception arm
   sees no request, so `AuthDelegatingHandler`, the outermost of the handlers `AddUIShared` registers
-  on `"APIClient"` (on a host that calls `AddServiceDefaults` the default resilience and
-  service-discovery handlers wrap it, `MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Extensions.cs:60`,
-  `:86`), stamps each transport failure that passes through it with the request's replay safety
+  on `"APIClient"` (on a host that calls `AddServiceDefaults` the service-discovery handler wraps
+  it, `MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Extensions.cs:87`; the default resilience
+  handler that call adds to every factory client, `:61`, is taken back off this one client by
+  `AddMmcaBlazorWebHost`, `MMCA.Common/Source/Presentation/MMCA.Common.UI.Web/Hosting/BlazorWebHostExtensions.cs:101`,
+  so every render mode runs one 90 s `HttpClient.Timeout` under these retries), stamps each transport failure that passes through it with the request's replay safety
   (`.../MMCA.Common.UI/Services/Auth/AuthDelegatingHandler.cs:38`, through `MarkReplaySafety`,
   `AuthenticatedServiceBase.cs:177-178`, under `ReplaySafeDataKey`, `:167`). `IsRetryableException`
   (`:188-192`, wired at `:245`) then resends a keyless POST or PATCH only when it failed before it
