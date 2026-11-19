@@ -56,11 +56,12 @@ every REST/gRPC host call it instead of composing its own.
   hand-ordered list.
 - **The order is data, not prose.** Each step is a named `MiddlewarePipelineStep` (a name plus the
   configure delegate), the names are constants on `MiddlewarePipelineStepNames`
-  (`Startup/Pipeline/MiddlewarePipelineStepNames.cs:17-74`, declared in application order), and
-  `MiddlewarePipelineBuilder.CreateDefault()` (`Startup/Pipeline/MiddlewarePipelineBuilder.cs:31-150`) seeds
-  the eighteen defaults: exception handler, correlation id, request localization, pre-forwarded
+  (`Startup/Pipeline/MiddlewarePipelineStepNames.cs:17-80`, declared in application order), and
+  `MiddlewarePipelineBuilder.CreateDefault()` (`Startup/Pipeline/MiddlewarePipelineBuilder.cs:31-159`) seeds
+  the nineteen defaults: exception handler, correlation id, request localization, pre-forwarded
   scheme/host capture, forwarded headers, gRPC-exempt HTTPS redirect, response compression, routing,
-  CORS, authentication, tenant resolution, rate limiter, soft-deleted-user check, authorization,
+  CORS, authentication, tenant resolution, rate limiter, soft-deleted-user check, read-only view-as
+  guard (ADR-137), authorization,
   output cache, JWKS and OIDC discovery endpoints, controllers. Both overloads route through one
   private helper that builds the list and applies it in order (`WebApplicationExtensions.cs:171-182`).
 - **A scoped escape hatch, validated at startup.** The
