@@ -272,7 +272,12 @@
           Revised 2026-10-25: <code>MassTransit.SqlTransport.PostgreSQL</code> 8.5.11 (Apache-2.0) joins the pinned set for the built-in PostgreSQL transport and reaches every consumer of MMCA.Common.Infrastructure with Dapper; Decision 1 now records that the build gate covers three of MMCA.Common&#39;s five MassTransit entries. See Revision (2026-10-25) at the end.
           Revised 2026-10-26: every MassTransit entry is at the 8.5.12 v8 patch, the build gate now covers all five MMCA.Common entries, MMCA.Common&#39;s <code>using MassTransit</code> surface is recounted as fifteen files and the swap surface is restated to include the consumer service hosts&#39; MassTransit-typed consumer registration, and the <code>Azure.Messaging.ServiceBus</code> pin is restated as also serving the Azure transport; anchors refreshed.
           Revised 2026-10-28: anchors refreshed after later MMCA.Common releases moved the CHANGELOG entries and an ADC Engagement host edit moved its consumer registration.
-          Revised 2026-11-23: the consumer-registration surface is restated (four hosts now pass a per-host <code>{Module}BrokerConsumers.Register</code> method group, each file naming MassTransit, and only ADC Identity keeps an inline lambda), the .NET 11 exit trigger records that ADC already runs <code>net11.0</code> on the v8 pin, and anchors are refreshed.</p>
+          Revised 2026-11-23: the consumer-registration surface is restated (four hosts now pass a per-host <code>{Module}BrokerConsumers.Register</code> method group, each file naming MassTransit, and only ADC Identity keeps an inline lambda), the .NET 11 exit trigger records that ADC already runs <code>net11.0</code> on the v8 pin, and anchors are refreshed.
+          Amended (2026-11-23, exit executed): the third exit trigger (the close of the v8 maintenance window at the
+          end of 2026) is acted on, and the replacement order in Decision 4 is reversed: the framework replaces
+          MassTransit with its own transports over the broker SDKs rather than adopting Wolverine. All four
+          transports are kept and the cutover is a single release. Decisions 1, 4 and 6 are superseded; Decisions
+          2, 3 and 5 stand. See <strong>Amendment (2026-11-23): native transports</strong> at the end.</p>
           <h2 id="context">Context</h2>
           <p>MassTransit is the only message-broker library in this workspace, and it is pinned to 8.5.12 across
           all five of MMCA.Common&#39;s MassTransit packages (<code>MMCA.Common/Directory.Packages.props:188-190</code>,
@@ -742,6 +747,40 @@
           Dapper, Apache-2.0) at <code>MMCA.Common/CHANGELOG.md:1066</code> and the 1.258.0 <code>MassTransitPackageIds</code>
           widening at <code>:1045</code>. <code>PostgreSqlBrokerTransport.cs:10-14</code>, <code>:40</code> are unchanged.</li>
           </ol>
+          <h2 id="amendment-2026-11-23-native-transports">Amendment (2026-11-23): native transports</h2>
+          <p><strong>Decision.</strong> MassTransit leaves the workspace. MMCA.Common implements the publish and consume leg
+          itself, over the vendor SDKs, behind the same <code>IMessageBus</code> and <code>IEventBus</code>, and the replacement order of
+          Decision 4 is reversed: the raw-SDK option is chosen, Wolverine is not adopted.</p>
+          <p><strong>Why the order flipped.</strong></p>
+          <ul>
+          <li><strong>The same risk, re-bought.</strong> Wolverine is a single-maintainer library backed by a company with a
+          commercial add-on, which is the shape MassTransit had before v9. Moving to it resets the clock on the
+          risk this record exists to manage instead of removing it.</li>
+          <li><strong>Most of Wolverine&#39;s value would be switched off.</strong> Decision 2 already keeps the outbox and the inbox
+          out of any library, and Wolverine&#39;s convention-discovered, code-generated handlers do not fit the
+          framework&#39;s one generic integration-event consumer or the five-analyzer, warnings-as-errors build.</li>
+          <li><strong>The brokers now do the hard parts natively.</strong> Azure Service Bus has scheduled messages and a
+          dead-letter sub-queue; Amazon SQS has message delay and redrive; RabbitMQ has per-queue TTL and
+          dead-letter exchanges, so delayed redelivery no longer needs the delayed-message plugin; PostgreSQL has
+          <code>FOR UPDATE SKIP LOCKED</code> and <code>LISTEN/NOTIFY</code>. What MassTransit added on top (topology, dispatch, retry,
+          redelivery, fault reporting) is a thin layer once the durable parts are already framework code.</li>
+          </ul>
+          <p><strong>Shape.</strong> One queue per host, named from the host (overridable with <code>MessageBus:QueueName</code>); one topic
+          per integration event, named <code>{application namespace}-{event name}</code>, where the event name is the
+          <code>[EventName]</code> declared name or the CLR full name in kebab case. Transports move bytes only: a framework
+          receive pipeline owns origin restore, the inbox, in-process exponential retry, second-level redelivery
+          and the dead-letter decision, and logs and counts a dead letter (<code>broker.fault.count</code>) at that point,
+          which replaces MassTransit&#39;s <code>Fault&lt;T&gt;</code> topics and the fault consumer. Publish and consume spans run on
+          the <code>MMCA.Common.Messaging</code> activity source with W3C <code>traceparent</code> in the message headers, so a trace
+          crosses the broker and an unsampled request stays unsampled.</p>
+          <p><strong>Cutover.</strong> One MMCA.Common release, then one pull request and one deployment per application. No wire
+          compatibility with MassTransit is kept: after the deployment the outbox rows the old revision published
+          during the overlap are published again through the new topology
+          (<code>IOutboxAdministration.RepublishProcessedAsync</code>), and the inbox absorbs the duplicates
+          (<a href="021-consumer-inbox-idempotency.html">ADR-021</a>). The old MassTransit entities are removed afterwards.</p>
+          <p><strong>Superseded here:</strong> Decision 1 (the v8 pin and its build gate: the gate becomes a ban on any
+          <code>MassTransit*</code> reference), Decision 4 (the replacement order) and Decision 6 (a trial beside the
+          incumbent: the cutover is single). Decisions 2, 3 and 5 stand.</p>
           <h2 id="related">Related</h2>
           <p><a href="016-lockstep-versioning-masstransit-pin.html">ADR-016</a> (the lockstep release policy this pin is
           enforced under; its 2026-08-28 amendment first sketched exit options, and this record owns the
@@ -783,6 +822,7 @@
             <li><a href="#revision-2026-10-26">Revision (2026-10-26)</a></li>
             <li><a href="#revision-2026-10-28">Revision (2026-10-28)</a></li>
             <li><a href="#revision-2026-11-23">Revision (2026-11-23)</a></li>
+            <li><a href="#amendment-2026-11-23-native-transports">Amendment (2026-11-23): native transports</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>
