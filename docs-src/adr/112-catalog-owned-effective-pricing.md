@@ -28,6 +28,9 @@ quoted at checkout, the promotion label shows whenever a line carries one, the g
 order quote share the same price fetch, and the chargeable-total refusal also runs on the guest and
 checkout-session paths.
 
+Revised 2026-11-23: anchors refreshed after the Catalog domain, checkout, order, receipt email,
+export, Catalog controller and Catalog service host edits moved them.
+
 ## Context
 MMCA.Store sells product variants, and a variant's price is one `Money` on the variant row
 (`MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.Domain/Products/ProductVariant.cs:30`).
@@ -42,9 +45,9 @@ Any pricing model that needs Sales to understand promotions grows that wire surf
 extraction harder to reverse. Second, checkout already freezes a price: `CheckOutHandler` fetches
 unit prices from Catalog through its `CheckOutPreflight` collaborator and `CheckOutDomainService`
 copies them onto order lines
-(`MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Application/ShoppingCarts/UseCases/CheckOut/CheckOutHandler.cs:88-89`,
+(`MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Application/ShoppingCarts/UseCases/CheckOut/CheckOutHandler.cs:89-91`,
 `MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Application/ShoppingCarts/UseCases/CheckOut/CheckOutPreflight.cs:85-91`,
-`MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Domain/Orders/CheckOutDomainService.cs:56,161-181`).
+`MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Domain/Orders/CheckOutDomainService.cs:56,162-182`).
 The guest checkout and the order quote use the same price fetch
 (`MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Application/Orders/UseCases/GuestCheckout/GuestCheckOutHandler.cs:51`,
 `MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Application/Orders/UseCases/Quote/GetOrderQuoteHandler.cs:46`),
@@ -68,7 +71,7 @@ discounting is fan-out over the same value object, all or
 nothing: `Product.SetDiscountOnAllVariants` refuses a product that has no active variant to discount
 (`Product.NoActiveVariants`, an invariant error surfaced as 400) and otherwise validates the discount
 against every active variant's list price before it touches any of them
-(`MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.Domain/Products/Product.cs:584-612`,
+(`MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.Domain/Products/Product.cs:601-629`,
 `MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.Domain/Products/ProductInvariants.cs:114`).
 
 **The list price is preserved and the effective price is computed in one method.**
@@ -94,52 +97,52 @@ boundary (`CheckOutPreflight.cs:97-99`, `OrderLinePricing.cs:22`), which is what
 of any reference to `Catalog.Shared`. The three values land on `OrderLine.UnitPrice`,
 `OrderLine.ListPrice` and `OrderLine.PromotionLabel` (`OrderLine.cs:30,42,49`), guarded by
 `OrderInvariants.EnsureListPriceIsValid` (non-negative, same currency, never below the unit price)
-and `EnsurePromotionLabelIsValid` (50 characters) (`OrderInvariants.cs:63,85-103,112-116`). Only
+and `EnsurePromotionLabelIsValid` (50 characters) (`OrderInvariants.cs:76,98-116,125-129`). Only
 `UnitPrice` is money owed for the merchandise: the line total and the order `Subtotal` follow from it
 alone. The payment total is `Order.Total`, which adds the shipping and tax quoted at checkout to the
-subtotal (`Order.cs:107-120`, `ApplyCharges` at `:485-519`; quoted at `CheckOutHandler.cs:98-99` and
-applied at `:181`), so the amount charged follows from the frozen unit prices plus that quote.
+subtotal (`Order.cs:135-149`, `ApplyCharges` at `:524-559`; quoted at `CheckOutHandler.cs:100-102` and
+applied at `:183`), so the amount charged follows from the frozen unit prices plus that quote.
 
 **What the order saved is derived, not stored.** `OrderLine.Savings` and `Order.TotalSavings` are
 computed on read from the frozen pair and excluded from the EF mapping (`OrderLine.cs:65`,
-`Order.cs:140`): a stored total could only ever disagree with the two numbers it restates. Both places
+`Order.cs:169`): a stored total could only ever disagree with the two numbers it restates. Both places
 that show a saving read the frozen columns back off the order rather than off an event payload. The
 receipt email is scheduled by the `OrderPaid` handler, not written by it: `OrderPaidHandler` writes a
 `SendOrderPaidEmailInternalCommand` carrying the order id alone (ADR-114,
-`Orders/DomainEventHandlers/OrderPaidHandler.cs:37-39`), and
+`Orders/DomainEventHandlers/OrderPaidHandler.cs:35-37`), and
 `SendOrderPaidEmailInternalCommandHandler` re-reads the order with its lines
-(`Orders/InternalCommands/SendOrderPaidEmailInternalCommandHandler.cs:45-48`) before rendering the
+(`Orders/InternalCommands/SendOrderPaidEmailInternalCommandHandler.cs:44-47`) before rendering the
 struck "Was" amount, the HTML-encoded label and the "You saved" total
-(`SendOrderPaidEmailInternalCommandHandler.cs:121-123,128-131,143-146`). The order detail page renders the same
+(`SendOrderPaidEmailInternalCommandHandler.cs:119-122,126-130,142-145`). The order detail page renders the same
 three from the order's own read model, plus an accessible "Was X, now Y" sentence
 (`Sales.UI/Pages/Orders/OrderLinesPanel.razor:57,59,66-73,113-117`). The struck price and the
 "You saved" total appear only when there is a saving (`OrderLinesPanel.razor:47,113`; the email's
-"Was" line at `SendOrderPaidEmailInternalCommandHandler.cs:120`). The label appears whenever the line
-carries one (`OrderLinesPanel.razor:66`, `SendOrderPaidEmailInternalCommandHandler.cs:127`), and
+"Was" line at `SendOrderPaidEmailInternalCommandHandler.cs:119`). The label appears whenever the line
+carries one (`OrderLinesPanel.razor:66`, `SendOrderPaidEmailInternalCommandHandler.cs:126`), and
 Catalog names a label only while its discount is in force (`ProductVariantService.cs:103-105`).
 `OrderPaid` still carries the order's `TotalSavings` and each line's `ListPrice` and
-`PromotionLabel` (`Orders/DomainEvents/OrderPaid.cs:21,42`), but its one subscriber now reads only
+`PromotionLabel` (`Orders/DomainEvents/OrderPaid.cs:26,47-48`), but its one subscriber now reads only
 the order id and the customer id from it.
 
 **The wire contracts grow additive fields; the event contracts do not.** `UnitPriceEntry` gains
 `list_price = 3` and `promotion_label = 4`
 (`MMCA.Store/Source/Services/MMCA.Store.Catalog.Contracts/Protos/product_variants.proto:106,109`) and
 the data-subject export line gains `list_price_amount = 6` and `promotion_label = 7`
-(`MMCA.Store/Source/Services/MMCA.Store.Sales.Contracts/Protos/user_sales_export.proto:93,96`,
-`UserSalesExportService.cs:71-72`): new numbers on existing messages, which a peer built against the
+(`MMCA.Store/Source/Services/MMCA.Store.Sales.Contracts/Protos/user_sales_export.proto:118,121`,
+`UserSalesExportService.cs:79-80`): new numbers on existing messages, which a peer built against the
 previous generation ignores. The `ProductVariantChanged` integration event keeps carrying the list
-price and nothing else (`Product.cs:542-543,562-563,607-608`), so ADR-010's schema-version rule is not engaged and
+price and nothing else (`Product.cs:559-560,579-580,624-625`), so ADR-010's schema-version rule is not engaged and
 ADR-083's one-lifecycle-event-per-entity taxonomy is unchanged. The two list-price columns land NOT NULL
 with defaults (`MMCA.Store/Source/Hosting/MMCA.Store.Migrations.SqlServer.Sales/Migrations/20260907232734_AddOrderLineListPrice.cs:28-44`)
 plus a guarded backfill from the unit price (`:60-63`), and `PromotionLabel` lands nullable
 (`:46-52`), add-only under ADR-057.
 
 **The effective price must stay above zero.** Sales allows a zero line price
-(`MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Domain/Orders/OrderInvariants.cs:25-31`) but refuses
+(`MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Domain/Orders/OrderInvariants.cs:42-44`) but refuses
 an order whose total the payment provider cannot charge, a zero total included, before anything is
-written (`CheckOutHandler.cs:188-190`, before `AddAsync` at `:193`; the guest checkout and the
+written (`CheckOutHandler.cs:190`, before `AddAsync` at `:195`; the guest checkout and the
 checkout-session creation run the same check at `GuestCheckOutHandler.cs:107` and
-`MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Application/Orders/UseCases/CreateCheckoutSession/CreateCheckoutSessionHandler.cs:95`), so a discount that resolves to zero would produce a variant
+`MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Application/Orders/UseCases/CreateCheckoutSession/CreateCheckoutSessionHandler.cs:111`), so a discount that resolves to zero would produce a variant
 that can be added to a cart and fails checkout whenever it leaves the order unchargeable. Catalog refuses that pairing at the write instead: `VariantDiscount.ApplyTo` fails with
 `EffectivePriceNotPositive` (`VariantDiscount.cs:61-62,216-218,237-239`), which in practice means a
 zero-priced variant cannot carry an active or scheduled discount. A discount whose window has ended
@@ -148,10 +151,10 @@ is not re-checked when the list price changes (`ProductVariant.cs:130-131`) and 
 
 The three write endpoints are gated on `catalog:pricing:manage`
 (`MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.Shared/Authorization/CatalogPermissions.cs:29`,
-`MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.API/Controllers/ProductVariantsController.cs:157-158,184-185`,
-`MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.API/Controllers/ProductsController.cs:204-205`), a narrower
+`MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.API/Controllers/ProductVariantsController.cs:132-133,149-150`,
+`MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.API/Controllers/ProductsController.cs:156-157`), a narrower
 permission than variant management. All three take the product ETag in `If-Match` (ADR-035,
-`ProductVariantsController.cs:158,185`, `ProductsController.cs:205`); the two variant endpoints also carry the variant row version in the
+`ProductVariantsController.cs:133,150`, `ProductsController.cs:157`); the two variant endpoints also carry the variant row version in the
 body for ADR-035's `IRowVersioned` child overload (`ProductVariantSetDiscountRequest.cs:20`,
 `ProductVariantClearDiscountRequest.cs:18`), while the product-wide request carries none
 (`ProductSetDiscountRequest.cs:15-34`).
@@ -183,7 +186,7 @@ a sale that ends between cart-add and checkout charges the list price, with no r
   `ICacheInvalidating` and their controllers evict the `catalog:products` output-cache tag, so an
   admin edit is visible at once. A window that opens or closes on the clock evicts nothing, so a
   cached storefront read can show the pre-boundary price until the products cache policy's 60-second TTL expires
-  (`MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:165`, comment at `:160-164`).
+  (`MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:64-65`, comment at `:62-63`).
   Checkout is never stale because it is a live cross-service call.
 - **An order line records the two prices and the promotion's name, not the promotion itself.** A line
   answers "struck from 24.99, charged at 19.99, Summer Sale", which is what the receipt, the order
@@ -310,6 +313,39 @@ the earlier dated revisions stay as written.
    `ProductVariantsController.cs:157-158,184-185` (tokens read at `:172,199`), with
    `CatalogPermissions.cs:29` and `ProductVariantSetDiscountRequest.cs:20`,
    `ProductVariantClearDiscountRequest.cs:18` unchanged.
+
+## Revision (2026-11-23)
+Re-verified against current source. The decision, the variant-level value object, the frozen pricing
+columns, the invariants, the 60-second products cache policy, the chargeable-total refusal and the
+wire and event contracts are unchanged; only anchors in the live sections moved. Anchors inside the
+earlier dated revisions stay as written.
+
+1. Anchors re-verified against current source:
+   `MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.Domain/Products/Product.cs:601-629`
+   (`SetDiscountOnAllVariants`: empty-set guard `:607-610`, every active variant validated
+   `:612-616`, apply loop `:618-626`) and `:559-560,579-580,624-625` (`ProductVariantChanged` with
+   the list price only), with `ProductInvariants.cs:114` unchanged;
+   `CheckOutHandler.cs:89-91` (`ResolveAsync`), `:100-102` (`QuoteChargesAsync`), `:183`
+   (`OrderQuoteApplier.Apply`) and `:190` (`EnsureChargeable`, comment `:187-189`, before `AddAsync`
+   at `:195`); `CheckOutDomainService.cs:162-182` (`BuildOrderItems`, pricing added at `:178`) and
+   `:107-125` (`ValidateAndPrice`), with `:56`, `:92` and `:96` unchanged;
+   `CreateCheckoutSessionHandler.cs:111` (`EnsureChargeable`), contract
+   `Orders/Interfaces/IPaymentService.cs:155`, implementation
+   `Sales.Infrastructure/Payments/Stripe/StripePaymentService.cs:248`, with
+   `GuestCheckOutHandler.cs:107` unchanged; `Order.cs:135-149` (`Total`, `Subtotal`, `ShippingCost`,
+   `TaxAmount`), `:524-559` (`ApplyCharges`) and `:169` (`TotalSavings`); `OrderInvariants.cs:42-44`
+   (`EnsurePriceIsValid`, zero allowed), `:76` (`PromotionLabelMaxLength`), `:98-116`
+   (`EnsureListPriceIsValid`) and `:125-129` (`EnsurePromotionLabelIsValid`);
+   `Orders/DomainEvents/OrderPaid.cs:26,47-48` (`TotalSavings`, `ListPrice`, `PromotionLabel`);
+   `OrderPaidHandler.cs:35-37` (schedules the command with the order id alone, sole
+   `IDomainEventHandler<OrderPaid>` at `:25`); `SendOrderPaidEmailInternalCommandHandler.cs:44-47`
+   (re-read with `OrderLines`), `:119-122` ("Was" gate and markup), `:126-130` (encoded label) and
+   `:142-145` ("You saved"); `user_sales_export.proto:118,121` and `UserSalesExportService.cs:79-80`,
+   with `product_variants.proto:106,109` unchanged; `ProductVariantsController.cs:132-133,149-150`
+   and `ProductsController.cs:156-157` (`PricingManage`, `SupportsIfMatch`; the ETag now reaches the
+   command through `HandleConditionalCommandAsync`); and
+   `MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:64-65` (`ProductsCache`,
+   `TimeSpan.FromSeconds(60)`, tags `catalog` and `catalog:products`, comment `:62-63`).
 
 ## Related
 - [ADR-006](006-database-per-service.md), [ADR-008](008-service-extraction-topology.md): each service

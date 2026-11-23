@@ -258,7 +258,10 @@
           <p>Accepted (2026-10-27). Revised 2026-10-28: the session-cookie and CSP constraints are scoped to
           ADC and Store (Helpdesk renders <code>InteractiveServer</code> with no session cookie and no CSP), navigations
           are stated to pass through the worker with their cookie, the cache gate is described as the text
-          check it is, and the lock-file growth is measured.</p>
+          check it is, and the lock-file growth is measured. Revised 2026-11-23: ADC and Store adopt the
+          worker, the cookie token storage and the CSP through the shared <code>AddMmcaBlazorWebHost</code> /
+          <code>UseMmcaBlazorWebPipeline</code> rather than their own <code>Program.cs</code> lines, and the rate-limiter paragraph
+          is re-justified (a file extension exempts nothing; <code>/service-worker.js</code> is counted like a page route).</p>
           <h2 id="context">Context</h2>
           <p>The Blazor Web hosts (ADC, Store and Helpdesk) can be added to a phone home screen or installed as a
           desktop app only if they ship a web app manifest and, for an offline page, a service worker. A
@@ -268,23 +271,26 @@
           <ul>
           <li><strong>Server-rendered pages carry the signed-in user&#39;s data.</strong> Every host prerenders its first page
           load on the server. ADC and Store render with <code>InteractiveAuto</code> outside their E2E runs
-          (<code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Components/App.razor:80</code>,
-          <code>MMCA.Store/Source/Hosts/UI/MMCA.Store.UI.Web/Components/App.razor:49</code>) and prerender under the
-          HttpOnly session cookie (<a href="022-browser-session-cookie-auth.html">ADR-022</a>;
-          <code>MMCA.Common/Source/Presentation/MMCA.Common.UI.Web/DependencyInjection.cs:27</code>, registered at
-          <code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs:157</code> and
-          <code>MMCA.Store/Source/Hosts/UI/MMCA.Store.UI.Web/Program.cs:149</code>). Helpdesk renders
-          <code>InteractiveServer</code> (<code>MMCA.Helpdesk/Source/Hosts/UI/MMCA.Helpdesk.UI.Web/Components/App.razor:27</code>)
+          (<code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Components/App.razor:81</code>,
+          <code>MMCA.Store/Source/Hosts/UI/MMCA.Store.UI.Web/Components/App.razor:56</code>, both through
+          <code>MMCA.Common/Source/Presentation/MMCA.Common.UI.Web/Hosting/E2eRenderMode.cs:46</code>) and prerender
+          under the HttpOnly session cookie (<a href="022-browser-session-cookie-auth.html">ADR-022</a>;
+          <code>MMCA.Common/Source/Presentation/MMCA.Common.UI.Web/DependencyInjection.cs:27</code>), registered with
+          the cookie-backed token storage by the shared <code>AddMmcaBlazorWebHost</code>
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI.Web/Hosting/BlazorWebHostExtensions.cs:123-124</code>,
+          <code>BlazorWebHostExtensions.cs:134</code>) that both hosts call (<code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs:26</code>,
+          <code>MMCA.Store/Source/Hosts/UI/MMCA.Store.UI.Web/Program.cs:30</code>). Helpdesk renders
+          <code>InteractiveServer</code> (<code>MMCA.Helpdesk/Source/Hosts/UI/MMCA.Helpdesk.UI.Web/Components/App.razor:40</code>)
           and registers no session cookie, but a generated app that adds sign-in inherits the same risk. A
           worker that cached navigations would hand one user&#39;s prerendered page to whoever opens the app
           next on that device, and would keep showing a signed-out user their old pages.</li>
           <li><strong>The CSP forbids inline script in production on ADC and Store.</strong> <code>BlazorCspPolicyProvider</code> emits
           <code>default-src &#39;self&#39;</code> and <code>script-src &#39;self&#39; &#39;wasm-unsafe-eval&#39;</code>, adding <code>&#39;unsafe-inline&#39;</code> in
-          Development only (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI.Web/Security/BlazorCspPolicyProvider.cs:103</code>),
-          and both hosts register it (<code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs:201</code>,
-          <code>MMCA.Store/Source/Hosts/UI/MMCA.Store.UI.Web/Program.cs:192</code>). Helpdesk registers no CSP. A
-          same-origin manifest and worker fall under <code>default-src &#39;self&#39;</code>, but the registration call
-          cannot be an inline <code>&lt;script&gt;</code>.</li>
+          Development only (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI.Web/Security/BlazorCspPolicyProvider.cs:101-102</code>),
+          and both hosts register it through <code>AddMmcaBlazorWebHost</code> (<code>BlazorWebHostExtensions.cs:157</code>).
+          Helpdesk registers no CSP. A
+          same-origin manifest falls under <code>default-src &#39;self&#39;</code> and a same-origin worker under
+          <code>script-src &#39;self&#39;</code>, but the registration call cannot be an inline <code>&lt;script&gt;</code>.</li>
           <li><strong>A worker&#39;s scope is capped at its script&#39;s folder.</strong> A script shipped as a Razor class library
           static asset is served from <code>/_content/&lt;package&gt;/</code>, which could control only that folder, not the
           site.</li>
@@ -296,22 +302,26 @@
           <ol>
           <li><strong><code>app.MapCommonServiceWorker()</code></strong> maps <code>GET /service-worker.js</code> at the site root, anonymous,
           excluded from the OpenAPI description and served with <code>Cache-Control: no-cache</code>
-          (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI.Web/Pwa/ServiceWorkerEndpointExtensions.cs:58</code>).
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI.Web/Pwa/ServiceWorkerEndpointExtensions.cs:60-70</code>).
           The script is an embedded resource, and the endpoint writes the package&#39;s informational version
           into it, so every framework release is a byte change the browser installs on its next update
-          check.</li>
+          check. The shared <code>UseMmcaBlazorWebPipeline</code> maps it right after <code>MapStaticAssets()</code>
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI.Web/Hosting/BlazorWebHostExtensions.cs:212-213</code>),
+          so ADC and Store get the endpoint from that one pipeline call; Helpdesk, which does not use the
+          shared pipeline, maps it itself
+          (<code>MMCA.Helpdesk/Source/Hosts/UI/MMCA.Helpdesk.UI.Web/Program.cs:77</code>).</li>
           <li><strong>The worker handles GET navigations only</strong> and never caches a page or response other than the
-          precached offline page (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI.Web/Pwa/service-worker.js:39</code>,
-          <code>service-worker.js:16</code>). Each navigation goes to the network, with navigation preload enabled so
-          routing it through the worker adds no latency (<code>service-worker.js:30</code>). When the network fails,
-          the worker answers with the offline page it precached at install,
-          <code>/_content/MMCA.Common.UI.Web/offline.html</code> (<code>service-worker.js:11</code>), a self-contained page with
+          precached offline page (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI.Web/Pwa/service-worker.js:40</code>,
+          <code>service-worker.js:16-17</code>). Each navigation goes to the network, with navigation preload enabled
+          so routing it through the worker adds no latency (<code>service-worker.js:30</code>). When the network
+          fails, the worker answers with the offline page it precached at install,
+          <code>/_content/MMCA.Common.UI.Web/offline.html</code> (<code>service-worker.js:12</code>), a self-contained page with
           no script. API calls, Blazor circuit negotiation, <code>/hubs</code> and <code>_framework</code> files reach the
           worker&#39;s fetch handler but are not handled: it returns without responding, so the browser
-          fetches them as usual (<code>service-worker.js:37-41</code>). A navigation request is handled, cookie
+          fetches them as usual (<code>service-worker.js:38-42</code>). A navigation request is handled, cookie
           included, and is answered from the preload or forwarded by <code>fetch(request)</code>
-          (<code>service-worker.js:46</code>); the worker script cannot read the HttpOnly cookie. Activation deletes
-          every earlier version&#39;s offline cache (<code>service-worker.js:24</code>).</li>
+          (<code>service-worker.js:46-47</code>); the worker script cannot read the HttpOnly cookie. Activation
+          deletes every earlier version&#39;s offline cache (<code>service-worker.js:24-26</code>).</li>
           <li><strong><code>_content/MMCA.Common.UI.Web/pwa-register.js</code></strong> registers the worker with scope <code>/</code> after the
           page <code>load</code> event, in a secure context only
           (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI.Web/wwwroot/pwa-register.js:5</code>). It is a file,
@@ -327,14 +337,29 @@
           as the template source, ships a placeholder icon and names itself only by its source name, so a
           generated app is renamed with it.</li>
           </ol>
-          <p>No CSP change and no rate-limiter change is needed: the CSP already allows a same-origin manifest
-          and worker, and the UI limiter already exempts any path whose last segment carries a file extension
-          (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI.Web/Hardening/UiRateLimitingExtensions.cs:104</code>).</p>
+          <p>No CSP change and no rate-limiter change is made. The CSP already allows a same-origin manifest
+          and worker: it declares no <code>child-src</code>, <code>worker-src</code> or <code>manifest-src</code>, so the manifest falls back
+          to <code>default-src &#39;self&#39;</code> and the worker to <code>script-src &#39;self&#39; &#39;wasm-unsafe-eval&#39;</code>
+          (<code>BlazorCspPolicyProvider.cs:101-110</code>). The UI limiter on ADC and Store
+          (<code>BlazorWebHostExtensions.cs:187</code>) exempts a request from both limiters by path prefix (<code>/health</code>,
+          <code>/alive</code>, <code>/_framework</code>, <code>/_content</code>, <code>/hubs</code>, plus the proxied <code>{SameOriginApiProxy:PathPrefix}/hubs</code>)
+          or because its endpoint is a real static asset; a file extension alone exempts nothing
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI.Web/Hardening/UiRateLimitingExtensions.cs:80</code>,
+          <code>UiRateLimitingExtensions.cs:90-92</code>, <code>UiRateLimitingExtensions.cs:102-104</code>,
+          <code>UiRateLimitingExtensions.cs:126-127</code>). Separately, a request with no resolvable client IP gets no
+          per-IP limiter (<code>UiRateLimitingExtensions.cs:156-161</code>) and <code>/_blazor</code> is kept out of the
+          concurrency ceiling (<code>UiRateLimitingExtensions.cs:198</code>). So <code>pwa-register.js</code> and <code>offline.html</code>
+          are exempt under <code>/_content</code>, and the manifest and icons are exempt as <code>MapStaticAssets</code> endpoints.
+          <code>/service-worker.js</code> is a route endpoint with no static-asset metadata, so it counts against both
+          the per-IP window and the concurrency ceiling like any page route (<code>UiRateLimitingExtensions.cs:151</code>,
+          <code>UiRateLimitingExtensions.cs:198</code>): one counted request per browser update check. Helpdesk wires no
+          UI limiter.</p>
           <p><strong>Gates.</strong> <code>ServiceWorkerEndpointTests</code> (MMCA.Common.UI.Web.Tests) pins the content type, the
           no-cache header, the version stamp, the retired worker and the anonymous endpoint metadata, and pins
           on the script text that the worker handles GET navigations only and contains no <code>cache.put(</code> or
           <code>cache.addAll(</code> call
-          (<code>MMCA.Common/Tests/Presentation/MMCA.Common.UI.Web.Tests/Pwa/ServiceWorkerEndpointTests.cs:45-47</code>).
+          (<code>MMCA.Common/Tests/Presentation/MMCA.Common.UI.Web.Tests/Pwa/ServiceWorkerEndpointTests.cs:45</code>,
+          <code>ServiceWorkerEndpointTests.cs:50-51</code>).
           That text check is narrower than the never-cache rule: a cache write of another shape (for example
           <code>cache.add(</code> of a navigation) passes it, so review of <code>service-worker.js</code> holds the rest. The
           Gallery host maps the worker and loads the register script, so the whole UI E2E suite
@@ -387,8 +412,11 @@
           </ul>
           <h2 id="consequences">Consequences</h2>
           <ul>
-          <li>Consumers adopt with one <code>Program.cs</code> line, two <code>App.razor</code> link tags plus the theme colour, one
-          script tag, a manifest and four icons; MMCA.Common 1.264.0 ships the framework half.</li>
+          <li>A host on the shared <code>UseMmcaBlazorWebPipeline</code> (ADC, Store) gets the worker endpoint with no
+          <code>Program.cs</code> line; a host outside it (Helpdesk) adds one <code>app.MapCommonServiceWorker()</code> line.
+          Every host adds two <code>App.razor</code> link tags plus the theme colour, one script tag
+          (<code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Components/App.razor:38-40</code>, <code>App.razor:63</code>), a
+          manifest and four icons; MMCA.Common 1.264.0 ships the framework half.</li>
           <li>Changing the worker means editing <code>Pwa/service-worker.js</code> and keeping
           <code>ServiceWorkerEndpointTests</code>&#39; script assertions true; any change that caches a response must
           revise this ADR first.</li>
@@ -430,6 +458,49 @@
           session cookie remark); <code>service-worker.js:39</code>, <code>:30</code>, <code>:11</code>, <code>:24</code> and
           <code>BlazorCspPolicyProvider.cs:103</code> unchanged.</li>
           </ol>
+          <h2 id="revision-2026-11-23">Revision (2026-11-23)</h2>
+          <p>Re-verified against current source. The mechanism is unchanged: the endpoint, the worker (GET
+          navigations only, only the offline page cached), the register script, the kill switch and the
+          host-owned identity read as written, and the Helpdesk scoping (no session cookie, no CSP) still
+          holds. What moved is how ADC and Store adopt it, and the reason the rate limiter needs no change.</p>
+          <ol>
+          <li><strong>ADC and Store adopt through the shared Blazor Web host.</strong> Neither <code>Program.cs</code> registers the
+          cookie token storage, the CSP or the worker any more. Both call <code>AddMmcaBlazorWebHost</code>
+          (<code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs:26</code>,
+          <code>MMCA.Store/Source/Hosts/UI/MMCA.Store.UI.Web/Program.cs:30</code>), which registers
+          <code>AddCommonServerTokenStorage</code> and <code>AddCommonBlazorCsp</code>
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI.Web/Hosting/BlazorWebHostExtensions.cs:134</code>,
+          <code>BlazorWebHostExtensions.cs:157</code>), and <code>UseMmcaBlazorWebPipeline</code>
+          (<code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs:128</code>, <code>Program.cs:130</code>;
+          <code>MMCA.Store/Source/Hosts/UI/MMCA.Store.UI.Web/Program.cs:92</code>), which maps
+          <code>MapCommonServiceWorker</code> after <code>UseAuthenticatedNoStore</code> and <code>MapStaticAssets()</code>
+          (<code>BlazorWebHostExtensions.cs:203</code>, <code>BlazorWebHostExtensions.cs:212-213</code>). Helpdesk still maps
+          the worker itself (<code>MMCA.Helpdesk/Source/Hosts/UI/MMCA.Helpdesk.UI.Web/Program.cs:77</code>). Context,
+          Decision item 1 and the first Consequences bullet now say so.</li>
+          <li><strong>The rate-limiter reason is corrected.</strong> The UI limiter does not exempt a path for its file
+          extension; it exempts by prefix (including the proxied hub prefix) or by static-asset endpoint
+          metadata (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI.Web/Hardening/UiRateLimitingExtensions.cs:80</code>,
+          <code>UiRateLimitingExtensions.cs:90-92</code>, <code>UiRateLimitingExtensions.cs:102-104</code>,
+          <code>UiRateLimitingExtensions.cs:126-127</code>). The register script
+          and offline page fall under <code>/_content</code>, the manifest and icons are static assets, and
+          <code>/service-worker.js</code> (a <code>MapGet</code> route) is counted against the per-IP window and the concurrency
+          ceiling (<code>UiRateLimitingExtensions.cs:151</code>, <code>UiRateLimitingExtensions.cs:198</code>). No limiter change
+          is made: the worker script costs one request per browser update check. Helpdesk wires no UI
+          limiter.</li>
+          <li><strong>The CSP fallback is stated per directive.</strong> The policy declares no <code>child-src</code>, <code>worker-src</code>
+          or <code>manifest-src</code>, so the manifest falls back to <code>default-src &#39;self&#39;</code> and the worker to
+          <code>script-src &#39;self&#39; &#39;wasm-unsafe-eval&#39;</code>
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI.Web/Security/BlazorCspPolicyProvider.cs:101-110</code>).
+          Same-origin is allowed either way, so no CSP change is made; Context and the Decision paragraph
+          now name the governing directive.</li>
+          <li>Anchors re-verified against current source: <code>App.razor:80</code> -&gt; <code>:81</code> (ADC) and <code>App.razor:49</code> -&gt;
+          <code>:56</code> (Store), both resolving to <code>InteractiveAuto</code> via <code>E2eRenderMode.cs:46</code>; Helpdesk
+          <code>App.razor:27</code> -&gt; <code>:40</code>; <code>ServiceWorkerEndpointExtensions.cs:58</code> -&gt; <code>:60-70</code> (<code>EnabledKey</code> at
+          <code>:24</code> unchanged); <code>service-worker.js:39</code> -&gt; <code>:40</code>, <code>:11</code> -&gt; <code>:12</code>, <code>:16</code> -&gt; <code>:16-17</code>, <code>:37-41</code>
+          -&gt; <code>:38-42</code>, <code>:46</code> -&gt; <code>:46-47</code>, <code>:24</code> -&gt; <code>:24-26</code> (<code>:30</code> unchanged);
+          <code>BlazorCspPolicyProvider.cs:103</code> -&gt; <code>:101-102</code>; <code>ServiceWorkerEndpointTests.cs:45-47</code> -&gt; <code>:45</code>
+          and <code>:50-51</code>. The dated anchors inside the 2026-10-28 revision stay as written.</li>
+          </ol>
           
         <div class="doc-foot btn-row">
           <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
@@ -448,6 +519,7 @@
             <li><a href="#alternatives-rejected">Alternatives rejected</a></li>
             <li><a href="#consequences">Consequences</a></li>
             <li><a href="#revision-2026-10-28">Revision (2026-10-28)</a></li>
+            <li><a href="#revision-2026-11-23">Revision (2026-11-23)</a></li>
             </ul>
           </nav>
         </aside>

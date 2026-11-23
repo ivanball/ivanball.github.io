@@ -265,7 +265,11 @@
           2026-10-26: adoption is fifteen call sites, adding the ADC Conference speaker-cache eviction and the
           framework&#39;s post-sign-in password rehash (a second explicit <code>CancellationToken.None</code> caller), and
           anchors are refreshed. Revised 2026-10-28: anchors refreshed after the ADC moderation handler, the
-          Store checkout preflight and the Store products controller moved.</p>
+          Store checkout preflight and the Store products controller moved. Revised 2026-11-23: adoption is
+          sixteen call sites with a second ADC Conference <code>speaker-cache-evict</code> after a speaker link, the Store
+          Catalog controllers evict through a class-level <code>[EvictOutputCache]</code> attribute rather than calling
+          <code>TryEvictTagsAsync</code> themselves, the password-rehash remark no longer contradicts its rejected path,
+          CA1031 is recorded as the one error-severity analyzer near the helper, and anchors are refreshed.</p>
           <h2 id="context">Context</h2>
           <p>A command that has already committed often has follow-up work attached to it: evict the output-cache
           entries the write invalidated, broadcast the new state to a live channel, send the notification the
@@ -274,18 +278,18 @@
           back, retry or 500 an operation whose real work already succeeded.</p>
           <p>Five records each answer that question locally, for their own feature, and each answer is right:
           ADR-024 makes a push delivery failure non-fatal and records <code>MarkAsFailed</code> instead
-          (<code>024-push-notifications.md:76-79</code>), ADR-026 makes cross-service cache eviction best-effort so a broken
+          (<code>024-push-notifications.md:78-81</code>), ADR-026 makes cross-service cache eviction best-effort so a broken
           eviction store cannot dead-letter a coherence hint, ADR-076 degrades a data-subject export per section
-          rather than failing the package (<code>076-data-subject-export.md:91-98</code>), ADR-091 composes the reset email in
+          rather than failing the package (<code>076-data-subject-export.md:103-110</code>), ADR-091 composes the reset email in
           the handler and delivers it best-effort, &quot;awaited and its failure caught, logged and swallowed&quot;
-          (<code>091-cache-backed-password-reset.md:87-96</code>), and ADR-054 makes compensation best-effort per order
-          line (<code>054-saga-compensation-and-reconciliation.md:254-265</code>). What none of them decides is the <strong>policy</strong>:
+          (<code>091-cache-backed-password-reset.md:90-99</code>), and ADR-054 makes compensation best-effort per order
+          line (<code>054-saga-compensation-and-reconciliation.md:303-313</code>). What none of them decides is the <strong>policy</strong>:
           which failures may be swallowed at all, at what severity, whether cancellation counts as one of them,
           and how a swallow is made visible to somebody who is not reading the log. Answered per call site, that
           produces a repo full of hand-rolled <code>catch (Exception)</code> blocks, each choosing its own severity, its
           own treatment of cancellation and its own decision to count nothing. ADR-041 records the counter this
-          record&#39;s helper emits and notes that it is wired to no alert (<code>041-observability-and-telemetry.md:288-292</code>,
-          <code>:311-314</code>), but it records the instrument, not the contract behind it.</p>
+          record&#39;s helper emits and notes that it is wired to no alert (<code>041-observability-and-telemetry.md:295-304</code>,
+          <code>:322-325</code>), but it records the instrument, not the contract behind it.</p>
           <h2 id="decision">Decision</h2>
           <p>One framework helper defines the contract, and a swallow that does not go through it is a deliberate,
           documented exception.</p>
@@ -298,16 +302,16 @@
           (<code>:57</code>), so the side effect completes (or fails) before the caller continues; nothing is left as an
           orphan task racing the response.</li>
           <li><strong>A failure produces exactly one Warning.</strong> <code>BestEffortLog.DispatchFailed</code> is a source-generated
-          <code>[LoggerMessage]</code> at <code>Warning</code> (<code>:81-84</code>) reading &quot;Best-effort operation &#39;{Operation}&#39; failed and
-          was swallowed; the caller&#39;s outcome is unaffected&quot; (<code>:83</code>), with the exception attached. The catch
+          <code>[LoggerMessage]</code> at <code>Warning</code> (<code>:83-86</code>) reading &quot;Best-effort operation &#39;{Operation}&#39; failed and
+          was swallowed; the caller&#39;s outcome is unaffected&quot; (<code>:85</code>), with the exception attached. The catch
           is deliberately broad, with the reason written into the code: the whole contract is that nothing the
           side effect throws reaches the caller (<code>:65-71</code>).</li>
           <li><strong>A failure produces exactly one metric increment.</strong> <code>besteffort.dispatch.failed</code> is a <code>Counter&lt;long&gt;</code>
-          on its own meter, <code>MMCA.Common.BestEffort</code> (<code>:102</code>, instrument at <code>:107-115</code>), incremented with an
-          <code>operation</code> tag (<code>:115</code>). It is a meter of its own rather than a counter folded into
+          on its own meter, <code>MMCA.Common.BestEffort</code> (<code>:104</code>, instrument at <code>:109-112</code>), incremented with an
+          <code>operation</code> tag (<code>:116-117</code>). It is a meter of its own rather than a counter folded into
           <code>MMCA.Common.Cqrs</code>, because best-effort dispatch is not part of the CQRS pipeline and an operator can
-          drop or keep it independently of the RED metrics (<code>:93-97</code>). The Aspire service defaults subscribe it
-          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Extensions.Telemetry.cs:311</code>).</li>
+          drop or keep it independently of the RED metrics (<code>:95-98</code>). The Aspire service defaults subscribe it
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Extensions.Telemetry.cs:313</code>).</li>
           <li><strong>The operation name is a low-cardinality constant.</strong> It becomes a metric tag (<code>:22</code>), so call sites
           pass a <code>const</code> or a fixed prefix plus a value from a small fixed set. A blank name throws
           <code>ArgumentException</code> and a null logger or action throws <code>ArgumentNullException</code> (<code>:51-53</code>): the helper
@@ -322,25 +326,26 @@
           (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Caching/OutputCacheEvictionExtensions.cs:78-92</code>,
           the token at <code>:90</code>), and so does the framework&#39;s post-sign-in password rehash, because the sign-in
           is complete and an abandoned request must not surface a cancellation from it
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Auth/AuthenticationServiceBase.cs:705</code>, the
-          reasoning at <code>:664-671</code>); the ADC submit and moderation broadcasts take the parameter&#39;s default for
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Auth/AuthenticationServiceBase.cs:1031</code>, the
+          reasoning at <code>:995-996</code>); the ADC submit and moderation broadcasts take the parameter&#39;s default for
           the same reason (<code>.../SubmitQuestionHandler.cs:199-202</code>, the call closing at <code>:237</code>, and
           <code>.../ModerateQuestionHandler.cs:146</code>, the call closing at <code>:165</code> with no token argument), while
-          the three ADC domain-event handlers pass their own <code>cancellationToken</code> (<code>.../SessionQuestionUpvoteChangedHandler.cs:91</code>,
-          <code>.../LivePollVoteChangedHandler.cs:83</code> and <code>.../SessionQuestionSubmittedPointsHandler.cs:102</code>), as
-          does the ADC Conference integration-event handler (<code>.../UserDeletedSpeakerErasureHandler.cs:108</code>),
-          and the hosted bookmark eviction processor passes its <code>stoppingToken</code>
-          (<code>.../Caching/BookmarkCacheEvictionProcessor.cs:77</code>). Those four handlers are post-commit work too
-          (the Conference handler saves at <code>.../UserDeletedSpeakerErasureHandler.cs:99</code> before its call at
-          <code>:102-108</code>), and none records a reason for keeping its own token, so this rule is followed by the
-          framework sites and the two ADC broadcasts, not by every post-commit caller.</li>
+          the three ADC domain-event handlers pass their own <code>cancellationToken</code> (<code>.../SessionQuestionUpvoteChangedHandler.cs:90</code>,
+          <code>.../LivePollVoteChangedHandler.cs:83</code> and <code>.../SessionQuestionSubmittedPointsHandler.cs:101</code>), as
+          do the two ADC Conference integration-event handlers (<code>.../UserDeletedSpeakerErasureHandler.cs:106</code>
+          and <code>.../UserRegisteredHandler.cs:131</code>), and the hosted bookmark eviction processor passes its
+          <code>stoppingToken</code> (<code>.../Caching/BookmarkCacheEvictionProcessor.cs:77</code>). Those five handlers are
+          post-commit work too (the Conference handlers save at <code>.../UserDeletedSpeakerErasureHandler.cs:97</code>
+          and <code>.../UserRegisteredHandler.cs:120</code> before their calls), and none records a reason for keeping
+          its own token, so this rule is followed by the framework sites and the two ADC broadcasts, not by
+          every post-commit caller.</li>
           <li><strong>The contract is pinned by tests.</strong> <code>BestEffortTests</code> covers the transparent success path, token
           passthrough, one-Warning-per-failure, the <code>operation</code>-tagged increment observed through a
           <code>MeterListener</code>, the rethrow of the caller&#39;s cancellation, the swallow of a non-caller cancellation,
           and argument validation
           (<code>MMCA.Common/Tests/Core/MMCA.Common.Application.Tests/Services/BestEffortTests.cs:15-169</code>).</li>
           </ul>
-          <p>Adoption today is <strong>fifteen call sites</strong>: eight in ADC (seven in Engagement, one in Conference), five
+          <p>Adoption today is <strong>sixteen call sites</strong>: nine in ADC (seven in Engagement, two in Conference), five
           in Store, and two in the framework (its own eviction helper and the post-sign-in password rehash). The
           ADC Engagement seven are the
           live-channel drain worker, whose operation name is the prefix <code>live-channel-publish:</code> plus the work
@@ -352,7 +357,7 @@
           approved branch at <code>:219-220</code> or the pending-count branch at <code>:234-235</code>),
           <code>session-question-moderation-broadcast</code> (<code>.../UseCases/Moderate/ModerateQuestionHandler.cs:31</code>, call at
           <code>:146</code>) and <code>session-question-upvote-broadcast</code>
-          (<code>.../DomainEventHandlers/SessionQuestionUpvoteChangedHandler.cs:47</code>, call at <code>:54</code>); the poll-results
+          (<code>.../DomainEventHandlers/SessionQuestionUpvoteChangedHandler.cs:46</code>, call at <code>:53</code>); the poll-results
           broadcast <code>livepoll-results-broadcast</code>
           (<code>.../LivePolls/DomainEventHandlers/LivePollVoteChangedHandler.cs:44</code>, call at <code>:51</code>); and the
           cross-host cache eviction <code>bookmark-cache-evict-broadcast</code>
@@ -360,12 +365,15 @@
           call at <code>:62-77</code>, a hosted processor that drains the signal the domain-event handler raises); and the
           question-asked points award <code>session-question-points-award</code>, which runs after the question&#39;s transaction
           commits so a failed award never fails the committed question
-          (<code>MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Application/Points/DomainEventHandlers/SessionQuestionSubmittedPointsHandler.cs:59</code>,
-          call at <code>:82-102</code>). The ADC Conference site is the speaker-list eviction <code>speaker-cache-evict</code>, raised
-          after a user deletion anonymizes and unlinks that user&#39;s speakers, so a broker fault cannot fail an
-          erasure that has already been saved
-          (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Users/IntegrationEventHandlers/UserDeletedSpeakerErasureHandler.cs:102-108</code>,
-          after <code>SaveChangesAsync</code> at <code>:99</code>). The Store five are a checkout display label, <code>checkout-customer-name</code>, resolved by the
+          (<code>MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Application/Points/DomainEventHandlers/SessionQuestionSubmittedPointsHandler.cs:58</code>,
+          call at <code>:81-101</code>). The two ADC Conference sites share the speaker-list eviction operation name
+          <code>speaker-cache-evict</code>. One is raised after a user deletion anonymizes and unlinks that user&#39;s
+          speakers, so a broker fault cannot fail an erasure that has already been saved
+          (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Users/IntegrationEventHandlers/UserDeletedSpeakerErasureHandler.cs:100-106</code>,
+          after <code>SaveChangesAsync</code> at <code>:97</code>). The other is raised after a registering user is linked to a
+          matching speaker, right after the save and before the back-link publish
+          (<code>.../Users/IntegrationEventHandlers/UserRegisteredHandler.cs:125-131</code>, the operation name at <code>:126</code>,
+          after <code>SaveChangesAsync</code> at <code>:120</code>). The Store five are a checkout display label, <code>checkout-customer-name</code>, resolved by the
           checkout preflight outside the transaction so an unreachable Identity leaves the name null instead of
           failing an otherwise valid checkout
           (<code>MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Application/ShoppingCarts/UseCases/CheckOut/CheckOutPreflight.cs:62-72</code>,
@@ -373,37 +381,46 @@
           three inventory label fetches sharing the operation name <code>inventory-catalog-labels</code>, so a Catalog service
           that drops out leaves rows with whatever labels they had
           (<code>.../Inventory/UseCases/Create/CreateInventoryItemHandler.cs:68</code>,
-          <code>.../Inventory/UseCases/BulkSet/BulkSetInventoryHandler.cs:67</code> and
-          <code>.../Inventory/UseCases/Set/AdjustInventoryHandler.cs:64-65</code>); and the post-save eviction broadcast
+          <code>.../Inventory/UseCases/BulkSet/BulkSetInventoryHandler.cs:70</code> and
+          <code>.../Inventory/UseCases/Set/AdjustInventoryHandler.cs:93-94</code>); and the post-save eviction broadcast
           <code>review-anonymize-cache-evict-broadcast</code> raised after a customer erasure anonymizes reviews, where a
           broker fault must not fail an erasure that has already committed
-          (<code>MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.Application/Reviews/IntegrationEventHandlers/CustomerErasedHandler.cs:62</code>,
-          call at <code>:109-115</code>). Four of those five are pre-commit reads rather than post-commit follow-ups (the
-          create fetch runs before <code>base.PersistAsync</code> at <code>CreateInventoryItemHandler.cs:82</code>, the set fetch before
-          <code>SaveChangesAsync</code> at <code>AdjustInventoryHandler.cs:79</code>): the
+          (<code>MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.Application/Reviews/IntegrationEventHandlers/CustomerErasedHandler.cs:64</code>,
+          call at <code>:111-117</code>, after <code>SaveChangesAsync</code> at <code>:100</code>). Four of those five are pre-commit reads
+          rather than post-commit follow-ups (the create fetch runs before <code>base.PersistAsync</code> at
+          <code>CreateInventoryItemHandler.cs:82</code>, the bulk fetch before <code>SaveChangesAsync</code> at
+          <code>BulkSetInventoryHandler.cs:115</code>, the set fetch before <code>SaveChangesAsync</code> at
+          <code>AdjustInventoryHandler.cs:111</code>): the
           contract is about what a failure is allowed to do to the caller, not about where in the handler the
           work sits. The framework&#39;s first site is its post-sign-in password rehash, <code>password-rehash</code>, which
           runs after the tokens are issued so a concurrency conflict or a dropped connection is swallowed by the
           helper and cannot fail a sign-in that has already succeeded
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Auth/AuthenticationServiceBase.cs:78</code>, call at
-          <code>:682-705</code>). A refused invariant never reaches the swallow: the action logs <code>PasswordRehashRejected</code>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Auth/AuthenticationServiceBase.cs:85</code>, call at
+          <code>:1008-1031</code>). A refused invariant never reaches the swallow: the action logs <code>PasswordRehashRejected</code>
           and returns normally, with no Warning from the helper and no <code>besteffort.dispatch.failed</code> increment
-          (<code>:693-700</code>), although the method&#39;s own remark says such a failure &quot;is logged and counted through&quot;
-          the helper (<code>:664-668</code>). The second is its own multi-tag eviction helper,
-          <code>OutputCacheEvictionExtensions.TryEvictTagsAsync</code>, whose operation name is the constant prefix
-          <code>output-cache-evict:</code> plus the tag being evicted
+          (<code>:1020-1027</code>), and the method&#39;s remark says the same, separating that path from &quot;any other
+          failure&quot;, which is logged and counted through the helper (<code>:989-997</code>). The second is its own
+          multi-tag eviction helper, <code>OutputCacheEvictionExtensions.TryEvictTagsAsync</code>, whose operation name is
+          the constant prefix <code>output-cache-evict:</code> plus the tag being evicted
           (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Caching/OutputCacheEvictionExtensions.cs:34</code>,
-          <code>:78-92</code>). Store Catalog reaches it from seven controllers, each passing fixed low-cardinality cache
-          tags, and every one of them evicts <code>catalog:products</code> and <code>catalog:categories</code> together:
-          <code>Controllers/CategoriesController.cs:174</code>, <code>ProductsController.cs:230</code>, <code>ProductVariantsController.cs:212</code>,
-          <code>ProductImagesController.cs:219</code>, <code>ReviewsController.cs:329</code>, <code>ReviewModerationController.cs:166</code> and
-          <code>ProductAttributesController.cs:154</code>.</p>
+          <code>:78-92</code>). No consumer calls it directly: each <code>[EvictOutputCache]</code> filter attribute instance calls
+          it with its own tags that the request has not yet evicted, so each tag is evicted at most once per
+          request (<code>.../Caching/EvictOutputCacheAttribute.cs:114</code>, <code>:100-105</code>, <code>:30-32</code>; the attribute allows
+          multiple instances, <code>:35</code>), logging through <code>ILogger&lt;EvictOutputCacheAttribute&gt;</code> (<code>:111-112</code>). It
+          evicts only when the final result status is 2xx on a method other than GET or HEAD, and it does so
+          before the result executes, so before the response body is written (<code>:80-85</code>, <code>:89-96</code>, <code>:19-21</code>).
+          Store Catalog applies
+          that attribute at class level on seven controllers, each naming fixed low-cardinality cache tags,
+          and every one of them evicts <code>catalog:products</code> and <code>catalog:categories</code> together:
+          <code>Controllers/CategoriesController.cs:33</code>, <code>ProductsController.cs:46</code>, <code>ProductVariantsController.cs:38</code>,
+          <code>ProductImagesController.cs:39</code>, <code>ReviewsController.cs:55</code>, <code>ReviewModerationController.cs:47</code> and
+          <code>ProductAttributesController.cs:42</code>.</p>
           <p>One swallow stays hand-rolled. The framework&#39;s own
           <code>OutputCacheEvictionHandler</code> hand-rolls the same swallow-log-count shape against
           <code>cache.eviction.failed</code> on the <code>MMCA.Common.OutputCache</code> meter
           (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Caching/OutputCacheEvictionHandler.cs:51-62</code>): it is
           the one documented non-reuse of this helper inside the framework. The rationale ADR-026 records for it
-          (<code>026-caching-strategy.md:614-619</code>) no longer matches source. ADR-026 says the API package cannot reach
+          (<code>026-caching-strategy.md:641-646</code>) no longer matches source. ADR-026 says the API package cannot reach
           <code>BestEffort</code> without either a layer-crossing reference or a duplicated meter name, and calls the
           hand-rolled copy a small duplication chosen over a worse coupling; yet the same package&#39;s
           <code>TryEvictTagsAsync</code> imports <code>MMCA.Common.Application.Services</code> and calls <code>BestEffort.ExecuteAsync</code> on
@@ -457,19 +474,25 @@
           </ul>
           <h2 id="trade-offs">Trade-offs</h2>
           <ul>
-          <li><strong>Nothing gates use of the helper.</strong> There is no fitness rule, analyzer or architecture test that
-          fails a build for a hand-rolled <code>catch (Exception)</code> that should have been a <code>BestEffort</code> call; the
-          helper is a convention backed by review. The only inventory is a search, which is how the fifteen call
-          sites and the one remaining hand-rolled swallow above were enumerated.</li>
+          <li><strong>Nothing gates use of the helper.</strong> There is no fitness rule or architecture test that fails a
+          build for a hand-rolled <code>catch (Exception)</code> that should have been a <code>BestEffort</code> call. The one
+          analyzer in the area at error severity, CA1031, stays there in the shared baseline (the global
+          default at <code>MMCA.Common/.editorconfig:313</code>), so a bare catch-all needs a suppression; the reason
+          that suppression should carry is a convention written in the baseline&#39;s comment
+          (<code>MMCA.Common/.editorconfig:323-326</code>), not something any gate checks. Sonar S2221 (catch specific
+          exceptions) is set only to suggestion (<code>MMCA.Common/.editorconfig:497-498</code>). Neither steers anyone
+          to the helper; the helper is a convention backed by review. The only inventory is a
+          search, which is how the sixteen call sites and the one remaining hand-rolled swallow above were
+          enumerated.</li>
           <li><strong>The Warning carries the operation name and the exception, nothing else.</strong> No entity id, no
           correlation payload beyond the ambient scope. <code>SubmitQuestionHandler</code> records that cost explicitly:
           the question id is one log line earlier, not in the best-effort warning
           (<code>.../Submit/SubmitQuestionHandler.cs:202-204</code>).</li>
           <li><strong>The counter is failure-only and alerts on nothing.</strong> A healthy system emits zero, and zero is
           indistinguishable from a host that never wired the meter. ADR-041 puts it in exactly that gap
-          (<code>041-observability-and-telemetry.md:311-314</code>).</li>
+          (<code>041-observability-and-telemetry.md:322-325</code>).</li>
           <li><strong>The meter name is a duplicated literal.</strong> <code>MMCA.Common.Aspire</code> subscribes it by string because that
-          package has no reference to Application (<code>BestEffort.cs:89-92</code>, <code>Extensions.Telemetry.cs:311</code>), so a rename has
+          package has no reference to Application (<code>BestEffort.cs:92-93</code>, <code>Extensions.Telemetry.cs:313</code>), so a rename has
           to move in two places or the metric silently stops being exported.</li>
           <li><strong>A swallow is still a loss.</strong> The helper decides that the caller does not see the failure; it does
           not make the side effect happen. A cache entry heals on its own TTL, but a lost broadcast never
@@ -592,6 +615,49 @@
           and <code>ProductsController.cs:230</code>
           (<code>MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.API/Controllers/ProductsController.cs:230</code>).</li>
           </ol>
+          <h2 id="revision-2026-11-23">Revision (2026-11-23)</h2>
+          <p>Re-verified against current source. No decision or rationale changed: the helper&#39;s Warning, counter,
+          cancellation rule and argument checks read as before, the Store set and bulk-set label fetches still
+          run before their saves, and all seven Store Catalog controllers still evict both catalog tags. The
+          adoption inventory grows by one, the eviction path is described as source has it, one stale
+          contradiction is withdrawn, and anchors moved.</p>
+          <ol>
+          <li>Adoption is sixteen call sites, not fifteen: nine in ADC, five in Store and two in the framework.
+          ADC Conference adds a second <code>speaker-cache-evict</code>, raised after a registering user is linked to a
+          matching speaker
+          (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Users/IntegrationEventHandlers/UserRegisteredHandler.cs:125-131</code>,
+          operation name <code>:126</code>, <code>SaveChangesAsync</code> at <code>:120</code>). It passes its own <code>cancellationToken</code>
+          (<code>:131</code>) with no recorded reason, so the Decision&#39;s post-commit bullet now counts five handlers
+          that keep their own token, not four.</li>
+          <li>The Store Catalog controllers no longer call <code>TryEvictTagsAsync</code> themselves. Each carries a
+          class-level <code>[EvictOutputCache(...)]</code> naming both catalog tags, and the framework attribute calls
+          the helper with the tags the request has not yet evicted, gated on a final 2xx status for a
+          non-GET, non-HEAD request and run before the result executes
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Caching/EvictOutputCacheAttribute.cs:114</code>,
+          <code>:100-105</code>, <code>:80-85</code>, <code>:89-96</code>); with a single class-level instance per controller and no
+          method-level one, that is one call per Store request (<code>MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.API/Controllers/ProductsController.cs:46</code>
+          and the six peers).</li>
+          <li>The password-rehash paragraph drops its claim that the method&#39;s remark contradicts the rejected
+          path: the remark now says a refused invariant is logged as <code>PasswordRehashRejected</code> and returns,
+          and only any other failure is logged and counted through the helper
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Auth/AuthenticationServiceBase.cs:989-997</code>).</li>
+          <li>The &quot;Nothing gates use of the helper&quot; trade-off now names CA1031, which stays at error severity
+          in the shared analyzer baseline (<code>MMCA.Common/.editorconfig:313</code>) and so forces some suppression
+          on a bare catch-all, with the reason it should carry left to the baseline&#39;s comment convention
+          (<code>:323-326</code>), and Sonar S2221 at suggestion severity (<code>:497-498</code>); neither points anyone at
+          <code>BestEffort</code>.</li>
+          <li>Anchors re-verified against current source: <code>BestEffort.cs</code> (log <code>:83-86</code>, message <code>:85</code>, meter
+          <code>:104</code>, instrument <code>:109-112</code>, tag <code>:116-117</code>, separate-meter rationale <code>:95-98</code>, Aspire literal
+          note <code>:92-93</code>); the Aspire subscription (<code>Extensions.Telemetry.cs:313</code>);
+          <code>AuthenticationServiceBase.cs</code> (constant <code>:85</code>, call <code>:1008-1031</code>, token <code>:1031</code>, reasoning
+          <code>:995-996</code>, rejected branch <code>:1020-1027</code>); <code>SessionQuestionUpvoteChangedHandler.cs</code> (<code>:46</code>, <code>:53</code>,
+          token <code>:90</code>); <code>SessionQuestionSubmittedPointsHandler.cs</code> (<code>:58</code>, call <code>:81-101</code>, token <code>:101</code>);
+          <code>UserDeletedSpeakerErasureHandler.cs</code> (call <code>:100-106</code>, token <code>:106</code>, save <code>:97</code>);
+          <code>BulkSetInventoryHandler.cs</code> (call <code>:70</code>, save <code>:115</code>); <code>AdjustInventoryHandler.cs</code> (call <code>:93-94</code>,
+          save <code>:111</code>); <code>CustomerErasedHandler.cs</code> (constant <code>:64</code>, call <code>:111-117</code>, save <code>:100</code>); the seven
+          controller attribute lines; and the ADR-024 (<code>:78-81</code>), ADR-026 (<code>:641-646</code>), ADR-041 (<code>:295-304</code>,
+          <code>:322-325</code>), ADR-054 (<code>:303-313</code>), ADR-076 (<code>:103-110</code>) and ADR-091 (<code>:90-99</code>) cross-references.</li>
+          </ol>
           <h2 id="related">Related</h2>
           <p><a href="024-push-notifications.html">ADR-024</a> (push delivery failure is non-fatal and recorded rather than
           raised, one of the local leniencies this policy generalizes),
@@ -628,6 +694,7 @@
             <li><a href="#revision-2026-10-21">Revision (2026-10-21)</a></li>
             <li><a href="#revision-2026-10-26">Revision (2026-10-26)</a></li>
             <li><a href="#revision-2026-10-28">Revision (2026-10-28)</a></li>
+            <li><a href="#revision-2026-11-23">Revision (2026-11-23)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

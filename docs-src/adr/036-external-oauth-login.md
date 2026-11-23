@@ -21,6 +21,13 @@ Revised 2026-11-08 (MMCA.Common v1.281.0): any OpenID Connect provider joins by 
 (`OAuth:Oidc:<Name>`), with a provider key of `{tid}|{oid}` or `{iss}|{sub}`, `email_verified` passed
 through only under `TrustEmail`, reserved names, and home-realm discovery. See the Revision
 (2026-11-08) at the end.
+Revised 2026-11-23: an existing account now also passes the privileged-account email rule on
+external sign-in (a provider-verified own address confirms it, otherwise an unconfirmed Organizer,
+ContentEditor or speaker-linked account is refused), Apple and trusted OIDC providers join Google as
+verified-email sources, the provider-key index excludes soft-deleted rows, invitation-link,
+cleared-password and service accounts are password-less shapes beside external ones (so the
+password check is `HasLocalPassword`, not `IsExternalLogin`), invitation-link accounts are claimable
+by email and a second `EmailVerified` source for the speaker auto-link, and anchors refreshed.
 ## Context
 The framework's Identity story so far is entirely first-party: a user registers with an email and
 password, the credentials are hashed (ADR-032), and Identity mints its own RS256 JWT pair. Every auth
@@ -47,16 +54,18 @@ a local `User`.
 - **Scheme registration is config-gated per provider.** `AddExternalAuthProviders` reads the `OAuth`
   section and enables Google, GitHub and/or Apple, each one only when that provider's
   `OAuth:<Provider>:ClientId` is present
-  (`MMCA.Common/Source/Presentation/MMCA.Common.API/Authentication/ExternalAuthExtensions.cs:60-73`);
-  with none of the three configured it returns without touching the pipeline, so
+  (`MMCA.Common/Source/Presentation/MMCA.Common.API/Authentication/ExternalAuthExtensions.cs:53-55`,
+  branches at `:76-89`);
+  with none of the three configured and no `OAuth:Oidc:<Name>` provider either (`:62-67`) it
+  returns without touching the pipeline, so
   `AddCommonAuthentication`'s JWT-only default is left exactly as it was. `AddAuthentication()` is
   called with no argument so it appends schemes rather than resetting the JWT bearer default. For
   Google and GitHub a configured `ClientId` with a missing `ClientSecret` fails fast at startup.
   Apple carries no static client secret: the handler mints a short-lived ES256 JWT from the
-  developer's private key (`GenerateClientSecret`, `ExternalAuthExtensions.cs:130`), so its
-  fail-fast set is `OAuth:Apple:TeamId` (`:131`), `OAuth:Apple:KeyId` (`:134`) and
-  `OAuth:Apple:PrivateKeyPem` (`:137`) instead, and its callback path is `/auth/callback/apple`
-  (`:143`). The same per-provider signal is what the UI's `ConfigurationOAuthUISettings`
+  developer's private key (`GenerateClientSecret`, `ExternalAuthExtensions.cs:198`), so its
+  fail-fast set is `OAuth:Apple:TeamId` (`:199`), `OAuth:Apple:KeyId` (`:202`) and
+  `OAuth:Apple:PrivateKeyPem` (`:205`) instead, and its callback path is `/auth/callback/apple`
+  (`:211`). The same per-provider signal is what the UI's `ConfigurationOAuthUISettings`
   uses to light up the Google/GitHub/Apple buttons (`GoogleEnabled` / `GitHubEnabled` /
   `AppleEnabled`).
 - **A short-lived cookie carries the external principal, nothing more.** The provider callback signs
@@ -82,66 +91,77 @@ a local `User`.
   upstream access logs.
 - **The exchange resolves to a local `User`, three ways, and guards the by-email link.**
   `ExternalLoginAsync` (app-level,
-  `MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Application/Users/AuthenticationService.cs:213`)
-  opens the transaction (`AuthenticationService.cs:220`) and runs the workflow body in
-  `ExternalLoginCoreAsync` (`AuthenticationService.cs:225`), which
-  first looks the user up by `LoginProvider` + `ProviderKey` (`AuthenticationService.cs:234-235`). Missing,
+  `MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Application/Users/AuthenticationService.cs:282`)
+  opens the transaction (`AuthenticationService.cs:289`) and runs the workflow body in
+  `ExternalLoginCoreAsync` (`AuthenticationService.cs:294`), which
+  first looks the user up by `LoginProvider` + `ProviderKey` (`AuthenticationService.cs:303-306`). Missing,
   it **validates the provider-supplied email before it searches on it**: `Email.Create(email)`
-  (`AuthenticationService.cs:253`) is checked as a `Result`, and an unparseable claim value **rejects**
+  (`AuthenticationService.cs:323`) is checked as a `Result`, and an unparseable claim value **rejects**
   the sign-in with an `Error.Validation` carrying code `Auth.ExternalEmailInvalid`
-  (`AuthenticationService.cs:257`). This address is the one email in the system no request-level
+  (`AuthenticationService.cs:327`). This address is the one email in the system no request-level
   validator has already gated (it arrives in an OAuth claim, not in a validated request), and the
-  by-email lookup that follows (`AuthenticationService.cs:262-263`) compares against the validated `Email`
+  by-email lookup that follows (`AuthenticationService.cs:332-335`) compares against the validated `Email`
   value object rather than the raw claim string. When an account already owns that email, three guards
   run in `TryLinkProviderToExistingAccountAsync` before anything is linked. First, **one provider link per user**: an account that is already
-  externally linked at all (`IsExternalLogin`, `AuthenticationService.cs:360`) is **rejected** with
-  an `Error.Conflict` carrying code `Auth.ExternalProviderAlreadyLinked` (`AuthenticationService.cs:363`),
+  externally linked at all (`IsExternalLogin`, `AuthenticationService.cs:514`) is **rejected** with
+  an `Error.Conflict` carrying code `Auth.ExternalProviderAlreadyLinked` (`AuthenticationService.cs:517`),
   because the aggregate holds a single `(LoginProvider, ProviderKey)` pair and linking a second
   provider would overwrite the first and strand the original login. The same refusal covers the
   *same* provider under a different key: this method is reached only after the provider-plus-key
   lookup missed, so the key differs, and a different key is a different account at the provider,
-  which re-keying would hand this account to (`AuthenticationService.cs:355-358`). The check runs
+  which re-keying would hand this account to (`AuthenticationService.cs:507-513`). The check runs
   ahead of the verifier, so saying no costs no external round trip. Second, the account-takeover
   guard: it asks
-  `IExternalLoginEmailVerifier.IsCurrentExternalLoginEmailVerifiedAsync` (`AuthenticationService.cs:373-374`)
+  `IExternalLoginEmailVerifier.IsCurrentExternalLoginEmailVerifiedAsync` (`AuthenticationService.cs:527-528`)
   whether the provider asserted the incoming email as verified, and when it did not it **rejects** the
-  sign-in with `Auth.ExternalEmailNotVerified` (defined inline at `AuthenticationService.cs:379`)
+  sign-in with `Auth.ExternalEmailNotVerified` (defined inline at `AuthenticationService.cs:533`)
   instead of linking, so an unverified provider assertion cannot claim an existing local account.
   Third, the **pre-registration takeover guard**: an account that still signs in with a password
-  (`User.HasLocalPassword`, checked at `AuthenticationService.cs:391`) is **rejected** with
-  `Auth.ExternalLinkRequiresLocalSignIn` (`:394`), because a provider-verified address proves only
+  (`User.HasLocalPassword`, checked at `AuthenticationService.cs:545`) is **rejected** with
+  `Auth.ExternalLinkRequiresLocalSignIn` (`:548`), because a provider-verified address proves only
   the provider's side and nothing proves the local row's address was ever confirmed (the reasoning is
   in the 2026-09-07 revision, item 3). Only
   when all three guards pass does it **link** the external provider to that account
-  (`User.LinkExternalProvider`, `AuthenticationService.cs:399`). When no account owns the email it
-  **creates** a new `Attendee` via `User.CreateExternal` (`AuthenticationService.cs:291`; an external
+  (`User.LinkExternalProvider`, `AuthenticationService.cs:553`). When no account owns the email it
+  **creates** a new `Attendee` via `User.CreateExternal` (`AuthenticationService.cs:361`; an external
   user has empty password hash/salt and carries `LoginProvider` / `ProviderKey`). The create path
-  asks the same verifier first (`AuthenticationService.cs:284-285`), so the verifier runs on both
+  asks the same verifier first (`AuthenticationService.cs:354-355`), so the verifier runs on both
   branches: the provider's assertion does not gate the create (GitHub asserts nothing, and refusing
   would close GitHub sign-up), but it is passed to `User.CreateExternal` as a sixth `emailVerified`
   argument and rides the `UserRegistered` event. It also settles the account's confirmation state
   (ADR-116): a verified assertion starts the account confirmed
   (`IsEmailConfirmed = emailVerified`,
-  `MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Domain/Users/User.cs:301`), while a provider
+  `MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Domain/Users/User.cs:294`), while a provider
   that asserts nothing starts it unconfirmed and it receives a confirmation link like a local
-  registration. An existing account (matched by provider key, or linked by email) then passes the
-  administrator-lock gate before anything is saved: `CheckNotLocked`
-  (`AuthenticationService.cs:310`, defined at `:118`) refuses a locked account with an
-  `Error.Unauthorized` carrying code `Auth.AccountLocked` (`:121`), the same check the password and
-  refresh hooks apply (`:106`, `:116`); a brand-new account cannot be locked, so the create case skips
-  it. On every success path (provider-key match, link, or create) the exchange then calls
-  `IssueTokensAsync` (`AuthenticationService.cs:336`), which opens a refresh **session** for the device through the
+  registration. An existing account (matched by provider key, or linked by email) then passes
+  `CheckExistingExternalAccountAsync` before anything is saved (`AuthenticationService.cs:419-439`,
+  called under `!isNewUser` at `:378-380`). Its first gate is the administrator lock: `CheckNotLocked`
+  (`:424`, defined at `:172`) refuses a locked account with an `Error.Unauthorized` carrying code
+  `Auth.AccountLocked` (`:175`), the same check the password and refresh hooks apply (`:108`,
+  `:126`). Its second gate is the privileged-account email rule: a confirmed account passes
+  untouched; an unconfirmed one is marked confirmed through `user.ConfirmEmail()` when this sign-in's
+  provider asserted the account's own address as verified (`:432-437`), and otherwise
+  `CheckPrivilegedAccountConfirmed` (`:438`, defined at `:161-164`) refuses an Organizer,
+  ContentEditor or speaker-linked account with `Authentication.EmailNotConfirmed` while an attendee
+  signs in unconfirmed, the same rule password sign-in and refresh apply (`:150`, `:129`). A brand-new
+  account cannot be locked and is an attendee, so the create case skips both. On every success path
+  (provider-key match, link, or create) the exchange then calls
+  `IssueTokensAsync` (`AuthenticationService.cs:402`), which opens a refresh **session** for the device through the
   shared workflow (hash at rest, per-user cap, rotation chain) instead of stamping a plaintext
   refresh token on the aggregate, so the caller receives the same `AuthenticationResponse` shape as a
   local login.
 - **The linkage is two nullable columns and a filtered unique index.** `User.LoginProvider`
   (`varchar(50)`) and `User.ProviderKey` (`varchar(256)`) are null for local accounts;
   `IsExternalLogin` is derived from `LoginProvider is not null`. In ADC's per-service Identity database
-  both columns and a unique index over the pair (filtered to non-null rows) are created by the Identity
-  `InitialCreate` migration
-  (`MMCA.ADC/Source/Hosting/MMCA.ADC.Migrations.SqlServer.Identity/Migrations/20260606053130_InitialCreate.cs:63`,
-  index at `20260606053130_InitialCreate.cs:100`), so two external identities cannot map to the same
-  local account while local (null,null) accounts are unconstrained. (ADC's `Source/Hosting/` carries
+  both columns are created by the Identity `InitialCreate` migration
+  (`MMCA.ADC/Source/Hosting/MMCA.ADC.Migrations.SqlServer.Identity/Migrations/20260606053130_InitialCreate.cs:63-64`),
+  which also created the unique index over the pair (`:100`). A later migration re-creates that index
+  with the soft-delete filter appended, so it now covers only live linked rows
+  (`[LoginProvider] IS NOT NULL AND [ProviderKey] IS NOT NULL AND [IsDeleted] = 0`,
+  `20260827015341_MultiDeviceRefreshSessionsAndAuditDeletionColumns.cs:193-198`, model snapshot
+  `SQLServerDbContextModelSnapshot.cs:153`), so one external identity cannot map to two live local
+  accounts while local (null,null) accounts are unconstrained (a single account holds at most one
+  identity because the pair on the row is single-valued, not because of the index). (ADC's `Source/Hosting/` carries
   four per-module migration projects, Identity, Conference, Engagement and Notification, alongside
   `MMCA.ADC.AppHost`, so the
   Identity database's own `InitialCreate` is the only place these columns are created: there is no
@@ -199,28 +219,35 @@ Identity story stays local-credential + RS256 only.
   (interface in the Identity Application layer,
   `MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Application/Users/IExternalLoginEmailVerifier.cs:11`),
   implemented at the API edge over the short-lived `ExternalLogin` cookie principal by
-  `MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.API/Authentication/HttpContextExternalLoginEmailVerifier.cs:17`,
-  which reads the provider's `email_verified` claim (`HttpContextExternalLoginEmailVerifier.cs:33`) and
-  is wired at `MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.API/DependencyInjection.cs:56`. Google's
-  `email_verified` claim passes the guard; GitHub's OAuth flow asserts nothing, so a GitHub sign-in
+  `MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.API/Authentication/HttpContextExternalLoginEmailVerifier.cs:18`,
+  which reads the provider's `email_verified` claim (`HttpContextExternalLoginEmailVerifier.cs:37`) and
+  is wired at `MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.API/DependencyInjection.cs:56`. The
+  Identity service host maps that claim for Google
+  (`MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:166-169`) and for Apple (`:175-176`),
+  so both can pass the guard, as can an OpenID Connect provider marked `TrustEmail` (Revision
+  2026-11-08); GitHub's OAuth flow asserts nothing, so a GitHub sign-in
   whose email matches an existing account is rejected with `Auth.ExternalEmailNotVerified`, not linked.
   The framework itself still performs no such check: `Auth.ExternalEmailNotVerified` is defined inline
-  in ADC's override (`AuthenticationService.cs:379`), and a non-adopting host (Store, Helpdesk) gets only
+  in ADC's override (`AuthenticationService.cs:533`), and a non-adopting host (Store, Helpdesk) gets only
   the framework's not-supported default (`Auth.ExternalLoginNotSupported`,
-  `MMCA.Common/Source/Core/MMCA.Common.Application/Auth/IAuthenticationService.cs:139`), so the guard is
+  `MMCA.Common/Source/Core/MMCA.Common.Application/Auth/IAuthenticationService.cs:157-158`, member at
+  `:150`), so the guard is
   ADC's own edge, not a framework guarantee.
 - **Not exactly-once account creation across the redirect.** The exchange commits the `User` before
   the UI redeems the code; an abandoned redemption still creates (or links) the account. That is the
   intended tradeoff (the identity is real once the provider vouched for it), but it means a completed
   challenge can leave a local account whose token pair was never collected.
 - **A second credential shape on `User`.** External accounts carry empty password hash/salt and rely
-  on `LoginProvider` / `ProviderKey`; code that assumes every `User` has a usable password must check
-  `IsExternalLogin` first. The pair is single-valued, so a person holds at most one provider link: any
+  on `LoginProvider` / `ProviderKey`. They are not the only password-less accounts (invitation-link,
+  cleared-password and service accounts carry no provider link either; Revision 2026-11-23, item 3),
+  so code that assumes every `User` has a usable password must check `User.HasLocalPassword`
+  (`MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Domain/Users/User.cs:169`), as the link guard
+  does (`AuthenticationService.cs:545`), not `IsExternalLogin`. The pair is single-valued, so a person holds at most one provider link: any
   provider identity arriving with the email of an already-externally-linked account (a second
   provider, or the same provider under a different key) is rejected
   (`Auth.ExternalProviderAlreadyLinked`) rather than relinked, and the rejection message points the
   person back at the provider already linked, or at Forgot password to set a local one
-  (`AuthenticationService.cs:364`).
+  (`AuthenticationService.cs:518`).
 
 ## Revision (2026-09-07)
 Four changes from the 2026-09-07 security review.
@@ -432,6 +459,77 @@ a new claim shape per provider. MMCA.Common v1.281.0 (`MMCA.Common/CHANGELOG.md:
 - Out of scope, and still in the *Enterprise-scale register* of
   [the Common backlog](../governance/common-RemediationBacklog.md): SCIM provisioning. Also out: SAML
   and per-tenant identity providers.
+
+## Revision (2026-11-23)
+Re-verified against current source. The exchange, the three by-email link guards, the external
+create, the code-in-cache handoff and the framework's empty-credential refusals behave as recorded;
+the existing-account check gained a second gate, the set of verified-email sources and password-less
+account shapes is wider than recorded, the provider-key index now excludes soft-deleted rows, and
+ADC's `AuthenticationService.cs` and `User.cs` lines and several framework lines moved.
+
+1. **An existing account passes the privileged-account email rule, not only the lock.**
+   `ExternalLoginCoreAsync` runs `CheckExistingExternalAccountAsync`
+   (`MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Application/Users/AuthenticationService.cs:419-439`,
+   under `!isNewUser` at `:378-380`) before the save. After `CheckNotLocked` (`:424`), a confirmed
+   account passes; an unconfirmed one is confirmed through `user.ConfirmEmail()` when the provider
+   asserted the account's own address as verified (`:432-437`), and otherwise
+   `CheckPrivilegedAccountConfirmed` (`:438`, defined at `:161-164`) refuses an Organizer,
+   ContentEditor or speaker-linked account (`:167-170`) with `Authentication.EmailNotConfirmed`, the
+   owner decision recorded at `:133-136` that password sign-in (`:150`) and refresh (`:129`) apply
+   too. An attendee still signs in unconfirmed. The Decision now says so.
+2. **Google is not the only verified-email source.** The Identity service host maps
+   `email_verified` for Google
+   (`MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:166-169`) and Apple (`:175-176`),
+   and an OIDC provider passes it through under `TrustEmail` (Revision 2026-11-08). The Trade-offs
+   now name all three; GitHub still asserts nothing.
+3. **More password-less shapes and a second `EmailVerified` source.** An invitation link
+   provisions an attendee with no local password and its address confirmed
+   (`User.CreateFromInvitation`,
+   `MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Domain/Users/User.cs:318`, doc at `:300-313`),
+   which a later external login asserting the same verified address can claim by email, because the
+   SEC-ADC-01 guard keys on `HasLocalPassword` (`User.cs:169`, checked at
+   `AuthenticationService.cs:545`). Two other ways reach that shape: `User.ClearPassword`
+   (`User.cs:608`) and `User.CreateServiceAccount` (`User.cs:356`, empty credentials at `:370`,
+   unconfirmed at `:374`), and `TryLinkProviderToExistingAccountAsync` has no service-account check
+   (`AuthenticationService.cs:501-555`). A machine client's address sits under
+   `clients.adc.invalid` (`ServiceAccounts.cs:16`), so only an OIDC provider marked `TrustEmail` that
+   asserts such an address could claim one, and machine clients are off by default. None of these
+   shapes sets `IsExternalLogin`, so the Trade-offs now name `HasLocalPassword` as the check. The
+   redemption raises `UserRegistered` with `EmailVerified: true`
+   (`MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Application/Users/UseCases/RedeemSignInLink/RedeemSignInLinkHandler.cs:113-114`),
+   so the Conference speaker auto-link (gate at
+   `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Users/IntegrationEventHandlers/UserRegisteredHandler.cs:103`)
+   also runs for an invited account: the flag means the address was proven (by a provider or by
+   mailbox delivery), not only that an external provider asserted it, as the 2026-09-07 revision,
+   item 4, words it.
+4. **The provider-key index excludes soft-deleted rows.** The columns are still created only by
+   `InitialCreate` (`20260606053130_InitialCreate.cs:63-64`), but the index is dropped and re-created
+   with `[IsDeleted] = 0` appended
+   (`MMCA.ADC/Source/Hosting/MMCA.ADC.Migrations.SqlServer.Identity/Migrations/20260827015341_MultiDeviceRefreshSessionsAndAuditDeletionColumns.cs:193-198`,
+   snapshot `SQLServerDbContextModelSnapshot.cs:153`). The Decision now says so.
+5. Anchors re-verified against current source:
+   - Decision and Trade-offs citations into ADC's `AuthenticationService.cs`: `ExternalLoginAsync`
+     `:282`, the transaction `:289`, `ExternalLoginCoreAsync` `:294`, the provider lookup `:303-306`,
+     `Email.Create` `:323`, `Auth.ExternalEmailInvalid` `:327`, the by-email lookup `:332-335`,
+     `TryLinkProviderToExistingAccountAsync` `:501` with the same-key reasoning `:507-513`, the
+     one-provider guard `:514` with its code at `:517` and message at `:518`, the link-branch
+     verifier call `:527-528`, `Auth.ExternalEmailNotVerified` `:533`, the SEC-ADC-01 reasoning
+     `:538-544`, `HasLocalPassword` `:545`, `Auth.ExternalLinkRequiresLocalSignIn` `:548`,
+     `LinkExternalProvider` `:553`, the create-branch verifier call `:354-355`, `User.CreateExternal`
+     `:361`, `IssueTokensAsync` `:402`, `CheckNotLocked` defined `:172` with `Auth.AccountLocked`
+     `:175`, the password and refresh lock hooks `:108` and `:126`.
+   - `User.cs`: `LoginProvider` `:94`, `ProviderKey` `:98`, `IsExternalLogin` `:148`, `IsLocked`
+     `:159`, `HasLocalPassword` `:169`, `CreateExternal` `:269` (`emailVerified` at `:275`),
+     `IsEmailConfirmed = emailVerified` `:294`, `LinkExternalProvider` `:445`, `Anonymize` `:662`
+     (clears both provider fields at `:684-685`).
+   - `ExternalAuthExtensions.cs`: `ClientId` reads `:53-55`, the none-configured return `:62-67`,
+     `AddAuthentication()` `:72`, per-provider branches `:76-89`, cookie `mmca_external_login`
+     `:154` (HttpOnly `:155`, Lax `:158`, 10 minutes `:159`), Google and GitHub `ClientSecret`
+     fail-fast `:166-168` and `:178-180`, `user:email` `:185`, Apple `GenerateClientSecret` `:198`,
+     `TeamId` `:199`, `KeyId` `:202`, `PrivateKeyPem` `:205`, callback `:211`.
+   - `HttpContextExternalLoginEmailVerifier.cs` class `:18`, claim read `:37`;
+     `IAuthenticationService.cs` member `:150`, not-supported default `:157-158`.
+   - `UserRegistered.cs`: `EmailVerified` default `false` at `:44`.
 
 ## Related
 ADR-004 (the RS256/JWKS token this flow exchanges the external identity *for*, and validates

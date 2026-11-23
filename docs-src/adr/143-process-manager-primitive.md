@@ -2,9 +2,13 @@
 
 ## Status
 Accepted (2026-11-12). The primitive ships in MMCA.Common v1.289.0
-(`MMCA.Common/CHANGELOG.md:7,43`); it is opt-in, with no table, no
-migration and no configuration key (`MMCA.Common/UPGRADING.md:240-241`). MMCA.Store is its first
-adopter.
+(`MMCA.Common/CHANGELOG.md:511,548`); it is opt-in, with no table, no
+migration and no configuration key (`MMCA.Common/UPGRADING.md:465-466`). MMCA.Store is its first
+adopter. Revised 2026-11-23: Store's payment deadline and its unpaid-order expiry sweep now measure
+from `Order.PaymentWindowStartedOn` (falling back to the last transition only for older rows), so a
+save that is not a payment transition no longer restarts the window; a hold ceiling from creation
+now bounds both sweep classes and new payment sessions, and a startup validator keeps the sweep
+window equal to the deadline's; anchors refreshed.
 
 ## Context
 A long-running flow (a process that spans several events and has a deadline) had no framework shape.
@@ -13,7 +17,7 @@ rules that make such a flow safe under redelivery had to be rediscovered per flo
 
 Store's unpaid-order deadline is the concrete case. The order's saga state is two members of the
 aggregate, `Order.Status` and `Order.InventoryRestored`
-(`MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Domain/Orders/Order.cs:40-43`). The deadline is a
+(`MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Domain/Orders/Order.cs:192,232`). The deadline is a
 durable internal command, `Sales.ExpireUnpaidOrder`, armed inside the checkout transaction
 (`MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Application/ShoppingCarts/UseCases/CheckOut/CheckOutDeadlineScheduler.cs:16-20`)
 and armed again when a payment fails, so the retry window starts over
@@ -22,7 +26,7 @@ Re-arming leaves the older row in the queue, so the handler cannot trust the ins
 at: it must re-derive the due instant from what is stored
 (`.../Orders/Saga/OrderPaymentFailedSagaHandler.cs:57-62`). A reconciliation sweep stays as the
 backstop for a deadline that was never written
-(`MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Infrastructure/Payments/Reconciliation/PaymentReconciliationService.cs:52-60`).
+(`MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Infrastructure/Payments/Reconciliation/PaymentReconciliationService.cs:53-62`).
 
 This record builds on four others. [ADR-054](054-saga-compensation-and-reconciliation.md) is the
 choreographed compensation and the reconciliation backstop this primitive gives a shape to, and its
@@ -155,7 +159,7 @@ its rows, two make the resolution ambiguous, and a plain `ICommandHandler` does 
 must find at least `MinimumTimeoutCommands` timeout commands, default 1, so a map that omits the
 declaring module fails instead of letting both rules pass without reading anything
 (`.../ProcessTimeoutConventionTestsBase.cs:13-15,28-34`). A repo subclasses the base only when it uses
-the primitive (`MMCA.Common/UPGRADING.md:259-262`).
+the primitive (`MMCA.Common/UPGRADING.md:484-487`).
 
 ## Rationale
 - **The aggregate already is the state.** ADR-054's rationale holds that `Order.Status` plus
@@ -164,9 +168,10 @@ the primitive (`MMCA.Common/UPGRADING.md:259-262`).
   that adds behaviour only gives every such flow one shape without a second copy of the state that
   could disagree with the first.
 - **Re-deriving the due instant makes stale timeouts harmless by construction.** Because the
-  aggregate computes the due instant from its own stored transition time, a timeout superseded by a
-  later transition answers `NotYetDue` and a timeout fired twice applies once
-  (`.../ProcessManagerAggregateRoot.cs:36-38`; `.../Orders/Order.cs:976-978`). No row needs to be
+  aggregate computes the due instant from its own stored state (Store's order from the stored start
+  of its payment window), a timeout superseded by a later transition answers `NotYetDue` and a
+  timeout fired twice applies once
+  (`.../ProcessManagerAggregateRoot.cs:36-38`; `.../Orders/Order.cs:1101-1105`). No row needs to be
   found and cancelled when the process moves.
 - **Every outcome decided by stored state completes the row.** Retrying a missing process, a
   timeout that does not apply, an early row or a refused transition cannot change the answer, so only
@@ -179,7 +184,7 @@ the primitive (`MMCA.Common/UPGRADING.md:259-262`).
   commit together, or roll back together on a failed result, is safe to run again.
 - **Nothing new to deploy.** Timeouts ride the existing internal-command queue and steps ride
   existing domain-event dispatch, so the primitive adds no table, no package and no configuration
-  (`MMCA.Common/UPGRADING.md:240-241`).
+  (`MMCA.Common/UPGRADING.md:465-466`).
 
 ## Trade-offs
 - **A `NotYetDue` decision does not re-arm.** The handler completes the row without scheduling
@@ -187,19 +192,38 @@ the primitive (`MMCA.Common/UPGRADING.md:259-262`).
   wants its timeout must schedule it again, as Store's payment-failure handler does
   (`.../Orders/Saga/OrderPaymentFailedSagaHandler.cs:48,68-98`); a step that forgets leaves the
   process with no live timeout.
-- **A host keeps a reconciliation sweep.** Any write that moves the last-modified time without
-  re-arming (a write no step covers, a scheduling failure that is logged and swallowed, a dead-lettered
-  row) pushes the due instant past every queued row. Store keeps its sweep as the backstop: its own
-  list is a deadline that was never written, a dead-lettered row and an order older than the deadline
-  mechanism, and it measures from the same `LastModifiedOn ?? CreatedOn`
-  (`.../Payments/Reconciliation/PaymentReconciliationService.cs:52-60,194-203`). The two windows are
-  separate settings, `PaymentReconciliation:StuckAgeMinutes` and `UnpaidOrderExpiry:Minutes`, equal by
-  default (30) and kept equal by convention, not by a check
-  (`.../Payments/Reconciliation/PaymentReconciliationSettings.cs:17-21,48`;
-  `MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Application/Orders/UnpaidOrderExpirySettings.cs:42-43`).
+- **A host keeps a reconciliation sweep.** A timeout can go missing without any step noticing: a
+  scheduling failure that is logged and swallowed, a dead-lettered row, a step that moves the process
+  and forgets to re-arm, and, for an adopter that measures from `GetLastTransitionOn()`, any save that
+  moves the last-modified time and so pushes the due instant past every queued row. Store keeps its
+  sweep as the backstop: its own list is a deadline that was never written, a dead-lettered row and
+  an order older than the deadline mechanism
+  (`.../Payments/Reconciliation/PaymentReconciliationService.cs:53-61`). Its unpaid-order expiry
+  class measures from the same instant the per-order deadline does, `Order.PaymentWindowStartedOn`,
+  falling back to `LastModifiedOn ?? CreatedOn` only for rows written before that column existed
+  (`.../Payments/Reconciliation/PaymentReconciliationService.cs:204-208,222`); its `PaymentInitiated`
+  class, reconciled against Stripe, still measures from `LastModifiedOn ?? CreatedOn`
+  (`.../Payments/Reconciliation/PaymentReconciliationService.cs:168-170`). Both classes also take any
+  order older than the `UnpaidOrderExpiry:MaxHoldMinutes` ceiling (default 240) measured from
+  creation: an unpaid one is expired, and a `PaymentInitiated` one is checked against Stripe first,
+  so it can be marked paid rather than cancelled
+  (`.../Payments/Reconciliation/PaymentReconciliationService.cs:64-72,170,222`). The same ceiling
+  makes checkout refuse any new payment session for such an order
+  (`MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Application/Orders/UseCases/CreateCheckoutSession/CreateCheckoutSessionHandler.cs:18-20`;
+  `MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Application/Orders/UnpaidOrderExpirySettings.cs:49-50,53`).
+  The two windows are separate settings, `PaymentReconciliation:StuckAgeMinutes` and
+  `UnpaidOrderExpiry:Minutes`, both 30 by default, and `PaymentReconciliationSettingsValidator`
+  refuses to start the host when they differ
+  (`.../Payments/Reconciliation/PaymentReconciliationSettings.cs:17-22,49`;
+  `.../Orders/UnpaidOrderExpirySettings.cs:43`;
+  `.../Payments/Reconciliation/PaymentReconciliationSettingsValidator.cs:14,33-37`;
+  `MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.API/SalesModule.cs:90`).
 - **The window is coupled to the audit stamp.** `GetLastTransitionOn()` reads the audit columns
   (`.../ProcessManagerAggregateRoot.cs:29-31`), so any save of the aggregate, not only a status
-  change, restarts every timeout window measured from it.
+  change, restarts every timeout window measured from it. An adopter that needs a window immune to
+  unrelated saves stores the window's start itself and measures from that: Store's order keeps
+  `PaymentWindowStartedOn` and decides from it, so a save that is not a payment transition (a link
+  refresh, a label) leaves the deadline where it was (`.../Orders/Order.cs:69,1107-1109,1125`).
 - **Scope is one aggregate.** The base assumes the whole process state lives on one aggregate; a
   flow whose state spans aggregates or services gets no help from it.
 - **Opt-in wiring is the adopter's.** `AddProcessManagers()` is not part of `AddApplication()`, and
@@ -226,10 +250,10 @@ the primitive (`MMCA.Common/UPGRADING.md:259-262`).
 
 ## Consequences
 **Store adopted it without changing its stored command.** `Order` derives
-`ProcessManagerAggregateRoot<OrderIdentifierType>` (`.../Orders/Order.cs:47`) and its `DecideTimeout`
-checks the timeout name `PaymentExpiry` and the status first, then the due instant from the last
-transition, then cancels with `OrderCancellationReason.PaymentExpired`
-(`.../Orders/Order.cs:54,984-1004`). `ExpireUnpaidOrderInternalCommandHandler` derives the timeout
+`ProcessManagerAggregateRoot<OrderIdentifierType>` (`.../Orders/Order.cs:48`) and its `DecideTimeout`
+checks the timeout name `PaymentExpiry` and the status first, then the due instant from
+`PaymentWindowStartedOn` (the last transition only when that column is null), then cancels with
+`OrderCancellationReason.PaymentExpired` (`.../Orders/Order.cs:55,1115-1135`). `ExpireUnpaidOrderInternalCommandHandler` derives the timeout
 base, resolves the window from `UnpaidOrderExpirySettings.Minutes` and maps each report to its log
 line
 (`MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Application/Orders/InternalCommands/ExpireUnpaidOrderInternalCommandHandler.cs:39-93`).
@@ -259,7 +283,40 @@ and one sealed `ProcessTimeoutHandlerBase` subclass; drives event steps with
 `ProcessDomainEventHandlerBase` subclasses that save for themselves; calls `AddProcessManagers()` in
 the module's Application DI and re-arms the timeout from every step that moves the process; keeps a
 reconciliation sweep; and subclasses `ProcessTimeoutConventionTestsBase`, raising the floor to its
-known count (`MMCA.Common/UPGRADING.md:243-262`).
+known count (`MMCA.Common/UPGRADING.md:469-487`).
+
+## Revision (2026-11-23)
+Re-verified against current source. The primitive itself (the base aggregate, the step and timeout
+handler bases, the scheduler, the registration and the convention gate) is unchanged; what moved is
+Store's adoption, whose deadline and unpaid-order expiry backstop no longer measure from the audit
+stamp, plus the anchors.
+
+1. Store's `Order.DecideTimeout` derives the due instant from `PaymentWindowStartedOn`, falling back
+   to `GetLastTransitionOn()` only for a row written before that column existed, so a save that is
+   not a payment transition leaves the deadline in place
+   (`MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Domain/Orders/Order.cs:69,1107-1109,1125`).
+   Consequences and the audit-stamp trade-off now record this; the base's coupling to the audit stamp
+   (`.../ProcessManagerAggregateRoot.cs:29-31`) still holds for any adopter that does not do the same.
+2. The sweep's unpaid-order expiry class measures from the same `PaymentWindowStartedOn` instant,
+   with the same legacy fallback, while its `PaymentInitiated` Stripe class still measures from
+   `LastModifiedOn ?? CreatedOn`. Both classes also take any order past the
+   `UnpaidOrderExpiry:MaxHoldMinutes` ceiling (default 240) from creation, a `PaymentInitiated` one
+   only after Stripe is checked, and checkout refuses a new payment session past it
+   (`MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Infrastructure/Payments/Reconciliation/PaymentReconciliationService.cs:64-72,168-170,204-208,222`;
+   `MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Application/Orders/UseCases/CreateCheckoutSession/CreateCheckoutSessionHandler.cs:18-20`;
+   `MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Application/Orders/UnpaidOrderExpirySettings.cs:49-50,53`).
+3. The sweep window and the deadline window are kept equal by a check, not by convention:
+   `PaymentReconciliationSettingsValidator` refuses to start the host on a mismatch and is registered
+   by the Sales module
+   (`.../Payments/Reconciliation/PaymentReconciliationSettingsValidator.cs:14,33-37`;
+   `MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.API/SalesModule.cs:90`).
+4. Anchors re-verified against current source: `MMCA.Common/CHANGELOG.md:511,548` (the 1.289.0
+   section and its process-manager entry); `MMCA.Common/UPGRADING.md:465-466` (opt-in, no table, no
+   migration, no key), `:469-487` (adopter steps) and `:484-487` (convention base only when used);
+   `.../Orders/Order.cs:192,232` (saga state), `:48` (class declaration), `:55`
+   (`PaymentExpiryTimeout`), `:1101-1105` (stale or doubled timeout is harmless) and `:1115-1135`
+   (`DecideTimeout`); `.../PaymentReconciliationService.cs:53-61` (backstop list);
+   `.../PaymentReconciliationSettings.cs:17-22,49` (`StuckAgeMinutes`).
 
 ## Related
 - [ADR-003](003-outbox-dual-dispatch.md): the outbox that redelivers the events driving each step.

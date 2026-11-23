@@ -262,7 +262,9 @@
           re-encrypt), the audit trail redacts encrypted properties, and a re-encryption test suite and the
           audit-trail test harness also wire the converter (v1.247.0); production adoption stays zero.
           Revised 2026-10-26: anchors refreshed after the v1.261.0 release.
-          Revised 2026-10-28: anchors refreshed after MMCA.Common #615 and the 2026-10-28 ADR-005 revision.</p>
+          Revised 2026-10-28: anchors refreshed after MMCA.Common #615 and the 2026-10-28 ADR-005 revision.
+          Revised 2026-11-23: anchors refreshed after the audit-trail interceptor, <code>PublicAPI.Shipped.txt</code> and
+          the changelog moved in later releases.</p>
           <h2 id="context">Context</h2>
           <p>Transparent database encryption (TDE) protects the data files as a whole, but it decrypts
           transparently for anyone who can query the database, so a leaked backup restored on a compromised
@@ -365,8 +367,8 @@
           environment variables, never hardcoded (<code>EncryptedStringConverter.cs:35</code>, <code>:36</code>). One other
           Infrastructure type does recognize the converter: the audit-trail interceptor records its redaction
           token, never the value, for any property whose value converter is an <code>EncryptedStringConverter</code>
-          (<code>Source/Core/MMCA.Common.Infrastructure/Persistence/AuditTrail/AuditTrailSaveChangesInterceptor.cs:638</code>
-          through <code>:641</code>, documented at <code>:56</code> through <code>:58</code>), because the change tracker hands it the decrypted
+          (<code>Source/Core/MMCA.Common.Infrastructure/Persistence/AuditTrail/AuditTrailSaveChangesInterceptor.cs:659</code>
+          through <code>:662</code>, documented at <code>:58</code> through <code>:60</code>), because the change tracker hands it the decrypted
           plaintext and recording that would put in clear text exactly what the column encrypts. That needs no
           marker on the property.</p>
           </li>
@@ -668,6 +670,25 @@
           <code>Source/Core/MMCA.Common.Infrastructure/PublicAPI.Shipped.txt:1011</code>; the &quot;Field encryption&quot; bullet
           still sits at <code>SECURITY.md:40</code>.</li>
           </ol>
+          <h2 id="revision-2026-11-23">Revision (2026-11-23)</h2>
+          <p>Re-verified against current source. Anchor-only refresh; no decision, rationale, trade-off or adoption
+          fact changed. The audit trail still redacts any property mapped through the converter,
+          <code>MarkForReEncryption</code> is still shipped public API, and production adoption is still zero. Every anchor
+          inside a dated revision above (including the changelog, <code>PublicAPI.Shipped.txt</code> and
+          <code>AuditTrailSaveChangesInterceptor.cs</code> anchors in the 2026-10-21, 2026-10-26 and 2026-10-28 revisions)
+          is a point-in-time record and is left as recorded.</p>
+          <ol>
+          <li>Anchors re-verified against current source: the audit-trail redaction check <code>IsRedacted</code> now runs
+          <code>Source/Core/MMCA.Common.Infrastructure/Persistence/AuditTrail/AuditTrailSaveChangesInterceptor.cs:659</code>
+          through <code>:662</code> (the <code>EncryptedStringConverter</code> clause at <code>:662</code>, its XML summary at <code>:653</code> through
+          <code>:658</code>), with the class-level remark at <code>:58</code> through <code>:60</code>, and Decision item 8 now cites those lines;
+          <code>MarkForReEncryption</code> is listed at
+          <code>Source/Core/MMCA.Common.Infrastructure/PublicAPI.Shipped.txt:1085</code>, with the two constructors at
+          <code>:616</code> and <code>:617</code>; the <code>[1.247.0]</code> changelog heading sits at <code>MMCA.Common/CHANGELOG.md:1240</code>, with the
+          <code>MarkForReEncryption</code> entry at <code>:1252</code> and the audit-trail redaction entry at <code>:1296</code>; the <code>[1.153.0]</code>
+          heading sits at <code>MMCA.Common/CHANGELOG.md:4858</code>, running to <code>[1.152.0]</code> at <code>:4940</code>.
+          <code>EncryptedStringConverter.cs:76</code>, <code>:143</code>, <code>:176</code>, <code>:211</code>, <code>:233</code>, <code>:251</code> and <code>:255</code> still hold.</li>
+          </ol>
           
         <div class="doc-foot btn-row">
           <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
@@ -693,6 +714,7 @@
             <li><a href="#revision-2026-10-21">Revision (2026-10-21)</a></li>
             <li><a href="#revision-2026-10-26">Revision (2026-10-26)</a></li>
             <li><a href="#revision-2026-10-28">Revision (2026-10-28)</a></li>
+            <li><a href="#revision-2026-11-23">Revision (2026-11-23)</a></li>
             </ul>
           </nav>
         </aside>

@@ -272,7 +272,12 @@
           dedup, <code>Wait</code>-versus-<code>DropOldest</code> and scoring-serialization trade-offs describe the pre-supersede
           design (the Trade-offs text itself is left unmarked, as history), with session scoring recorded as
           a durable internal command under a per-event distributed claim and ADR-121 as the home of the live
-          ephemeral-queue decision.</p>
+          ephemeral-queue decision. Revised 2026-11-23: the Trade-offs section now opens with a pointer
+          marking its scoring statements and its <code>DropOldest</code>-versus-<code>Wait</code> comparison as the pre-supersede
+          design (so the Trade-offs text is no longer unmarked, reversing that part of the 2026-10-28
+          revision), and anchors refreshed after the
+          <code>OpenLivePollHandler</code>, Engagement registration, scoring handler, <code>IDistributedLock</code> registration and
+          <code>InternalCommandProcessor</code> bodies shifted.</p>
           <h2 id="context">Context</h2>
           <p>Some requests trigger work that cannot run inside the request: an AI scoring pass over an event&#39;s
           sessions takes minutes and issues one paid API call per session, and a live-channel broadcast must
@@ -362,6 +367,12 @@
           for durable internal commands (ADR-114).</li>
           </ul>
           <h2 id="trade-offs">Trade-offs</h2>
+          <p>The scoring statements below (in &quot;In-process only&quot;, &quot;Dedup is per replica&quot;, the whole
+          <code>DropOldest</code>-versus-<code>Wait</code> comparison in &quot;Backpressure&quot;, and &quot;wanted for scoring&quot;) describe the
+          session-scoring queue and its <code>Wait</code> channel this ADR had before it was superseded; scoring is now a
+          durable internal command under a per-event distributed claim (ADR-114, see the Revision
+          (2026-10-28)), the full modes in use are <code>DropOldest</code> and <code>DropWrite</code>, and the live ephemeral-queue
+          decision is <a href="121-ephemeral-in-process-work-queue.html">ADR-121</a>.</p>
           <ul>
           <li><strong>In-process only.</strong> The queue does not survive a restart and does not span replicas. Accepted
           because every current job is either ephemeral (a lost broadcast is a missed UI refresh) or
@@ -641,6 +652,60 @@
           </ul>
           </li>
           </ol>
+          <h2 id="revision-2026-11-23">Revision (2026-11-23)</h2>
+          <p>Re-verified against current source. <strong>The Decision, the Rationale, the post-commit rule and the
+          ephemeral half are unchanged</strong>, and so are the facts the Revision (2026-10-28) records: scoring is
+          a durable internal command under a per-event claim, the lock falls back to a process-local
+          implementation without Redis, and <code>InternalCommandProcessor</code> runs a claimed batch sequentially. One
+          choice of that revision is reversed: it left the Trade-offs bullets in place unmarked, and they now
+          sit under a marking pointer. Otherwise only line anchors moved. The dated revisions above keep
+          their anchors as written.</p>
+          <ol>
+          <li><strong>Trade-offs now opens with a pointer, reversing the &quot;unmarked&quot; choice of the Revision
+          (2026-10-28).</strong> Its scoring statements and the <code>DropOldest</code>-versus-<code>Wait</code> comparison still read
+          as live policy, while scoring is a durable internal command
+          (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Sessions/UseCases/DecisionSupport/ScoreEventSessions/ScoreEventSessionsInternalCommand.cs:35</code>)
+          whose handler takes a per-event distributed claim (<code>ScoreEventSessionsInternalCommandHandler.cs:86</code>),
+          and no <code>BoundedChannelFullMode.Wait</code> channel remains under <code>MMCA.ADC/Source</code>: the full modes in
+          use are <code>DropOldest</code>
+          (<code>MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Application/Live/LiveChannelPublishQueue.cs:36</code>)
+          and <code>DropWrite</code>
+          (<code>MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Application/UserSessionBookmarks/Services/BookmarkCacheEvictionSignal.cs:30</code>).
+          The section opens with a short note marking those statements as the pre-supersede design and
+          pointing to ADR-114 and ADR-121; the bullets themselves are left as written. The parenthetical
+          &quot;(the Trade-offs text itself is left unmarked, as history)&quot; in the 2026-10-28 Status sentence
+          records that revision&#39;s choice and no longer describes the file.</li>
+          <li>Anchors re-verified against current source:<ul>
+          <li><code>OpenLivePollHandler.cs</code>
+          (<code>MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Application/LivePolls/UseCases/Open/OpenLivePollHandler.cs</code>):
+          <code>MutateEntityHandlerBase</code> at <code>:27</code>, <code>LogMutated</code> override at <code>:79-80</code>, <code>OnMutatedAsync</code> at
+          <code>:83</code>, <code>EnqueueOpened(poll)</code> call at <code>:88</code>, queue write at <code>:109-110</code>. These match the Revision
+          (2026-08-31) again except the base line, so the &quot;one line higher&quot; note in the Revision
+          (2026-10-26) no longer holds.</li>
+          <li>Engagement registrations: <code>LiveChannelPublishQueue</code> and its interface at <code>:59-60</code> and
+          <code>TryAddSingleton&lt;BookmarkCacheEvictionSignal&gt;()</code> at <code>:64</code>
+          (<code>MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Application/DependencyInjection.cs</code>);
+          <code>AddHostedService&lt;LiveChannelPublishProcessor&gt;</code> at <code>:26</code> and
+          <code>AddHostedService&lt;BookmarkCacheEvictionProcessor&gt;</code> at <code>:27</code>
+          (<code>MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Infrastructure/DependencyInjection.cs</code>).</li>
+          <li><code>ScoreEventSessionsInternalCommandHandler.cs</code>: idempotence remarks at <code>:37-43</code>, class at <code>:49</code>,
+          <code>TryAcquireAsync</code> at <code>:86</code>, skip check at <code>:89</code> with the <code>LogRunSkippedNotClaimed</code> call at <code>:91</code>,
+          <code>runner.RunAsync</code> with <code>command.RequestedAtUtc</code> at <code>:95</code>, log message and declaration at
+          <code>:133-134</code>. The two anchors the Revision (2026-10-21) recorded (<code>:84</code>, <code>:132</code>) are now <code>:86</code>
+          and <code>:133</code>.</li>
+          <li><code>ScoreEventSessionsInternalCommand.cs</code>: <code>[InternalCommandName(&quot;Conference.ScoreEventSessions.v1&quot;)]</code>
+          at <code>:35</code>.</li>
+          <li><code>DependencyInjection.Caching.cs</code>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.Caching.cs</code>):
+          <code>TryAddSingleton&lt;IDistributedLock&gt;</code> at <code>:109-123</code>, the <code>IConnectionMultiplexer</code> check and Redis
+          branch at <code>:111-118</code>, the <code>InProcessDistributedLock</code> fallback at <code>:120-122</code>.</li>
+          <li><code>InternalCommandProcessor.cs</code>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/InternalCommands/Processing/InternalCommandProcessor.cs</code>):
+          the per-row loop over the claimed batch at <code>:209-223</code>, <code>RenewClaimAsync</code> at <code>:215</code> and
+          <code>ExecuteClaimedAsync</code> at <code>:221</code>, each awaited in turn.</li>
+          </ul>
+          </li>
+          </ol>
           
         <div class="doc-foot btn-row">
           <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
@@ -663,6 +728,7 @@
             <li><a href="#revision-2026-10-21">Revision (2026-10-21)</a></li>
             <li><a href="#revision-2026-10-26">Revision (2026-10-26)</a></li>
             <li><a href="#revision-2026-10-28">Revision (2026-10-28)</a></li>
+            <li><a href="#revision-2026-11-23">Revision (2026-11-23)</a></li>
             </ul>
           </nav>
         </aside>

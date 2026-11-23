@@ -15,6 +15,7 @@ Revised 2026-10-26: anchors refreshed after the releases that moved the SNS send
 Revised 2026-10-28: the hub-call cost consequence is scoped to the Notification Hubs adapter, with the SNS per-endpoint cost beside it, and the native-leg anchor is corrected.
 Revised 2026-11-07: `INativePushSender.BroadcastAsync` and the SNS and FCM broadcast topics are removed (breaking), and the Notification Hubs sender attempts every chunk on both platforms and rethrows the collected failures at the end; see Revision (2026-11-07).
 Revised 2026-11-07 (v1.280.0, breaking): `SendToUsersAsync` returns a per-platform `NativePushOutcome` instead of throwing, and the handler records it on each notification for a "Phone delivery" column; see Revision (2026-11-07): per-platform outcome.
+Revised 2026-11-23: anchors refreshed after the releases since v1.280.0 that moved the registrar interface, the three adapters' registration calls, senders and registrars, the startup tripwire and the client sign-out leg.
 
 ## Context
 ADR-024 established two notification channels: a durable per-user `UserNotification` inbox (the
@@ -36,8 +37,8 @@ may not exist when the code ships.
   `MMCA.Common/Source/Core/MMCA.Common.Application/Interfaces/Infrastructure/Notifications/INativePushSender.cs:12`,
   `:26`) and `IPushDeviceRegistrar`
   (installation upsert/delete,
-  `MMCA.Common/Source/Core/MMCA.Common.Application/Interfaces/Infrastructure/Notifications/IPushDeviceRegistrar.cs:11`,
-  `UpsertAsync` at `:29`, `DeleteAsync` at `:48`, and `DeleteAllForUserAsync` at `:65`, which removes
+  `MMCA.Common/Source/Core/MMCA.Common.Application/Interfaces/Infrastructure/Notifications/IPushDeviceRegistrar.cs:12`,
+  `UpsertAsync` at `:30`, `DeleteAsync` at `:49`, and `DeleteAllForUserAsync` at `:66`, which removes
   every installation one user holds). `AddInfrastructure` TryAdds no-op defaults.
 - **Account erasure removes the user's devices.** `DeleteUserHandlerBase` takes an optional
   `IInternalCommandScheduler`
@@ -45,18 +46,18 @@ may not exist when the code ships.
   and, when one is supplied, schedules `DeleteUserPushInstallationsInternalCommand` in the erasure's
   unit of work (`:195-198`; the command at `DeleteUserPushInstallationsInternalCommand.cs:18`). Its
   handler calls `DeleteAllForUserAsync` (`DeleteUserPushInstallationsInternalCommandHandler.cs:31`), so
-  a failure retries as a durable internal command (`IPushDeviceRegistrar.cs:62-63`). Every registrar
+  a failure retries as a durable internal command (`IPushDeviceRegistrar.cs:62-64`). Every registrar
   implements it: the Null default
   (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Notifications/Push/NullPushDeviceRegistrar.cs:25`),
   Azure Notification Hubs by listing the user's installations
-  (`MMCA.Common/Source/Hosting/MMCA.Common.Azure/Notifications/AzureNotificationHubDeviceRegistrar.cs:122-135`),
+  (`MMCA.Common/Source/Hosting/MMCA.Common.Azure/Notifications/AzureNotificationHubDeviceRegistrar.cs:122-143`),
   SNS through the `UserId` index
-  (`MMCA.Common/Source/Hosting/MMCA.Common.Aws/Notifications/SnsPushDeviceRegistrar.cs:123-128`) and FCM
+  (`MMCA.Common/Source/Hosting/MMCA.Common.Aws/Notifications/SnsPushDeviceRegistrar.cs:128-141`) and FCM
   through its Firestore registry query
-  (`MMCA.Common/Source/Hosting/MMCA.Common.Gcp/Notifications/FcmPushDeviceRegistrar.cs:102-107`). ADC
+  (`MMCA.Common/Source/Hosting/MMCA.Common.Gcp/Notifications/FcmPushDeviceRegistrar.cs:102-120`). ADC
   runs erasure on its Identity service, which registers `AddAzureNotificationHubsPush` so the
   registrar reaches the hub devices register in
-  (`MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:210-214`), and its `DeleteUserHandler`
+  (`MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:230-234`), and its `DeleteUserHandler`
   forwards the scheduler
   (`MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Application/Users/UseCases/DeleteUser/DeleteUserHandler.cs:44`).
   Store forwards it too
@@ -69,27 +70,27 @@ may not exist when the code ships.
     the platform credentials outside our code, and its installation model gives upsert semantics
     with client-generated stable ids. The free tier covers conference volumes.
   - **AWS SNS mobile push**, `AddAmazonSnsPush(configuration)`
-    (`MMCA.Common/Source/Hosting/MMCA.Common.Aws/AwsServiceCollectionExtensions.cs:162`), gated on
+    (`MMCA.Common/Source/Hosting/MMCA.Common.Aws/AwsServiceCollectionExtensions.cs:174`), gated on
     `NativePush:Sns` carrying `InstallationsTable` and at least one of
-    `FcmPlatformApplicationArn` / `ApnsPlatformApplicationArn` (`:138-146`, `:167-172`;
+    `FcmPlatformApplicationArn` / `ApnsPlatformApplicationArn` (`:150-158`, `:180-182`;
     `.../MMCA.Common.Aws/Notifications/SnsNativePushSettings.cs:51-53`). SNS keeps
     no owner per endpoint, so a DynamoDB table is the installation registry: partition key
-    `InstallationId`, global secondary index `UserId-index` on `UserId` (`:150-151`;
+    `InstallationId`, global secondary index `UserId-index` on `UserId` (`:161-163`;
     `.../MMCA.Common.Aws/Notifications/SnsInstallationRegistry.cs:29`). The ownership and handover
     rule is one conditional write, `attribute_not_exists(InstallationId) OR UserId = :me OR
-    PushChannel = :channel` (`SnsInstallationRegistry.cs:36`, applied at `:97`), so it holds under
+    PushChannel = :channel` (`SnsInstallationRegistry.cs:36`, applied at `:92`), so it holds under
     concurrency without a lock. Endpoints are subscribed to no topic (the broadcast topic was removed;
     see Revision (2026-11-07)), and an endpoint SNS reports disabled or missing is removed with its row on send
     (`SnsNativePushSender.cs:95-99`, `:111`).
   - **Google FCM HTTP v1**, `AddFirebaseCloudMessagingPush(configuration)`
-    (`MMCA.Common/Source/Hosting/MMCA.Common.Gcp/GcpServiceCollectionExtensions.cs:137`), gated on
+    (`MMCA.Common/Source/Hosting/MMCA.Common.Gcp/GcpServiceCollectionExtensions.cs:149`), gated on
     `NativePush:Fcm` carrying `ProjectId` and `InstallationsCollection`
-    (`:118-121`, `:142-148`; `.../MMCA.Common.Gcp/Notifications/FcmNativePushSettings.cs:28-30`), with
+    (`:130-132`, `:155-157`; `.../MMCA.Common.Gcp/Notifications/FcmNativePushSettings.cs:28-30`), with
     Application Default Credentials. A Firestore collection is the
     registry, one document per installation id, and every ownership decision is a Firestore
     transaction (`.../MMCA.Common.Gcp/Notifications/FirestoreInstallationRegistry.cs:10-12`, `:45`).
     Only FCM registration tokens are accepted: an APNs-platform registration fails validation with
-    `PushDevice.UnsupportedPlatform` (`Notifications/FcmPushDeviceRegistrar.cs:40-46`), so an iOS
+    `PushDevice.UnsupportedPlatform` (`Notifications/FcmPushDeviceRegistrar.cs:33-39`), so an iOS
     client registers its FCM token on this adapter. The registrar subscribes tokens to no topic (see
     Revision (2026-11-07)), and a send that reports the token unregistered, or
     names it as an invalid registration token, prunes the installation
@@ -100,22 +101,22 @@ may not exist when the code ships.
     The exit is moving registration and send to FIDs together.
 - **A lost adapter call fails startup.** `NativePush:Enabled=true` while `INativePushSender` is
   still the Null sender fails validation with a message naming all three calls and their keys
-  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Configuration/CloudAdapterTripwire.cs:48-53`).
+  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Configuration/CloudAdapterTripwire.cs:77-82`, message at `:81`).
 - **Sends target users, never raw tokens**; a user's every device gets the message. On Notification
   Hubs installations are tagged `user:{id}` and tag expressions are OR-chunked at the hub's 20-tag
   cap (`MMCA.Common/Source/Hosting/MMCA.Common.Azure/Notifications/NativePushUserTags.cs:11,20`,
   unit-tested), so audience size is unbounded. The SNS and FCM registries look installations up by
-  their `UserId` field instead (`SnsInstallationRegistry.cs:127`; Firestore queries at most 30 users
+  their `UserId` field instead (`SnsInstallationRegistry.cs:122-123`; Firestore queries at most 30 users
   at a time, `FirestoreInstallationRegistry.cs:23`).
 - **One payload shape in the core.** `NativePushPayloads.BuildFcmV1Payload` and `BuildApnsPayload`
   are public in `MMCA.Common.Infrastructure.Notifications.Push`
   (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Notifications/Push/NativePushPayloads.cs:13,20,42`),
   called by the Notification Hubs sender
-  (`MMCA.Common/Source/Hosting/MMCA.Common.Azure/Notifications/AzureNotificationHubNativePushSender.cs:22-23`)
+  (`MMCA.Common/Source/Hosting/MMCA.Common.Azure/Notifications/AzureNotificationHubNativePushSender.cs:32-33`)
   and the SNS message builder
   (`MMCA.Common/Source/Hosting/MMCA.Common.Aws/Notifications/SnsPushMessage.cs:29-30`). The FCM adapter
   maps the same fields onto FirebaseAdmin's typed `Message` instead of raw JSON
-  (`MMCA.Common/Source/Hosting/MMCA.Common.Gcp/Notifications/FcmPushMessage.cs:7-9`, `:56-76`), with a
+  (`MMCA.Common/Source/Hosting/MMCA.Common.Gcp/Notifications/FcmPushMessage.cs:7-9`, `:41-61`), with a
   test pinning the equivalence.
 - **`SendPushNotificationHandler` gains the third leg.** After the inbox write and the SignalR
   attempt, it calls `INativePushSender.SendToUsersAsync` inside its own non-fatal catch. The
@@ -134,9 +135,9 @@ may not exist when the code ships.
   call is authenticated) and `IPushDeviceTokenProvider` (the platform token extension point). UI.Maui
   ships `MauiPushRegistrationService` (stable installation id in `IDevicePreferences`, sync
   over the named API client, with a `SemaphoreSlim` serializing registration passes,
-  `MauiPushRegistrationService.cs:27,44`). The token provider defaults to
-  `NullPushDeviceTokenProvider` (TryAdd, `MMCA.Common.UI/Services/Capabilities/DependencyInjection.cs:62`);
-  the opt-in `AddMauiPushDeviceTokenProvider()` (`MMCA.Common.UI.Maui/DependencyInjection.cs:124-132`)
+  `MauiPushRegistrationService.cs:26,43`). The token provider defaults to
+  `NullPushDeviceTokenProvider` (TryAdd, `MMCA.Common.UI/Services/Capabilities/DependencyInjection.cs:67`);
+  the opt-in `AddMauiPushDeviceTokenProvider()` (`MMCA.Common.UI.Maui/DependencyInjection.cs:136-144`)
   replaces it with `FcmPushDeviceTokenProvider` on Android (gated on the `Push:Fcm` section,
   `FcmPushDeviceTokenProvider.cs:33,43-49`) and `ApnsPushDeviceTokenProvider` on iOS/MacCatalyst
   (gated on `Push:Apns:Enabled`, `ApnsPushDeviceTokenProvider.cs:30,37`), while the windows TFM
@@ -145,18 +146,19 @@ may not exist when the code ships.
   auth-state changes, and on Android `MauiFirebaseMessagingService.OnNewToken` re-registers when
   FCM rotates the token (`MauiFirebaseMessagingService.cs:26-35`). `AuthUIService` owns the
   unregister leg: `LogoutAsync` and `RevokeAllSessionsAsync` both call `UnregisterPushAsync`
-  before the local sign-out (`AuthUIService.cs:90,143`, defined at `:361`).
+  before the local sign-out (`AuthUIService.cs:103,159`, defined at `:512`).
 
 ## Consequences
 - On Notification Hubs, sends fan out per 20-user chunk and per platform: an audience of N users
   costs `ceil(N/20) * 2` hub calls. Acceptable at conference scale; a template-based send can
   consolidate later without touching callers. The SNS adapter instead costs at least one DynamoDB
   query per distinct user (the registry pages until `LastEvaluatedKey` is empty,
-  `SnsInstallationRegistry.cs:117-151`) plus one publish per distinct endpoint
-  (`SnsNativePushSender.cs:45-64`), and a disabled or missing endpoint adds its removal calls
-  (`SnsNativePushSender.cs:120-123`). The FCM adapter costs one Firestore query per 30 distinct
-  users (`FcmNativePushSender.cs:39,43`, `FirestoreInstallationRegistry.cs:23,76`) plus one
-  `SendEachAsync` per 500 distinct tokens (`FcmNativePushSender.cs:57,63`,
+  `SnsInstallationRegistry.cs:112-147`, `LastEvaluatedKey` at `:140`) plus one publish per distinct
+  endpoint (`SnsNativePushSender.cs:65-72`, `PublishAsync` at `:85-92`), and a disabled or missing
+  endpoint adds its removal calls (`SnsNativePushSender.cs:116-120`). The FCM adapter costs one
+  Firestore query per 30 distinct users (`FcmNativePushSender.cs:40,94`,
+  `FirestoreInstallationRegistry.cs:23,76`) plus one `SendEachAsync` per 500 distinct tokens
+  (`FcmNativePushSender.cs:48,54`,
   `IFcmMessagingClient.cs:17`).
 - On Notification Hubs one failing send does not stop the rest. Every 20-tag chunk is attempted on
   both platforms; a failure is counted and the loop continues, and the counts and the first failure
@@ -170,11 +172,11 @@ may not exist when the code ships.
   re-runs the live legs under the execution strategy, so native delivery is at-least-once and a
   device can receive the same OS push twice (`SendPushNotificationHandler.cs:21-30`). The
   observability surface is the vendor's delivery telemetry plus each adapter's own log messages
-  (for SNS, `SnsNativePushSender.cs:67,132-148`; for FCM, `FcmNativePushSender.cs:116-134`); the
+  (for SNS, `SnsNativePushSender.cs:128-141`; for FCM, `FcmNativePushSender.cs:126-142`); the
   inbox remains the recovery path.
 - A delete verifies ownership before it acts: the registrar reads the installation and checks
   the `user:{id}` tag `UpsertAsync` stamped on it
-  (`AzureNotificationHubDeviceRegistrar.cs:84-92`), so an id belonging to someone else deletes
+  (`AzureNotificationHubDeviceRegistrar.cs:90-98`, unknown-id success at `:101-105`), so an id belonging to someone else deletes
   nothing. That costs an extra hub round trip per delete, and the response cannot tell a caller
   which case it hit: an unknown id and a foreign one both answer success, deliberately, so the
   endpoint is not an existence oracle for other users' installation ids.
@@ -444,3 +446,47 @@ unchanged.
    and `:111`, `FcmNativePushSender.cs:70-73`).
 6. **Not done.** A per-device delivery record (the hub does not return one, and the stored counts are
    per-platform totals), retrying a failed batch, and any change to the inbox or SignalR legs or to the overall `Status`.
+
+## Revision (2026-11-23)
+Re-verified against current source. The decision is unchanged: three delivery adapters each gated on
+`NativePush:Enabled` and a complete section, the Null-by-default sender and registrar, account erasure
+removing a user's devices through `DeleteAllForUserAsync` on every registrar, the startup tripwire
+naming all three calls, one payload shape in the core, and the unregister leg running before the local
+sign-out in both `LogoutAsync` and `RevokeAllSessionsAsync`. Only anchors in the live sections moved.
+
+1. Anchors re-verified against current source:
+   - `IPushDeviceRegistrar` is `IPushDeviceRegistrar.cs:12`, with `UpsertAsync` at `:30`, `DeleteAsync`
+     at `:49`, `DeleteAllForUserAsync` at `:66` and the idempotent, durable-retry remark at `:62-64`.
+   - `DeleteAllForUserAsync` is `AzureNotificationHubDeviceRegistrar.cs:122-143` (list at `:127`, the
+     per-installation delete loop at `:135-143`), `SnsPushDeviceRegistrar.cs:128-141` (remarks at
+     `:122-127`) and `FcmPushDeviceRegistrar.cs:102-120`; the Null default stays at
+     `NullPushDeviceRegistrar.cs:25`.
+   - ADC's Identity service calls `AddAzureNotificationHubsPush` at
+     `MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:234`, explained at `:230-233`.
+   - `AddAmazonSnsPush` is `AwsServiceCollectionExtensions.cs:174`, its settings documentation
+     `:150-158`, its runtime gate `:180-182` and the table key and `UserId-index` documentation
+     `:161-163`. `AddFirebaseCloudMessagingPush` is `GcpServiceCollectionExtensions.cs:149`, its
+     settings documentation `:130-132` and its runtime gate `:155-157`.
+   - The native push tripwire check is `CloudAdapterTripwire.cs:77-82`, its message at `:81`, below the
+     Passkeys (`:64-69`) and MachineClients (`:71-75`) checks.
+   - The Notification Hubs sender calls the core payload builders at
+     `AzureNotificationHubNativePushSender.cs:32-33`; `FcmPushMessage` maps them in `Build` at
+     `FcmPushMessage.cs:41-61`.
+   - The FCM registrar's APNs rejection is `FcmPushDeviceRegistrar.cs:33-39` (`:41-47` rejects any
+     other non-`fcmv1` platform).
+   - The SNS ownership condition is applied at `SnsInstallationRegistry.cs:92`, the `UserId` lookup is
+     `:122-123`, and `QueryByUserAsync` pages at `:112-147` (`LastEvaluatedKey` at `:140`).
+   - SNS sends: the per-endpoint publish loop is `SnsNativePushSender.cs:65-72` (`PublishAsync` at
+     `:85-92`), the stale-endpoint removal calls `:116-120`, and the log messages `:128-141`.
+   - FCM sends: the lookup is called at `FcmNativePushSender.cs:40` and chunked per 30 users at `:94`,
+     `Chunk(MaxMessagesPerSend)` is `:48` and `SendEachAsync` `:54`, and the log messages are `:126-142`.
+   - The delete ownership check is `AzureNotificationHubDeviceRegistrar.cs:90-98`, with the unknown-id
+     success at `:101-105`.
+   - Client: the `NullPushDeviceTokenProvider` TryAdd is `MMCA.Common.UI/Services/Capabilities/DependencyInjection.cs:67`,
+     `AddMauiPushDeviceTokenProvider()` is `MMCA.Common.UI.Maui/DependencyInjection.cs:136-144`
+     (FCM at `:139`, APNs at `:141`), the registration `SemaphoreSlim` and its `WaitAsync` are
+     `MauiPushRegistrationService.cs:26,43`, and the unregister calls are `AuthUIService.cs:103,159`,
+     each ahead of `SignOutLocallyAsync` at `:116` and `:160`, with `UnregisterPushAsync` defined at
+     `:512`.
+   Anchors inside earlier revisions are left as recorded, including the 2026-10-24 registration and
+   gate lines, the 2026-11-07 `SharedResource.resx` and `UPGRADING.md` lines, and the CHANGELOG lines.

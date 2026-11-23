@@ -11,7 +11,11 @@ is gone, the load-bearing legacy branch is now the header-less 64-byte PBKDF2 ha
 iterations, new hashes are versioned at 210,000 iterations, and a successful sign-in rehashes a stale
 record through `NeedsRehash` for users that opt in. Revised 2026-10-28: the stale opening sentences saying
 ADR-102 carries the current decision and the body is retained unchanged are removed, the 2026-10-26
-sentence drops its clause about that earlier note, and the rehash anchors are refreshed.
+sentence drops its clause about that earlier note, and the rehash anchors are refreshed. Revised
+2026-11-23: the timing burn is now the hasher's own `BurnVerificationCost` default interface member,
+which `PasswordHasher` runs at the 600,000-iteration legacy work factor and which also covers service
+accounts, the rehash applies through the aggregate and skips the save when it is refused, and the
+anchors are refreshed against v1.315.0.
 
 ## Context
 Identity stores a credential as a (salt, hash) pair, never plaintext. The framework needs one
@@ -33,24 +37,24 @@ factor, and comparison are decided once and not re-implemented per app. Two forc
 Provide a single `IPasswordHasher` (`MMCA.Common.Application.Interfaces.Infrastructure.Auth`,
 `IPasswordHasher.cs:6`) with one implementation `PasswordHasher`
 (`Source/Core/MMCA.Common.Infrastructure/Auth/PasswordHasher.cs:22`), registered as a singleton via
-`TryAddSingleton` (`Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:335`, in the public
-`AddServices` extension member at `DependencyInjection.cs:315` that `AddInfrastructure`
-(`DependencyInjection.cs:57`) calls at `DependencyInjection.cs:254`). The call site always runs, but
+`TryAddSingleton` (`Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:359`, in the public
+`AddServices` extension member at `DependencyInjection.cs:338` that `AddInfrastructure`
+(`DependencyInjection.cs:58`) calls at `DependencyInjection.cs:277`). The call site always runs, but
 `TryAdd` semantics mean a host that has already registered its own `IPasswordHasher` keeps it: the
 framework supplies the default hasher rather than forcing it. The type is stateless (only `const`
 parameters), so the singleton lifetime is safe.
 
-- **New passwords use versioned PBKDF2-HMAC-SHA512.** `HashPassword` (`PasswordHasher.cs:61`) draws a
-  fresh 32-byte salt from `RandomNumberGenerator.GetBytes` (`PasswordHasher.cs:65`) and derives a
+- **New passwords use versioned PBKDF2-HMAC-SHA512.** `HashPassword` (`PasswordHasher.cs:67`) draws a
+  fresh 32-byte salt from `RandomNumberGenerator.GetBytes` (`PasswordHasher.cs:71`) and derives a
   64-byte key via `Rfc2898DeriveBytes.Pbkdf2` with `HashAlgorithmName.SHA512` (`ComputePbkdf2Hash`,
-  `PasswordHasher.cs:141-147`). It writes a 69-byte hash: the version byte `0x01`, a 4-byte big-endian
-  iteration count, then the 64-byte digest (`PasswordHasher.cs:68-71`). The constants are
+  `PasswordHasher.cs:159-165`). It writes a 69-byte hash: the version byte `0x01`, a 4-byte big-endian
+  iteration count, then the 64-byte digest (`PasswordHasher.cs:74-77`). The constants are
   `SaltSize = 32` (`PasswordHasher.cs:25`), `HashSize = 64` (`PasswordHasher.cs:28`) and
   `Iterations = 210_000` (`PasswordHasher.cs:34`), the OWASP figure for PBKDF2-HMAC-SHA512. The
   versioned format and the work factor are owned by ADR-133.
 - **Verification reads the work factor from the stored bytes, not from a flag.** `VerifyPassword`
-  (`PasswordHasher.cs:77`) returns false unless the salt is `SaltSize` bytes and `TryReadIterations`
-  accepts the hash (`PasswordHasher.cs:90`). `TryReadIterations` (`PasswordHasher.cs:122-138`) accepts
+  (`PasswordHasher.cs:83`) returns false unless the salt is `SaltSize` bytes and `TryReadIterations`
+  accepts the hash (`PasswordHasher.cs:96`). `TryReadIterations` (`PasswordHasher.cs:140-156`) accepts
   exactly two shapes: a header-less 64-byte hash, read at `LegacyIterations = 600_000`
   (`PasswordHasher.cs:37`), or a 69-byte hash whose version byte is `0x01` and whose stored count lies
   between `MinIterations = 100_000` (`PasswordHasher.cs:52`) and `MaxIterations = 2_000_000`
@@ -58,55 +62,67 @@ parameters), so the singleton lifetime is safe.
   shapes transparently. The bounds cap a tampered row rather than freeze it: such a row can still move
   the work factor anywhere from 100,000 to 2,000,000, or to 600,000 by taking the header-less shape,
   but cannot drop below the floor or force an unbounded verification (`PasswordHasher.cs:48-58`,
-  `:126`, `:133`).
+  `:144`, `:151`).
 - **The legacy branch is load-bearing, not dead code.** The 64-byte branch of `TryReadIterations`
-  (`PasswordHasher.cs:124-128`) is the only path by which a record written before versioning still
+  (`PasswordHasher.cs:142-146`) is the only path by which a record written before versioning still
   verifies. A refactor that "simplifies" it away would compile cleanly, pass the current-format tests,
   deploy without error, and then silently reject every record not yet upgraded. There is no exception
   and no startup failure to catch it; the only symptom is that those users cannot sign in.
 - **A successful sign-in upgrades a stale record.** `IPasswordHasher` declares
   `NeedsRehash(byte[] hash)` as a default interface member returning false (`IPasswordHasher.cs:28`),
   so a host-supplied hasher need not implement it. `PasswordHasher.NeedsRehash`
-  (`PasswordHasher.cs:109-115`) returns true for a legacy 64-byte hash and for a versioned hash whose
+  (`PasswordHasher.cs:127-133`) returns true for a legacy 64-byte hash and for a versioned hash whose
   stored count differs from `Iterations`, and false for the current shape and for unrecognized
   material. After tokens are issued, `AuthenticationServiceBase` calls `RehashPasswordIfNeededAsync`
-  (`AuthenticationServiceBase.cs:237`, declared at `:676`), which runs only when issuance succeeded and
-  the user implements `IPasswordRehashableUser` (`:678`), checks `NeedsRehash` (`:688`), hashes the
-  verified plaintext (`:693`) and saves through the unit of work, all inside `BestEffort.ExecuteAsync`
-  (`:683`): a failure is logged and the record is upgraded on a later sign-in, never failing a sign-in
-  that already succeeded. Both apps opt in (ADC `User.cs:36`, Store `User.cs:30`).
+  (`AuthenticationServiceBase.cs:295`, declared at `:1001`), which runs only when issuance succeeded
+  and the user implements `IPasswordRehashableUser` (`:1003`), checks `NeedsRehash` (`:1013`), hashes
+  the verified plaintext (`:1018`), applies it through the aggregate's own `RehashPassword` (`:1019`)
+  and saves through the unit of work (`:1029`), all inside `BestEffort.ExecuteAsync` (`:1008`). An
+  aggregate that refuses the new material is logged as `PasswordRehashRejected` and the save is
+  skipped (`:1020-1026`); any other failure is logged and the record is upgraded on a later sign-in,
+  never failing a sign-in that already succeeded. Both apps opt in (ADC `User.cs:39`, Store
+  `User.cs:30`).
+- **A sign-in with no password to check still pays a verification's cost.** `IPasswordHasher` declares
+  a third default interface member, `BurnVerificationCost(string password)`, which by default derives
+  one `HashPassword` and discards it (`IPasswordHasher.cs:39`). `PasswordHasher` implements it
+  explicitly (`PasswordHasher.cs:114`), deriving over a fresh salt at
+  `BurnIterations` (`PasswordHasher.cs:64`), the larger of `Iterations` and `LegacyIterations`
+  (600,000), so the burn costs what verifying a legacy record costs rather than what a new hash costs.
 - **Comparison is constant time.** The single PBKDF2 path compares the recomputed digest to the trailing
-  `HashSize` bytes of the stored hash (`PasswordHasher.cs:95`) with
-  `CryptographicOperations.FixedTimeEquals` (`PasswordHasher.cs:100`), which always reads the full
+  `HashSize` bytes of the stored hash (`PasswordHasher.cs:101`) with
+  `CryptographicOperations.FixedTimeEquals` (`PasswordHasher.cs:106`), which always reads the full
   length so the verify time does not leak how many leading bytes matched.
 - **Adopted by both apps' Identity flow, through shared bases.** Each app's `AuthenticationService` is a
   sealed subclass of `AuthenticationServiceBase<TUser>`
-  (`Source/Core/MMCA.Common.Application/Auth/AuthenticationServiceBase.cs:67`, `IPasswordHasher`
-  parameter at `:69`) that passes the hasher into the base constructor rather than calling it. The
-  base owns every sign-in call site: the login-time `VerifyPassword` (`AuthenticationServiceBase.cs:178`),
-  the registration-time `HashPassword` (`AuthenticationServiceBase.cs:277`), the timing burn for an
-  unknown account or one with no stored credential such as an external-OAuth account (`HashPassword`
-  at `AuthenticationServiceBase.cs:655`, reached from `:170-172`) and the rehash above. ADC's
+  (`Source/Core/MMCA.Common.Application/Auth/AuthenticationServiceBase.cs:74`, `IPasswordHasher`
+  parameter at `:76`) that passes the hasher into the base constructor rather than calling it. The
+  base owns every sign-in call site: the login-time `VerifyPassword` (`AuthenticationServiceBase.cs:212`),
+  the registration-time `HashPassword` (`AuthenticationServiceBase.cs:335`), the timing burn for an
+  unknown account, one with no stored credential such as an external-OAuth account, or a machine
+  client's service account (ADR-140) (`BurnPasswordVerificationCost` at
+  `AuthenticationServiceBase.cs:955-963`, calling `BurnVerificationCost` at `:962`, reached from `:203`
+  when `CanSignInWithPassword` at `:938` is false, `:201`) and the rehash above. ADC's
   subclass declares the parameter and forwards it
-  (`MMCA.ADC/.../Identity.Application/Users/AuthenticationService.cs:52`, forwarded at
-  `AuthenticationService.cs:61`); Store's does the same
+  (`MMCA.ADC/.../Identity.Application/Users/AuthenticationService.cs:53`, forwarded at
+  `AuthenticationService.cs:63`); Store's does the same
   (`MMCA.Store/.../Identity.Application/Users/AuthenticationService.cs:28`, forwarded at
   `AuthenticationService.cs:35`). The remaining hasher call sites are hoisted the same way, each into
   its own shared base. Change-password lives in `ChangePasswordHandlerBase<TUser, TCommand>`
-  (`ChangePasswordHandlerBase.cs:56`, `IPasswordHasher` at `:58`), which verifies the current password
-  (`ChangePasswordHandlerBase.cs:109`) before hashing the new one (`ChangePasswordHandlerBase.cs:118`)
-  and applying the aggregate's `ChangePassword` (`ChangePasswordHandlerBase.cs:119`). Reset-password
+  (`ChangePasswordHandlerBase.cs:55`, `IPasswordHasher` at `:57`), which verifies the current password
+  (`ChangePasswordHandlerBase.cs:108`) before hashing the new one (`ChangePasswordHandlerBase.cs:117`)
+  and applying the aggregate's `ChangePassword` (`ChangePasswordHandlerBase.cs:118`). Reset-password
   lives in `ResetPasswordHandlerBase<TUser, TCommand>` (`MMCA.Common.Application.Users.UseCases.ResetPassword`,
   `ResetPasswordHandlerBase.cs:42`, `IPasswordHasher` at `:44`), which hashes the new password
   (`ResetPasswordHandlerBase.cs:110`). Each app's `ChangePasswordHandler` and `ResetPasswordHandler`
   only declares the `IPasswordHasher` parameter and forwards it (`ChangePasswordHandler.cs:26` in ADC,
   `:31` in Store; `ResetPasswordHandler.cs:26` in ADC, `:30` in Store). Seeding lives in
   `IdentityModuleDbSeederBase<TUser>` (`MMCA.Common.Infrastructure.Persistence.DbContexts.Seeding`,
-  `IdentityModuleDbSeederBase.cs:57`, `IPasswordHasher` through the constructor at `:59` and `:71`),
-  which hashes each seeded account's password (`IdentityModuleDbSeederBase.cs:136`); each app's
+  `IdentityModuleDbSeederBase.cs:54`, `IPasswordHasher` through the primary constructor at `:56` and the
+  secondary constructor at `:68`, held in the `PasswordHasher` property at `:77`), which hashes each
+  seeded account's password through that property (`IdentityModuleDbSeederBase.cs:121`); each app's
   `IdentityModuleDbSeeder` supplies only the account list, an `EmailExistsAsync` existence check
-  (abstract at `IdentityModuleDbSeederBase.cs:114`; ADC `IdentityModuleDbSeeder.cs:42`, Store `:45`)
-  and a `CreateUser` factory (abstract at `IdentityModuleDbSeederBase.cs:123`) and forwards the hasher (`IdentityModuleDbSeeder.cs:30` in ADC,
+  (abstract at `IdentityModuleDbSeederBase.cs:99`; ADC `IdentityModuleDbSeeder.cs:41`, Store `:44`)
+  and a `CreateUser` factory (abstract at `IdentityModuleDbSeederBase.cs:108`) and forwards the hasher (`IdentityModuleDbSeeder.cs:30` in ADC,
   `:32` in Store). Every hasher invocation both apps depend on therefore sits in framework code; no
   file under either app's `Source/` calls `HashPassword`, `VerifyPassword` or `NeedsRehash`. The one
   app-side lookup is each app's `IdentityModuleSeeder`, which resolves `IPasswordHasher` through
@@ -130,16 +146,18 @@ parameters), so the singleton lifetime is safe.
 - **The legacy branch is a correctness dependency that looks deletable.** Its load-bearing role is
   invisible from the method body alone, so it is the most refactor-fragile line in the hasher. The
   mitigation is this record plus focused regression tests:
-  `Tests/Core/MMCA.Common.Infrastructure.Tests/Auth/PasswordHasherSecurityTests.cs:34` verifies a
-  legacy 64-byte digest computed at 600,000 iterations, `PasswordHasherSecurityTests.cs:147` pins
+  `Tests/Core/MMCA.Common.Infrastructure.Tests/Auth/PasswordHasherSecurityTests.cs:36` verifies a
+  legacy 64-byte digest computed at 600,000 iterations, `PasswordHasherSecurityTests.cs:149` pins
   `LegacyIterations`, and `Auth/PasswordHasherTests.cs:39` asserts `NeedsRehash` is true for a legacy
   hash, alongside the current-format coverage at `PasswordHasherTests.cs:21` (69-byte versioned hash),
-  `PasswordHasherTests.cs:77` and `PasswordHasherTests.cs:84` (verify true and false). The removed
-  HMAC format is pinned the other way: `PasswordHasherSecurityTests.cs:164` asserts a 128-byte-salt
-  HMAC-SHA512 digest is rejected.
+  `PasswordHasherSecurityTests.cs:222` (a hash it produced verifies) and `PasswordHasherTests.cs:77`
+  (a wrong password does not). The removed HMAC format is pinned the other way:
+  `PasswordHasherSecurityTests.cs:166` asserts a 128-byte-salt HMAC-SHA512 digest is rejected. The burn
+  is pinned too: `PasswordHasherSecurityTests.cs:235` holds `BurnIterations` to the larger work factor
+  and `:244` checks the burn costs as much as verifying a legacy record.
 - **Format selection is keyed on hash length and a version byte.** It relies on the legacy (64 bytes)
   and versioned (69 bytes) shapes being distinct. They are, and corrupt or hostile material at worst
-  fails to verify rather than misauthenticates (`PasswordHasherSecurityTests.cs:195`), but a future
+  fails to verify rather than misauthenticates (`PasswordHasherSecurityTests.cs:197`), but a future
   format has to claim a new version byte rather than reuse `0x01`.
 - **The upgrade is opt-in and best effort.** A user whose app type does not implement
   `IPasswordRehashableUser`, or who never signs in, stays on the old shape indefinitely, and a failed
@@ -246,3 +264,42 @@ current source; what moved is the Status block and the rehash anchors.
    is declared at `AuthenticationServiceBase.cs:676` (call site `:237` unchanged), with the
    `IPasswordRehashableUser` check at `:678`, `BestEffort.ExecuteAsync` at `:683`, `NeedsRehash` at
    `:688` and `HashPassword` at `:693`; `:67`, `:69`, `:178`, `:277` and `:655` are unchanged.
+
+## Revision (2026-11-23)
+Re-verified against current source. The decision is unchanged: one framework-owned `IPasswordHasher`,
+PBKDF2-HMAC-SHA512 at 210,000 iterations for new hashes, the load-bearing header-less 64-byte branch,
+constant-time comparison, opt-in rehash on sign-in and every call site hoisted into a Common base. What
+moved is the timing burn, a detail of the rehash, the test anchors and every line anchor after the
+v1.315.0 release.
+
+1. **The timing burn belongs to the hasher.** `IPasswordHasher` has a third default interface member,
+   `BurnVerificationCost(string password)`, defaulting to a discarded `HashPassword`
+   (`IPasswordHasher.cs:39`). `PasswordHasher` implements it explicitly (`PasswordHasher.cs:114`) at
+   `BurnIterations` (`PasswordHasher.cs:64`), the larger of `Iterations` and `LegacyIterations`, so the
+   burn costs 600,000 iterations, not the 210,000 a `HashPassword` costs. `AuthenticationServiceBase`
+   reaches it through `BurnPasswordVerificationCost` (`AuthenticationServiceBase.cs:955-963`, call at
+   `:962`) from `:203` when `CanSignInWithPassword` (`:938`) is false (`:201`), which also covers a
+   machine client's service account (ADR-140, comment at `:197-200`). The Decision gains a bullet for
+   it and the adoption bullet's burn clause is corrected.
+2. **The rehash applies through the aggregate.** `RehashPasswordIfNeededAsync` passes the new hash to
+   the aggregate's `RehashPassword` (`AuthenticationServiceBase.cs:1019`); a refused invariant is
+   logged as `PasswordRehashRejected` and returns (`:1020-1026`) before the unit-of-work save at
+   `:1029`.
+3. **Test anchors corrected.** `PasswordHasherTests.cs:77` is the wrong-password test and `:84` is the
+   `[Theory]` of the null-or-empty-password throw test, so the "verify true and false" pair now cites
+   `PasswordHasherSecurityTests.cs:222` (a produced hash verifies) and `PasswordHasherTests.cs:77`. The
+   burn tests at `PasswordHasherSecurityTests.cs:235` and `:244` are added to the Trade-offs list.
+4. **Anchors re-verified against current source:** `PasswordHasher.cs` `HashPassword` `:67`,
+   `GetBytes` `:71`, header and digest writes `:74-77`, `VerifyPassword` `:83`, guard `:96`, comparison
+   `:101`/`:106`, `NeedsRehash` `:127-133`, `TryReadIterations` `:140-156` (legacy branch `:142-146`,
+   bounds `:144`/`:151`), `ComputePbkdf2Hash` `:159-165` (class `:22`, `SaltSize` `:25`, `HashSize`
+   `:28`, `Iterations` `:34`, `LegacyIterations` `:37`, `MinIterations` `:52`, `MaxIterations` `:58`
+   unchanged); `DependencyInjection.cs:359` (`TryAddSingleton`), `:338` (`AddServices`), `:58`/`:277`
+   (`AddInfrastructure` and its call); `AuthenticationServiceBase.cs:74`/`:76`/`:212`/`:335`, rehash
+   call `:295`, declared `:1001`, check `:1003`, `BestEffort.ExecuteAsync` `:1008`, `NeedsRehash`
+   `:1013`, `HashPassword` `:1018`; ADC `User.cs:39` (Store `:30` unchanged); app
+   `AuthenticationService.cs` ADC `:53` (forwarded `:63`; Store `:28`/`:35` unchanged);
+   `ChangePasswordHandlerBase.cs:55`/`:57`/`:75` (`HandlerName`)/`:108`/`:117`/`:118`;
+   `IdentityModuleDbSeederBase.cs:54`/`:56`/`:68`/`:77` (`PasswordHasher` property)/`:99`/`:108`/`:121`;
+   app `IdentityModuleDbSeeder.cs` `EmailExistsAsync` ADC `:41`, Store `:44` (forwards ADC `:30`,
+   Store `:32` unchanged); `PasswordHasherSecurityTests.cs:36`, `:149`, `:166`, `:197`.

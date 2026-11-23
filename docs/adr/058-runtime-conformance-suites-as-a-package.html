@@ -264,11 +264,12 @@
           Revised 2026-10-21: the OpenAPI base gains an opt-in committed-baseline breaking-change diff that all seven OpenAPI subclasses adopt, the decorator pipeline is now sealed against late registration through the framework helpers, the lockstep pin is 1.250.0, and anchors are refreshed; see the Revision (2026-10-21) below.
           Revised 2026-10-26: anchors refreshed after the v1.261.0 consumer sweep (the lockstep <code>MMCA.Common.Shared</code> pin is now 1.261.0 and the ADC pin anchor moved to <code>Directory.Packages.props:108</code>), with the <code>MiddlewarePipelineOrderTestsBase</code> and ADR-015 / ADR-046 cross-reference anchors re-pointed; see the Revision (2026-10-26) below.
           Revised 2026-10-28: the lockstep <code>MMCA.Common.Shared</code> pin is now 1.265.1, and the inventory of MMCA.Common&#39;s own conformance self-tests names the tenancy-base and breaking-change-detector tests; see the Revision (2026-10-28) below.
-          Amended 2026-11-12: the test tier gains <code>ServiceHostTestFactory</code> and <code>ReplaceWithFake</code>, and the structural package gains the cache-invalidation and process-timeout convention bases; see the Revision (2026-11-12) below.</p>
+          Amended 2026-11-12: the test tier gains <code>ServiceHostTestFactory</code> and <code>ReplaceWithFake</code>, and the structural package gains the cache-invalidation and process-timeout convention bases; see the Revision (2026-11-12) below.
+          Revised 2026-11-23: four consumer-host bases outside the seven (<code>AuthPreferencesTestsBase</code>, <code>FallbackAuthorizationTestsBase</code>, <code>UiHostHardeningTestsBase</code>, <code>AppHostBicepParityTestsBase</code>) are recorded with their ADC and Store subclasses, Store Catalog&#39;s own 412 test and Helpdesk&#39;s webhook-delivery registration are added, the lockstep pin is 1.315.0, and anchors are refreshed; see the Revision (2026-11-23) below.</p>
           <h2 id="context">Context</h2>
           <p>ADR-015 turned the architecture invariants into build-gating tests, and drew its own boundary
           explicitly: the fitness suite asserts &quot;<strong>structure / registration</strong>, not runtime behavior&quot;
-          (<code>015-architecture-fitness-functions.md:118</code>). NetArchTest can prove a controller lives in the right
+          (<code>015-architecture-fitness-functions.md:128</code>). NetArchTest can prove a controller lives in the right
           assembly and that an outbound client <em>wires</em> resilience. It cannot prove that a booted host answers a
           bad page number with an RFC 9457 problem document, emits HSTS on a liveness probe, drains within a
           bounded stop, serves the OpenAPI document it claims to serve, answers two API versions, or nests the
@@ -276,7 +277,7 @@
           one of them is only true if the consuming host wired it correctly: the framework ships the middleware,
           the controller base, and the decorator registrations, but the host composes them.</p>
           <p>The gap is visible in the ADR set. ADR-046 names exactly one of these checks (a &quot;shared
-          fitness contract&quot; for versioning, one Decision bullet at <code>046-http-api-versioning.md:100</code>), and ADR-013 defines the RFC 9457
+          fitness contract&quot; for versioning, one Decision bullet at <code>046-http-api-versioning.md:109</code>), and ADR-013 defines the RFC 9457
           edge contract that another one guards, but neither decides the layer itself. The runtime-conformance
           tier has been referenced repeatedly and never recorded on its own.</p>
           <h2 id="decision">Decision</h2>
@@ -288,11 +289,11 @@
           <code>Source/Hosting/MMCA.Common.Testing/Conformance/</code> in namespace <code>MMCA.Common.Testing.Conformance</code>, so
           every bare <code>TestsBase.cs</code> name below resolves inside that folder; the fixtures they boot through sit
           beside it in <code>Fixtures/</code>. <code>ProblemDetailsContractTestsBase&lt;TFixture&gt;</code>
-          (<code>Source/Hosting/MMCA.Common.Testing/Conformance/ProblemDetailsContractTestsBase.cs:22</code>) asserts the two
+          (<code>Source/Hosting/MMCA.Common.Testing/Conformance/ProblemDetailsContractTestsBase.cs:21</code>) asserts the two
           error-shaping paths, ASP.NET Core model validation (400, <code>application/problem+json</code> with
           <code>type</code>/<code>traceId</code>/<code>errors</code>, <code>ProblemDetailsContractTestsBase.cs:30</code>) and the framework&#39;s
           <code>HandleFailure</code> Result mapping (404, <code>ProblemDetailsContractTestsBase.cs:42</code>), against the shared
-          shape check <code>AssertProblemDetailsShapeAsync</code> (<code>ProblemDetailsContractTestsBase.cs:68</code>).
+          shape check <code>AssertProblemDetailsShapeAsync</code> (<code>ProblemDetailsContractTestsBase.cs:67</code>).
           <code>OpenApiContractTestsBase&lt;TFixture&gt;</code> (<code>OpenApiContractTestsBase.cs:32</code>) asserts the live
           <code>/openapi/v1.json</code> document is OpenAPI 3.x and still describes the pinned public resources
           (<code>OpenApiContractTestsBase.cs:83</code>, <code>OpenApiContractTestsBase.cs:98</code>).
@@ -319,7 +320,7 @@
           <li><strong>The host is really booted; nothing is inferred from registrations.</strong> Three of the six booted-host
           suites (problem details, OpenAPI, versioning) reach the host through <code>IIntegrationTestFixture</code>
           (<code>Source/Hosting/MMCA.Common.Testing/Fixtures/IIntegrationTestFixture.cs:8</code>) and
-          <code>IntegrationTestBase&lt;TFixture&gt;</code> (<code>Fixtures/IntegrationTestBase.cs:13</code>), whose <code>Client</code> comes from the
+          <code>IntegrationTestBase&lt;TFixture&gt;</code> (<code>Fixtures/IntegrationTestBase.cs:12</code>), whose <code>Client</code> comes from the
           fixture&#39;s <code>WebApplicationFactory</code>. The other three take a factory directly: security headers through
           its own abstract <code>CreateClient()</code> (<code>SecurityHeadersTestsBase.cs:42</code>), graceful shutdown and gateway
           hardening through a factory the subclass supplies (<code>GracefulShutdownTestsBase.cs:32</code>,
@@ -339,7 +340,7 @@
           through the <code>WebApplicationFactory</code> surface.</li>
           <li><strong>The consumer supplies its host and its host-specific facts, nothing else.</strong> The abstract surface
           is deliberately small: two probe requests for problem details
-          (<code>ProblemDetailsContractTestsBase.cs:55</code>, <code>:61</code>), a route-count floor and a pinned resource list for
+          (<code>ProblemDetailsContractTestsBase.cs:54</code>, <code>:60</code>), a route-count floor and a pinned resource list for
           OpenAPI (<code>OpenApiContractTestsBase.cs:58</code>, <code>:71</code>), a client factory for security headers
           (<code>SecurityHeadersTestsBase.cs:42</code>), a service-collection configurator for the decorator pipeline
           (<code>DecoratorPipelineOrderTestsBase.cs:46</code>), the booted factory plus the host&#39;s own route-table facts
@@ -354,20 +355,20 @@
           the registration list.</strong> It builds a <code>ServiceCollection</code>, runs the repo&#39;s own real registration
           sequence through the subclass, resolves the closed handler interface from the built provider, then
           walks outermost to innermost by reading each decorator&#39;s private inner-handler field
-          (<code>DecoratorPipelineOrderTestsBase.cs:105</code>) and compares the names against the ADR-014 order
+          (<code>DecoratorPipelineOrderTestsBase.cs:106</code>) and compares the names against the ADR-014 order
           (<code>DecoratorPipelineOrderTestsBase.cs:49</code>, <code>:61</code>). That is what makes it a runtime check: Scrutor
           <code>TryDecorate</code> applies decorators in reverse registration order, so a regression in the decorator
           registration order changes the constructed pipeline while every registration still exists. A
           module scan that runs after the decorators no longer does so silently: <code>AddApplicationDecorators()</code>
           seals the collection, and every framework registration helper called after it throws
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/DependencyInjection.cs:310-319</code>, checked by
-          <code>AddApplicationDecorators</code> and <code>AddMmcaApplicationPipeline</code> at <code>:116</code> and <code>:209</code>,
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/DependencyInjection.cs:313-339</code>, checked by
+          <code>AddApplicationDecorators</code> and <code>AddMmcaApplicationPipeline</code> at <code>:134</code> and <code>:228</code>,
           <code>ScanModuleApplicationServices</code> at <code>DependencyInjection.ModuleScanning.cs:49</code>, and <code>AddEntityCrud</code>,
           <code>AddEntityUpdateVerb</code> and <code>AddEntityUpdate</code> at <code>DependencyInjection.Crud.cs:80</code>, <code>:142</code>, <code>:193</code>).
           A raw handler registration made outside those helpers is not checked at registration; the
-          <code>VerifyDecoratorPipeline()</code> fitness check (<code>DependencyInjection.cs:244</code>) reports it instead. All
+          <code>VerifyDecoratorPipeline()</code> fitness check (<code>DependencyInjection.cs:263</code>) reports it instead. All
           three consumer subclasses compose the sequence through the sealing <code>AddMmcaApplicationPipeline(...)</code>
-          (<code>DependencyInjection.cs:207</code>).</li>
+          (<code>DependencyInjection.cs:226</code>).</li>
           <li><strong>The live document is the oracle; a committed baseline is an opt-in breaking-change diff.</strong> By
           default the OpenAPI guard reads no checked-in file (<code>OpenApiContractTestsBase.cs:15-17</code>), so a new
           controller can never leave a stale snapshot behind, and those assertions are deliberately coarse:
@@ -385,11 +386,13 @@
           <code>MMCA.Store/Tests/Integration/MMCA.Store.Catalog.IntegrationTests/Contract/OpenApiContractTests.cs:30</code>).
           The committed <code>openapi/&lt;host&gt;.json</code> documents that MMCA.ADC and MMCA.Store diff in CI (ADR-046) are a
           separate, build-time check owned by each consumer, not an input to this suite.</li>
-          <li><strong>Hosts extend the base where they have more to prove.</strong> ADC Conference adds a 412
-          stale-precondition test on top of the inherited 400/404 facts, driving two editors through the
-          same <code>If-Match</code> tag and reusing the inherited shape assertion
-          (<code>MMCA.ADC/Tests/Integration/MMCA.ADC.Conference.IntegrationTests/Contract/ProblemDetailsContractTests.cs:42</code>,
-          <code>:70</code>).</li>
+          <li><strong>Hosts extend the base where they have more to prove.</strong> ADC Conference and Store Catalog each add
+          a 412 stale-precondition test on top of the inherited 400/404 facts, reusing the inherited shape
+          assertion: ADC drives two editors through the same <code>If-Match</code> tag
+          (<code>MMCA.ADC/Tests/Integration/MMCA.ADC.Conference.IntegrationTests/Contract/ProblemDetailsContractTests.cs:41</code>,
+          <code>:69</code>), and Store does the same over a category rename
+          (<code>MMCA.Store/Tests/Integration/MMCA.Store.Catalog.IntegrationTests/Contract/ProblemDetailsContractTests.cs:41</code>,
+          <code>:58</code>).</li>
           </ul>
           <p>Adoption today is real but <strong>partial, and uneven per suite</strong>. The OpenAPI and problem-details guards are
           the two with full coverage of the extracted REST hosts. OpenAPI covers all four ADC services
@@ -428,12 +431,12 @@
           (<code>MMCA.ADC/Tests/Hosts/MMCA.ADC.Gateway.Tests/GatewayHardeningTests.cs:29</code>,
           <code>MMCA.Store/Tests/Hosts/MMCA.Store.Gateway.Tests/GatewayHardeningTests.cs:34</code>). Each subclass states
           its own route-table facts, turns the active-probe expectation off
-          (<code>MMCA.ADC/Tests/Hosts/MMCA.ADC.Gateway.Tests/GatewayHardeningTests.cs:89</code>,
+          (<code>MMCA.ADC/Tests/Hosts/MMCA.ADC.Gateway.Tests/GatewayHardeningTests.cs:90</code>,
           <code>MMCA.Store/Tests/Hosts/MMCA.Store.Gateway.Tests/GatewayHardeningTests.cs:93</code>), so on both gateways
           the probe gate asserts that no cluster carries an enabled active probe, and supplies a
           Production-pinned factory with a recording forwarder standing in for <code>IHttpForwarder</code>
-          (<code>MMCA.ADC/Tests/Hosts/MMCA.ADC.Gateway.Tests/GatewayHardeningTests.cs:103</code>,
-          <code>MMCA.Store/Tests/Hosts/MMCA.Store.Gateway.Tests/GatewayHardeningTests.cs:128</code>). The decorator suite is
+          (<code>MMCA.ADC/Tests/Hosts/MMCA.ADC.Gateway.Tests/GatewayHardeningTests.cs:104</code>,
+          <code>MMCA.Store/Tests/Hosts/MMCA.Store.Gateway.Tests/GatewayHardeningTests.cs:125</code>). The decorator suite is
           subclassed once per consumer repo and is the one base all three of them run: ADC and Store both
           against the Identity module&#39;s <code>ChangePreferencesCommand</code> / <code>GetUserPreferencesQuery</code> pair
           (<code>MMCA.ADC/Tests/Architecture/MMCA.ADC.Architecture.Tests/Cqrs/DecoratorPipelineOrderTests.cs:29</code>,
@@ -455,7 +458,37 @@
           is exercised through its one private <code>Probe</code> subclass, instantiated with different settings
           (<code>Tests/Hosting/MMCA.Common.Testing.Tests/Conformance/TenantResolutionTestsBaseTests.cs:15</code>, <code>:163</code>),
           and the breaking-change detector behind the OpenAPI baseline gate has its own unit tests
-          (<code>OpenApiBreakingChangeDetectorTests.cs:14</code>, <code>OpenApiBreakingChangeDetectorParameterTests.cs:15</code>).</p>
+          (<code>OpenApiBreakingChangeDetectorTests.cs:14</code>, <code>OpenApiBreakingChangeDetectorParameterTests.cs:15</code>).
+          The folder also holds the self-tests of the four consumer-host bases recorded below:
+          <code>ConsumerHostConformanceBasesShapeTests.cs:16</code>, and under <code>ServiceDiscovery/</code> the parity-base tests
+          (<code>AppHostBicepParityTestsBaseTests.cs:14</code>, with private <code>Probe</code> and <code>LocatorProbe</code> subclasses at
+          <code>:132</code> and <code>:142</code>), the edge-parser tests (<code>AppHostBicepEdgeParserTests.cs:11</code>) and their shared
+          samples (<code>ServiceDiscoverySamples.cs:9</code>).</p>
+          <p><strong>Four consumer-host bases ship beside the seven and are not counted among them.</strong> They sit in
+          sub-folders of the same <code>Conformance</code> folder, in namespaces
+          <code>MMCA.Common.Testing.Conformance.{Identity,UiHost,ServiceDiscovery}</code>:
+          <code>AuthPreferencesTestsBase&lt;TFixture&gt;</code>
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Testing/Conformance/Identity/AuthPreferencesTestsBase.cs:27</code>),
+          a booted-host contract for the Identity preferences endpoints that derives <code>IntegrationTestBase</code>;
+          <code>FallbackAuthorizationTestsBase&lt;TEntryPoint&gt;</code> (<code>UiHost/FallbackAuthorizationTestsBase.cs:38</code>) and
+          <code>UiHostHardeningTestsBase&lt;TEntryPoint, TCircuitCeiling&gt;</code> (<code>UiHost/UiHostHardeningTestsBase.cs:31</code>)
+          over a UI web host factory; and <code>AppHostBicepParityTestsBase</code>
+          (<code>ServiceDiscovery/AppHostBicepParityTestsBase.cs:30</code>), which reads the AppHost and Bicep files as
+          text through the internal <code>AppHostBicepEdgeParser</code> (<code>ServiceDiscovery/AppHostBicepEdgeParser.cs:13</code>)
+          and never boots the AppHost (<code>AppHostBicepParityTestsBase.cs:18</code>). ADC and Store subclass all four:
+          <code>AuthPreferencesTests</code>
+          (<code>MMCA.ADC/Tests/Integration/MMCA.ADC.Identity.IntegrationTests/Attendee/AuthPreferencesTests.cs:17</code>,
+          <code>MMCA.Store/Tests/Integration/MMCA.Store.Identity.IntegrationTests/Auth/AuthPreferencesTests.cs:15</code>),
+          <code>FallbackAuthorizationTests</code>
+          (<code>MMCA.ADC/Tests/Hosts/MMCA.ADC.UI.Web.Tests/FallbackAuthorizationTests.cs:29</code>,
+          <code>MMCA.Store/Tests/Hosts/MMCA.Store.UI.Web.Tests/FallbackAuthorizationTests.cs:24</code>),
+          <code>UiHostHardeningTests</code> over <code>BoundedCircuitHandler</code>
+          (<code>MMCA.ADC/Tests/Hosts/MMCA.ADC.UI.Web.Tests/UiHostHardeningTests.cs:20</code>,
+          <code>MMCA.Store/Tests/Hosts/MMCA.Store.UI.Web.Tests/UiHostHardeningTests.cs:22</code>) and
+          <code>AppHostBicepParityTests</code>
+          (<code>MMCA.ADC/Tests/Hosts/MMCA.ADC.Gateway.Tests/AppHostBicepParityTests.cs:11</code>,
+          <code>MMCA.Store/Tests/Hosts/MMCA.Store.Gateway.Tests/AppHostBicepParityTests.cs:11</code>). MMCA.Helpdesk
+          subclasses none of them.</p>
           <p><strong>MMCA.Helpdesk adopts exactly one of them, the decorator suite</strong>, having adopted none of them when
           this record was written. Its architecture-test project now references <code>MMCA.Common.Testing</code> alongside the
           structural package
@@ -463,12 +496,14 @@
           and subclasses <code>DecoratorPipelineOrderTestsBase</code> against a real Tickets pair: the framework&#39;s generic
           <code>UpdateEntityCommand&lt;Ticket, TicketUpdateRequest, TicketIdentifierType&gt;</code>, closed over the Ticket
           aggregate by the seed&#39;s own <code>AddEntityCrud</code> wiring, and the module&#39;s hand-written <code>GetTicketByIdQuery</code>
-          (<code>MMCA.Helpdesk/Tests/Architecture/MMCA.Helpdesk.Architecture.Tests/DecoratorPipelineOrderTests.cs:38</code>,
-          <code>:40-43</code>), whose <code>ConfigureServices</code> runs the seed&#39;s own registration sequence through the composed
-          <code>AddMmcaApplicationPipeline(...)</code>: <code>AddApplication()</code>, the Tickets module registration, then
-          <code>AddApplicationDecorators()</code> last, with the collection sealed afterwards (<code>:67-68</code>). Two files in that
+          (<code>MMCA.Helpdesk/Tests/Architecture/MMCA.Helpdesk.Architecture.Tests/DecoratorPipelineOrderTests.cs:37</code>,
+          <code>:39-42</code>), whose <code>ConfigureServices</code> runs the seed&#39;s own registration sequence through the composed
+          <code>AddMmcaApplicationPipeline(...)</code>: <code>AddApplication()</code>, the Tickets module registration and the host&#39;s
+          webhook delivery registration (<code>:66-70</code>), then <code>AddApplicationDecorators()</code> last, with the collection
+          sealed afterwards. The subclass adds one fact of its own on top of the two inherited ones,
+          <code>ComposedPipeline_LeavesNoHandlerUndecorated</code> (<code>:73-74</code>). Two files in that
           project import the <code>MMCA.Common.Testing.Conformance</code> namespace, and only one of them belongs to this
-          record: that decorator subclass (<code>:13</code>). The other, <code>MiddlewarePipelineOrderTests.cs</code> (<code>:1</code>), is a
+          record: that decorator subclass (<code>:12</code>). The other, <code>MiddlewarePipelineOrderTests.cs</code> (<code>:1</code>), is a
           one-line subclass of <code>MiddlewarePipelineOrderTestsBase</code>
           (<code>MMCA.Common/Source/Hosting/MMCA.Common.Testing/Conformance/MiddlewarePipelineOrderTestsBase.cs:31</code>,
           <code>MMCA.Helpdesk/Tests/Architecture/MMCA.Helpdesk.Architecture.Tests/MiddlewarePipelineOrderTests.cs:15</code>)
@@ -539,7 +574,7 @@
           problem-details shape check has no such diff.</li>
           <li><strong>The decorator check reads private fields.</strong> Unwrapping the chain depends on each decorator holding
           its inner handler in a field that implements the same closed interface
-          (<code>DecoratorPipelineOrderTestsBase.cs:112-115</code>); a decorator that stored it differently would silently
+          (<code>DecoratorPipelineOrderTestsBase.cs:113-116</code>); a decorator that stored it differently would silently
           end the walk early rather than fail loudly.</li>
           <li><strong>A new contract base only reaches consumers at the next lockstep bump.</strong> The suites ship inside the
           package set, so adding one is a framework release plus a consumer sweep (ADR-016), not a local edit
@@ -823,6 +858,56 @@
           <p>The same pass added a dependency-outage base to the AppHost test tier, <code>DependencyOutageTestBase&lt;TFixture&gt;</code>
           (<code>MMCA.Common/Source/Hosting/MMCA.Common.Testing.Aspire/Outages/DependencyOutageTestBase.cs:35</code>). It
           belongs to that tier, so it is recorded in <a href="117-apphost-integration-test-base.html">ADR-117</a>, not here.</p>
+          <h2 id="revision-2026-11-23">Revision (2026-11-23)</h2>
+          <p>Re-verified against current source. The decision stands: the seven contract bases still ship in
+          <code>MMCA.Common.Testing</code> and their subclass inventory is unchanged. What moved is the set of bases beside
+          them, two subclass details, the pin, and the anchors.</p>
+          <ol>
+          <li><strong>Four consumer-host bases ship beside the seven.</strong> <code>AuthPreferencesTestsBase&lt;TFixture&gt;</code>
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Testing/Conformance/Identity/AuthPreferencesTestsBase.cs:27</code>),
+          <code>FallbackAuthorizationTestsBase&lt;TEntryPoint&gt;</code> (<code>UiHost/FallbackAuthorizationTestsBase.cs:38</code>),
+          <code>UiHostHardeningTestsBase&lt;TEntryPoint, TCircuitCeiling&gt;</code> (<code>UiHost/UiHostHardeningTestsBase.cs:31</code>)
+          and <code>AppHostBicepParityTestsBase</code> (<code>ServiceDiscovery/AppHostBicepParityTestsBase.cs:30</code>, text-only,
+          <code>:18</code>), plus the internal <code>AppHostBicepEdgeParser</code> (<code>ServiceDiscovery/AppHostBicepEdgeParser.cs:13</code>).
+          <code>AuthPreferencesTestsBase</code> boots a host like the six, but it guards an Identity module endpoint
+          rather than a framework edge contract, so it is listed beside the seven rather than counted among
+          them. ADC and Store subclass all four (for example
+          <code>MMCA.ADC/Tests/Hosts/MMCA.ADC.UI.Web.Tests/UiHostHardeningTests.cs:20</code>,
+          <code>MMCA.Store/Tests/Hosts/MMCA.Store.Gateway.Tests/AppHostBicepParityTests.cs:11</code>); Helpdesk
+          subclasses none. The Decision adoption section and the Related entry now name them.</li>
+          <li><strong>MMCA.Common&#39;s conformance self-tests include the new bases&#39; tests.</strong>
+          <code>ConsumerHostConformanceBasesShapeTests.cs:16</code>, <code>ServiceDiscovery/AppHostBicepParityTestsBaseTests.cs:14</code>
+          (private <code>Probe</code> <code>:132</code>, <code>LocatorProbe</code> <code>:142</code>), <code>ServiceDiscovery/AppHostBicepEdgeParserTests.cs:11</code>
+          and <code>ServiceDiscovery/ServiceDiscoverySamples.cs:9</code> join the inventory the 2026-10-28 Revision
+          listed in full.</li>
+          <li><strong>Store Catalog adds its own 412 test.</strong> <code>PreconditionFailed_412_HasProblemDetailsShape</code>
+          (<code>MMCA.Store/Tests/Integration/MMCA.Store.Catalog.IntegrationTests/Contract/ProblemDetailsContractTests.cs:41</code>)
+          reuses the inherited shape assertion (<code>:58</code>), so the &quot;hosts extend the base&quot; bullet names both
+          consumers.</li>
+          <li><strong>The Helpdesk decorator subclass registers webhook delivery inside the pipeline and adds a fact.</strong>
+          Its <code>AddMmcaApplicationPipeline(...)</code> call also runs <code>.AddWebhookDelivery()</code>
+          (<code>MMCA.Helpdesk/Tests/Architecture/MMCA.Helpdesk.Architecture.Tests/DecoratorPipelineOrderTests.cs:66-70</code>),
+          and <code>ComposedPipeline_LeavesNoHandlerUndecorated</code> (<code>:73-74</code>) checks the whole handler set on top of
+          the two inherited facts.</li>
+          <li><strong>The lockstep pin is now 1.315.0.</strong> MMCA.ADC, MMCA.Store and MMCA.Helpdesk all pin
+          <code>MMCA.Common.Shared</code> 1.315.0 (<code>MMCA.ADC/Directory.Packages.props:148</code>,
+          <code>MMCA.Store/Directory.Packages.props:28</code>, <code>MMCA.Helpdesk/Directory.Packages.props:85</code>), not the
+          1.265.1 the 2026-10-28 Revision recorded.</li>
+          <li>Anchors re-verified against current source: <code>ProblemDetailsContractTestsBase</code> class <code>:21</code>, its
+          probes <code>:54</code> and <code>:60</code>, <code>AssertProblemDetailsShapeAsync</code> <code>:67</code> (the facts <code>:30</code> and <code>:42</code> are
+          unchanged); <code>Fixtures/IntegrationTestBase.cs:12</code>; <code>DecoratorPipelineOrderTestsBase.cs</code> <code>UnwrapChain</code>
+          <code>:106</code> and its field scan <code>:113-116</code>; the pipeline seal in
+          <code>MMCA.Common/Source/Core/MMCA.Common.Application/DependencyInjection.cs:313-339</code>, with the checks in
+          <code>AddApplicationDecorators</code> and <code>AddMmcaApplicationPipeline</code> at <code>:134</code> and <code>:228</code>, the seal call
+          <code>:169</code>, <code>AddMmcaApplicationPipeline</code> <code>:226</code> and <code>VerifyDecoratorPipeline</code> <code>:263</code>; the ADC Conference
+          412 test <code>:41</code> and <code>:69</code>; the gateway subclasses&#39; <code>ActiveHealthChecksExpected</code> at ADC <code>:90</code> and Store
+          <code>:93</code> and their forwarder replacement at ADC <code>:104</code> and Store <code>:125</code>; the Helpdesk decorator subclass
+          <code>:37</code>, its generic arguments <code>:39-42</code> and its <code>Conformance</code> import <code>:12</code>; <code>MMCA.ADC/MMCA.ADC.CI.slnf:64</code>
+          for the UI.Web tests project; ADC&#39;s local <code>UiRateLimitingTests.cs:19</code> and
+          <code>BoundedCircuitHandlerTests.cs:16</code>, still plain <code>IClassFixture</code> tests rather than suite subclasses;
+          Store&#39;s <code>Pages/Roles/RoleListTests.cs:14</code> and <code>RoleEditTests.cs:14</code>; and the Context
+          cross-references <code>015-architecture-fitness-functions.md:128</code> and <code>046-http-api-versioning.md:109</code>.</li>
+          </ol>
           <h2 id="related">Related</h2>
           <p>ADR-015 (the structural / registration fitness layer this complements; its stated non-goal, &quot;not
           runtime behavior&quot;, is exactly this ADR&#39;s scope, and the two tiers ship as two separate packages),
@@ -833,7 +918,10 @@
           one of these seven; the folder also holds the no-host tenancy fitness base <code>TenantResolutionTestsBase</code>,
           <code>MMCA.Common/Source/Hosting/MMCA.Common.Testing/Conformance/TenantResolutionTestsBase.cs:27</code>, which only
           MMCA.Common&#39;s own tests subclass, and the <code>OpenApiBreakingChangeDetector</code> the OpenAPI baseline gate uses,
-          with its <code>OpenApiBreakingChange</code> and <code>OpenApiBreakingChangeKind</code> result types),
+          with its <code>OpenApiBreakingChange</code> and <code>OpenApiBreakingChangeKind</code> result types; its <code>Identity</code>,
+          <code>UiHost</code> and <code>ServiceDiscovery</code> sub-folders hold the four consumer-host bases
+          <code>AuthPreferencesTestsBase</code>, <code>FallbackAuthorizationTestsBase</code>, <code>UiHostHardeningTestsBase</code> and
+          <code>AppHostBicepParityTestsBase</code>, also outside the seven),
           ADR-016 (lockstep versioning:
           a new conformance base reaches consumers only through a release and a full sweep). Package inventory
           for the framework lives in <code>MMCA.Common/FACTS.md</code>.</p>
@@ -862,6 +950,7 @@
             <li><a href="#revision-2026-10-26">Revision (2026-10-26)</a></li>
             <li><a href="#revision-2026-10-28">Revision (2026-10-28)</a></li>
             <li><a href="#revision-2026-11-12-a-service-host-test-factory-a-fake-swap-helper-and-two-convention-bases">Revision (2026-11-12): a service-host test factory, a fake-swap helper, and two convention bases</a></li>
+            <li><a href="#revision-2026-11-23">Revision (2026-11-23)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

@@ -61,6 +61,11 @@ see the Revision (2026-10-21) at the end. Revised 2026-10-26: anchors refreshed 
 fifty-three sites across thirty-four files, MMCA.Store narrows a fifth holder and composes at five
 fluent sites (ten consumer sites in all), and the specification-taking `CountAsync` has a MMCA.Store
 caller again in the storefront product read; see the Revision (2026-10-28) at the end.
+Revised 2026-11-23: MMCA.Helpdesk now runs the raw-queryable rule, so all four repositories opt in;
+keyset paging and the change feed reach `IEntityQueryService` and an opt-in controller action;
+ADC's narrowing is seventy-six sites across forty-two files and the consumers compose at twelve
+call lines; the combined allowlist is twelve files, not thirteen; see the Revision (2026-11-23) at
+the end.
 
 ## Context
 Every read an application handler performs has to come from somewhere, and the shape of that contract
@@ -114,11 +119,11 @@ keeps the raw `IQueryable` surfaces out of Application code.
   a queryable at all.
 - **Application code must not touch those queryables, and a fitness rule fails the build.**
   `RawQueryableConventionTestsBase.ApplicationLayer_DoesNotUseRawQueryableSurfaces`
-  (`Source/Hosting/MMCA.Common.Testing.Architecture/Bases/Cqrs/RawQueryableConventionTestsBase.cs:61`)
-  scans the `.cs` files of each mapped module's Application project (`:45-58`, `:71-82`) for
-  `.Table` / `.TableNoTracking*` member access (`:103`). The stated reason is the extraction promise:
+  (`Source/Hosting/MMCA.Common.Testing.Architecture/Bases/Cqrs/RawQueryableConventionTestsBase.cs:64`)
+  scans the `.cs` files of each mapped module's Application project (`:48-61`, `:74-95`) for
+  `.Table` / `.TableNoTracking*` member access (`:121`). The stated reason is the extraction promise:
   a raw-queryable handler is EF-coupled and its query shape cannot move behind a gRPC boundary
-  (`:6-12`, `:85`).
+  (`:6-12`, `:103`).
 - **Predicates are `Specification` expression trees.** `ISpecification<TEntity, TIdentifierType>`
   (`Source/Core/MMCA.Common.Domain/Interfaces/ISpecification.cs:12`) exposes a single `Criteria`
   expression for LINQ-to-DB translation (`:17`) plus `IsSatisfiedBy` for in-memory evaluation
@@ -136,92 +141,122 @@ keeps the raw `IQueryable` surfaces out of Application code.
   (`Source/Core/MMCA.Common.Domain/Specifications/OwnedByUserSpecification.cs:20`, `:29-30`) and is
   closed over the entity type at the call site, which is how ADC scopes an attendee to their own
   answers
-  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/Events/EventQuestionAnswersController.cs:113`,
-  inside the `GetExportSpecification` override at `:109-114`, resolved through
-  `OwnershipHelper.GetOwnershipSpecification` at `:110`).
-- **Specifications compose.** `AndSpecification` (`Specification.cs:81`), `OrSpecification` (`:107`),
-  and `NotSpecification` (`:132`) each expose a `Criteria` that delegates to the internal
-  `SpecificationComposer` (`:151`). `Combine` (`:198`) rebinds the right operand's parameter onto the
+  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/Events/EventQuestionAnswersController.cs:115`,
+  inside the `GetExportSpecification` override at `:111-116`, resolved through
+  `OwnershipHelper.GetOwnershipSpecification` at `:112`).
+- **Specifications compose.** `AndSpecification` (`Specification.cs:80`), `OrSpecification` (`:106`),
+  and `NotSpecification` (`:131`) each expose a `Criteria` that delegates to the internal
+  `SpecificationComposer` (`:150`). `Combine` (`:197`) rebinds the right operand's parameter onto the
   left's with an `ExpressionVisitor`, `ParameterReplacer.Replace` (`ParameterReplacer.cs:34`), and
-  joins the two bodies with `AndAlso` or `OrElse` (`Specification.cs:212-216`); `Negate` (`:224`)
-  wraps the inner body in `Expression.Not` and keeps the inner lambda's own parameter (`:231-234`).
+  joins the two bodies with `AndAlso` or `OrElse` (`Specification.cs:211-215`); `Negate` (`:223`)
+  wraps the inner body in `Expression.Not` and keeps the inner lambda's own parameter (`:231-233`).
   No `Expression.Invoke` is involved, so the composed result is a single expression tree any provider
-  can translate, and each combinator caches it in a per-instance lazy field (`:90` with `??=` at
-  `:94`, `:116` with `:120`, `:139` with `:143`). Composition is **criteria-only, and enforced as
+  can translate, and each combinator caches it in a per-instance lazy field (`:89` with `??=` at
+  `:93`, `:115` with `:119`, `:138` with `:142`). Composition is **criteria-only, and enforced as
   such**: every combinator constructor passes its operands through `SpecificationComposer.RejectShaped`
-  (`:88-89`, `:114-115`, `:138`; defined at `:165-179`), which throws `ArgumentException` when an
+  (`:87-88`, `:113-114`, `:137`; defined at `:164-178`), which throws `ArgumentException` when an
   operand is a `QuerySpecification` carrying ordering, includes, paging, tracking or soft-delete scope
-  (`HasShape`, `:181-189`), because the composed specification could not forward that shape and would
+  (`HasShape`, `:180-188`), because the composed specification could not forward that shape and would
   drop it silently. An unshaped `QuerySpecification` composes like any other, and the check applies
   equally to the fluent `.And()` / `.Or()` / `.Not()`, which construct the same classes.
   `InlineSpecification` (`:45`) wraps a predicate that was assembled dynamically and has
   no hand-written class. Composition is used in production: ADC's paged session read ANDs the
   public-session specification with the speaker-scoped one rather than substituting, because dropping
   the public filter would leak non-accepted sessions to non-privileged callers
-  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/Sessions/SessionsController.cs:113`,
-  `:135`, rationale at `:108-111`). Every composing call site writes the fluent form, five in
-  MMCA.ADC, four `.And()` calls, for example `publicSpecification.And(...)`
-  (`SessionsController.cs:135`), and one `.Not()` on the Identity user-list read, the first
+  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/Sessions/SessionsController.cs:118`,
+  `:140`, rationale at `:113-115`). Every composing call site writes the fluent form. MMCA.ADC has
+  seven call lines carrying eight operations: seven `.And()` calls, for example
+  `publicSpecification.And(...)` (`SessionsController.cs:140`), the others in
+  `SpeakersController.cs:181`, the MCP reader
+  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Mcp/ConferenceMcpReader.cs:133`, and
+  `:280`, which chains two), `PublicConferenceVisibility.cs:148` and
+  `UserListEntityQueryService.cs:111`, plus one `.Not()` on the Identity user-list read, the first
   production caller of `Not`
-  (`MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Application/Users/UserListEntityQueryService.cs:172`),
-  and five in MMCA.Store: two review reads
-  (`MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.API/Controllers/ReviewsController.cs:106`,
+  (`MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Application/Users/UserListEntityQueryService.cs:172`).
+  MMCA.Store has five: two review reads
+  (`MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.API/Controllers/ReviewsController.cs:105`,
   `MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.Application/Reviews/DomainEventHandlers/ProductReviewChangedHandler.cs:111`)
   and three `.And()` calls that fold optional `InlineSpecification` filters into the criteria of
   the storefront product specification, a `QuerySpecification` that composes them inside its own
   `BuildCriteria` and exposes the result as its `Criteria`
   (`MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.Application/Products/UseCases/Storefront/StorefrontProductsSpecification.cs:72`,
-  `:78`, `:84`, with the class at `:27` and `BuildCriteria` at `:59`). That is ten consumer
-  composing call sites, and the hand-built
+  `:78`, `:84`, with the class at `:27` and `BuildCriteria` at `:59`). That is twelve consumer
+  composing call lines (thirteen operations), none of them `.Or()`, and the hand-built
   `new AndSpecification<...>(a, b)` construction no longer appears in any consumer.
 - **The specification enters the same query pipeline, not a parallel one.** `IEntityQueryService`
-  takes an optional `ISpecification<TEntity, TIdentifierType>` on every DTO or entity read: the two
+  takes an optional `ISpecification<TEntity, TIdentifierType>` on six reads: the two
   `GetAllAsync` overloads, `GetEntityByIdAsync`, and `GetByIdAsync`
-  (`Source/Core/MMCA.Common.Application/Interfaces/Mapping/IEntityQueryService.cs:40`, `:63`, `:110`,
-  `:131`). The other two reads on the interface take a raw predicate rather than a specification,
-  `GetAllForLookupAsync` (`:87-91`) and `ExistsAsync` (`:143-146`).
+  (`Source/Core/MMCA.Common.Application/Interfaces/Mapping/IEntityQueryService.cs:52`, `:75`, `:121`,
+  `:142`), the keyset `GetPageByCursorAsync` (`:173`, specification at `:175`) and the change feed
+  `GetChangesSinceAsync` (`:206`, specification at `:210`). Those two are default interface members
+  whose bodies return an unexpected failure (`:176-180` with code `:28`, `:211-215` with code
+  `:34`), so only an implementer that overrides them, as `EntityQueryService` does, serves keyset
+  paging or the change feed; a custom `IEntityQueryService` gets the failure. The other two reads on the interface
+  take a raw predicate rather than a specification, `GetAllForLookupAsync` (`:98`, predicate at
+  `:100`) and `ExistsAsync` (`:154-155`).
   `EntityQueryService` passes the specification's `Criteria` into the query parameters
-  (`Source/Core/MMCA.Common.Application/Services/EntityQueryService.cs:322` on the list path, `:599`
-  in `BuildQueryAsync`) alongside the dynamic filters, sorting, and paging. Cross-source predicates are produced the same way:
+  (`Source/Core/MMCA.Common.Application/Services/EntityQueryService.cs:322` on the list path, `:693`
+  in `BuildQueryAsync`, declared at `:672`) alongside the dynamic filters, sorting, and paging.
+  Keyset paging reaches the HTTP layer through the same service: `GetPageByCursorAsync`
+  (`EntityQueryService.cs:536`, overriding the default) delegates to the repository's
+  `GetPageByCursorAsync` (`:562`), the change feed (`:577`) reads through that same repository
+  member (`:591`), and `EntityControllerBase`
+  exposes an opt-in `GET cursor` action
+  (`Source/Presentation/MMCA.Common.API/Controllers/EntityControllerBase.cs:403-404`, calling the
+  query service at `:424`) that exists only on a controller carrying `[SupportsCursorPaging]`.
+  MMCA.Helpdesk's ticket controller opts in
+  (`MMCA.Helpdesk/Source/Modules/Tickets/MMCA.Helpdesk.Tickets.API/Controllers/TicketsController.cs:49`)
+  and MMCA.ADC's bookmarks controller reads the change feed
+  (`MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.API/Controllers/BookmarksController.cs:132`);
+  MMCA.Store Source uses neither. Cross-source predicates are produced the same way:
   `CrossSourceSpecification.BuildAsync`
   (`Source/Core/MMCA.Common.Application/Specifications/CrossSourceSpecification.cs:39`) resolves the
   principal keys with `GetProjectedAsync` (`:55-56`) and returns an `InlineSpecification` of
   `FK IN (keys)` ANDed with the local predicate (`:62-63`, `:74-90`).
 
-Enforcement of the queryable ban is **opt-in per repository, by subclassing the base**, and today
-three repositories opt in. MMCA.Common scans its own framework Application project
-(`Tests/Architecture/MMCA.Common.Architecture.Tests/Cqrs/RawQueryableConventionTests.cs:18-22`),
-MMCA.ADC scans its mapped Identity/Conference/Engagement Application projects plus the thin
-Notification module appended by hand
-(`MMCA.ADC/Tests/Architecture/MMCA.ADC.Architecture.Tests/Cqrs/RawQueryableConventionTests.cs:21-30`),
-and MMCA.Store scans its Catalog/Sales/Identity Application projects
-(`MMCA.Store/Tests/Architecture/MMCA.Store.Architecture.Tests/Cqrs/RawQueryableConventionTests.cs`).
-Store adopted on the 2026-07-28 drift wave with an **empty** `AllowedFiles`: its Application layer
-had zero raw-queryable uses at adoption, so unlike the other two it starts with no exemptions to
-ratchet down. MMCA.Helpdesk has no subclass, so its Application code is not scanned today. The
+Enforcement of the queryable ban is **opt-in per repository, by subclassing the base**, and all
+four repositories opt in. MMCA.Common scans its own framework Application project
+(`Tests/Architecture/MMCA.Common.Architecture.Tests/Cqrs/RawQueryableConventionTests.cs:18-22`).
+MMCA.ADC scans the Application projects its architecture map declares, Identity, Conference,
+Engagement and the thin Notification module
+(`MMCA.ADC/Tests/Architecture/MMCA.ADC.Architecture.Tests/AdcArchitectureMap.cs:52`), through the
+base's default directory scan: its subclass overrides only `Map` and `AllowedFiles`
+(`MMCA.ADC/Tests/Architecture/MMCA.ADC.Architecture.Tests/Cqrs/RawQueryableConventionTests.cs:13`,
+`:16-31`). MMCA.Store scans its Catalog/Sales/Identity Application projects
+(`MMCA.Store/Tests/Architecture/MMCA.Store.Architecture.Tests/Cqrs/RawQueryableConventionTests.cs:11`),
+and MMCA.Helpdesk scans the Application project its map declares
+(`MMCA.Helpdesk/Tests/Architecture/MMCA.Helpdesk.Architecture.Tests/Cqrs/RawQueryableConventionTests.cs:15`,
+`Map` at `:17`). Store adopted on the 2026-07-28 drift wave with an **empty** `AllowedFiles`
+(`MMCA.Store/.../RawQueryableConventionTests.cs:14`): its Application layer had zero raw-queryable
+uses at adoption. Helpdesk does not override `AllowedFiles` at all, deliberately: an entry there
+would name the seed's own files and cover nothing in a module an adopter scaffolds
+(`MMCA.Helpdesk/.../RawQueryableConventionTests.cs:9-12`). So
+only MMCA.Common and MMCA.ADC have exemptions to ratchet down. The
 rule also ships with a documented exemption list, `AllowedFiles`
-(`RawQueryableConventionTestsBase.cs:40`), used as an adoption ratchet (`:24-27`): MMCA.Common
+(`RawQueryableConventionTestsBase.cs:41`), used as an adoption ratchet (`:26-28`): MMCA.Common
 exempts six files, the generic query pipeline itself (`EntityQueryService.cs`, which builds its base
-query from `Table` / `TableNoTracking` at `EntityQueryService.cs:335` and `:591-593`) plus five Notifications
-handlers (`RawQueryableConventionTests.cs:26-36`), and MMCA.ADC exempts six, the Engagement live
-layer, the bookmarks projection and the Notification GDPR export
+query from `Table` / `TableNoTracking` at `EntityQueryService.cs:335` and `:686-687`) plus five
+Notifications handlers
+(`MMCA.Common/Tests/Architecture/MMCA.Common.Architecture.Tests/Cqrs/RawQueryableConventionTests.cs:28`
+for `EntityQueryService.cs`, `:32-36` for the handlers), and MMCA.ADC exempts six,
+the Engagement live layer, the bookmarks projection and the Notification GDPR export
 (`MMCA.ADC/.../RawQueryableConventionTests.cs:16-31`); no Identity file remains on its list. The
 ratchet only tightens: an entry that names no scanned file, or only files with no raw-queryable use
-left, fails the rule as stale (`RawQueryableConventionTestsBase.cs:36-37`, message at `:99`).
+left, fails the rule as stale (`RawQueryableConventionTestsBase.cs:37-39`, message at `:100`).
 
-The interface split is shipped and, since 2026-08-21, consumed. MMCA.ADC declares the narrow
-interfaces at fifty-three read-only sites across thirty-four files, thirty-three of them Application
+The interface split is shipped and, since 2026-08-21, consumed. In MMCA.ADC `IEntityReader<` /
+`IEntityQuerier<` appear seventy-six times across forty-two files, forty-one of them Application
 files plus one API controller local
-(`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/Sessions/SessionSelectionController.cs:142`):
+(`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/Sessions/SessionSelectionController.cs:143`):
 helper parameters narrowed to
 `IEntityReader` where the helper only looks up or checks existence (for example
 `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Sessions/Validation/SessionRoomScheduling.cs:45`)
 or to `IEntityQuerier` where it projects or counts (for example
-`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Users/IntegrationEventHandlers/UserRegisteredHandler.cs:149`,
-`:186`),
+`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Users/IntegrationEventHandlers/UserRegisteredHandler.cs:164`,
+`:201`),
 and locals typed to the querier where a visibility helper reads through the unit of work
 (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Common/PublicConferenceVisibility.cs:40`,
-`:75`, `:126`, `:151`). MMCA.Store ships the same narrowing at five read-only holders: two
+`:74`, `:125`, `:150`). MMCA.Store ships the same narrowing at five read-only holders: two
 by-id/existence service fields
 (`MMCA.Store/Source/Modules/Identity/MMCA.Store.Identity.Application/Customers/CustomerService.cs:14`,
 and `MMCA.Store/Source/Modules/Identity/MMCA.Store.Identity.Application/Users/AuthenticationService.cs:49`,
@@ -229,7 +264,7 @@ assigned from `GetReadRepository` at `:50`),
 a handler parameter narrowed to `IEntityReader`
 (`MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.Application/Categories/UseCases/AssignParentCategory/CategoryAssignParentUpdateHandler.cs:120`),
 and a querier parameter on the customer-provisioning handler's `LogCollisionAsync` helper
-(`MMCA.Store/Source/Modules/Identity/MMCA.Store.Identity.Application/Users/DomainEventHandlers/UserRegisteredHandler.cs:130`),
+(`MMCA.Store/Source/Modules/Identity/MMCA.Store.Identity.Application/Users/DomainEventHandlers/UserRegisteredHandler.cs:131`),
 and a querier local in the storefront product read, which counts and lists through the same
 `QuerySpecification`
 (`MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.Application/Products/UseCases/Storefront/GetStorefrontProductsHandler.cs:46`,
@@ -242,13 +277,13 @@ narrows one site, the reference app's by-id query handler, whose local is typed 
 (`MMCA.Helpdesk/Source/Modules/Tickets/MMCA.Helpdesk.Tickets.Application/Tickets/UseCases/GetById/GetTicketByIdHandler.cs:24`,
 with the reason written next to it at `:22-23`), so the seed teaches the narrowing rather than only
 describing it in the comments its template staging script carries
-(`MMCA.Helpdesk/build/templates/stage.ps1:670`, `:1436`).
+(`MMCA.Helpdesk/build/templates/stage.ps1:690`, `:1448`).
 
 What has not changed is the wiring, and that is deliberate. `IUnitOfWork` hands out only the
 composites (`IRepository` at
 `Source/Core/MMCA.Common.Application/Interfaces/Infrastructure/Persistence/IUnitOfWork.cs:19`, `IReadRepository`
 at `:29`), and the container registers only the open generic `IRepository<,>`
-(`Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:128`). Every narrowed holder is
+(`Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:129`). Every narrowed holder is
 assigned from `IUnitOfWork.GetReadRepository<,>()` (or `GetRepository<,>()` where the same handler
 also writes) and narrows by an implicit reference conversion at the assignment, because
 `IReadRepository` derives from both narrow interfaces (`IRepository.cs:332-333`). Nothing
@@ -271,14 +306,14 @@ three consumer applications, sitting on an unchanged registration surface
   in a query and compiled in memory by `IsSatisfiedBy` (`Specification.cs:9-11`, `:32`), so an
   authorization predicate can be asserted in a domain test with no database at all.
 - **Composability keeps filters additive.** ANDing an authorization scope onto a business filter is a
-  single-expression construction (`SessionsController.cs:133-135`) instead of a second hand-written query path,
+  single-expression construction (`SessionsController.cs:138-140`) instead of a second hand-written query path,
   which is what makes "never substitute the public filter" a cheap rule to follow.
 - **A textual scan was chosen deliberately over IL analysis.** NetArchTest and reflection cannot see
   member usage inside method bodies, and the testing package carries no IL or Roslyn dependency on
   purpose, so the rule is an honest line scan with its limits written down
   (`RawQueryableConventionTestsBase.cs:13-23`).
 - **The ratchet beats a big-bang cleanup.** Recording existing raw-queryable files in `AllowedFiles`
-  makes new code clean immediately while the list shrinks over time (`:24-27`), the same adoption
+  makes new code clean immediately while the list shrinks over time (`:26-28`), the same adoption
   posture used elsewhere in the fitness suite (ADR-015).
 
 ## Trade-offs
@@ -294,9 +329,11 @@ three consumer applications, sitting on an unchanged registration surface
   `//` comments, so a match inside a string literal or a trailing comment is a false positive, and it
   cannot see through variable indirection or an interface alias that re-exposes a queryable
   (`RawQueryableConventionTestsBase.cs:17-22`).
-- **Coverage is partial by construction.** Three of the four repositories run the rule; MMCA.Helpdesk
+- **Coverage is partial by construction.** *(Superseded by the Revision (2026-11-23) below:
+  MMCA.Helpdesk now ships a subclass, so all four repositories run the rule; kept as the record of
+  the trade-off as originally accepted.)* Three of the four repositories run the rule; MMCA.Helpdesk
   currently does not, so its Application layer relies on review alone.
-- **The exemptions are real coupling, not paperwork.** The thirteen allowlisted files across
+- **The exemptions are real coupling, not paperwork.** The twelve allowlisted files across
   MMCA.Common and MMCA.ADC are EF-coupled on purpose (aggregations and projections the focused
   surface cannot express); each is intra-module or framework-owned, but every one of them would need
   rework if its module moved behind a transport boundary.
@@ -757,3 +794,77 @@ below are the current ones.
    `AuthenticationService.cs:49` (assigned at `:50`), `CategoryAssignParentUpdateHandler.cs:120`,
    `UserRegisteredHandler.cs:130`; ADC `SessionSelectionController.cs:142`. Anchors inside the earlier
    Revision sections are left as historical records.
+
+## Revision (2026-11-23)
+Re-verified against current source. The decision, the read-interface split, the composition rules
+and the fitness rule's behavior are unchanged; the rule's coverage, the query-service surface, the
+consumer counts and the allowlist total moved.
+
+1. **All four repositories run the raw-queryable rule.** MMCA.Helpdesk ships a subclass
+   (`MMCA.Helpdesk/Tests/Architecture/MMCA.Helpdesk.Architecture.Tests/Cqrs/RawQueryableConventionTests.cs:15`,
+   `Map = new HelpdeskArchitectureMap()` at `:17`) and deliberately leaves `AllowedFiles` empty
+   (`:9-12`). The Decision's enforcement paragraph is restated, and the "Coverage is partial by
+   construction" Trade-offs entry is marked superseded in place. The Revision (2026-08-31)
+   statement that Helpdesk "still ships no `RawQueryableConventionTests` subclass" no longer holds.
+2. **ADC appends nothing by hand.** The ADC subclass overrides only `Map` and `AllowedFiles`
+   (`MMCA.ADC/Tests/Architecture/MMCA.ADC.Architecture.Tests/Cqrs/RawQueryableConventionTests.cs:13`,
+   `:16-31`); the Notification Application project is scanned because the map declares it
+   (`AdcArchitectureMap.cs:52`). The Decision paragraph is corrected.
+3. **The allowlists total twelve, not thirteen.** MMCA.Common exempts six
+   (`MMCA.Common/Tests/Architecture/MMCA.Common.Architecture.Tests/Cqrs/RawQueryableConventionTests.cs:28`,
+   `:32-36`) and MMCA.ADC six
+   (`MMCA.ADC/Tests/Architecture/MMCA.ADC.Architecture.Tests/Cqrs/RawQueryableConventionTests.cs:20-23`,
+   `:27`, `:30`). The Trade-offs entry is restated.
+4. **Keyset paging and the change feed reach the query service and the HTTP layer.**
+   `IEntityQueryService` declares `GetPageByCursorAsync`
+   (`MMCA.Common/Source/Core/MMCA.Common.Application/Interfaces/Mapping/IEntityQueryService.cs:173`,
+   specification at `:175`) and `GetChangesSinceAsync` (`:206`, specification at `:210`);
+   `EntityQueryService` implements the first at `EntityQueryService.cs:536` over
+   `Repository.GetPageByCursorAsync` (`:562`) and reads the change feed through the same member
+   (`:591`). `EntityControllerBase` exposes an opt-in `GET cursor` action
+   (`MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/EntityControllerBase.cs:403-404`,
+   calling the query service at `:424`) on any controller carrying `[SupportsCursorPaging]`, and a
+   change-feed action gated on `SupportsChangeFeedAttribute` (`:457`, calling the query service at
+   `:471`). MMCA.Helpdesk's `TicketsController` opts in to cursor paging (`TicketsController.cs:49`)
+   and MMCA.ADC's `BookmarksController` calls `GetChangesSinceAsync` (`BookmarksController.cs:132`).
+   The Revision (2026-08-18) statements that keyset paging is "deliberately not on
+   `IEntityQueryService`", that the HTTP query contract offers offset paging only, and its cost
+   entry "Keyset paging stops at the repository" no longer describe current source; nor does the
+   earlier "no caller" note for `GetPageByCursorAsync`, which now holds only for direct repository
+   calls from consumer Source. The query-service bullet in the Decision is restated to six
+   specification-taking reads and two predicate-taking ones.
+5. **ADC's narrowing is restated.** `IEntityReader<` / `IEntityQuerier<` appear seventy-six times
+   across forty-two files under `MMCA.ADC/Source`: forty-one Application files plus the API
+   controller local, now at `SessionSelectionController.cs:143`. The largest new contributors are
+   the Engagement ticket insights handlers (`GetEngagementInsightsHandler.cs`, ten;
+   `GetRosterInsightsHandler.cs`, five) and the Conference `GetSessionSelectionDashboardHandler.cs`
+   (five).
+6. **The consumers compose at twelve call lines.** MMCA.ADC has seven lines and eight operations,
+   seven `.And()` (`SessionsController.cs:140`, `SpeakersController.cs:181`,
+   `ConferenceMcpReader.cs:133` and `:280`, the latter chaining two,
+   `PublicConferenceVisibility.cs:148`, `UserListEntityQueryService.cs:111`) and the `.Not()` at
+   `UserListEntityQueryService.cs:172`; MMCA.Store's five are unchanged in shape
+   (`ReviewsController.cs:105`, `ProductReviewChangedHandler.cs:111`,
+   `StorefrontProductsSpecification.cs:72`, `:78`, `:84`). Consumer Source still holds no `.Or()`
+   call and no hand-built `AndSpecification`, `OrSpecification` or `NotSpecification`
+   construction. The Decision bullet is restated.
+7. Anchors re-verified against current source: `RawQueryableConventionTestsBase.cs` test method
+   `:64` (`[Fact]` `:63`), directories `:48-61`, scan loop `:74-95`, member-access regex `:121`,
+   extraction reason `:103`, `AllowedFiles` `:41`, ratchet `:26-28`, stale rule `:37-39` with its
+   message at `:100`; `Specification.cs` `And` `:80`, `Or` `:106`, `Not` `:131`,
+   `SpecificationComposer` `:150`, `RejectShaped` `:164-178`, `HasShape` `:180-188`, `Combine`
+   `:197`, join `:211-215`, `Negate` `:223` (parameter kept `:231-233`), lazy fields `:89`/`:93`,
+   `:115`/`:119`, `:138`/`:142`, constructor guards `:87-88`, `:113-114`, `:137`;
+   `DependencyInjection.cs:129`; `IEntityQueryService.cs` `:52`, `:75`, `:121`, `:142`,
+   `GetAllForLookupAsync` `:98`, `ExistsAsync` `:154-155`; `EntityQueryService.cs` `BuildQueryAsync`
+   `:672`, base query `:686-687`, criteria `:693` (`:322` and `:335` still hold);
+   `EventQuestionAnswersController.cs` override `:111-116`, `OwnershipHelper` `:112`,
+   `OwnedByUserSpecification` `:115`; `SessionsController.cs` method `:118`, rationale `:113-115`,
+   ternary `:138-140`; ADC `UserRegisteredHandler.cs:164`, `:201`;
+   `PublicConferenceVisibility.cs:40`, `:74`, `:125`, `:150` (`SessionRoomScheduling.cs:45` holds);
+   MMCA.Store `UserRegisteredHandler.cs:131` (`CustomerService.cs:14`, `AuthenticationService.cs:49`,
+   `CategoryAssignParentUpdateHandler.cs:120`, `GetStorefrontProductsHandler.cs:46` and
+   `ProductVariantService.cs:21` hold); `stage.ps1` comments at `:690` and `:1448`
+   (`GetTicketByIdHandler.cs:24`, reason `:22-23`, holds). Anchors inside the earlier Revision
+   sections are left as historical records; among them the `SpeakersController` `.And` cited at
+   `:187` is now `:181`.

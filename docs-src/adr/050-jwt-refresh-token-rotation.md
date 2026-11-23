@@ -18,7 +18,7 @@ claim and single-session details no longer describe the code: refresh tokens are
 type declares them; neither Domain analyzer ledger mentions them any more (the unshipped ledger holds
 only `#nullable enable`, `Source/Core/MMCA.Common.Domain/PublicAPI.Unshipped.txt:1`, and the shipped
 `IAuthUser` entries list only `PasswordHash` and `PasswordSalt`, `PublicAPI.Shipped.txt:16-18`), so the
-removal record survives only in Common's changelog (`MMCA.Common/CHANGELOG.md:3623`). The only callable copies left are on a
+removal record survives only in Common's changelog (`MMCA.Common/CHANGELOG.md:4559`). The only callable copies left are on a
 Common test double
 (`MMCA.Common/Tests/Core/MMCA.Common.Application.Tests/Users/UserUseCaseTestDoubles.cs:83,89`), which is
 not dead code: `DeleteUserHandlerBaseTests.cs:81` still calls `UpdateRefreshToken` on it. Beyond that,
@@ -43,7 +43,8 @@ revoking the user's live sessions again (Common #612, v1.261.0); anchors refresh
 silently reverting to the seven-day default (Common v1.247.0), so the Trade-offs bullet and the
 Decision's sliding-expiry bullet are corrected; the changelog removal anchor is refreshed. Revised
 2026-11-02: opt-in lost-response recovery (Common v1.273.0) can rotate a never-presented successor
-instead of revoking the family; see Revision below.
+instead of revoking the family; see Revision below. Revised 2026-11-23: anchors refreshed after
+later Common releases moved the changelog removal record.
 
 Note (2026-09-03): the body bullet on account deactivation and erasure described shipped code when this
 record was written (ADC revoked in `Delete()` and `Anonymize()`, Store in `Deactivate()` and
@@ -435,6 +436,17 @@ v1.273.0, `MMCA.Common/CHANGELOG.md:17`).
    conditions in `FindRecoverableSuccessorAsync` at `:531-555`). A successor that is used or expired,
    or a presentation past the window, still revokes the family (`:363`). ADR-097 carries the full
    rule. The body above is not re-anchored by this revision.
+
+## Revision (2026-11-23)
+Re-verified against current source. The decision, the superseded status and the removal of the
+refresh-token members from `IAuthUser` are unchanged; only the changelog anchor in Status moved, as
+later releases were prepended to `MMCA.Common/CHANGELOG.md`.
+
+1. Anchors re-verified against current source: the removal record in Status is
+   `MMCA.Common/CHANGELOG.md:4559` (the BREAKING multi-device refresh sessions entry; `:3623` is now
+   unrelated text). For reference, the v1.273.0 heading is now `MMCA.Common/CHANGELOG.md:834` and
+   the v1.247.0 `[Range(1, int.MaxValue)]` lifetime entry is `:1279`. The 2026-11-02 and earlier
+   revisions keep the anchors they recorded.
 
 ## Related
 ADR-004 (the stateless RS256/JWKS access token this refresh flow reissues, and the algorithm pinning

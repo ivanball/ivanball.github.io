@@ -8,6 +8,7 @@ Revised 2026-10-07: the live drain's bounded shutdown flush (complete the queue,
 Revised 2026-10-21: anchors refreshed after the live drain, upvote handler and question submit handler moved.
 Revised 2026-10-26: anchors refreshed after the live poll open handler and question submit handler moved.
 Revised 2026-10-28: the moderation handler's queue writes (one unconditional event write plus a Pending-count write only for an approved or dismissed Pending question, not one write per branch), with the live poll close and moderation handler anchors refreshed.
+Revised 2026-11-23: the `ITransactional` premise narrowed to the four enqueuing commands (the ticket roster commands in Engagement do implement it), with the scoring trigger, scoring handler, queue registration, drain processor registration, upvote handler and live poll open handler anchors refreshed.
 
 ## Context
 ADR-052 ran two different kinds of work through one mechanism: ephemeral broadcasts that must not
@@ -19,19 +20,19 @@ the difference between them.
 The expensive half has moved out. Session scoring is scheduled as a durable internal command
 ([ADR-114](114-internal-commands-durable-job-queue.md)): the trigger endpoint writes a row through
 `IInternalCommandScheduler.ScheduleAsync`
-(`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/Sessions/SessionSelectionController.cs:148-152`)
-and answers `202 Accepted` once the row is written (`:160`), with a failed schedule surfaced through
-`HandleFailure` (`:156`), an unknown event answered 404 by an existence check before anything is
-scheduled (`:143-146`), and a `[FeatureGate(ConferenceFeatures.SessionScoring)]` gate (`:134`)
+(`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/Sessions/SessionSelectionController.cs:149-153`)
+and answers `202 Accepted` once the row is written (`:161`), with a failed schedule surfaced through
+`HandleFailure` (`:157`), an unknown event answered 404 by an existence check before anything is
+scheduled (`:143-146`), and a `[FeatureGate(ConferenceFeatures.SessionScoring)]` gate (`:135`)
 answering 404 while the flag is off, and the framework's leased, retrying,
 dead-lettering processor runs the pass. Duplicate runs are held off across replicas by a per-event
 `IDistributedLock` claim taken inside the handler
-(`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Sessions/UseCases/DecisionSupport/ScoreEventSessions/ScoreEventSessionsInternalCommandHandler.cs:83-85`,
-`ClaimTimeToLive` of 15 minutes at `:61`, `ClaimWait` of `TimeSpan.Zero` at `:68`), and the loser of
-that claim logs and returns `Result.Success()` (`:87-91`). The handler's remarks say where its
+(`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Sessions/UseCases/DecisionSupport/ScoreEventSessions/ScoreEventSessionsInternalCommandHandler.cs:85-87`,
+`ClaimTimeToLive` of 15 minutes at `:63`, `ClaimWait` of `TimeSpan.Zero` at `:70`), and the loser of
+that claim logs and returns `Result.Success()` (`:89-93`). The handler's remarks say where its
 retries come from: the framework's processor completes a row only on a successful result, and
 anything else consumes an attempt, backs off, and dead-letters at `InternalCommands:MaxAttempts`
-(`:23-27`).
+(`:26-28`).
 
 What remains is the half that was always a good fit for a channel: ephemeral, best-effort work owned
 by one process, where a lost item costs a missed UI refresh and nothing else. This record is scoped
@@ -46,8 +47,8 @@ starts an untracked `Task` from a request, and nothing that must run lands here.
   interface both resolving to the **one** instance (`TryAddSingleton<LiveChannelPublishQueue>()` plus
   `TryAddSingleton<ILiveChannelPublishQueue>(sp => sp.GetRequiredService<LiveChannelPublishQueue>())`
   at
-  `MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Application/DependencyInjection.cs:53-54`,
-  with the "one concrete singleton, exposed to handlers via the interface" note at `:52`). Registering
+  `MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Application/DependencyInjection.cs:59-60`,
+  with the "one concrete singleton, exposed to handlers via the interface" note at `:58`). Registering
   the two separately would give producers a queue nobody drains. Capacity is a per-job constant
   (`1024` at
   `MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Application/Live/LiveChannelPublishQueue.cs:18`,
@@ -72,7 +73,7 @@ starts an untracked `Task` from a request, and nothing that must run lands here.
   (`MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Infrastructure/Live/LiveChannelPublishProcessor.cs:85-90`,
   test and `TryRead` at `:94`; the `BackgroundService` base at `:44`, registered by
   `AddHostedService<LiveChannelPublishProcessor>()` at
-  `MMCA.ADC.Engagement.Infrastructure/DependencyInjection.cs:23`). The test and the read are two
+  `MMCA.ADC.Engagement.Infrastructure/DependencyInjection.cs:26`). The test and the read are two
   separate steps, so a stop that lands between them still dequeues one item onto a cancelled token.
   The bookmark eviction drain reads with no stop test, which is fine for a capacity-one signal
   (`MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Infrastructure/Caching/BookmarkCacheEvictionProcessor.cs:56-60`).
@@ -108,15 +109,17 @@ starts an untracked `Task` from a request, and nothing that must run lands here.
     (`MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Application/LivePolls/DomainEventHandlers/LivePollVoteChangedHandler.cs:41`)
     and enqueues at `:79`; `SessionQuestionUpvoteChangedHandler` implements
     `IDomainEventHandler<SessionQuestionUpvoteChanged>`
-    (`.../SessionQuestions/DomainEventHandlers/SessionQuestionUpvoteChangedHandler.cs:44`) and
-    enqueues at `:87`. Both are singletons that open their own scope (`:53`, `:56`) and wrap the work
-    in `BestEffort.ExecuteAsync` (`:51`, `:54`).
+    (`.../SessionQuestions/DomainEventHandlers/SessionQuestionUpvoteChangedHandler.cs:43`) and
+    enqueues at `:86`. Both are singletons that open their own scope (`:53`, `:55`) and wrap the work
+    in `BestEffort.ExecuteAsync` (`:51`, `:53`).
   - *From the command handler side of a non-transactional command, once its save has returned.*
     `TransactionalCommandDecorator` wraps only commands implementing `ITransactional` and passes
     everything else straight through
     (`MMCA.Common/Source/Core/MMCA.Common.Application/UseCases/Decorators/TransactionalCommandDecorator.cs:30-31`,
-    marker at `.../UseCases/Markers/ITransactional.cs:6`); no Engagement command implements it, so for
-    these handlers `SaveChangesAsync` **is** the commit. Three of the four sites get the ordering
+    marker at `.../UseCases/Markers/ITransactional.cs:6`); none of the four enqueuing commands
+    implements it (the Engagement commands that do are the ticket roster ones, for example
+    `.../Tickets/UseCases/DeleteRoster/DeleteTicketRosterCommand.cs:10`), so for these handlers
+    `SaveChangesAsync` **is** the commit. Three of the four sites get the ordering
     structurally, because a `MutateEntityHandlerBase` subclass
     (`MMCA.Common/Source/Core/MMCA.Common.Application/UseCases/Crud/MutateEntityHandlerBase.cs:339`,
     over the shared `MutateEntityHandlerCore` at `:52`) holds no save of its own: the base saves at
@@ -124,7 +127,7 @@ starts an untracked `Task` from a request, and nothing that must run lands here.
     enqueue is the body of that hook. `CloseLivePollHandler` declares the base at
     `.../LivePolls/UseCases/Close/CloseLivePollHandler.cs:24` and enqueues from the hook at `:71`
     (queue write at `:92-93`); `OpenLivePollHandler` at
-    `.../LivePolls/UseCases/Open/OpenLivePollHandler.cs:26` and `:87` (write at `:108-109`);
+    `.../LivePolls/UseCases/Open/OpenLivePollHandler.cs:27` and `:88` (write at `:109-110`);
     `ModerateQuestionHandler` at `.../SessionQuestions/UseCases/Moderate/ModerateQuestionHandler.cs:28`
     and `:97`, whose helper (`:114`) builds the event name and payload outside the guard (`:126-144`)
     and then wraps its work in `BestEffort.ExecuteAsync` (`:146`): the moderation event write is
@@ -151,7 +154,7 @@ starts an untracked `Task` from a request, and nothing that must run lands here.
 Two implementations exist: `LiveChannelPublishQueue` / `LiveChannelPublishProcessor` (ephemeral,
 `DropOldest`, ADR-039) and `BookmarkCacheEvictionSignal` / `BookmarkCacheEvictionProcessor`
 (ephemeral, capacity one, `DropWrite`; the processor is registered at
-`MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Infrastructure/DependencyInjection.cs:24`).
+`MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Infrastructure/DependencyInjection.cs:27`).
 
 ## Rationale
 - **The host lifetime is the point.** A `BackgroundService` is the only in-process shape the host can
@@ -322,6 +325,36 @@ already moved, and the Decision's description of the moderation helper's writes.
    `ModerateQuestionHandler.cs:28`) and the `MutateEntityHandlerBase` lines
    (`MMCA.Common/Source/Core/MMCA.Common.Application/UseCases/Crud/MutateEntityHandlerBase.cs:339`,
    `:52`, `:322`, `:324`, `:325`).
+
+## Revision (2026-11-23)
+Re-verified against current source. The decision, rationale and trade-offs are unchanged, and so
+is every behavior they describe (the scoring trigger and handler, the one-instance queue
+registration, both post-commit enqueue shapes); what moved is one Decision premise and the line
+numbers in the scoring trigger, the scoring handler, both Engagement registrations, the upvote
+handler and `OpenLivePollHandler`.
+1. The Decision no longer says that no Engagement command implements `ITransactional`. Three do,
+   all ticket roster commands
+   (`MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Application/Tickets/UseCases/DeleteRoster/DeleteTicketRosterCommand.cs:10`,
+   `.../Tickets/UseCases/LinkExistingAccounts/LinkExistingAccountsCommand.cs:11`,
+   `.../Tickets/UseCases/StartRosterImport/StartTicketRosterImportCommand.cs:18`). None of the four
+   commands that enqueue live broadcasts implements it, so the conclusion (for these handlers
+   `SaveChangesAsync` is the commit) holds with the premise narrowed to them.
+2. Anchors re-verified against current source: in
+   `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/Sessions/SessionSelectionController.cs`,
+   the `[FeatureGate]` attribute (`:135`), the `ScheduleAsync` statement (`:149-153`),
+   `HandleFailure` on a failed schedule (`:157`) and `Accepted()` (`:161`); in
+   `.../ScoreEventSessions/ScoreEventSessionsInternalCommandHandler.cs`, the claim (`:85-87`),
+   `ClaimTimeToLive` (`:63`), `ClaimWait` (`:70`), the loser's `Result.Success()` block (`:89-93`)
+   and the retry remarks (`:26-28`); the queue singletons
+   (`MMCA.ADC.Engagement.Application/DependencyInjection.cs:59-60`, note at `:58`); both
+   hosted-service registrations (`MMCA.ADC.Engagement.Infrastructure/DependencyInjection.cs:26`,
+   `:27`); in `.../SessionQuestions/DomainEventHandlers/SessionQuestionUpvoteChangedHandler.cs`,
+   the `IDomainEventHandler` declaration (`:43`), `BestEffort.ExecuteAsync` (`:53`),
+   `CreateAsyncScope` (`:55`) and `Enqueue` (`:86`); in
+   `.../LivePolls/UseCases/Open/OpenLivePollHandler.cs`, the base declaration (`:27`), the hook's
+   enqueue call (`:88`, inside the `OnMutatedAsync` override at `:83`) and the queue write
+   (`:109-110`). Unchanged and confirmed: the trigger's existence check (`:143-146`) and
+   `LivePollVoteChangedHandler.cs` (`:41`, `:51`, `:53`, `:79`).
 
 ## Related
 [ADR-114](114-internal-commands-durable-job-queue.md) (the durable, leased, retrying queue that owns

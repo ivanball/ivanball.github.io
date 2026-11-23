@@ -2,9 +2,10 @@
 
 ## Status
 Accepted (2026-11-12). Released in MMCA.Common v1.289.0
-(`MMCA.Common/CHANGELOG.md:7`, `:24`). Off for every controller unless it carries
+(`MMCA.Common/CHANGELOG.md:511`, `:529`). Off for every controller unless it carries
 `[SupportsCursorPaging]`
 (`MMCA.Common/Source/Presentation/MMCA.Common.API/Pagination/SupportsCursorPagingAttribute.cs:3-14`).
+Revised 2026-11-23: anchors refreshed after later MMCA.Common releases (through v1.315.0) moved them.
 
 ## Context
 The generic list surface of [ADR-034](034-generic-entity-query-layer.md) pages by offset:
@@ -36,9 +37,9 @@ that carries its marker; on every other controller it does not exist.**
 1. **The action.** `GetCursorPageAsync` answers `GET {controller}/cursor` with the parameters
    `sortColumn`, `sortDirection`, `cursor` and `pageSize` (default 10, `[Range(1, int.MaxValue)]`), and
    returns `KeysetCollectionResult<TEntityDTO>` or Problem Details (400, 500)
-   (`EntityControllerBase.cs:401-411`). It is `virtual`, like the other generic reads.
+   (`EntityControllerBase.cs:403-413`). It is `virtual`, like the other generic reads.
 2. **Page size is clamped twice, never rejected above the floor.** The action takes
-   `Math.Min(pageSize, MaxPageSize)` (`EntityControllerBase.cs:417`), where `MaxPageSize` is
+   `Math.Min(pageSize, MaxPageSize)` (`EntityControllerBase.cs:419`), where `MaxPageSize` is
    `ApplicationSettings.MaxPageSize` (default 500) clamped to the pipeline's unbounded-result ceiling
    (`EntityControllerBase.cs:58-64`;
    `MMCA.Common/Source/Core/MMCA.Common.Application/Settings/ApplicationSettings.cs:17`).
@@ -46,12 +47,12 @@ that carries its marker; on every other controller it does not exist.**
 3. **Direction.** `sortDirection` must be empty, `asc` or `desc` (case-insensitive); anything else is
    `Error.InvalidSortDirection`, answered before any read
    (`MMCA.Common/Source/Core/MMCA.Common.Application/Services/QueryFieldService.cs:591-605`;
-   `EntityControllerBase.cs:413-415`). Only `desc` sets `Descending` (`EntityControllerBase.cs:418`).
+   `EntityControllerBase.cs:415-417`). Only `desc` sets `Descending` (`EntityControllerBase.cs:420`).
 4. **One sort column, validated against the response contract.** `EntityQueryService.GetPageByCursorAsync`
    validates the name exactly as the list read does (`DTOToEntityPropertyMap`, `FieldContract` and the
    entity's properties) and fails before the repository runs; a name found in `DTOToEntityPropertyMap`
    is replaced by its entity value
-   (`MMCA.Common/Source/Core/MMCA.Common.Application/Services/EntityQueryService.cs:528-559`). The
+   (`MMCA.Common/Source/Core/MMCA.Common.Application/Services/EntityQueryService.cs:528-560`). The
    repository resolves the name to a public instance property of the entity and answers
    `Error.InvalidEntityField` for anything else, a mapped navigation path included
    (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Repositories/KeysetQueryBuilder.cs:35-47`;
@@ -70,33 +71,33 @@ that carries its marker; on every other controller it does not exist.**
    extra row only proves a next page exists, and `NextCursor` is null on the last page
    (`EFReadRepository.cs:669-686`; `KeysetPagination.cs:93-107`).
 8. **Read scope and tenant filter apply.** The action resolves `GetReadSpecificationAsync` once and
-   passes it down (`EntityControllerBase.cs:420-425`), the hook the other generic reads use
+   passes it down (`EntityControllerBase.cs:422-427`), the hook the other generic reads use
    (`EntityControllerBase.cs:115`, `:170`). Only the specification's criteria apply
    (`applyShape: false`, `EFReadRepository.cs:648-650`). The context's global query filters stay in
-   force: the tenant filter is a named query filter (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/ApplicationDbContext.cs:618`,
-   `:713`), and the one filter a specification can lift is the soft-delete filter
+   force: the tenant filter is a named query filter (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/ApplicationDbContext.cs:626`,
+   `:721`), and the one filter a specification can lift is the soft-delete filter
    (`EFReadRepository.cs:41`, `:573-582`).
 9. **What the keyset read deliberately lacks.** Compared with `GET {controller}/paged` there is no total
    count, no `X-Pagination` header, no `fields` projection, no includes and no filter dictionary: the
-   keyset read takes a specification only (`EntityControllerBase.cs:396-400`;
+   keyset read takes a specification only (`EntityControllerBase.cs:398-402`;
    `MMCA.Common/Source/Core/MMCA.Common.Application/Interfaces/Mapping/IEntityQueryService.cs:173`).
    The result type carries no total and no page number by design (`KeysetPagination.cs:78-85`).
 10. **The service method is a defaulted interface member.** `IEntityQueryService.GetPageByCursorAsync`
     has a default body answering `Error.Unexpected` with `Query.CursorPagingNotSupported` (500), so an
     implementation that predates it keeps compiling; `EntityQueryService` overrides it and maps the rows
     with `DTOMapper` in repository order (`IEntityQueryService.cs:24-28`, `:160-182`;
-    `EntityQueryService.cs:561-565`).
+    `EntityQueryService.cs:562-566`).
 11. **The opt-in marker and the convention.** `[SupportsCursorPaging]` is a public, inherited class
     attribute, so declaring it on an abstract base opts in every derived controller
     (`SupportsCursorPagingAttribute.cs:9-14`). The action carries the internal
-    `[OptInAction(typeof(SupportsCursorPagingAttribute))]` (`EntityControllerBase.cs:402`), an
+    `[OptInAction(typeof(SupportsCursorPagingAttribute))]` (`EntityControllerBase.cs:404`), an
     `IActionModelConvention` that removes the action from the controller's application model unless the
     controller carries the marker
     (`MMCA.Common/Source/Presentation/MMCA.Common.API/Pagination/OptInActionAttribute.cs:16-33`). A
     removed action has no route and no API description, so the API document of a controller without the
     marker is exactly what it was; the convention is read off the base action, so an override that does
     not opt in is removed as well (`OptInActionAttribute.cs:10-14`). The change feed (`GetChangesAsync`,
-    ADR-144) uses the same convention with its own marker (`EntityControllerBase.cs:454-455`).
+    ADR-144) uses the same convention with its own marker (`EntityControllerBase.cs:456-457`).
 12. **Reflection-based authorization tests skip what is not an endpoint.** The convention removes the
     action from the application model, not from the type: `GetCursorPageAsync` is still a public method of
     every derived controller. A fitness test that enumerates controller methods by reflection and demands
@@ -177,3 +178,25 @@ that carries its marker; on every other controller it does not exist.**
   authorization row. ADC and Store opt in nowhere today, so their committed documents are unchanged.
 - **Watch:** a reflection-based authorization or anonymous-read fitness test added in any consumer must
   apply the skip in Decision, point 12, or it fails on the first controller without the marker.
+
+## Revision (2026-11-23)
+Re-verified against current source. The decision is unchanged: the `GET {controller}/cursor` action,
+its clamping, direction and sort-column validation, the read-scope hook, the named tenant filter, the
+deliberately thin keyset read and the opt-in convention all behave as Decision states. Only line
+anchors moved, as later releases added lines above them.
+
+1. Anchors re-verified against current source:
+   - The v1.289.0 release heading and its cursor-paging entry: `MMCA.Common/CHANGELOG.md:511`, `:529`.
+   - `GetCursorPageAsync`, from `[HttpGet("cursor")]` through the `[Range]` page size:
+     `EntityControllerBase.cs:403-413`; `[OptInAction(typeof(SupportsCursorPagingAttribute))]` at `:404`;
+     the remarks on the thin read at `:398-402`.
+   - Direction check and failure: `EntityControllerBase.cs:415-417`; `Math.Min(pageSize, MaxPageSize)`
+     at `:419`; the `desc`-only `Descending` at `:420`; `GetReadSpecificationAsync` and the
+     `QueryService.GetPageByCursorAsync` call at `:422-427`.
+   - The change feed's `[HttpGet("changes")]` and its `[OptInAction(typeof(SupportsChangeFeedAttribute))]`:
+     `EntityControllerBase.cs:456-457`.
+   - `EntityQueryService.GetPageByCursorAsync` validation and the mapped-name swap:
+     `EntityQueryService.cs:528-560`; the repository call and the `DTOMapper.MapToDTOs` mapping at
+     `:562-566`.
+   - `TenantFilterName` and its `HasQueryFilter(TenantFilterName, filter)` application:
+     `ApplicationDbContext.cs:626`, `:721`.

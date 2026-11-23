@@ -284,6 +284,10 @@
           database, an outbox drain (decision 11); MMCA.Common&#39;s <code>apphost-testing</code> job runs an outage scenario
           over SQL Server and RabbitMQ containers; MMCA.ADC adds an opt-in AppHost outage
           tier; the rejected outbox-drain helper is revisited; anchors are refreshed (see Revision (2026-11-12)).</p>
+          <p>Revised 2026-11-23: the Aspire pin reads 17.0.0 and the package adds <code>Aspire.Hosting.Dotnet</code>; the
+          runtime boundary test now forbids <code>MMCA.Common.Aspire</code>, so both gates enforce the Aspire ban; the
+          <code>apphost-testing</code> job installs a pinned Aspire CLI; ADC&#39;s package pin now ships the outage base;
+          anchors are refreshed (see Revision (2026-11-23)).</p>
           <h2 id="context">Context</h2>
           <p>The AppHost is the only file that states how a whole stack fits together: which project resources
           exist, which database each one owns, which broker they share, where JWKS discovery points, and the
@@ -314,7 +318,7 @@
           CI runner has no user secrets, so the JwtBearer options factory threw on the first request. Every
           request answered 500, including <code>/alive</code>, so the liveness probe never turned Identity healthy and
           every <code>WaitFor(identity)</code> edge waited out the twelve-minute budget. The framework already has the
-          channel for the fix (<code>MMCA.Common/Source/Hosting/MMCA.Common.Aspire.Hosting/Extensions.cs:366</code>,
+          channel for the fix (<code>MMCA.Common/Source/Hosting/MMCA.Common.Aspire.Hosting/Extensions.cs:413</code>,
           <code>WithE2eRsaKeys()</code>, which forwards <code>E2E_JWT_PRIVATE_KEY_PEM</code> / <code>E2E_JWT_PUBLIC_KEY_PEM</code> onto
           <code>Jwt__*</code> and <code>Jwks__*</code>); what it did not have was anything that put a keypair into those
           variables.</li>
@@ -325,7 +329,7 @@
           </ol>
           <p>There is a third rule the framework already records and that any shared base must not break: a
           startup gate probes LIVENESS, never readiness
-          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Aspire.Hosting/H2cHealthCheckExtensions.cs:45</code>, <code>:90</code>). A readiness
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Aspire.Hosting/H2cHealthCheckExtensions.cs:45</code>, <code>:91</code>). A readiness
           endpoint aggregates downstream and warm-up checks, so gating startup on it can deadlock the
           dependency graph.</p>
           <h2 id="decision">Decision</h2>
@@ -337,15 +341,15 @@
           <code>AppHostFixtureBase&lt;TAppHost&gt;</code>
           (<code>MMCA.Common/Source/Hosting/MMCA.Common.Testing.Aspire/Fixtures/AppHostFixtureBase.Generic.cs</code>)
           builds through <code>DistributedApplicationTestingBuilder.CreateAsync&lt;TAppHost&gt;</code> and the non-generic
-          base (<code>.../Fixtures/AppHostFixtureBase.cs:41</code>, <code>InitializeAsync</code> at <code>:105</code>, <code>DisposeAsync</code> at
-          <code>:138</code>) owns the lifecycle. Starting an orchestrator is
+          base (<code>.../Fixtures/AppHostFixtureBase.cs:42</code>, <code>InitializeAsync</code> at <code>:108</code>, <code>DisposeAsync</code> at
+          <code>:141</code>) owns the lifecycle. Starting an orchestrator is
           the most expensive thing in any repo per assertion, so it happens once per collection.</p>
           </li>
           <li><p><strong>Readiness is awaited per resource, inside one shared budget.</strong>
-          <code>WaitForResourcesAsync</code> (<code>.../Fixtures/AppHostFixtureBase.cs:245</code>) asks
+          <code>WaitForResourcesAsync</code> (<code>.../Fixtures/AppHostFixtureBase.cs:248</code>) asks
           <code>ResourceNotificationService.WaitForResourceHealthyAsync</code> for a resource that carries a
-          <code>HealthCheckAnnotation</code> (<code>:260</code>) and <code>WaitForResourceAsync(..., KnownResourceStates.Running)</code> for
-          one that carries none (<code>:272</code>), and it says which of the two it did in the failure message. The
+          <code>HealthCheckAnnotation</code> (<code>:263</code>) and <code>WaitForResourceAsync(..., KnownResourceStates.Running)</code> for
+          one that carries none (<code>:275</code>), and it says which of the two it did in the failure message. The
           budget is a single deadline shared across resources rather than a per-resource allowance
           (<code>.../Fixtures/AppHostReadinessBudget.cs:37</code>, <code>Remaining</code>), because with five resources a
           per-resource budget makes a stack that wedges on the last one take five times as long to say so.
@@ -356,9 +360,9 @@
           </li>
           <li><p><strong>Preconditions produce a skip with a reason, never a wedge.</strong>
           <code>AppHostEnvironmentGate.Evaluate</code>
-          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Testing.Aspire/Preconditions/AppHostEnvironmentGate.cs:38</code>)
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Testing.Aspire/Preconditions/AppHostEnvironmentGate.cs:23</code>)
           turns a fixture&#39;s declared requirements into either &quot;go&quot; or one actionable sentence, which the
-          fixture exposes as <code>SkipReason</code> / <code>IsAvailable</code> (<code>.../Fixtures/AppHostFixtureBase.cs:56</code>, <code>:59</code>).
+          fixture exposes as <code>SkipReason</code> / <code>IsAvailable</code> (<code>.../Fixtures/AppHostFixtureBase.cs:57</code>, <code>:60</code>).
           The requirements are an opt-in variable <code>MMCA_APPHOST_TESTS</code> (<code>.../AppHostEnvironmentGate.cs:16</code>),
           a reachable container runtime (<code>.../DockerAvailability.cs:31</code>, a socket and named-pipe probe
           rather than a <code>docker info</code> process launch, because the gate runs in front of a skip decision),
@@ -373,7 +377,7 @@
           <code>dotnet dev-certs https --trust</code> as an explicit step. The framework&#39;s own <code>apphost-testing</code> job
           needs none, because neither of its sample scenarios needs a development certificate, and its
           header says a consumer stack with an https launch profile adds that step
-          (<code>MMCA.Common/.github/workflows/ci.yml:1069</code>, <code>:1086-1089</code>). ADC&#39;s outage workflow is such a
+          (<code>MMCA.Common/.github/workflows/ci.yml:1324</code>, <code>:1341-1344</code>). ADC&#39;s outage workflow is such a
           stack and runs the step (<code>MMCA.ADC/.github/workflows/apphost-tests.yml:64-65</code>).</p>
           </li>
           <li><p><strong>The RS256 keypair is minted when the environment has none.</strong> <code>EphemeralRsaKeyPair.Create()</code>
@@ -405,52 +409,52 @@
           (decision 11) uses <code>Microsoft.Data.SqlClient</code> for SQL Server only and leaves any other engine to an
           override (<code>.../Outages/DependencyOutageTestBase.cs:5</code>, <code>:310-342</code>). That provider is already in
           the graph through <code>MMCA.Common.Testing</code>; the direct reference exists because the package&#39;s own code
-          calls it (<code>.../MMCA.Common.Testing.Aspire.csproj:25-27</code>, <code>:35</code>).</p>
+          calls it (<code>.../MMCA.Common.Testing.Aspire.csproj:28-30</code>).</p>
           </li>
           <li><p><strong>The package&#39;s layer ceiling is <code>MMCA.Common.Testing</code>, enforced at compile time, with a runtime gate for part of it.</strong> It reuses
           <code>JwtTokenGenerator</code> and reaches Application and API only through that one edge. The compile-time
           gate is <code>EnforceTestingAspireLayerBoundary</code>
-          (<code>MMCA.Common/Source/Build/MMCA.Common.LayerEnforcement.targets:219</code>), which judges the references
-          this csproj DECLARES (by <code>DefiningProjectName</code>) rather than the transitive closure the SDK folds
-          into <code>@(ProjectReference)</code> before <code>ResolveProjectReferences</code>. The runtime gate is
-          <code>TestingAspireBoundaryTests</code>
+          (<code>MMCA.Common/Source/Build/MMCA.Common.LayerEnforcement.targets:248</code>), which judges the references
+          this csproj DECLARES (by <code>DefiningProjectName</code>, <code>:258</code>) rather than the transitive closure the SDK
+          folds into <code>@(ProjectReference)</code> before <code>ResolveProjectReferences</code> (<code>:249</code>, <code>:252-256</code>). The
+          runtime gate is <code>TestingAspireBoundaryTests</code>
           (<code>MMCA.Common/Tests/Architecture/MMCA.Common.Architecture.Tests/Layering/TestingAspireBoundaryTests.cs:20</code>),
-          which asserts a subset of that rule against the compiled assembly: it forbids Domain,
-          Infrastructure, API and UI (<code>:25</code>, <code>:31</code>, <code>:37</code>, <code>:43</code>), so for those four a type arriving by a
-          path no <code>ProjectReference</code> declares is caught too. It does not forbid Application or Grpc, which
-          the compile-time gate forbids only as declared references
-          (<code>MMCA.Common.LayerEnforcement.targets:229</code>, <code>:231</code>, <code>:234</code>), so a transitive arrival of either is
-          caught by neither gate. <code>MMCA.Common.Aspire</code> is forbidden at compile
-          time (<code>:236</code>); the runtime entry for it is written <code>&quot;MMCA.Common.Aspire.&quot;</code> with a trailing dot
-          (<code>TestingAspireBoundaryTests.cs:51</code>), and the framework&#39;s own note on NetArchTest matching says
-          such an entry matches nothing
-          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Rules/Layering/ArchitectureRules.CloudVendors.cs:14-16</code>),
-          so the Aspire ban is in effect enforced by the compile-time gate alone, which leaves a transitive
-          arrival of the service-defaults graph unguarded. The reason for the ban:
+          one theory (<code>:27</code>, <code>:33-34</code>) that asserts a subset of that rule against the compiled assembly: it
+          forbids Domain, Infrastructure, API, UI and <code>MMCA.Common.Aspire</code> (<code>:28-32</code>), so for those five a
+          type arriving by a path no <code>ProjectReference</code> declares is caught too. The Aspire entry is written
+          without a trailing dot, because a dotted NetArchTest namespace entry matches nothing and the
+          segment form covers <code>MMCA.Common.Aspire</code> and every namespace under it (<code>:24-26</code>). It does not
+          forbid Application or Grpc (<code>:9-10</code>), which the compile-time gate forbids only as declared
+          references (<code>MMCA.Common.LayerEnforcement.targets:260</code>, <code>:263</code>), so a transitive arrival of either
+          is caught by neither gate. <code>MMCA.Common.Aspire</code> is forbidden by both gates (<code>:265</code>). The reason
+          for the ban:
           the probe paths are MIRRORED constants (<code>.../Probes/AppHostProbePaths.cs:15-41</code>) precisely so an
           AppHost-tier package never drags the service-defaults graph into a consumer&#39;s test project, and a
           unit test cross-asserts each pair against the framework constant it mirrors.</p>
           </li>
           <li><p><strong>Skipping is the consuming project&#39;s call.</strong> The package takes no dependency on the xUnit
           assertion library (its only xUnit reference is <code>xunit.v3.extensibility.core</code>,
-          <code>MMCA.Common/Source/Hosting/MMCA.Common.Testing.Aspire/MMCA.Common.Testing.Aspire.csproj:25</code>), so a
+          <code>MMCA.Common/Source/Hosting/MMCA.Common.Testing.Aspire/MMCA.Common.Testing.Aspire.csproj:31</code>), so a
           test class writes the skip itself, always with a non-null reason: <code>Assert.SkipWhen(!Fixture.IsAvailable, Fixture.SkipReason ?? &quot;...&quot;)</code>
           (<code>MMCA.Common/Tests/Hosting/MMCA.Common.Testing.Aspire.AppHostTests/SampleAppHostTests.cs:155</code>) or
           the <code>if (!Fixture.IsAvailable) { Assert.Skip(Fixture.SkipReason!); }</code> branch the package&#39;s own
           documentation prescribes
-          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Testing.Aspire/Fixtures/AppHostFixtureBase.cs:34-35</code>).
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Testing.Aspire/Fixtures/AppHostFixtureBase.cs:34-36</code>).
           <code>SkipReason</code> is null exactly when the stack started, and <code>SkipWhen</code> validates its reason before
           the condition, so a null-forgiven <code>Fixture.SkipReason!</code> passed to <code>SkipWhen</code> throws
-          <code>ArgumentNullException</code> on the runner the tier exists for (<code>.../AppHostFixtureBase.cs:36-37</code>). That
+          <code>ArgumentNullException</code> on the runner the tier exists for (<code>.../AppHostFixtureBase.cs:37-39</code>). That
           keeps the skip API where a test project already has it and keeps one more package out of a
           consumer&#39;s graph.</p>
           </li>
           <li><p><strong>The tier runs in CI, blocking, against an in-repo sample.</strong> The <code>apphost-testing</code> job carries
           no <code>continue-on-error</code>, so a red fails the run, but it is not a required merge check
-          (<code>MMCA.Common/.github/workflows/ci.yml:1069</code>, <code>:1074-1075</code>).
+          (<code>MMCA.Common/.github/workflows/ci.yml:1324</code>, <code>:1329-1330</code>).
           <code>Tests/Hosting/MMCA.Common.Testing.Aspire.AppHostTests</code> boots, in its default scenario, a sample
-          AppHost with a SQLite file and ONE sample service project declared as TWO resources, so that
-          scenario needs no container runtime (<code>ci.yml:1082-1084</code>), and asserts every helper against it.
+          AppHost with a SQLite file and ONE sample service project declared as TWO resources, each through
+          <code>AddDotnetProject</code> by the service&#39;s csproj path
+          (<code>MMCA.Common/Tests/Hosting/MMCA.Common.Testing.Aspire.AppHostTests.SampleAppHost/Program.cs:68</code>,
+          <code>:83</code>), so that scenario needs no container runtime (<code>ci.yml:1337-1338</code>), and asserts every helper
+          against it.
           The two resources are the two cleartext protocol profiles,
           because a cleartext Kestrel endpoint serves one or the other: <code>sample</code> runs <code>HttpProtocols.Http1</code>
           for the ordinary probes, and <code>sample-h2c</code> runs <code>HttpProtocols.Http2</code> alone, which is what h2c
@@ -466,7 +470,7 @@
           (<code>.../SampleOutageAppHostFixture.cs:15</code>, <code>:21</code>), and runs a database outage, a broker outage
           that parks one outbox row and asserts it drains, and a raw stop-and-start
           (<code>SampleOutageTests.cs:30</code>, <code>:46</code>, <code>:66</code>). It stops and starts real containers, so the job needs
-          Docker and its budget is 40 minutes (<code>ci.yml:1073</code>, <code>:1084-1086</code>). Because a SQL Server container
+          Docker and its budget is 40 minutes (<code>ci.yml:1328</code>, <code>:1338-1341</code>). Because a SQL Server container
           with no data volume comes back from a stop and start with no tables, the sample service keeps its
           own schema: <code>SampleSchemaKeeper</code>, a background service, calls <code>EnsureCreatedAsync</code> once a second
           (<code>MMCA.Common/Tests/Hosting/MMCA.Common.Testing.Aspire.AppHostTests.SampleService/SampleSchemaKeeper.cs:8-15</code>,
@@ -478,10 +482,14 @@
           service-side half is asserted in <code>MMCA.Common.Testing.Aspire.Tests</code> (<code>H2cProbeServerTests</code>)
           against a cleartext <code>HttpProtocols.Http2</code> listener the test owns, where an exact HTTP/1.1 request
           really is refused, and <code>AssertH2cAsync</code>&#39;s own documentation states the scope of its claim.
-          The three projects (test, sample AppHost, sample service) sit OUTSIDE <code>MMCA.Common.slnx</code>: an
-          AppHost&#39;s committed lock file carries a RID-specific <code>Aspire.Dashboard.Sdk</code> entry, so a lock
-          committed from Windows fails the solution&#39;s locked-mode restore on an ubuntu runner, and the fast
-          solution-wide unit loop must not build or discover an orchestrator.</p>
+          The three projects (test, sample AppHost, sample service) sit OUTSIDE <code>MMCA.Common.slnx</code>, because
+          the fast solution-wide unit loop must not build an orchestrator
+          (<code>.../SampleAppHost/MMCA.Common.Testing.Aspire.AppHostTests.SampleAppHost.csproj:12-13</code>; the
+          lock-file reason the same comment gives at <code>:10-12</code> is stale). The
+          sample AppHost&#39;s committed lock file holds a single <code>net11.0</code> section and no
+          <code>Aspire.Dashboard.Sdk</code> entry (<code>.../SampleAppHost/packages.lock.json:4</code>). Building the sample
+          AppHost needs the matching Aspire CLI bundle (ASPIRE013), so the job installs Aspire CLI 17.0.0,
+          pinned by SHA-512, before the test run (<code>ci.yml:1364-1387</code>).</p>
           </li>
           <li><p><strong>A dependency outage is a scenario the base runs, not a script each consumer writes.</strong>
           <code>DependencyOutageTestBase&lt;TFixture&gt;</code>
@@ -511,7 +519,7 @@
           framework&#39;s per-check timeout, <code>HealthChecks:CheckTimeoutSeconds</code> (5 seconds by default, 1 to
           60): a check still running when it expires is reported with its failure status, so a dependency
           that does not answer turns <code>/health</code> unhealthy instead of leaving the last report in place
-          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Extensions.Health.cs:50-53</code>;
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Extensions.Health.cs:51-54</code>;
           <code>MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Health/HealthReportCacheOptions.cs:55</code>).</p>
           <p><strong>The outbox drain is asserted by a helper the package carries.</strong> A broker scenario may name the database
           resource that holds the outbox (any other outage kind that does is refused, <code>:89-96</code>); the base
@@ -540,7 +548,8 @@
           that wants the tier. It also leaves the two 2026-09-09 preconditions as tribal knowledge in one
           workflow file rather than as behavior a fixture carries.</li>
           <li><strong>Put the fixture in <code>MMCA.Common.Testing</code>.</strong> Rejected: that package is taken by every integration
-          test project in every consumer, and adding <code>Aspire.Hosting</code> plus <code>Aspire.Hosting.Testing</code> to it
+          test project in every consumer, and adding <code>Aspire.Hosting</code>, <code>Aspire.Hosting.Dotnet</code> and
+          <code>Aspire.Hosting.Testing</code> to it
           would put the whole AppHost-side application model into the graph of test projects that never boot
           an orchestrator. A separate package is the same reasoning that already keeps
           <code>MMCA.Common.Aspire.Hosting</code> apart from <code>MMCA.Common.Aspire</code>.</li>
@@ -576,35 +585,38 @@
           over <code>AppHostTestBase&lt;AdcAppHostFixture&gt;</code>, and Store&#39;s had the same shape. Both smoke projects, and
           the <code>apphost-smoke</code> job that ran them, are removed. Each consumer&#39;s real AppHost composition is
           exercised instead by its <code>e2e.yml</code>, which boots the AppHost for every E2E run, including the
-          deploy&#39;s chromium <code>e2e-gate</code> (<code>MMCA.ADC/.github/workflows/e2e.yml:34-36</code>, <code>:242</code>;
-          <code>MMCA.Store/.github/workflows/e2e.yml:252</code>). ADC&#39;s outage tier has the same shape again: a fixture
+          deploy&#39;s chromium <code>e2e-gate</code> (<code>MMCA.ADC/.github/workflows/e2e.yml:34-36</code>, <code>:283</code>;
+          <code>MMCA.Store/.github/workflows/e2e.yml:313</code>). ADC&#39;s outage tier has the same shape again: a fixture
           with those three overrides plus a builder hook
-          (<code>MMCA.ADC/Tests/Integration/MMCA.ADC.AppHost.OutageTests/AdcOutageAppHostFixture.cs:16</code>, <code>:59-62</code>,
-          <code>:68-69</code>, <code>:75-76</code>, <code>:85</code>) and a test class over
+          (<code>MMCA.ADC/Tests/Integration/MMCA.ADC.AppHost.OutageTests/AdcOutageAppHostFixture.cs:17</code>, <code>:60-63</code>,
+          <code>:69</code>, <code>:76</code>, <code>:86</code>) and a test class over
           <code>DependencyOutageTestBase&lt;AdcOutageAppHostFixture&gt;</code> (<code>AdcDependencyOutageTests.cs:22-23</code>); see the
           Revision (2026-11-12).</li>
           <li><strong>Cost: this is the slowest tier per assertion, and it blocks the CI run without being a required
           merge check.</strong> The <code>apphost-testing</code> job has no <code>continue-on-error</code>, so a red fails the MMCA.Common
-          CI run, but it is not a required merge check (<code>MMCA.Common/.github/workflows/ci.yml:1074-1075</code>).
+          CI run, but it is not a required merge check (<code>MMCA.Common/.github/workflows/ci.yml:1329-1330</code>).
           ADC&#39;s outage tier runs from its own workflow, which is neither a required check nor a deploy gate
-          (<code>MMCA.ADC/.github/workflows/apphost-tests.yml:10-11</code>).</li>
+          (<code>MMCA.ADC/.github/workflows/apphost-tests.yml:10</code>).</li>
           <li><strong>A real stack, and the framework&#39;s outage scenario, need Docker on the runner.</strong> The default
           sample scenario avoids containers on purpose, and its fixture opts OUT of the inherited
           <code>AppHostEnvironmentRequirement.Docker</code>
           (<code>MMCA.Common/Tests/Hosting/MMCA.Common.Testing.Aspire.AppHostTests/SampleAppHostFixture.cs:42-43</code>)
           rather than the other way round. The outage fixture keeps the inherited opt-in plus Docker,
           because it stops real containers (<code>.../SampleOutageAppHostFixture.cs:9</code>), so the framework&#39;s own job
-          now pays for SQL Server and RabbitMQ image pulls (<code>ci.yml:1084-1086</code>). ADC&#39;s AppHost starts SQL
-          Server, Redis, RabbitMQ and MailDev (<code>AdcOutageAppHostFixture.cs:10-11</code>).</li>
+          now pays for SQL Server and RabbitMQ image pulls (<code>ci.yml:1339-1341</code>). ADC&#39;s AppHost starts SQL
+          Server, Redis, RabbitMQ and MailDev (<code>AdcOutageAppHostFixture.cs:11-12</code>).</li>
           <li><strong>The framework carries one more package</strong> (<code>MMCA.Common.Testing.Aspire</code>, listed with the current
-          count in <code>MMCA.Common/FACTS.md:43</code>), and every <code>MMCA.Common.*</code> pin
+          count in <code>MMCA.Common/FACTS.md:48</code>), and every <code>MMCA.Common.*</code> pin
           in each consumer&#39;s <code>Directory.Packages.props</code> moves together at the next release
           (<a href="016-lockstep-versioning-masstransit-pin.html">ADR-016</a>).</li>
           <li><strong>Aspire versions are now coupled in one more place.</strong> <code>Aspire.Hosting.Testing</code> is pinned at the
-          same 13.6.4 as every other Aspire entry (<code>MMCA.Common/Directory.Packages.props:444</code>, against
-          <code>Aspire.Hosting</code> at <code>:435</code>), because the
+          same 17.0.0 as every other Aspire entry (<code>MMCA.Common/Directory.Packages.props:518</code>, against
+          <code>Aspire.Hosting</code> at <code>:509</code>, with the same-version comment at <code>:514-517</code>), because the
           testing host builds the application model the AppHost package produces; a version split between
-          them is a model mismatch rather than an upgrade.</li>
+          them is a model mismatch rather than an upgrade. The C# AppHost packages
+          <code>Aspire.Hosting.AppHost</code> and <code>Aspire.Hosting.Dotnet</code> sit on the same version (<code>:523-524</code>), and
+          the Aspire CLI the <code>apphost-testing</code> job installs to build the sample AppHost is one more copy of
+          that version, bumped with the packages (<code>MMCA.Common/.github/workflows/ci.yml:1364-1373</code>).</li>
           </ul>
           <h2 id="revision-2026-10-01">Revision (2026-10-01)</h2>
           <p>No decision or rationale changed. Decision 9 is corrected: it showed
@@ -789,6 +801,75 @@
           header at <code>:1082-1089</code> (decisions 4 and 10, Trade-offs). The anchors inside earlier revisions stay
           as written.</li>
           </ol>
+          <h2 id="revision-2026-11-23">Revision (2026-11-23)</h2>
+          <p>Re-verified against current source. The decisions stand: the <code>apphost-testing</code> job is still
+          blocking with no <code>continue-on-error</code> and is not a required merge check, <code>WithE2eRsaKeys()</code> still
+          forwards the two E2E variables onto <code>Jwt__*</code> and <code>Jwks__*</code>, the compile-time layer target still
+          judges declared references only, the package&#39;s only xUnit reference is still
+          <code>xunit.v3.extensibility.core</code>, and both consumers still state there is no AppHost smoke project.
+          What moved is the Aspire version and its build tooling, the runtime layer gate, one stated reason,
+          ADC&#39;s pin, and the anchors.</p>
+          <ol>
+          <li><strong>The Aspire pin reads 17.0.0 on every Aspire entry</strong>: <code>Aspire.Hosting</code> at
+          <code>MMCA.Common/Directory.Packages.props:509</code>, <code>Aspire.Hosting.Testing</code> at <code>:518</code>, with the
+          same-version rationale comment at <code>:514-517</code>. Aspire 17 retired the <code>Aspire.AppHost.Sdk</code> project
+          SDK, so a C# AppHost is a <code>Microsoft.NET.Sdk</code> project over <code>Aspire.Hosting.AppHost</code> and
+          <code>Aspire.Hosting.Dotnet</code> (<code>:519-524</code>), and the sample AppHost references both
+          (<code>MMCA.Common/Tests/Hosting/MMCA.Common.Testing.Aspire.AppHostTests.SampleAppHost/MMCA.Common.Testing.Aspire.AppHostTests.SampleAppHost.csproj:24-25</code>)
+          and declares its resources with <code>AddDotnetProject</code> (<code>.../SampleAppHost/Program.cs:68</code>, <code>:83</code>).
+          Trade-offs and decision 10 now say so.</li>
+          <li><strong>The package references <code>Aspire.Hosting.Dotnet</code></strong> for <code>DotnetProjectResource</code>
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Testing.Aspire/MMCA.Common.Testing.Aspire.csproj:18-20</code>),
+          the type the fixture awaits when <code>ResourcesToAwait</code> names none
+          (<code>.../Fixtures/AppHostFixtureBase.cs:300</code>, <code>:318</code>). The Rationale&#39;s &quot;Put the fixture in
+          <code>MMCA.Common.Testing</code>&quot; item now names it with the other two Aspire packages.</li>
+          <li><strong>Both gates enforce the Aspire ban.</strong> The runtime test is one theory whose entries forbid
+          Domain, Infrastructure, API, UI and <code>&quot;MMCA.Common.Aspire&quot;</code> without a trailing dot
+          (<code>MMCA.Common/Tests/Architecture/MMCA.Common.Architecture.Tests/Layering/TestingAspireBoundaryTests.cs:27-34</code>,
+          the reason at <code>:24-26</code>), so the Revision (2026-10-28) finding that the Aspire entry matches
+          nothing no longer holds. Application and Grpc are still absent from it (<code>:9-10</code>). Decision 8 now
+          says so.</li>
+          <li><strong>The <code>apphost-testing</code> job installs Aspire CLI 17.0.0</strong>, because building an Aspire 17 C#
+          AppHost needs the matching CLI bundle (ASPIRE013), downloading the versioned archive and refusing
+          it unless it matches a pinned SHA-512 (<code>MMCA.Common/.github/workflows/ci.yml:1364-1387</code>). ADC&#39;s
+          outage workflow runs the same install (<code>MMCA.ADC/.github/workflows/apphost-tests.yml:75</code>).
+          Decision 10 and Trade-offs now say so.</li>
+          <li><strong>One reason for keeping the AppHost tier outside <code>MMCA.Common.slnx</code> is no longer borne out.</strong>
+          Decision 10 said an AppHost&#39;s committed lock carries a RID-specific <code>Aspire.Dashboard.Sdk</code> entry;
+          the sample AppHost&#39;s lock holds a single <code>net11.0</code> section and no such entry
+          (<code>.../SampleAppHost/packages.lock.json:4</code>). The reason that holds is that the unit loop must not
+          build an orchestrator (<code>.../SampleAppHost/MMCA.Common.Testing.Aspire.AppHostTests.SampleAppHost.csproj:12-13</code>);
+          decision 10 now gives that one alone. The three projects are still outside the solution.</li>
+          <li><strong>ADC&#39;s package pin now ships the outage base.</strong> Revision (2026-11-12) item 3 recorded a 1.288.0
+          pin that predated the outage base. ADC now pins <code>MMCA.Common.Testing.Aspire</code> at 1.315.0
+          (<code>MMCA.ADC/Directory.Packages.props:194</code>), and the v1.315.0 tag carries
+          <code>Source/Hosting/MMCA.Common.Testing.Aspire/Outages/DependencyOutageTestBase.cs</code> (absent at
+          v1.288.0), so the pinned package now ships the base the project derives from. The workflow sets
+          <code>MMCA_APPHOST_TESTS</code> at <code>apphost-tests.yml:100</code> and <code>--minimum-expected-tests 1</code> at <code>:98</code>.</li>
+          <li>Anchors re-verified against current source: <code>apphost-testing</code> job at
+          <code>MMCA.Common/.github/workflows/ci.yml:1324</code>, <code>timeout-minutes: 40</code> at <code>:1328</code>, the BLOCKING,
+          not-a-required-merge-check comment at <code>:1329-1330</code>, the default-scenario, outage-scenario and
+          consumer <code>dotnet dev-certs https --trust</code> header at <code>:1337-1344</code> (decisions 4 and 10,
+          Trade-offs); <code>WithE2eRsaKeys()</code> at
+          <code>MMCA.Common/Source/Hosting/MMCA.Common.Aspire.Hosting/Extensions.cs:413</code> (variables read at
+          <code>:417-418</code>, forwarded at <code>:425-427</code>); the liveness rule at <code>H2cHealthCheckExtensions.cs:45</code>,
+          <code>:91</code>; <code>HealthChecks:CheckTimeoutSeconds</code> at <code>Extensions.Health.cs:51-54</code>;
+          <code>EnforceTestingAspireLayerBoundary</code> at
+          <code>MMCA.Common/Source/Build/MMCA.Common.LayerEnforcement.targets:248</code> (<code>BeforeTargets</code> at <code>:249</code>,
+          the <code>DefiningProjectName</code> filter at <code>:258</code>, Application <code>:260</code>, Grpc <code>:263</code>,
+          <code>MMCA.Common.Aspire</code> <code>:265</code>); the package csproj&#39;s <code>xunit.v3.extensibility.core</code> at <code>:31</code> and
+          <code>Microsoft.Data.SqlClient</code> at <code>:28-30</code>; <code>AppHostFixtureBase.cs</code> class <code>:42</code>, <code>SkipReason</code> <code>:57</code>,
+          <code>IsAvailable</code> <code>:60</code>, <code>InitializeAsync</code> <code>:108</code>, <code>DisposeAsync</code> <code>:141</code>, <code>WaitForResourcesAsync</code>
+          <code>:248</code>, <code>HealthCheckAnnotation</code> <code>:263</code>, the <code>Running</code> wait <code>:275</code>, the skip documentation
+          <code>:34-36</code> and <code>:37-39</code>; the public <code>AppHostEnvironmentGate.Evaluate</code> at
+          <code>.../Preconditions/AppHostEnvironmentGate.cs:23</code> (decision 3 cited the internal overload);
+          <code>MMCA.Common.Testing.Aspire</code> in <code>MMCA.Common/FACTS.md:48</code>; the AppHost launch in
+          <code>MMCA.ADC/.github/workflows/e2e.yml:283</code> and <code>MMCA.Store/.github/workflows/e2e.yml:313</code>; the
+          &quot;No AppHost smoke project&quot; rule at <code>MMCA.ADC/AGENTS.md:91</code> and <code>MMCA.Store/AGENTS.md:80</code>;
+          <code>AdcOutageAppHostFixture.cs</code> class <code>:17</code>, <code>RequiredEnvironment</code> <code>:60-63</code>, <code>Budget</code> <code>:69</code>,
+          <code>ResourcesToAwait</code> <code>:76</code>, <code>ConfigureBuilder</code> <code>:86</code>. The anchors inside earlier revisions stay as
+          written.</li>
+          </ol>
           <h2 id="related">Related</h2>
           <p><a href="098-aspire-orchestration-not-testing-or-dashboards.html">ADR-098</a> (the orchestration posture this tier
           tests without changing),
@@ -821,6 +902,7 @@
             <li><a href="#revision-2026-10-26">Revision (2026-10-26)</a></li>
             <li><a href="#revision-2026-10-28">Revision (2026-10-28)</a></li>
             <li><a href="#revision-2026-11-12">Revision (2026-11-12)</a></li>
+            <li><a href="#revision-2026-11-23">Revision (2026-11-23)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

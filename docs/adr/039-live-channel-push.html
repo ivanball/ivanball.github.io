@@ -263,7 +263,9 @@
           <code>DependencyInjection.Notifications.cs</code> partial, and the ADC poll manage endpoint).
           Revised 2026-10-21: anchors refreshed after the ADC live poll manage endpoint moved.
           Revised 2026-10-26: linked ADR-135 as the owner of the application namespace behind the backplane
-          prefix; anchors refreshed after the connection-cap, backplane-prefix and poll-read-scope code moved.</p>
+          prefix; anchors refreshed after the connection-cap, backplane-prefix and poll-read-scope code moved.
+          Revised 2026-11-23: anchors refreshed after the backplane-prefix registration, the application
+          namespace resolver and the ADC live poll manage endpoint moved.</p>
           <h2 id="context">Context</h2>
           <p>Conference-day features (live polls, session Q&amp;A, live result counters) need sub-second fan-out of
           small events to whoever is looking at a page right now. The existing notification pipeline
@@ -440,6 +442,24 @@
           </ul>
           </li>
           </ol>
+          <h2 id="revision-2026-11-23">Revision (2026-11-23)</h2>
+          <p>Re-verified against current source. No change to the channel model, the per-application backplane
+          prefix or the ADC live poll manage surface recorded on 2026-09-07. Three anchors recorded in the
+          earlier revisions have moved; those sections stay as written and the current anchors are listed
+          here.</p>
+          <ol>
+          <li>Anchors re-verified against current source:<ul>
+          <li>The Redis backplane prefix is resolved through <code>ApplicationNamespace.Resolve</code> at
+          <code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.Notifications.cs:59</code>
+          and applied as the channel prefix at <code>:60-61</code>.</li>
+          <li>The resolver <code>ApplicationNamespace.Resolve(IConfiguration?, IHostEnvironment?)</code> is declared at
+          <code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Configuration/ApplicationNamespace.cs:54</code>.</li>
+          <li>The manage endpoint (<code>GET /api/livepolls/manage</code>) carries its route attribute at
+          <code>MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.API/Controllers/LivePollsController.cs:172</code>,
+          with <code>GetSessionManagePollsAsync</code> declared at <code>:176</code>.</li>
+          </ul>
+          </li>
+          </ol>
           <h2 id="related">Related</h2>
           <ul>
           <li><a href="024-push-notifications.html">ADR-024</a>: the durable push notification pipeline and hub this ADR extends.</li>
@@ -466,6 +486,7 @@
             <li><a href="#revision-2026-10-06">Revision (2026-10-06)</a></li>
             <li><a href="#revision-2026-10-21">Revision (2026-10-21)</a></li>
             <li><a href="#revision-2026-10-26">Revision (2026-10-26)</a></li>
+            <li><a href="#revision-2026-11-23">Revision (2026-11-23)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

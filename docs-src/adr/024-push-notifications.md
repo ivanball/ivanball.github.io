@@ -16,6 +16,7 @@ Revised 2026-10-07: the hub client connects WebSockets-only with negotiation ski
 Revised 2026-10-21: the ADC Notification scale block is read correctly (its two preconditions make more than one replica safe, and `maxReplicas: 2` is right-sizing for measured load, not a backplane limit); anchors refreshed.
 Revised 2026-10-26: the per-user hub connection cap is recorded as per replica, `AddPushNotifications` is recorded as also replacing the SignalR `IUserIdProvider`, the Store payment-failed saga handler is recorded as also re-arming the payment deadline when unpaid-order expiry is enabled (the default), ADR-135 is linked, and anchors refreshed.
 Revised 2026-10-28: the Store guest order-received email is recorded as an inline best-effort send outside ADR-114 (so not every order email retries and dead-letters), the three further durable Store order-email call sites are named, and anchors refreshed.
+Revised 2026-11-23: the native-push leg is recorded as also storing its per-platform outcome on the `PushNotification` audit row, `AddPushNotifications` as also registering a startup warning when no `IChannelJoinAuthorizer` is registered, and anchors refreshed.
 ## Context
 The framework needs to deliver user-facing notifications (an organizer broadcasting a schedule change,
 a per-user alert). Two delivery models each fail on their own. A pure real-time push over a WebSocket
@@ -39,19 +40,19 @@ recipient policy both behind abstractions.
   per recipient (`MMCA.Common.Domain.Notifications.UserNotifications`, carrying `IsRead` / `ReadOn` with
   an idempotent `MarkAsRead`), and only then dispatches the live push. The inbox is the durable source
   of truth; the push is the best-effort live layer over it. The three saves (audit row, inbox rows,
-  terminal status, `:102`, `:112`, `:155`) are one unit: `SendPushNotificationCommand` is
+  terminal status, `:102`, `:112`, `:144`) are one unit: `SendPushNotificationCommand` is
   `ITransactional` (`SendPushNotificationCommand.cs:23`), so a fault anywhere rolls the whole send
   back, and the live legs run inside that unit, making live delivery at-least-once and the inbox rows
   exactly-once (`SendPushNotificationHandler.cs:21-31`).
 - **A send is idempotent only when the caller opts in.** The command may carry a `DedupKey`; when it is
   present and not whitespace the handler scopes it to the sender (the stored key is the hex SHA-256 of
-  `{sentByUserId}:{clientKey}`, `SendPushNotificationHandler.cs:167-169`), so another caller reusing the
+  `{sentByUserId}:{clientKey}`, `SendPushNotificationHandler.cs:199-201`), so another caller reusing the
   same client key neither suppresses this send nor is handed this sender's notification. It looks that
   scoped key up before doing anything else and, on a hit, returns the already-sent notification without
   resolving recipients, writing inbox rows, or pushing (`SendPushNotificationHandler.cs:60-71`, lookup
-  in `FindByDedupKeyAsync` at `:187-196`). That lookup is a check-then-act, so two concurrent retries
+  in `FindByDedupKeyAsync` at `:219-228`). That lookup is a check-then-act, so two concurrent retries
   of the same send both pass it and the loser fails its first save on the filtered unique index on
-  `DedupKey` (`PushNotificationConfiguration.cs:69-73`). The handler does not recover in place: the
+  `DedupKey` (`PushNotificationConfiguration.cs:79-83`). The handler does not recover in place: the
   failure propagates (`SendPushNotificationHandler.cs:101-102`) as the persistence exception, surfaced
   as a 409 through `DbUpdateExceptionHandler`, the transactional decorator rolls the attempt back, and
   the client's retry is then answered by the dedup lookup with the winner's notification
@@ -80,11 +81,15 @@ recipient policy both behind abstractions.
   rolled back because the WebSocket fan-out failed.
 - **An optional third, native-push leg (ADR-044).** After the inbox write and the SignalR push,
   `SendPushNotificationHandler` also dispatches through `INativePushSender`
-  (`SendPushNotificationHandler.cs:136-153`), an OS-level native-push channel that reaches devices the
-  SignalR hub cannot (the app backgrounded or killed). It is best-effort by the same logic as the live
-  push (a throw is logged, never fatal, and the SignalR leg has already decided the audit status), and it
-  defaults to `NullNativePushSender` (`MMCA.Common.Infrastructure`, `DependencyInjection.cs:353`), so it
-  stays inert until a native hub is configured. The design of that channel is ADR-044's scope; this ADR
+  (`SendPushNotificationHandler.cs:142`, implemented in `SendNativeAsync` at `:153-190`), an OS-level
+  native-push channel that reaches devices the SignalR hub cannot (the app backgrounded or killed). It
+  is best-effort by the same logic as the live push (a throw is logged, never fatal, and the SignalR
+  leg has already decided the audit status). It does record what it did: the per-platform outcome
+  (the delivery unit and the Android and Apple sent and failed counts) is written onto the
+  `PushNotification` row through `RecordNativePushOutcome` (`:172-177`) and saved with the terminal
+  status (`:144`), and an outcome with no counts and no failure leaves the row unrecorded (`:167-171`).
+  It defaults to `NullNativePushSender` (`MMCA.Common.Infrastructure`, `DependencyInjection.cs:377`),
+  so it stays inert until a native hub is configured. The design of that channel is ADR-044's scope; this ADR
   keeps its own on the inbox and SignalR channels, so the "Two-Channel" title names the durable and
   transient channels this record governs, not a hard cap on the number of delivery legs.
 - **Horizontal scale-out is configuration, not code.** When a Redis connection string is present,
@@ -94,24 +99,27 @@ recipient policy both behind abstractions.
   `MapNotificationHub()` maps `NotificationHub` at the configured `HubPath` just when it is true
   (`SignalRExtensions.cs:25`). `AddPushNotifications` binds the section but registers SignalR,
   `SignalRPushNotificationSender` and `SignalRLiveChannelPublisher` unconditionally
-  (`DependencyInjection.Notifications.cs:38-70`, `AddSignalR()` at `:45` and the two transient
-  registrations at `:62-63`), so the opt-in registration, not the flag, is what decides whether
+  (`DependencyInjection.Notifications.cs:41-89`, `AddSignalR()` at `:48` and the two transient
+  registrations at `:76-77`), so the opt-in registration, not the flag, is what decides whether
   a send goes through SignalR; with `Enabled: false` the sender is still wired and simply has no hub
   endpoint for clients to connect to. The same method also replaces SignalR's default
-  `IUserIdProvider` with `ClaimBasedUserIdProvider` (`:67`), which is what maps a user-targeted push
-  to that user's connections.
+  `IUserIdProvider` with `ClaimBasedUserIdProvider` (`:81`), which is what maps a user-targeted push
+  to that user's connections, and registers `ChannelJoinAuthorizerMissingWarningService` (`:86`),
+  which logs one startup Warning when no `IChannelJoinAuthorizer` is registered, since a live-channel
+  join is then open to any authenticated caller with a well-formed key
+  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Notifications/NotificationHub.cs:24`, `:159-162`).
 - **The hub client connects WebSockets-only, with no negotiate request.** `NotificationHubService`
   sets `SkipNegotiation = true` and `Transports = HttpTransportType.WebSockets` before branching on
-  the connection mode (`NotificationHubService.cs:538-539`, the same-origin-proxy early return at
-  `:541-544`), so every mode opens the connection as a single WebSocket request: the browser path
+  the connection mode (`NotificationHubService.cs:577-578`, the same-origin-proxy early return at
+  `:580-583`), so every mode opens the connection as a single WebSocket request: the browser path
   through the same-origin proxy, a browser connecting to the gateway directly (token from
-  `AccessTokenProvider`, `:546`), and a direct non-browser connection (server-side Blazor, MAUI),
-  which also gets its own socket factory (`:548-551`). Negotiate and
+  `AccessTokenProvider`, `:585`), and a direct non-browser connection (server-side Blazor, MAUI),
+  which also gets its own socket factory (`:587-590`). Negotiate and
   connect are otherwise two requests, and behind a non-sticky ingress the connect can land on a
   replica that never issued the connection id and be refused with a 404; with no negotiate there is
   nothing to pin, so the hub scales out without session affinity, consistent with the no-affinity
   posture ADR-069 records for the Identity service. Delivery across replicas is then the
-  backplane's job (above). There is no Server-Sent Events or long-polling fallback (`NotificationHubService.cs:511-517`).
+  backplane's job (above). There is no Server-Sent Events or long-polling fallback (`NotificationHubService.cs:550-556`).
 
 ## Rationale
 - **Each channel covers the other's failure mode.** The inbox guarantees eventual delivery to offline
@@ -136,14 +144,14 @@ recipient policy both behind abstractions.
   opted in) but is a discoverability foot-gun.
 - **WebSocket auth is a special case, and it differs by connection mode.** A browser cannot add headers
   to the WebSocket upgrade. Through the same-origin proxy the connection carries no token at all and the
-  proxy authenticates from the HttpOnly session cookie (`NotificationHubService.cs:519-524`, early
-  return at `:541-544`). A direct non-browser connection (server-side Blazor, MAUI) builds its own
+  proxy authenticates from the HttpOnly session cookie (`NotificationHubService.cs:558-563`, early
+  return at `:580-583`). A direct non-browser connection (server-side Blazor, MAUI) builds its own
   `ClientWebSocket` and sets `Authorization: Bearer <token>` on the upgrade
-  (`NotificationHubService.cs:550`, `:591-595`). Only a browser connecting to the gateway directly
+  (`NotificationHubService.cs:589`, `:631-635`). Only a browser connecting to the gateway directly
   still relies on the `access_token` query string on `/hubs` (ADR-004), which the server extracts for
   hub paths
-  (`MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/WebApplicationBuilderExtensions.Authentication.cs:151`,
-  `:179`); that path has to be kept exempt from other edge controls.
+  (`MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/WebApplicationBuilderExtensions.Authentication.cs:156`,
+  `:184`); that path has to be kept exempt from other edge controls.
 - **Read state is per-user, not on the aggregate.** `IsRead`/`ReadOn` live on each `UserNotification`,
   not on the `PushNotification`, so "how many recipients have read this" is a query across the inbox
   rows rather than a property of the sent notification.
@@ -151,7 +159,7 @@ recipient policy both behind abstractions.
   reaches users connected to the same replica that handled the send; the inbox masks this for correctness
   but not for immediacy.
 - **WebSockets are required; there is no transport fallback.** Because the client pins the transport
-  to WebSockets and skips negotiation (`NotificationHubService.cs:538-539`), a client or an
+  to WebSockets and skips negotiation (`NotificationHubService.cs:577-578`), a client or an
   intermediate proxy that cannot carry a WebSocket gets no live push at all rather than degrading to
   Server-Sent Events or long polling. The inbox still delivers on next load, so this costs immediacy,
   not correctness.
@@ -468,3 +476,50 @@ ADR-114, and several anchors.
    `:2572-2573`, "not a backplane limit" `:2574`), with the scale rule (`maxReplicas: 2`) at `:2577`,
    which is also the anchor for the 2026-10-26 item 1 replica count. The 2026-10-26 statement that
    its list gave current locations is superseded by this one for the anchors above.
+
+## Revision (2026-11-23)
+Re-verified against current source. The two-channel model, the dedup and transactional posture, the
+WebSockets-only hub client, the backplane, the ADC scale block and the email primitive are
+unchanged; what moved is two facts the record did not carry and most live anchors.
+
+1. **The native-push leg records its outcome on the audit row.** `SendNativeAsync`
+   (`MMCA.Common/Source/Core/MMCA.Common.Application/Notifications/PushNotifications/UseCases/Send/SendPushNotificationHandler.cs:153-190`,
+   called at `:142`) writes the delivery unit and the Android and Apple sent and failed counts onto
+   the `PushNotification` through `RecordNativePushOutcome` (`:172-177`), and the terminal save
+   (`:144`) persists them with the status. An outcome with no per-platform counts and no failure
+   leaves the row unrecorded (`:167-171`). The leg stays best-effort: a failure is logged with the
+   exception and never thrown (`:179-189`). The Decision bullet on the native leg now says so.
+2. **`AddPushNotifications` also registers a startup warning for open channel joins.** It adds
+   `ChannelJoinAuthorizerMissingWarningService` as a hosted service
+   (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.Notifications.cs:86`),
+   which logs one Warning naming `IChannelJoinAuthorizer` when none is registered, because a live-channel
+   join is then open to any authenticated caller with a well-formed key
+   (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Notifications/NotificationHub.cs:24`, `:159-162`). The method also post-configures the Redis backplane
+   options through every registered `IRedisConfigurationOptionsConfigurator` (`:65-72`). The Decision
+   bullet on scale-out now names the hosted service.
+3. Anchors re-verified against current source: `SendPushNotificationHandler.cs` saves at `:102`,
+   `:112`, `:144`, the sender-scoped key at `:199-201`, `FindByDedupKeyAsync` at `:219-228`, the
+   native-push call at `:142` (the `Create` call at `:86-92`, the lookup at `:60-71`, the propagation
+   comment and first save at `:101-102` and the remarks at `:21-31` and `:33-41` are as recorded);
+   the filtered unique index at
+   `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Configuration/EntityTypeConfiguration/Notifications/PushNotificationConfiguration.cs:79-83`;
+   the `NullNativePushSender` default at
+   `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:377`;
+   `AddPushNotifications` at `DependencyInjection.Notifications.cs:41-89` (`AddSignalR()` at `:48`,
+   the transient registrations at `:76-77`, the `IUserIdProvider` replacement at `:81`);
+   `NotificationHubService.cs` with negotiation skipped at `:577-578` (method at `:573`), the early
+   return at `:580-583`, `AccessTokenProvider` at `:585`, the socket factory at `:587-590`, the doc
+   comment at `:550-556`, the proxy paragraph at `:558-563` and the Bearer header at `:631-635`;
+   `WebApplicationBuilderExtensions.Authentication.cs` at `:156` (the hub-path comment) and `:184`
+   (the `access_token` query read). Current locations for facts in earlier Revisions (those sections
+   are left as recorded): the default registrations in `DependencyInjection.cs` (`IEmailSender`
+   `:369`, `IPushNotificationSender` `:370`, `ILiveChannelPublisher` `:371`, `INativePushSender`
+   `:377`, `IPushDeviceRegistrar` `:378`, inside `AddServices()` `:338`, called at `:277`); the
+   backplane channel prefix at `DependencyInjection.Notifications.cs:59`;
+   `SendOrderPaidEmailInternalCommandHandler.cs` takes `IEmailSender` at `:33`, sends at `:81` and
+   builds the body at `:88`; the ADC Notification scale comment at
+   `MMCA.ADC/infra/main.bicep:2868-2886` ("more than one replica safe" `:2871`, cap back to 1
+   `:2880-2881`, the backplane-errors alert `:2882-2883`, "not a backplane limit" `:2884`), the
+   scale rule (`maxReplicas: 2`) at `:2887`, and the `signalr-backplane-errors` entry key at `:688`.
+   The 2026-10-26 and 2026-10-28 statements that their lists gave current locations are superseded
+   by this one for the anchors above.

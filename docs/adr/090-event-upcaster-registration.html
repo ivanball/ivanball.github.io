@@ -267,7 +267,8 @@
           Revised 2026-10-07: anchors refreshed after the v1.233.0 release.
           Revised 2026-10-21: anchors refreshed after the outbox releases through v1.247.0.
           Revised 2026-10-26: a terminal unresolvable-type miss now stamps <code>LockedUntil</code> to the current time
-          instead of clearing it, so the dead-letter retention window runs from the last failed attempt.</p>
+          instead of clearing it, so the dead-letter retention window runs from the last failed attempt.
+          Revised 2026-11-23: anchors refreshed after the outbox releases through v1.309.0.</p>
           <h2 id="context">Context</h2>
           <p>ADR-010 splits event evolution into a signal and a discipline. The signal (<code>SchemaVersion</code>, a
           fitness-function-gated property on every integration event) shipped with ADR-010 itself. The
@@ -506,6 +507,31 @@ x.RegisterUpcastedIntegrationEventConsumer&lt;ProductVariantChanged&gt;(); <span
           <code>FromDomainEvent</code> (<code>:140</code>) stores <code>GetStorageName</code> at <code>:148</code>, <code>DeserializeEvent</code> (<code>:176</code>) calls
           <code>ResolveEventType</code> at <code>:178</code> (defined at <code>:199</code>), and the fallback is at <code>:209</code>, all unchanged.</li>
           </ol>
+          <h2 id="revision-2026-11-23">Revision (2026-11-23)</h2>
+          <p>Re-verified against current source. The decision, the mechanism, both delivery paths, and the
+          terminal unresolvable-type behavior recorded by the 2026-10-26 revision (<code>RetryCount</code> set to
+          <code>MaxRetries</code>, <code>LockedUntil</code> stamped to the current UTC time, <code>ProcessedOn</code> left null) are
+          unchanged; only line anchors in <code>OutboxProcessor.cs</code> and <code>OutboxCleanupService.cs</code> moved. Anchors
+          inside the earlier revisions are left as recorded.</p>
+          <ol>
+          <li><strong>Anchors re-verified against current source:</strong> In
+          <code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/Processing/OutboxProcessor.cs</code>,
+          the <code>DeserializeEvent</code> call is at <code>:577</code>, the <code>HandleUnresolvableType</code> call at <code>:580</code>, and the
+          method at <code>:1074</code>, with its XML summary at <code>:1058-1068</code> (<code>ProcessedOn</code> stays null,
+          <code>:1064-1065</code>). The terminal miss sets <code>RetryCount</code> to <code>MaxRetries</code> at <code>:1089</code> and stamps
+          <code>LockedUntil</code> at <code>:1093</code> (comment at <code>:1091-1092</code>); the dead-letter counter increment is at
+          <code>:1094-1097</code>, tagged <code>event_type</code> (<code>:1096</code>) and <code>reason</code> <code>type_unresolvable</code> (<code>:1097</code>). The
+          <code>RetryCount &lt; MaxRetries</code> poll filter sits in <code>FetchCandidatesAsync</code> (<code>:305</code>, filter at <code>:316</code>),
+          and the backlog gauge <code>CountPendingAsync</code> (<code>:273</code>) copies it at <code>:290</code>. In
+          <code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/Administration/OutboxCleanupService.cs</code>,
+          <code>SweepDeadLettersAsync</code> (<code>:155</code>) computes the cutoff at <code>:163-164</code> and keys it on
+          <code>LockedUntil ?? OccurredOn</code> at <code>:172</code> (key selector at <code>:173</code>). In
+          <code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/OutboxMessage.cs</code>,
+          <code>FromDomainEvent</code> (<code>:140</code>) stores <code>GetStorageName</code> at <code>:148</code>, <code>DeserializeEvent</code> (<code>:176</code>) calls
+          <code>ResolveEventType</code> at <code>:178</code> (defined at <code>:199</code>), and the fallback is at <code>:209</code>, all unchanged.
+          <code>AddEventUpcaster</code> remains at <code>DependencyInjection.Extensibility.cs:81</code> (singleton via
+          <code>TryAddEnumerable</code> at <code>:86</code>).</li>
+          </ol>
           
         <div class="doc-foot btn-row">
           <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
@@ -527,6 +553,7 @@ x.RegisterUpcastedIntegrationEventConsumer&lt;ProductVariantChanged&gt;(); <span
             <li><a href="#revision-2026-10-07">Revision (2026-10-07)</a></li>
             <li><a href="#revision-2026-10-21">Revision (2026-10-21)</a></li>
             <li><a href="#revision-2026-10-26">Revision (2026-10-26)</a></li>
+            <li><a href="#revision-2026-11-23">Revision (2026-11-23)</a></li>
             </ul>
           </nav>
         </aside>

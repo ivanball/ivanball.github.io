@@ -1,7 +1,7 @@
 # ADR-129: The Tactical Aggregate Contract
 
 ## Status
-Accepted (2026-10-01). Revised 2026-10-21: anchors refreshed after the ADC `Speaker` aggregate moved its child-access call sites. Revised 2026-10-26: anchors refreshed after the framework aggregate base and the Helpdesk `Ticket`, ADC `Speaker` and Store `Product` aggregates moved their child-access and `Result.Combine` lines.
+Accepted (2026-10-01). Revised 2026-10-21: anchors refreshed after the ADC `Speaker` aggregate moved its child-access call sites. Revised 2026-10-26: anchors refreshed after the framework aggregate base and the Helpdesk `Ticket`, ADC `Speaker` and Store `Product` aggregates moved their child-access and `Result.Combine` lines. Revised 2026-11-23: MMCA.Common now runs the full entity suite over its own aggregates through a framework-as-module map, and the existence of a soft-delete cascade to an aggregate's children is recorded as fitness-gated, with a test subclassed in all four repos; anchors refreshed.
 
 ## Context
 Every entity in the four repos is written the same way: a sealed class over a framework base, a
@@ -20,19 +20,21 @@ sits, and which half a fitness test holds. This record is that place, in the sam
 
 ## Decision
 Entities follow one tactical contract. The construction, encapsulation and placement parts are
-fitness-gated by `EntityConventionTestsBase`; the child-access part and the use of `Result.Combine` are framework members and a convention
-every repo follows, not a test.
+fitness-gated by `EntityConventionTestsBase`, and that a soft delete cascades to the children at all
+is fitness-gated by `CascadeSoftDeleteConventionTestsBase` (an existence check, not a coverage
+check); the child-access helpers themselves and the use
+of `Result.Combine` are framework members and a convention every repo follows, not a test.
 
 - **One hierarchy, three abstract levels.** `BaseEntity<TIdentifierType>`
   (`MMCA.Common/Source/Core/MMCA.Common.Domain/Entities/BaseEntity.cs:34`) carries identity;
   `AuditableBaseEntity<TIdentifierType>`
   (`MMCA.Common/Source/Core/MMCA.Common.Domain/Entities/AuditableBaseEntity.cs:13`) adds soft delete,
-  the audit fields and the row version, all with private setters (`:20-53`): `IsDeleted` is set by
-  the domain methods `Delete()` and `Undelete()` (`:67-80`, `:89-104`), while the audit fields are
-  stamped at save time; and
+  the audit fields and the row version, all with private setters (`:20-55`): `IsDeleted` is set by
+  the domain methods `Delete()` (public virtual, `:69-82`) and `Undelete()` (protected, `:91-106`),
+  while the audit fields are stamped at save time by `AuditSaveChangesInterceptor` (`:22-23`); and
   `AuditableAggregateRootEntity<TIdentifierType>`
-  (`MMCA.Common/Source/Core/MMCA.Common.Domain/Entities/AuditableAggregateRootEntity.cs:13`) adds the
-  domain event list (`:16-50`) and the child-access members below. The fitness rules recognize an
+  (`MMCA.Common/Source/Core/MMCA.Common.Domain/Entities/AuditableAggregateRootEntity.cs:14`) adds the
+  domain event list (`:17-51`) and the child-access members below. The fitness rules recognize an
   aggregate root by a base type whose name starts with `AuditableAggregateRootEntity`, and an entity
   by any of the three bases
   (`MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/RuleHelpers.cs:109-119`).
@@ -64,18 +66,36 @@ every repo follows, not a test.
 - **Child access goes through the root.** `GetChildOrNotFound<TChild, TChildId>` is a protected static
   member of the aggregate base that returns the active child by id or a `NotFound` failure carrying
   the caller as source and the child type as target, skipping soft-deleted children
-  (`AuditableAggregateRootEntity.cs:105-122`). `SetItems<TChildEntity>` is the protected collection
+  (`AuditableAggregateRootEntity.cs:106-123`). `SetItems<TChildEntity>` is the protected collection
   replacement: it copies the incoming items, calls the overridable `ValidateSetItems` hook (a no-op by
-  default) and only then replaces the backing list (`:60-76`, hook at `:87-92`). Three more protected
+  default) and only then replaces the backing list (`:61-77`, hook at `:88-93`). Three more protected
   static helpers build on the lookup: `RemoveChildOrNotFound` (lookup then the child's `Delete()`,
-  `:158`), `RestoreChild` (reactivates a soft-deleted child, `:212`) and `DeleteChildren` (soft-deletes
-  every active child for a cascading `Delete()`, `:273`). All five are protected, so only the aggregate
+  `:159`), `RestoreChild` (reactivates a soft-deleted child, `:213`) and `DeleteChildren` (soft-deletes
+  every active child for a cascading `Delete()`, `:274`). All five are protected, so only the aggregate
   calls them directly; aggregates still expose `internal` `SetXxx` wrappers over `SetItems` for
   manual navigation loading (for example
-  `MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.Domain/Products/Product.cs:404-405`, `:411-412`), which
+  `MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.Domain/Products/Product.cs:420-421`, `:427-428`), which
   Application-layer navigation populators call
   (`MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.Application/Products/ProductNavigationPopulator.cs:28`).
-  No fitness rule requires the use of any of these helpers.
+  No fitness rule requires the use of any of these helpers. What is gated is that a cascading delete
+  exists: `AggregatesCascadeSoftDeleteToChildren`
+  (`MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Rules/Domain/ArchitectureRules.CascadeSoftDelete.cs:100-143`)
+  reads the IL of every concrete aggregate root that declares a child collection and fails it when it
+  has no `Delete()` override, or when that override's own instructions contain neither a call to
+  `DeleteChildren` nor a virtual call to any zero-argument `Delete` (`:148-186`), unless the type is
+  on a reviewed exemption list. It runs as the one fact of `CascadeSoftDeleteConventionTestsBase`
+  (`.../Bases/Domain/CascadeSoftDeleteConventionTestsBase.cs:18-31`), which all four repos subclass
+  (for example
+  `MMCA.Store/Tests/Architecture/MMCA.Store.Architecture.Tests/Domain/CascadeSoftDeleteConventionTests.cs:12`).
+  Two of those runs assert less than the sentence suggests. MMCA.Common runs the rule over
+  `CommonArchitectureMap`, and the framework declares no child-bearing aggregate, so its run is a
+  ratchet rather than an assertion
+  (`MMCA.Common/Tests/Architecture/MMCA.Common.Architecture.Tests/Domain/CascadeSoftDeleteConventionTests.cs:8-11`,
+  `:16`). The exemption lists are not empty: ADC exempts `Speaker`, the example aggregate below,
+  because its junction rows deliberately outlive the soft-deleted root
+  (`MMCA.ADC/Tests/Architecture/MMCA.ADC.Architecture.Tests/Domain/CascadeSoftDeleteConventionTests.cs:19-25`),
+  and Store exempts `Category`, whose `Delete()` refuses while children are assigned
+  (`MMCA.Store/Tests/Architecture/MMCA.Store.Architecture.Tests/Domain/CascadeSoftDeleteConventionTests.cs:19-24`).
 - **Invariants are static classes composed with `Result.Combine`.** `Result.Combine(params
   ReadOnlySpan<Result>)` (`MMCA.Common/Source/Core/MMCA.Common.Shared/Abstractions/Result.cs:124`)
   throws on an empty argument list (`:126-129`) and otherwise returns success or one failure holding
@@ -89,30 +109,33 @@ every repo follows, not a test.
   private constructor (`:52`) and `Create` returning `Result<Ticket>` (`:66`), composes
   `TicketInvariants` through `Result.Combine` in `Create` and `UpdateDetails` (`:68`, `:117`), and
   finds a comment through `GetChildOrNotFound` (`:143`). `TicketInvariants` is the static class
-  (`MMCA.Helpdesk/Source/Modules/Tickets/MMCA.Helpdesk.Tickets.Domain/Tickets/TicketInvariants.cs:16`,
-  `Result.Combine` at `:27`, `:33`, `:40`). The ADC and Store aggregates use the same members, for
-  example `Speaker` (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Speakers/Speaker.cs:434`,
-  `:491`, `:510`) and `Product`
-  (`MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.Domain/Products/Product.cs:405`, `:451`, `:470`).
-- **Adoption: the three application repos subclass the full base unchanged.** MMCA.ADC
+  (`MMCA.Helpdesk/Source/Modules/Tickets/MMCA.Helpdesk.Tickets.Domain/Tickets/TicketInvariants.cs:13`,
+  `Result.Combine` at `:24`, `:30`, `:37`). The ADC and Store aggregates use the same members, for
+  example `Speaker` (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Speakers/Speaker.cs:441`,
+  `:498`, `:517`) and `Product`
+  (`MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.Domain/Products/Product.cs:421`, `:468`, `:487`).
+- **Adoption: all four repos subclass the full base.** The three application repos subclass it
+  unchanged: MMCA.ADC
   (`MMCA.ADC/Tests/Architecture/MMCA.ADC.Architecture.Tests/Domain/EntityConventionTests.cs:3-6`),
   MMCA.Store
   (`MMCA.Store/Tests/Architecture/MMCA.Store.Architecture.Tests/Domain/EntityConventionTests.cs:3-6`)
   and MMCA.Helpdesk
   (`MMCA.Helpdesk/Tests/Architecture/MMCA.Helpdesk.Architecture.Tests/ArchitectureTests.cs:89-92`)
   each supply only their architecture map.
-- **MMCA.Common does not subclass `EntityConventionTestsBase`.** It has no business modules, and the
-  sealed, setter and module-scoped constructor rules scope to module domains, so those three would be
-  vacuous there (`ArchitectureRules.Entities.cs:141-144`, `:86`). The layer-placement and DTO/request
-  rules do not scope to module domains (`ArchitectureRules.Entities.cs:180-217`), but Common does not
-  call them either. It subclasses the smaller
-  `AggregateConventionTestsBase` instead
+- **MMCA.Common runs the full base over a framework-as-module map.**
+  `EntityConventionTests` subclasses `EntityConventionTestsBase`
+  (`MMCA.Common/Tests/Architecture/MMCA.Common.Architecture.Tests/Domain/EntityModel/EntityConventionTests.cs:12`)
+  over `FrameworkModuleArchitectureMap`, which registers the framework's Shared, Domain and Application
+  assemblies as one module named `Framework` and keeps Infrastructure a framework layer
+  (`.../Domain/EntityModel/FrameworkModuleArchitectureMap.cs:16-29`). The sealed, setter and
+  module-scoped constructor rules, which would be vacuous over the default `CommonArchitectureMap`
+  (`FrameworkModuleArchitectureMap.cs:12-13`), therefore run over the aggregates the framework ships,
+  the Notifications family (`:10-11`), alongside the layer-placement and DTO/request rules. Common also
+  keeps the smaller `AggregateConventionTestsBase` over `CommonArchitectureMap`
   (`MMCA.Common/Tests/Architecture/MMCA.Common.Architecture.Tests/Domain/AggregateConventionTests.cs:9`),
-  which runs the vacuity, `Create` factory and Domain-wide `Result<T>` facts plus a no-public-constructor
-  rule scoped to the whole Domain layer rather than module domains
+  which adds a no-public-constructor rule scoped to the whole Domain layer rather than module domains
   (`MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Bases/Domain/AggregateConventionTestsBase.cs:14-24`,
-  rule at `ArchitectureRules.Entities.cs:90-100`). The framework's own types are therefore not checked
-  for sealing, setters, layer placement or DTO/request placement by this suite.
+  rule at `ArchitectureRules.Entities.cs:90-100`).
 
 ## Rationale
 - **One contract, one record.** The pieces were each correct in their own ADR, but an agent writing a
@@ -135,7 +158,8 @@ every repo follows, not a test.
 
 ## Trade-offs
 - **Part of the contract is not enforced.** Child access through `GetChildOrNotFound`, `SetItems` and
-  the remove, restore and cascade-delete helpers, the existence of an `*Invariants` class and the use of `Result.Combine` hold by copying, not by a test; an abstract module-domain class over an entity base also escapes the sealed rule. An
+  the remove, restore and cascade-delete helpers (that some cascade exists is gated, the helper that
+  performs it is not), the existence of an `*Invariants` class and the use of `Result.Combine` hold by copying, not by a test; an abstract module-domain class over an entity base also escapes the sealed rule. An
   aggregate that reaches into a child list directly or validates inline still builds.
 - **Eager evaluation has a cost.** Every argument to `Result.Combine` runs before the call, so an
   invariant that depends on an earlier one passing must guard itself or run in a separate step.
@@ -145,10 +169,14 @@ every repo follows, not a test.
 - **Layer placement covers two layers.** The rule scans Application and Infrastructure assemblies only
   (`ArchitectureRules.Entities.cs:182`); an entity declared in an API or UI assembly is not caught by
   it.
+- **The cascade rule proves existence, not coverage.** An aggregate with two child collections that
+  cascades only one still passes, so a unit test on the aggregate pins the second
+  (`ArchitectureRules.CascadeSoftDelete.cs:88-90`); only direct calls in the override are read, so a
+  loop moved into a private helper is reported even though it cascades (`:85-87`); any virtual call
+  to a zero-argument `Delete` counts as a child delete (`:183-186`); and only collections declared on
+  the aggregate itself are inspected (`:90-91`).
 - **The `Create` check is by name.** A type with no `Create` method is outside the `Result<T>` rule
   entirely (`ArchitectureRules.Entities.cs:67-70`), so a factory under another name is unchecked.
-- **The framework's own model is gated more lightly.** MMCA.Common runs the smaller base, so sealing,
-  setter, layer-placement and DTO/request rules do not apply to its own concrete Domain types.
 
 ## Revision (2026-10-06)
 - No content changes: the contract described above still matches the code.
@@ -188,6 +216,47 @@ also moved.
    `MMCA.Helpdesk/Source/Modules/Tickets/MMCA.Helpdesk.Tickets.Domain/Tickets/Ticket.cs:117`
    (`Result.Combine` in `UpdateDetails`) and `:143` (`GetChildOrNotFound`); `Ticket.cs:26`, `:52`,
    `:66`, `:68` and `TicketInvariants.cs:16`, `:27`, `:33`, `:40` still hold.
+
+## Revision (2026-11-23)
+Re-verified against current source. The construction, encapsulation, placement and child-access
+contract is unchanged. Two statements moved: MMCA.Common now runs the full entity suite over its own
+aggregates, and the existence of a soft-delete cascade to an aggregate's children is fitness-gated,
+with the test subclassed in all four repos. The framework base and the three example aggregates also moved their line anchors.
+
+1. MMCA.Common subclasses `EntityConventionTestsBase`
+   (`MMCA.Common/Tests/Architecture/MMCA.Common.Architecture.Tests/Domain/EntityModel/EntityConventionTests.cs:12`)
+   over `FrameworkModuleArchitectureMap` (`FrameworkModuleArchitectureMap.cs:16-29`), so the sealed,
+   setter, module-scoped constructor, layer-placement and DTO/request rules now cover the framework's
+   Notifications aggregates. The Decision bullet that called those rules vacuous in Common and the
+   trade-off "The framework's own model is gated more lightly" are replaced; the smaller
+   `AggregateConventionTests` (`AggregateConventionTests.cs:9`) still runs alongside.
+2. The cascade-delete part of the child-access contract is gated as an existence check:
+   `AggregatesCascadeSoftDeleteToChildren`
+   (`MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Rules/Domain/ArchitectureRules.CascadeSoftDelete.cs:100-143`)
+   fails a child-bearing aggregate root whose `Delete()` override contains neither a `DeleteChildren`
+   call nor a virtual zero-argument `Delete` call, run by `CascadeSoftDeleteConventionTestsBase.cs:18-31`
+   and subclassed in MMCA.ADC and MMCA.Store (`Domain/CascadeSoftDeleteConventionTests.cs:12`),
+   MMCA.Helpdesk (`:16`) and MMCA.Common (`:14`, a ratchet: no framework aggregate has children).
+   ADC exempts `Speaker` and Store exempts `Category`. The helpers themselves stay optional; the
+   Decision lead, the child-access bullet, the first trade-off and a new cascade trade-off now say so.
+3. Anchors re-verified against current source:
+   `MMCA.Common/Source/Core/MMCA.Common.Domain/Entities/AuditableBaseEntity.cs:20-55` (private setters,
+   `RowVersion` at `:55`), `:69-82` (`Delete()`, public virtual) and `:91-106` (`Undelete()`,
+   protected), `:22-23` (stamped by `AuditSaveChangesInterceptor`); `:13` still holds.
+   `MMCA.Common/Source/Core/MMCA.Common.Domain/Entities/AuditableAggregateRootEntity.cs:14` (class),
+   `:17-51` (event list), `:61-77` (`SetItems`), `:88-93` (`ValidateSetItems`), `:106-123`
+   (`GetChildOrNotFound`), `:159` (`RemoveChildOrNotFound`), `:213` (`RestoreChild`) and `:274`
+   (`DeleteChildren`). Helpdesk
+   `MMCA.Helpdesk/Source/Modules/Tickets/MMCA.Helpdesk.Tickets.Domain/Tickets/TicketInvariants.cs:13`
+   (class) with `Result.Combine` at `:24`, `:30`, `:37`; `Ticket.cs:26`, `:52`, `:66`, `:68`, `:117`
+   and `:143` still hold. ADC
+   `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Speakers/Speaker.cs:441`
+   (`SetItems`, also `:511`), `:498` (`RemoveChildOrNotFound`, also `:428`), `:517`
+   (`GetChildOrNotFound`) and `:408` (`RestoreChild`). Store
+   `MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.Domain/Products/Product.cs:420-421` and
+   `:427-428` (the `internal` `SetProductImages` and `SetProductVariants` wrappers, `SetItems` at
+   `:421`, `:428`), `:468` (`RemoveChildOrNotFound`, also `:304`), `:487` (`GetChildOrNotFound`, also
+   `:517`, `:551`, `:573`) and `:142-143` (`DeleteChildren` in `Delete()`).
 
 ## Related
 [ADR-013](013-result-pattern.md) (the `Result<T>` factories this contract requires),

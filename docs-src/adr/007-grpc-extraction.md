@@ -12,6 +12,9 @@ Revised 2026-10-21: ADC now marks seven `[ServiceContract]` interfaces, and the 
 Store's one shared-secret exception (an HS256 service token on the Sales -> Identity Customers edge).
 Revised 2026-10-26: anchors refreshed after the v1.261.0 release.
 Revised 2026-10-28: anchors refreshed after the v1.265.1 release.
+Revised 2026-11-23: ADC now carries three service-token edges (Store's Customers edge is no longer
+the only one), the auth bullet records the service-only `ServiceCaller` policy, and ADC marks nine
+`[ServiceContract]` interfaces.
 
 ## Context
 Once modules became separate service processes, the in-process interface calls between them (e.g.
@@ -33,7 +36,7 @@ Use **gRPC**, exposed through `MMCA.Common.Grpc`, with a contract-package conven
   the typed-client registration itself ("register a hand-written adapter that implements the consuming
   module's own C# interface contract ... and delegates to this typed gRPC client. That adapter IS the
   consuming module's Anti-Corruption Layer",
-  `MMCA.Common/Source/Presentation/MMCA.Common.Grpc/DependencyInjection.cs:74-76`, with the package's
+  `MMCA.Common/Source/Presentation/MMCA.Common.Grpc/DependencyInjection.cs:75-77`, with the package's
   own class remarks naming both this pattern and the Strangler Fig route at `:16-25`) and enforced by the
   transport fitness rule below, which forbids gRPC and protobuf types outside the adapter's layer.
 - **Typed clients** via `AddTypedGrpcClient<T>(serviceName)` resolve `http://<service>` through
@@ -44,9 +47,18 @@ Use **gRPC**, exposed through `MMCA.Common.Grpc`, with a contract-package conven
   (`MMCA.Common/Source/Presentation/MMCA.Common.Grpc/Authentication/ServiceTokenHttpClientBuilderExtensions.cs:23-25`);
   registering the provider sends nothing by itself
   (`MMCA.Common/Source/Presentation/MMCA.Common.Grpc/Authentication/ServiceTokenServiceCollectionExtensions.cs:17-22`).
-  Store's Customers client is the only adopter
+  Four clients opt in. In Store, the Customers client
   (`MMCA.Store/Source/Services/MMCA.Store.Identity.Contracts/DependencyInjection.cs:46`, with
-  `MMCA.Store/Source/Services/MMCA.Store.Sales.Service/Program.cs:300`); ADC uses neither.
+  `MMCA.Store/Source/Services/MMCA.Store.Sales.Service/Program.cs:147`). In ADC, the
+  VerifiedUserLookup client
+  (`MMCA.ADC/Source/Services/MMCA.ADC.Identity.Contracts/DependencyInjection.cs:74`) and the
+  LiveChannelPush client
+  (`MMCA.ADC/Source/Services/MMCA.ADC.Notification.Contracts/DependencyInjection.cs:51`), both
+  registered by Engagement (`MMCA.ADC/Source/Services/MMCA.ADC.Engagement.Service/Program.cs:220-221`,
+  provider at `:230`), and the TicketInvitation client
+  (`MMCA.ADC/Source/Services/MMCA.ADC.Engagement.Contracts/DependencyInjection.cs:110`), registered
+  by Identity (`MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:306`, provider at
+  `:149`).
 - **`Result` failures over the wire**: the server-side `GrpcResultExceptionInterceptor` maps a failed
   `Result` to an `RpcException` carrying the structured `ErrorType`/code, mirroring the HTTP
   `HandleFailure` edge mapping (ADR-013). Adapters whose interface returns a `Result` (for example
@@ -58,31 +70,44 @@ Use **gRPC**, exposed through `MMCA.Common.Grpc`, with a contract-package conven
   negotiate without TLS/ALPN (a deliberate `SocketsHttpHandler` override). That is the default endpoint
   of an `Http2`-only service, or a dedicated `Http2`-only `grpc` endpoint on the mixed-profile services
   (see Trade-offs).
-- **Federated auth, not a shared secret (except one service-token edge)**: services validate forwarded JWTs against the issuer's
+- **Federated auth, not a shared secret (except the service-token edges)**: services validate forwarded JWTs against the issuer's
   JWKS (ADR-004) through `AddForwardedJwtBearer`, which fetches OIDC discovery and the JWKS from the
   configured authority and pins RS256
   (`MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/WebApplicationBuilderExtensions.Authentication.cs:52`,
-  `:109`). Under the AppHost the authority is wired by `WithJwksDiscovery(identity, gateway)`, whose
-  gateway argument is optional (`MMCA.Common/Source/Hosting/MMCA.Common.Aspire.Hosting/Extensions.cs:322-324`);
+  `:110`). Under the AppHost the authority is wired by `WithJwksDiscovery(identity, gateway)`, whose
+  gateway argument is optional (`MMCA.Common/Source/Hosting/MMCA.Common.Aspire.Hosting/Extensions.cs:369-371`);
   in production the bicep points the authority straight at Identity's internal cleartext URL with
-  `RequireHttpsMetadata=false`, not through the gateway (`MMCA.ADC/infra/main.bicep:2192`, `:2196`;
-  `MMCA.Store/infra/main.bicep:1782`, `:1787`). This holds for every user token. The one
-  shared-secret exception is Store's Sales -> Identity Customers edge: Identity registers
-  `AddServiceTokenAuthentication`
-  (`MMCA.Store/Source/Services/MMCA.Store.Identity.Service/Program.cs:179`), a second JwtBearer
-  scheme that validates HS256 against the shared `Grpc:ServiceToken:SigningKey`
-  (`ServiceTokenServiceCollectionExtensions.cs:141-144`) and is never the default scheme, and maps
-  the Customers service under the `InternalCaller` policy
-  (`MMCA.Store/Source/Services/MMCA.Store.Identity.Service/Program.cs:354`), which accepts an
-  authenticated caller under either scheme (`ServiceTokenServiceCollectionExtensions.cs:84-87`): a
-  forwarded user JWT, or a service token signed with the shared key and carrying a `svc` claim (the
-  scheme refuses one without it, `:151-157`; it does not check which service the claim names).
-  Sales is the only host that mints one, and attaches it on calls that have no user token to forward.
+  `RequireHttpsMetadata=false`, not through the gateway (`MMCA.ADC/infra/main.bicep:2484`, `:2488`;
+  `MMCA.Store/infra/main.bicep:2113`, `:2118`). This holds for every user token. The shared-secret
+  exception is four gRPC edges that a call with no user token must still cross. A host that serves
+  one registers `AddServiceTokenAuthentication`, a second JwtBearer scheme that validates HS256
+  against the shared `Grpc:ServiceToken:SigningKey`
+  (`MMCA.Common/Source/Presentation/MMCA.Common.Grpc/Authentication/ServiceTokenServiceCollectionExtensions.cs:148`,
+  `:151`) and is never the default scheme (a startup guard fails the host otherwise, `:81-85`), and
+  maps the edge under one of two policies. `InternalCaller` accepts an authenticated caller under
+  either scheme (`:88-90`): a forwarded user JWT, or a service token. `ServiceCaller` accepts the
+  service scheme alone and requires the `svc` claim (`:91-94`). The scheme refuses a service token
+  without a non-empty `svc` claim (`:162-171`); it does not check which service the claim names.
+  The edges are Store's Sales -> Identity Customers under `InternalCaller`
+  (`MMCA.Store/Source/Services/MMCA.Store.Identity.Service/Program.cs:85`, `:149`), and in ADC
+  Engagement -> Identity VerifiedUserLookup under `InternalCaller`
+  (`MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:143`, `:351`), Engagement ->
+  Notification LiveChannelPush under `ServiceCaller`
+  (`MMCA.ADC/Source/Services/MMCA.ADC.Notification.Service/Program.cs:137`, `:160`) and Identity ->
+  Engagement TicketInvitation under `ServiceCaller`
+  (`MMCA.ADC/Source/Services/MMCA.ADC.Engagement.Service/Program.cs:236`, `:276`). Three hosts mint
+  a service token (Store Sales, ADC Engagement, ADC Identity), each attaching it only on the
+  opted-in clients and only when there is no user token to forward. ADC's AppHost hands the three
+  ADC services one generated key (`MMCA.ADC/Source/Hosting/MMCA.ADC.AppHost/Program.cs:242-245`), and
+  production supplies it as the `Grpc__ServiceToken__SigningKey` environment variable, bound to the
+  container-app secret `grpc-service-token-signing-key` (`MMCA.ADC/infra/main.bicep:2305`, `:2646`,
+  `:2813`), which references the Key Vault secret `Grpc--ServiceToken--SigningKey`
+  (`MMCA.ADC/infra/main.bicep:2082`).
 - **Disabled-module stubs**: when a multi-module host runs with a peer module switched off,
   `ModuleLoader` registers that module's `Disabled*` stubs so resolution always succeeds
-  (`MMCA.Common/Source/Core/MMCA.Common.Application/Modules/ModuleLoader.cs:119`). The extracted
+  (`MMCA.Common/Source/Core/MMCA.Common.Application/Modules/ModuleLoader.cs:121`). The extracted
   service hosts name only their own module assembly (for example
-  `MMCA.ADC/Source/Services/MMCA.ADC.Engagement.Service/Program.cs:221`), so peers are never
+  `MMCA.ADC/Source/Services/MMCA.ADC.Engagement.Service/Program.cs:65`), so peers are never
   discovered, no stub is registered, and the gRPC adapter registration satisfies the interface.
 
 ## Rationale
@@ -106,10 +131,11 @@ Use **gRPC**, exposed through `MMCA.Common.Grpc`, with a contract-package conven
   `AllowedPublicImplementations` escape hatch (`ContractImplementationTestsBase.cs:30`); all four repos
   subclass it too. Both rules are **triggered in ADC and Store**, whose architecture maps register the
   module Shared assemblies (`AdcArchitectureMap.cs:31`, `:39`, `:47`, `:53`;
-  `StoreArchitectureMap.cs:25`, `:33`, `:41`). ADC marks seven interfaces
-  (`ISessionBookmarkValidationService.cs:10`, `IEventLiveValidationService.cs:12`,
+  `StoreArchitectureMap.cs:25`, `:33`, `:41`). ADC marks nine interfaces
+  (`ISessionBookmarkValidationService.cs:10`, `IEventLiveValidationService.cs:13`,
   `IBookmarkCountService.cs:10`, `IUserEngagementExportService.cs:13`, `IAttendeeQueryService.cs:10`,
-  `IUserNotificationExportService.cs:13`, `IUserConferenceExportService.cs:13`) and Store four (`IProductVariantService.cs:33`,
+  `IUserNotificationExportService.cs:13`, `IUserConferenceExportService.cs:13`,
+  `IPendingTicketInvitationService.cs:13`, `IVerifiedUserLookupService.cs:15`) and Store four (`IProductVariantService.cs:33`,
   `IUserCatalogExportService.cs:19`, `IUserSalesExportService.cs:20`, `ICustomerService.cs:25`), all
   with the parameterless form, so none passes a version. MMCA.Common and Helpdesk mark nothing
   (`MMCA.Common/Source/Core/MMCA.Common.Shared/Abstractions/ServiceContractAttribute.cs:12-13`), so
@@ -122,11 +148,11 @@ Use **gRPC**, exposed through `MMCA.Common.Grpc`, with a contract-package conven
 - **h2c assumptions.** Target services must serve HTTP/2 on cleartext; the Notification service runs
   `Http1AndHttp2` on its default endpoint for its SignalR WebSocket upgrade, unlike the `Http2`-only
   REST services, and carries a second, `Http2`-only `grpc` endpoint for its gRPC ingress (ADR-012)
-  (`MMCA.ADC/Source/Services/MMCA.ADC.Notification.Service/Program.cs:58-73`; `appsettings.json:13`,
+  (`MMCA.ADC/Source/Services/MMCA.ADC.Notification.Service/Program.cs:72-80`; `appsettings.json:13`,
   `:17`). Store's Sales service runs the same mixed profile: its default endpoints stay `Http1AndHttp2`
   because REST and the Stripe webhook arrive over HTTP/1.1, and a dedicated `Http2`-only `grpc`
   endpoint serves `IUserSalesExportService`
-  (`MMCA.Store/Source/Services/MMCA.Store.Sales.Service/Program.cs:66-80`; `appsettings.json:13`, `:17`).
+  (`MMCA.Store/Source/Services/MMCA.Store.Sales.Service/Program.cs:65-70`; `appsettings.json:13`, `:17`).
 - **Operational surface.** gRPC adds proto tooling, service discovery, and resilience tuning to the
   deployment.
 
@@ -221,3 +247,59 @@ Only anchors moved.
    re-pointed to `MMCA.ADC/infra/main.bicep:2192`, `:2196` (repeating at `:2328`, `:2332` and
    `:2482`, `:2486`); Store's to `MMCA.Store/infra/main.bicep:1782`, `:1787` (repeating at `:1918`,
    `:1923`).
+
+## Revision (2026-11-23)
+Re-verified against current source. The decision, the ACL convention, the production JWKS wiring
+(both bicep files still set the authority to `http://${identityApp.name}` with
+`RequireHttpsMetadata=false`), the h2c profiles and Store's Customers edge are unchanged. The
+service-token adoption, the policy set and the ADC `[ServiceContract]` count moved.
+
+1. ADC adopts the service token on three clients, so "ADC uses neither" no longer holds:
+   VerifiedUserLookup
+   (`MMCA.ADC/Source/Services/MMCA.ADC.Identity.Contracts/DependencyInjection.cs:74`) and
+   LiveChannelPush
+   (`MMCA.ADC/Source/Services/MMCA.ADC.Notification.Contracts/DependencyInjection.cs:51`), both
+   registered by Engagement (`MMCA.ADC/Source/Services/MMCA.ADC.Engagement.Service/Program.cs:220-221`,
+   `AddServiceTokenClient` at `:230`), and TicketInvitation
+   (`MMCA.ADC/Source/Services/MMCA.ADC.Engagement.Contracts/DependencyInjection.cs:110`), registered
+   by Identity (`MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:306`,
+   `AddServiceTokenClient` at `:149`). Minting hosts are now Store Sales, ADC Engagement and ADC
+   Identity.
+2. Federated auth carries four service-token edges, not one: Store Sales -> Identity Customers
+   (`InternalCaller`), and ADC Engagement -> Identity VerifiedUserLookup (`InternalCaller`,
+   `MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:351`), Engagement -> Notification
+   LiveChannelPush (`ServiceCaller`,
+   `MMCA.ADC/Source/Services/MMCA.ADC.Notification.Service/Program.cs:160`) and Identity ->
+   Engagement TicketInvitation (`ServiceCaller`,
+   `MMCA.ADC/Source/Services/MMCA.ADC.Engagement.Service/Program.cs:276`). The Decision now records
+   the second policy, `ServiceCaller`, which accepts the service scheme alone and requires the `svc`
+   claim
+   (`MMCA.Common/Source/Presentation/MMCA.Common.Grpc/Authentication/ServiceTokenServiceCollectionExtensions.cs:91-94`),
+   and the startup guard that keeps the service scheme off the default (`:81-85`). The ADC AppHost
+   key (`MMCA.ADC/Source/Hosting/MMCA.ADC.AppHost/Program.cs:242-245`) and the production secret
+   (`MMCA.ADC/infra/main.bicep:2305`, `:2646`, `:2813`) are recorded beside them.
+3. ADC marks nine `[ServiceContract]` interfaces, not seven, all parameterless: the additions are
+   `MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Shared/Tickets/Invitations/IPendingTicketInvitationService.cs:13`
+   and `MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Shared/Users/IVerifiedUserLookupService.cs:15`.
+   Store's four are unchanged, and MMCA.Common and Helpdesk still mark no type.
+4. Anchors re-verified against current source: the ACL convention quote re-pointed to
+   `MMCA.Common/Source/Presentation/MMCA.Common.Grpc/DependencyInjection.cs:75-77` (class remarks
+   `:16-25` hold); the RS256 pin to
+   `MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/WebApplicationBuilderExtensions.Authentication.cs:110`
+   (`:52` holds); `WithJwksDiscovery` to
+   `MMCA.Common/Source/Hosting/MMCA.Common.Aspire.Hosting/Extensions.cs:369-371`; the HS256 key and
+   algorithm pin to `ServiceTokenServiceCollectionExtensions.cs:148`, `:151`, the `InternalCaller`
+   policy to `:88-90` and the `svc` check to `:162-171`; ADC JWKS authority and
+   `RequireHttpsMetadata` to `MMCA.ADC/infra/main.bicep:2484`, `:2488` (repeating at `:2623`,
+   `:2627` and `:2789`, `:2793`); Store's to `MMCA.Store/infra/main.bicep:2113`, `:2118` (repeating
+   at `:2249`, `:2254`); Store Identity `AddServiceTokenAuthentication` to
+   `MMCA.Store/Source/Services/MMCA.Store.Identity.Service/Program.cs:85` and the Customers mapping
+   to `:149`; `AddServiceTokenClient` in Sales to
+   `MMCA.Store/Source/Services/MMCA.Store.Sales.Service/Program.cs:147`; `RegisterDisabledStubs` to
+   `MMCA.Common/Source/Core/MMCA.Common.Application/Modules/ModuleLoader.cs:121`; the Engagement
+   host's single module assembly to
+   `MMCA.ADC/Source/Services/MMCA.ADC.Engagement.Service/Program.cs:65`; `IEventLiveValidationService`
+   to `:13`; ADC Notification mixed profile to
+   `MMCA.ADC/Source/Services/MMCA.ADC.Notification.Service/Program.cs:72-80`; Store Sales mixed
+   profile to `MMCA.Store/Source/Services/MMCA.Store.Sales.Service/Program.cs:65-70`
+   (`appsettings.json:13`, `:17` still hold for both).

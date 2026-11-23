@@ -255,13 +255,13 @@
           <p class="eyebrow doc-kicker">Architecture Decision Record</p>
           <h1 id="adr-033-resource-ownership-authorization-row-level--action-filter">ADR-033: Resource-Ownership Authorization (Row-Level + Action Filter)</h1>
           <h2 id="status">Status</h2>
-          <p>Accepted (2026-07-02, revised 2026-07-25, 2026-08-01, 2026-08-31, 2026-09-10). Revised 2026-10-01 (the fail-closed owner gate and the per-record ownership check are now framework code in <code>OwnershipHelper</code>; see Revision below). Revised 2026-10-06: the CSV export&#39;s fail-closed <code>AllowUnscopedExport</code> opt-in, which lets only the bypass role export an unscoped table, is now recorded in Adoption. Revised 2026-10-07: anchors refreshed after the v1.233.0 release. Revised 2026-10-21: the bypass check is <code>ICurrentUserService.IsInRole</code> over every role claim (v1.234.0), not a compare against the first role claim, and the bypass role is a required host-named argument with no <code>Admin</code> default. Revised 2026-10-26: anchors refreshed after the v1.261.0 release (changelog, <code>OwnershipHelper</code> overload and Store <code>ReviewsController</code> anchors cited in earlier revisions). Revised 2026-10-28: Store&#39;s <code>ReviewsController</code> calls <code>OwnershipHelper.IsAdmin</code> directly again (correcting Revision 2026-10-01), and anchors refreshed after the Store Sales controllers and ADR-020 moved.</p>
+          <p>Accepted (2026-07-02, revised 2026-07-25, 2026-08-01, 2026-08-31, 2026-09-10). Revised 2026-10-01 (the fail-closed owner gate and the per-record ownership check are now framework code in <code>OwnershipHelper</code>; see Revision below). Revised 2026-10-06: the CSV export&#39;s fail-closed <code>AllowUnscopedExport</code> opt-in, which lets only the bypass role export an unscoped table, is now recorded in Adoption. Revised 2026-10-07: anchors refreshed after the v1.233.0 release. Revised 2026-10-21: the bypass check is <code>ICurrentUserService.IsInRole</code> over every role claim (v1.234.0), not a compare against the first role claim, and the bypass role is a required host-named argument with no <code>Admin</code> default. Revised 2026-10-26: anchors refreshed after the v1.261.0 release (changelog, <code>OwnershipHelper</code> overload and Store <code>ReviewsController</code> anchors cited in earlier revisions). Revised 2026-10-28: Store&#39;s <code>ReviewsController</code> calls <code>OwnershipHelper.IsAdmin</code> directly again (correcting Revision 2026-10-01), and anchors refreshed after the Store Sales controllers and ADR-020 moved. Revised 2026-11-23: the ADC Bookmarks delete is recorded as a call to the shared <code>OwnershipHelper.ValidateOwnershipAsync</code> (404 for a non-owner, 403 for an unresolvable claim), the filter guards three Bookmarks actions rather than two, ADC Conference&#39;s Q&amp;A row-level adoption moves into Adoption, and anchors are refreshed.</p>
           <h2 id="context">Context</h2>
           <p>ADR-020 added a permission (capability) layer over RBAC: it answers &quot;what may this <strong>role</strong> do&quot;,
           resolving a role to a permission so an endpoint can require a capability instead of a role name. It
-          explicitly scoped out the orthogonal question, &quot;is this <strong>my</strong> order&quot;, recording that &quot;per-resource
-          ownership (a customer may read only their own data) stays a separate concern (<code>OwnerOrAdminFilter</code>),
-          and a route needing both composes the two&quot; (<code>020-permission-based-authorization.md:174-175</code>).</p>
+          explicitly scoped out the orthogonal question, &quot;is this <strong>my</strong> order&quot;, recording that &quot;Per-resource
+          ownership (&quot;a customer may read only their own data&quot;) stays a separate concern (<code>OwnerOrAdminFilter</code>),
+          and a route needing both composes the two&quot; (<code>020-permission-based-authorization.md:195-196</code>).</p>
           <p>That carve-out names a mechanism that already ships in framework code but had no decision record of
           its own. RBAC and permissions are principal-scoped: a customer with the Customer role may read orders,
           but that role says nothing about <em>which</em> orders. Two endpoint shapes need a different, resource-scoped
@@ -301,9 +301,9 @@
           (<code>/customers/{id}</code>) or, when the route lacks it, from a <strong>model-bound query/body argument</strong>
           (<code>?userId=42</code>), so the guard also covers list/query routes that carry the owner as a bound
           argument, not only route ids. It is registered scoped by <code>AddAPI</code>
-          (<code>Source/Presentation/MMCA.Common.API/DependencyInjection.cs:85</code>) and applied as
+          (<code>Source/Presentation/MMCA.Common.API/DependencyInjection.cs:88</code>) and applied as
           <code>[ServiceFilter(typeof(OwnerOrAdminFilter))]</code>, at class level (Store) or per action (ADC&#39;s
-          <code>BookmarksController.cs:85</code>, <code>:106</code>).</li>
+          <code>BookmarksController.cs:91</code>, <code>:121</code>, <code>:147</code>).</li>
           <li><strong>Collection ownership specification.</strong> <code>OwnershipHelper</code>
           (<code>Source/Presentation/MMCA.Common.API/Authorization/OwnershipHelper.cs:11</code>) is a static helper.
           <code>GetOwnershipSpecification&lt;TSpec, TId&gt;</code> (<code>OwnershipHelper.cs:41</code>) returns <code>null</code> for the bypass
@@ -330,7 +330,7 @@
           (<code>Source/Presentation/MMCA.Common.API/Authorization/OwnershipHelper.cs:24</code>) returns
           <code>ICurrentUserService.IsInRole(bypassRole)</code> (<code>OwnershipHelper.cs:27</code>), which checks every role claim
           the caller holds case-insensitively
-          (<code>Source/Core/MMCA.Common.Application/Interfaces/Infrastructure/Auth/ICurrentUserService.cs:88-89</code>),
+          (<code>Source/Core/MMCA.Common.Application/Interfaces/Infrastructure/Auth/ICurrentUserService.cs:86-87</code>),
           not only <code>ICurrentUserService.Role</code>, the first role claim (<code>ICurrentUserService.cs:22</code>). The
           <code>bypassRole</code> argument is required and has no default: the host names its own role. Both
           enforcement points consult it, so a caller holding the bypass role among any of its roles sees and
@@ -348,8 +348,12 @@
           only a <em>missing</em> parameter; an action carrying a foreign owner id is still denied, and a missing
           owner claim is still denied regardless.</li>
           <li><strong>Two failure shapes, by design.</strong> The single-resource filter denies with 403 (<code>ForbidResult</code>); the
-          collection path never 403s, it returns a filtered (possibly empty) result set. Both flow through the
-          caller&#39;s normal <code>Result</code>/HTTP edge (ADR-013), not exceptions.</li>
+          collection path narrows rather than rejects, returning a filtered (possibly empty) result set to any
+          caller it can scope. It answers 403 only when it cannot scope: the <code>RequireResolvableOwner</code> gate
+          refuses a caller whose owner claim does not resolve (<code>OwnershipHelper.cs:107-109</code>), and the CSV export
+          refuses an unscoped read the controller has not opted in to (<code>EntityControllerBase.cs:274-275</code>), both
+          recorded in Adoption. Both shapes flow through the caller&#39;s normal <code>Result</code>/HTTP edge (ADR-013), not
+          exceptions.</li>
           </ul>
           <p><strong>Applying the filter at controller level covers every action on that controller</strong>, including ones
           inherited from <code>EntityControllerBase</code> / <code>AggregateRootEntityControllerBase</code>. Adding it is therefore an
@@ -375,24 +379,24 @@
           The export itself fails closed on a <code>null</code> scope: <code>EntityControllerBase.ExportAsync</code> refuses with
           <code>Error.Forbidden</code> when the read specification is <code>null</code> and the controller has not opted in through
           <code>AllowUnscopedExport</code>
-          (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/EntityControllerBase.cs:273-274</code>,
-          <code>:608-613</code>), which defaults to <code>false</code> (<code>EntityControllerBase.cs:508</code>). Both Sales controllers opt in
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/EntityControllerBase.cs:274-275</code>,
+          the refusal built at <code>:664-669</code>), which defaults to <code>false</code> (<code>EntityControllerBase.cs:549</code>). Both Sales controllers opt in
           only for the bypass role, <code>AllowUnscopedExport =&gt; OwnershipHelper.IsAdmin(currentUserService, RoleNames.Admin)</code> (<code>ShoppingCartsController.cs:211</code>, <code>OrdersController.cs:250</code>), so an admin exports
           the whole table and a non-admin with an unresolvable claim still gets a 403. <code>CustomersController</code>
           opts in unconditionally (<code>CustomersController.cs:48</code>), because its export is already gated by
           <code>[HasPermission(IdentityPermissions.CustomersManage)]</code> and its holders list every customer unscoped.
           <code>OrdersController</code> does not use the class-level filter for its
           mutating routes; it runs an explicit per-mutation ownership check, a private <code>ValidateOwnershipAsync</code>
-          (<code>OrdersController.cs:388-404</code>) that delegates to <code>OwnershipHelper.ValidateOwnershipAsync</code>
-          (<code>OrdersController.cs:392</code>), which lets the bypass role through via <code>IsAdmin</code>
+          (<code>OrdersController.cs:374-390</code>) that delegates to <code>OwnershipHelper.ValidateOwnershipAsync</code>
+          (<code>OrdersController.cs:378</code>), which lets the bypass role through via <code>IsAdmin</code>
           (<code>OwnershipHelper.cs:152-155</code>). The only ownership logic the controller supplies is the existence predicate
-          (<code>OrdersController.cs:396-398</code>). Its two denial branches return different statuses on purpose:</p>
+          (<code>OrdersController.cs:382-384</code>). Its two denial branches return different statuses on purpose:</p>
           <ul>
           <li><strong>Missing owner claim</strong> (the caller carries no <code>customer_id</code>, checked at <code>OwnershipHelper.cs:157-160</code>):
           <code>Error.Forbidden</code>, a 403 (<code>OwnershipHelper.cs:180-181</code>). Nothing was looked up, so there is no
           resource whose existence a 403 could leak; this matches the filter&#39;s own missing-claim <code>ForbidResult</code>.</li>
           <li><strong>Owner mismatch</strong> (the claim is present but the order is someone else&#39;s, the existence check at
-          <code>OrdersController.cs:396-398</code>): <code>Error.NotFound</code>, a 404 rather than a 403
+          <code>OrdersController.cs:382-384</code>): <code>Error.NotFound</code>, a 404 rather than a 403
           (<code>OwnershipHelper.cs:175-177</code>), so the response does not reveal that another customer&#39;s order exists.</li>
           </ul>
           <p><strong>A <code>null</code> specification means two different things, so the collection reads gate on it.</strong> Store&#39;s two
@@ -423,8 +427,27 @@
           that is the type the principal the filter inspects actually carries (<code>DependencyInjection.cs:47-52</code>).
           The filter type is unchanged; only the options differ, which is exactly what the options object exists
           for. The Bookmarks
-          <strong>delete</strong> keeps a separate DB-backed inline ownership check that returns 404-not-403 (the same
-          per-mutation, existence-hiding pattern Store&#39;s <code>OrdersController</code> uses).</p>
+          <strong>delete</strong> runs the per-mutation check instead: <code>DeleteAsync</code>
+          (<code>MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.API/Controllers/BookmarksController.cs:167</code>)
+          calls the shared <code>OwnershipHelper.ValidateOwnershipAsync&lt;UserIdentifierType&gt;</code> with the same
+          <code>NameIdentifier</code> claim and <code>Organizer</code> bypass role (<code>BookmarksController.cs:175-184</code>), supplying only
+          the existence predicate (<code>:179-181</code>), so a non-owner gets 404 and an unresolvable claim gets 403 (the
+          same existence-hiding pattern Store&#39;s <code>OrdersController</code> uses). ADC&#39;s Conference module carries the
+          row-level half too: <code>EventQuestionAnswersController</code> and <code>SessionQuestionAnswersController</code> override
+          <code>GetExportSpecification()</code> through the two-generic <code>GetOwnershipSpecification</code>
+          (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/Events/EventQuestionAnswersController.cs:111-112</code>,
+          and the same lines in <code>Controllers/Sessions/SessionQuestionAnswersController.cs</code>), which scopes the
+          inherited reads on them, and gate the four inherited reads (the list, the paged list, the lookup and
+          the by-id read) on a private <code>RequireResolvableOwner()</code> wrapper (<code>:139-140</code>, called at <code>:156</code>, <code>:174</code>,
+          <code>:185</code>, <code>:199</code> in each). A fifth read, <code>GetMineAsync</code> (<code>[HttpGet(&quot;mine&quot;)]</code>, <code>:216-241</code> in each), takes
+          neither: it refuses an unresolvable <code>NameIdentifier</code> claim with its own inline <code>Error.Forbidden</code>
+          (<code>:223-226</code>) and applies <code>OwnedByUserSpecification(callerId)</code> for every role, <code>Organizer</code> included
+          (<code>:229</code>), so an Organizer filling in their own feedback sees only their own answers. The export is
+          <code>Organizer</code>-only outright: both controllers override <code>ExportAsync</code> (<code>[HttpGet(&quot;export&quot;)]</code>, <code>:250-265</code>)
+          to return <code>Forbid()</code> to any caller without the <code>Organizer</code> role before the base export runs
+          (<code>:259-262</code>), so unlike Store a non-bypass caller gets no scoped export at all, and the
+          <code>AllowUnscopedExport</code> opt-in for <code>Organizer</code> (<code>:123</code> in each) is what lets that base export then run
+          unscoped.</p>
           <p><strong>The deny-by-default audit.</strong> Both Store controllers apply the filter at class level, so every action
           on them was reviewed and the ones with no owner parameter now carry <code>[AllowMissingOwner]</code> with the
           guard that replaces the check named at each site:</p>
@@ -468,7 +491,8 @@
           <code>[HasPermission(IdentityPermissions.CustomersManage)]</code> (<code>CustomersController.cs:134</code>) beside the
           <code>[AllowMissingOwner]</code> opt-out (<code>CustomersController.cs:135</code>), matching the admin-gated create page that
           is its only caller (<code>CustomersController.cs:127-132</code>). ADC&#39;s <code>BookmarksController</code> needs no annotation:
-          both filtered actions bind a <code>[Required]</code> non-nullable <code>userId</code>, so model validation rejects a missing
+          all three filtered actions bind a <code>[FromQuery, Required]</code> non-nullable <code>userId</code>
+          (<code>BookmarksController.cs:94</code>, <code>:126</code>, <code>:150</code>), so model validation rejects a missing
           value before the filter runs.</p>
           <h2 id="rationale">Rationale</h2>
           <ul>
@@ -485,7 +509,7 @@
           <code>Specification&lt;TEntity, TId&gt;</code> whose <code>Criteria</code> is an EF-translatable expression
           (<code>Specification.cs:9</code>, <code>Specification.cs:23</code>), so it slots into <code>IEntityQueryService</code> alongside
           filtering, sorting, paging, and projection (and can be <code>And</code>-composed with other specs,
-          <code>SpecificationExtensions.cs:54</code>, building an <code>AndSpecification</code>, <code>Specification.cs:81</code>) rather than
+          <code>SpecificationExtensions.cs:54</code>, building an <code>AndSpecification</code>, <code>Specification.cs:80</code>) rather than
           introducing a parallel query path.</li>
           </ul>
           <h2 id="trade-offs">Trade-offs</h2>
@@ -514,7 +538,7 @@
           </ul>
           <h2 id="related">Related</h2>
           <p>ADR-020 (the role/permission RBAC layer this complements, and whose explicit
-          <code>020-permission-based-authorization.md:174-175</code> scope-out this fills), ADR-034 (the generic entity query
+          <code>020-permission-based-authorization.md:195-196</code> scope-out this fills), ADR-034 (the generic entity query
           pipeline / <code>IEntityQueryService</code> the collection-scoping <code>Specification</code> slots into), ADR-013 (failures
           surface as <code>Result</code>/HTTP at the edge, the filter as a 403 <code>ForbidResult</code>), ADR-004 (the validated
           principal and owner claim both enforcement points trust), ADR-078 (the CSV export endpoint, whose
@@ -746,6 +770,47 @@
           <code>:392</code>, existence predicate <code>:396-398</code>); and the ADR-020 carve-out quote in Context and Related,
           now <code>020-permission-based-authorization.md:174-175</code>.</li>
           </ol>
+          <h2 id="revision-2026-11-23">Revision (2026-11-23)</h2>
+          <p>Re-verified against current source. The filter, the ownership specification, the bypass check over
+          every role claim, the fail-closed <code>RequireResolvableOwner&lt;TId&gt;</code> gate, the per-record
+          <code>ValidateOwnershipAsync&lt;TId&gt;</code> check, their 403/404 split and the export&#39;s fail-closed
+          <code>AllowUnscopedExport</code> opt-in read as recorded, and the live <code>OwnershipHelper</code> anchors are unchanged.
+          Three statements about ADC in the live sections no longer held, and several anchors moved.</p>
+          <ol>
+          <li><strong>The Bookmarks delete uses the shared helper.</strong> Adoption described a separate DB-backed inline
+          check returning 404-not-403. <code>DeleteAsync</code>
+          (<code>MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.API/Controllers/BookmarksController.cs:167</code>)
+          calls <code>OwnershipHelper.ValidateOwnershipAsync&lt;UserIdentifierType&gt;</code> (<code>:175-184</code>) with
+          <code>ClaimTypes.NameIdentifier</code> and <code>RoleNames.Organizer</code>, supplying only the existence predicate
+          (<code>:179-181</code>): a non-owner gets 404 and an unresolvable claim gets 403 before any lookup.</li>
+          <li><strong>The filter guards three Bookmarks actions, not two.</strong> <code>[ServiceFilter(typeof(OwnerOrAdminFilter))]</code>
+          sits on <code>GetUserBookmarksAsync</code> (<code>BookmarksController.cs:91</code>), <code>GetChangesAsync</code> (<code>:121</code>) and
+          <code>GetBookmarkedSessionIdsAsync</code> (<code>:147</code>), and each binds <code>[FromQuery, Required] UserIdentifierType userId</code> (<code>:94</code>, <code>:126</code>, <code>:150</code>), so the &quot;needs no annotation&quot; conclusion holds for all three.</li>
+          <li><strong>ADC Conference&#39;s row-level adoption is now in Adoption.</strong> It was recorded only in Revisions
+          2026-09-10, 2026-10-01 and 2026-10-06. <code>EventQuestionAnswersController</code> and
+          <code>SessionQuestionAnswersController</code> (identical line layout) override <code>GetExportSpecification()</code> at
+          <code>:111</code> through the two-generic <code>GetOwnershipSpecification</code> (<code>:112</code>), gate the four inherited reads on
+          the <code>RequireResolvableOwner()</code> wrapper (<code>:139-140</code>, called at <code>:156</code>, <code>:174</code>, <code>:185</code>, <code>:199</code>), serve
+          the caller&#39;s own answers through <code>GetMineAsync</code> (<code>:216-241</code>, its own inline <code>Error.Forbidden</code> at
+          <code>:223-226</code> and <code>OwnedByUserSpecification(callerId)</code> for every role at <code>:229</code>), and override
+          <code>ExportAsync</code> (<code>:250-265</code>) to <code>Forbid()</code> any non-<code>Organizer</code> (<code>:259-262</code>) before the base export,
+          whose <code>AllowUnscopedExport</code> opt-in (<code>:123</code>) then lets the <code>Organizer</code> export unscoped. These supersede the Q&amp;A anchors in
+          Revisions 2026-09-10, 2026-10-01 and 2026-10-06, which stay as written.</li>
+          <li>Anchors re-verified against current source: the <code>AddAPI</code> registration
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/DependencyInjection.cs:88</code>, options validated by
+          data annotations at <code>:94-95</code>); <code>ICurrentUserService.IsInRole</code>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Interfaces/Infrastructure/Auth/ICurrentUserService.cs:86-87</code>,
+          <code>Role</code> unchanged at <code>:22</code>); the export refusal in
+          <code>MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/EntityControllerBase.cs</code> (null-spec
+          check <code>:274-275</code>, <code>AllowUnscopedExport</code> default <code>false</code> at <code>:549</code>, <code>UnscopedExportRefused</code> at
+          <code>:664-669</code>); Store <code>OrdersController.ValidateOwnershipAsync</code> (<code>:374-390</code>, helper call <code>:378</code>,
+          existence predicate <code>:382-384</code>); <code>AndSpecification</code> (<code>Specification.cs:80</code>); and the ADR-020
+          carve-out quote in Context and Related, now <code>020-permission-based-authorization.md:195-196</code>. In
+          <code>MMCA.Common/CHANGELOG.md</code>, cited in Revisions 2026-10-21 and 2026-10-26, the v1.216.0
+          <code>OwnershipHelper</code> entry is <code>:1906</code> under the <code>[1.216.0]</code> header at <code>:1889</code>, the v1.234.0 entry is
+          <code>:1519</code> under the header at <code>:1508</code>, and the v1.201.0 removal of the <code>= &quot;Admin&quot;</code> default is
+          <code>:2635-2636</code> under the header at <code>:2561</code>.</li>
+          </ol>
           
         <div class="doc-foot btn-row">
           <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
@@ -772,6 +837,7 @@
             <li><a href="#revision-2026-10-21">Revision (2026-10-21)</a></li>
             <li><a href="#revision-2026-10-26">Revision (2026-10-26)</a></li>
             <li><a href="#revision-2026-10-28">Revision (2026-10-28)</a></li>
+            <li><a href="#revision-2026-11-23">Revision (2026-11-23)</a></li>
             </ul>
           </nav>
         </aside>

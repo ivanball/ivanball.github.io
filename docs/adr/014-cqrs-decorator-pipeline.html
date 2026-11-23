@@ -293,7 +293,12 @@
           Revised 2026-11-07: the command chain gains an eighth decorator, <code>ViewAsCommandDecorator</code>, registered
           outermost, which refuses every command while the caller holds a view-as token
           (ADR-137); the query chain is unchanged. See the Revision
-          (2026-11-07) at the end.</p>
+          (2026-11-07) at the end.
+          Revised 2026-11-23: the seven ADC and Store service hosts no longer call <code>AddMmcaApplicationPipeline</code>
+          themselves but reach it through <code>AddMmcaServiceHost</code> in <code>MMCA.Common.ServiceHost</code>, supplying their
+          pipeline steps only through its <code>ConfigurePipeline</code> callback, and the Helpdesk order test is recorded as running the
+          <code>VerifyDecoratorPipeline</code> coverage fact too; the order-rationale sentence now names the view-as guard
+          as the first short-circuit on commands; anchors refreshed.</p>
           <h2 id="context">Context</h2>
           <p>Commands and queries share cross-cutting concerns: validation, transactions, cache invalidation,
           logging / timing, and feature gating. Putting that logic inside each handler scatters it, makes the
@@ -310,8 +315,8 @@
           <li>Cross-cutting concerns are decorators registered with Scrutor <code>TryDecorate</code> in
           <code>AddApplicationDecorators()</code>. Because <code>TryDecorate</code> applies in <strong>reverse</strong> registration order (last
           registered is outermost), the execution order (outermost to innermost) is (registration sequence at
-          <code>MMCA.Common/Source/Core/MMCA.Common.Application/DependencyInjection.cs:134-141</code> for commands and
-          <code>:144-149</code> for queries; how the chain reached this shape is in the Revisions (2026-08-18),
+          <code>MMCA.Common/Source/Core/MMCA.Common.Application/DependencyInjection.cs:152-159</code> for commands and
+          <code>:162-167</code> for queries; how the chain reached this shape is in the Revisions (2026-08-18),
           (2026-08-26) and (2026-11-07) below):<ul>
           <li><strong>Commands:</strong> ViewAs -&gt; FeatureGate -&gt; Authorization -&gt; Logging -&gt; Caching -&gt; Validating -&gt; Timeout -&gt;
           Transactional -&gt; Handler</li>
@@ -324,7 +329,8 @@
           <li><strong>The order is load-bearing and hard-coded</strong> (not config-driven): validation runs <em>before</em> the
           transaction opens (an invalid command never touches the DB), cache invalidation runs <em>outside</em> the
           transaction boundary (a rolled-back command does not evict valid cache), logging wraps the whole
-          pipeline to time it, and the feature gate short-circuits first.</li>
+          pipeline to time it, and the short-circuit guards run first (on commands the view-as guard ahead of
+          the feature gate, on queries the feature gate).</li>
           <li><strong>Decoration is opt-in per concern</strong> via marker interfaces: <code>ITransactional</code>, <code>ICacheInvalidating</code>
           (with <code>CachePrefix</code>), <code>IQueryCacheable</code> (with <code>CacheKey</code> + <code>CacheDuration</code>). A handler that
           implements none simply skips that decorator&#39;s work, so messages pay only for the concerns they
@@ -335,15 +341,24 @@
           exist, so <code>TryDecorate</code> can find them. The hand-written form of that sequence is <code>AddApplication</code> -&gt;
           <code>AddInfrastructure</code> -&gt; <code>AddAPI</code> -&gt; module handler scan via <code>ModuleLoader.DiscoverAndRegister</code> -&gt;
           <code>AddApplicationDecorators</code>. All eight hosts compose it through
-          <code>AddMmcaApplicationPipeline(pipeline =&gt; ...)</code> instead, which runs <code>AddApplication</code> first, the
+          <code>AddMmcaApplicationPipeline(pipeline =&gt; ...)</code> instead, directly or through <code>AddMmcaServiceHost</code>, which runs <code>AddApplication</code> first, the
           callback&#39;s registration steps, and <code>AddApplicationDecorators</code> last, and seals the collection (see the
-          Revision (2026-08-26) below): the Helpdesk reference host
-          (<code>MMCA.Helpdesk/Source/Hosts/MMCA.Helpdesk.Web/Program.cs:121</code>) and the seven production service
-          hosts, ADC Identity / Conference / Engagement /
-          Notification (<code>MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:340</code>, <code>...Conference.Service/Program.cs:429</code>,
-          <code>...Engagement.Service/Program.cs:299</code>, <code>...Notification.Service/Program.cs:239</code>) and Store Identity /
-          Catalog / Sales (<code>MMCA.Store/Source/Services/MMCA.Store.Identity.Service/Program.cs:255</code>,
-          <code>...Catalog.Service/Program.cs:267</code>, <code>...Sales.Service/Program.cs:248</code>). Only that decorators-last
+          Revision (2026-08-26) below). The Helpdesk reference host calls it directly
+          (<code>MMCA.Helpdesk/Source/Hosts/MMCA.Helpdesk.Web/Program.cs:138</code>). The seven production service
+          hosts reach it through the composed service-host start-up in <code>MMCA.Common.ServiceHost</code>:
+          <code>builder.AddMmcaServiceHost(...)</code> makes the single call
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.ServiceHost/ServiceHostBuilderExtensions.cs:152</code>, after
+          <code>AddInfrastructure</code> at <code>:144</code> and <code>AddAPI</code> at <code>:145</code>), and each host supplies its pipeline steps
+          only through the <code>ConfigurePipeline</code> option
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.ServiceHost/MmcaServiceHostOptions.cs:35</code>, required alongside
+          <code>LogFilePath</code> at <code>:22</code> and <code>ModuleAssemblies</code> at <code>:28</code>), whose module discovery step is
+          <code>pipeline.Register(moduleHost.RegisterModules)</code>
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/ModuleHostContext.cs:66</code>, which runs
+          <code>ModuleLoader.DiscoverAndRegister</code> at <code>:70</code>): ADC Identity / Conference / Engagement /
+          Notification (<code>MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:301</code>, <code>...Conference.Service/Program.cs:356</code>,
+          <code>...Engagement.Service/Program.cs:216</code>, <code>...Notification.Service/Program.cs:117</code>) and Store Identity /
+          Catalog / Sales (<code>MMCA.Store/Source/Services/MMCA.Store.Identity.Service/Program.cs:123</code>,
+          <code>...Catalog.Service/Program.cs:106</code>, <code>...Sales.Service/Program.cs:129</code>). Only that decorators-last
           ordering is load-bearing; the relative position of <code>AddInfrastructure</code>/<code>AddAPI</code> is not.</li>
           <li><strong>Each kind of validation has one home.</strong> UI form models declare DataAnnotations rules once and
           bridge them onto <code>MudForm</code> through <code>ModelValidation.For(model, validator)</code>
@@ -352,9 +367,9 @@
           the rules instead; that is UX feedback, not enforcement. Server-side FluentValidation is the
           Validating decorator step of this pipeline (<code>MMCA.Common/Source/Core/MMCA.Common.Application/UseCases/Decorators/ValidatingCommandDecorator.cs:32</code>),
           and <code>CommandValidatorCoverageTestsBase</code>
-          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Bases/Cqrs/CommandValidatorCoverageTestsBase.cs:22</code>)
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Bases/Cqrs/CommandValidatorCoverageTestsBase.cs:25</code>)
           fails the architecture test run when a data-carrying command has no validator, either its own or through the
-          <code>CommandRequestValidator</code> bridge (<code>:9-15</code>, facts at <code>:40-48</code>). Domain invariants stay in the entity
+          <code>CommandRequestValidator</code> bridge (<code>:9-15</code>, facts at <code>:44-52</code>). Domain invariants stay in the entity
           factories and value objects, returning <code>Result</code> (ADR-013, ADR-068).</li>
           </ul>
           <h2 id="rationale">Rationale</h2>
@@ -865,6 +880,63 @@
           moved to <code>DependencyInjection.cs:134-141</code> (commands) and <code>:144-149</code> (queries); the earlier Revision
           sections keep the anchors they recorded.</li>
           </ol>
+          <h2 id="revision-2026-11-23">Revision (2026-11-23)</h2>
+          <p>Re-verified against current source. The decision, both decorator chains (eight on commands, six on
+          queries), the sealing rule, the marker opt-in model and the validation homes are unchanged; the
+          conformance base&#39;s expected sequences are still the only definitions workspace-wide. What moved is
+          how the seven production service hosts reach the sealed composition path, one fact the earlier
+          Revisions attribute too narrowly, and the anchors. Stale anchors inside the earlier Revision sections
+          are left as historical records.</p>
+          <ol>
+          <li><strong>The service hosts compose through <code>MMCA.Common.ServiceHost</code>.</strong> None of the seven ADC and Store
+          service hosts calls <code>AddMmcaApplicationPipeline</code> any more. Each calls
+          <code>builder.AddMmcaServiceHost(...)</code>
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.ServiceHost/ServiceHostBuilderExtensions.cs:63</code>), which
+          registers <code>AddInfrastructure</code> (<code>:144</code>) and <code>AddAPI</code> (<code>:145</code>) and then makes the single
+          <code>AddMmcaApplicationPipeline</code> call (<code>:152</code>) over the host&#39;s <code>ConfigurePipeline</code> callback. Module
+          discovery inside that callback is <code>pipeline.Register(moduleHost.RegisterModules)</code>
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/ModuleHostContext.cs:66</code>, running
+          <code>ModuleLoader.DiscoverAndRegister</code> at <code>:70</code>). The Decision now cites the <code>ConfigurePipeline</code> sites.
+          The Helpdesk reference host still calls <code>AddMmcaApplicationPipeline</code> directly
+          (<code>MMCA.Helpdesk/Source/Hosts/MMCA.Helpdesk.Web/Program.cs:138</code>, with <code>AddInfrastructure</code> at <code>:78</code>
+          and <code>AddAPI</code> at <code>:116</code> outside it). The Revision (2026-09-25) phrase, &quot;the helper its four service
+          hosts call&quot;, now holds only indirectly, through <code>AddMmcaServiceHost</code>.</li>
+          <li><strong>Helpdesk runs the coverage fact too.</strong> The Revisions (2026-08-18) and (2026-09-25) name ADC and
+          Store as the consumers that add <code>ComposedPipeline_LeavesNoHandlerUndecorated</code>. Helpdesk&#39;s order
+          test (<code>MMCA.Helpdesk/Tests/Architecture/MMCA.Helpdesk.Architecture.Tests/DecoratorPipelineOrderTests.cs:37</code>)
+          composes through <code>AddMmcaApplicationPipeline</code> (<code>:66</code>) and carries the same fact (<code>:74</code>), calling
+          <code>services.VerifyDecoratorPipeline()</code> (<code>:85</code>), so all three consumers pin both the order and the
+          coverage of their pipeline. Common&#39;s own conformance test still hand-sequences the calls
+          (<code>MMCA.Common/Tests/Hosting/MMCA.Common.Testing.Tests/Conformance/DecoratorPipelineOrderTests.cs:38-40</code>).</li>
+          <li><strong>The order-rationale sentence names the right first guard.</strong> The Decision said &quot;the feature gate
+          short-circuits first&quot;, which since the Revision (2026-11-07) holds for queries only: on commands
+          <code>ViewAsCommandDecorator</code> is registered last
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/DependencyInjection.cs:159</code>) and so runs ahead of
+          the feature gate (<code>:158</code>), as the inline diagram and rationale state (<code>:79</code>, <code>:105-107</code>). The
+          sentence now says so.</li>
+          <li>Anchors re-verified against current source: in the Decision, the registration sequence
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/DependencyInjection.cs:152-159</code> commands,
+          <code>:162-167</code> queries; <code>AddApplicationDecorators()</code> declared at <code>:132</code>), the Helpdesk host
+          (<code>MMCA.Helpdesk/Source/Hosts/MMCA.Helpdesk.Web/Program.cs:138</code>), the <code>ConfigurePipeline</code> sites ADC
+          Identity (<code>MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:301</code>), Conference
+          (<code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:356</code>), Engagement
+          (<code>MMCA.ADC/Source/Services/MMCA.ADC.Engagement.Service/Program.cs:216</code>) and Notification
+          (<code>MMCA.ADC/Source/Services/MMCA.ADC.Notification.Service/Program.cs:117</code>), Store Identity
+          (<code>MMCA.Store/Source/Services/MMCA.Store.Identity.Service/Program.cs:123</code>), Catalog
+          (<code>MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:106</code>) and Sales
+          (<code>MMCA.Store/Source/Services/MMCA.Store.Sales.Service/Program.cs:129</code>), and
+          <code>CommandValidatorCoverageTestsBase</code>
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Bases/Cqrs/CommandValidatorCoverageTestsBase.cs:25</code>,
+          facts at <code>:44-52</code>; the bridge <code>:9-15</code> still matches) are re-pointed. Current anchors for facts the
+          earlier Revisions record: <code>ViewAsCommandDecorator</code> at <code>DependencyInjection.cs:159</code> after FeatureGate
+          at <code>:158</code>; the <code>act_sub</code> view-as actor claim at
+          <code>MMCA.Common/Source/Core/MMCA.Common.Shared/Auth/AuthClaimTypes.cs:122</code>;
+          <code>DecoratorPipelineOrderTestsBase.cs</code> class <code>:38</code>, <code>ExpectedCommandDecorators</code> <code>:49</code>,
+          <code>ExpectedQueryDecorators</code> <code>:62</code>; the consumer <code>CommandValidatorCoverageTests</code> subclasses at
+          <code>MMCA.ADC/Tests/Architecture/MMCA.ADC.Architecture.Tests/Cqrs/CommandValidatorCoverageTests.cs:17</code>,
+          <code>MMCA.Store/Tests/Architecture/MMCA.Store.Architecture.Tests/Cqrs/CommandValidatorCoverageTests.cs:16</code>
+          and <code>MMCA.Helpdesk/Tests/Architecture/MMCA.Helpdesk.Architecture.Tests/ArchitectureTests.cs:163</code>.</li>
+          </ol>
           
         <div class="doc-foot btn-row">
           <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
@@ -896,6 +968,7 @@
             <li><a href="#revision-2026-10-26">Revision (2026-10-26)</a></li>
             <li><a href="#revision-2026-10-28">Revision (2026-10-28)</a></li>
             <li><a href="#revision-2026-11-07">Revision (2026-11-07)</a></li>
+            <li><a href="#revision-2026-11-23">Revision (2026-11-23)</a></li>
             </ul>
           </nav>
         </aside>

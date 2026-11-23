@@ -264,7 +264,8 @@
           Revised 2026-10-07: MMCA.Helpdesk also subclasses <code>ConcurrencyConventionTestsBase</code> (three consumers), MMCA.Common&#39;s own subclass is recorded as vacuous (its map declares no module layer), and stale anchors were refreshed against current source.
           Revised 2026-10-21: the set-based <code>ExecuteUpdateAsync</code> path is recorded as re-stamping the client-stamped <code>RowVersion</code> itself (it bypasses the audit interceptor), and stale anchors were refreshed.
           Revised 2026-10-26: concurrency conflicts are counted by <code>ConcurrencyConflictMetrics</code> in both the <code>[SupportsIfMatch]</code> filter and the global handler, the constructor-dependency trade-off records that this metric took the static-dependency route while the problem helper resolves its services from the request, and stale repository, filter and <code>DbUpdateExceptionHandler</code> anchors were refreshed.
-          Revised 2026-11-12: <code>SetConcurrencyETag</code> is recorded on <code>ApiControllerBase</code>, <code>[SupportsIfMatch]</code> declares its own 412 and 428 response metadata for OpenAPI, the conditional-write helpers on <code>ApiControllerBase</code> are recorded as the standard action body that answers a successful update with a weak <code>ETag</code>, and the filter anchors were refreshed.</p>
+          Revised 2026-11-12: <code>SetConcurrencyETag</code> is recorded on <code>ApiControllerBase</code>, <code>[SupportsIfMatch]</code> declares its own 412 and 428 response metadata for OpenAPI, the conditional-write helpers on <code>ApiControllerBase</code> are recorded as the standard action body that answers a successful update with a weak <code>ETag</code>, and the filter anchors were refreshed.
+          Revised 2026-11-23: anchors refreshed against current source; no decision changed.</p>
           <h2 id="context">Context</h2>
           <p>Every mutable aggregate in the framework is edited through a load-modify-save handler: the update use
           case fetches the tracked entity, applies the request, and calls <code>SaveChangesAsync</code>. With one shared
@@ -297,12 +298,12 @@
           declared in <code>MMCA.Common/Source/Core/MMCA.Common.Domain/Interfaces/IRowVersioned.cs</code>) so a child
           row can be reached without a second generic parameter. EF configures the property on <strong>every</strong>
           non-owned <code>IAuditableEntity</code> in <code>ConfigureConcurrencyTokens</code>
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/ApplicationDbContext.cs:589</code>,
-          called from <code>OnModelCreating</code> at <code>:421</code>). The mapping keys on the engine&#39;s declared capability
-          (<code>Engine.Capabilities.RowVersion == RowVersionStrategy.StoreGenerated</code>, <code>:592</code>) rather than on the
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/ApplicationDbContext.cs:737</code>,
+          called from <code>OnModelCreating</code> at <code>:556</code>). The mapping keys on the engine&#39;s declared capability
+          (<code>Engine.Capabilities.RowVersion == RowVersionStrategy.StoreGenerated</code>, <code>:740</code>) rather than on the
           provider: SQL Server, the one engine declaring <code>StoreGenerated</code>, maps it to a server-generated
-          <code>rowversion</code> (<code>IsRowVersion</code>, <code>:602</code>), and the other relational engines map it as a plain
-          application-managed token (<code>IsConcurrencyToken</code>, <code>:606</code>). EF then includes the token in every change-tracked (<code>SaveChanges</code>)
+          <code>rowversion</code> (<code>IsRowVersion</code>, <code>:750</code>), and the other relational engines map it as a plain
+          application-managed token (<code>IsConcurrencyToken</code>, <code>:754</code>). EF then includes the token in every change-tracked (<code>SaveChanges</code>)
           UPDATE/DELETE <code>WHERE</code> clause and raises <code>DbUpdateConcurrencyException</code> when it matches no row. The
           set-based <code>ExecuteUpdateAsync</code> path is the exception: its <code>WHERE</code> is only the caller&#39;s predicate and
           a non-match returns <code>0</code> rather than throwing
@@ -316,23 +317,23 @@
           precondition travels in the header alone (<code>:9-14</code>).</p>
           </li>
           <li><p><strong>The read emits a weak <code>ETag</code>.</strong> <code>EntityControllerBase.GetByIdAsync</code>
-          (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/EntityControllerBase.cs:360</code>) calls
-          <code>SetConcurrencyETag(result.Value)</code> (<code>:381</code>). The helper lives on <code>ApiControllerBase</code>, the base of
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/EntityControllerBase.cs:362</code>) calls
+          <code>SetConcurrencyETag(result.Value)</code> (<code>:383</code>). The helper lives on <code>ApiControllerBase</code>, the base of
           the entity and use-case controllers
-          (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/ApiControllerBase.cs:97</code>; the OAuth and
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/ApiControllerBase.cs:125</code>; the OAuth and
           service-info bases derive <code>ControllerBase</code> directly, <code>OAuthControllerBase.cs:60</code>,
           <code>ServiceInfoControllerBase.cs:30</code>), and
           renders the served row&#39;s token as <code>W/&quot;&lt;base64&gt;&quot;</code> (formatted by <code>ConcurrencyETag.Format</code>,
           <code>MMCA.Common/Source/Core/MMCA.Common.Shared/Http/ConcurrencyETag.cs:40</code>, and written to the
-          response at <code>ApiControllerBase.cs:105</code>). Weak is the honest
+          response at <code>ApiControllerBase.cs:133</code>). Weak is the honest
           strength: the tag identifies the row&#39;s version, not a byte-exact representation, and the same row
           legitimately serializes differently under a <code>fields=</code> projection. Those shaped responses are seen
-          through rather than skipped: <code>ReadRowVersion</code> (<code>:211</code>) reads the <code>rowVersion</code> (else <code>RowVersion</code>)
-          entry when the payload is a projection dictionary (<code>:213-215</code>) and the typed <code>RowVersion</code> property
-          otherwise (<code>:220-221</code>). The property is resolved once per runtime type (<code>:23-28</code>), and a row with
-          no token, or an empty one, gets no header (<code>:102-103</code>). It is <code>protected</code> so a hand-written read
+          through rather than skipped: <code>ReadRowVersion</code> (<code>:239</code>) reads the <code>rowVersion</code> (else <code>RowVersion</code>)
+          entry when the payload is a projection dictionary (<code>:241-245</code>) and the typed <code>RowVersion</code> property
+          otherwise (<code>:248-249</code>). The property is resolved once per runtime type (<code>:25-30</code>), and a row with
+          no token, or an empty one, gets no header (<code>:127-131</code>). It is <code>protected</code> so a hand-written read
           action, or a conditional write answering with the refreshed value, can emit the same header
-          instead of re-implementing the format (<code>:90-95</code>), which is where the two would drift and a
+          instead of re-implementing the format (<code>:119-123</code>), which is where the two would drift and a
           precondition would quietly stop working.</p>
           </li>
           <li><p><strong><code>[SupportsIfMatch]</code> decodes the header, and nothing else carries the token.</strong>
@@ -360,18 +361,18 @@
           <li><p><strong>The conditional-write helpers are the standard action body.</strong> <code>ApiControllerBase</code> carries the
           body a conditional action would otherwise hand-write: read the decoded token, build the command,
           dispatch it, map a failure. <code>HandleConditionalCommandWithResponseAsync</code>
-          (<code>ApiControllerBase.cs:156</code>) reads the token through <code>RequiredToken</code> (<code>:165</code>), answers a failure
+          (<code>ApiControllerBase.cs:184</code>) reads the token through <code>RequiredToken</code> (<code>:193</code>), answers a failure
           through <code>HandleFailure</code> and a success with 200, the value and the value&#39;s weak <code>ETag</code>
-          (<code>:194-202</code>), so a client can condition its next write without re-reading.
-          <code>HandleConditionalCommandAsync</code> (<code>:125</code>, token at <code>:135</code>) is the form for a command whose value
-          is discarded and answers 204 with no <code>ETag</code> (<code>:177-184</code>). Both await an optional success
-          follow-up before answering (<code>:118-119</code>, <code>:149-150</code>), and both throw before the handler runs when
-          the action carries no <code>[SupportsIfMatch]</code>, because no token was decoded (<code>:123-124</code>, <code>:154-155</code>).
+          (<code>:222-230</code>), so a client can condition its next write without re-reading.
+          <code>HandleConditionalCommandAsync</code> (<code>:153</code>, token at <code>:163</code>) is the form for a command whose value
+          is discarded and answers 204 with no <code>ETag</code> (<code>:205-212</code>). Both await an optional success
+          follow-up before answering (<code>:209-210</code>, <code>:226-227</code>), and both throw before the handler runs when
+          the action carries no <code>[SupportsIfMatch]</code>, because no token was decoded (<code>:151-152</code>, <code>:182-183</code>).
           A stale token still surfaces as a <code>DbUpdateConcurrencyException</code> or a 409 result, which the
           filter turns into 412 exactly as it does for a hand-written body. ADC runs most of its
-          conditional actions through them
-          (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/Activities/ActivitiesController.cs:165</code>,
-          <code>:171</code>).</p>
+          conditional actions through them, the Activities update action among them
+          (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/Activities/ActivitiesController.cs:167</code>
+          for the attribute, <code>:173</code> for the helper).</p>
           </li>
           <li><p><strong>Three status codes, one problem-details shape.</strong></p>
           <ul>
@@ -401,7 +402,7 @@
           (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Interfaces/Infrastructure/Persistence/IRepository.cs:396</code>)
           applies the caller&#39;s token as the tracked entity&#39;s <strong>original</strong> <code>RowVersion</code>; the <code>EFRepository</code>
           implementation writes it to <code>Entry(entity).Property(nameof(RowVersion)).OriginalValue</code>
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Repositories/EFRepository.cs:52-54</code>).
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Repositories/EFRepository.cs:54-56</code>).
           The shared write workflow calls it right after loading the aggregate and before the mutation runs
           (<code>MMCA.Common/Source/Core/MMCA.Common.Application/UseCases/Crud/MutateEntityHandlerBase.cs:300</code>), so
           EF compares the client&#39;s token against the row&#39;s current value inside the UPDATE statement,
@@ -411,9 +412,9 @@
           repository&#39;s aggregate root (<code>TEntity</code>), so a child edit (a <code>ProductVariant</code> under a <code>Product</code>)
           cannot receive a token through it. A second overload,
           <code>SetOriginalRowVersion(IRowVersioned childEntity, byte[] rowVersion)</code> (<code>IRepository.cs:407</code>,
-          implemented at <code>EFRepository.cs:58</code>), accepts any tracked auditable entity instead, and an update
+          implemented at <code>EFRepository.cs:60</code>), accepts any tracked auditable entity instead, and an update
           handler that mutates children through the aggregate&#39;s repository stamps each child itself. Both
-          overloads reject a null token (<code>EFRepository.cs:50</code>, <code>:61</code>): there is no value that means &quot;skip
+          overloads reject a null token (<code>EFRepository.cs:52</code>, <code>:63</code>): there is no value that means &quot;skip
           the check&quot;.</p>
           </li>
           <li><p><strong>A fitness function keeps the token out of the body.</strong>
@@ -432,7 +433,7 @@
           (<code>MMCA.Common/Tests/Architecture/MMCA.Common.Architecture.Tests/Domain/ConcurrencyConventionTests.cs:13</code>,
           over <code>CommonArchitectureMap</code>, <code>:15</code>), but that run checks nothing: the rule reads only
           <code>ModuleApplication()</code>, which keeps layers with a non-empty module
-          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/ArchitectureMapBase.cs:42</code>, <code>:102</code>),
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/ArchitectureMapBase.cs:43</code>, <code>:103</code>),
           and <code>CommonArchitectureMap</code> declares only framework layers
           (<code>MMCA.Common/Tests/Architecture/MMCA.Common.Architecture.Tests/CommonArchitectureMap.cs:21-27</code>). A
           framework <code>*UpdateRequest</code> carrying a body token would not fail it.</p>
@@ -440,16 +441,16 @@
           <li><p><strong>The UI speaks the same format.</strong> <code>ConcurrencyETag</code> lives in <code>MMCA.Common.Shared.Http</code> rather than
           in the API package precisely so both ends of the exchange can use it: the API reads an <code>If-Match</code>
           value with it and the UI writes one. <code>EntityServiceBase.UpdateAsync</code>
-          (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/Api/EntityServiceBase.cs:188</code>) passes
-          <code>ConcurrencyTagOf(entity)</code> (<code>:209</code>) as the write&#39;s <code>If-Match</code> (<code>:196</code>), and the request client
-          (<code>CreateRequestClientAsync</code>, <code>:403</code>) sets the header (<code>:424</code>), so a Blazor page conditions its writes with no per-page code.</p>
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/Api/EntityServiceBase.cs:169</code>) passes
+          <code>ConcurrencyTagOf(entity)</code> (<code>:193</code>) as the write&#39;s <code>If-Match</code> (<code>:183</code>), and the request client
+          (<code>CreateRequestClientAsync</code>, <code>:323</code>) sets the header (<code>:344</code>), so a Blazor page conditions its writes with no per-page code.</p>
           </li>
           <li><p><strong>Every auditable table carries the column.</strong> The token exists in the database or it does not
           exist at all: each database&#39;s migrations add the <code>RowVersion</code> column to every table mapped from an
           auditable entity, typed <code>rowversion</code> in SQL Server, alongside the audit columns of the same base
           (<code>MMCA.Store/Source/Hosting/MMCA.Store.Migrations.SqlServer.Catalog/Migrations/20260621192800_InitialCreate.cs:34</code>,
           <code>MMCA.ADC/Source/Hosting/MMCA.ADC.Migrations.SqlServer.Conference/Migrations/20260606053146_InitialCreate.cs</code>).
-          Framework tables such as <code>InboxMessages</code> and <code>OutboxMessages</code> carry none (Store <code>:47</code>, <code>:62</code>).</p>
+          Framework tables such as <code>InboxMessages</code> and <code>OutboxMessages</code> carry none (Store <code>:48</code>, <code>:63</code>).</p>
           </li>
           </ul>
           <h2 id="rationale">Rationale</h2>
@@ -494,7 +495,7 @@
           including a non-concurrency conflict a handler reports through the <code>Result</code> channel. A thrown
           <code>DbUpdateException</code> other than <code>DbUpdateConcurrencyException</code> (<code>:181</code>) is not touched: it leaves
           the filter unhandled and the global <code>DbUpdateExceptionHandler</code>
-          (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/DependencyInjection.cs:161</code>) still answers 409
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/DependencyInjection.cs:164</code>) still answers 409
           (<code>DbUpdateExceptionHandler.cs:41</code>). The response keeps its original problem details
           and error codes, so the cause is still readable in the body, but one class of conflict wears a
           status code naming a precondition the client did not actually violate. The alternative, a dedicated
@@ -533,8 +534,8 @@
           <code>ExecuteUpdateAsync</code> bypasses that interceptor, so <code>EFRepository</code> re-stamps there itself: on a
           <code>ClientStamped</code> engine, when the caller did not assign <code>RowVersion</code> and the entity maps one, it adds
           a fresh <code>Guid.NewGuid().ToByteArray()</code> assignment to the same statement
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Repositories/EFRepository.cs:128</code>,
-          <code>StampRowVersion</code> at <code>:139-147</code>).
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Repositories/EFRepository.cs:130</code>,
+          <code>StampRowVersion</code> at <code>:141-149</code>).
           Cosmos gets no framework concurrency token at all: <code>CosmosDbContext.OnModelCreating</code>
           (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/CosmosDbContext.cs:119-146</code>)
           calls neither the base nor <code>ConfigureConcurrencyTokens</code>, and no ETag concurrency is configured
@@ -681,6 +682,34 @@
           registration stays at <code>DependencyInjection.cs:161</code>). Anchors inside earlier Revisions are left as
           recorded.</li>
           </ol>
+          <h2 id="revision-2026-11-23">Revision (2026-11-23)</h2>
+          <p>Re-verified against current source. No decision changed: the token mapping, the header-only
+          transport, the three status codes, the original-value stamp, the set-based re-stamp, the
+          conditional-write helpers and the Cosmos gap all hold as written. Only anchors had moved.</p>
+          <ol>
+          <li>Anchors re-verified against current source: <code>ApplicationDbContext.cs</code>
+          <code>ConfigureConcurrencyTokens</code> at <code>:737</code>, called from <code>OnModelCreating</code> at <code>:556</code>, the
+          <code>StoreGenerated</code> check at <code>:740</code>, <code>IsRowVersion</code> at <code>:750</code>, <code>IsConcurrencyToken</code> at <code>:754</code>;
+          <code>EntityControllerBase.cs</code> <code>GetByIdAsync</code> at <code>:362</code> with its <code>SetConcurrencyETag</code> call at <code>:383</code>;
+          <code>ApiControllerBase.cs</code> <code>SetConcurrencyETag</code> at <code>:125</code> (null and empty-token guards <code>:127-131</code>,
+          header write <code>:133</code>, protected-access remark <code>:119-123</code>), the per-type property cache at
+          <code>:25-30</code>, <code>ReadRowVersion</code> at <code>:239</code> (dictionary entry <code>:241-245</code>, typed property <code>:248-249</code>),
+          <code>HandleConditionalCommandAsync</code> at <code>:153</code> (token <code>:163</code>, follow-up <code>:209-210</code>, 204 at
+          <code>:205-212</code>) and <code>HandleConditionalCommandWithResponseAsync</code> at <code>:184</code> (token <code>:193</code>, follow-up
+          <code>:226-227</code>, <code>ETag</code> and 200 at <code>:222-230</code>), the no-attribute exception documented at <code>:151-152</code>
+          and <code>:182-183</code>; <code>EFRepository.cs</code> original-value writes at <code>:54-56</code> and <code>:65-67</code>, the overloads
+          at <code>:49</code> and <code>:60</code>, null-token rejection at <code>:52</code> and <code>:63</code>, the <code>ExecuteUpdateAsync</code>
+          re-stamp call at <code>:130</code> and <code>StampRowVersion</code> at <code>:141-149</code>; the <code>DbUpdateExceptionHandler</code>
+          registration at <code>DependencyInjection.cs:164</code>; <code>ArchitectureMapBase.cs</code> <code>ModuleApplication()</code> at
+          <code>:43</code> over the <code>ModuleLayer</code> helper at <code>:103</code>; <code>EntityServiceBase.cs</code> <code>UpdateAsync</code> at <code>:169</code>,
+          <code>ifMatch: ConcurrencyTagOf(entity)</code> at <code>:183</code>, <code>ConcurrencyTagOf</code> at <code>:193</code>,
+          <code>CreateRequestClientAsync</code> at <code>:323</code> adding the header at <code>:344</code>; ADC
+          <code>ActivitiesController.cs</code> update action with <code>[SupportsIfMatch]</code> at <code>:167</code> and
+          <code>HandleConditionalCommandWithResponseAsync</code> at <code>:173</code>; Store Catalog <code>InitialCreate.cs</code>
+          <code>InboxMessages</code> at <code>:48</code> and <code>OutboxMessages</code> at <code>:63</code>, neither with a <code>RowVersion</code> column.
+          <code>IRepository.cs</code> (<code>:396</code>, <code>:407</code>, <code>:468</code>) and <code>ConcurrencyConventionTests.cs</code> (<code>:13</code>, <code>:15</code>) are
+          unchanged. Anchors inside earlier Revisions are left as recorded.</li>
+          </ol>
           <h2 id="related">Related</h2>
           <p>ADR-017 (HTTP request idempotency, which dedups retries of the <strong>same</strong> request, the mirror-image
           concern to two <strong>distinct</strong> edits racing here, and whose declared-intent gate sits at this same
@@ -715,6 +744,7 @@
             <li><a href="#revision-2026-10-07">Revision (2026-10-07)</a></li>
             <li><a href="#revision-2026-10-21">Revision (2026-10-21)</a></li>
             <li><a href="#revision-2026-10-26">Revision (2026-10-26)</a></li>
+            <li><a href="#revision-2026-11-23">Revision (2026-11-23)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

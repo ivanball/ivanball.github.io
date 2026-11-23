@@ -39,6 +39,9 @@ RabbitMQ and Azure Service Bus), ADR-135 is linked as the owner of the applicati
 decision, and anchors are refreshed.
 Revised 2026-10-28: anchors refreshed after the ADC Identity and ADC Engagement consumer
 registrations moved one line; no decision or inventory change.
+Revised 2026-11-23: the adoption inventory grows (ADC Identity also consumes `TicketHolderInvited`,
+ADC Engagement also consumes `UserRegistered` and `UserEmailVerified`, still five of seven hosts),
+and the consumer-registration and `EnableInbox` anchors are refreshed.
 
 ## Context
 ADR-003 makes integration-event delivery **at-least-once**: the outbox guarantees a published event
@@ -100,8 +103,8 @@ writes to a different source, and handlers must still be idempotent.)
 
 In production `EnableInbox: true` is set explicitly on all four ADC service hosts
 (`MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/appsettings.json:56`,
-`MMCA.ADC.Conference.Service/appsettings.json:48`, `MMCA.ADC.Engagement.Service/appsettings.json:68`,
-`MMCA.ADC.Notification.Service/appsettings.json:82`) and on all three Store service hosts
+`MMCA.ADC.Conference.Service/appsettings.json:71`, `MMCA.ADC.Engagement.Service/appsettings.json:83`,
+`MMCA.ADC.Notification.Service/appsettings.json:95`) and on all three Store service hosts
 (`MMCA.Store/Source/Services/MMCA.Store.Sales.Service/appsettings.json:58`,
 `MMCA.Store.Catalog.Service/appsettings.json:54`, `MMCA.Store.Identity.Service/appsettings.json:48`),
 so every deployed service host states its posture rather than resting on the transport default the
@@ -113,22 +116,22 @@ inside its single `InitialCreate` migration
 `MMCA.Store.Migrations.SqlServer.Catalog/Migrations/20260621192800_InitialCreate.cs:48,213`,
 `MMCA.Store.Migrations.SqlServer.Identity/Migrations/20260621192816_InitialCreate.cs:49,119`),
 because those per-service projects postdate the frozen combined-archive lineage that added the ADC
-migration. Adoption inventory as of 2026-10-01: **five of the seven service hosts consume from the
+migration. Adoption inventory as of 2026-11-23: **five of the seven service hosts consume from the
 broker** and so use their inbox for real, three in ADC and two in Store. ADC Identity consumes
-`SpeakerLinkedToUser` and
-`SpeakerUnlinkedFromUser` (`MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:347-348`),
-ADC Conference consumes `UserRegistered` and `UserDeleted`
+`SpeakerLinkedToUser`, `SpeakerUnlinkedFromUser` and `TicketHolderInvited`
+(`MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:309-310`, `:314`), ADC Conference consumes `UserRegistered` and `UserDeleted`
 (`MMCA.ADC.Conference.Service/ConferenceBrokerConsumers.cs:34-35`) and chains a third broker consumer
 beside them, `RegisterOutputCacheEvictionConsumer()` (`MMCA.ADC.Conference.Service/ConferenceBrokerConsumers.cs:37`), and ADC
-Engagement consumes four events, `AttendeeCheckedIn`, `SessionFeedbackSubmitted`,
-`EventFeedbackSubmitted` and `UserDeleted` (`MMCA.ADC.Engagement.Service/Program.cs:306-309`), the
-first of which is ADC's first **self-consumption** over the broker: Engagement publishes
+Engagement consumes six events, `AttendeeCheckedIn`, `SessionFeedbackSubmitted`,
+`EventFeedbackSubmitted`, `UserDeleted`, `UserRegistered` (on its own named endpoint, so it does not
+compete with Conference for the same queue) and `UserEmailVerified`
+(`MMCA.ADC.Engagement.Service/EngagementBrokerConsumers.cs:36-42`), the first of which is ADC's first **self-consumption** over the broker: Engagement publishes
 `AttendeeCheckedIn` and consumes it back, which is precisely the shape a redelivery would double-count,
 so the inbox is load-bearing there rather than decorative. Store Sales consumes three events,
 `ProductVariantChanged`, `ProductInfoChanged` and `CustomerErased`
-(`MMCA.Store/Source/Services/MMCA.Store.Sales.Service/Program.cs:273`, `:278`, `:283`), and Store
-Catalog consumes `OrderFulfilled` and `CustomerErased` plus the output-cache eviction event
-(`MMCA.Store.Catalog.Service/Program.cs:285`, `:294`, `:301`), which makes Catalog both publisher and
+(`MMCA.Store/Source/Services/MMCA.Store.Sales.Service/SalesBrokerConsumers.cs:25`, `:28`, `:31`),
+and Store Catalog consumes `OrderFulfilled` and `CustomerErased` plus the output-cache eviction event
+(`MMCA.Store.Catalog.Service/CatalogBrokerConsumers.cs:35`, `:39-40`, `:43`), which makes Catalog both publisher and
 consumer of that eviction event and therefore exactly the redelivery-doubles-work shape the inbox
 guards. The remaining two hosts (**ADC
 Notification** and **Store Identity**) carry `EnableInbox: true` and the table while
@@ -529,3 +532,31 @@ inventory; older Revision sections keep their original anchors.
    `MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:347-348`; ADC Engagement registers
    `AttendeeCheckedIn`, `SessionFeedbackSubmitted`, `EventFeedbackSubmitted` and `UserDeleted` (same
    four events, same order) at `MMCA.ADC/Source/Services/MMCA.ADC.Engagement.Service/Program.cs:306-309`.
+
+## Revision (2026-11-23)
+Re-verified against current source. No decision changed: the inbox still resolves ON for a broker
+transport, all seven service hosts still set `EnableInbox: true`, and the same five of the seven
+hosts consume from the broker (ADC Notification and Store Identity call `AddBrokerMessaging` with no
+consumers). What moved is the consumer inventory on two ADC hosts and the live-section anchors; older
+Revision sections keep their original anchors and wording, including their "inventory unchanged"
+statements, which were true when written.
+
+1. **ADC Identity consumes a third event.** Beside `SpeakerLinkedToUser` and
+   `SpeakerUnlinkedFromUser` (`MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:309-310`)
+   it registers `TicketHolderInvited` (`:314`), which Engagement publishes when an organizer sends
+   ticket invites (`:312-313`). The Decision lists it.
+2. **ADC Engagement consumes six events, not four.** Its registrations moved out of `Program.cs`
+   into `MMCA.ADC/Source/Services/MMCA.ADC.Engagement.Service/EngagementBrokerConsumers.cs` (wired at
+   `Program.cs:222`). The original four sit at `:36-39`; `UserRegistered` (`:40-41`) listens on its
+   own explicit endpoint, `adc-engagement-user-registered` (`:30`), because Conference already
+   consumes `UserRegistered` on the default name and a shared queue would make the two services
+   competing consumers (`:18-29`); `UserEmailVerified` is at `:42`. The Decision lists all six.
+3. Anchors re-verified against current source: the ADC `EnableInbox` lines at
+   `MMCA.ADC.Conference.Service/appsettings.json:71`, `MMCA.ADC.Engagement.Service/appsettings.json:83`
+   and `MMCA.ADC.Notification.Service/appsettings.json:95` (Identity `:56` holds); Store Sales
+   registrations at `MMCA.Store/Source/Services/MMCA.Store.Sales.Service/SalesBrokerConsumers.cs:25`,
+   `:28` and `:31` (wired at `Program.cs:139`); Store Catalog registrations at
+   `MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/CatalogBrokerConsumers.cs:35`, `:39-40` and
+   `:43` (wired at `Program.cs:110`). The other live anchors hold as written:
+   `ConferenceBrokerConsumers.cs:34-35` and `:37`, and the three Store `EnableInbox` appsettings
+   lines.

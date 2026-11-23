@@ -277,7 +277,10 @@
           refreshed after the v1.250.0 consumer sweep. Revised 2026-10-24: anchors refreshed against current source.
           Revised 2026-10-26: anchors refreshed against current source, including the live-section host,
           Gateway and <code>Extensions.cs</code> anchors the 2026-10-24 pass left stale. Revised 2026-10-28: anchors
-          refreshed against current source.</p>
+          refreshed against current source. Revised 2026-11-23: the service hosts are described through the
+          composed <code>AddMmcaServiceHost</code> call (module list, gRPC client and Key Vault passed as options) instead
+          of <code>AddModuleHost</code>, the session-asset upload cap is recorded as YARP route configuration rather than
+          Gateway pipeline code, and anchors are refreshed.</p>
           <h2 id="context">Context</h2>
           <p>ADC began as a modular monolith: one <code>MMCA.ADC.WebAPI</code> host loaded every module (Identity, Conference,
           Engagement, Notification) in-process via the <code>ModuleLoader</code>, sharing one database and dispatching
@@ -301,14 +304,15 @@
           <ul>
           <li><strong>Each service is the monolith with one module enabled.</strong> The hosts still run <code>ModuleLoader</code>, just with
           <code>Modules:{Module}:Enabled=true</code> for their own module, and each names only its own module assembly
-          to <code>AddModuleHost</code> (<code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:379-381</code>), so
+          in the <code>ModuleAssemblies</code> option it passes to <code>AddMmcaServiceHost</code>
+          (<code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:82</code>, list at <code>:89</code>), so
           peer modules are never discovered there; the cross-module interfaces a service consumes are
-          satisfied by gRPC clients the host registers (<code>:431</code>). The Domain/Application/Shared code is identical whether it runs in-process or extracted.</li>
+          satisfied by gRPC clients the host registers in its <code>ConfigurePipeline</code> option (<code>:356-358</code>). The Domain/Application/Shared code is identical whether it runs in-process or extracted.</li>
           <li><strong>Extraction follows the Strangler Fig route; a rewrite is never the plan.</strong> Nothing in the topology
           needs a big-bang switch. A module is extracted by (1) starting its single-module service host beside
           the combined host, which keeps running with that module turned off (<code>Modules:{Module}:Enabled=false</code>)
           and its peers satisfied by the <code>Disabled*</code> stubs the <code>ModuleLoader</code> registers for disabled modules
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Modules/ModuleLoader.cs:12-14</code>, <code>:119</code>); (2) moving
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Modules/ModuleLoader.cs:12-14</code>, <code>:121</code>); (2) moving
           that module&#39;s route prefix at the Gateway from the combined host&#39;s cluster to the new service&#39;s, one
           YARP <code>ReverseProxy</code> configuration change under ADR-089 and no client change, because the Gateway is
           the only entry point; and (3) retiring the combined host once no route points at it. Old path and
@@ -318,29 +322,40 @@
           <li><strong>The Gateway is the only client entry point.</strong> It owns the route-to-service map (<code>/Auth</code>, <code>/Events</code>,
           <code>/Bookmarks</code>, <code>/hubs</code>, <code>/.well-known</code>, and so on); clients (Blazor/MAUI) never address a service directly. It
           has no DbContext or controllers. Its pipeline is edge rate limiting
-          (<code>MMCA.ADC/Source/Hosts/MMCA.ADC.Gateway/Program.cs:82</code>, <code>:186</code>), one per-downstream readiness check
-          per service (<code>:96</code>), forwarded headers (<code>:166</code>), correlation (<code>:171</code>), security-headers middleware
-          (ADR-023, <code>:126</code>, <code>:176</code>), CORS (<code>:131</code>, <code>:179</code>), static files (<code>:191</code>), <code>/privacy</code>, <code>/terms</code> and
-          <code>/delete-account</code> minimal-API endpoints (<code>:198</code>, <code>:205</code>, <code>:209</code>), a request-body cap raised only for
-          the session-asset upload path (<code>:220-232</code>),
+          (<code>MMCA.ADC/Source/Hosts/MMCA.ADC.Gateway/Program.cs:89</code>, <code>:198</code>), one per-downstream readiness check
+          per service (<code>:105</code>), forwarded headers (<code>:178</code>), correlation (<code>:183</code>), security-headers middleware
+          (ADR-023, <code>:135</code>, <code>:188</code>), CORS (<code>:140</code>, <code>:191</code>), static files (<code>:203</code>), <code>/privacy</code>, <code>/terms</code> and
+          <code>/delete-account</code> minimal-API endpoints (<code>:210</code>, <code>:217</code>, <code>:221</code>),
           authorization middleware that evaluates the <code>anonymous</code> policy every route declares
-          (<code>AddAuthorization</code> at <code>:120</code>, <code>UseAuthorization</code> at <code>:237</code>; no authentication scheme is registered,
+          (<code>AddAuthorization</code> at <code>:129</code>, <code>UseAuthorization</code> at <code>:228</code>; no authentication scheme is registered,
           so the Gateway authenticates no one, ADR-088), and the proxy itself: the route table is loaded from
-          the <code>ReverseProxy</code> configuration section and mapped by <code>MapReverseProxy</code> (<code>:154-155</code>, <code>:240</code>), not
-          expressed as <code>MapForwarder</code> calls in code (ADR-089). Both Gateways layer Azure Key Vault
-          configuration before anything binds settings (ADC <code>:68</code>, ahead of <code>AddServiceDefaults</code> at <code>:70</code>, the
-          order every ADC service and UI host now follows too, for example
-          <code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:115</code> before <code>:117</code>; Store
-          <code>MMCA.Store/Source/Hosts/MMCA.Store.Gateway/Program.cs:67</code>). Store&#39;s Gateway is the same shape
-          without the static files, the <code>/privacy</code>, <code>/terms</code> and <code>/delete-account</code> endpoints, the upload cap and the authorization pair: its
-          routes declare <code>anonymous</code> too, but it registers no authorization middleware, by design
-          (<code>MMCA.Store/Source/Hosts/MMCA.Store.Gateway/appsettings.json:45-49</code>).</li>
+          the <code>ReverseProxy</code> configuration section and mapped by <code>MapReverseProxy</code> (<code>:166-167</code>, <code>:231</code>), not
+          expressed as <code>MapForwarder</code> calls in code (ADR-089). A request-body cap raised only for the
+          session-asset upload path is route configuration, not pipeline code: the
+          <code>conference-session-assets-file</code> route sets <code>MaxRequestBodySize</code>
+          (<code>MMCA.ADC/Source/Hosts/MMCA.ADC.Gateway/appsettings.json:275-281</code>, value at <code>:280</code>). Both Gateways
+          layer Azure Key Vault configuration before anything binds settings (ADC
+          <code>MMCA.ADC/Source/Hosts/MMCA.ADC.Gateway/Program.cs:75</code>, ahead of <code>AddServiceDefaults</code> at <code>:77</code>; Store
+          <code>MMCA.Store/Source/Hosts/MMCA.Store.Gateway/Program.cs:67</code>). Every ADC service host follows the
+          same order through the composed host: it passes <code>AddAzureKeyVaultConfiguration</code> in its
+          <code>ConfigureConfigurationSources</code> option
+          (<code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:91</code>, <code>:97</code>), which
+          <code>AddMmcaServiceHost</code> invokes before it calls <code>AddServiceDefaults</code>
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.ServiceHost/ServiceHostBuilderExtensions.cs:77</code>, <code>:83</code>).
+          The ADC UI host does the same through the composed Blazor host
+          (<code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs:39</code>, invoked at
+          <code>MMCA.Common/Source/Presentation/MMCA.Common.UI.Web/Hosting/BlazorWebHostExtensions.cs:82</code>, before
+          <code>AddServiceDefaults</code> at <code>:85</code>).
+          Store&#39;s Gateway is the same shape without the static files, the <code>/privacy</code>, <code>/terms</code> and
+          <code>/delete-account</code> endpoints, the upload-cap route and the authorization pair: its routes declare
+          <code>anonymous</code> too, but it registers no authorization middleware, by design
+          (<code>MMCA.Store/Source/Hosts/MMCA.Store.Gateway/appsettings.json:46-50</code>).</li>
           <li><strong>Cross-service communication uses edge transports:</strong> synchronous calls over gRPC contracts (ADR-007);
           asynchronous flows over the outbox to MassTransit broker (ADR-003, ADR-006). Token validation is
           federated via JWKS (ADR-004): locally the AppHost points each service at Identity through the Gateway
-          (<code>MMCA.ADC/Source/Hosting/MMCA.ADC.AppHost/Program.cs:374-376</code>), while in production each service
-          sets its JWT authority to Identity&#39;s internal URL directly (<code>MMCA.ADC/infra/main.bicep:2192</code>, <code>:2328</code>,
-          <code>:2482</code>). Each service owns its own database (ADR-006).</li>
+          (<code>MMCA.ADC/Source/Hosting/MMCA.ADC.AppHost/Program.cs:370-372</code>), while in production each service
+          sets its JWT authority to Identity&#39;s internal URL directly (<code>MMCA.ADC/infra/main.bicep:2484</code>, <code>:2623</code>,
+          <code>:2789</code>). Each service owns its own database (ADR-006).</li>
           <li><strong>Transport stays at the edge, enforced.</strong> <code>MicroserviceExtractionTests</code> in the architecture suite
           forbid gRPC / MassTransit / Protobuf dependencies in any Domain, Application, or Shared assembly, so the
           core stays host-agnostic and the split stays reversible.</li>
@@ -358,7 +373,7 @@
           <li><strong>Reversible by construction.</strong> Transport at the edge + the <code>ModuleLoader</code> mean a service can be
           re-collapsed into a combined host (or peers co-hosted) by a host-level change, not a domain change: a
           host names the module assemblies it boots in code
-          (<code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:379-381</code>), and configuration then
+          (<code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:89</code>), and configuration then
           enables or disables each of them. Useful
           insurance for a small team adopting microservices.</li>
           </ul>
@@ -373,10 +388,16 @@
           <li><strong>Transport constraints leak into hosting.</strong> The REST services run <code>Http2</code>-only on cleartext for h2c
           gRPC, while Notification runs <code>Http1AndHttp2</code> for its SignalR WebSocket upgrade: a per-host Kestrel
           nuance that didn&#39;t exist in the monolith.</li>
-          <li><strong>Duplicated host wiring.</strong> Each service repeats the same pipeline setup; shared concerns live in the
-          framework packages (<code>MMCA.Common.API</code>, plus <code>AddServiceDefaults</code> from <code>MMCA.Common.Aspire</code> at
-          <code>MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Extensions.cs:33</code>) to limit the drift. Neither consumer
-          carries a <code>ServiceDefaults</code> project of its own.</li>
+          <li><strong>Per-host wiring.</strong> Each service still has its own host project, but the shared start-up is one
+          framework call: <code>AddMmcaServiceHost</code> from <code>MMCA.Common.ServiceHost</code> runs the configuration sources,
+          the endpoints, Serilog, <code>AddServiceDefaults</code> (declared in <code>MMCA.Common.Aspire</code> at
+          <code>MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Extensions.cs:35</code>), Redis caching, <code>AddModuleHost</code> and
+          the infrastructure health checks in a fixed order
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.ServiceHost/ServiceHostBuilderExtensions.cs:63-104</code>), and a
+          host supplies only its options (<code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:82</code>).
+          What stays per host is those options (module list, protocols, gRPC clients, vendor configuration),
+          which is where drift between hosts can still arise. Neither consumer carries a <code>ServiceDefaults</code>
+          project of its own.</li>
           </ul>
           <h2 id="applicability">Applicability</h2>
           <p>This ADR is framed around ADC (the first repo extracted), but the same topology is now the framework&#39;s
@@ -394,8 +415,8 @@
           nothing runs is a claim. They are not the output of a scale, team or deploy-cadence trigger. The
           conference peaked at roughly 67 concurrent users (Context above), one team owns every module, and all
           six deployables still ship in a single pipeline run from one template
-          (<code>MMCA.ADC/infra/main.bicep:1858</code>, <code>:2111</code>, <code>:2264</code>, <code>:2399</code>, <code>:2589</code>, <code>:2752</code>, deployed together by a
-          single <code>azure/arm-deploy</code> step for <code>main.bicep</code> at <code>MMCA.ADC/.github/workflows/deploy.yml:1449-1455</code>), so the
+          (<code>MMCA.ADC/infra/main.bicep:2131</code>, <code>:2402</code>, <code>:2556</code>, <code>:2704</code>, <code>:2899</code>, <code>:3062</code>, deployed together by a
+          single <code>azure/arm-deploy</code> step for <code>main.bicep</code> at <code>MMCA.ADC/.github/workflows/deploy.yml:1929-1935</code>), so the
           independent-deploy benefit this record lists is available rather than taken. What ADC does buy with the split is proof under load that the path
           works: transport stays out of Domain, Application and Shared under a build gate
           (<code>MMCA.ADC/Tests/Architecture/MMCA.ADC.Architecture.Tests/Layering/MicroserviceExtractionTests.cs:3</code>), and the
@@ -536,6 +557,54 @@
           arm-deploy step at <code>MMCA.ADC/.github/workflows/deploy.yml:1449-1455</code> (<code>uses</code> at <code>:1451</code>,
           template at <code>:1454</code>) and the <code>foundation.bicep</code> arm-deploy step at <code>:988</code>.</li>
           </ol>
+          <h2 id="revision-2026-11-23">Revision (2026-11-23)</h2>
+          <p>Re-verified against current source. The topology and every decision above stand: each extracted
+          host still boots a single module assembly, peers are still reached over host-registered gRPC
+          clients, Key Vault configuration still precedes <code>AddServiceDefaults</code> in every host, the ADC Gateway
+          still registers no authentication scheme, JWKS federation still runs through the Gateway only under
+          the AppHost, and exactly six container apps (and no container app jobs) still deploy from one
+          <code>main.bicep</code> arm-deploy step beside the separate <code>foundation.bicep</code> step. Two live statements and
+          the anchors moved; the dated revisions above keep their anchors as written.</p>
+          <ol>
+          <li>The service hosts no longer call <code>AddModuleHost</code> or their own <code>AddServiceDefaults</code>. Each passes
+          its single module assembly in the <code>ModuleAssemblies</code> option of <code>AddMmcaServiceHost</code>
+          (<code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:82</code>, list at <code>:89</code>; likewise
+          Engagement <code>:65</code>, Identity <code>:89</code>, Notification <code>:65</code>), registers its gRPC client in the
+          <code>ConfigurePipeline</code> option (<code>AddEngagementBookmarkCountClient</code> at <code>:358</code>), and supplies Key Vault
+          through <code>ConfigureConfigurationSources</code> (<code>:91</code>, <code>:97</code>), which the composed host runs before
+          <code>AddServiceDefaults</code>
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.ServiceHost/ServiceHostBuilderExtensions.cs:77</code>, <code>:83</code>).
+          The UI host supplies Key Vault the same way through the composed Blazor host
+          (<code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs:39</code>, run at
+          <code>MMCA.Common/Source/Presentation/MMCA.Common.UI.Web/Hosting/BlazorWebHostExtensions.cs:82</code> before
+          <code>AddServiceDefaults</code> at <code>:85</code>). The Decision and Rationale sections now name that call, and the
+          Trade-offs bullet on host wiring now describes the composed start-up
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.ServiceHost/ServiceHostBuilderExtensions.cs:63-104</code>)
+          rather than a pipeline each service repeats.</li>
+          <li>The session-asset upload body cap is no longer Gateway pipeline code: it is the
+          <code>MaxRequestBodySize</code> of the <code>conference-session-assets-file</code> route in the YARP configuration
+          (<code>MMCA.ADC/Source/Hosts/MMCA.ADC.Gateway/appsettings.json:275-281</code>, value at <code>:280</code>), so the
+          Decision section now lists it beside the pipeline rather than inside it.</li>
+          <li>Anchors re-verified against current source: ADC Gateway
+          (<code>MMCA.ADC/Source/Hosts/MMCA.ADC.Gateway/Program.cs</code>) Key Vault <code>:75</code>, <code>AddServiceDefaults</code> <code>:77</code>,
+          <code>AddGatewayRateLimiting</code> <code>:89</code> and <code>UseGatewayRateLimiting</code> <code>:198</code>, downstream readiness checks
+          <code>:105</code>, <code>AddAuthorization</code> <code>:129</code>, <code>AddCommonSecurityHeaders</code> <code>:135</code> and
+          <code>UseCommonSecurityHeaders</code> <code>:188</code>, <code>AddCommonGatewayCors</code> <code>:140</code> and <code>UseCors</code> <code>:191</code>,
+          <code>AddReverseProxy</code> with <code>LoadFromConfig</code> <code>:166-167</code>, forwarded headers <code>:178</code>, correlation <code>:183</code>,
+          static files <code>:203</code>, <code>/privacy</code> <code>:210</code>, <code>/terms</code> <code>:217</code>, <code>/delete-account</code> <code>:221</code>,
+          <code>UseAuthorization</code> <code>:228</code>, <code>MapReverseProxy</code> <code>:231</code>; <code>ModuleLoader</code> stub registration at
+          <code>MMCA.Common/Source/Core/MMCA.Common.Application/Modules/ModuleLoader.cs:121</code>; AppHost JWKS wiring
+          at <code>MMCA.ADC/Source/Hosting/MMCA.ADC.AppHost/Program.cs:370-372</code>; production JWT authority at
+          <code>MMCA.ADC/infra/main.bicep:2484</code>, <code>:2623</code> and <code>:2789</code>; the six container apps at <code>:2131</code>
+          (Identity), <code>:2402</code> (Conference), <code>:2556</code> (Engagement), <code>:2704</code> (Notification), <code>:2899</code> (Gateway)
+          and <code>:3062</code> (UI); the <code>main.bicep</code> arm-deploy step at
+          <code>MMCA.ADC/.github/workflows/deploy.yml:1929-1935</code> (<code>uses</code> at <code>:1931</code>, template at <code>:1934</code>) and the
+          <code>foundation.bicep</code>
+          arm-deploy step at <code>:1384</code> (template at <code>:1387</code>); <code>AddServiceDefaults</code> declared at
+          <code>MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Extensions.cs:35</code>; Store Gateway by-design comment at
+          <code>MMCA.Store/Source/Hosts/MMCA.Store.Gateway/appsettings.json:46-50</code> and the first <code>anonymous</code>
+          policy at <code>:55</code>.</li>
+          </ol>
           <h2 id="related">Related</h2>
           <p>ADR-003 (outbox dual dispatch), ADR-004 (cross-service token validation via JWKS), ADR-006 (database
           per service), and ADR-007 (gRPC cross-service calls) are the facet decisions that sit under this extraction.</p>
@@ -562,6 +631,7 @@
             <li><a href="#revision-2026-10-24">Revision (2026-10-24)</a></li>
             <li><a href="#revision-2026-10-26">Revision (2026-10-26)</a></li>
             <li><a href="#revision-2026-10-28">Revision (2026-10-28)</a></li>
+            <li><a href="#revision-2026-11-23">Revision (2026-11-23)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

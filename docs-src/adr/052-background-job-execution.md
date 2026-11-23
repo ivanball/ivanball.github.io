@@ -19,7 +19,12 @@ refreshed after the `SubmitQuestionHandler` and `OpenLivePollHandler` bodies shi
 dedup, `Wait`-versus-`DropOldest` and scoring-serialization trade-offs describe the pre-supersede
 design (the Trade-offs text itself is left unmarked, as history), with session scoring recorded as
 a durable internal command under a per-event distributed claim and ADR-121 as the home of the live
-ephemeral-queue decision.
+ephemeral-queue decision. Revised 2026-11-23: the Trade-offs section now opens with a pointer
+marking its scoring statements and its `DropOldest`-versus-`Wait` comparison as the pre-supersede
+design (so the Trade-offs text is no longer unmarked, reversing that part of the 2026-10-28
+revision), and anchors refreshed after the
+`OpenLivePollHandler`, Engagement registration, scoring handler, `IDistributedLock` registration and
+`InternalCommandProcessor` bodies shifted.
 
 ## Context
 Some requests trigger work that cannot run inside the request: an AI scoring pass over an event's
@@ -109,6 +114,13 @@ command (ADR-114).
   for durable internal commands (ADR-114).
 
 ## Trade-offs
+The scoring statements below (in "In-process only", "Dedup is per replica", the whole
+`DropOldest`-versus-`Wait` comparison in "Backpressure", and "wanted for scoring") describe the
+session-scoring queue and its `Wait` channel this ADR had before it was superseded; scoring is now a
+durable internal command under a per-event distributed claim (ADR-114, see the Revision
+(2026-10-28)), the full modes in use are `DropOldest` and `DropWrite`, and the live ephemeral-queue
+decision is [ADR-121](121-ephemeral-in-process-work-queue.md).
+
 - **In-process only.** The queue does not survive a restart and does not span replicas. Accepted
   because every current job is either ephemeral (a lost broadcast is a missed UI refresh) or
   re-triggerable (an organizer can click score again). Work that must survive a crash belongs in the
@@ -377,3 +389,55 @@ rewritten.
    - `ScoreEventSessionsInternalCommandHandler.cs`: class at `:47`, `TryAcquireAsync` at `:84`,
      `LogRunSkippedNotClaimed` call at `:89` and declaration at `:131-132`; the two anchors the
      Revision (2026-10-21) recorded (`:84`, log message at `:132`) are unchanged.
+
+## Revision (2026-11-23)
+Re-verified against current source. **The Decision, the Rationale, the post-commit rule and the
+ephemeral half are unchanged**, and so are the facts the Revision (2026-10-28) records: scoring is
+a durable internal command under a per-event claim, the lock falls back to a process-local
+implementation without Redis, and `InternalCommandProcessor` runs a claimed batch sequentially. One
+choice of that revision is reversed: it left the Trade-offs bullets in place unmarked, and they now
+sit under a marking pointer. Otherwise only line anchors moved. The dated revisions above keep
+their anchors as written.
+
+1. **Trade-offs now opens with a pointer, reversing the "unmarked" choice of the Revision
+   (2026-10-28).** Its scoring statements and the `DropOldest`-versus-`Wait` comparison still read
+   as live policy, while scoring is a durable internal command
+   (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Sessions/UseCases/DecisionSupport/ScoreEventSessions/ScoreEventSessionsInternalCommand.cs:35`)
+   whose handler takes a per-event distributed claim (`ScoreEventSessionsInternalCommandHandler.cs:86`),
+   and no `BoundedChannelFullMode.Wait` channel remains under `MMCA.ADC/Source`: the full modes in
+   use are `DropOldest`
+   (`MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Application/Live/LiveChannelPublishQueue.cs:36`)
+   and `DropWrite`
+   (`MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Application/UserSessionBookmarks/Services/BookmarkCacheEvictionSignal.cs:30`).
+   The section opens with a short note marking those statements as the pre-supersede design and
+   pointing to ADR-114 and ADR-121; the bullets themselves are left as written. The parenthetical
+   "(the Trade-offs text itself is left unmarked, as history)" in the 2026-10-28 Status sentence
+   records that revision's choice and no longer describes the file.
+2. Anchors re-verified against current source:
+   - `OpenLivePollHandler.cs`
+     (`MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Application/LivePolls/UseCases/Open/OpenLivePollHandler.cs`):
+     `MutateEntityHandlerBase` at `:27`, `LogMutated` override at `:79-80`, `OnMutatedAsync` at
+     `:83`, `EnqueueOpened(poll)` call at `:88`, queue write at `:109-110`. These match the Revision
+     (2026-08-31) again except the base line, so the "one line higher" note in the Revision
+     (2026-10-26) no longer holds.
+   - Engagement registrations: `LiveChannelPublishQueue` and its interface at `:59-60` and
+     `TryAddSingleton<BookmarkCacheEvictionSignal>()` at `:64`
+     (`MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Application/DependencyInjection.cs`);
+     `AddHostedService<LiveChannelPublishProcessor>` at `:26` and
+     `AddHostedService<BookmarkCacheEvictionProcessor>` at `:27`
+     (`MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Infrastructure/DependencyInjection.cs`).
+   - `ScoreEventSessionsInternalCommandHandler.cs`: idempotence remarks at `:37-43`, class at `:49`,
+     `TryAcquireAsync` at `:86`, skip check at `:89` with the `LogRunSkippedNotClaimed` call at `:91`,
+     `runner.RunAsync` with `command.RequestedAtUtc` at `:95`, log message and declaration at
+     `:133-134`. The two anchors the Revision (2026-10-21) recorded (`:84`, `:132`) are now `:86`
+     and `:133`.
+   - `ScoreEventSessionsInternalCommand.cs`: `[InternalCommandName("Conference.ScoreEventSessions.v1")]`
+     at `:35`.
+   - `DependencyInjection.Caching.cs`
+     (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.Caching.cs`):
+     `TryAddSingleton<IDistributedLock>` at `:109-123`, the `IConnectionMultiplexer` check and Redis
+     branch at `:111-118`, the `InProcessDistributedLock` fallback at `:120-122`.
+   - `InternalCommandProcessor.cs`
+     (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/InternalCommands/Processing/InternalCommandProcessor.cs`):
+     the per-row loop over the claimed batch at `:209-223`, `RenewClaimAsync` at `:215` and
+     `ExecuteClaimedAsync` at `:221`, each awaited in turn.

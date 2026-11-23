@@ -268,7 +268,9 @@
           identifier, <code>TicketCommentId</code>, which takes no alias and is named directly), the design-time option
           <code>AddStronglyTypedIdAssembly</code> and the model-cache key joined the capability, and Decision points 12,
           13 and 14 were amended and point 15 added accordingly; the alias count is 50 (48 <code>int</code>), see the
-          Revision (2026-11-12) at the end.
+          Revision (2026-11-12) at the end. Revised 2026-11-23: anchors refreshed after the Common
+          framework files and the ADC Conference alias file they cite moved; behavior, counts and adoption
+          are unchanged.
           <strong>Revisits <a href="048-primitive-identifier-type-aliases.html">ADR-048</a> and
           <a href="085-identifier-type-aliases-revisited.html">ADR-085</a></strong> by adding the capability those records deferred,
           without a workspace-wide migration. ADR-048&#39;s decision (every entity identity is a primitive named through a
@@ -288,8 +290,8 @@
           <code>MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Shared/MMCA.ADC.Engagement.GlobalUsings.IdentifierType.cs:6</code>);
           the two exceptions are both <code>System.Guid</code> and both in ADC&#39;s Conference module
           (<code>SessionAssetIdentifierType</code> and <code>SpeakerIdentifierType</code>,
-          <code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Shared/MMCA.ADC.Conference.GlobalUsings.IdentifierType.cs:17</code>
-          and <code>:23</code>). The migration surface is ADR-085&#39;s figure to own: its census is re-measured at each of
+          <code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Shared/MMCA.ADC.Conference.GlobalUsings.IdentifierType.cs:18</code>
+          and <code>:24</code>). The migration surface is ADR-085&#39;s figure to own: its census is re-measured at each of
           its revisions and has grown well past the August figure.</p>
           <p><strong>None of the three has fired, and this record is not claiming otherwise.</strong> The trigger here is a
           different one: the 2026-09-09 framework gap analysis of what a .NET application framework is expected
@@ -360,8 +362,8 @@
           <code>value.Value</code> and reads the primitive back through <code>From</code>. Dictionary keys are covered too, so
           <code>Dictionary&lt;OrderId, T&gt;</code> serializes exactly like <code>Dictionary&lt;int, T&gt;</code> (<code>:53-70</code>). <code>AddAPI</code> adds
           the factory to <code>JsonSerializerOptions.Converters</code> beside <code>EnumerationJsonConverterFactory</code>
-          (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/DependencyInjection.cs:65</code>, rationale at
-          <code>:60-64</code>), for the same reason ADR-104 gives: an attribute would have to be repeated on every
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/DependencyInjection.cs:66</code>, rationale at
+          <code>:62-65</code>), for the same reason ADR-104 gives: an attribute would have to be repeated on every
           wrapper a consumer declares.</p>
           </li>
           <li><p><strong>MVC route and query binding goes through a <code>TypeConverter</code>, not through <code>IParsable</code>.</strong> That is
@@ -378,7 +380,7 @@
           </li>
           <li><p><strong>One call is the whole opt-in.</strong>
           <code>services.AddStronglyTypedIds(typeof(OrderId).Assembly)</code>
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:418</code>) scans the named
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:425</code>) scans the named
           assemblies for wrappers, registers the <code>TypeConverter</code> for each, and registers a
           <code>StronglyTypedIdRegistry</code> singleton through <code>TryAddSingleton</code>
           (<code>MMCA.Common/Source/Core/MMCA.Common.Shared/Identifiers/StronglyTypedIdRegistry.cs:22</code>). A host
@@ -387,7 +389,7 @@
           <li><p><strong>EF Core maps a wrapper as a PRE-CONVENTION type mapping, registered once on the base
           context.</strong> <code>ApplicationDbContext.ConfigureConventions</code> resolves the registry with <code>GetService</code> and
           applies it
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/ApplicationDbContext.cs:512-514</code>);
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/ApplicationDbContext.cs:520-522</code>);
           <code>StronglyTypedIdModelConfiguration.Apply</code>
           (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Conventions/StronglyTypedIdModelConfiguration.cs:29</code>)
           declares <code>configurationBuilder.Properties(identifierType).HaveConversion(converterType, comparerType)</code>
@@ -432,7 +434,7 @@
           <code>TypeConverter</code>-bound parameter as a plain string. Both are registered by <code>AddCommonOpenApi</code>
           on every document the host registers with its own <code>services.AddOpenApi()</code> (since v1.217.0 the
           framework registers no document of its own; see ADR-046)
-          (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/WebApplicationBuilderExtensions.cs:110-111</code>).</p>
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/WebApplicationBuilderExtensions.cs:117-118</code>).</p>
           </li>
           <li><p><strong>Mapperly needs nothing in the normal case and one attribute in the other.</strong> A DTO implements
           <code>IBaseDTO&lt;TIdentifierType&gt;</code> over the SAME identifier type its entity uses, so a wrapper maps to
@@ -450,7 +452,7 @@
           (<code>MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Rules/Domain/ArchitectureRules.StronglyTypedIds.cs:34</code>)
           flags a wrapper that is not a struct, is not <code>readonly</code>, is not a record, or declares instance
           state beyond the wrapped value. It is exposed by <code>StronglyTypedIdTestsBase</code>
-          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Bases/Domain/StronglyTypedIdTestsBase.cs:9</code>)
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Bases/Domain/StronglyTypedIdTestsBase.cs:10</code>)
           and subclassed in all four repositories&#39; architecture tests: MMCA.Common
           (<code>MMCA.Common/Tests/Architecture/MMCA.Common.Architecture.Tests/Domain/StronglyTypedIdConventionTests.cs:12</code>),
           MMCA.ADC
@@ -461,8 +463,8 @@
           (<code>MMCA.Helpdesk/Tests/Architecture/MMCA.Helpdesk.Architecture.Tests/ArchitectureTests.cs:231</code>).
           The first three are satisfied by having nothing to check. Helpdesk&#39;s is not vacuous: it runs
           over <code>TicketCommentId</code>, and adds a fact that the Tickets module declares exactly one wrapper,
-          that type, over <code>int</code> (<code>ArchitectureTests.cs:237-251</code>), inside the template&#39;s child region so a
-          scaffold with no child collection passes the base vacuously (<code>:226-230</code>). The rule holds every
+          that type, over <code>int</code> (<code>ArchitectureTests.cs:236-252</code>), inside the template&#39;s child region
+          (<code>:235</code> to <code>:253</code>) so a scaffold with no child collection passes the base vacuously (<code>:226-230</code>). The rule holds every
           wrapper any repo declares to the shape the converters,
           comparer and route binding are written against. The rule is deliberately separate from
           <code>ValueObjectsAreImmutableSealedInShared</code>: an identifier is not a <code>ValueObject</code> derivative, it has
@@ -515,8 +517,8 @@
           round trip that inserts through a real database and reads a generated wrapped <code>int</code> key back, a
           raw-column read proving the stored value is the primitive, and filter and sort translated to SQL;
           beside them, the design-time and model-cache wrapper tests of point 15 in
-          <code>.../Persistence/DataSources/DesignTimeDbContextHelperTests.cs</code> (<code>:209-278</code>) and
-          <code>.../Persistence/DataSources/ModelCacheKeyGateTests.cs</code> (<code>:166-176</code>).
+          <code>.../Persistence/DataSources/DesignTimeDbContextHelperTests.cs</code> (<code>:209-294</code>) and
+          <code>.../Persistence/DataSources/ModelCacheKeyGateTests.cs</code> (<code>:166-184</code>).
           Application: 13 methods across the filter strategy and a Mapperly test mapper that maps both ways in both
           DTO shapes. API: 5 methods over a started in-memory host running the real <code>AddAPI</code> + <code>AddCommonOpenApi</code>
           pipeline (route binding, query binding, the 400 for an unparseable segment, a JSON body, and the
@@ -528,24 +530,24 @@
           <li><p><strong>Design time and the model cache know the declared set.</strong> A migrations project builds its
           context outside the host, so it never sees the host&#39;s <code>AddStronglyTypedIds</code> call, and without a
           registry the design-time model has no converter for a wrapped key and fails naming the property
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/Design/DesignTimeDbContextOptions.cs:185-187</code>).
-          <code>DesignTimeDbContextOptions.AddStronglyTypedIdAssembly</code> (<code>:194</code>, over the list at <code>:189</code>; the
-          same assembly added twice keeps one entry, <code>:197-200</code>) names the same assemblies the host
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/Design/DesignTimeDbContextOptions.cs:232-234</code>).
+          <code>DesignTimeDbContextOptions.AddStronglyTypedIdAssembly</code> (<code>:241</code>, over the list at <code>:236</code>; the
+          same assembly added twice keeps one entry, <code>:244-247</code>) names the same assemblies the host
           passes. When the list is non-empty the design-time helper registers a <code>StronglyTypedIdRegistry</code>
           over it, and when it is empty the model builds exactly as before
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/Design/DesignTimeDbContextHelper.cs:243-248</code>).
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/Design/DesignTimeDbContextHelper.cs:241-248</code>).
           Helpdesk&#39;s SQL Server migrations factory names the Tickets Shared assembly
           (<code>MMCA.Helpdesk/Source/Hosting/MMCA.Helpdesk.Migrations.SqlServer.Tickets/DesignTimeSQLServerDbContextFactory.cs:52</code>).
           Because the declared set changes the model, it also joins EF&#39;s model cache key:
           <code>ApplicationDbContext</code> resolves the registry while configuring and records its identifier types
-          as one string of assembly-qualified names (<code>ApplicationDbContext.cs:442-447</code>, property at <code>:216</code>,
-          computed once per registry through a weak table at <code>:182</code>), and <code>DataSourceModelCacheKeyFactory</code>
+          as one string of assembly-qualified names (<code>ApplicationDbContext.cs:443-448</code>, property at <code>:217</code>,
+          computed once per registry through a weak table at <code>:183</code>), and <code>DataSourceModelCacheKeyFactory</code>
           puts that string in the key
           (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/DataSourceModelCacheKeyFactory.cs:30</code>).
           Two contexts that declare different wrappers never share a cached model, and two registries
           over the same types do, because the key is the content rather than the registry instance
-          (<code>ApplicationDbContext.cs:213-214</code>). Both design-time members are shipped public API
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/PublicAPI.Shipped.txt:500</code>, <code>:526</code>).</p>
+          (<code>ApplicationDbContext.cs:214-215</code>). Both design-time members are shipped public API
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/PublicAPI.Shipped.txt:506</code>, <code>:532</code>).</p>
           </li>
           </ol>
           <h2 id="rationale">Rationale</h2>
@@ -632,7 +634,7 @@
           in each of the four packages) and are frozen under
           <a href="015-architecture-fitness-functions.html">ADR-015</a>&#39;s RS0016/RS0017 gate; the two design-time
           members of Decision point 15 shipped with v1.289.0
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/PublicAPI.Shipped.txt:500</code>, <code>:526</code>).
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/PublicAPI.Shipped.txt:506</code>, <code>:532</code>).
           Removing any of it later is a breaking change to the package surface.</li>
           <li><strong>EF discovery needs the type list up front.</strong> The mapping has to be declared pre-convention, and
           at <code>ConfigureConventions</code> time no entity type exists yet, so the framework cannot discover wrappers
@@ -809,6 +811,44 @@
           Infrastructure&#39;s <code>StronglyTyped</code> lines to 12; Shared carries 32, API 6 and Testing.Architecture 5.
           The Trade-offs bullet now says 55.</li>
           </ol>
+          <h2 id="revision-2026-11-23">Revision (2026-11-23)</h2>
+          <p>Re-verified against current source. The decision is unchanged: the framework still ships the
+          capability, the aliases are still the default, and adoption is still one identifier in the
+          reference app. The alias count (50), the test method counts (Shared 30, Infrastructure 13,
+          Application 13, API 5, Architecture 4) and the 55 shipped declarations all still hold. Only
+          anchors moved, in the live sections; the dated anchors in the earlier revisions stay as recorded.</p>
+          <ol>
+          <li>Anchors re-verified against current source:<ul>
+          <li>Context: the two <code>System.Guid</code> aliases are <code>SessionAssetIdentifierType</code> at
+          <code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Shared/MMCA.ADC.Conference.GlobalUsings.IdentifierType.cs:18</code>
+          and <code>SpeakerIdentifierType</code> at <code>:24</code> (a comment line was added above them).</li>
+          <li>Decision point 4: <code>AddAPI</code> adds the factory at
+          <code>MMCA.Common/Source/Presentation/MMCA.Common.API/DependencyInjection.cs:66</code>, rationale at
+          <code>:62-65</code> (<code>:60</code> is the <code>EnumerationJsonConverterFactory</code> registration).</li>
+          <li>Decision point 6: <code>AddStronglyTypedIds</code> is
+          <code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:425</code>; it builds the
+          registry (<code>:429</code>), calls <code>StronglyTypedIdTypeConverters.Register</code> (<code>:432</code>) and registers the
+          singleton through <code>TryAddSingleton</code> (<code>:434</code>).</li>
+          <li>Decision point 7: <code>ConfigureConventions</code> resolves and applies the registry at
+          <code>ApplicationDbContext.cs:520-522</code> (comment <code>:515-519</code>), below the restrict-by-default delete
+          convention registered at <code>:513</code>.</li>
+          <li>Decision point 10: <code>AddCommonOpenApi</code> (<code>WebApplicationBuilderExtensions.cs:108</code>) registers the
+          two transformers at <code>:117-118</code>.</li>
+          <li>Decision point 12: <code>StronglyTypedIdTestsBase</code> is declared at <code>StronglyTypedIdTestsBase.cs:10</code>;
+          Helpdesk&#39;s exactly-one fact runs <code>ArchitectureTests.cs:236-252</code>, inside the child region
+          marked at <code>:235</code> and <code>:253</code>.</li>
+          <li>Decision point 14: the design-time wrapper tests run <code>DesignTimeDbContextHelperTests.cs:209-294</code>
+          and the model-cache wrapper facts <code>ModelCacheKeyGateTests.cs:166-184</code>.</li>
+          <li>Decision point 15: <code>DesignTimeDbContextOptions.cs</code> carries the failure-mode remarks at
+          <code>:232-234</code>, the list at <code>:236</code>, <code>AddStronglyTypedIdAssembly</code> at <code>:241</code> and the dedupe at
+          <code>:244-247</code>; <code>DesignTimeDbContextHelper.cs:241-248</code> registers the registry; in
+          <code>ApplicationDbContext.cs</code> the key is recorded at <code>:443-448</code>, the property is <code>:217</code>, the weak
+          table <code>:183</code> and the content-not-instance note <code>:214-215</code>.</li>
+          <li>Decision point 15 and Trade-offs: the design-time members sit at
+          <code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/PublicAPI.Shipped.txt:506</code> and <code>:532</code>.</li>
+          </ul>
+          </li>
+          </ol>
           
         <div class="doc-foot btn-row">
           <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
@@ -831,6 +871,7 @@
             <li><a href="#revision-2026-10-21">Revision (2026-10-21)</a></li>
             <li><a href="#revision-2026-10-26">Revision (2026-10-26)</a></li>
             <li><a href="#revision-2026-11-12">Revision (2026-11-12)</a></li>
+            <li><a href="#revision-2026-11-23">Revision (2026-11-23)</a></li>
             </ul>
           </nav>
         </aside>

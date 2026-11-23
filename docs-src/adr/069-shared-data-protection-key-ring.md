@@ -15,6 +15,7 @@ Revised 2026-10-25: three key-ring adapters (Azure Blob + Key Vault, AWS Paramet
 Revised 2026-10-26: the consumer call sites name `AddAzureKeyVaultConfiguration()` and `AddAzureDataProtection()`, `AddAzureMonitorExporter()` now sits between `AddServiceDefaults()` and the registration (so Store's "only an ADR-069 comment block between them" is retired), and anchors refreshed across both hosts, templates and deploy workflows.
 Revised 2026-10-28: anchors refreshed after the ADC and Store host `Program.cs` files and both infrastructure templates moved.
 Amended 2026-11-12: `AddAzureDataProtection()` and its two DataProtection packages now live in `MMCA.Common.Azure.Startup`, which `MMCA.Common.Azure` references and type-forwards, so the call and its keys are unchanged; the Decision's Azure path, package bullet and citations are corrected in place ([ADR-134](134-cloud-neutral-core-vendor-adapters.md)).
+Revised 2026-11-23: Store now adopts the call on three hosts (UI, Identity, Sales), each with its own blob and discriminator, a missing gate-2 key logs one startup Warning outside Development, the gate-2 repository variable reads as set on both repositories, ADC's per-app identity opt-in and key-ring access alert are recorded, and anchors refreshed across Common, both hosts, both templates and both deploy workflows.
 
 ## Context
 ASP.NET Core's DataProtection default keeps the key ring **in memory, per process**. That is correct
@@ -29,9 +30,10 @@ antiforgery tokens; both are DataProtection payloads. ADR-008 then split the mon
 independently scaled hosts, and in ADC the two hosts that mint those payloads (the UI host and the
 Identity service, which also does OAuth correlation and state cookie cryptography) both scale to
 `maxReplicas: conferenceScaledMaxReplicas`, which is 2, or 4 in conference mode
-(`MMCA.ADC/infra/main.bicep:192`; `:2103` Identity service, `:2881` UI host). Of those two
+(`MMCA.ADC/infra/main.bicep:214`; `:2394` Identity service, `:3191` UI host, whose minimum also
+rises to the cap in conference mode at `:3190`). Of those two
 minting hosts, only the Identity service runs with **no session affinity**; the UI ingress is sticky
-(`MMCA.ADC/infra/main.bicep:2771-2773`), which narrows the UI window rather than closing it, since
+(`MMCA.ADC/infra/main.bicep:3081-3083`), which narrows the UI window rather than closing it, since
 affinity is lost on a replica restart, a revision swap, or a dropped affinity cookie.
 
 Nothing in the record decided **where the key ring lives**. ADR-061 decides how a running app reaches
@@ -45,82 +47,99 @@ Persist the key ring through one opt-in registration call per cloud, so every re
 one ring, and let a host keep exactly one ring. Three adapters exist: `AddAzureDataProtection`
 (MMCA.Common.Azure.Startup, also reached through MMCA.Common.Azure) persists it to a single Azure blob
 with optional Key Vault protection
-(`MMCA.Common/Source/Hosting/MMCA.Common.Azure.Startup/AzureDataProtectionExtensions.cs:53`),
+(`MMCA.Common/Source/Hosting/MMCA.Common.Azure.Startup/AzureDataProtectionExtensions.cs:54`),
 `AddAwsDataProtection` (MMCA.Common.Aws) to Systems Manager Parameter Store
 (`MMCA.Common/Source/Hosting/MMCA.Common.Aws/AwsDataProtectionExtensions.cs:57`), and
 `AddGoogleCloudDataProtection` (MMCA.Common.Gcp) to one Cloud Storage object with optional Cloud KMS
-protection (`MMCA.Common/Source/Hosting/MMCA.Common.Gcp/GoogleCloudDataProtectionExtensions.cs:76`).
+protection (`MMCA.Common/Source/Hosting/MMCA.Common.Gcp/GoogleCloudDataProtectionExtensions.cs:77`).
 The bullets up to the AWS one describe the Azure adapter, the one both deployed consumers call.
 
 - **One configuration key is the gate, and absent means do nothing.**
-  `DataProtection:BlobStorageUri` is read first (`AzureDataProtectionExtensions.cs:59`); when it is absent
+  `DataProtection:BlobStorageUri` is read first (`AzureDataProtectionExtensions.cs:56`); when it is absent
   or whitespace the method returns the builder untouched (`:64-67`), so no DataProtection services are
-  registered at all. A developer machine, a test host, and the Helpdesk seed all run single-process,
-  where the in-memory default is correct and an unconditional Azure dependency at startup would be a
-  liability. Two tests pin that boundary: an unconfigured builder registers no `IDataProtectionProvider`
-  and leaves `KeyManagementOptions.XmlRepository` null, while a configured URI replaces the default
-  repository with the blob one
-  (`MMCA.Common/Tests/Hosting/MMCA.Common.Azure.Tests/AzureDataProtectionExtensionsTests.cs:22`,
-  `:40`, which asserts the replacement is the `Azure.Extensions.AspNetCore.DataProtection.Blobs`
-  repository specifically). Neither test needs Azure credentials: the blob client is constructed
-  lazily by the repository, never at registration time.
-- **Blob persistence plus an application discriminator.** A configured URI wires
-  `PersistKeysToAzureBlobStorage` and `SetApplicationName`
-  (`AzureDataProtectionExtensions.cs:75-77`); the discriminator comes from `DataProtection:ApplicationName`
-  and falls back to the host application name (`:69-70`). The discriminator is what keeps two
-  applications sharing one blob or one key-ring directory from reading each other's keys.
+  registered at all and no startup receipt is left. A developer machine, a test host, and the Helpdesk
+  seed all run single-process, where the in-memory default is correct and an unconditional Azure
+  dependency at startup would be a liability. Tests pin that boundary: an unconfigured builder
+  registers no `IDataProtectionProvider` and leaves `KeyManagementOptions.XmlRepository` null, while a
+  configured URI replaces the default repository with the blob one
+  (`MMCA.Common/Tests/Hosting/MMCA.Common.Azure.Startup.Tests/AzureDataProtectionExtensionsTests.cs:26`,
+  `:44`, which asserts the replacement is the `Azure.Extensions.AspNetCore.DataProtection.Blobs`
+  repository specifically at `:69`), and the receipt is left only with a URI (`:74`, `:86`). None of
+  them needs Azure credentials: the blob client is constructed lazily by the repository, never at
+  registration time.
+- **Blob persistence plus an application discriminator.** A configured URI leaves the tripwire
+  receipt (`AzureDataProtectionExtensions.cs:71`) and wires `SetApplicationName` and
+  `PersistKeysToAzureBlobStorage` (`:79-81`); the discriminator comes from
+  `DataProtection:ApplicationName` and falls back to the host application name (`:73-74`). The
+  discriminator is what keeps two applications sharing one blob or one key-ring directory from reading
+  each other's keys.
 - **Encryption of the key ring at rest is a SECOND, deliberately independent gate.**
-  `DataProtection:KeyVaultKeyUri` is read separately and only adds `ProtectKeysWithAzureKeyVault` when
-  present (`:86-90`). The two are uncoupled on purpose (`:79-85`): blob persistence is the part that
-  fixes cross-replica cookie and antiforgery decryption, and it has to work **without** the Key Vault
-  Crypto User role, because that role assignment is granted out of band and can lag a deployment.
-  Folding the second step into the first would turn an optional hardening gap into a total
-  authentication outage. The deployment template records the same reasoning as a follow-up
-  (`MMCA.ADC/infra/main.bicep:1542-1547`). Both templates now ship the gate-2 path, default off (see the
-  2026-09-10 revision); a deployment turns it on through the `DATA_PROTECTION_KEY_VAULT_KEY_URI`
-  repository variable (`MMCA.ADC/.github/workflows/deploy.yml:1427-1428`,
-  `MMCA.Store/.github/workflows/deploy.yml:1325-1326`). That is repository configuration, not source:
-  as read on 2026-10-06 the variable is set on the ADC repository and absent on the Store repository.
-- **One `DefaultAzureCredential` instance serves both sinks** (`AzureDataProtectionExtensions.cs:73`), so
+  `DataProtection:KeyVaultKeyUri` is read separately (`:90`, through the constant at
+  `AzureKeyRingAtRestNoticeService.cs:17`) and adds `ProtectKeysWithAzureKeyVault` when present
+  (`AzureDataProtectionExtensions.cs:91-94`). When it is absent outside Development the call
+  registers `AzureKeyRingAtRestNoticeService` instead (`:95-99`), which logs one startup Warning naming
+  that key (`AzureKeyRingAtRestNoticeService.cs:22`, `:30-32`); in Development nothing is logged.
+  Tests pin the Warning and both silent cases (`AzureDataProtectionExtensionsTests.cs:115`, `:123`,
+  `:135`). The two gates are uncoupled on purpose (`AzureDataProtectionExtensions.cs:83-89`): blob
+  persistence is the part that fixes cross-replica cookie and antiforgery decryption, and it has to
+  work **without** the Key Vault Crypto User role, because that role assignment is granted out of band
+  and can lag a deployment. Folding the second step into the first would turn an optional hardening
+  gap into a total authentication outage, so a missing key is a Warning, not a failure. The deployment
+  template records the same reasoning (`MMCA.ADC/infra/main.bicep:1716-1721`). Both templates ship the
+  gate-2 path, default off (see the 2026-09-10 revision); a deployment turns it on through the
+  `DATA_PROTECTION_KEY_VAULT_KEY_URI` repository variable (`MMCA.ADC/.github/workflows/deploy.yml:1673`,
+  `:1907-1908`; `MMCA.Store/.github/workflows/deploy.yml:1406`, `:1558-1559`). That is repository
+  configuration, not source: as read on 2026-11-23 the variable is set on both the ADC and the Store
+  repository.
+- **One `DefaultAzureCredential` instance serves both sinks** (`AzureDataProtectionExtensions.cs:77`), so
   they share a single token cache. A deployed host authenticates with its managed identity and a
   developer machine falls back to the local Azure CLI or Visual Studio sign-in; ADC pins **which**
-  identity with `AZURE_CLIENT_ID` on both adopting apps (`MMCA.ADC/infra/main.bicep:1993`, `:2813`).
+  identity with `AZURE_CLIENT_ID` on both adopting apps (`MMCA.ADC/infra/main.bicep:2270`, `:3123`).
 - **ADC adopts it on exactly the two hosts that mint the payloads.** The Identity service calls it
-  (`MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:127`) and so does the Web UI host
-  (`MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs:72`), each after `AddServiceDefaults()` and
-  after `AddAzureMonitorExporter()`, which sits between the two (UI `:70`, Identity `:119`).
-  `AddAzureKeyVaultConfiguration()` runs first in both hosts, ahead of `AddServiceDefaults()` itself
-  (UI host `:63` -> `:65` -> `:72`; Identity service `:112` -> `:114` -> `:127`; the reason is in the
-  comments at UI `:60-62` and Identity `:109-111`), because `ConfigurationManager` loads each source
-  as it is added, so the vault has to be layered in before anything reads configuration, the blob URI
-  included. The Conference, Engagement, Notification and
-  Gateway hosts do not call it at all, because they mint neither a session cookie nor an antiforgery
-  token.
+  (`MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:109`) and so does the Web UI host
+  (`MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs:47`), each inside the composed host's
+  `AfterServiceDefaults` callback, after `AddAzureMonitorExporter()` (UI `:46`, Identity `:101`).
+  `AddAzureKeyVaultConfiguration()` is the `ConfigureConfigurationSources` callback in both hosts (UI
+  `:39`, Identity `:94`; the reason is in the comments at UI `:36-38` and Identity `:91-93`), and the
+  framework runs that callback before `AddServiceDefaults()` and the `AfterServiceDefaults` callback
+  (`MMCA.Common/Source/Hosting/MMCA.Common.ServiceHost/ServiceHostBuilderExtensions.cs:77` -> `:83` ->
+  `:84`; `MMCA.Common/Source/Presentation/MMCA.Common.UI.Web/Hosting/BlazorWebHostExtensions.cs:82` ->
+  `:85` -> `:86`), because `ConfigurationManager` loads each source as it is added, so the vault has to
+  be layered in before anything reads configuration, the blob URI included. The Conference,
+  Engagement and Notification hosts and the Gateway call only the exporter (Gateway Key Vault
+  `MMCA.ADC/Source/Hosts/MMCA.ADC.Gateway/Program.cs:75`, exporter `:82`) and never
+  `AddAzureDataProtection`, because they
+  mint neither a session cookie nor an antiforgery token.
 - **In ADC, infrastructure provisions one private container, not a new storage account.**
   `dataprotection-keys` is created on the existing avatar storage account with `publicAccess: 'None'`
-  (`MMCA.ADC/infra/main.bicep:1526-1532`), deliberately unlike the public `avatars` and
-  `session-assets` containers beside it (`:1496-1502`, `:1512-1518`), and both apps are pointed at
-  `.../dataprotection-keys/keys.xml` with the shared discriminator `MMCA.ADC` (`:1991-1992`,
-  `:2811-2812`), unconditionally. No extra role assignment is needed: the ADR-045 Storage Blob Data
-  Contributor grant is scoped to the storage **account**, so it already covers this container
-  (`:1534-1541`, `:1550`). That grant is itself guarded by `grantAvatarStorageRole`, default `false`,
-  because the deploy identity deliberately lacks role-assignment rights (`:133`, `:1535-1537`,
-  `:1548`). The account's blob data-plane audit explicitly covers reads of
-  `dataprotection-keys/keys.xml` (`:1466-1468`, diagnostic setting at `:1474`).
+  (`MMCA.ADC/infra/main.bicep:1700-1706`), deliberately unlike the public `avatars` and
+  `session-assets` containers beside it (`:1670-1676`, `:1686-1692`), and both apps are pointed at
+  `.../dataprotection-keys/keys.xml` with the shared discriminator `MMCA.ADC` (`:2268-2269`,
+  `:3121-3122`), unconditionally. No extra role assignment is needed on default parameters: the
+  ADR-045 Storage Blob Data Contributor grant to the shared apps identity is scoped to the storage
+  **account**, so it already covers this container (comment `:1708-1715`, scope `:1724`, principal
+  `:1727`). That grant is itself guarded by `grantAvatarStorageRole`, default `false`, because the
+  deploy identity deliberately lacks role-assignment rights (`:155`, `:1710-1711`, `:1722`). Under the
+  opt-in `usePerAppIdentities` (default `false`, `:39`) the Identity and UI apps run as their own
+  identities (`:1887`, `:1902`) and their `dataprotection-keys` grants come from
+  `MMCA.ADC/scripts/security/bootstrap-identities.ps1:21-24`, not from the template. The account's blob
+  data-plane audit explicitly covers reads of `dataprotection-keys/keys.xml` (comment `:1640-1642`,
+  diagnostic setting at `:1648`), and an alert fires on a successful request to that container by any
+  principal other than the apps, Identity or UI identity, or by account key or SAS (`:943-984`).
 - **AWS: Parameter Store SecureString parameters.** `AddAwsDataProtection()` is gated on
   `DataProtection:SsmParameterPrefix` (`AwsDataProtectionExtensions.cs:59`, a no-op when blank at
   `:65`-`:68`, marker at `:72`) and persists through `PersistKeysToAWSSystemsManager` from
   `Amazon.AspNetCore.DataProtection.SSM` (`:80`; referenced at
-  `MMCA.Common/Source/Hosting/MMCA.Common.Aws/MMCA.Common.Aws.csproj:22`, pinned at
-  `MMCA.Common/Directory.Packages.props:164`). Each key is one SecureString parameter under the prefix,
+  `MMCA.Common/Source/Hosting/MMCA.Common.Aws/MMCA.Common.Aws.csproj:24`, pinned at
+  `MMCA.Common/Directory.Packages.props:232`). Each key is one SecureString parameter under the prefix,
   so KMS encrypts it at rest with no separate protection step (`:27`-`:29`). The optional
   `DataProtection:KmsKeyId` names the KMS key, else the account's `aws/ssm` key is used (`:37`-`:38`,
   applied at `:82`-`:85`), and the discriminator is the same `DataProtection:ApplicationName` with the
   host application name as fallback (`:74`-`:75`).
 - **Google Cloud: one Cloud Storage object, written by the framework's own repository.**
   `AddGoogleCloudDataProtection()` is gated on `DataProtection:GcsObjectUri` in `gs://bucket/path/keys.xml`
-  form (`GoogleCloudDataProtectionExtensions.cs:24`, `:37`-`:41`; read at `:78`, a no-op when blank at
-  `:84`-`:87`, parsed at `:90`, marker at `:102`). `GcsXmlRepository` keeps the whole ring as one object,
+  form (`GoogleCloudDataProtectionExtensions.cs:24`, `:37`-`:41`; read at `:79`, a no-op when blank at
+  `:85`-`:88`, parsed at `:91`, marker at `:103`). `GcsXmlRepository` keeps the whole ring as one object,
   the shape the Azure Blob repository uses
   (`MMCA.Common/Source/Hosting/MMCA.Common.Gcp/DataProtection/GcsXmlRepository.cs:12`-`:15`), and writes
   it read-modify-write under `IfGenerationMatch` set to the generation it read, 0 meaning create only
@@ -130,71 +149,92 @@ The bullets up to the AWS one describe the Azure adapter, the one both deployed 
   `MMCA.Common/Source/Hosting/MMCA.Common.Gcp/DataProtection/GcpDataProtectionBuilderExtensions.cs:21`),
   and then fails, naming the object (`GcsXmlRepository.cs:101`-`:102`). The optional
   `DataProtection:GcpKmsKeyName` encrypts each key with a Cloud KMS symmetric key
-  (`GoogleCloudDataProtectionExtensions.cs:25`, validated at `:93`-`:98`, applied at `:111`-`:114`; the
+  (`GoogleCloudDataProtectionExtensions.cs:25`, validated at `:94`-`:99`, applied at `:112`-`:115`; the
   encryptor is wired at `GcpDataProtectionBuilderExtensions.cs:54`-`:59`), a separate optional step for
-  the reason Azure gate 2 is (`GoogleCloudDataProtectionExtensions.cs:63`-`:66`). The repository and
+  the reason Azure gate 2 is (`GoogleCloudDataProtectionExtensions.cs:64`-`:66`), and like Azure it
+  logs one startup Warning outside Development when no key is named (`:116`-`:121`). The repository and
   the KMS encryptor and decryptor are hand-written because Google's DataProtection packages are
   prerelease only and a stable package cannot depend on a prerelease (NU5104)
-  (`MMCA.Common/Directory.Packages.props:187`-`:191`, `MMCA.Common/CHANGELOG.md:19`); see Alternatives
+  (`MMCA.Common/Directory.Packages.props:255`-`:259`, `MMCA.Common/CHANGELOG.md:19`); see Alternatives
   rejected.
 - **A host keeps exactly one key ring.** Each adapter's gate set without its call fails
   `ValidateOnStart`, naming the call
   (`MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Integrations/HostIntegrationTripwire.cs:26`, `:32`,
-  `:43`; checks at `:73`-`:77`, `:83`-`:87`, `:93`-`:97`), and setting more than one of
+  `:43`; checks at `:101`-`:105`, `:111`-`:115`, `:121`-`:125`), and setting more than one of
   `DataProtection:BlobStorageUri`, `DataProtection:SsmParameterPrefix` and `DataProtection:GcsObjectUri`
-  fails startup as well (`:49`-`:54`, `:107`-`:112`): whichever registration runs last would own the
-  repository, so services that disagree on the order would mint payloads the others cannot decrypt
-  (`:104`-`:106`).
+  fails startup as well (the key list at `:77`-`:82`, the check at `:161`-`:166`): whichever
+  registration runs last would own the repository, so services that disagree on the order would mint
+  payloads the others cannot decrypt (`:158`-`:160`).
 - **Each cloud's dependencies live in its own adapter package.**
   `Azure.Extensions.AspNetCore.DataProtection.Blobs` and `.Keys` are referenced by
   `MMCA.Common.Azure.Startup`
-  (`MMCA.Common/Source/Hosting/MMCA.Common.Azure.Startup/MMCA.Common.Azure.Startup.csproj:21`, `:25`,
-  pinned at `MMCA.Common/Directory.Packages.props:271`-`:272`), the package that also carries
+  (`MMCA.Common/Source/Hosting/MMCA.Common.Azure.Startup/MMCA.Common.Azure.Startup.csproj:22`, `:26`,
+  pinned at `MMCA.Common/Directory.Packages.props:277`-`:278`), the package that also carries
   `AddAzureDataProtection()` itself
-  (`MMCA.Common/Source/Hosting/MMCA.Common.Azure.Startup/AzureDataProtectionExtensions.cs:20`, `:53`)
+  (`MMCA.Common/Source/Hosting/MMCA.Common.Azure.Startup/AzureDataProtectionExtensions.cs:20`, `:54`)
   with no persistence or messaging dependency (its only project reference is MMCA.Common.Aspire,
-  `MMCA.Common.Azure.Startup.csproj:4`, `:36`). `MMCA.Common.Azure` references it
-  (`MMCA.Common/Source/Hosting/MMCA.Common.Azure/MMCA.Common.Azure.csproj:44`) and type-forwards the
+  `MMCA.Common.Azure.Startup.csproj:4`, `:37`). `MMCA.Common.Azure` references it
+  (`MMCA.Common/Source/Hosting/MMCA.Common.Azure/MMCA.Common.Azure.csproj:47`) and type-forwards the
   call (`MMCA.Common/Source/Hosting/MMCA.Common.Azure/TypeForwards.cs:8`), in the same `MMCA.Common.Azure`
   namespace (`AzureDataProtectionExtensions.cs:7`), so a host on the full adapter writes the same call.
   A host that needs only start-up plumbing (for example a gateway) references `MMCA.Common.Azure.Startup`
   alone. `Amazon.AspNetCore.DataProtection.SSM` by
   `MMCA.Common.Aws` (above), and `Google.Cloud.Kms.V1` by `MMCA.Common.Gcp`
   (`MMCA.Common/Source/Hosting/MMCA.Common.Gcp/MMCA.Common.Gcp.csproj:23`, pinned at
-  `Directory.Packages.props:192`), so a host references only the cloud it runs on.
+  `Directory.Packages.props:260`), so a host references only the cloud it runs on.
 
 **Both consumers have now adopted it (2026-08-13).** MMCA.Store originally had no call site and no
-`DataProtection` configuration anywhere in the repo, even though its UI and Identity container apps
-also run at `maxReplicas: 2` (`MMCA.Store/infra/main.bicep:2198` UI host, `:1689` Identity
-service). Its UI host now calls `AddAzureDataProtection()` after `AddServiceDefaults()`, with
-`AddAzureMonitorExporter()` and an ADR-069 comment block between them
-(`MMCA.Store/Source/Hosts/UI/MMCA.Store.UI.Web/Program.cs:65`, `:70`, `:72-75`, `:76`;
-`AddAzureKeyVaultConfiguration()` precedes all of them at `:46`), and the infrastructure side has
-landed and is live. Store diverges from ADC in three ways worth recording:
+`DataProtection` configuration anywhere in the repo, even though its UI, Identity and Sales container
+apps also run at `maxReplicas: 2` (`MMCA.Store/infra/main.bicep:2548` UI host, `:2020` Identity
+service, `:2311` Sales service). Three Store hosts now call `AddAzureDataProtection()`, each inside
+the composed host's `AfterServiceDefaults` callback after `AddAzureMonitorExporter()`, with
+`AddAzureKeyVaultConfiguration()` as the `ConfigureConfigurationSources` callback that runs first:
+
+- **The UI host** (`MMCA.Store/Source/Hosts/UI/MMCA.Store.UI.Web/Program.cs:50`; exporter `:45`, Key
+  Vault `:39`), for the SSR session cookie and antiforgery tokens.
+- **The Identity service** (`MMCA.Store/Source/Services/MMCA.Store.Identity.Service/Program.cs:62`;
+  exporter `:56`, Key Vault `:48`), because the two-factor secret is stored protected with the ring,
+  so every replica and every later revision must be able to unprotect it (comment `:58-61`).
+- **The Sales service** (`MMCA.Store/Source/Services/MMCA.Store.Sales.Service/Program.cs:82`;
+  exporter `:76`, Key Vault `:63`), because it protects the Stripe webhook signing secret it shares
+  through the cache (comment `:78-81`). Sales registers `SharedDataProtectionKeyRing` only when the
+  `AzureDataProtection` receipt is present (`:111-119`); without it the secret is kept unprotected
+  rather than written in a form no other replica can read.
+
+The Catalog service and the Gateway call only the exporter (Gateway Key Vault
+`MMCA.Store/Source/Hosts/MMCA.Store.Gateway/Program.cs:67`, exporter `:74`), never
+`AddAzureDataProtection`. The infrastructure side has landed and is live. Store
+diverges from ADC in four ways worth recording:
 
 - **A new dedicated storage account, not a reused one.** Store has no public-blob workload to share an
   account with, so the template provisions its own `Standard_LRS` account `dataProtectionStorage` with
-  `allowBlobPublicAccess: false` (`MMCA.Store/infra/main.bicep:1246-1264`) and its own private
-  `dataprotection-keys` container (`:1271-1277`), with a diagnostic setting that sends the account's
-  blob reads, writes and deletes to Log Analytics (`:1287`).
-- **The blob URI is gated behind a readiness flag.** `DataProtection__ApplicationName='MMCA.Store'`
-  (`:2167`) and `AZURE_CLIENT_ID` (the shared `azureClientIdEnv` entry at `:2169`, defined at
-  `:1507-1510`) are unconditional, but
-  `DataProtection__BlobStorageUri` is appended only when the `dataProtectionStorageReady` parameter is
-  true (default `false` at `:101`, concatenated at `:2170-2171`). The flag exists because
-  `AddAzureDataProtection` gates on the presence of the URI, never on reachability: wiring the URI
-  before the data-plane grant exists would 403 on the first protect call rather than degrade. That
-  flag has since been flipped true in production: the deploy workflow passes
+  `allowBlobPublicAccess: false` (`MMCA.Store/infra/main.bicep:1549`, `:1559`, `:1564`) and its own
+  private `dataprotection-keys` container (`:1579-1585`, `publicAccess: 'None'` at `:1583`), with a
+  diagnostic setting that sends the account's blob reads, writes and deletes to Log Analytics
+  (`:1595`).
+- **One ring per host, not one shared ring.** Each adopting host has its own blob and its own
+  discriminator: the UI `keys.xml` with `MMCA.Store` (`:2517`, `:2521`), Identity `identity-keys.xml`
+  with `MMCA.Store.Identity` (`:1991-1992`), and Sales `sales-keys.xml` with `MMCA.Store.Sales`
+  (`:2293-2294`), so no Store host can read another's payloads.
+- **The blob URI is gated behind a readiness flag.** The UI's `DataProtection__ApplicationName` is
+  unconditional (`:2517`), but every `DataProtection__BlobStorageUri` is appended only when the
+  `dataProtectionStorageReady` parameter is true (default `false` at `:131`; UI `:2520-2521`), and
+  Identity and Sales gate their discriminator on the same flag (`:1990-1993`, `:2292-2295`). The flag
+  exists because `AddAzureDataProtection` gates on the presence of the URI, never on reachability:
+  wiring the URI before the data-plane grant exists would 403 on the first protect call rather than
+  degrade. That flag is true in production: the deploy workflow passes
   `"dataProtectionStorageReady": {"value": true}` in its base parameters
-  (`MMCA.Store/.github/workflows/deploy.yml:1221`).
+  (`MMCA.Store/.github/workflows/deploy.yml:1454`). Gate 2 is `hasDataProtectionKek` alone on the UI
+  (`main.bicep:158`, `:2522-2528`) and the readiness flag AND `hasDataProtectionKek` on Identity and
+  Sales (`:1994-1996`, `:2298-2299`).
 - **Its own role-assignment guard.** The Storage Blob Data Contributor grant is guarded by Store's
-  own `grantDataProtectionStorageRole` parameter (default `false` at `:98`), with the account-scoped
-  role assignment at `:1328-1336`, deliberately separate from the readiness flag above: one says whether
-  THIS deployment creates the grant, the other says whether the grant already exists.
+  own `grantDataProtectionStorageRole` parameter (default `false` at `:128`), with the account-scoped
+  role assignment at `:1636`, deliberately separate from the readiness flag above: one says whether
+  THIS deployment creates the grant, the other says whether the grant already exists. Store has the
+  same opt-in `usePerAppIdentities` mode as ADC (`:29`, default `false`; comment `:1989`).
 
-The framework side needed no change at all: the whole delta was one call site plus infrastructure,
-against a capability that already shipped in the package Store consumes. Store's Identity service is
-deliberately left out: it registers no cookie or OAuth scheme, so it mints no key-ring payload at all.
+The framework side needed no change for any of the three: each delta was one call site plus
+infrastructure, against a capability that already shipped in the package Store consumes.
 
 ## Rationale
 - **The key ring is the smallest thing that has to be shared.** Sticky sessions would paper over the
@@ -220,21 +260,28 @@ deliberately left out: it registers no cookie or OAuth scheme, so it mints no ke
   path and both default it off (2026-09-10 revision), so on default parameters the ring is protected
   by the container being private and the account grant being narrow, not by a Key Vault key. Turning
   it on is a deployment decision (one repository variable plus the Key Vault Crypto User grant). That
-  variable lives in repository configuration rather than source; as read on 2026-10-06 it is set for
-  ADC, so the ADC Identity and UI deploys inject `DataProtection__KeyVaultKeyUri`, and unset for
-  Store, whose UI ring stays unencrypted by a Key Vault key.
+  variable lives in repository configuration rather than source; as read on 2026-11-23 it is set for
+  both ADC and Store, so a deploy that reads it injects `DataProtection__KeyVaultKeyUri` into the ADC
+  Identity and UI apps and into all three Store rings (`MMCA.Store/infra/main.bicep:1994`, `:2298`,
+  `:2522`). Whether a Store deploy has applied it is not determinable from source; the Store deploy run
+  history (read 2026-11-23) shows successful push deploys of `main` after the variable was last
+  updated, so one very likely has. A host running without the key logs one startup Warning naming it
+  (`AzureDataProtectionExtensions.cs:95-99`).
 - **Opt-in per host, so adoption must be audited.** A scaled-out host that never calls
   `AddAzureDataProtection` keeps the broken per-replica default and fails intermittently rather than
   loudly, the same audit-the-inventory caveat as ADR-005 / ADR-017 / ADR-021. Store was exactly that
   case until its UI host adopted the call site (2026-08-13); the caveat still binds every future
-  scaled-out host that mints a DataProtection payload.
+  scaled-out host that mints or stores a DataProtection payload, as Store's Identity and Sales
+  services now do.
 - **Startup now depends on a credential resolving in the adopting hosts.** In Azure that is the
   user-assigned identity named by `AZURE_CLIENT_ID`; a missing or wrong identity turns a key-ring read
-  into a startup-time failure on each of the three hosts that opt in (ADC Identity, ADC UI, Store UI).
+  into a startup-time failure on each of the five hosts that opt in (ADC Identity and UI; Store UI,
+  Identity and Sales).
 - **A shared blob plus a shared discriminator means shared keys by design.** ADC's Identity service and
   UI host both use the discriminator `MMCA.ADC`, which is what makes their cookies mutually
-  decryptable; a future app that should NOT share keys must get its own blob or its own
-  `DataProtection:ApplicationName`, or it will silently join the same ring.
+  decryptable; Store instead gives each host its own blob and discriminator. A future app that should
+  NOT share keys must get its own blob or its own `DataProtection:ApplicationName`, or it will
+  silently join the same ring.
 - **Local and deployed behavior differ.** Development runs the in-memory default, so a cross-replica
   decryption bug is by construction not reproducible locally: the deployed configuration is the only
   place the persisted path is exercised.
@@ -395,7 +442,7 @@ unchanged.
 - **Google's own ASP.NET Core DataProtection packages (for example
   `Google.Cloud.AspNetCore.DataProtection.Kms`) instead of a hand-written repository and encryptor.**
   Weighed 2026-10-25 and declined. They are prerelease only, and a stable `MMCA.Common.Gcp` cannot
-  depend on a prerelease package (NU5104) (`MMCA.Common/Directory.Packages.props:189`-`:190`,
+  depend on a prerelease package (NU5104) (`MMCA.Common/Directory.Packages.props:255`-`:259`,
   `MMCA.Common/CHANGELOG.md:19`). The cost is code the framework now maintains: one repository
   (`MMCA.Common/Source/Hosting/MMCA.Common.Gcp/DataProtection/GcsXmlRepository.cs:31`) and a KMS
   encryptor and decryptor pair beside it. Revisit when Google publishes stable releases of those
@@ -484,6 +531,59 @@ hold. What moved is line numbers in both hosts' `Program.cs` and both infrastruc
    `:2169`, `:2170-2171` (UI env entries), `:2198` (UI scale, inside `uiApp` at `:2102`), `:1689`
    (Identity scale, inside `identityApp` at `:1515`); `:98` and `:101` unchanged. The earlier
    revisions keep their anchors as a historical record.
+
+## Revision (2026-11-23)
+Re-verified against current source. Both Azure gates and their independence, the blob no-op, the ADC
+adopting hosts (Identity and UI only), the vault-first ordering, the ADC private container and
+account-scoped grant, the ADC replica cap and sticky UI ingress, the Store dedicated account, private
+container, readiness flag and role guard, and the one-ring tripwire all hold. What changed is the
+Store host inventory, the gate-2 absent path and the gate-2 repository state, plus anchors throughout.
+
+1. **Store adopts the call on three hosts, not one.** The Identity service
+   (`MMCA.Store/Source/Services/MMCA.Store.Identity.Service/Program.cs:62`) protects its two-factor
+   secret with the ring, and the Sales service
+   (`MMCA.Store/Source/Services/MMCA.Store.Sales.Service/Program.cs:82`) protects the Stripe webhook
+   signing secret, registering `SharedDataProtectionKeyRing` only when the receipt is present
+   (`:111-119`). Each Store host has its own blob and discriminator
+   (`MMCA.Store/infra/main.bicep:1991-1992`, `:2293-2294`, `:2517`, `:2521`). The Decision's
+   "Store's Identity service is deliberately left out" and the Trade-offs' "three hosts" are corrected
+   in place; the 2026-09-10 revision's "Store on one" stays as recorded.
+2. **Gate 2 absent is a startup Warning, not silence.** Outside Development a configured blob with no
+   `DataProtection:KeyVaultKeyUri` registers `AzureKeyRingAtRestNoticeService`
+   (`MMCA.Common/Source/Hosting/MMCA.Common.Azure.Startup/AzureDataProtectionExtensions.cs:95-99`),
+   which logs one Warning naming the key
+   (`MMCA.Common/Source/Hosting/MMCA.Common.Azure.Startup/AzureKeyRingAtRestNoticeService.cs:17`,
+   `:22`, `:30-32`); the Google Cloud adapter does the same (`GoogleCloudDataProtectionExtensions.cs:116-121`).
+3. **Gate-2 repository variable.** As read on 2026-11-23, `DATA_PROTECTION_KEY_VAULT_KEY_URI` is set
+   on both the ADC and the Store repository (repository configuration, not source). Whether a Store
+   deploy has applied it is not determinable from source; the Store deploy run history (read
+   2026-11-23) shows successful push deploys of `main` after the variable was last updated, so one
+   very likely has.
+4. **Omissions filled.** ADC's opt-in `usePerAppIdentities` mode (`MMCA.ADC/infra/main.bicep:39`,
+   `:1887`, `:1902`), under which the key-ring grants come from
+   `MMCA.ADC/scripts/security/bootstrap-identities.ps1:21-24` rather than the template, and ADC's
+   key-ring access alert (`MMCA.ADC/infra/main.bicep:943-984`). The ADC hosts now express the
+   ordering through the composed host's callbacks
+   (`MMCA.Common/Source/Hosting/MMCA.Common.ServiceHost/ServiceHostBuilderExtensions.cs:77`, `:83`,
+   `:84`; `MMCA.Common/Source/Presentation/MMCA.Common.UI.Web/Hosting/BlazorWebHostExtensions.cs:82`,
+   `:85`, `:86`).
+5. Anchors re-verified against current source: `AzureDataProtectionExtensions.cs:54` (method), `:56`
+   (gate read), `:71` (receipt, the marker the 2026-10-24 revision cites at `:57`), `:73-74`
+   (discriminator), `:77` (credential), `:79-81` (persist), `:83-89` (uncoupling comment), `:90-94`
+   (gate 2); tests in
+   `MMCA.Common/Tests/Hosting/MMCA.Common.Azure.Startup.Tests/AzureDataProtectionExtensionsTests.cs:26`,
+   `:44`, `:69`, `:74`, `:86`, `:115`, `:123`, `:135`; `HostIntegrationTripwire.cs:77-82`, `:101-105`,
+   `:111-115`, `:121-125`, `:158-166`; `MMCA.Common.Azure.Startup.csproj:22`, `:26`, `:37`;
+   `MMCA.Common.Azure.csproj:47`; `MMCA.Common.Aws.csproj:24`; `GoogleCloudDataProtectionExtensions.cs:77`,
+   `:79`, `:85-88`, `:91`, `:94-99`, `:103`, `:112-115`; `MMCA.Common/Directory.Packages.props:232`,
+   `:255-259`, `:260`, `:277-278`; ADC UI `Program.cs:39`, `:46`, `:47` and Identity `Program.cs:94`,
+   `:101`, `:109`; ADC `infra/main.bicep:214` (cap), `:2394` and `:3191` (scale), `:3081-3083`
+   (sticky), `:155` (grant guard), `:1670-1676`, `:1686-1692`, `:1700-1706` (containers),
+   `:1708-1730` (grant), `:1648` (blob diagnostics), `:2268-2270` and `:3121-3123` (env); ADC
+   `deploy.yml:1673`, `:1907-1908`; Store UI `Program.cs:39`, `:45`, `:50`; Store
+   `infra/main.bicep:128`, `:131`, `:158`, `:1549`, `:1579-1585`, `:1595`, `:1636`, `:2020`, `:2311`,
+   `:2548`; Store `deploy.yml:1406`, `:1454`, `:1558-1559`. The earlier revisions keep their anchors as
+   a historical record.
 
 ## Related
 ADR-022 (the browser session cookies whose decryption this makes replica-independent, together with

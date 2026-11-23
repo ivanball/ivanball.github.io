@@ -11,6 +11,10 @@ switched off in its production configuration as passkeys are
 ([ADR-139](139-passkeys-webauthn-opt-in-sign-in.md)); MMCA.Common's
 `[RefuseMachineClients]` keeps machine clients off the endpoints where a person takes part, and ADC
 declares it on eight controllers (see Consequences).
+Revised 2026-11-23: the service-account refusal behind every interactive path now sits in the
+private `IssueTokensCoreAsync`, and the revocation marker is written for the longer of the machine
+token and the host's access-token lifetime plus the 5-minute bearer clock skew (20 minutes at
+least); anchors refreshed after v1.315.0.
 
 ## Context
 Only a person could obtain a token: every token-issuing path in the framework is an interactive
@@ -35,7 +39,7 @@ Four forces shaped the decision:
 - **Revocation already has a cross-service mechanism.** Deleting an account writes a soft-deleted
   marker every service reads, so `SoftDeletedUserMiddleware` rejects that user's outstanding tokens
   ([ADR-047](047-soft-deleted-user-session-revocation.md);
-  `MMCA.Common/Source/Core/MMCA.Common.Application/Auth/SoftDeletedUserCache.cs:35`, `:59`).
+  `MMCA.Common/Source/Core/MMCA.Common.Application/Auth/SoftDeletedUserCache.cs:41`, `:73-74`).
 
 ## Decision
 **A program authenticates with the OAuth 2.0 client credentials grant and receives a short-lived
@@ -50,11 +54,14 @@ writes the soft-deleted marker, and a role that could escalate can never back a 
    the ADR-116 consumer-supplied-store shape. `IAuthUser.IsServiceAccount` is a defaulted member
    (false), so an app that never adopts machine clients implements nothing (`IAuthUser.cs:25-33`).
 2. **A service account never signs in interactively.** Password login
-   (`MMCA.Common/Source/Core/MMCA.Common.Application/Auth/AuthenticationServiceBase.cs:836-841`),
-   sign-in links (`:510-513`) and passkeys (`:555-561`) refuse it, and `IssueTokensAsync` refuses it
-   as the backstop behind every interactive path, the app-level external login included (`:612-638`).
+   (`MMCA.Common/Source/Core/MMCA.Common.Application/Auth/AuthenticationServiceBase.cs:197-209`,
+   through `CanSignInWithPassword` at `:938-939`), sign-in links (`:564-570`) and passkeys
+   (`:609-615`) refuse it, and the private `IssueTokensCoreAsync` refuses it as the backstop behind
+   every interactive path (`:725-735`): the framework's own sign-in paths mint through it directly,
+   and the protected `IssueTokensAsync` that app-level flows such as external login call skips the
+   second-factor challenge for a service account and delegates to it (`:691-713`).
    View-as refuses it as a target through `ViewAsSubject.IsServiceAccount`
-   (`MMCA.Common/Source/Core/MMCA.Common.Application/Auth/ViewAs/ViewAsService.cs:177-179`).
+   (`MMCA.Common/Source/Core/MMCA.Common.Application/Auth/ViewAs/ViewAsService.cs:177-181`).
 3. **One call registers it, and two checks catch a half-configuration.**
    `services.AddMachineClients(configuration)` binds the `MachineClients` section with
    `ValidateOnStart` and registers the EF client store and `IMachineClientService`
@@ -80,17 +87,21 @@ writes the soft-deleted marker, and a role that could escalate can never back a 
    raw `ITokenService.GenerateShortLivedAccessToken`, the view-as precedent, with `client_id` and
    `token_use=machine` added
    (`MMCA.Common/Source/Core/MMCA.Common.Application/Auth/MachineClients/MachineClientService.cs:66-120`;
-   `MMCA.Common/Source/Core/MMCA.Common.Shared/Auth/AuthClaimTypes.cs:110-126`). The token's `sub` is
-   the service account and its permission claims are the role's, baked in exactly as for a person
+   `MMCA.Common/Source/Core/MMCA.Common.Shared/Auth/AuthClaimTypes.cs:134`, `:140`, `:146`). The
+   token's `sub` is the service account and its permission claims are the role's, baked in exactly
+   as for a person
    (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Auth/TokenService.cs:118-128`, `:159-171`). It
    carries no refresh token, no session (`sid`), no `auth_time` and no `mfa`
    (`MachineClientService.cs:14-21`), so an `IRequiresMfa` use case refuses it with no special case.
 6. **The lifetime is capped below the revocation marker.** `MachineClients:AccessTokenMinutes`
    defaults to 15 and is validated from 1 to 15
    (`MachineClientSettings.cs:24-33`, `:42`; `MachineClientSettingsValidator.cs:23-27`). The
-   soft-deleted marker lives 20 minutes (`SoftDeletedUserCache.cs:35`) and the bearer handler allows 5
-   minutes of clock skew, so a 15-minute token always lapses while the marker still exists; a longer
-   token would outlive the revocation that is meant to stop it (`MachineClientSettings.cs:27-33`).
+   soft-deleted marker lives at least 20 minutes (`SoftDeletedUserCache.cs:41`), and revoke writes it
+   through `MarkerDurationFor`, which covers the longer of the machine token's lifetime and the host's
+   access-token lifetime plus the 5-minute bearer clock skew and never drops below those 20 minutes
+   (`SoftDeletedUserCache.cs:51-55`; `MachineClientService.cs:230-234`). A 15-minute token therefore
+   always lapses while the marker still exists; a longer token would outlive the revocation that is
+   meant to stop it (`MachineClientSettings.cs:27-33`).
 7. **Secrets are random, hashed and rotatable.** A secret is 32 random bytes shown once, stored as
    SHA-256 and compared in constant time
    (`MMCA.Common/Source/Core/MMCA.Common.Domain/Auth/MachineClients/MachineClientSecret.cs:18-41`).
@@ -99,11 +110,11 @@ writes the soft-deleted marker, and a role that could escalate can never back a 
    `:130`, `:150`).
 8. **Revocation reuses the soft-deleted marker.** `RevokeAsync` saves `RevokedOn` first, so no new
    token is minted, then writes the soft-deleted marker for the service account, so every service's
-   `SoftDeletedUserMiddleware` answers 401 to the tokens the client already holds
-   (`MachineClientService.cs:211-231`).
+   `SoftDeletedUserMiddleware` answers 401 to the tokens the client already holds, for the marker
+   lifetime point 6 gives (`MachineClientService.cs:211-237`).
 9. **Four permissions can never back a client.** A role granting any of them is refused at create,
    before the service account is provisioned, and at every mint, because a role can gain a permission
-   after the client exists (`MachineClientService.cs:47-58`, `:95-101`, `:141-149`, `:244-248`):
+   after the client exists (`MachineClientService.cs:47-58`, `:95-101`, `:141-149`, `:250-254`):
    - `users:view-as` (`AdministrationPermissions.ViewAsUsers`): a program holding it could read as any
      user, which [ADR-137](137-read-only-view-as-support-access.md) reserves for a named staff member
      giving a reason;
@@ -114,13 +125,13 @@ writes the soft-deleted marker, and a role that could escalate can never back a 
 10. **Administration is a separate, permissioned base.** `MachineClientsControllerBase` (abstract, no
     route, `[HasPermission(clients:manage)]`) lists, creates (the secret returned once), rotates,
     promotes and revokes
-    (`MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/MachineClients/MachineClientsControllerBase.cs:37-38`,
-    `:47`, `:67`, `:92`, `:114`, `:139`), and a routeless Common.UI page sits over it
+    (`MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/MachineClients/MachineClientsControllerBase.cs:38-39`,
+    `:48`, `:68`, `:93`, `:115`, `:140`), and a routeless Common.UI page sits over it
     (`AddMachineClientAdministrationUI`,
-    `MMCA.Common/Source/Presentation/MMCA.Common.UI/DependencyInjection.cs:349`).
+    `MMCA.Common/Source/Presentation/MMCA.Common.UI/DependencyInjection.cs:360`).
 11. **The table is gated.** `MachineClients` is mapped only where enabled
-    (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/ApplicationDbContext.cs:389`,
-    `:477`, `:1052`), and `DesignTimeDbContextOptions.EnableMachineClients` opens the gate for
+    (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/ApplicationDbContext.cs:164-169`,
+    `:440`, `:540-545`, `:1127-1132`), and `DesignTimeDbContextOptions.EnableMachineClients` opens the gate for
     `dotnet ef` (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/Design/DesignTimeDbContextOptions.cs:143`).
 12. **MCP needs no change.** A permissioned MCP tool checks the same `perm:` policy as `[HasPermission]`
     through the host's bearer handler (ADR-138, point 4), and a machine token is such a bearer token
@@ -141,7 +152,7 @@ writes the soft-deleted marker, and a role that could escalate can never back a 
 
 ## Trade-offs
 - **Turning it on needs consumer code:** the provisioner, the `IsServiceAccount` answer on the app's
-  user type and the view-as resolver flag (`MMCA.Common/UPGRADING.md:304-317`). MMCA.ADC is the first
+  user type and the view-as resolver flag (`MMCA.Common/UPGRADING.md:529-542`). MMCA.ADC is the first
   consumer to carry that code (see Consequences).
 - **A machine identity is a user row.** It shows up wherever the app lists users unless the app
   filters on `IsServiceAccount`.
@@ -168,10 +179,10 @@ writes the soft-deleted marker, and a role that could escalate can never back a 
 ## Consequences
 - A consumer that opts in implements the provisioner, calls `AddMachineClients`, adds the
   `MachineClients` migration on its Identity database, routes the two controller subclasses, and grants
-  `clients:manage` to an operator role that no client can hold (`MMCA.Common/UPGRADING.md:304-317`).
+  `clients:manage` to an operator role that no client can hold (`MMCA.Common/UPGRADING.md:529-542`).
 - MMCA.ADC is the first consumer to carry machine clients. Its Identity service calls
   `AddMachineClients`
-  (`MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:176-183`), and it carries the
+  (`MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:196-203`), and it carries the
   feature switched off in production configuration, exactly as it carries passkeys
   ([ADR-139](139-passkeys-webauthn-opt-in-sign-in.md)): the service's base `appsettings.json` sets
   `MachineClients:Enabled` false with `AccessTokenMinutes` 15
@@ -180,17 +191,17 @@ writes the soft-deleted marker, and a role that could escalate can never back a 
   development turns it on: `appsettings.Development.json`
   (`MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/appsettings.Development.json:36-41`) and the
   AppHost's `MachineClients__Enabled`
-  (`MMCA.ADC/Source/Hosting/MMCA.ADC.AppHost/Program.cs:489-494`). Nothing under `MMCA.ADC/infra/` or
+  (`MMCA.ADC/Source/Hosting/MMCA.ADC.AppHost/Program.cs:481-485`). Nothing under `MMCA.ADC/infra/` or
   `MMCA.ADC/.github/` names the feature (no match for "machine client" in either). The Identity
   design-time factory still sets `EnableMachineClients`, so the schema carries the `MachineClients`
   table either way
-  (`MMCA.ADC/Source/Hosting/MMCA.ADC.Migrations.SqlServer.Identity/DesignTimeSQLServerDbContextFactory.cs:59-63`).
+  (`MMCA.ADC/Source/Hosting/MMCA.ADC.Migrations.SqlServer.Identity/DesignTimeSQLServerDbContextFactory.cs:52-57`).
   `ServiceAccountProvisioner` implements the provisioner over ADC's
   own `User`
   (`MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Application/Users/Administration/ServiceAccountProvisioner.cs:25-52`),
   creating the account through `User.CreateServiceAccount`, which raises no registration event,
   accepts any valid ADC role and sets `IsServiceAccount`
-  (`MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Domain/Users/User.cs:371-400`). The
+  (`MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Domain/Users/User.cs:341-377`). The
   cross-module attendee-id query does not count a service account: it admits an Attendee-role user only when
   it is not a service account
   (`MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Application/Users/AttendeeQueryService.cs:24`).
@@ -208,12 +219,12 @@ writes the soft-deleted marker, and a role that could escalate can never back a 
   `MachineClientAdmin`
   (`MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.UI/Pages/Users/MachineClients.razor:1-2`,
   `:11`), reached from an Organizer-only Admin menu entry that also requires `clients:manage`
-  (`MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.UI/IdentityUIModule.cs:43`). The entry and the
+  (`MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.UI/IdentityUIModule.cs:44`). The entry and the
   page stay with the feature off: the framework's `MachineClientAdmin` then renders one "not enabled"
   notice in place of the create form and the list, because its list load answers not found
   (`MMCA.Common/Source/Presentation/MMCA.Common.UI/Pages/Administration/MachineClientAdmin.razor.cs:56-61`;
   `MMCA.Common/Source/Presentation/MMCA.Common.UI/Pages/Administration/MachineClientAdmin.razor:7-13`;
-  `MMCA.Common/CHANGELOG.md:61`). The
+  `MMCA.Common/CHANGELOG.md:565`). The
   `AddMachineClients` migration adds `Identity.User.IsServiceAccount` (default false), creates the
   `MachineClients` table and a unique index on `ServiceAccountUserId` filtered to undeleted rows
   (`MMCA.ADC/Source/Hosting/MMCA.ADC.Migrations.SqlServer.Identity/Migrations/20261112192549_AddMachineClients.cs:14-55`).
@@ -221,22 +232,22 @@ writes the soft-deleted marker, and a role that could escalate can never back a 
   backing role holds, so an endpoint that asks only for a signed-in caller (casting a vote, saving a
   bookmark, checking in) is open to every machine client whatever role backs it. Choosing the backing
   role cannot close that, and the framework refuses only the four permissions of point 9 while ADC's
-  factory takes any valid role (`User.cs:372-374`), so the endpoint itself has to say its caller is a
+  factory takes any valid role (`User.cs:363`), so the endpoint itself has to say its caller is a
   person. MMCA.Common's `[RefuseMachineClients]` is that statement: an authorization filter
   for a controller or an action that answers 403 with the error code `MachineClients.EndpointRefused`
   to a request whose token carries `token_use` = `machine` and lets every other caller through;
   declared on a controller it covers every action, the permission-gated ones included, and it adds
   nothing to the API description
   (`MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/RefuseMachineClientsAttribute.cs:13-37`,
-  check at `:44-49`; `MMCA.Common/CHANGELOG.md:22`). ADC declares it at class level on eight
+  check at `:44-49`; `MMCA.Common/CHANGELOG.md:526`). ADC declares it at class level on eight
   controllers: Engagement's `BookmarksController`, `CheckInsController`, `LivePollVotingController`,
   `PointsController`, `SessionQuestionsController` and `TicketsController`
-  (`MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.API/Controllers/BookmarksController.cs:35`,
-  `CheckInsController.cs:39`, `LivePollVotingController.cs:36`, `PointsController.cs:36`,
+  (`MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.API/Controllers/BookmarksController.cs:36`,
+  `CheckInsController.cs:41`, `LivePollVotingController.cs:36`, `PointsController.cs:36`,
   `SessionQuestionsController.cs:38`, `TicketsController.cs:41`), and Conference's
   `SessionQuestionAnswersController` and `EventQuestionAnswersController`
-  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/Sessions/SessionQuestionAnswersController.cs:80`,
-  `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/Events/EventQuestionAnswersController.cs:80`).
+  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/Sessions/SessionQuestionAnswersController.cs:81`,
+  `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/Events/EventQuestionAnswersController.cs:81`).
   `MachineClientParticipationTests` pins the classification: every concrete Engagement controller is
   either one of the six participation controllers carrying the attribute or on an allow-list with a
   reason, and the two Conference controllers carry it
@@ -252,6 +263,35 @@ writes the soft-deleted marker, and a role that could escalate can never back a 
 - Machine activity is audited under a named service account.
 - The *Enterprise-scale register* of [the Common backlog](../governance/common-RemediationBacklog.md)
   no longer holds client credentials; webhooks and versioned OpenAPI with Sunset stay there.
+
+## Revision (2026-11-23)
+Re-verified against current source. The decision is unchanged: client credentials over a
+service-account user, the four refused permissions, the 15-minute cap, the gated table and ADC's
+eight `[RefuseMachineClients]` controllers all hold. Two descriptions moved with the code, and most
+anchors moved with later releases through v1.315.0.
+
+1. **The interactive-path backstop is the issuance core.** The service-account refusal sits in the
+   private `IssueTokensCoreAsync`
+   (`MMCA.Common/Source/Core/MMCA.Common.Application/Auth/AuthenticationServiceBase.cs:725-735`),
+   which the framework's own sign-in paths call directly; the protected `IssueTokensAsync` that
+   app-level flows call skips the second-factor challenge for a service account and delegates to it
+   (`:691-713`). Point 2 now says so.
+2. **The revocation marker can outlast 20 minutes.** `RevokeAsync` writes the marker through
+   `SoftDeletedUserCache.MarkerDurationFor`, sized to the longer of the machine token's lifetime and
+   the host's access-token lifetime plus the bearer clock skew, with 20 minutes as the floor
+   (`MMCA.Common/Source/Core/MMCA.Common.Application/Auth/MachineClients/MachineClientService.cs:230-234`;
+   `MMCA.Common/Source/Core/MMCA.Common.Application/Auth/SoftDeletedUserCache.cs:41`, `:51-55`).
+   Points 6 and 8 now say so.
+3. Anchors re-verified against current source: `AuthenticationServiceBase.cs:197-209`, `:938-939`,
+   `:564-570`, `:609-615`; `ViewAsService.cs:177-181`; `SoftDeletedUserCache.cs:41`, `:73-74`;
+   `AuthClaimTypes.cs:134`, `:140`, `:146`; `MachineClientService.cs:211-237`, `:250-254`;
+   `MachineClientsControllerBase.cs:38-39`, `:48`, `:68`, `:93`, `:115`, `:140`;
+   `MMCA.Common.UI/DependencyInjection.cs:360`; `ApplicationDbContext.cs:164-169`, `:440`,
+   `:540-545`, `:1127-1132`; `MMCA.Common/UPGRADING.md:529-542`; `MMCA.Common/CHANGELOG.md:526`,
+   `:565`; in MMCA.ADC, `MMCA.ADC.Identity.Service/Program.cs:196-203`,
+   `MMCA.ADC.AppHost/Program.cs:481-485`, `DesignTimeSQLServerDbContextFactory.cs:52-57`,
+   `User.cs:341-377` (role check at `:363`), `IdentityUIModule.cs:44`, `BookmarksController.cs:36`,
+   `CheckInsController.cs:41`, and both Conference answer controllers at `:81`.
 
 ## Related
 [ADR-004](004-authentication-dual-fetch.md) (the JWKS validation every service already does),

@@ -278,7 +278,10 @@
           rule as a partial enforcer of the Shared-typed wire discriminator, and the contract snapshot
           builder citation was re-anchored after the <code>[EventName]</code> rule landed above it.
           Updated 2026-10-28: the MMCA.ECommerce sample is retired, so its two adopters leave the count (17
-          records derive the base, all in the four repos).</p>
+          records derive the base, all in the four repos).
+          Revised 2026-11-23: <code>ProductVariantChanged</code>&#39;s doc no longer names the four events it replaced, so
+          the Decision now quotes what it says, <code>OrderPaid</code> is recorded as also carrying the frozen savings,
+          and the stale source anchors were refreshed.</p>
           <h2 id="context">Context</h2>
           <p>ADR-003 decides how a domain event <strong>moves</strong>: captured into the outbox inside <code>SaveChangesAsync</code>,
           dispatched in-process after commit, or published to the broker when it is an integration event.
@@ -309,27 +312,27 @@
           site in any repo raises <code>Unchanged</code>: it is the zero default, and it appears only as a negative
           <code>[InlineData]</code> case in a handler test, whose helper has to hand-build the event because no
           transition on the aggregate produces one
-          (<code>MMCA.ADC/Tests/Modules/Engagement/MMCA.ADC.Engagement.Application.Tests/Points/DomainEventHandlers/SessionQuestionSubmittedPointsHandlerTests.cs:79,203-220</code>).</li>
+          (<code>MMCA.ADC/Tests/Modules/Engagement/MMCA.ADC.Engagement.Application.Tests/Points/DomainEventHandlers/SessionQuestionSubmittedPointsHandlerTests.cs:69,193-210</code>).</li>
           <li><strong><code>Added</code> from the factory, <code>Updated</code> from mutators, <code>Deleted</code> from <code>Delete()</code>.</strong> The base&#39;s usage
           note fixes the mapping (<code>EntityChangedEvent.cs:10-13</code>), and <code>Session</code> is the canonical shape: one
           event type, four raise sites, in
-          <code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Sessions/Session.cs:243</code> (Added, from
-          the static factory), <code>:305</code> (Updated, from <code>Update</code>), <code>:324</code> (Updated, from <code>UnassignRoom</code>) and <code>:345</code>
+          <code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Sessions/Session.cs:242</code> (Added, from
+          the static factory), <code>:304</code> (Updated, from <code>Update</code>), <code>:323</code> (Updated, from <code>UnassignRoom</code>) and <code>:344</code>
           (Deleted, inside the <code>Delete</code> override once the base soft delete and the child cascade succeed), all
           constructing the same <code>SessionChanged</code> (<code>.../Sessions/DomainEvents/SessionChanged.cs:13-18</code>).</li>
           <li><strong>Handlers filter on <code>State</code>, or deliberately do not.</strong> <code>SpeakerDeletedHandler</code> subscribes to
           <code>SpeakerChanged</code> and returns immediately unless the state is <code>Deleted</code>
-          (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Speakers/DomainEventHandlers/SpeakerDeletedHandler.cs:29-30</code>),
+          (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Speakers/DomainEventHandlers/SpeakerDeletedHandler.cs:30-31</code>),
           and the points award for asking a question does the same for <code>Added</code> on <code>SessionQuestionChanged</code>
-          (<code>MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Application/Points/DomainEventHandlers/SessionQuestionSubmittedPointsHandler.cs:66-70</code>).
+          (<code>MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Application/Points/DomainEventHandlers/SessionQuestionSubmittedPointsHandler.cs:65-69</code>).
           A handler that genuinely wants every transition writes no filter and logs the discriminator instead:
           <code>TicketChangedAuditHandler</code> passes <code>domainEvent.State</code> straight into its <code>LoggerMessage</code> template
           (<code>MMCA.Helpdesk/Source/Modules/Tickets/MMCA.Helpdesk.Tickets.Application/Tickets/DomainEventHandlers/TicketChangedAuditHandler.cs:23,28-29</code>).</li>
           <li><strong>Business state-machine transitions keep their own event types.</strong> The base&#39;s doc scopes it to
           generic CRUD and directs events such as <code>OrderPaid</code> and <code>ShoppingCartCheckedOut</code> to inherit
           <code>BaseDomainEvent</code> directly (<code>EntityChangedEvent.cs:16-19</code>), which is what they do: <code>OrderPaid</code> carries
-          a customer, a frozen total and an order-line snapshot
-          (<code>MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Domain/Orders/DomainEvents/OrderPaid.cs:17-22</code>),
+          a customer, a frozen total and savings, and an order-line snapshot
+          (<code>MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Domain/Orders/DomainEvents/OrderPaid.cs:22-28</code>),
           and <code>ShoppingCartCheckedOut</code> names the checkout transition rather than an update
           (<code>.../Sales.Domain/ShoppingCarts/DomainEvents/ShoppingCartCheckedOut.cs:6-8</code>, raised at
           <code>.../ShoppingCarts/ShoppingCart.cs:118</code>). The test is payload plus intent: a transition with a name a
@@ -337,8 +340,8 @@
           <li><strong>The discriminator rides the wire, and it is frozen there.</strong> Store&#39;s cross-module Catalog contract
           puts the discriminator first on a <code>BaseIntegrationEvent</code>
           (<code>MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.Shared/Products/IntegrationEvents/ProductVariantChanged.cs:34-35</code>)
-          and explicitly consolidates four former events, <code>ProductVariantAdded</code>, <code>ProductVariantRemoved</code>,
-          <code>ProductVariantSkuChanged</code> and <code>ProductVariantPriceChanged</code> (<code>:9-10</code>). On the wire the discriminator
+          and its doc states that one event covers every variant lifecycle change (add; SKU, price or
+          discount update; removal), told apart by <code>State</code> (<code>:9-10</code>). On the wire the discriminator
           is not the framework enum but Catalog&#39;s own <code>ProductChangeState</code>, declared with the same member names
           and ordinals because every type on a public contract has to live in a <code>*.Shared</code> assembly a consumer
           may reference while <code>DomainEntityState</code> ships from a <code>*.Domain</code> one
@@ -353,12 +356,12 @@
           so retyping or removing the discriminator fails the build and, under ADR-010, requires a new event
           type rather than a silent reshape.</li>
           <li><strong>The shared base is the convenience; the discriminator shape is the convention.</strong> Seventeen concrete
-          records derive <code>EntityChangedEvent&lt;TId&gt;</code> across the four repos: seven in Store (<code>OrderChanged.cs:19</code>,
-          <code>ShoppingCartChanged.cs:16</code>, <code>InventoryItemChanged.cs:17</code> under <code>Sales.Domain</code>,
+          records derive <code>EntityChangedEvent&lt;TId&gt;</code> across the four repos: seven in Store (<code>OrderChanged.cs:18</code>,
+          <code>ShoppingCartChanged.cs:15</code>, <code>InventoryItemChanged.cs:16</code> under <code>Sales.Domain</code>,
           <code>Catalog.Domain/Products/DomainEvents/ProductChanged.cs:23</code>,
           <code>Catalog.Domain/Categories/DomainEvents/CategoryChanged.cs:19</code>,
           <code>Catalog.Domain/Reviews/DomainEvents/ProductReviewChanged.cs:15-20</code>,
-          <code>Identity.Domain/Customers/DomainEvents/CustomerChanged.cs:25</code>), nine in ADC Conference
+          <code>Identity.Domain/Customers/DomainEvents/CustomerChanged.cs:24</code>), nine in ADC Conference
           (<code>SponsorChanged.cs:16</code>, <code>EventChanged.cs:16</code>, <code>QuestionChanged.cs:16</code>, <code>CategoryChanged.cs:16</code>,
           <code>ActivityChanged.cs:16</code>, <code>SpeakerChanged.cs:21</code>, <code>SessionChanged.cs:18</code>, <code>PartnerChanged.cs:16</code>,
           <code>SessionAssetChanged.cs:18</code>), and one in Helpdesk
@@ -427,7 +430,7 @@
           <li><strong>The carve-out keeps the model honest.</strong> A CRUD discriminator is the right answer for &quot;a row
           changed&quot; and the wrong answer for &quot;payment cleared&quot;: <code>OrderPaid</code> carries an order-line snapshot
           precisely so downstream handlers do not re-query inside an uncommitted transaction
-          (<code>OrderPaid.cs:14-16</code>). Folding that into a lifecycle base would hang a nullable business payload off
+          (<code>OrderPaid.cs:19-21</code>). Folding that into a lifecycle base would hang a nullable business payload off
           every entity&#39;s event.</li>
           <li><strong>Adding a transition is cheap.</strong> A new lifecycle state is an enum member plus handler branches, not
           a new record, a new registration and a new payload shape.</li>
@@ -435,7 +438,7 @@
           <h2 id="trade-offs">Trade-offs</h2>
           <ul>
           <li><strong>Every selective handler pays a filter.</strong> A handler that cares about one transition has to open with
-          a <code>State</code> guard and return (<code>SpeakerDeletedHandler.cs:29-30</code> is the shape to copy); omit it and the
+          a <code>State</code> guard and return (<code>SpeakerDeletedHandler.cs:30-31</code> is the shape to copy); omit it and the
           handler fires on all three. The compiler cannot help, because the wrong behavior is an extra silent
           invocation, not a build error.</li>
           <li><strong>The subscription surface is coarser.</strong> Subscribing means subscribing to the whole entity lifecycle:
@@ -507,6 +510,36 @@
           <code>State:ProductChangeState</code> contract lines (<code>IntegrationEventContractTests.cs:11-12</code>, keyed
           <code>Catalog.ProductInfoChanged.v1</code> and <code>Catalog.ProductVariantChanged.v1</code>).</li>
           </ol>
+          <h2 id="revision-2026-11-23">Revision (2026-11-23)</h2>
+          <p>Re-verified against current source. The taxonomy, the four <code>Session</code> raise sites and their state
+          mapping, the selective-handler guards and the adopter counts (17 records derive the base: 7 Store,
+          9 ADC, 1 Helpdesk) are unchanged; two payload descriptions moved and several anchors shifted.</p>
+          <ol>
+          <li><code>ProductVariantChanged</code>&#39;s doc no longer lists the four events it consolidated. It now says one
+          event covers every variant lifecycle change (add; SKU, price or discount update; removal), told
+          apart by <code>State</code>
+          (<code>MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.Shared/Products/IntegrationEvents/ProductVariantChanged.cs:9-10</code>),
+          and no file under <code>MMCA.Store/Source/</code> names <code>ProductVariantAdded</code>, <code>ProductVariantRemoved</code>,
+          <code>ProductVariantSkuChanged</code> or <code>ProductVariantPriceChanged</code> (the integration test names
+          <code>ProductVariantAddedConsistencyTests</code> and <code>ProductVariantAdded_*</code> keep the old event name for the
+          add case of the consolidated event). The Decision bullet now quotes the
+          doc as it reads. The record and its leading <code>State</code> (<code>:34-35</code>) are unchanged.</li>
+          <li><code>OrderPaid</code> also carries a frozen <code>TotalSavings</code> beside the total
+          (<code>MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Domain/Orders/DomainEvents/OrderPaid.cs:26</code>,
+          doc <code>:15-18</code>). It still inherits <code>BaseDomainEvent</code> directly (<code>:28</code>), and the rationale for its
+          line snapshot (no re-query inside an uncommitted transaction) is the <code>OrderLines</code> doc at
+          <code>:19-21</code>.</li>
+          <li>Anchors re-verified against current source: <code>Session.cs:242</code> (Added, in <code>Create</code> at <code>:195</code>),
+          <code>:304</code> (Updated, in <code>Update</code> at <code>:265</code>), <code>:323</code> (Updated, in <code>UnassignRoom</code> at <code>:316</code>) and
+          <code>:344</code> (Deleted, in the <code>Delete</code> override at <code>:333</code>, after <code>base.Delete()</code> at <code>:341</code>); the
+          <code>Unchanged</code> test case and its hand-built helper
+          (<code>SessionQuestionSubmittedPointsHandlerTests.cs:69,193-210</code>); the <code>Added</code> guard
+          (<code>SessionQuestionSubmittedPointsHandler.cs:65-69</code>); the <code>Deleted</code> guard
+          (<code>SpeakerDeletedHandler.cs:30-31</code>); the <code>OrderPaid</code> record (<code>OrderPaid.cs:22-28</code>); and the Store
+          base-derived records <code>OrderChanged.cs:18</code>, <code>ShoppingCartChanged.cs:15</code>,
+          <code>InventoryItemChanged.cs:16</code> (under <code>Sales.Domain/Inventory/DomainEvents</code>) and
+          <code>CustomerChanged.cs:24</code>.</li>
+          </ol>
           <h2 id="related">Related</h2>
           <p>ADR-003 (how these events are captured and dispatched; this ADR decides only their shape), ADR-010
           (schema versioning for the discriminator once it crosses a service boundary), ADR-008 (the extraction
@@ -531,6 +564,7 @@
             <li><a href="#alternatives-rejected">Alternatives rejected</a></li>
             <li><a href="#revision-2026-10-06">Revision (2026-10-06)</a></li>
             <li><a href="#revision-2026-10-21">Revision (2026-10-21)</a></li>
+            <li><a href="#revision-2026-11-23">Revision (2026-11-23)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

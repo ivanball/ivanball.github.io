@@ -9,7 +9,7 @@ to revisit. The current-state persistence model recorded in [ADR-003](003-outbox
 mechanism. Revised 2026-10-01: citations re-anchored. Revised 2026-10-06: the ADR-075 history claim
 is scoped to opted-in entities, with retention purging only where the host runs the scheduler. Revised 2026-10-07: the rationale acknowledges ADC's append-only points ledger and why it
 is not event sourcing, and the Marten rejection separates framework PostgreSQL support (ADR-113)
-from production, where no deployment runs a PostgreSQL server. Revised 2026-10-21: anchors refreshed after Common and ADC source commits moved the outbox, inbox, provider and snapshot lines. Revised 2026-10-26: anchors refreshed after Common source commits on 2026-10-25 moved the PostgreSQL provider pin and reference lines. Revised 2026-10-28: anchors refreshed after the Common output-cache Redis reference (#615) moved the PostgreSQL provider reference line.
+from production, where no deployment runs a PostgreSQL server. Revised 2026-10-21: anchors refreshed after Common and ADC source commits moved the outbox, inbox, provider and snapshot lines. Revised 2026-10-26: anchors refreshed after Common source commits on 2026-10-25 moved the PostgreSQL provider pin and reference lines. Revised 2026-10-28: anchors refreshed after the Common output-cache Redis reference (#615) moved the PostgreSQL provider reference line. Revised 2026-11-23: anchors refreshed after Common and ADC source commits moved the soft-delete, save-identity, outbox, provider-pin and snapshot lines.
 
 ## Context
 Event sourcing keeps an append-only log of the facts that happened to an aggregate and treats that log
@@ -25,10 +25,10 @@ aggregate root and child entity derives from, and it carries the state, the audi
 concurrency token on the row itself
 (`MMCA.Common/Source/Core/MMCA.Common.Domain/Entities/AuditableBaseEntity.cs:13`, `IsDeleted` at `:20`,
 `CreatedOn` at `:25`). Deletion is a flag rather than a fact appended to a log: `Delete()` sets
-`IsDeleted = true` at `:77`, and a global query filter hides the row from every normal read
-(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/ApplicationDbContext.cs:454`, the filter applied at `:466`).
+`IsDeleted = true` at `:79`, and a global query filter hides the row from every normal read
+(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/ApplicationDbContext.cs:602`, the filter applied at `:614`).
 The audit fields are stamped during the save, from the identity the caller passed in: the save records
-it (`.../DbContexts/ApplicationDbContext.cs:194`, set at `:197`) and the audit interceptor reads it back
+it (`.../DbContexts/ApplicationDbContext.cs:272`, set at `:285`) and the audit interceptor reads it back
 (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Interceptors/AuditSaveChangesInterceptor.cs:66`). ADC's `LivePoll` is representative, an aggregate root
 holding its own current status
 (`MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Domain/LivePolls/LivePoll.cs:18`).
@@ -43,10 +43,10 @@ events get is delivery durability, not history. An `OutboxMessage` row carries t
 and the stored event identity
 (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/OutboxMessage.cs:15`, the
 identity at `:40`), the table is mapped on every relational source
-(`.../DbContexts/ApplicationDbContext.cs:668`, and per service database in ADC at
-`MMCA.ADC/Source/Hosting/MMCA.ADC.Migrations.SqlServer.Conference/Migrations/SQLServerDbContextModelSnapshot.cs:1596`),
+(`.../DbContexts/ApplicationDbContext.cs:816`, and per service database in ADC at
+`MMCA.ADC/Source/Hosting/MMCA.ADC.Migrations.SqlServer.Conference/Migrations/SQLServerDbContextModelSnapshot.cs:1662`),
 the processor drains it
-(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/Processing/OutboxProcessor.cs:58`),
+(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/Processing/OutboxProcessor.cs:61`),
 and the consume edge de-duplicates it
 (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Inbox/EfInboxStore.cs:43`). A
 processed outbox row is a delivered message; nothing reads it back and no code path rebuilds state
@@ -102,9 +102,9 @@ statement anywhere that the combination was declined.
   and the specific option this record weighed. It was dropped on two grounds rather than on taste. It
   requires PostgreSQL. The framework already supports PostgreSQL as an engine
   ([ADR-113](113-postgresql-as-a-first-class-engine.md),
-  `MMCA.Common/Directory.Packages.props:64`), and the provider ships in every consumer as a direct
+  `MMCA.Common/Directory.Packages.props:116`), and the provider ships in every consumer as a direct
   dependency of `MMCA.Common.Infrastructure`
-  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/MMCA.Common.Infrastructure.csproj:47`), but no
+  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/MMCA.Common.Infrastructure.csproj:44`), but no
   production deployment runs a PostgreSQL server and no production entity routes to a
   non-SQL-Server engine ([ADR-018](018-polyglot-persistence.md)). So Marten would add no engine to the
   framework, but it would add a deployed PostgreSQL server for the adopting module's database
@@ -210,6 +210,28 @@ Common source commit on 2026-10-26 added the output-cache Redis reference above 
    `Microsoft.EntityFrameworkCore.SqlServer` reference). The `MassTransit.SqlTransport.PostgreSQL`
    broker comment the 2026-10-26 revision placed at `:50` now sits at `:54-56`, with the reference at
    `:57`. The version pin (`MMCA.Common/Directory.Packages.props:64`) holds.
+
+## Revision (2026-11-23)
+Re-verified against current source. The decision (event sourcing not adopted), the rationale and the
+revisit trigger are unchanged: aggregates are still current-state rows that soft-delete, the outbox is
+still mapped per relational source and per ADC service database, and the PostgreSQL provider is still
+pinned centrally and referenced unconditionally by `MMCA.Common.Infrastructure`. Eight body anchors
+moved after Common and ADC source commits shifted the lines they cited.
+1. Anchors re-verified against current source: the `IsDeleted = true` assignment in `Delete()`
+   (`MMCA.Common/Source/Core/MMCA.Common.Domain/Entities/AuditableBaseEntity.cs:79`, previously
+   `:77`; the class `:13`, `IsDeleted` `:20` and `CreatedOn` `:25` hold), `ApplySoftDeleteFilters`
+   (`.../DbContexts/ApplicationDbContext.cs:602`, the filter at `:614`, previously `:454` and `:466`),
+   the save-identity property `CurrentSaveUserId` (`:272`, set in `SaveChangesAsync` at `:285`,
+   previously `:194` and `:197`), the `OutboxMessages` table mapping in `ConfigureOutbox` (`:816`,
+   previously `:668`), ADC's `OutboxMessages` mapping (`SQLServerDbContextModelSnapshot.cs:1662`,
+   previously `:1596`), the `OutboxProcessor` class declaration
+   (`.../Outbox/Processing/OutboxProcessor.cs:61`, previously `:58`), the
+   `Npgsql.EntityFrameworkCore.PostgreSQL` version pin (`MMCA.Common/Directory.Packages.props:116`,
+   previously `:64`; the version comes from `MmcaNpgsqlVersion`, `:48` and `:60` per framework line),
+   and the unconditional provider reference
+   (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/MMCA.Common.Infrastructure.csproj:44`, its
+   ADR-113 comment at `:41-43`, previously `:47`). `AuditSaveChangesInterceptor.cs:66`,
+   `OutboxMessage.cs:15` and `:40`, and `EfInboxStore.cs:43` hold.
 
 ## Related
 [ADR-003](003-outbox-dual-dispatch.md) (at-least-once delivery of domain events, the mechanism a

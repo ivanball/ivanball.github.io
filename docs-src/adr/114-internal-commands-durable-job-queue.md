@@ -22,6 +22,9 @@ polling settings in ADC and Store.
 Revised 2026-11-12: a command type can be drained by a dedicated lane instead of the shared loop (one
 lane exists, for webhook deliveries), process timeouts are internal commands, and anchors into
 `InternalCommandProcessor.cs` were refreshed; see Revision below.
+Revised 2026-11-23: Decision 5 now records that the queue's `ProcessingDelaySeconds` default of 0
+matches the outbox's (only `MaxRetryBackoffSeconds` differs) and lists `DeadLetterRetentionDays`,
+the smart-wait wording matches source, and anchors were refreshed.
 
 ## Context
 The framework has had two ways to move work off the request thread and neither of them is a job
@@ -32,7 +35,7 @@ The **transactional outbox** ([ADR-003](003-outbox-dual-dispatch.md)) carries *e
 (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/OutboxMessage.cs:15`) is
 written by the domain-event interceptor inside the same transaction as the aggregate change, and
 `OutboxProcessor`
-(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/Processing/OutboxProcessor.cs:58`)
+(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/Processing/OutboxProcessor.cs:61`)
 drains one table per relational source with a claim lease, exponential backoff, dead-lettering and
 OpenTelemetry instrumentation. It answers "this happened, tell whoever cares". It does not answer
 "do this later", and bending it to do so means expressing an instruction as an event, which is
@@ -83,38 +86,40 @@ exposes `ScheduleAsync(command, runAt)` and a `TimeSpan delay` overload, both re
 adds the row to the context handed back by the scope's own `IDbContextFactory` (`:101`, `:105`),
 which is the same instance the calling handler's repositories use. With a transaction active it
 enrolls the row and records an owed processor wake against that context instead of signalling
-(`EnrolledCommandWake.Defer`, `:115`), so the caller's commit persists the row and a rollback erases
+(`EnrolledCommandWake.Defer`, `:114`), so the caller's commit persists the row and a rollback erases
 it. The caller's next save writes the enrolled row; when no save follows, the transactional
 execution path saves it just before the commit
 (`FlushEnrolledCommandsBeforeCommitAsync`, called at
-`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/Factory/DbContextFactory.cs:651`
-and defined at `:713`), and that flush refuses to commit, throwing so the unit rolls back, if
+`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/Factory/DbContextFactory.cs:652`
+and defined at `:716`), and that flush refuses to commit, throwing so the unit rolls back, if
 anything other than added `InternalCommandMessage` rows is still unsaved. The explicit
-`CommitTransaction` (`:498`) performs no such flush. The unit of work releases the owed wake once,
-after a successful commit (`:507` and `:660`), and drops it on rollback (`EnrolledCommandWake.Drop`
-at `:885`, inside `DropDeferredWork`, which `RollbackTransaction` calls at `:520`), with the wake
+`CommitTransaction` (`:499`) performs no such flush. The unit of work releases the owed wake once,
+after a successful commit (`:508` and `:661`), and drops it on rollback (`EnrolledCommandWake.Drop`
+at `:892`, inside `DropDeferredWork` at `:889`, which `RollbackTransaction` calls at `:521`), with the wake
 itself kept in
 `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/InternalCommands/EnrolledCommandWake.cs:14`.
-With no transaction active it saves immediately (`:124`) and signals the processor whether or not the
+With no transaction active it saves immediately (`:123`) and signals the processor whether or not the
 row is due yet
-(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/InternalCommands/InternalCommandScheduler.cs:129`):
-a due row runs on the wake, and a future-dated row re-arms the processor's smart wait on its
-`ScheduledOn` plus `ProcessingDelaySeconds`, floored at one second and capped at the polling
-interval (`InternalCommandProcessor.cs:112`, delegating to `PollingLoop.ComputeWaitTime` at
-`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Polling/PollingLoop.cs:104`). That is the
+(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/InternalCommands/InternalCommandScheduler.cs:128`):
+a due row runs on the wake, and a future-dated row re-arms the processor's smart wait until just
+after its `ScheduledOn` plus `ProcessingDelaySeconds` (a 50 ms readiness margin), capped at the
+polling interval; only a row already due but left for a later cycle waits the one-second floor
+(`InternalCommandProcessor.cs:112`, delegating to `PollingLoop.ComputeWaitTime` at
+`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Polling/PollingLoop.cs:117`, margin
+and floor at `:29` and `:21`). That is the
 outbox's atomicity guarantee applied to an instruction instead of an event: a transaction that
 aborts schedules nothing.
 
 **3. One table per relational source, mapped unconditionally.** `InternalCommandMessage`
 (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/InternalCommands/InternalCommandMessage.cs:21`)
 is configured in `ApplicationDbContext.ConfigureInternalCommands`
-(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/ApplicationDbContext.cs:757`)
+(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/ApplicationDbContext.cs:906`)
 alongside the outbox and inbox, with three filtered indexes for the poll, the retention sweep and the
 dead-letter view. It takes the engine the model is being built for and runs its partial-index
 predicates through the same `QuoteColumn`
-(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/ApplicationDbContext.cs:619`)
+(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/ApplicationDbContext.cs:767`)
 and `IncludeColumns`
-(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/ApplicationDbContext.cs:645`)
+(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/ApplicationDbContext.cs:793`)
 helpers [ADR-113](113-postgresql-as-a-first-class-engine.md) introduced for the outbox, so PostgreSQL
 gets double-quoted identifiers while every other engine keeps the bracketed literal it has always
 produced. `PostgreSQLDbContext` calls `base.OnModelCreating`, so the fourth engine needs no
@@ -127,7 +132,7 @@ deployment decision.
 
 **4. Execution restores the caller's context.** The row captures the scheduling user id, roles,
 permission claims (`InternalCommandMessage.UserPermissions`,
-`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/InternalCommands/InternalCommandMessage.cs:129`),
+`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/InternalCommands/InternalCommandMessage.cs:130`),
 tenant and correlation id. The processor does not restore that context itself: before the dispatcher
 runs it calls the shared `AmbientOrigin.Restore`
 (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Context/AmbientOrigin.cs:254`, called at `InternalCommandProcessor.cs:545`), the same helper
@@ -140,20 +145,20 @@ first, then rebuilds a `ClaimsPrincipal` carrying the `sub` claim, one role clai
 carrier read by `ImpersonatingCurrentUserService`
 (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Context/ImpersonatingCurrentUserService.cs:20`),
 which decorates whatever `ICurrentUserService` the host registered
-(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:279`). With no override
+(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:285`). With no override
 set every member reads straight through, so an HTTP request behaves exactly as before.
 
 **5. Failure policy: the outbox's, with one deliberate divergence.** `InternalCommandProcessor`
 (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/InternalCommands/Processing/InternalCommandProcessor.cs:44`)
 claims the due prefix of each batch with a lease token
 (`ClaimDueAsync`, `:333`), executes each row in a fresh DI scope, and stamps the outcome through a
-set-based update guarded by that token (`StampAsync`, `:669`) so a replica whose lease expired
+set-based update guarded by that token (`StampAsync`, `:675`) so a replica whose lease expired
 mid-execution silently drops its stale outcome. A `Result.Failure` and a thrown exception are the
 same operational fact and both consume an attempt; the backoff is
 `RetryBackoffBaseSeconds * 2^(attempts-1)` with jitter in `[0.8, 1.2]`, capped at
-`MaxRetryBackoffSeconds` (`ComputeRetryBackoffSeconds`, `:695`, delegating to the shared
+`MaxRetryBackoffSeconds` (`ComputeRetryBackoffSeconds`, `:701`, delegating at `:702` to the shared
 `PollingLoop.ComputeRetryBackoffSeconds` at
-`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Polling/PollingLoop.cs:183`). A
+`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Polling/PollingLoop.cs:197`). A
 payload that no longer deserializes is dead-lettered on the first attempt as `payload_invalid`
 (`:427`), because retrying cannot change the stored bytes. The divergence: an unresolvable
 command type (`type_unresolvable`, `:440`) and a missing handler registration (`handler_missing`,
@@ -166,13 +171,15 @@ fact that will not change.
 Settings live under `InternalCommands`
 (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/InternalCommands/Administration/InternalCommandsSettings.cs:15`)
 and mirror `OutboxSettings` where the semantics match: `BatchSize` 50 (`:31`), `MaxAttempts` 5
-(`:39`), `LeaseSeconds` 300 (`:70`), `RetryBackoffBaseSeconds` 10 (`:79`), `RetentionDays` 7 (`:95`),
-`CleanupIntervalHours` 6 (`:110`). Two values deliberately differ. `ProcessingDelaySeconds` defaults
-to `0` rather than the outbox's 5 (`:59`), because that delay exists to bound a race with the
-in-process fast path that dispatches an event before the processor can, and the queue has no such
-fast path. `MaxRetryBackoffSeconds` (600, `:88`) is a separate ceiling rather than the lease, because
-a job queue wants a long lease for slow handlers and a short ceiling on how long a transient failure
-parks a command, where the outbox caps its backoff at `LeaseSeconds` and gets one number for both.
+(`:39`), `ProcessingDelaySeconds` 0 (`:58`, the same default as the outbox's,
+`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/Administration/OutboxSettings.cs:45`),
+`LeaseSeconds` 300 (`:69`), `RetryBackoffBaseSeconds` 10 (`:78`), `RetentionDays` 7 (`:94`),
+`DeadLetterRetentionDays` 0, which falls back to `RetentionDays` (`:102`, mirroring
+`OutboxSettings.cs:118`), and `CleanupIntervalHours` 6 (`:109`). One value deliberately differs.
+`MaxRetryBackoffSeconds` (600, `:87`) is a separate ceiling rather than the lease, because a job
+queue wants a long lease for slow handlers and a short ceiling on how long a transient failure parks
+a command, where the outbox caps its backoff at `LeaseSeconds` and gets one number for both
+(`OutboxProcessor.cs:1108`).
 
 `IInternalCommandAdministration`
 (`MMCA.Common/Source/Core/MMCA.Common.Application/InternalCommands/IInternalCommandAdministration.cs:17`)
@@ -204,12 +211,12 @@ of it: it owns a not-started `InternalCommandProcessor` (`InternalCommandLanePro
 constructed at `WebhookDeliveryLane.cs:74`), polls with the shared pending predicate, order and batch
 size (`InternalCommandLaneProcessor.cs:23`), and calls that processor's `ClaimDueAsync`,
 `RenewClaimAsync`, `ExecuteClaimedAsync` and `RecordFailedAttemptAsync`
-(`InternalCommandLaneProcessor.cs:276`, `:475`, `:482`, `:525`), which the processor exposes as
+(`InternalCommandLaneProcessor.cs:276`, `:479`, `:486`, `:529`), which the processor exposes as
 internal members (`InternalCommandProcessor.cs:333`, `:381`, `:407`, `:489`) along with its
 `Settings` (`:72`). Retry, backoff, `MaxAttempts`, dead-lettering and requeue therefore run through
 the same code for a lane row as for a shared row. What differs is what counts as an attempt: while a
 receiver cools down the lane charges each of its due rows one failed attempt without running the
-handler (`InternalCommandLaneProcessor.cs:515-535`), so a lane row can reach `MaxAttempts` and
+handler (`InternalCommandLaneProcessor.cs:519-540`), so a lane row can reach `MaxAttempts` and
 dead-letter on fewer real sends than a shared row gets runs
 ([ADR-142](142-outbound-webhooks-and-delivery-lane.md)). The one addition to the row runner is an optional observer on
 `ExecuteClaimedAsync` (`:413`), invoked just before a failed attempt is recorded, which the shared
@@ -217,8 +224,8 @@ loop never passes and the lane uses to cool a failing receiver down (`ReceiverCo
 `Signal()` wakes both loops: the framework signal keeps a second wake that exists only once a lane
 creates it (`InternalCommandSignal.cs:19`, `:28`, `:39`), so neither steals the other's permit. The
 lane reports on the same `MMCA.Common.InternalCommands` meter through its own
-`internal_commands.lane.*` instruments tagged by `lane` (`InternalCommandMetrics.cs:128`, `:137`,
-`:143`, `:153`, `:160`). The lane's own rules (concurrency, the per-receiver cooldown, the batch start
+`internal_commands.lane.*` instruments tagged by `lane` (`InternalCommandMetrics.cs:129`, `:138`,
+`:144`, `:153`, `:160`). The lane's own rules (concurrency, the per-receiver cooldown, the batch start
 budget) are recorded in [ADR-142](142-outbound-webhooks-and-delivery-lane.md).
 
 **Process timeouts are internal commands.** A process manager's timeout is an
@@ -302,8 +309,8 @@ poll. `InternalCommands:PollingIntervalSeconds` ships at 2
 which is the same default `OutboxSettings` ships
 (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/Administration/OutboxSettings.cs:31`),
 so the divergence is a deployment decision rather than a framework one: ADC and Store both run the
-queue at 60 seconds (`MMCA.ADC/infra/main.bicep:1933`, `MMCA.Store/infra/main.bicep:1596`) while
-pushing the outbox to 300 (`MMCA.ADC/infra/main.bicep:1927`, `MMCA.Store/infra/main.bicep:1589`).
+queue at 60 seconds (`MMCA.ADC/infra/main.bicep:2210`, `MMCA.Store/infra/main.bicep:1910`) while
+pushing the outbox to 300 (`MMCA.ADC/infra/main.bicep:2204`, `MMCA.Store/infra/main.bicep:1903`).
 A host that raises the interval to cut idle polling accepts that much latency on any
 transaction-scheduled work the post-commit wake does not reach.
 
@@ -438,6 +445,46 @@ moved.
    `ComputeRetryBackoffSeconds` (`:695`), and the `payload_invalid`, `type_unresolvable` and
    `handler_missing` dead letters (`:427`, `:440`, `:462`). The earlier revisions keep their dated
    anchors as written.
+
+## Revision (2026-11-23)
+Re-verified against current source. The decision, the five parts, the failure policy, the dedicated
+lane, the process timeouts and the deployed 60-second queue and 300-second outbox intervals in ADC
+and Store are unchanged. Decision 5's settings paragraph no longer matched the code, the smart-wait
+wording was imprecise, and line anchors moved.
+
+1. Decision 5 no longer says `ProcessingDelaySeconds` diverges from the outbox. The outbox's
+   `ProcessingDelaySeconds` now has no initializer and defaults to 0
+   (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/Administration/OutboxSettings.cs:45`),
+   and its documentation states that the delay does not bound the duplicate-dispatch window
+   (`:35-40`), so the earlier rationale (a race with an in-process fast path) is gone. The queue's
+   default of 0 (`InternalCommandsSettings.cs:58`) is now listed among the mirrored settings, and
+   `MaxRetryBackoffSeconds` is the one value that differs (the outbox caps its backoff at
+   `LeaseSeconds`, `OutboxProcessor.cs:1108`).
+2. Decision 5 now lists `DeadLetterRetentionDays` (default 0, falling back to `RetentionDays`,
+   `InternalCommandsSettings.cs:102`), which mirrors `OutboxSettings.DeadLetterRetentionDays`
+   (`OutboxSettings.cs:118`).
+3. Decision 2 now describes the smart wait as source computes it: a not-yet-due row waits until it
+   is ready plus a 50 ms readiness margin (`PollingLoop.cs:29`, `:131`), capped at the polling
+   interval (`:133`); the one-second floor (`:21`) applies only to a row already due but left for a
+   later cycle (`:129-130`).
+4. Anchors re-verified against current source: `OutboxProcessor` (`OutboxProcessor.cs:61`); the
+   scheduler's `EnrolledCommandWake.Defer` (`InternalCommandScheduler.cs:114`), immediate save
+   (`:123`) and signal (`:128`); `FlushEnrolledCommandsBeforeCommitAsync` (called at
+   `DbContextFactory.cs:652`, defined at `:716`), `CommitTransaction` (`:499`), the wake release
+   (`:508` and `:661`) and drop (`:892`, in `DropDeferredWork` at `:889`, called from
+   `RollbackTransaction` at `:521`); `PollingLoop.ComputeWaitTime` (`PollingLoop.cs:117`) and
+   `PollingLoop.ComputeRetryBackoffSeconds` (`:197`); `ConfigureInternalCommands`, `QuoteColumn` and
+   `IncludeColumns` (`ApplicationDbContext.cs:906`, `:767`, `:793`);
+   `InternalCommandMessage.UserPermissions` (`InternalCommandMessage.cs:130`); the
+   `ICurrentUserService` decoration (`DependencyInjection.cs:285`); `StampAsync`
+   (`InternalCommandProcessor.cs:675`) and `ComputeRetryBackoffSeconds` (`:701`); the
+   `InternalCommandsSettings` members (`:58`, `:69`, `:78`, `:87`, `:94`, `:102`, `:109`); the lane's
+   `RenewClaimAsync`, `ExecuteClaimedAsync` and `RecordFailedAttemptAsync` calls
+   (`InternalCommandLaneProcessor.cs:479`, `:486`, `:529`) and its cooldown charge (`:519-540`); the
+   lane counters (`InternalCommandMetrics.cs:129`, `:138`, `:144`); and the deployed polling
+   settings (`MMCA.ADC/infra/main.bicep:2210` for the queue and `:2204` for the outbox,
+   `MMCA.Store/infra/main.bicep:1910` and `:1903`). The earlier revisions keep their dated anchors as
+   written.
 
 ## Related
 [ADR-003](003-outbox-dual-dispatch.md) (the claim-lease, backoff and dead-letter machinery this

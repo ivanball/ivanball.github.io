@@ -8,6 +8,7 @@ Revised 2026-10-21: the Android status-bar fallback is recorded as part of the s
 Revised 2026-10-26: startup initialization is recorded as `InitializeAtStartupAsync` behind a best-effort interop guard, with a known MAUI native value authoritative over the WebView cookie for the Blazor startup mode (not the host pre-paint), and the dark palette background check is credited as a literal rather than a `BrandColors` pin.
 Revised 2026-10-28: the opt-in `ColorModeStamp` document attribute (`Layout:StampColorModeOnDocument`) is recorded as a post-render step of the theme lifecycle, and the `MmcaThemeProviders` startup and interactivity-marker anchors are refreshed.
 Revised 2026-10-31: all three Store heads, the MAUI head included, opt in to `Layout:StampColorModeOnDocument`, the MAUI head's `store.css` link is recorded beside the pre-paint route, and the Store and `theme.js` anchors are refreshed.
+Revised 2026-11-23: the MAUI host pre-paint now takes the native `MmcaTheme` user-agent token first on a session's first page (Android, iOS, MacCatalyst) and reads localStorage before the cookie, can stamp `data-mmca-color-mode` before first paint (Store's MAUI head opts in), and also sets the navigation-bar fallback; ADC's `MauiHostShellTests` now requires the pre-paint script and ADC's host `app.css` fallback is gone, the Store WASM client's opt-in arrives through `/client-config`, `ColorModeStamp` catches its failures inline, and anchors are refreshed.
 
 ## Context
 `MMCATheme` (`MMCA.Common.UI/Theme/MMCATheme.cs`) has always defined a complete, brand-tuned `PaletteDark`
@@ -23,7 +24,7 @@ intended end state but is not yet wired for theme on web heads (see Decision 3).
 ## Decision
 
 1. **Bind the existing theme.** The shared `MainLayout` renders a single `<MmcaThemeProviders />`
-   component (`MMCA.Common.UI/Layout/MainLayout.razor:16`), which owns the four Mud providers plus the
+   component (`MMCA.Common.UI/Layout/MainLayout.razor:17`), which owns the four Mud providers plus the
    Day/Dark lifecycle in one place. Inside that component `MudThemeProvider` is bound with
    `Theme="@Theme"` and `@bind-IsDarkMode`
    (`MMCA.Common.UI/Theme/MmcaThemeProviders.razor:14`), a two-way binding to that component's own
@@ -45,7 +46,7 @@ intended end state but is not yet wired for theme on web heads (see Decision 3).
    native value): the no-flash SSR bootstrap is outstanding.** `MmcaThemeProviders.OnAfterRenderAsync(firstRender)` calls
    `ThemeService.InitializeAtStartupAsync` (`MmcaThemeProviders.razor:69`), which on a web head (no
    native value) runs `ThemeService.InitializeAsync` to read the persisted value via JS interop
-   (`ThemeService.cs:61-62`); it deliberately does **not** run during SSR prerender, so the bound
+   (`ThemeService.cs:53-56`); it deliberately does **not** run during SSR prerender, so the bound
    `IsDarkMode` is corrected just after hydration. The call is wrapped in `ThemeInterop.TryAsync`,
    which swallows `JSException`, `JSDisconnectedException` and `InvalidOperationException`
    (`ThemeInterop.cs:19-30`), so a failure of one of those three types keeps the initial mode rather
@@ -57,63 +58,86 @@ intended end state but is not yet wired for theme on web heads (see Decision 3).
    theme**. On web heads a brief wrong-theme flash on first paint is therefore currently possible;
    emitting the theme server-side at prerender to close it is tracked as follow-up. MAUI heads do not
    wait for JS: `MMCA.Common.UI.Maui` registers `IInitialThemeModeSource` as
-   `MauiInitialThemeModeSource` (`MMCA.Common.UI.Maui/DependencyInjection.cs:68`), and
+   `MauiInitialThemeModeSource` (`MMCA.Common.UI.Maui/DependencyInjection.cs:69`), and
    `MmcaThemeProviders.OnInitialized` seeds `_isDarkMode` from it before subscribing
    (`MmcaThemeProviders.razor:50`), so the first frame paints in the stored mode. A known native
-   value is authoritative at startup: `InitializeFromNativeAsync` adopts it without a JS read and
-   then reseeds the WebView cookie/localStorage with it (`ThemeService.cs:64-79`), so on MAUI a known
+   value is authoritative at startup: `InitializeAtStartupAsync` (`ThemeService.cs:72-73`) routes it
+   to `InitializeFromNativeAsync`, which adopts it without a JS read (`ThemeService.cs:82-84`) and
+   then reseeds the WebView cookie/localStorage with it (`ThemeService.cs:90`), so on MAUI a known
    native value, not the cookie, decides the Blazor startup mode. When the source returns no value
    (null means unknown, `MmcaThemeProviders.razor:48-50`) MAUI takes the same cookie/JS path as a web
-   head (`ThemeService.cs:61-62`). The host-page pre-paint described next reads no native value, so
-   until the page is interactive the host surface follows the WebView cookie/localStorage even when
-   the native store disagrees. Web heads register no source and keep the post-render JS path. Before Blazor renders at all, the host page itself is
-   seeded by a framework-shipped pre-paint script: `MMCA.Common.UI/wwwroot/theme-prepaint.js`, a
-   classic synchronous script that stamps `<html data-mmca-theme="dark|light">` from the `mmca_theme`
-   cookie, then localStorage, then the OS scheme (`theme-prepaint.js:14-43`). The matching rules in
+   head (`ThemeService.cs:53-56`). Web heads register no source and keep the post-render JS path.
+   Before Blazor renders at all, the host page itself is seeded by a framework-shipped pre-paint
+   script: `MMCA.Common.UI/wwwroot/theme-prepaint.js`, a classic synchronous script whose theme
+   block (`theme-prepaint.js:22-77`) stamps `<html data-mmca-theme="dark|light">` (`:73`). It takes
+   the native `MmcaTheme/<dark|light>` user-agent token first (`:34-42`), but only on the first page
+   of a WebView session, marked through `sessionStorage` (`:36`, `:39`); then localStorage
+   (`:46-52`), then the `mmca_theme` cookie (`:54-67`), then the OS scheme (`:69-71`). The token is
+   appended by `MainPageBase` (`MMCA.Common.UI.Maui/MainPageBase.cs:200-212`) on Android
+   (`:138-145`) and on iOS and MacCatalyst (`:190-197`), and only when a native value is stored, so
+   on those platforms a cold launch's host surface follows the native store even when the WebView's
+   lazily flushed storage disagrees; elsewhere, and on a later reload in the same session, it
+   follows localStorage, then the cookie. The matching rules in
    Common's `app.css` (`MMCA.Common.UI/wwwroot/app.css:100-126`) paint the host surface in that mode
    until `MmcaThemeProviders` marks the page interactive (`data-mmca-interactive`,
-   `MmcaThemeProviders.razor:90-104`); every selector requires `data-mmca-theme`, so web heads, which
+   `MmcaThemeProviders.razor:90-106`); every selector requires `data-mmca-theme`, so web heads, which
    do not load the script, are untouched. Both MAUI heads load it as the first script in `<head>`
    (`MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI/wwwroot/index.html:8`,
-   `MMCA.Store/Source/Hosts/UI/MMCA.Store.UI/wwwroot/index.html:13`), and neither head carries an
-   inline script. The same file also carries a second, non-theme block: the Android status-bar
-   height fallback that turns the `MmcaStatusBar/<px>` user-agent token into
-   `--mmca-status-bar-fallback` (`theme-prepaint.js:45-56`). Each head carries a repo-local fitness
+   `MMCA.Store/Source/Hosts/UI/MMCA.Store.UI/wwwroot/index.html:15`), and neither head carries an
+   inline script. The same file also carries a second, non-theme block (`theme-prepaint.js:87-97`):
+   the system-bar fallbacks that turn the `MmcaStatusBar/<px>` user-agent token into
+   `--mmca-status-bar-fallback` (`:88-91`) and the `MmcaNavigationBar/<px>` token into
+   `--mmca-navigation-bar-fallback` (`:93-96`), both appended on Android
+   (`MainPageBase.cs:139-140`). Each head carries a repo-local fitness
    test, `MauiHostShellTests.HostPage_DoesNotPaintALightBackgroundBeforeTheThemeApplies`, that fails
-   when the host page would paint the default light surface before the theme applies, but only
-   Store's knows about the pre-paint script. Store's
-   (`MMCA.Store/Tests/Architecture/MMCA.Store.Architecture.Tests/Ui/MauiHostShellTests.cs:21-49`)
-   accepts any one of three routes (`:47`): a transparent `html`/`body`, a
-   `prefers-color-scheme: dark` aware one, or the pre-paint seed, which holds when the script runs
-   ahead of every stylesheet, Common's `app.css` is linked, and no host-local `html`/`body` rule
-   paints a background outside a `data-mmca-theme` selector (`:40-45`). Store's host `app.css` has
+   when the host page would paint the default light surface before the theme applies. Store's
+   (`MMCA.Store/Tests/Architecture/MMCA.Store.Architecture.Tests/Ui/MauiHostShellTests.cs:36-64`)
+   accepts any one of three routes (`:62`): a transparent `html`/`body`, a
+   `prefers-color-scheme: dark` aware one that also paints a page background (`:49`), or the
+   pre-paint seed, which holds when the script runs ahead of every stylesheet, Common's `app.css` is
+   linked, and no host-local `html`/`body` rule paints a background outside a `data-mmca-theme`
+   selector (`:55-60`). Store's host `app.css` has
    no `html`/`body` rule, so the seed is the route in use there. The MAUI head also links Store's
-   `store.css` after `app.css` (`MMCA.Store/Source/Hosts/UI/MMCA.Store.UI/wwwroot/index.html:19`),
+   `store.css` after `app.css` (`MMCA.Store/Source/Hosts/UI/MMCA.Store.UI/wwwroot/index.html:21`),
    whose `body` rule paints `var(--casa-page)`
    (`MMCA.Store/Source/Hosts/UI/MMCA.Store.UI.Web/wwwroot/store.css:117-118`); Common's
    `html[data-mmca-theme=...] body` selectors (`MMCA.Common.UI/wwwroot/app.css:110`, `:115`, `:124`)
    are more specific than that bare `body` selector, so the pre-paint seed still wins. The test reads
-   only the host `app.css` and inline styles (`MauiHostShellTests.cs:24-26`), so it does not see
-   `store.css`. ADC's
-   (`MMCA.ADC/Tests/Architecture/MMCA.ADC.Architecture.Tests/Ui/MauiHostShellTests.cs:42-58`)
-   accepts only the first two routes (`:56`) and does not check the script: ADC's host `app.css`
-   keeps a `prefers-color-scheme` aware `html`/`body` fallback surface
-   (`MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI/wwwroot/app.css:26-36`), so the test passes through that
-   rule and removing `theme-prepaint.js` from ADC's `index.html` would not fail it. After marking
+   only the inline styles and the head's own `app.css` (`MauiHostShellTests.cs:40-41`, `:163`), so it
+   does not see `store.css`. ADC's
+   (`MMCA.ADC/Tests/Architecture/MMCA.ADC.Architecture.Tests/Ui/MauiHostShellTests.cs:43-83`)
+   requires the pre-paint route itself: `theme-prepaint.js` loaded as a classic script (`:54-56`) in
+   `<head>` (`:59`) ahead of the first stylesheet (`:60-63`), and Common's `app.css` linked
+   (`:65-67`); it then checks only inline `<style>` blocks for a light `html`/`body` background
+   (`:69-82`). Because the script-tag assertion is unconditional, removing `theme-prepaint.js` from
+   ADC's `index.html` fails the test. The head's own linked stylesheets
+   (`_content/MMCA.ADC.Conference.UI/adc-ui.css` and `MMCA.ADC.UI.styles.css`,
+   `MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI/wwwroot/index.html:11-12`) are not read by the test. After marking
    the page interactive, `OnAfterRenderAsync` also calls the opt-in `ColorModeStamp.ApplyAsync`
-   (`MmcaThemeProviders.razor:76`, and again after every theme change at `:125`): with
-   `Layout:StampColorModeOnDocument` set (off by default, `LayoutSettings.cs:68`) it stamps
-   `<html data-mmca-color-mode="light|dark">` for an app's own stylesheet, best-effort through
-   `ThemeInterop.TryAsync` (`ColorModeStamp.cs:24-35`). It is deliberately a separate attribute
-   (`theme.js:91-93`, `:96`) from the pre-paint `data-mmca-theme` (stamped at
-   `theme-prepaint.js:42`) and runs only after an interactive render, so it does not close the
-   web-head first-paint flash. All three Store heads opt in: both web heads
-   (`MMCA.Store/Source/Hosts/UI/MMCA.Store.UI.Web/appsettings.json:28`,
-   `MMCA.Store.UI.Web.Client/wwwroot/appsettings.json:27`) and the MAUI head
-   (`MMCA.Store/Source/Hosts/UI/MMCA.Store.UI/appsettings.json:21`). `store.css`, which the MAUI
-   head links too (`MMCA.Store.UI/wwwroot/index.html:19`), keys its dark roles on the attribute
-   (`MMCA.Store.UI.Web/wwwroot/store.css:89-94`), so those roles share that post-interactive
-   timing; ADC and Helpdesk do not opt in.
+   (`MmcaThemeProviders.razor:76`, and again after every theme change at `:127`, inside
+   `RerenderSafeAsync`, `:115-137`): with `Layout:StampColorModeOnDocument` set (a `bool` that
+   defaults to false, `LayoutSettings.cs:51`) it stamps
+   `<html data-mmca-color-mode="light|dark">` for an app's own stylesheet (`ColorModeStamp.cs:24-35`),
+   best-effort: it catches `JSException`, `JSDisconnectedException` and `InvalidOperationException`
+   inline (`ColorModeStamp.cs:37`) rather than through `ThemeInterop.TryAsync`. It is deliberately a
+   separate attribute (`theme.js:91-93`, `:96`) from the pre-paint `data-mmca-theme` (stamped at
+   `theme-prepaint.js:73`) and runs only after an interactive render, so it does not close the
+   web-head first-paint flash. A MAUI head can stamp it before the first paint as well: when the
+   script tag carries `data-stamp-color-mode` (`theme-prepaint.js:15-21`, `:26`), the pre-paint also
+   stamps `data-mmca-color-mode` with the same mode (`:74-76`; documented at `LayoutSettings.cs:45-47`).
+   All three Store heads opt in. The server web head sets it in its `Layout` section
+   (`MMCA.Store/Source/Hosts/UI/MMCA.Store.UI.Web/appsettings.json:26-32`, `:31`), and the WASM
+   client, which carries no `Layout` section of its own
+   (`MMCA.Store.UI.Web.Client/wwwroot/appsettings.json:8-9`), receives it through `/client-config`,
+   which forwards `LayoutSettings` (`MMCA.Common.UI.Web/ClientConfig/ClientConfigUiSections.cs:39`;
+   `MMCA.Store.UI.Web/appsettings.json:23-25`). The MAUI head sets it too
+   (`MMCA.Store/Source/Hosts/UI/MMCA.Store.UI/appsettings.json:21`) and loads the pre-paint script
+   with `data-stamp-color-mode` (`MMCA.Store.UI/wwwroot/index.html:15`). `store.css`, which the MAUI
+   head links too (`MMCA.Store.UI/wwwroot/index.html:21`), keys its dark roles on the attribute
+   (`MMCA.Store.UI.Web/wwwroot/store.css:89-94`), so on the Store web heads those roles share the
+   post-interactive timing, while on the Store MAUI head they apply in the first frame. Store's
+   `MauiHostShellTests.HostPage_PrepaintScriptOptsIntoTheColorModeStamp` (`MauiHostShellTests.cs:132-146`)
+   pins that opt-in. ADC and Helpdesk do not opt in.
 
 4. **The toggle ships in the shared `MainLayout`**, next to the i18n culture switcher, in the app-bar
    `appbar-icon-actions` slot, so every consumer gets both controls without per-host wiring.
@@ -143,12 +167,14 @@ intended end state but is not yet wired for theme on web heads (see Decision 3).
   definition (`:52-92`), and pins the theme palettes to `BrandColors` on the C# side: the light
   primary and the secondary family, including `PaletteDark.Secondary` (`:94-110`), and the dark
   palette's primary (`:118`). The dark palette's background is asserted against the literal
-  `#1A2027` (`:117`), not against `BrandColors.DarkBackground`. The surface colors are restated by hand in two
-  places no test compares to `BrandColors.LightBackground`/`DarkBackground` (`BrandColors.cs:66`,
+  `#1A2027` (`:117`), not against `BrandColors.DarkBackground`. The surface colors are restated by hand in
+  three places no test compares to `BrandColors.LightBackground`/`DarkBackground` (`BrandColors.cs:66`,
   `:136`): the pre-paint tokens `--mmca-prepaint-background-light/dark`
-  (`MMCA.Common.UI/wwwroot/app.css:96-97`) and the `#FAFBFC`/`#1A2027` fallbacks in ADC's host
-  `app.css` (`MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI/wwwroot/app.css:28`, `:34`), so either copy can
-  drift unnoticed.
+  (`MMCA.Common.UI/wwwroot/app.css:96-97`, whose comment at `:93-95` says they mirror the values a
+  head's `MainPage.xaml` uses natively) and the native page background of each MAUI head
+  (`MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI/MainPage.xaml:8`,
+  `MMCA.Store/Source/Hosts/UI/MMCA.Store.UI/MainPage.xaml:8`, both
+  `AppThemeBinding Light=#FAFBFC, Dark=#1A2027`), so those copies can drift unnoticed.
 - **Defaulting to the OS preference** respects the user's system setting on first visit while letting an
   explicit choice win and follow them across devices.
 
@@ -291,11 +317,55 @@ links.
    `store.css:89-94`, `theme-prepaint.js:42`, Store `index.html:13` and
    `MauiHostShellTests.cs:40-45`, `:47` unchanged.
 
+## Revision (2026-11-23)
+Re-verified against current source. The binding, the `ThemeService` preference model, the startup
+initialization path, the web-head flash scope and the `ColorModeStamp` opt-in default are
+unchanged; what moved is the MAUI host pre-paint script, the ADC host-page fitness test and the
+Store opt-in mechanics.
+1. Decision 3: `theme-prepaint.js` no longer reads only WebView storage. Its theme block
+   (`theme-prepaint.js:22-77`) takes the native `MmcaTheme/<dark|light>` user-agent token first
+   (`:34-42`) on the first page of a WebView session (`sessionStorage`, `:36`, `:39`), then
+   localStorage (`:46-52`), then the cookie (`:54-67`), then the OS scheme (`:69-71`), and stamps
+   `data-mmca-theme` at `:73`. `MainPageBase` appends the token on Android, iOS and MacCatalyst
+   (`MMCA.Common.UI.Maui/MainPageBase.cs:138-145`, `:190-197`, `:200-212`). The statement that the
+   host pre-paint reads no native value, and the cookie-before-localStorage order, no longer hold.
+2. Decision 3: a `data-stamp-color-mode` attribute on the script tag (`theme-prepaint.js:15-21`,
+   `:26`) makes the pre-paint also stamp `data-mmca-color-mode` (`:74-76`;
+   `LayoutSettings.cs:45-47`). Store's MAUI head sets it (`MMCA.Store.UI/wwwroot/index.html:15`),
+   so `store.css`'s dark roles apply there in the first frame, and Store pins it with
+   `HostPage_PrepaintScriptOptsIntoTheColorModeStamp` (`MauiHostShellTests.cs:132-146`). The
+   post-interactive timing still holds on the web heads.
+3. Decision 3: the non-theme block (`theme-prepaint.js:87-97`) also sets
+   `--mmca-navigation-bar-fallback` from `MmcaNavigationBar/<px>` (`:93-96`; `MainPageBase.cs:140`).
+4. Decision 3, Rationale and Related: ADC's `MauiHostShellTests` (`:43-83`) now requires
+   `theme-prepaint.js` as a classic script in `<head>` ahead of the first stylesheet (`:54-63`) and
+   Common's `app.css` linked (`:65-67`), then checks only inline styles (`:69-82`); ADC's host
+   `wwwroot` no longer carries an `app.css`, so its `prefers-color-scheme` fallback and its
+   `#FAFBFC`/`#1A2027` copies are gone. Both consumer tests now recognize the pre-paint script; the
+   2026-10-21 Status sentence that only Store's does, and the Rationale's two hand-restated places
+   (now three: `app.css:96-97` and each MAUI head's `MainPage.xaml:8`, which the earlier count
+   left out), are superseded.
+5. Decision 3: the Store WASM client's `wwwroot/appsettings.json` has no `Layout` section
+   (`:8-9`); it still opts in, through `/client-config` forwarding of `LayoutSettings`
+   (`MMCA.Common.UI.Web/ClientConfig/ClientConfigUiSections.cs:39`), from the server head's
+   setting (`MMCA.Store.UI.Web/appsettings.json:31`).
+6. Decision 3: `ColorModeStamp` does not call `ThemeInterop.TryAsync`; it catches `JSException`,
+   `JSDisconnectedException` and `InvalidOperationException` inline (`ColorModeStamp.cs:37`).
+7. Anchors re-verified against current source: shared `MainLayout.razor:17` (superseding `:16`);
+   `MMCA.Common.UI.Maui/DependencyInjection.cs:69` (superseding `:68`); `ThemeService.cs:53-56`,
+   `:72-73`, `:82-84`, `:90` (superseding `:61-62` and `:64-79`); `MmcaThemeProviders.razor:90-106`
+   and `:127` (superseding `:90-104` and `:125`); `LayoutSettings.cs:51` (superseding `:68`); Store
+   `index.html:15` and `:21` (superseding `:13` and `:19`); Store `MauiHostShellTests.cs:36-64`,
+   `:62`, `:55-60`, `:40-41` (superseding `:21-49`, `:47`, `:40-45`, `:24-26`);
+   `MmcaThemeProviders.razor:14`, `:36`, `:38`, `:50`, `:76`, `app.css:96-97`, `:100-126`, `:110`,
+   `:115`, `:124`, `BrandColors.cs:66`, `:136`, `store.css:89-94`, `:117-118`, `theme.js:91-93`,
+   `:96`, ADC `index.html:8` and Store MAUI `appsettings.json:21` unchanged.
+
 ## Related
 [ADR-027](027-multi-locale-i18n.md) (shares the cookie source-of-truth and the `User` preference migration,
 and is the model for the theme no-flash SSR bootstrap that is not yet wired),
 [ADR-022](022-browser-session-cookie-auth.md) (the SSR cookie-read pattern),
 [ADR-015](015-architecture-fitness-functions.md) (the fitness-function framework; the shared
 `MMCA.Common.Testing.Architecture` package carries no theme base, and the theme host-page assertion
-lives in each consumer's own `MauiHostShellTests`, of which only Store's checks the pre-paint script,
-see Decision 3).
+lives in each consumer's own `MauiHostShellTests`, both of which recognize the pre-paint script, see
+Decision 3).

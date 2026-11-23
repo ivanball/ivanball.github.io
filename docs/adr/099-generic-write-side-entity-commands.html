@@ -282,7 +282,11 @@
           entity-keyed <code>ICacheInvalidating&lt;TEntity&gt;</code> marker and its convention test, Decision 6 places the
           <code>ETag</code> helper on <code>ApiControllerBase</code>, Decisions 7 and 8 add the conditional-write helpers for
           narrow updates and the controller-level read caching and eviction attributes, and the cache-prefix
-          trade-off names the allow-list.</p>
+          trade-off names the allow-list. Revised 2026-11-23: MMCA.Helpdesk joins the adopters, the list of
+          kept <code>UpdateEntityHandler</code> subclasses grows to six (four beside <code>AddEntityCrud</code>, two beside Store
+          Sales&#39; <code>AddEntityUpdateVerb</code>), Decision 7 records that the no-attribute throw lives in
+          <code>SupportsIfMatchAttribute.RequiredToken</code> and that ADC&#39;s activity update makes one helper call, and
+          the record now notes that ADC&#39;s password change derives the framework&#39;s <code>ChangePasswordHandlerBase</code>.</p>
           <h2 id="context">Context</h2>
           <p>ADR-034 records the read side of the generic resource layer and stops one verb short. Its
           <code>AggregateRootEntityControllerBase</code> ships <code>[HttpPost]</code> create and <code>[HttpDelete(&quot;{id}&quot;)]</code>
@@ -404,7 +408,7 @@
           </li>
           <li><p><strong>PUT ships on a new derived controller base, not on the shipped one.</strong>
           <code>CrudEntityControllerBase&lt;TEntity, TEntityDTO, TIdentifierType, TCreateRequest, TUpdateRequest&gt;</code>
-          (<code>Source/Presentation/MMCA.Common.API/Controllers/CrudEntityControllerBase.cs:54</code>) inherits
+          (<code>Source/Presentation/MMCA.Common.API/Controllers/CrudEntityControllerBase.cs:55</code>) inherits
           <code>AggregateRootEntityControllerBase</code> and adds <code>[HttpPut(&quot;{id}&quot;)]</code> (<code>:89</code>). A controller offering
           only create and delete keeps inheriting the four-parameter base; one that also offers update
           inherits this and gains the action (<code>:24-29</code>). The action is <code>[Idempotent]</code> (<code>:90</code>, ADR-017) and
@@ -414,7 +418,7 @@
           command (<code>:104</code>). A failed precondition is answered with 412 rather than 409. The request body
           carries no token. On success the refreshed token is emitted as a weak <code>ETag</code> through
           <code>SetConcurrencyETag</code> (<code>:113</code>), which the entity and use-case controllers inherit from
-          <code>ApiControllerBase</code> (<code>Source/Presentation/MMCA.Common.API/Controllers/ApiControllerBase.cs:97</code>; the
+          <code>ApiControllerBase</code> (<code>Source/Presentation/MMCA.Common.API/Controllers/ApiControllerBase.cs:125</code>; the
           OAuth and service-info bases derive <code>ControllerBase</code> directly, <code>OAuthControllerBase.cs:60</code>,
           <code>ServiceInfoControllerBase.cs:30</code>), so a client can
           condition its next write without re-reading.</p>
@@ -422,16 +426,22 @@
           <li><p><strong>A narrow update outside the generic PUT uses the conditional-write helpers.</strong> A write that is
           not the whole-request PUT (a lifecycle transition, a single-field change) is still conditional,
           and <code>ApiControllerBase</code> carries its action body. <code>HandleConditionalCommandWithResponseAsync</code>
-          (<code>ApiControllerBase.cs:156</code>) reads the token <code>[SupportsIfMatch]</code> decoded (<code>:165</code>), builds the
-          command from it, dispatches it, awaits an optional success follow-up and answers 200 with the
-          value and its weak <code>ETag</code> (<code>:194-202</code>). <code>HandleConditionalCommandAsync</code> (<code>:125</code>) is the form for
-          a command whose value is discarded and answers 204 (<code>:177-184</code>). A failure goes through
-          <code>HandleFailure</code> (<code>:179</code>, <code>:196</code>), and an action without the attribute throws before the handler
-          runs (<code>:123-124</code>, <code>:154-155</code>). ADC runs most of its conditional actions through them
-          (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/Activities/ActivitiesController.cs:165</code>,
-          <code>:171</code>); its event update keeps its own body because the handler answers with an envelope the
-          action unwraps after adding a warning header
-          (<code>.../Controllers/Events/EventsController.cs:196-213</code>).</p>
+          (<code>ApiControllerBase.cs:184</code>) reads the token <code>[SupportsIfMatch]</code> decoded (<code>:193</code>), builds the
+          command from it, and hands it to <code>RunConditionalCommandWithResponseAsync</code> (<code>:216</code>), which
+          dispatches it, awaits an optional success follow-up and answers 200 with the value and its weak
+          <code>ETag</code> (<code>:229-230</code>). <code>HandleConditionalCommandAsync</code> (<code>:153</code>, token <code>:163</code>) is the form for a
+          command whose value is discarded; its <code>RunConditionalCommandAsync</code> (<code>:198</code>) answers 204
+          (<code>:212</code>). A failure goes through <code>HandleFailure</code> (<code>:207</code>, <code>:224</code>), and an action without the
+          attribute throws before the handler runs: the token read
+          <code>SupportsIfMatchAttribute.RequiredToken</code>
+          (<code>Source/Presentation/MMCA.Common.API/Concurrency/SupportsIfMatchAttribute.cs:81</code>) throws when no
+          token was decoded (<code>:87</code>), as both helpers document (<code>ApiControllerBase.cs:151-152</code>,
+          <code>:182-183</code>). ADC runs most of its conditional actions through them (12 helper calls across 10
+          controllers, against 16 <code>[SupportsIfMatch]</code> actions across 12), for example the activity update
+          (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/Activities/ActivitiesController.cs:173</code>);
+          its event update keeps its own body because the handler answers with an envelope the action
+          unwraps after adding a warning header
+          (<code>.../Controllers/Events/EventsController.cs:196-222</code>).</p>
           </li>
           <li><p><strong>Read caching and eviction are declared on the controller.</strong> <code>[PublicCachedReads(policyName)]</code>
           (<code>Source/Presentation/MMCA.Common.API/Caching/PublicCachedReadsAttribute.cs:42</code>) is a controller
@@ -452,7 +462,7 @@
           rewritten a conflict to 412 and evicts nothing for it (<code>:17-21</code>). Eviction is best effort: a
           cache-store fault is logged as a Warning and never fails the committed write (<code>:24-27</code>,
           <code>:111-114</code>), and a tag named at class and method level is evicted once per request (<code>:30-32</code>).
-          ADC declares both on its Conference controllers (<code>ActivitiesController.cs:39-40</code>). Output-cache
+          ADC declares both on its Conference controllers (<code>ActivitiesController.cs:39</code>, <code>:42</code>). Output-cache
           eviction is separate from the <code>CachePrefix</code> the caching decorator evicts (ADR-026, ADR-040).</p>
           </li>
           </ol>
@@ -509,18 +519,30 @@
           <li><strong>Nothing in the framework opts a consumer in: every registration is a line the module writes.</strong>
           Adoption is per aggregate and partial. ADC&#39;s Conference module registers it for four aggregates,
           <code>Category</code>, <code>Activity</code>, <code>Sponsor</code> and <code>Partner</code>
-          (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/DependencyInjection.cs:155-157</code>,
-          and <code>Partner</code> at <code>:158</code>),
+          (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/DependencyInjection.cs:157-159</code>,
+          and <code>Partner</code> at <code>:160</code>),
           Store&#39;s Catalog for <code>Product</code> (one call per field-scoped update request) and <code>Category</code>
-          (<code>MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.Application/DependencyInjection.cs:101-104</code>,
-          <code>:105</code>, <code>:112</code>),
-          and Store&#39;s Identity for <code>Customer</code>
-          (<code>MMCA.Store/Source/Modules/Identity/MMCA.Store.Identity.Application/DependencyInjection.cs:84-86</code>),
-          each call placed after the convention scan so <code>TryAdd</code> leaves the hand-written handlers those
-          modules keep (the create verbs, Catalog&#39;s <code>DeleteCategoryHandler</code> and <code>DeleteProductHandler</code>, and
-          <code>CategoryAssignParentUpdateHandler</code>, a subclass of <code>UpdateEntityHandler</code>, at
-          <code>.../MMCA.Store.Catalog.Application/DependencyInjection.cs:97-100</code>, <code>:107-111</code>) exactly where they
-          were. An
+          (<code>MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.Application/DependencyInjection.cs:95-98</code>,
+          <code>:99</code>, <code>:107</code>),
+          Store&#39;s Identity for <code>Customer</code>, one call per field-scoped update request
+          (<code>MMCA.Store/Source/Modules/Identity/MMCA.Store.Identity.Application/DependencyInjection.cs:91-93</code>),
+          and MMCA.Helpdesk&#39;s Tickets module for <code>Ticket</code>
+          (<code>MMCA.Helpdesk/Source/Modules/Tickets/MMCA.Helpdesk.Tickets.Application/DependencyInjection.cs:55</code>).
+          Each module also runs the convention scan (ADC Conference <code>:147</code>, Store Catalog <code>:76</code>, Store
+          Identity <code>:77</code>, Helpdesk <code>:33</code>), which is what registers the hand-written handlers those modules
+          keep. The scan appends them and <code>AddEntityCrud</code> only <code>TryAdd</code>s its generic handlers, so the
+          hand-written ones keep their verbs whichever call runs first (the Helpdesk comment at
+          <code>.../MMCA.Helpdesk.Tickets.Application/DependencyInjection.cs:45-49</code>). They are the
+          create verbs, Catalog&#39;s <code>DeleteCategoryHandler</code> and <code>DeleteProductHandler</code> (named in the comments
+          at <code>.../MMCA.Store.Catalog.Application/DependencyInjection.cs:84-87</code>, <code>:93</code>), and four subclasses
+          of <code>UpdateEntityHandler</code> that keep one <code>AddEntityCrud</code> update verb each: Catalog&#39;s
+          <code>CategoryAssignParentUpdateHandler</code> (<code>:103-106</code>) and <code>ProductAssignCategoryUpdateHandler</code>
+          (<code>.../Products/UseCases/AssignCategory/ProductAssignCategoryUpdateHandler.cs:32</code>, base <code>:36</code>),
+          Identity&#39;s <code>CustomerChangeEmailUpdateHandler</code>
+          (<code>.../MMCA.Store.Identity.Application/Customers/UseCases/ChangeEmail/CustomerChangeEmailUpdateHandler.cs:48</code>,
+          base <code>:54</code>) and Helpdesk&#39;s <code>TicketUpdateHandler</code>
+          (<code>.../MMCA.Helpdesk.Tickets.Application/Tickets/UseCases/Update/TicketUpdateHandler.cs:33</code>, base
+          <code>:37</code>). An
           aggregate whose lifecycle is guarded rather than plain CRUD keeps its own handlers, and no
           migration is asked of anyone.</li>
           <li><strong>A gated read cannot live on a <code>[PublicCachedReads]</code> controller.</strong> The attribute matches an
@@ -799,6 +821,72 @@
           (<code>:101-104</code>, <code>:105</code>, <code>:112</code>, hand-written handlers at <code>:97-100</code>, <code>:107-111</code>) and Store Identity
           (<code>:84-86</code>).</li>
           </ol>
+          <h2 id="revision-2026-11-23">Revision (2026-11-23)</h2>
+          <p>Re-verified against current source. No decision changed: the generic commands, the two controller
+          bases, the registration helpers and the conditional-write helpers behave as recorded. What moved is
+          the adoption record, two statements in Decision 7, and line positions across the controller base and
+          the consumer registrations. Anchors inside the earlier Revisions are left as recorded.</p>
+          <ol>
+          <li><strong>MMCA.Helpdesk adopts the generic write side.</strong> Its Tickets module registers
+          <code>AddEntityCrud&lt;Ticket, TicketDTO, TicketIdentifierType, TicketCreateRequest, TicketUpdateRequest&gt;</code>
+          (<code>MMCA.Helpdesk/Source/Modules/Tickets/MMCA.Helpdesk.Tickets.Application/DependencyInjection.cs:55</code>)
+          after its scan (<code>:33</code>) and keeps its update verb in <code>TicketUpdateHandler</code>, a subclass of
+          <code>UpdateEntityHandler</code>
+          (<code>.../Tickets/UseCases/Update/TicketUpdateHandler.cs:33</code>, base <code>:37</code>). The Trade-offs adoption
+          paragraph now names it.</li>
+          <li><strong>The kept update handlers are six, not one.</strong> Four keep an <code>AddEntityCrud</code> update verb. Beside
+          Store Catalog&#39;s
+          <code>CategoryAssignParentUpdateHandler</code>, <code>TryAdd</code> leaves in place Catalog&#39;s
+          <code>ProductAssignCategoryUpdateHandler</code>
+          (<code>MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.Application/Products/UseCases/AssignCategory/ProductAssignCategoryUpdateHandler.cs:32</code>,
+          base <code>:36</code>), Identity&#39;s <code>CustomerChangeEmailUpdateHandler</code>
+          (<code>MMCA.Store/Source/Modules/Identity/MMCA.Store.Identity.Application/Customers/UseCases/ChangeEmail/CustomerChangeEmailUpdateHandler.cs:48</code>,
+          base <code>:54</code>) and Helpdesk&#39;s <code>TicketUpdateHandler</code>. The Trade-offs list also no longer cites the
+          hand-written handlers as registrations in the Catalog DI file: the scan (<code>:76</code>) registers them,
+          and that file names them only in comments (<code>:84-87</code>, <code>:93</code>, <code>:103-106</code>). The other two are on the
+          verb side: Store Sales&#39; <code>IncreaseInventoryHandler</code>
+          (<code>MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Application/Inventory/UseCases/Adjust/IncreaseInventoryHandler.cs:38</code>,
+          base <code>:44</code>) and <code>DecreaseInventoryHandler</code> (<code>.../Adjust/DecreaseInventoryHandler.cs:23</code>, base
+          <code>:29</code>) subclass the verb-discriminated <code>UpdateEntityHandler</code> and keep the increase and decrease
+          verbs under <code>TryAdd</code> (named together in the comment at
+          <code>MMCA.Store.Sales.Application/DependencyInjection.cs:98-99</code>), while the <code>AddEntityUpdateVerb</code>
+          pair sits at <code>:103-104</code> (scan <code>:90</code>).</li>
+          <li><strong>The no-attribute throw lives in the token read.</strong> Decision 7 said the conditional helpers throw
+          on an action without <code>[SupportsIfMatch]</code>. The throw is in
+          <code>SupportsIfMatchAttribute.RequiredToken</code>
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Concurrency/SupportsIfMatchAttribute.cs:81</code>,
+          throw <code>:87</code>), which both helpers call (<code>ApiControllerBase.cs:163</code>, <code>:193</code>) and document
+          (<code>:151-152</code>, <code>:182-183</code>). Each helper now delegates the awaited half to a private runner
+          (<code>RunConditionalCommandAsync</code> <code>:198</code>, <code>RunConditionalCommandWithResponseAsync</code> <code>:216</code>).</li>
+          <li><strong>ADC&#39;s activity controller makes one helper call, not two.</strong> Decision 7 now cites the update at
+          <code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/Activities/ActivitiesController.cs:173</code>
+          and states the ratio behind &quot;most&quot;: 12 helper calls across 10 ADC controllers against 16
+          <code>[SupportsIfMatch]</code> actions across 12.</li>
+          <li><strong>ADC&#39;s password change derives a framework base.</strong> This corrects the record rather than a code
+          change: the 2026-08-30 Revision calls the handler hand-written, but it already derived the base
+          then (since the v1.138.0 adoption sweep, 2026-08-03). <code>ChangePasswordHandler</code> derives the
+          framework&#39;s <code>ChangePasswordHandlerBase</code>
+          (<code>MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Application/Users/UseCases/ChangePassword/ChangePasswordHandler.cs:24</code>,
+          base <code>:31</code>;
+          <code>MMCA.Common/Source/Core/MMCA.Common.Application/Users/UseCases/ChangePassword/ChangePasswordHandlerBase.cs:55</code>).
+          It stays off the generic update path, so the auth verticals remain outside it as &quot;Where the generic
+          path stops&quot; records; what that section calls hand-written is partly a framework base.</li>
+          <li>Anchors re-verified against current source: the PUT base
+          (<code>CrudEntityControllerBase.cs:55</code>, <code>[HttpPut(&quot;{id}&quot;)]</code> <code>:89</code>, <code>[Idempotent]</code> <code>:90</code>,
+          <code>[SupportsIfMatch]</code> <code>:91</code>, <code>RequiredToken</code> <code>:104</code>, <code>SetConcurrencyETag</code> <code>:113</code>);
+          <code>SetConcurrencyETag</code> on <code>ApiControllerBase.cs:125</code>; <code>HandleConditionalCommandAsync</code> <code>:153</code>,
+          <code>HandleConditionalCommandWithResponseAsync</code> <code>:184</code>, <code>HandleFailure</code> <code>:207</code>, <code>:224</code>, 204 <code>:212</code>,
+          200 with <code>ETag</code> <code>:229-230</code>; ADC <code>[PublicCachedReads]</code> and <code>[EvictOutputCache]</code>
+          (<code>ActivitiesController.cs:39</code>, <code>:42</code>) and the event update body
+          (<code>EventsController.cs:196-222</code>); ADC Conference <code>AddEntityCrud</code>
+          (<code>DependencyInjection.cs:157-160</code>, scan <code>:147</code>) and <code>AddEntityUpdate&lt;UpdateSpeakerCommand, ...&gt;</code>
+          (<code>:169</code>); Store Catalog (<code>:95-98</code>, <code>:99</code>, <code>:107</code>) and Store Identity (<code>:91-93</code>, scan <code>:77</code>);
+          <code>PayOrderHandler</code> (<code>PayOrderHandler.cs:23</code>, base <code>:27</code>, <code>MutateAsync</code> <code>:52</code>, <code>RetireAsync</code> <code>:69</code>)
+          and <code>ProcessPaymentWebhookHandler</code> (<code>ProcessPaymentWebhookHandler.cs:28</code>, <code>ICommandHandler</code>
+          <code>:32</code>); ADC <code>SpeakerUpdateApplier.cs:14-15</code>, <code>SetUserAvatarHandler.cs:27</code> (payload base <code>:34</code>),
+          <code>RemoveUserAvatarHandler.cs:18</code> (bare base <code>:22</code>, <code>MutateAsync</code> <code>:31</code>),
+          <code>UpdateSessionHandler.cs:23</code>, <code>UpdateEventHandler.cs:22</code>, <code>AddRoomHandler.cs:28</code>.</li>
+          </ol>
           
         <div class="doc-foot btn-row">
           <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
@@ -821,6 +909,7 @@
             <li><a href="#revision-2026-10-21">Revision (2026-10-21)</a></li>
             <li><a href="#revision-2026-10-26">Revision (2026-10-26)</a></li>
             <li><a href="#revision-2026-10-28">Revision (2026-10-28)</a></li>
+            <li><a href="#revision-2026-11-23">Revision (2026-11-23)</a></li>
             </ul>
           </nav>
         </aside>

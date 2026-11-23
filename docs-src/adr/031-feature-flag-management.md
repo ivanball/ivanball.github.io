@@ -32,14 +32,17 @@ at the end.
 Revised 2026-11-08 (MMCA.Common v1.281.0): stored overrides can be layered over the configuration
 (`AddReloadableFeatureFlags`), so a kill switch flips without a new revision; configuration stays the
 default and the answer whenever the overrides cannot be loaded. See the Revision (2026-11-08) at the
-end.
+end. Revised 2026-11-23: the command FeatureGate decorator sits directly inside `ViewAs` rather than
+outermost, a stored override can define a flag configuration never mentions, and the override
+snapshot key carries the owning service as well as the data source; anchors refreshed.
 
 ## Context
 The apps need to decouple *release* from *deploy*: ship code dark, flip a kill switch, or roll a feature
 out to a percentage of users without a redeploy. A flag has to be enforceable at **two** different points
 of the request path (the HTTP edge (an MVC action) and inside the CQRS pipeline (a command or query))
-because a feature can be reachable from either. ADR-014 already names a `FeatureGate` decorator as the
-outermost slot of the command/query pipeline, but it only decides the *decorator ordering*; it does not
+because a feature can be reachable from either. ADR-014 already places a `FeatureGate` decorator at the
+outer end of the command/query pipeline (outermost for queries, directly inside `ViewAs` for
+commands), but it only decides the *decorator ordering*; it does not
 decide the provider, the controller-edge surface, the disabled-response convention, or the rollout
 filters. This ADR records those.
 
@@ -47,7 +50,7 @@ filters. This ADR records those.
 Standardize on **`Microsoft.FeatureManagement`**, configured from the `"FeatureManagement"` configuration
 section and registered once in `AddAPI`
 (`services.AddFeatureManagement()` + `services.AddSingleton<IDisabledFeaturesHandler,
-DisabledFeatureHandler>()`, `MMCA.Common.API/DependencyInjection.cs:105-107`), with the built-in
+DisabledFeatureHandler>()`, `MMCA.Common.API/DependencyInjection.cs:108-110`), with the built-in
 **Percentage / TimeWindow / Targeting** filters available for progressive rollout. The same flag *name*
 is enforced at two independent surfaces:
 
@@ -55,22 +58,29 @@ is enforced at two independent surfaces:
   `X` is off, `DisabledFeatureHandler` returns an **RFC 9457 ProblemDetails `404`** ("Feature not
   available", `MMCA.Common.API/FeatureManagement/DisabledFeatureHandler.cs:19-27`). The body is built by
   hand, so it does not carry the `ApiControllerBase.HandleFailure` shape (title "Operation failed" plus
-  an `errors` extension, `MMCA.Common.API/Controllers/ApiControllerBase.cs:50-58`).
+  an `errors` extension, `MMCA.Common.API/Controllers/ApiControllerBase.cs:49-77`, title at `:67`,
+  `errors` at `:72`).
 - **CQRS pipeline:** a command/query implements `IFeatureGated` (exposing `FeatureName`). The
-  `FeatureGateCommandDecorator` / `FeatureGateQueryDecorator` (the **outermost** decorator (ADR-014))
-  checks `IFeatureManager.IsEnabledAsync(FeatureName)` and, when off, short-circuits with
-  `Error.NotFoundError("Feature.Disabled", …)` (`ErrorType.NotFound`) **before** any logging, caching,
-  validation, or transaction work.
+  `FeatureGateQueryDecorator` is the **outermost** query decorator, and the
+  `FeatureGateCommandDecorator` sits directly inside `ViewAsCommandDecorator`, outside every other
+  command decorator (ADR-014;
+  `MMCA.Common.Application/DependencyInjection.cs:158-159`, `:167`). Each checks
+  `IFeatureManager.IsEnabledAsync(FeatureName)` and, when off, short-circuits with
+  `Error.NotFoundError("Feature.Disabled", ...)` (`ErrorType.NotFound`) **before** any authorization,
+  logging, caching, validation, or transaction work. A command from a view-as caller is refused by
+  `ViewAs` before the flag is checked, so that caller never reaches the disabled-feature answer.
 - **Disabled = `404` (NotFound), never `403`.** Both surfaces return not-found rather than advertising a
   forbidden capability. The bodies still say a feature is off: the edge title reads "Feature not
   available", and the CQRS failure carries code `Feature.Disabled` with the generic message "The
   requested feature is not currently available." (the flag name is kept out of it; clients branch on
   the code), the same wording as the edge's `Detail`
-  (`MMCA.Common.Application/UseCases/Decorators/FeatureGateCommandDecorator.cs:60-62`,
+  (`MMCA.Common.Application/UseCases/Decorators/FeatureGateCommandDecorator.cs:61-63`,
   `FeatureGateQueryDecorator.cs:59-61`).
 - **Flag names are module constants** (`CatalogFeatures` / `SalesFeatures` in Store,
   `ConferenceFeatures` / `EngagementFeatures` in ADC) that match keys in each service's
-  `"FeatureManagement"` config, so a flag flips at config + restart, not at deploy. The framework itself
+  `"FeatureManagement"` config, so a flag flips at config + restart, not at deploy (in a host that calls
+  `AddReloadableFeatureFlags`, a stored override flips it on the next evaluation with no restart; see the
+  Revision (2026-11-08)). The framework itself
   uses `[FeatureGate]` (e.g. the notification controllers), and the decorators ship with unit tests.
 
 ## Rationale
@@ -81,7 +91,7 @@ is enforced at two independent surfaces:
   is unreachable from either entry instead of leaking through the one that was missed.
 - **The `404` convention reuses the not-found status.** The CQRS surface goes through the
   Result to ProblemDetails edge (ADR-013), whose `errors` extension serializes each error's `Code` and
-  `Message` (`MMCA.Common.API/Middleware/ErrorHttpMapping.cs:62-70`); the MVC edge writes its own
+  `Message` (`MMCA.Common.API/Middleware/ErrorHttpMapping.cs:65-74`); the MVC edge writes its own
   ProblemDetails. Both answer `404` rather than `403`, so neither reveals a guarded capability, but
   neither body is identical to an ordinary not-found: each states that a feature is unavailable.
 
@@ -96,10 +106,15 @@ is enforced at two independent surfaces:
   subclass it.
 - **Per-service configuration.** The same flag name must be present in each service that enforces it. A
   missing key resolves to **disabled** (`IsEnabledAsync`'s default): fail-safe for a kill switch, but it
-  will silently hide a feature you meant to ship if the key is forgotten.
+  will silently hide a feature you meant to ship if the key is forgotten. In a host that calls
+  `AddReloadableFeatureFlags`, a stored override also defines a flag configuration never mentions: the
+  evaluation path answers from the override before the configured provider is consulted
+  (`MMCA.Common.Infrastructure/FeatureFlags/StoredOverrideFeatureDefinitionProvider.cs:43-50`, override
+  branch `:45-49`; the enumeration path yields it too, `:65-69`), so a missing configuration key means
+  off only while no override exists for it.
 - **Only the Targeting filter is sticky per user.** Filters are evaluated locally in each process.
   `AddAPI` registers `CurrentUserTargetingContextAccessor` through `WithTargeting` unconditionally
-  (`MMCA.Common.API/DependencyInjection.cs:105-106`), so in a host that goes through `AddAPI` a
+  (`MMCA.Common.API/DependencyInjection.cs:108-109`), so in a host that goes through `AddAPI` a
   Targeting-filter rollout gives a signed-in user the same answer across requests and replicas, keyed
   on the targeting id: the `sub` (or mapped `NameIdentifier`) claim, falling back to `Identity.Name`
   when a principal carries neither (`MMCA.Common.API/FeatureManagement/CurrentUserTargetingContextAccessor.cs:121`).
@@ -149,9 +164,9 @@ stable, and a flag whose filter is configured without a targeting audience still
 before.
 
 ## Related
-ADR-014 (the decorator pipeline whose outermost slot `FeatureGate` fills, and the ordering that puts it
-first, now with Authorization registered directly inside it so a disabled feature does not leak which
-permission guards it), ADR-013 (the `Result` / `Error` and ProblemDetails edge the disabled responses
+ADR-014 (the decorator pipeline and the ordering that puts `FeatureGate` outermost for queries and
+directly inside `ViewAs` for commands, with Authorization registered directly inside it so a disabled
+feature does not leak which permission guards it), ADR-013 (the `Result` / `Error` and ProblemDetails edge the disabled responses
 reuse), ADR-019 / ADR-020 / ADR-021 / ADR-026 (the other opt-in, audit-the-inventory capabilities),
 ADR-020 (the role vocabulary the targeting accessor reads as `Groups`).
 
@@ -383,3 +398,49 @@ the `404` answers, the targeting context and the lifecycle gate are unchanged.
 - Rejected: Azure App Configuration (a paid service and a vendor dependency for a table the owning
   service can hold), and per-tenant override rows (targeting groups already cover tenants, see the
   Revision (2026-11-07)).
+
+## Revision (2026-11-23)
+Re-verified against current source. The decision is unchanged: both surfaces answer `404`, the edge
+writes its own "Feature not available" ProblemDetails, both decorators return the generic
+`Feature.Disabled` failure, and the override layer stays opt-in. Three facts moved and the live
+anchors were re-pointed.
+
+1. **FeatureGate is outermost for queries only.** The command chain registers
+   `ViewAsCommandDecorator` after `FeatureGateCommandDecorator`, so `ViewAs` is outermost and
+   FeatureGate sits directly inside it
+   (`MMCA.Common/Source/Core/MMCA.Common.Application/DependencyInjection.cs:158-159`; the decorator's
+   own doc says so at
+   `MMCA.Common/Source/Core/MMCA.Common.Application/UseCases/Decorators/FeatureGateCommandDecorator.cs:14-16`).
+   The query chain still ends with `FeatureGateQueryDecorator` (`DependencyInjection.cs:167`). The
+   Context, Decision and Related sections now say so, and the Decision notes the consequence: a
+   view-as caller's command is refused by `ViewAs` before the flag is read.
+2. **A missing configuration key is off only while no override exists.** With
+   `AddReloadableFeatureFlags`, `StoredOverrideFeatureDefinitionProvider` answers a flag from its stored
+   override before consulting the configured provider
+   (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/FeatureFlags/StoredOverrideFeatureDefinitionProvider.cs:43-50`,
+   override branch `:45-49`) and also enumerates every stored override that configuration never
+   mentions (`:65-69`).
+   The per-service configuration Trade-offs entry now records it.
+3. **The override snapshot is keyed by the owning service and the data source.** The Revision
+   (2026-11-08) says the entry is keyed by the owning data source under `featureflags:overrides:`.
+   The key is `featureflags:overrides:<service>:<DataSourceName>:all`, where the service is the host's
+   `IHostEnvironment.ApplicationName`, else the entry assembly name, else the literal `host`
+   (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/FeatureFlags/FeatureFlagOverrideSnapshot.cs:53`,
+   `:62`, `:66`, `:77-78`; the resolver `:85-94`, `host` fallback `:93`), because two services on one Redis that keep the default
+   `FeatureFlags:DataSourceName` would otherwise share one snapshot (`:27-33`). A write still
+   invalidates that one prefix (`:70-71`). The memory-only staleness remarks are at `:16-25`.
+4. Anchors re-verified against current source: `Error.NotFoundError("Feature.Disabled", ...)` at
+   `FeatureGateCommandDecorator.cs:61-63` (class `:21`, `IFeatureManager` `:23`, `IsEnabledAsync`
+   `:54`, the rationale comment `:57-59`) and `FeatureGateQueryDecorator.cs:59-61` (`IFeatureManager`
+   `:22`, `IsEnabledAsync` `:53`); the `AddAPI` registration at
+   `MMCA.Common/Source/Presentation/MMCA.Common.API/DependencyInjection.cs:107-110`
+   (`AddHttpContextAccessor` `:107`, `WithTargeting` `:108-109`, `DisabledFeatureHandler` `:110`,
+   singleton rationale `:101-106`); `HandleFailure` at `ApiControllerBase.cs:49-77` (title `:67`,
+   `errors` `:72`); `BuildErrorsExtension` at `ErrorHttpMapping.cs:65-74`; `Microsoft.FeatureManagement`
+   and `.AspNetCore` 4.8.0 at `MMCA.Common/Directory.Packages.props:99-100`. For the Revision
+   (2026-11-08): the `FeatureFlagOverrides` model gate is resolved at
+   `ApplicationDbContext.cs:437`, applied at `:537` and decided by `ResolveFeatureFlagOverrideGate` at
+   `:1083`; `AddFeatureFlagAdministrationUI(params string[] sources)` is at
+   `MMCA.Common/Source/Presentation/MMCA.Common.UI/DependencyInjection.cs:456`; v1.281.0 is at
+   `MMCA.Common/CHANGELOG.md:695` and its opt-in steps under `MMCA.Common/UPGRADING.md:525` (the
+   reloadable-feature-flags block at `:562`, steps `:565-574`). The stale anchors inside the earlier Revisions stay as written.

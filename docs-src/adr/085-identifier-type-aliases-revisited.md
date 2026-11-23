@@ -16,7 +16,12 @@ migration-surface census was re-measured to 3,945 lines across 1,227 files (see 
 Engagement's `ErasedUserIdentifierType`, and the migration-surface census was re-measured to 4,069
 lines across 1,250 files (see the Revision (2026-10-21) at the end). Revised 2026-10-26: the
 migration-surface census was re-measured to 4,085 lines across 1,256 files and the
-`AddStronglyTypedIds` anchor was refreshed (see the Revision (2026-10-26) at the end).
+`AddStronglyTypedIds` anchor was refreshed (see the Revision (2026-10-26) at the end). Revised
+2026-11-23: MMCA.Helpdesk now declares one wrapper identifier (`TicketCommentId`) beside its alias,
+so the capability is adopted in the reference app only, and acting on it takes the DI call plus a
+design-time registration rather than the one DI call stated below; the alias count is 50 (48 `int`)
+and the migration-surface census was re-measured to 4,693 lines across 1,433 files (see the Revision
+(2026-11-23) at the end).
 **Revisits [ADR-048](048-primitive-identifier-type-aliases.md)**, which stays
 Accepted and unchanged in substance: the aliases remain the identifier model. What changes is the
 shape of the deferral. ADR-048 left the wrapper-struct alternative "considered and left unbuilt" with
@@ -43,43 +48,53 @@ at once (specification-first reads, keyset pagination, projection pushdown; see
 going to ride along with unrelated churn, that was the wave to fold it into. It did not, and this
 record says why.
 
-Three facts frame the decision, all counted in the four repositories' `Source` trees on 2026-10-21:
+Three facts frame the decision, all counted in the four repositories' `Source` trees on 2026-11-23:
 
-- **49 aliases live in 10 files across the four repos.** MMCA.Common declares 3 (`UserIdentifierType`
+- **50 aliases live in 10 files across the four repos.** MMCA.Common declares 3 (`UserIdentifierType`
   in `Source/Core/MMCA.Common.Domain/GlobalUsings.IdentifierType.cs:1` plus the two push-notification
   aliases in `Source/Core/MMCA.Common.Shared/GlobalUsings.NotificationIdentifierType.cs:1-2`);
-  MMCA.ADC declares 33 across Conference (19, alias file `:7-25`), Engagement (11, `:4-14`),
+  MMCA.ADC declares 35 across Conference (19, alias file `:8-26`), Engagement (13, `:4-16`),
   Identity (1, `:2`) and Notification (2, `:1-2`); MMCA.Store declares 11 across Catalog (6,
   `MMCA.Store.Catalog.GlobalUsings.IdentifierType.cs:3-8`), Sales (3, `:5-7`) and Identity (2, `:3-4`);
-  MMCA.Helpdesk declares 2 in Tickets
-  (`MMCA.Helpdesk.Tickets.GlobalUsings.IdentifierType.cs:6,8`).
-- **47 of the 49 resolve to `int`.** Both exceptions are `System.Guid` and both sit in ADC's
+  MMCA.Helpdesk declares 1 in Tickets, `TicketIdentifierType = int`
+  (`MMCA.Helpdesk.Tickets.GlobalUsings.IdentifierType.cs:8`), whose comment at `:6-7` states that a
+  strongly typed identifier gets no alias.
+- **48 of the 50 resolve to `int`.** Both exceptions are `System.Guid` and both sit in ADC's
   Conference module
   (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Shared/MMCA.ADC.Conference.GlobalUsings.IdentifierType.cs`):
-  `SpeakerIdentifierType` (`:23`), which Sessionize forces, and `SessionAssetIdentifierType` (`:17`),
-  whose identifier is a path segment of a public blob name and therefore has to be unguessable rather
-  than sequential (`:4-5`). So for every practical purpose the whole workspace has **one** identifier
-  CLR type, and the compiler sees 47 synonyms for it.
-- **The wrapper struct exists as a framework capability and nothing uses it.** The generator packages
-  are still absent (a sweep of the four repositories for `Vogen` finds no package reference, no
+  `SpeakerIdentifierType` (`:24`), which Sessionize forces (`:4`), and `SessionAssetIdentifierType`
+  (`:18`), whose identifier is a path segment of a public blob name and therefore has to be
+  unguessable rather than sequential (`:5-6`). So for every practical purpose the whole workspace has
+  **one** identifier CLR type, and the compiler sees 48 synonyms for it.
+- **The wrapper struct exists as a framework capability and one reference-app identifier uses
+  it.** The generator packages are still absent (a sweep of the four repositories for `Vogen` finds no package reference, no
   project file entry, no using), but the wrapper primitives themselves ship in MMCA.Common:
   the `IStronglyTypedId<TSelf, TValue>` contract (`Identifiers/IStronglyTypedId.cs:60`) and the
   `StronglyTypedId` helper class (`Identifiers/StronglyTypedId.cs:19`) plus a JSON converter factory,
   a `TypeConverter`, a registry and the object-mapper wrap/unwrap pair
-  (`Identifiers/StronglyTypedIdMappings.cs:5-7`) live in
+  (`Identifiers/StronglyTypedIdMappings.cs:36`) live in
   `MMCA.Common/Source/Core/MMCA.Common.Shared/Identifiers/` (six files); the EF value converter
   lives in Infrastructure
   (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Conversions/StronglyTypedIdValueConverter.cs:28`,
   nullable twin `:56`) and is applied from `ApplicationDbContext.ConfigureConventions`
-  (`Persistence/DbContexts/ApplicationDbContext.cs:402-409`). All of it is wired by one DI call,
-  `AddStronglyTypedIds`
-  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:401`), and shape-checked
-  by a fitness rule, `StronglyTypedIdsAreReadonlyRecordStructs`
+  (`Persistence/DbContexts/ApplicationDbContext.cs:491`, opt-in block `:515-522`). At run time all of
+  it is wired by one DI call, `AddStronglyTypedIds`
+  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:425`); a host with
+  design-time EF tooling also names the identifier assembly to its design-time factory
+  (`options.AddStronglyTypedIdAssembly`, as in
+  `MMCA.Helpdesk/Source/Hosting/MMCA.Helpdesk.Migrations.SqlServer.Tickets/DesignTimeSQLServerDbContextFactory.cs:52`).
+  The shape is checked by a fitness rule, `StronglyTypedIdsAreReadonlyRecordStructs`
   (`MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Rules/Domain/ArchitectureRules.StronglyTypedIds.cs:34`).
-  That capability is [ADR-115](115-strongly-typed-identifiers-opt-in.md), and it is opt-in: no
-  identifier in any of the four `Source` trees declares a wrapper type today, so the aliases remain
-  the only identifier model in use and this record's deferral is about the default, not about
-  availability.
+  That capability is [ADR-115](115-strongly-typed-identifiers-opt-in.md), and it is opt-in. Exactly
+  one identifier in the four `Source` trees declares a wrapper type: MMCA.Helpdesk's
+  `TicketCommentId`
+  (`MMCA.Helpdesk/Source/Modules/Tickets/MMCA.Helpdesk.Tickets.Shared/Tickets/TicketCommentId.cs:19`),
+  which keys the child `TicketComment` (`TicketComment.cs:17`) while the parent's
+  `TicketIdentifierType` stays the `int` alias (`TicketComment.cs:25`), so the reference app shows
+  both styles; its host calls `AddStronglyTypedIds`
+  (`MMCA.Helpdesk/Source/Hosts/MMCA.Helpdesk.Web/Program.cs:86`). MMCA.ADC and MMCA.Store declare no
+  wrapper. The aliases therefore remain the identifier model of every production consumer, and this
+  record's deferral is about the default, not about availability.
 
 ## Decision
 **Keep the aliases.** The wrapper-struct alternative is evaluated in this record, priced, and
@@ -121,14 +136,16 @@ An **alias token** here is any `<Name>IdentifierType` token (a non-empty prefix,
 `IdentifierType` tuple element name in
 `MMCA.Common/Source/Core/MMCA.Common.Shared/Identifiers/StronglyTypedIdRegistry.cs:73` does not count)
 other than the framework's own generic parameter `TIdentifierType`, counted in the `.cs` and `.razor` files of the four `Source` trees on
-2026-10-26, with tests, `bin` and `obj` excluded, one hit per source line that carries at least one
-such token. On that rule the aliases appear on **4,085 lines across 1,256 files**: 352 in 130 files in
-MMCA.Common, 2,437 in 727 files in MMCA.ADC, 1,232 in 368 files in MMCA.Store, and 64 in 31 files in
+2026-11-23, with tests, `bin` and `obj` excluded, one hit per source line that carries at least one
+such token. On that rule the aliases appear on **4,693 lines across 1,433 files**: 510 in 167 files in
+MMCA.Common, 2,726 in 815 files in MMCA.ADC, 1,407 in 423 files in MMCA.Store, and 50 in 28 files in
 MMCA.Helpdesk. (Counting every token rather than every line raises the total and leaves the file
-count unchanged.) Excluding `TIdentifierType` is what makes the framework figure honest: 762 of
-MMCA.Common's 1,124 `IdentifierType` lines carry only that generic parameter, which a wrapper
+count unchanged.) Excluding `TIdentifierType` is what makes the framework figure honest: 798 of
+MMCA.Common's 1,318 `IdentifierType` lines carry that generic parameter, which a wrapper
 migration re-satisfies with a new type argument rather than rewrites call
-site by call site. Every one of the 4,085 is a signature, a property, a generic argument, or a DTO
+site by call site. The rule excludes only that one name, so other framework generic parameters of
+the `T...IdentifierType` shape still count: 20 of MMCA.Common's 510 lines are such parameters, all
+in `MMCA.Common/Source/Core/MMCA.Common.Application/Services/NavigationLoader.cs`. Every one of the 4,693 is a signature, a property, a generic argument, or a DTO
 field that a wrapper migration would have to either change or prove it can leave alone. Because
 MMCA.Common is a published package family released in lockstep
 ([ADR-016](016-lockstep-versioning-masstransit-pin.md)), the framework share of that count
@@ -164,11 +181,19 @@ Absent all three, this stays a recorded, priced deferral rather than an open que
 - **The cost is paid once and the benefit accrues per defect avoided, and the defect count is
   currently zero.** No production incident in any of the four repos has been traced to a swapped
   identifier. That is not proof of safety, and this record does not claim it is; it is the only
-  evidence available, and it does not support a 1,256-file change.
+  evidence available, and it does not support a 1,433-file change.
 - **A partial migration is worse than either endpoint.** Wrapping some identifiers and not others
   produces a codebase where the absence of a compiler error means nothing, because the reader cannot
   tell whether a given call site is protected or merely un-migrated. The change is therefore
-  all-or-nothing across four repositories, which is precisely what makes it expensive.
+  all-or-nothing across the production consumers, which is precisely what makes it expensive.
+  MMCA.Helpdesk is the one deliberate exception: as the reference app and template source it wraps
+  one child identifier (`TicketCommentId.cs:19`) beside an aliased parent so an adopter sees both
+  styles side by side, which is a demonstration, not a migration of an existing default. Because
+  Helpdesk is also the `dotnet new` template source, a scaffolded app with a child collection starts
+  in that mixed state (`ArchitectureTests.cs:228-230`). The reader problem above is narrower there,
+  since the split is fixed by role (the child key is wrapped, every aliased identifier is not) rather
+  than by migration progress, but it is not absent: an aliased call site in such an app is still
+  unprotected, and nothing at the call site says so.
 - **The friction ADR-048 avoided is still real, not merely historical.** ADR-048's central claim was
   that `int` and `Guid` need no converter at any boundary: EF Core, the SQL provider,
   `System.Text.Json`, gRPC, and the OpenAPI generator all speak them natively. Nothing since has
@@ -183,18 +208,24 @@ Absent all three, this stays a recorded, priced deferral rather than an open que
   a deferral and a blind spot.
 
 ## Trade-offs
-- **The exposure is unmitigated, not reduced.** This record buys no safety whatsoever. Every
-  transposition ADR-048 could not catch is still uncatchable today, and the `CheckIn` constructor
-  above is still a live example of a two-argument swap that compiles.
+- **The exposure is unmitigated, not reduced.** This record buys no safety whatsoever. In MMCA.ADC
+  and MMCA.Store every transposition ADR-048 could not catch is still uncatchable today, and the
+  `CheckIn` constructor above is still a live example of a two-argument swap that compiles. The one
+  exception is MMCA.Helpdesk's wrapped child key: `TicketComment` is keyed by `TicketCommentId`
+  (`TicketComment.cs:17`) while its `TicketId` is the `int` alias (`:25`), so swapping a comment id
+  with an `int` identifier there is a compiler error; two aliased identifiers still swap silently.
 - **No detection either.** Nothing gates, lints, or tests for a suspicious identifier assignment.
   There is no analyzer and no naming convention that a reviewer could mechanically check, and the one
   fitness rule ([ADR-015](015-architecture-fitness-functions.md)) in this area,
   `StronglyTypedIdsAreReadonlyRecordStructs`
   (`ArchitectureRules.StronglyTypedIds.cs:34`), constrains the shape of a wrapper type rather than any
-  identifier assignment, so with no wrapper declared it matches nothing. Trigger 1 therefore depends on a
+  identifier assignment. In MMCA.ADC and MMCA.Store, which declare no wrapper, it matches nothing; in
+  MMCA.Helpdesk its one subject is `TicketCommentId`, through the `StronglyTypedIdTestsBase` subclass
+  (`MMCA.Helpdesk/Tests/Architecture/MMCA.Helpdesk.Architecture.Tests/ArchitectureTests.cs:231`)
+  whose base calls the rule (`StronglyTypedIdTestsBase.cs:16`). Trigger 1 therefore depends on a
   production defect being *traced* to a transposition, and a wrong-user check-in is exactly the kind
   of defect that gets written off as a scanning mistake instead.
-- **The migration price rises with the codebase.** The 4,085 lines counted here are a snapshot
+- **The migration price rises with the codebase.** The 4,693 lines counted here are a snapshot
   and the number only grows. Deferring on cost grounds means the cost argument gets stronger every
   release, which is the classic shape of a decision that is never revisited on its merits.
 - **Trigger 3 is not measured.** No count of cross-module scalar identifier references is maintained,
@@ -220,7 +251,7 @@ alias convention nor identifier transposition),
 [ADR-034](034-generic-entity-query-layer.md) (the generic surfaces parameterized by the identifier
 type, and therefore in the migration's blast radius),
 [ADR-115](115-strongly-typed-identifiers-opt-in.md) (the opt-in wrapper-struct capability that makes
-acting on a trigger a DI call instead of a build).
+acting on a trigger a DI call plus a design-time registration instead of a build).
 
 ## Revision (2026-08-23)
 The decision, the priced alternative, the three triggers and the trade-offs are unchanged. What
@@ -390,3 +421,57 @@ migration-surface census moved and one Context anchor was re-pointed.
 3. Anchors re-verified against current source: `AddStronglyTypedIds` now declares at
    `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:401` (the Context bullet
    carries it).
+
+## Revision (2026-11-23)
+Re-verified against current source. The decision, the priced alternative, the three triggers and
+the trade-offs are unchanged in substance; adoption moved (MMCA.Helpdesk wraps one identifier), the
+alias count and the migration-surface census moved, and several Context anchors were re-pointed.
+
+1. **The capability is adopted in the reference app.** MMCA.Helpdesk declares
+   `public readonly record struct TicketCommentId(int Value) : IStronglyTypedId<TicketCommentId, int>`
+   (`MMCA.Helpdesk/Source/Modules/Tickets/MMCA.Helpdesk.Tickets.Shared/Tickets/TicketCommentId.cs:19`),
+   which keys `TicketComment` (`TicketComment.cs:17`) while `TicketIdentifierType` stays the `int`
+   alias (`TicketComment.cs:25`). The host calls `AddStronglyTypedIds`
+   (`MMCA.Helpdesk/Source/Hosts/MMCA.Helpdesk.Web/Program.cs:86`) and the design-time factory names
+   the identifier assembly (`DesignTimeSQLServerDbContextFactory.cs:52`), so acting on the capability
+   takes the DI call plus that design-time registration. MMCA.ADC and MMCA.Store still have no
+   `IStronglyTypedId<` implementation and no `Vogen` reference. The adoption check recorded on
+   2026-10-26 was true when written. The Context bullet and the partial-migration Rationale bullet
+   now say that Helpdesk shows both styles as a demonstration, not a migrated default, and that a
+   scaffold with a child collection inherits that mixed state; the "unmitigated" trade-off is scoped
+   to ADC and Store, since a comment-id swap in Helpdesk is a compiler error; and the Related entry
+   for ADR-115 names the design-time registration beside the DI call.
+2. **The alias count is 50 across the same 10 files, 48 of them `int`.** ADC's Engagement module
+   gained `TicketIdentifierType` and `TicketImportRunIdentifierType`
+   (`MMCA.ADC.Engagement.GlobalUsings.IdentifierType.cs:14-15`), taking Engagement to thirteen
+   (`:4-16`) and ADC to thirty-five; MMCA.Helpdesk dropped to one alias
+   (`MMCA.Helpdesk.Tickets.GlobalUsings.IdentifierType.cs:8`, with the no-alias rule for a wrapped
+   identifier stated at `:6-7`). Common (3) and Store (11) are unmoved. The two `Guid` aliases are
+   still both in ADC Conference, now at `MMCA.ADC.Conference.GlobalUsings.IdentifierType.cs:18`
+   (`SessionAssetIdentifierType`) and `:24` (`SpeakerIdentifierType`).
+3. **The migration-surface census is re-measured on the stated rule**: **4,693 lines across 1,433
+   files** (Common 510/167, ADC 2,726/815, Store 1,407/423, Helpdesk 50/28), against 4,085 across
+   1,256 on 2026-10-26, counted with the ripgrep-based Grep tool over `*.cs` and `*.razor` in each
+   `Source` tree with the pattern `\b(?:[A-Za-z_][A-Za-z0-9_]+|[A-SU-Za-z_])IdentifierType\b`.
+   That pattern excludes only `TIdentifierType`, so 20 of Common's 510 lines are other
+   `T...IdentifierType` generic parameters (all in `NavigationLoader.cs`). Whether the 2026-10-26
+   pass used the same pattern is not recorded, so how much of Common's rise from 352 to 510 is growth
+   rather than a counting difference is not determinable from source.
+   `MMCA.Common/Source` now carries 1,318 `IdentifierType` lines, 798 of them carrying the generic
+   parameter `TIdentifierType` (any occurrence, not only that token). Helpdesk's share shrank with its
+   lost alias. The token total was not re-measured. The Decision, Rationale and Trade-offs figures
+   follow it.
+4. **The fitness rule now has a subject.** `StronglyTypedIdsAreReadonlyRecordStructs`
+   (`ArchitectureRules.StronglyTypedIds.cs:34`) still matches nothing in ADC and Store, but Helpdesk's
+   `StronglyTypedIdTestsBase` subclass (`ArchitectureTests.cs:231`, base call at
+   `StronglyTypedIdTestsBase.cs:16`) applies it to `TicketCommentId`. It still gates no identifier
+   assignment, so the "no detection" trade-off stands.
+5. **Triggers.** Trigger 2 has not fired by its wording: Helpdesk is one of the four existing
+   repositories, not a greenfield fifth consumer. Trigger 1 stays unverified by design (see the
+   Revision (2026-08-23)) and trigger 3 stays unmeasured. None of the three is recorded as fired.
+6. Anchors re-verified against current source: `StronglyTypedIdMappings<TSelf, TValue>` at
+   `MMCA.Common/Source/Core/MMCA.Common.Shared/Identifiers/StronglyTypedIdMappings.cs:36` (the old
+   `:5-7` was its doc block); `ApplicationDbContext.ConfigureConventions` at
+   `Persistence/DbContexts/ApplicationDbContext.cs:491` with the opt-in block at `:515-522`;
+   `AddStronglyTypedIds` at `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:425`;
+   the ADC Conference alias range `:8-26` with the rationale comments at `:4` and `:5-6`.

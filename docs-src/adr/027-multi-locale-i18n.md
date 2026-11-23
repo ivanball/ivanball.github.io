@@ -1,7 +1,7 @@
 # ADR-027: Multi-Locale Internationalization (Supersedes ADR-011)
 
 ## Status
-Accepted (2026-06-27, amended 2026-07-02, 2026-07-03, 2026-07-09, 2026-07-29, and 2026-09-15: the MudBlazor localization interceptor is replaced so no dependency assigns the current culture on a hybrid head; corrected 2026-08-01: the pseudo-locale CI gate is required on all three browser engines, and the hybrid applier sets only the thread defaults; revised 2026-10-01: four statements corrected to match the code; revised 2026-10-06: displayed times follow the viewer's clock except a conference schedule, which follows the event's own time zone (Decision 11), and client-synthesized HTTP failures localize by error code; revised 2026-10-07: when the caller supplies a localizer, a code-keyed client failure resolves from the framework's own `SharedResource` pair before the English fallback, and the stale "only coverage collection is chromium-only" note on the pseudo-locale gate is removed). Revised 2026-10-21: Decision 10 names the server-side account-email caller of `SupportedCultures.ResolveClosest`, the `Http.{status}` key count is corrected to eleven, and anchors are refreshed. Revised 2026-10-26: the pseudo-locale sentinel check is no longer retried (the test sets the culture cookie and waits for network idle), Decision 11 states that formatted times render empty rather than in UTC until the viewer's zone resolves, and anchors are refreshed. Revised 2026-10-28: anchors refreshed after the `ci.yml` and `Directory.Packages.props` line shifts. **Supersedes [ADR-011](011-single-locale-i18n.md)** (single-locale by design).
+Accepted (2026-06-27, amended 2026-07-02, 2026-07-03, 2026-07-09, 2026-07-29, and 2026-09-15: the MudBlazor localization interceptor is replaced so no dependency assigns the current culture on a hybrid head; corrected 2026-08-01: the pseudo-locale CI gate is required on all three browser engines, and the hybrid applier sets only the thread defaults; revised 2026-10-01: four statements corrected to match the code; revised 2026-10-06: displayed times follow the viewer's clock except a conference schedule, which follows the event's own time zone (Decision 11), and client-synthesized HTTP failures localize by error code; revised 2026-10-07: when the caller supplies a localizer, a code-keyed client failure resolves from the framework's own `SharedResource` pair before the English fallback, and the stale "only coverage collection is chromium-only" note on the pseudo-locale gate is removed). Revised 2026-10-21: Decision 10 names the server-side account-email caller of `SupportedCultures.ResolveClosest`, the `Http.{status}` key count is corrected to eleven, and anchors are refreshed. Revised 2026-10-26: the pseudo-locale sentinel check is no longer retried (the test sets the culture cookie and waits for network idle), Decision 11 states that formatted times render empty rather than in UTC until the viewer's zone resolves, and anchors are refreshed. Revised 2026-10-28: anchors refreshed after the `ci.yml` and `Directory.Packages.props` line shifts. Revised 2026-11-23: Decision 8 states that the `ui-e2e` run step is skipped on a docs-only change, the MudBlazor key-mirror gap is recorded against the 9.14.0 pin, and anchors are refreshed. **Supersedes [ADR-011](011-single-locale-i18n.md)** (single-locale by design).
 
 ## Context
 ADR-011 recorded single-locale (en-US) as a deliberate, *revisitable* non-goal and sketched what
@@ -46,8 +46,8 @@ machine `Code`, which makes server-side error localization a keyed lookup rather
 4. **Only the human-facing `message` is localized; every machine field crosses the wire verbatim.**
    `ErrorHttpMapping.BuildErrorsExtension` localizes `Message` by the stable `Code` and leaves
    `Code`, `Type`, `Source` and `Target` untranslated
-   (`MMCA.Common/Source/Presentation/MMCA.Common.API/Middleware/ErrorHttpMapping.cs:62-70`,
-   localization at `:66`), and `ProblemDetailsResultReader` reads those machine fields back on the
+   (`MMCA.Common/Source/Presentation/MMCA.Common.API/Middleware/ErrorHttpMapping.cs:65-74`,
+   localization at `:69`), and `ProblemDetailsResultReader` reads those machine fields back on the
    client (`MMCA.Common/Source/Core/MMCA.Common.Shared/Http/ProblemDetailsResultReader.cs:373-385`).
    Updated 2026-08-27: the client no longer branches on the ProblemDetails `title` at all. The
    removed `ServiceExceptionHelper` matched three fixed English title strings, which coupled the
@@ -114,9 +114,10 @@ machine `Code`, which makes server-side error localization a keyed lookup rather
    then waits for network idle before reading the page (`:49-63`), because a reload-and-retry only
    repeats the race between the two renders (`:36-43`). The gate is **required on
    all three browser engines**, not just one: `ui-e2e` is a `chromium, firefox, webkit` matrix whose
-   legs are each a required merge check (`MMCA.Common/.github/workflows/ci.yml:232`), and the run
-   step executes the whole E2E project on every leg with no per-class or per-browser filter
-   (`:372-377`, the `dotnet test` command at `:377`). A leak-guard
+   legs are each a required merge check (`MMCA.Common/.github/workflows/ci.yml:331`, the matrix at
+   `:340`), and the run step executes the whole E2E project on every leg with no per-class or
+   per-browser filter (`:484-489`, the `dotnet test` command at `:489`). The run step is gated on a
+   code change (`:485`), so a docs-only PR skips it while each leg's check still reports. A leak-guard
    test asserts the sentinel is absent under `en-US` (`PseudoLocalizationE2ETests.cs:71-72`).
    Production hosts are unchanged: they keep
    `qps-Ploc` Development-only.
@@ -245,8 +246,8 @@ machine `Code`, which makes server-side error localization a keyed lookup rather
     restored at `:43`). Registration stores the request's UI culture, resolved through it, as a new
     account's preference when the user implements `IUserPreferences` and has none, skipping the
     pseudo-locale and storing nothing for the default
-    (`MMCA.Common/Source/Core/MMCA.Common.Application/Auth/AuthenticationServiceBase.cs:286`,
-    resolved at `:535`), so the confirmation email, composed later outside the request, speaks the
+    (`MMCA.Common/Source/Core/MMCA.Common.Application/Auth/AuthenticationServiceBase.cs:342`,
+    the seeding at `:768-776`, resolved at `:793`), so the confirmation email, composed later outside the request, speaks the
     language the account registered in. The active culture still reaches the services as `Accept-Language`: the
     hybrid head already shares `CultureDelegatingHandler` through `AddUIShared`, so once
     `CurrentUICulture` is right, localized backend errors follow with no extra wiring.
@@ -255,7 +256,7 @@ machine `Code`, which makes server-side error localization a keyed lookup rather
     zone (added 2026-10-06).** Instants are stored and serialized in UTC. `MMCA.Common.UI` renders
     them on the viewer's clock through `ViewerTimeZone`
     (`MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/Culture/ViewerTimeZone.cs:22`, registered
-    by `AddUIShared` at `.../MMCA.Common.UI/DependencyInjection.cs:198`): it reads the browser's IANA
+    by `AddUIShared` at `.../MMCA.Common.UI/DependencyInjection.cs:229`): it reads the browser's IANA
     zone once per scope through JS interop and resolves it with `TimeZoneInfo` (`:54-90`, `:128-131`).
     Until the zone resolves (SSR prerender, the first interactive render, a host without JS),
     `ToViewerTime` converts to UTC (`:36`, `:106`) but `Format` renders an empty placeholder rather
@@ -267,7 +268,7 @@ machine `Code`, which makes server-side error localization a keyed lookup rather
     `CurrentCulture` (`:118-119`), so Decision 7 still governs the shape of the string. Common's own
     pages use it (notifications, sessions), and so do Store's (`ReviewList`, `ProductReviewsPanel`,
     `OrderSummaryPanel`, for example
-    `MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.UI/Pages/Orders/OrderSummaryPanel.razor.cs:24`)
+    `MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.UI/Pages/Orders/OrderSummaryPanel.razor.cs:26`)
     and ADC's non-schedule pages (points, check-ins, user administration). Helpdesk source references
     no `ViewerTimeZone` of its own; the Common pages it hosts carry the rule.
 
@@ -433,6 +434,37 @@ changed.
    an ADC account registered from the Spanish UI received its confirmation email in English (drift
    analysis 2026-10-31, D1). The 2026-10-21 statement that no caller exists in ADC, Store or
    Helpdesk source was true on that date and is left as written.
+
+## Revision (2026-11-23)
+Re-verified against current source. No decision or rationale changed; Decision 8 now states that
+the `ui-e2e` run step is skipped on a docs-only change, and the anchors moved.
+
+1. Decision 8: the `ui-e2e` run step carries `if: needs.changes.outputs.code == 'true'`
+   (`MMCA.Common/.github/workflows/ci.yml:485`), so a change with no code skips the E2E run on
+   every leg while the leg itself still reports. When it runs, it still executes the whole E2E
+   project with no per-class or per-browser filter, passing only `--minimum-expected-tests 1`
+   (`:489`).
+2. Decision 9: the `MudTranslations` pair still mirrors MudBlazor `LanguageResource` keys as of
+   v9.6.0 (`.../MMCA.Common.UI/Resources/MudTranslations.cs:7-8`), while the MudBlazor pin is now
+   9.14.0 (`MMCA.Common/Directory.Packages.props:313`), so the gap between the mirrored keys and the
+   pinned version is wider than the 9.11.0 recorded on 2026-10-28.
+3. Anchors re-verified against current source: `ErrorHttpMapping.cs:65-74` with the localizer
+   call at `:69` (`Code` at `:68`, `Type`, `Source` and `Target` at `:70-72`), replacing the
+   2026-10-06 `:62-70` and `:66`; the `ui-e2e` job at `ci.yml:331`, its matrix at `:340`, the
+   required-gate comment at `:341-343`, the run step at `:484-489` with `E2E_BROWSER` at `:488` and
+   `dotnet test` at `:489` (the 2026-10-28 `:232`, `:372-377`, `:376` and `:377` are stale);
+   `Http.Status` at `.../MMCA.Common.UI/Resources/SharedResource.resx:844`, the eleven
+   `Http.{status}` keys at `:847-877`, `Http.TransportFailure` at `:880` and `Http.Timeout` at
+   `:883`, at the same lines in `SharedResource.es.resx` (the 2026-10-21 `:796`, `:799-829`, `:832`
+   and `:835` are stale); `Common.Error.Load` at `SharedResource.resx:82-83` and
+   `Common.Button.Cancel` at `:271-272` (the 2026-10-21 `:79-80` and `:265-266` are stale);
+   registration's culture seeding called at `AuthenticationServiceBase.cs:342`, the
+   `SeedRegistrationCulture` method at `:768-776`, and `RequestCulture` at `:785-795` skipping the
+   pseudo-locale at `:788`, calling `SupportedCultures.ResolveClosest` at `:793` and storing
+   nothing for the default at `:794` (the 2026-10-31 `:286` and `:535` are stale);
+   `ViewerTimeZone` registered by `AddUIShared` at `.../MMCA.Common.UI/DependencyInjection.cs:229`
+   (the 2026-10-21 `:198` is stale; every `ViewerTimeZone.cs` anchor still holds); Store's
+   `OrderSummaryPanel.razor.cs:26` (was `:24`).
 
 ## Related
 [ADR-011](011-single-locale-i18n.md) (superseded), [ADR-013](013-result-pattern.md) (the `Error.Code`

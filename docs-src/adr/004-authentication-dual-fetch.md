@@ -15,7 +15,10 @@ resolved fail-closed through `GetRequiredJwtAuthority()`, alongside the audience
 Store Bicep anchors are refreshed. Revised 2026-11-04: the JWKS document can publish more than one
 public key (`JwksSettings.AdditionalKeys`, MMCA.Common 1.277.0), every local validator accepts the
 published set, and the Rationale and Trade-offs now describe the staged signing-key rotation that
-makes possible (see Revision below).
+makes possible (see Revision below). Revised 2026-11-23: the validator bullet now records that the
+five validating services register `AddForwardedJwtBearer` through the composed
+`AddMmcaServiceHost` start-up rather than calling it directly, and that the two Identity services
+take its `TokenIssuer` branch to `AddCommonAuthentication`; the remaining anchors are refreshed.
 
 ## Context
 When the modular monolith is extracted into per-module service hosts behind a gateway (ADR-008),
@@ -63,16 +66,25 @@ opts into HS256 explicitly, alongside the `Jwt:SecretForKey` that choice require
   signature against the published key
   (`MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/WebApplicationBuilderExtensions.Authentication.cs:52-57`).
   No service except Identity holds key material. ADC's Conference, Engagement, and Notification
-  services and Store's Catalog and Sales services all use this path
-  (`.../MMCA.ADC.Conference.Service/Program.cs:339`, `.../MMCA.ADC.Engagement.Service/Program.cs:185`,
-  `.../MMCA.ADC.Notification.Service/Program.cs:175`; `.../MMCA.Store.Catalog.Service/Program.cs:211`,
-  `.../MMCA.Store.Sales.Service/Program.cs:186`), passing the host's `IConfiguration` and
-  `IHostEnvironment` and leaving `requireHttpsMetadata` at its default. All five resolve the
-  authority fail-closed through the Common `builder.Configuration.GetRequiredJwtAuthority()`
-  (`MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/Auth/JwtAuthorityExtensions.cs:35`, key
-  `Authentication:JwtBearer:Authority` at `:21`, throw at `:39-42`), and the audience fail-closed
-  through the Common `JwtAudience.RequireConfigured(builder.Configuration[JwtAudience.ConfigKey])`
-  (`MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/Auth/JwtAudience.cs:17`, key `Jwt:Audience`
+  services and Store's Catalog and Sales services all use this path through the composed Common
+  service host: each calls `builder.AddMmcaServiceHost(new() ...)`
+  (`.../MMCA.ADC.Conference.Service/Program.cs:82`, `.../MMCA.ADC.Engagement.Service/Program.cs:58`,
+  `.../MMCA.ADC.Notification.Service/Program.cs:58`; `.../MMCA.Store.Catalog.Service/Program.cs:32`,
+  `.../MMCA.Store.Sales.Service/Program.cs:51`), whose default `ForwardedJwtBearer` authentication
+  (`MMCA.Common/Source/Hosting/MMCA.Common.ServiceHost/MmcaServiceHostOptions.cs:52`) calls
+  `AddForwardedJwtBearer` with the host's `IConfiguration` and `IHostEnvironment`, leaving
+  `requireHttpsMetadata` at its default
+  (`MMCA.Common/Source/Hosting/MMCA.Common.ServiceHost/ServiceHostBuilderExtensions.cs:136-140`).
+  The two Identity services set `ServiceHostAuthentication.TokenIssuer` instead
+  (`.../MMCA.ADC.Identity.Service/Program.cs:120`, `.../MMCA.Store.Identity.Service/Program.cs:67`),
+  which routes to the in-process `AddCommonAuthentication` (`ServiceHostBuilderExtensions.cs:130-132`).
+  The composed host resolves the authority fail-closed through the Common
+  `configuration.GetRequiredJwtAuthority()` (`ServiceHostBuilderExtensions.cs:137`;
+  `MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/Auth/JwtAuthorityExtensions.cs:36`, key
+  `Authentication:JwtBearer:Authority` at `:21`, throw at `:41-43`), and the audience fail-closed
+  through the Common `JwtAudience.RequireConfigured(configuration[JwtAudience.ConfigKey])`
+  (`ServiceHostBuilderExtensions.cs:138`;
+  `MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/Auth/JwtAudience.cs:17`, key `Jwt:Audience`
   at `:20`, guard at `:28`), so a host with no configured authority or audience fails at startup
   instead of booting against a hard-coded default. `GetRequiredJwtAuthority()` throws only on a
   missing value; a blank authority is rejected by `AddForwardedJwtBearer` itself
@@ -88,10 +100,10 @@ opts into HS256 explicitly, alongside the `Jwt:SecretForKey` that choice require
   (`.../WebApplicationBuilderExtensions.Authentication.cs:68-72`).
 - `ValidIssuer` is deliberately **not** pinned: the middleware takes the issuer from the discovery
   document, because the `authority` need not be the token's `iss` origin. Locally the authority is
-  the gateway's HTTPS endpoint (`MMCA.Common/Source/Hosting/MMCA.Common.Aspire.Hosting/Extensions.cs:345-348`);
+  the gateway's HTTPS endpoint (`MMCA.Common/Source/Hosting/MMCA.Common.Aspire.Hosting/Extensions.cs:392-395`);
   in ADC's production deployment it is Identity's internal-ingress URL `http://${identityApp.name}`
-  (`MMCA.ADC/infra/main.bicep:2192`) while Identity issues tokens with `iss` set to the public
-  gateway origin (`MMCA.ADC/infra/main.bicep:1952`).
+  (`MMCA.ADC/infra/main.bicep:2484`) while Identity issues tokens with `iss` set to the public
+  gateway origin (`MMCA.ADC/infra/main.bicep:2229`).
 - Both validators pin `TokenValidationParameters.ValidAlgorithms` so an attacker cannot force an
   algorithm swap (for example, signing an HS256 token using the RSA public key as the HMAC secret):
   the **forwarded JWKS** validator (`AddForwardedJwtBearer`) pins `[RS256]` (the JWKS path only ever
@@ -105,7 +117,7 @@ opts into HS256 explicitly, alongside the `Jwt:SecretForKey` that choice require
   the same set the JWKS document publishes
   (`.../WebApplicationBuilderExtensions.Authentication.cs:151`, `:248`), and so does `TokenService`'s
   refresh-flow validation of the expired access token it signed
-  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Auth/TokenService.cs:98`, `:194`).
+  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Auth/TokenService.cs:98`, `:217`).
 
 **Discovery routing and fallback.**
 - Discovery is wired by the AppHost helper `WithJwksDiscovery(identity, gateway?)`. Because the
@@ -115,15 +127,15 @@ opts into HS256 explicitly, alongside the `Jwt:SecretForKey` that choice require
   forwards `/.well-known/*` on to Identity. When no gateway is passed, it **falls back** to Identity's
   HTTPS endpoint directly (HTTP/2-only, so the gateway form is preferred). ADC's AppHost uses the
   two-argument gateway form for all three validating services
-  (`MMCA.ADC/Source/Hosting/MMCA.ADC.AppHost/Program.cs:374-376`).
+  (`MMCA.ADC/Source/Hosting/MMCA.ADC.AppHost/Program.cs:370-372`).
 - That gateway routing is the local Aspire wiring only; Store's AppHost uses the same gateway form
-  for Catalog and Sales (`MMCA.Store/Source/Hosting/MMCA.Store.AppHost/Program.cs:379-380`). In
+  for Catalog and Sales (`MMCA.Store/Source/Hosting/MMCA.Store.AppHost/Program.cs:337-338`). In
   the Azure Container Apps deployments the validators set `Authentication__JwtBearer__Authority`
   to Identity's internal-ingress URL `http://${identityApp.name}` directly (ADC:
-  `MMCA.ADC/infra/main.bicep:2192`, `:2328`, `:2482`; Store: `MMCA.Store/infra/main.bicep:1782`,
-  `:1918`), where TLS terminates at the platform edge, and pair it with
-  `Authentication__JwtBearer__RequireHttpsMetadata=false` (ADC: `:2196`, `:2332`, `:2486`; Store:
-  `:1787`, `:1923`), which is the shape the startup warning above exists for.
+  `MMCA.ADC/infra/main.bicep:2484`, `:2623`, `:2789`; Store: `MMCA.Store/infra/main.bicep:2113`,
+  `:2249`), where TLS terminates at the platform edge, and pair it with
+  `Authentication__JwtBearer__RequireHttpsMetadata=false` (ADC: `:2488`, `:2627`, `:2793`; Store:
+  `:2118`, `:2254`), which is the shape the startup warning above exists for.
 - `OpenIdConnectMetadataWarmupTask` (MMCA.Common.Aspire) pre-fetches the discovery document at
   startup through an `IHttpClientFactory` client
   (`MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Warmup/OpenIdConnectMetadataWarmupTask.cs:49`),
@@ -164,7 +176,7 @@ opts into HS256 explicitly, alongside the `Jwt:SecretForKey` that choice require
   client's connection pool, and only issuer-side and process-wide state is shared. The middleware
   caches the key set after its first fetch. The Polly pipeline only partly covers this: `AddServiceDefaults()` attaches
   `AddStandardResilienceHandler` through `ConfigureHttpClientDefaults`
-  (`MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Extensions.cs:50-60`), which reaches only
+  (`MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Extensions.cs:57-68`), which reaches only
   `IHttpClientFactory` clients, so the warmup prefetch is covered
   (`.../Warmup/OpenIdConnectMetadataWarmupTask.cs:26`, `:49`). The JwtBearer middleware's own
   `ConfigurationManager` fetch is separate (`OpenIdConnectMetadataWarmupTask.cs:18-23`), and
@@ -357,6 +369,59 @@ validator registration, discovery and the pinned algorithms are unchanged.
 6. The other anchors in this ADR were not re-verified in this revision; the changes to
    `WebApplicationBuilderExtensions.Authentication.cs` sit after line 146, so the `:52-72` and
    `:83-114` ranges cited above are unaffected.
+
+## Revision (2026-11-23)
+Re-verified against current source. The signing model, the pinned algorithms, the fail-closed
+authority and audience guards, the `RequireHttpsMetadata` resolution, the local gateway-routed
+discovery, the production internal-ingress authority and the published key set are unchanged; the
+place the validating services register the JWT bearer moved, and the anchors moved with it. The
+earlier revisions above keep the anchors that were true on their dates.
+1. The five validating services no longer call `AddForwardedJwtBearer` from their own `Program.cs`.
+   Each calls `builder.AddMmcaServiceHost(new() ...)`
+   (`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:82`,
+   `MMCA.ADC/Source/Services/MMCA.ADC.Engagement.Service/Program.cs:58`,
+   `MMCA.ADC/Source/Services/MMCA.ADC.Notification.Service/Program.cs:58`,
+   `MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:32`,
+   `MMCA.Store/Source/Services/MMCA.Store.Sales.Service/Program.cs:51`), and the composed host calls
+   `AddForwardedJwtBearer` with `GetRequiredJwtAuthority()`, `JwtAudience.RequireConfigured(...)`,
+   the configuration and the environment, leaving `requireHttpsMetadata` at its default
+   (`MMCA.Common/Source/Hosting/MMCA.Common.ServiceHost/ServiceHostBuilderExtensions.cs:136-140`).
+   That branch is the default (`MMCA.Common/Source/Hosting/MMCA.Common.ServiceHost/MmcaServiceHostOptions.cs:52`).
+   The 2026-10-28 statement that the call still starts at the five `Program.cs` lines no longer holds.
+2. The Identity services take the other branch: they set `ServiceHostAuthentication.TokenIssuer`
+   (`MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:120`,
+   `MMCA.Store/Source/Services/MMCA.Store.Identity.Service/Program.cs:67`), which registers
+   `AddCommonAuthentication` (`ServiceHostBuilderExtensions.cs:130-132`). The validator bullet in
+   the Decision section now says so.
+3. Anchors re-verified against current source:
+   - `GetRequiredJwtAuthority` is declared at
+     `MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/Auth/JwtAuthorityExtensions.cs:36`, key
+     at `:21`, throw at `:41-43`; `JwtAudience` stays at `:17`, `:20`, `:28`.
+   - `TokenService` builds the additional validation keys at
+     `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Auth/TokenService.cs:98` and applies them as
+     `IssuerSigningKeys` in `GetPrincipalFromExpiredToken` at `:217` (declared `:204`); signing stays
+     on the current key, built by `BuildRsaCredentials` (`:273`, `SigningCredentials` at `:293`).
+   - `WithJwksDiscovery` is declared at
+     `MMCA.Common/Source/Hosting/MMCA.Common.Aspire.Hosting/Extensions.cs:369-371`, picks the
+     gateway (or Identity) `https` endpoint at `:392-394` and sets
+     `Authentication__JwtBearer__Authority` at `:395`.
+   - The two-argument gateway form is called at
+     `MMCA.ADC/Source/Hosting/MMCA.ADC.AppHost/Program.cs:370-372` and
+     `MMCA.Store/Source/Hosting/MMCA.Store.AppHost/Program.cs:337-338`.
+   - ADC Bicep: Identity's `Jwt__Issuer` at `MMCA.ADC/infra/main.bicep:2229`; the validators'
+     `Authentication__JwtBearer__Authority` at `:2484`, `:2623`, `:2789` and
+     `RequireHttpsMetadata=false` at `:2488`, `:2627`, `:2793`. Store Bicep: Authority at
+     `MMCA.Store/infra/main.bicep:2113`, `:2249` and `RequireHttpsMetadata=false` at `:2118`,
+     `:2254`.
+   - `AddServiceDefaults()` calls `ConfigureHttpClientDefaults` at
+     `MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Extensions.cs:57` and attaches
+     `AddStandardResilienceHandler` at `:68`.
+   - The HS256 service-token validator sets its `SymmetricSecurityKey` at
+     `MMCA.Common/Source/Presentation/MMCA.Common.Grpc/Authentication/ServiceTokenServiceCollectionExtensions.cs:148`
+     and pins `ValidAlgorithms = [HmacSha256]` at `:151`, inside `ConfigureServiceTokenBearer`
+     (`:138`); there is still no published key set.
+   - ADC's rotation runbook is the `## JWKS signing-key rotation` section at
+     `MMCA.ADC/infra/OPERATIONS.md:746`.
 
 ## Related
 ADR-007 (gRPC calls forward the validated JWT downstream via `JwtForwardingClientInterceptor`),

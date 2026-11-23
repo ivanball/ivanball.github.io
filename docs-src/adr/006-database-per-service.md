@@ -24,6 +24,8 @@ Revised 2026-10-28: anchors refreshed after Helpdesk #199 moved the no-per-modul
 Revised 2026-11-17: the abstract per-module `ModuleApplicationDbContext` DbSet holders were deleted
 from ADC, Store and Helpdesk (nothing derived from or referenced them, and their `DbSet` lists had
 drifted from the model); no module declares a DbContext class of any kind.
+Revised 2026-11-23: the ADC Decision bullet now says the two attendee hot-path databases run at S2
+Standard instead of Basic while `conferenceMode` is on; anchors refreshed.
 
 ## Context
 When the modules were first extracted into independently-deployable services, all services in an
@@ -46,7 +48,7 @@ Adopt **database-per-service**: each service owns its own physical database with
   module's entity configurations alone (rule stated at `MMCA.Helpdesk/AGENTS.md:64`). ADC
   Notification still owns the `ADC_Notification` database, but its `PushNotification` and
   `UserNotification` entities live in MMCA.Common
-  (`MMCA.ADC/Source/Services/MMCA.ADC.Notification.Service/Program.cs:269-270`), so its module
+  (`MMCA.ADC/Source/Services/MMCA.ADC.Notification.Service/Program.cs:141-142`), so its module
   projects are API, Application and Shared only, with no Infrastructure project. The default engine is SQL Server (`SQLServerDbContext`); ADR-018
   later added `SqliteDbContext` and `CosmosDbContext`, and ADR-113 added `PostgreSQLDbContext`, each
   a sealed subclass of the abstract `ApplicationDbContext`. The singleton `PhysicalDbContextFactory`
@@ -56,13 +58,15 @@ Adopt **database-per-service**: each service owns its own physical database with
   `DataSourceResolver`, and to an engine by configuration base class (`[UseDataSource]`, ADR-018).
   The forbidden split is *per-module*, not per-engine.
 - **ADC** runs `ADC_Identity`, `ADC_Conference`, `ADC_Engagement`, `ADC_Notification`: locally on
-  the shared Aspire SQL container and in Azure as four Basic-tier databases. Those four are the
+  the shared Aspire SQL container and in Azure as four Basic-tier databases, of which
+  `ADC_Conference` and `ADC_Engagement` move to S2 Standard while `conferenceMode` is on
+  (`MMCA.ADC/infra/main.bicep:215-217`, `:1308-1310`). Those four are the
   entire application data estate: the legacy `AtlDevCon` database was exported to the bacpac blob
   `sql-archive/AtlDevCon-20260902.bacpac` and dropped on 2026-09-02, and `infra/main.bicep` no
   longer declares it. That bacpac was itself deleted permanently on 2026-10-03 (blob soft delete and
   versioning were off), so there is no restore path to the pre-cutover `AtlDevCon` data; its contents
   had already been copied into the per-service databases at cutover, and those four databases keep
-  their own PITR plus LTR (`MMCA.ADC/infra/main.bicep:1114`, `MMCA.ADC/infra/main.bicep:1166`,
+  their own PITR plus LTR (`MMCA.ADC/infra/main.bicep:1271`, `MMCA.ADC/infra/main.bicep:1323`,
   `MMCA.ADC/infra/POST-CUTOVER-atldevcon-downgrade.md:103`, `MMCA.ADC/infra/DISASTER-RECOVERY.md:27`).
 - **Per-source outbox.** Each database has its own `OutboxMessages`; the `OutboxProcessor` drains
   only the sources its host owns, so no service ever sees another's rows.
@@ -198,3 +202,33 @@ Engagement lacked `TicketImportRun`, Store Catalog lacked `ProductVariant`). A m
 DbContext class at all, and the rule is restated at `MMCA.Helpdesk/AGENTS.md:64`. The earlier
 revisions keep the wording and anchors they recorded; their `ModuleApplicationDbContext` anchors are
 superseded by this revision. Source: the 2026-11-17 Infrastructure-projects drift review (item A5).
+
+## Revision (2026-11-23)
+Re-verified against current source. The decision is unchanged: one sealed context class per engine,
+one instance per database, no module DbContext class, and four per-service `ADC_*` databases with
+PITR plus LTR as the only restore path. The ADC Decision bullet now qualifies the Basic tier for
+conference mode, and its anchors moved. The earlier revisions keep the anchors they recorded (their
+`ApplicationDbContext.cs:46`, `SQLServerDbContextModelSnapshot.cs:95` / `:156`, `Program.cs:269-270`,
+`main.bicep:1114` and `main.bicep:1166` anchors are superseded by this revision).
+
+1. Two of the four ADC databases leave Basic in conference mode: `conferenceScaledDatabaseNames`
+   (`MMCA.ADC/infra/main.bicep:215-217`) lists `ADC_Conference` and `ADC_Engagement`, and the
+   per-service database resource gives those two `S2` / `Standard` while `conferenceMode` is on and
+   `Basic` (capacity 5) otherwise (`MMCA.ADC/infra/main.bicep:1308-1310`). The four names are
+   declared at `MMCA.ADC/infra/main.bicep:1292-1295` and locally at
+   `MMCA.ADC/Source/Hosting/MMCA.ADC.AppHost/Program.cs:37-40`.
+2. Anchors re-verified against current source: the abstract `ApplicationDbContext` at
+   `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/ApplicationDbContext.cs:53`
+   (was `:46`); the comment placing `PushNotification` and `UserNotification` in MMCA.Common at
+   `MMCA.ADC/Source/Services/MMCA.ADC.Notification.Service/Program.cs:141-142` (was `:269-270`);
+   the `Notification` schema mappings at
+   `MMCA.ADC/Source/Hosting/MMCA.ADC.Migrations.SqlServer.Notification/Migrations/SQLServerDbContextModelSnapshot.cs:111`
+   and `:172` (was `:95`, `:156`), over the MMCA.Common entity types declared at `:25` and `:114`;
+   the Notification module is still the three API, Application and Shared projects under
+   `MMCA.ADC/Source/Modules/Notification`; the `AtlDevCon` archived-and-dropped note at
+   `MMCA.ADC/infra/main.bicep:1271` (was `:1114`), with the 2026-10-03 bacpac deletion sentence at
+   `:1276-1277` and a second mention in the LTR comment at `:1321-1322`; the `serviceDatabaseLtr`
+   policy at `MMCA.ADC/infra/main.bicep:1323` (was `:1166`), weekly `P4W`, monthly `P12M`, yearly
+   `P1Y` at `:1328-1330` (values unchanged); `MMCA.Helpdesk/AGENTS.md:64`,
+   `MMCA.ADC/infra/POST-CUTOVER-atldevcon-downgrade.md:103` and
+   `MMCA.ADC/infra/DISASTER-RECOVERY.md:27` are unchanged.

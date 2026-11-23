@@ -29,6 +29,11 @@ Revised 2026-10-28: anchors refreshed after edits to `NavMenu.razor` and
 `ClaimsPrincipalExtensions.cs` moved the navigation-filter and `HasPermissionClaim` lines.
 Revised 2026-11-04: Blazor pages gate on a capability with `[HasPagePermission(p)]`, the page-side
 twin of `NavItem.RequiredPermission`; ADC's conference management pages adopt it.
+Revised 2026-11-23: grant counts re-enumerated (ADC Engagement defines four permissions, ADC
+Identity aliases four framework administration capabilities, and both apps' grant maps add framework
+`ManageFeatures` or `ViewAuditTrail`), and the role-level second-factor setting is recorded as a
+host-supplied role string that withholds a listed role, and the permission claims it alone carried,
+from a validated bearer principal without MFA.
 ## Context
 The default answer in ASP.NET Core is pure role-based access control (RBAC): an endpoint declares
 `[Authorize(Policy = "RequireOrganizer")]` against a named policy that calls `RequireRole(...)`, and a
@@ -72,10 +77,10 @@ one authorization model. Nothing is pre-registered per role name.
   works whether or not inbound-claim mapping is on). Baking permissions into the token is therefore
   optional: role-derived resolution is the default.
 - **Grants are the host's to declare.** `AddAuthorizationPolicies()`
-  (`MMCA.Common.API/Authorization/AuthorizationExtensions.cs:25`) wires the handler, the policy
-  provider, and an empty shared registry, so any host that configures authentication gets the
-  mechanism for free; it grants nothing beyond explicit claims until a host calls
-  `AddPermissions(...)`.
+  (`MMCA.Common.API/Authorization/AuthorizationExtensions.cs:30`) wires the handler, the policy
+  provider, an empty shared registry and the role-level second-factor requirement (`:84`, inert
+  while its role list is empty), so any host that configures authentication gets the mechanism for
+  free; it grants nothing beyond explicit claims until a host calls `AddPermissions(...)`.
 - **Framework-owned endpoints state a capability too.** The notification endpoints that ship in
   `MMCA.Common.API` carry `[HasPermission(NotificationPermissions.Manage)]`
   (`Controllers/Notifications/NotificationsController.cs:29`, the `notifications:manage` constant at
@@ -89,47 +94,56 @@ surface needs. ADC's Conference module defines twelve (`ConferencePermissions.cs
 `All` at `:58-72`; the twelfth, `SpeakersLink` at `:55`, is Organizer-only and deliberately kept out of
 the curation subset), including a curation subset (`ContentManagement` at `:79-88`: sessions, speakers,
 categories, sponsors, partners, activities, session assets) granted to the app's own `ContentEditor` role constant
-(`MMCA.ADC.Conference.Shared/Authorization/ConferencePermissionGrants.cs:48`, the whole set to `Organizer`
-at `:47`, applied from `MMCA.ADC.Conference.API/DependencyInjection.cs:43`); its Engagement module defines three
+(`MMCA.ADC.Conference.Shared/Authorization/ConferencePermissionGrants.cs:54`), while `Organizer` holds
+the whole set plus the framework's `AdministrationPermissions.ManageFeatures` (`:53`, applied from
+`MMCA.ADC.Conference.API/DependencyInjection.cs:45`); its Engagement module defines four
 (`engagement:live:manage` gating the conference-day live-poll management endpoints,
-`engagement:checkin:manage` gating QR badge check-in and the attendance rollup, and
-`engagement:points:view-overview` gating the organizer points rollup, at
-`EngagementPermissions.cs:16`, `:23`, `:30`), each granted to `Organizer`; and its
-Identity module defines `identity:users:read`, the only member of its `IdentityPermissions.All`
-(`MMCA.ADC.Identity.Shared/Authorization/IdentityPermissions.cs:13`, `All` at `:49-52`). The two
-framework administration capabilities the shipped admin controller bases gate on are aliased there
-(`UsersManage` and `RolesManage`, `:26` and `:41`) but stay out of `All`, because `All` lists only
-the capabilities ADC itself defines; the module's grant map hands `Organizer` the module set plus those
-two by name (`IdentityPermissionGrants.cs:36-38`). MMCA.Store defines eleven of its own across three
+`engagement:checkin:manage` gating QR badge check-in and the attendance rollup,
+`engagement:points:view-overview` gating the organizer points rollup, and
+`engagement:tickets:manage` for the ticket roster, at `EngagementPermissions.cs:17`, `:24`, `:31`,
+`:38`, all four in `All` at `:41-47`), granted to `Organizer` together with `ManageFeatures`
+(`EngagementPermissionGrants.cs:42`); and its Identity module defines `identity:users:read`, the only
+member of its `IdentityPermissions.All`
+(`MMCA.ADC.Identity.Shared/Authorization/IdentityPermissions.cs:13`, `All` at `:73-76`). Four
+framework administration capabilities are aliased there (`UsersManage` at `:26`, `RolesManage` at
+`:41`, `UsersViewAs` at `:52`, `ClientsManage` at `:64`) but stay out of `All`, because `All` lists
+only the capabilities ADC itself defines; the module's grant map hands `Organizer` the module set
+plus those four by name and the framework's `AdministrationPermissions.ViewAuditTrail`
+(`IdentityPermissionGrants.cs:42-51`, applied from
+`MMCA.ADC.Identity.API/DependencyInjection.cs:49`). MMCA.Store defines eleven of its own across three
 modules: six in Catalog (`CatalogPermissions.cs:12-36`), three in Sales
-(`SalesPermissions.cs:12-18`) and two in Identity (`IdentityPermissions.cs:14-17`, `All` at
-`:34-38`; a third constant, `RolesManage` at `:31`, aliases the framework's `ManageRoles` and stays
-out of `All`), each module granting its whole set to its own `Admin` role constant from a grant map in
-its Shared project (`CatalogPermissionGrants.cs:29`, `SalesPermissionGrants.cs:30`,
+(`SalesPermissions.cs:12-18`) and two in Identity (`IdentityPermissions.cs:14` and `:21`, `All` at
+`:38`; a third constant, `RolesManage` at `:35`, aliases the framework's `ManageRoles` and stays
+out of `All`), each module granting its whole set plus the framework's
+`AdministrationPermissions.ViewAuditTrail` to its own `Admin` role constant from a grant map in its
+Shared project (`CatalogPermissionGrants.cs:31`, `SalesPermissionGrants.cs:31`,
 `IdentityPermissionGrants.cs:35-37`) that its API registration passes to `AddPermissions(...)`
 (`MMCA.Store.Catalog.API/DependencyInjection.cs:45`, `MMCA.Store.Sales.API/DependencyInjection.cs:52`,
-`MMCA.Store.Identity.API/DependencyInjection.cs:66`). Both Identity grant maps have the same shape:
-the module's own `All` plus the framework's `ManageUsers` and `ManageRoles` named explicitly, by
-value rather than always by the framework constant: ADC names both through its aliases
-(`IdentityPermissionGrants.cs:38`, `UsersManage` and `RolesManage`), and Store names
-`AdministrationPermissions.ManageUsers` directly and `ManageRoles` through its `RolesManage` alias
-(`IdentityPermissionGrants.cs:37`). The registry, handler and
+`MMCA.Store.Identity.API/DependencyInjection.cs:66`). Both Identity grant maps name the framework
+administration capabilities beside the module's own `All` explicitly, by value rather than always by
+the framework constant: ADC names its four through its aliases next to
+`AdministrationPermissions.ViewAuditTrail` (`IdentityPermissionGrants.cs:46-50`), and Store names
+`AdministrationPermissions.ManageUsers` and `ViewAuditTrail` directly and `ManageRoles` through its
+`RolesManage` alias (`IdentityPermissionGrants.cs:37`). The registry, handler and
 policy provider are covered by framework tests, and the ADC grant tables (Conference, Engagement and
 Identity) by dedicated grant tests
 (`MMCA.ADC/Tests/Modules/Identity/MMCA.ADC.Identity.Shared.Tests/Authorization/IdentityPermissionGrantsTests.cs:24`,
-`:46`).
+`:49`).
 
 **Role vocabulary is the app's, not the framework's.** MMCA.Common declares no role names at all: a
 role string reaches framework code only when a host supplies it, as the key it hands to
 `AddPermissions(...)` or as a role-valued setting on a framework gate. The framework's own
 navigation entries gate on `NavItem.RequiredPermission`
 (`MMCA.Common/Source/Presentation/MMCA.Common.UI/Common/NavItem.cs:20`, matched against the
-`permission` claim at `.../UI/Layout/NavMenu.razor:265`), the notification entry on
+`permission` claim at `.../UI/Layout/NavMenu.razor.cs:127`), the notification entry on
 `NotificationPermissions.Manage`
 (`.../UI/Notifications/NotificationUIModule.cs:20`). The role-valued settings are all host-supplied
 and empty by default: the signed-in-devices entry narrows to `LayoutSettings.SessionsNavRequiredRole`
 when one is configured (`.../UI/Common/Settings/LayoutSettings.cs:39`, checked with `IsInRole` at
-`.../UI/Layout/NavMenu.razor:258-259`), a host's own `NavItem.RequiredRole` is honoured (`:263`), the
+`.../UI/Layout/NavMenu.razor.cs:120-121`), a host's own `NavItem.RequiredRole` is honoured (`:125`),
+the roles that must present a second factor are a host-supplied list
+(`Authorization:MultiFactor:RequiredForRoles`,
+`.../API/Authorization/MultiFactor/MultiFactorAuthorizationSettings.cs:34`), the
 owner-or-admin bypass role is required configuration a host supplies
 (`OwnerOrAdminFilterOptions.BypassRole`, `.../API/Authorization/OwnerOrAdminFilterOptions.cs:24`;
 [ADR-033](033-resource-ownership-authorization.md)), the public output-cache policy takes its bypass
@@ -141,16 +155,21 @@ those constants to that module's permissions.
 
 **Access tokens carry the capabilities, and both gates honour them.** `TokenService` resolves the
 host's `IPermissionRegistry`
-(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Auth/TokenService.cs:73`) and writes one
+(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Auth/TokenService.cs:74`) and writes one
 `permission` claim (`AuthClaimTypes.Permission`,
 `MMCA.Common/Source/Core/MMCA.Common.Shared/Auth/AuthClaimTypes.cs:24`) per permission granted to the
 token's role, ordinally ordered and never duplicating a claim the caller already supplied
-(`TokenService.cs:133-141`); stored grants ([ADR-116](116-identity-completions-opt-in.md)) ride along
+(`TokenService.cs:163-171`); stored grants ([ADR-116](116-identity-completions-opt-in.md)) ride along
 because the registry it resolves is the layered one. The HTTP policy handler evaluates the same
 capability through the registry, and the CQRS `AuthorizationGate` passes a request whose permission
 the registry grants to the caller's roles OR that the principal carries as a claim
 (`MMCA.Common/Source/Core/MMCA.Common.Application/UseCases/Decorators/AuthorizationGate.cs:46-48`,
 over `ClaimsPrincipalExtensions.HasPermissionClaim`, `.../Shared/Auth/ClaimsPrincipalExtensions.cs:95`).
+One qualification: when a host lists a role under `Authorization:MultiFactor:RequiredForRoles` and
+the session carries no `mfa` claim, the API withholds that role, and the permission claims it alone
+carried, from the validated bearer principal, marking each with `MultiFactorWithheldRole` /
+`MultiFactorWithheldPermission` (`.../Shared/Auth/AuthClaimTypes.cs:78-96`); the token still carries
+them, but the request's principal goes without them until a second factor is presented.
 
 That claim is what makes the model work when the modules run as separate services. The host that mints
 tokens (the Identity service) has to register every module's compiled grants, so a token carries the
@@ -312,6 +331,64 @@ package and the MAUI head never loads it; and a UI policy provider for the `perm
 `AddAuthorizationPolicies` installs the API provider with `Replace` and the two would compete in a
 web host that wires both. The distinct `page-perm:` prefix falls through the API provider to the
 default one, which reads the registered policy.
+
+## Revision (2026-11-23)
+Re-verified against current source. The decision, the grant model, the fallback policy and the
+explicit-authorization-decision gate are unchanged; several grant tables grew and one host-supplied
+role setting was missing from the Decision. The earlier dated revisions keep their anchors as written.
+
+1. ADC's Engagement module defines four permissions, not three: `TicketsManage`
+   (`engagement:tickets:manage`,
+   `MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Shared/Authorization/EngagementPermissions.cs:38`)
+   joins the other three in `All` (`:41-47`).
+2. ADC's Identity module aliases four framework administration capabilities, all outside `All`
+   (`MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Shared/Authorization/IdentityPermissions.cs:26`,
+   `:41`, `:52`, `:64`; `All` at `:73-76`), and its grant map hands `Organizer` all four plus
+   `AdministrationPermissions.ViewAuditTrail`
+   (`MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Shared/Authorization/IdentityPermissionGrants.cs:42-51`).
+3. Grants now add framework capabilities beside a module's own set: ADC's Conference and Engagement
+   maps grant `Organizer` `AdministrationPermissions.ManageFeatures`
+   (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Shared/Authorization/ConferencePermissionGrants.cs:53`,
+   `MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Shared/Authorization/EngagementPermissionGrants.cs:42`),
+   and every Store grant map grants `Admin` `AdministrationPermissions.ViewAuditTrail`
+   (`MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.Shared/Authorization/CatalogPermissionGrants.cs:31`,
+   `MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Shared/Authorization/SalesPermissionGrants.cs:31`,
+   `MMCA.Store/Source/Modules/Identity/MMCA.Store.Identity.Shared/Authorization/IdentityPermissionGrants.cs:37`).
+   The Decision paragraph no longer says the two Identity grant maps have the same shape.
+4. `AddAuthorizationPolicies` also wires the role-level second-factor requirement
+   (`MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/AuthorizationExtensions.cs:84`),
+   driven by the host-supplied, empty-by-default `Authorization:MultiFactor:RequiredForRoles`
+   (`MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/MultiFactor/MultiFactorAuthorizationSettings.cs:34`).
+   A listed role, and the permission claims it alone carried, are withheld from a bearer principal
+   without the `mfa` claim
+   (`MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/MultiFactor/MultiFactorRoleWithholding.cs:72`,
+   `:81-83`, `:96`), which records them under the markers
+   `MMCA.Common/Source/Core/MMCA.Common.Shared/Auth/AuthClaimTypes.cs:89` and `:96`
+   (`MultiFactorRoleWithholding.cs:87-88`). The
+   role-vocabulary and access-token paragraphs now record it.
+5. Anchors re-verified against current source: `AuthorizationExtensions.cs` parameterless overload
+   `:30`, configurable overload `:67`, `Enabled = false` opt-out documentation `:50`,
+   `FallbackAuthorizationHandler` registration `:92-93`, `FallbackPolicy` assignment `:97-103`; the
+   handler class at `Fallback/FallbackAuthorizationHandler.cs:35`; `FallbackAuthorizationOptions.cs`
+   `DefaultExemptPathPrefixes` `:21`, `Enabled` `:52`, `ExemptPathPrefixes` `:64`. The navigation
+   filters moved to the code-behind,
+   `MMCA.Common/Source/Presentation/MMCA.Common.UI/Layout/NavMenu.razor.cs`: the
+   `SessionsNavRequiredRole` read and `IsInRole` check at `:120-121`, the `NavItem.RequiredRole`
+   filter at `:125`, the `RequiredPermission` filter over `HasPermissionClaim` at `:127`.
+   `TokenService.cs` takes `IPermissionRegistry` at `:74` and emits permission claims at `:163-171`.
+   In `AnonymousEndpointTestsBase.cs`: `RequireExplicitAuthorizationDecision` (default `true`) `:73`,
+   `EndpointsWithoutAuthorizationAttribute` `:81`, `Endpoints_DeclareAnAuthorizationDecision` `:123`
+   with its opt-out early return at `:125-129`, `UndecoratedAllowList_HasNoStaleEntries` `:141`; each
+   repo still overrides the gate to `true` explicitly (MMCA.Common
+   `Tests/Architecture/MMCA.Common.Architecture.Tests/Api/AnonymousEndpointTests.cs:87`, MMCA.ADC
+   `Tests/Architecture/MMCA.ADC.Architecture.Tests/Api/AnonymousEndpointTests.cs:143`, MMCA.Store
+   `Tests/Architecture/MMCA.Store.Architecture.Tests/Api/AnonymousEndpointTests.cs:127`, MMCA.Helpdesk
+   `Tests/Architecture/MMCA.Helpdesk.Architecture.Tests/AnonymousEndpointTests.cs:52`). Grant-site
+   anchors: Conference `ContentEditor` `ConferencePermissionGrants.cs:54` and its registration at
+   `MMCA.ADC.Conference.API/DependencyInjection.cs:45`; ADC Identity registration at
+   `MMCA.ADC.Identity.API/DependencyInjection.cs:49`; Store Identity `RolesManage` at
+   `IdentityPermissions.cs:35` and `All` at `:38`; the ADC grant test
+   `All_ListsOnlyTheCapabilitiesAdcDefines` at `IdentityPermissionGrantsTests.cs:49`.
 
 ## Related
 ADR-004 (the authenticated principal and claims this keys on, including the optional `permission`

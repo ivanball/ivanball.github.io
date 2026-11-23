@@ -255,7 +255,9 @@
           <p class="eyebrow doc-kicker">Architecture Decision Record</p>
           <h1 id="adr-010-integration-event-schema-versioning--upcaster-policy">ADR-010: Integration-Event Schema Versioning &amp; Upcaster Policy</h1>
           <h2 id="status">Status</h2>
-          <p>Accepted (2026-06-19). Updated 2026-06-27 (Helpdesk enforcement gap closed; all three consumers now gate the convention). Updated 2026-08-14 (ADC now gates seven events, and a fourth tree, the local MMCA.ECommerce sample, subclasses the same base). Revised 2026-08-18 (MMCA.Common now ships its own concrete integration event, <code>OutputCacheEvictionRequested</code>, so the framework&#39;s convention test is no longer vacuous: enforcement runs at five points, not four). Updated 2026-08-21: the upcaster registration extension point named below as follow-up work now ships; see <a href="090-event-upcaster-registration.html">ADR-090</a>. Amended 2026-09-11: <strong>payload purity</strong> is now part of the contract and is build-gated, so an integration event may neither ship from outside a <code>*.Shared</code> assembly nor expose a type declared in a <code>*.Domain</code> assembly on its wire shape (see the amendment section at the end). Updated 2026-09-19 (Store now ships four concrete integration events, not one: <code>ProductVariantChanged</code>, <code>ProductInfoChanged</code>, <code>OrderFulfilled</code> and <code>CustomerErased</code>). Revised 2026-10-21: <code>EventConventionTestsBase</code> now carries the <code>[EventName]</code> rule as a third event-shape companion rule, the ECommerce sample is disclosed as pinned to an older rule set, and anchors moved. Updated 2026-10-28: the MMCA.ECommerce sample is retired, so three consumer trees gate the convention and all of them resolve the current rule set.</p>
+          <p>Accepted (2026-06-19). Updated 2026-06-27 (Helpdesk enforcement gap closed; all three consumers now gate the convention). Updated 2026-08-14 (ADC now gates seven events, and a fourth tree, the local MMCA.ECommerce sample, subclasses the same base). Revised 2026-08-18 (MMCA.Common now ships its own concrete integration event, <code>OutputCacheEvictionRequested</code>, so the framework&#39;s convention test is no longer vacuous: enforcement runs at five points, not four). Updated 2026-08-21: the upcaster registration extension point named below as follow-up work now ships; see <a href="090-event-upcaster-registration.html">ADR-090</a>. Amended 2026-09-11: <strong>payload purity</strong> is now part of the contract and is build-gated, so an integration event may neither ship from outside a <code>*.Shared</code> assembly nor expose a type declared in a <code>*.Domain</code> assembly on its wire shape (see the amendment section at the end). Updated 2026-09-19 (Store now ships four concrete integration events, not one: <code>ProductVariantChanged</code>, <code>ProductInfoChanged</code>, <code>OrderFulfilled</code> and <code>CustomerErased</code>). Revised 2026-10-21: <code>EventConventionTestsBase</code> now carries the <code>[EventName]</code> rule as a third event-shape companion rule, the ECommerce sample is disclosed as pinned to an older rule set, and anchors moved. Updated 2026-10-28: the MMCA.ECommerce sample is retired, so three consumer trees gate the convention and all of them resolve the current rule set. Revised 2026-11-23: ADC now ships nine integration
+          events, the frozen wire-contract snapshot (<code>IntegrationEventContractTestsBase</code>, subclassed by all
+          three consumers) is recorded as a companion gate, and the <code>IEventBus</code> anchors moved.</p>
           <h2 id="context">Context</h2>
           <p>Integration events cross service boundaries (Identity → Conference, Conference ↔ Engagement, …) and
           are resolved by consumers solely by their type string: the outbox serializes the event to JSON keyed
@@ -327,7 +329,7 @@
           is still held to Shared.) The other three are the consumer trees, which subclass
           <code>EventConventionTestsBase</code> and run its rules against their own event assemblies (each at the rule
           set of the MMCA.Common release it resolves; all three track the current release):
-          <code>EventConventionTests</code> in <code>MMCA.ADC.Architecture.Tests</code> (ADC&#39;s seven events, spread across the
+          <code>EventConventionTests</code> in <code>MMCA.ADC.Architecture.Tests</code> (ADC&#39;s nine events, spread across the
           Identity, Conference and Engagement Shared assemblies the map registers) and
           <code>MMCA.Store.Architecture.Tests</code>
           (<code>Tests/Architecture/MMCA.Store.Architecture.Tests/Contracts/EventConventionTests.cs:3</code>, Store&#39;s
@@ -348,6 +350,25 @@
           events such as <code>OutputCacheEvictionRequested</code> are gated in Common&#39;s own build and not re-gated in
           consumer runs (<code>IntegrationEvents(map)</code> at
           <code>MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Rules/Contracts/ArchitectureRules.Events.cs:155-164</code>).</li>
+          <li><code>SchemaVersion</code> and the shape rules do not notice an in-place reshape on their own; a frozen
+          wire-contract snapshot does. <code>IntegrationEventContractTestsBase</code>
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Bases/Contracts/IntegrationEventContractTestsBase.cs:18</code>)
+          rebuilds the live contract with <code>ArchitectureRules.BuildIntegrationEventContract</code>
+          (<code>.../Rules/Contracts/ArchitectureRules.Events.cs:66</code>, called at <code>IntegrationEventContractTestsBase.cs:38</code>):
+          one line per event keyed by its <code>[EventName]</code> (full type name otherwise), its public properties
+          other than those declared by the framework envelope, sorted by name (the filter is by declaring
+          namespace, so <code>SchemaVersion</code> drops out unless the event overrides it, in which case the line
+          carries <code>SchemaVersion:Int32</code>; <code>ArchitectureRules.Events.cs:84-86</code>), and fails when that
+          differs from the subclass&#39;s committed <code>ExpectedContract</code> (<code>:33</code>). Members compare as a set, so a
+          reorder is not a failure, while a missing, extra or retyped member, or a changed event set, is.
+          All three consumer trees subclass it: <code>IntegrationEventContractTests</code> in
+          <code>MMCA.ADC/Tests/Architecture/MMCA.ADC.Architecture.Tests/Contracts/IntegrationEventContractTests.cs:3</code>,
+          <code>MMCA.Store/Tests/Architecture/MMCA.Store.Architecture.Tests/Contracts/IntegrationEventContractTests.cs:3</code>
+          and <code>MMCA.Helpdesk/Tests/Architecture/MMCA.Helpdesk.Architecture.Tests/ArchitectureTests.cs:99</code>.
+          A failing snapshot is the prompt to take the new-type-plus-upcaster path of Decision item 3 for a
+          breaking change; every intentional change, a new <code>FooV2</code> type (reported as <code>NEW EVENT</code>,
+          <code>IntegrationEventContractTestsBase.cs:72-73</code>) or an additive member alike, then updates
+          <code>ExpectedContract</code> in the same commit (<code>IntegrationEventContractTestsBase.cs:48-52</code>). <a href="065-scaffolding-templates.html">ADR-065</a> records how the template seeds it.</li>
           <li>A get-only <code>SchemaVersion</code> is informational on the wire (it round-trips out, not back in): intentional
           (version is a property of the type, not per-instance data), but it means you read it off the concrete
           type/JSON, not by mutating it.</li>
@@ -390,7 +411,7 @@
           <code>BaseDomainEvent</code> (<code>MMCA.Common/Source/Core/MMCA.Common.Domain/DomainEvents/BaseIntegrationEvent.cs:11</code>),
           which is what lets one outbox row and one dispatcher carry both kinds of event, and <code>IEventBus</code>
           already accepts only <code>IIntegrationEvent</code> on both of its overloads
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Interfaces/Events/IEventBus.cs:18</code>, <code>:25</code>). Those
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Interfaces/Events/IEventBus.cs:20</code>, <code>:27</code>). Those
           two facts together stop a domain event from being <em>published</em> outward. What they cannot stop is a
           domain type travelling <em>inside</em> a properly typed integration event, which is a payload question
           rather than an envelope question. The compiler gates the envelope; these rules gate the payload.</p>
@@ -457,6 +478,34 @@
           </ul>
           </li>
           </ol>
+          <h2 id="revision-2026-11-23">Revision (2026-11-23)</h2>
+          <p>Re-verified against current source. The versioning policy, the upcaster rule and the payload-purity
+          amendment are unchanged; ADC&#39;s event count grew, a shipped companion gate is now recorded, and two
+          anchors moved.</p>
+          <ol>
+          <li>ADC ships nine integration events, not seven, all in module Shared assemblies the map registers
+          (<code>MMCA.ADC/Tests/Architecture/MMCA.ADC.Architecture.Tests/AdcArchitectureMap.cs:31</code>, <code>:39</code>, <code>:47</code>):
+          Identity Shared carries <code>UserRegistered</code>, <code>UserDeleted</code>, <code>UserEmailVerified</code> and
+          <code>TicketHolderInvited</code> (<code>Source/Modules/Identity/MMCA.ADC.Identity.Shared/Users/IntegrationEvents/</code>),
+          Conference Shared carries <code>SpeakerLinkedToUser</code>, <code>SpeakerUnlinkedFromUser</code>,
+          <code>EventFeedbackSubmitted</code> and <code>SessionFeedbackSubmitted</code>, and Engagement Shared carries
+          <code>AttendeeCheckedIn</code>. The Trade-offs entry now says nine; the 2026-08-14 Status sentence keeps
+          &quot;seven&quot; as recorded on that date.</li>
+          <li>The frozen wire-contract snapshot is recorded as a Trade-offs entry: <code>IntegrationEventContractTestsBase</code>
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Bases/Contracts/IntegrationEventContractTestsBase.cs:18</code>)
+          compares <code>ArchitectureRules.BuildIntegrationEventContract</code>
+          (<code>.../Rules/Contracts/ArchitectureRules.Events.cs:66</code>) to a committed <code>ExpectedContract</code>, and ADC,
+          Store and Helpdesk each subclass it
+          (<code>MMCA.ADC/Tests/Architecture/MMCA.ADC.Architecture.Tests/Contracts/IntegrationEventContractTests.cs:3</code>,
+          <code>MMCA.Store/Tests/Architecture/MMCA.Store.Architecture.Tests/Contracts/IntegrationEventContractTests.cs:3</code>,
+          <code>MMCA.Helpdesk/Tests/Architecture/MMCA.Helpdesk.Architecture.Tests/ArchitectureTests.cs:99</code>).</li>
+          <li>Anchors re-verified against current source:<ul>
+          <li><code>IEventBus</code> overloads: <code>MMCA.Common/Source/Core/MMCA.Common.Application/Interfaces/Events/IEventBus.cs:20</code>
+          and <code>:27</code> (was <code>:18</code>, <code>:25</code>); both still take only <code>IIntegrationEvent</code> /
+          <code>IEnumerable&lt;IIntegrationEvent&gt;</code>.</li>
+          </ul>
+          </li>
+          </ol>
           
         <div class="doc-foot btn-row">
           <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
@@ -476,6 +525,7 @@
             <li><a href="#revision-2026-10-01">Revision (2026-10-01)</a></li>
             <li><a href="#revision-2026-10-06">Revision (2026-10-06)</a></li>
             <li><a href="#revision-2026-10-21">Revision (2026-10-21)</a></li>
+            <li><a href="#revision-2026-11-23">Revision (2026-11-23)</a></li>
             </ul>
           </nav>
         </aside>

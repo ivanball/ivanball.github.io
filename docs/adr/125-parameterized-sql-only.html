@@ -255,7 +255,7 @@
           <p class="eyebrow doc-kicker">Architecture Decision Record</p>
           <h1 id="adr-125-parameterized-sql-only-enforced-by-a-fitness-gate">ADR-125: Parameterized SQL Only, Enforced by a Fitness Gate</h1>
           <h2 id="status">Status</h2>
-          <p>Accepted (2026-09-19). Revised 2026-10-01: citations refreshed and MMCA.Helpdesk counted as the fourth subclassing repo. Revised 2026-10-06: the relational limit is now a conditional registration that fails at container validation, not a <code>NotSupportedException</code> on the first statement. Revised 2026-10-07: the Cosmos-default failure is an unresolved-service error raised at startup only where the container is validated on build (Development under the default builder) and otherwise on first resolution, and the CHANGELOG anchors are refreshed after the v1.233.0 release. Revised 2026-10-21: the source comments now state the same Development-build versus first-resolution timing the ADR does, the <code>SET IDENTITY_INSERT</code> exemption is described as the SQL Server explicit-key insert dialect with a best-effort toggle-off on the failure path, and anchors are refreshed after v1.250.0. Revised 2026-10-26: anchors refreshed after v1.261.0. Revised 2026-10-28: anchors refreshed after v1.265.1.</p>
+          <p>Accepted (2026-09-19). Revised 2026-10-01: citations refreshed and MMCA.Helpdesk counted as the fourth subclassing repo. Revised 2026-10-06: the relational limit is now a conditional registration that fails at container validation, not a <code>NotSupportedException</code> on the first statement. Revised 2026-10-07: the Cosmos-default failure is an unresolved-service error raised at startup only where the container is validated on build (Development under the default builder) and otherwise on first resolution, and the CHANGELOG anchors are refreshed after the v1.233.0 release. Revised 2026-10-21: the source comments now state the same Development-build versus first-resolution timing the ADR does, the <code>SET IDENTITY_INSERT</code> exemption is described as the SQL Server explicit-key insert dialect with a best-effort toggle-off on the failure path, and anchors are refreshed after v1.250.0. Revised 2026-10-26: anchors refreshed after v1.261.0. Revised 2026-10-28: anchors refreshed after v1.265.1. Revised 2026-11-23: the <code>SET IDENTITY_INSERT</code> call site states its reasoning in a plain comment with no <code>S2077</code> suppression, MMCA.ADC takes the base scan unchanged (Notification is now a mapped module), and anchors are refreshed after v1.315.0.</p>
           <h2 id="context">Context</h2>
           <p>The supported way to read data is the repository plus specification contract
           (<a href="055-repository-and-specification-contract.html">ADR-055</a>), and LINQ answers almost everything. It does
@@ -276,9 +276,9 @@
           <p>The framework also runs on four engines (<a href="018-polyglot-persistence.html">ADR-018</a>), and one of them has
           no SQL command surface at all, so &quot;raw SQL&quot; cannot be offered as a capability every host has. Before
           v1.192.0 the landing shape for a raw scalar read was four keyless <code>ValReturn&lt;T&gt;</code> entities mapped to no
-          table and queried by nobody (<code>MMCA.Common/CHANGELOG.md:2096-2102</code>); the pair of additions this record
-          covers shipped in v1.192.0 (<code>MMCA.Common/CHANGELOG.md:1981</code>, the interface at <code>:2051-2060</code> and the
-          fitness base at <code>:2061-2064</code>).</p>
+          table and queried by nobody (<code>MMCA.Common/CHANGELOG.md:3033-3039</code>); the pair of additions this record
+          covers shipped in v1.192.0 (<code>MMCA.Common/CHANGELOG.md:2918</code>, the interface at <code>:2988-2997</code> and the
+          fitness base at <code>:2998-3001</code>).</p>
           <h2 id="decision">Decision</h2>
           <p>Give raw SQL exactly one door whose signature makes the unsafe call uncompilable, and ban the four raw
           EF members in module code with a fitness test rather than a guideline.</p>
@@ -295,38 +295,38 @@
           (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/EFRawSqlQueryExecutor.cs:29</code>)
           resolves the host&#39;s default physical source (<code>:51</code>), and it is registered only when that default
           source is on a relational engine
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:435</code>, registration at
-          <code>:437</code>). A Cosmos-default host has no registration, so a service that injects the interface there
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:459</code>, registration at
+          <code>:461</code>). A Cosmos-default host has no registration, so a service that injects the interface there
           fails with an unresolved-service error rather than on its first statement. The interface
           (<code>IRawSqlQueryExecutor.cs:17-23</code>), the executor (<code>EFRawSqlQueryExecutor.cs:19-25</code>) and the
-          registration method (<code>DependencyInjection.cs:416-422</code>) all document the missing registration and
+          registration method (<code>DependencyInjection.cs:440-446</code>) all document the missing registration and
           its timing: at container build in Development, where the default host validates the container, and
           on first resolution elsewhere (<code>IRawSqlQueryExecutor.cs:21-22</code>, <code>EFRawSqlQueryExecutor.cs:23-24</code>,
-          <code>DependencyInjection.cs:420-421</code>). No host in the four repos sets <code>ValidateOnBuild</code> itself, and the
+          <code>DependencyInjection.cs:444-445</code>). No host in the four repos sets <code>ValidateOnBuild</code> itself, and the
           hosts that register the executor build through <code>WebApplication.CreateBuilder</code> (for example
-          <code>MMCA.Helpdesk/Source/Hosts/MMCA.Helpdesk.Web/Program.cs:12</code>), so the container is validated at
+          <code>MMCA.Helpdesk/Source/Hosts/MMCA.Helpdesk.Web/Program.cs:13</code>), so the container is validated at
           startup only where the default builder turns validation on (the Development environment), and
           elsewhere the error appears the first time a dependent service is resolved.</li>
           <li><strong>The statement joins the caller&#39;s unit of work.</strong> The executor takes its context from the scoped
           <code>IDbContextFactory</code> and calls EF&#39;s <code>Database.SqlQuery&lt;T&gt;</code> on it (<code>EFRawSqlQueryExecutor.cs:52</code>), so
           the read shares the caller&#39;s connection and any transaction an <code>ITransactional</code> command opened. It is
           registered scoped, by the call that follows the singleton <code>IQueryableExecutor</code> and deliberately not a
-          singleton itself (<code>DependencyInjection.cs:116</code>, the sibling at <code>:111</code> and the reason at <code>:113-115</code>;
-          the scoped registration itself at <code>:437</code>), and is <code>internal sealed</code> (<code>EFRawSqlQueryExecutor.cs:29</code>),
+          singleton itself (<code>DependencyInjection.cs:117</code>, the sibling at <code>:112</code> and the reason at <code>:114-116</code>;
+          the scoped registration itself at <code>:461</code>), and is <code>internal sealed</code> (<code>EFRawSqlQueryExecutor.cs:29</code>),
           so the abstraction is the only public surface.</li>
           <li><strong>The ban is a test, not a paragraph.</strong> <code>ModuleCode_UsesParameterizedSqlOnly</code>
-          (<code>RawSqlConventionTestsBase.cs:66</code>) scans the <code>.cs</code> files of every mapped module and fails on member
-          access to <code>FromSqlRaw</code>, <code>SqlQueryRaw</code>, <code>ExecuteSqlRaw</code> or <code>ExecuteSqlRawAsync</code> (<code>:115</code>), skipping
-          whole-line comment lines (<code>:105</code>). The failure message names the four members, says why they are
-          unsafe, and names the replacements (<code>:90-94</code>), so the test output is the instruction.</li>
+          (<code>RawSqlConventionTestsBase.cs:67</code>) scans the <code>.cs</code> files of every mapped module and fails on member
+          access to <code>FromSqlRaw</code>, <code>SqlQueryRaw</code>, <code>ExecuteSqlRaw</code> or <code>ExecuteSqlRawAsync</code> (<code>:116</code>), skipping
+          whole-line comment lines (<code>:106</code>). The failure message names the four members, says why they are
+          unsafe, and names the replacements (<code>:91-95</code>), so the test output is the instruction.</li>
           <li><strong>A vacuous scan is a failure, not a pass.</strong> If the map declares no modules or the project folders
           moved, the run finds no directories and the test fails with an explanation and a pointer to the
-          override (<code>:68-72</code>), so the gate cannot quietly stop checking anything.</li>
+          override (<code>:69-73</code>), so the gate cannot quietly stop checking anything.</li>
           <li><strong>Scope is every project a module owns, not just its Application layer.</strong> The default scan walks the
-          repo&#39;s <code>Source/</code> tree for each project name the map attributes to a business module (<code>:48-63</code>),
+          repo&#39;s <code>Source/</code> tree for each project name the map attributes to a business module (<code>:49-64</code>),
           because a raw statement is as dangerous in a module&#39;s Infrastructure as in its Application.</li>
           <li><strong><code>AllowedFiles</code> is an adoption ratchet, and today it holds one entry across four repos.</strong> The base
-          declares it empty (<code>:39</code>) and skips a file whose name is listed (<code>:81</code>). MMCA.Common lists exactly
+          declares it empty (<code>:40</code>) and skips a file whose name is listed (<code>:82</code>). MMCA.Common lists exactly
           one file, <code>DbContextFactory.cs</code>, with the reason inline
           (<code>MMCA.Common/Tests/Architecture/MMCA.Common.Architecture.Tests/Cqrs/RawSqlConventionTests.cs:25-32</code>):
           the <code>SET IDENTITY_INSERT</code> statement has no parameterized form, because a T-SQL identifier cannot be a
@@ -335,13 +335,17 @@
           (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/Factory/DbContextFactory.cs:424-426</code>,
           the OFF statement built at <code>:428</code> and run at <code>:443</code>, or best-effort through <code>TryToggleOffAsync</code> at
           <code>:439</code> when the save fails, both built from the identity group&#39;s schema and table). The statement
-          comes from the engine&#39;s explicit-key insert dialect (selected at <code>DbContextFactory.cs:296</code> and passed
-          to the call site at <code>:389</code>), and SQL Server
+          comes from the engine&#39;s explicit-key insert dialect (selected at <code>DbContextFactory.cs:296-297</code>,
+          passed in at <code>:366</code> and received by the call site&#39;s method at <code>:389</code>), and SQL Server
           is the one engine that implements it
           (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DataSources/Engines/SQLServerDataSourceEngine.cs:162-163</code>).
-          That call site also carries the matching Sonar <code>S2077</code> suppression with the same reasoning
-          (<code>DbContextFactory.cs:423</code>, restored at <code>:445</code>), so the exemption is stated twice and names its
-          justification in both places. MMCA.ADC declares no override, so it inherits the empty list
+          The call site restates the same reasoning in a plain comment above the ON statement
+          (<code>DbContextFactory.cs:423</code>), with no analyzer suppression on the method that issues it. The same
+          reasoning appears a third time as a <code>CA2100</code> suppression on <code>SaveChangesAsync</code>
+          (<code>DbContextFactory.cs:272-273</code>), the method that selects the dialect, rather than on the method
+          that runs the statement. The allow-list reason itself still says the call site carries a matching
+          <code>S2077</code> suppression (<code>RawSqlConventionTests.cs:29-30</code>), which no longer matches the source.
+          MMCA.ADC declares no override, so it inherits the empty list
           (<code>MMCA.ADC/Tests/Architecture/MMCA.ADC.Architecture.Tests/Cqrs/RawSqlConventionTests.cs:14-16</code>, with
           the reason written in its class documentation at <code>:10-12</code>), and MMCA.Store declares the empty list
           explicitly
@@ -355,8 +359,10 @@
           redirects the scan onto the framework&#39;s own Application and Infrastructure projects
           (<code>RawSqlConventionTests.cs:17-22</code>), on the grounds that the one place shipping a raw-SQL surface is
           the one place that must not leave a concatenated statement lying around as the example. MMCA.ADC
-          keeps the base scan and appends the thin Notification module, which is not a mapped module
-          (<code>RawSqlConventionTests.cs:24-33</code>). MMCA.Store takes the base scan unchanged
+          takes the base scan unchanged (<code>RawSqlConventionTests.cs:14-16</code>); its map attributes the thin
+          Notification module&#39;s three layers to a module, so the default scan already covers it
+          (<code>MMCA.ADC/Tests/Architecture/MMCA.ADC.Architecture.Tests/AdcArchitectureMap.cs:51-54</code>). MMCA.Store
+          takes the base scan unchanged too
           (<code>RawSqlConventionTests.cs:12</code>, <code>:15</code>), and so does MMCA.Helpdesk
           (<code>MMCA.Helpdesk/Tests/Architecture/MMCA.Helpdesk.Architecture.Tests/ArchitectureTests.cs:191-194</code>).</li>
           </ul>
@@ -399,20 +405,20 @@
           <code>SET IDENTITY_INSERT</code> needed an exemption instead of a rewrite.</li>
           <li><strong>The fitness test is a textual scan with the limits of one.</strong> The package carries no IL or Roslyn
           dependency, and reflection cannot see member usage inside method bodies, so the rule reads source
-          text (<code>RawSqlConventionTestsBase.cs:21-28</code>). A match inside a string literal or a trailing comment is
+          text (<code>RawSqlConventionTestsBase.cs:22-29</code>). A match inside a string literal or a trailing comment is
           a false positive that has to be parked in <code>AllowedFiles</code>, and the regex names exactly four EF members
-          (<code>:115</code>), so concatenated SQL reaching the database some other way (raw ADO.NET, a micro-ORM, a
+          (<code>:116</code>), so concatenated SQL reaching the database some other way (raw ADO.NET, a micro-ORM, a
           stored procedure body) is not matched at all.</li>
-          <li><strong><code>AllowedFiles</code> matches on file name, not path</strong> (<code>:81</code>). Exempting <code>DbContextFactory.cs</code> exempts
+          <li><strong><code>AllowedFiles</code> matches on file name, not path</strong> (<code>:82</code>). Exempting <code>DbContextFactory.cs</code> exempts
           every file with that name inside the scanned directories, which is a wider hole than the entry reads.</li>
-          <li><strong>The default scan covers module code only</strong> (<code>:48-63</code>). Host and service projects, migrations
+          <li><strong>The default scan covers module code only</strong> (<code>:49-64</code>). Host and service projects, migrations
           projects and test projects are outside it unless a subclass adds them, which is what MMCA.Common&#39;s
-          subclass does for the framework projects and MMCA.ADC&#39;s does for its Notification module.</li>
+          subclass does for the framework projects.</li>
           <li><strong>One source, the default one.</strong> The executor resolves the host&#39;s default physical source
           (<code>EFRawSqlQueryExecutor.cs:51</code>), so a statement that must run against a named non-default source has
           no route through this interface today.</li>
           <li><strong>The Cosmos refusal is discovered at run time, not at compile time.</strong> The missing registration is
-          documented (<code>IRawSqlQueryExecutor.cs:18-22</code>), but it surfaces as a resolution failure: at host
+          documented (<code>IRawSqlQueryExecutor.cs:20-22</code>), but it surfaces as a resolution failure: at host
           startup only where the container is validated on build (the Development environment under the
           default builder), otherwise on the first resolution of a dependent service. Nothing at compile
           time tells a module author that the host it will be deployed into defaults to a non-relational engine.</li>
@@ -543,6 +549,45 @@
           <code>:439</code>, <code>:445</code>, <code>:463</code>) still hold as cited. The earlier revisions and Status sentences keep their
           anchors as recorded on their dates.</li>
           </ol>
+          <h2 id="revision-2026-11-23">Revision (2026-11-23)</h2>
+          <p>Re-verified against current source. The decision, the <code>FormattableString</code>-only contract, the
+          conditional relational registration and its timing, the fitness base, the one-entry <code>AllowedFiles</code>
+          ratchet and the empty lists in the three application repos are unchanged. Two statements no longer
+          matched source and are corrected in place, and anchors moved as <code>DependencyInjection.cs</code>, the fitness
+          base and the CHANGELOG grew through v1.315.0 (<code>MMCA.Common/CHANGELOG.md:7</code>).</p>
+          <ol>
+          <li>The <code>SET IDENTITY_INSERT</code> call site carries no Sonar <code>S2077</code> suppression: no <code>S2077</code> appears in
+          MMCA.Common&#39;s <code>Source/</code> tree. The reasoning sits in a plain comment above the ON statement
+          (<code>DbContextFactory.cs:423</code>), and a <code>CA2100</code> suppression with the same justification sits on
+          <code>SaveChangesAsync</code> (<code>DbContextFactory.cs:272-273</code>), not on the method that runs the statement.
+          The only remaining <code>S2077</code> mention is the allow-list comment in the Common subclass
+          (<code>RawSqlConventionTests.cs:29-30</code>), which still describes the suppression and is stale; it is
+          left for a source change. The Decision bullet now says so.</li>
+          <li>MMCA.ADC&#39;s subclass overrides only <code>Map</code> (<code>MMCA.ADC/Tests/Architecture/MMCA.ADC.Architecture.Tests/Cqrs/RawSqlConventionTests.cs:14-16</code>);
+          it no longer appends the Notification module to the scan, because its map now attributes
+          Notification&#39;s Application, Shared and API layers to a module
+          (<code>MMCA.ADC/Tests/Architecture/MMCA.ADC.Architecture.Tests/AdcArchitectureMap.cs:51-54</code>) and the
+          default scan covers it. The Decision and Trade-offs bullets now say so.</li>
+          <li>The explicit-key insert dialect is passed into <code>SaveExplicitKeyGroupsAsync</code> at
+          <code>DbContextFactory.cs:366</code>; <code>:389</code> is that method&#39;s parameter, not the call.</li>
+          <li>Anchors re-verified against current source: <code>DependencyInjection.cs</code> call site <code>:117</code>, sibling
+          <code>:112</code>, reason <code>:114-116</code>, <code>AddRawSqlQueryExecutor</code> summary <code>:440-446</code> (timing wording
+          <code>:444-445</code>, method <code>:450</code>), relational check <code>:459</code>, scoped registration <code>:461</code>;
+          <code>RawSqlConventionTestsBase.cs</code> limits paragraph <code>:22-29</code>, <code>AllowedFiles</code> <code>:40</code>, default scan
+          <code>:49-64</code>, test <code>:67</code>, vacuous-scan check <code>:69-73</code>, file-name match <code>:82</code>, failure message
+          <code>:91-95</code>, comment skip <code>:106</code>, regex <code>:116</code>; <code>DbContextFactory.cs</code> dialect selection <code>:296-297</code>,
+          ON statement <code>:424-426</code>, OFF statement built <code>:428</code> and run <code>:443</code>, <code>TryToggleOffAsync</code> called at
+          <code>:439</code> and defined at <code>:462</code>; <code>IRawSqlQueryExecutor.cs</code> relational-limit wording <code>:20-22</code>;
+          <code>MMCA.Helpdesk/Source/Hosts/MMCA.Helpdesk.Web/Program.cs:13</code> (<code>ValidateOnBuild</code> still has no match
+          in any of the four repos&#39; <code>Source/</code> trees); <code>MMCA.Common/CHANGELOG.md</code> v1.192.0 header <code>:2918</code>,
+          <code>IRawSqlQueryExecutor</code> entry <code>:2988-2997</code> (still ending on the original <code>NotSupportedException</code>
+          sentence at <code>:2997</code>), <code>RawSqlConventionTestsBase</code> entry <code>:2998-3001</code>, <code>ValReturn&lt;T&gt;</code> removal
+          <code>:3033-3039</code> (its <code>IRawSqlQueryExecutor</code> mention at <code>:3036</code>); the v1.218.0 conditional
+          registration bullet is now <code>:1825</code> (header <code>:1818</code>); the v1.247.0 failure-path toggle-off entry is
+          <code>:1293</code> (header <code>:1240</code>, item M229). <code>EFRawSqlQueryExecutor.cs</code> (<code>:29</code>, <code>:51</code>, <code>:52</code>) and the
+          consumer subclass anchors for Common, Store and Helpdesk still hold as cited. The earlier
+          revisions and Status sentences keep their anchors as recorded on their dates.</li>
+          </ol>
           <h2 id="related">Related</h2>
           <p><a href="055-repository-and-specification-contract.html">ADR-055</a> (the repository plus specification path this
           escape hatch sits beside, and the reason the hatch stays narrow),
@@ -575,6 +620,7 @@
             <li><a href="#revision-2026-10-21">Revision (2026-10-21)</a></li>
             <li><a href="#revision-2026-10-26">Revision (2026-10-26)</a></li>
             <li><a href="#revision-2026-10-28">Revision (2026-10-28)</a></li>
+            <li><a href="#revision-2026-11-23">Revision (2026-11-23)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

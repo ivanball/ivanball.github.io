@@ -24,6 +24,7 @@ Revised 2026-10-07: anchors re-verified against current source after the v1.233.
 Revised 2026-10-21: anchors refreshed after host `Program.cs` edits moved four `AddCommonApiVersioning` call sites and the OpenAPI contract-test anchor, no decision change.
 Revised 2026-10-26: anchors refreshed after host `Program.cs` edits moved all seven extracted-host `AddCommonApiVersioning` call sites, no decision change.
 Revised 2026-10-28: anchors refreshed after ADC #298 moved the ADC Identity host `AddCommonApiVersioning` call site, no decision change.
+Revised 2026-11-23: the extracted service hosts now get `AddCommonApiVersioning`, `AddCommonOpenApi`, `MapCommonOpenApi` and the design-time skip from `MMCA.Common.ServiceHost` (which also pins the `v1` document to OpenAPI 3.1), keeping only their own `AddOpenApi()` call; Helpdesk still calls the versioning registration directly; anchors refreshed.
 
 ## Context
 The framework's REST surface is served by controllers hosted in extracted service processes behind a
@@ -69,15 +70,22 @@ proves two live versions coexist.
   explorer's default-version behavior is inherited rather than configured, exactly as the comment
   above it records (`WebApplicationBuilderExtensions.cs:41`-`WebApplicationBuilderExtensions.cs:43`). The
   explorer feeds the controllers' API descriptions to the OpenAPI generator; it does not name the
-  documents. Since v1.217.0 each host registers the single `v1` document itself with ASP.NET Core's
+  documents. Since v1.217.0 each extracted service host registers the single `v1` document itself with ASP.NET Core's
   `services.AddOpenApi()`, and `AddCommonOpenApi`
-  (`WebApplicationBuilderExtensions.cs:101`, contract in the doc comment at `:87`-`:100`) registers no
-  document: it configures every document the host registered. `MapCommonOpenApi` serves it at
+  (`WebApplicationBuilderExtensions.cs:108`, contract in the doc comment at `:94`-`:107`) registers no
+  document: it configures every document the host registered (`ConfigureAll`, `:115`-`:119`). `MapCommonOpenApi` serves it at
   `/openapi/v1.json` outside Production only
-  (`Source/Presentation/MMCA.Common.API/Startup/Endpoints/OpenApiEndpointExtensions.cs:60`, guarded at
-  `OpenApiEndpointExtensions.cs:62`, mapped `.AllowAnonymous()` at `OpenApiEndpointExtensions.cs:74`),
-  and fails at startup when the host registered no `v1` document (`OpenApiEndpointExtensions.cs:64`-`:72`).
-  Why the host must keep the call: see the Revision (2026-10-01, v1.217.0).
+  (`Source/Presentation/MMCA.Common.API/Startup/Endpoints/OpenApiEndpointExtensions.cs:59`, guarded at
+  `OpenApiEndpointExtensions.cs:61`, mapped `.AllowAnonymous()` at `OpenApiEndpointExtensions.cs:73`),
+  and fails at startup when the host registered no `v1` document (`OpenApiEndpointExtensions.cs:63`-`:71`).
+  Why the host must keep the call: see the Revision (2026-10-01, v1.217.0). For the extracted service
+  hosts the framework pair is made by `MMCA.Common.ServiceHost`: `AddMmcaServiceHost` calls
+  `AddCommonOpenApi` (`Source/Hosting/MMCA.Common.ServiceHost/ServiceHostBuilderExtensions.cs:128`) and
+  pins the `v1` document to OpenAPI 3.1 through named options (`ServiceHostBuilderExtensions.cs:125`-`:127`,
+  reasoning in the comment at `:118`-`:124`), and `UseMmcaServiceHostAsync` refuses to start when the
+  host skipped its own `AddOpenApi()` (`ServiceHostApplicationExtensions.cs:50`) before mapping
+  `MapCommonOpenApi` (`ServiceHostApplicationExtensions.cs:57`). The host keeps only its
+  `builder.Services.AddOpenApi()` line.
 - **A shipped exemplar proves two versions coexist.** `ServiceInfoControllerBase`
   (`Source/Presentation/MMCA.Common.API/Controllers/ServiceInfoControllerBase.cs:30`) serves the same
   `/ServiceInfo` route under two versions selected by the header: `GetV1` is mapped to `1.0`
@@ -124,14 +132,16 @@ proves two live versions coexist.
   current host was affected either way, which is precisely why the failure could ship unnoticed.
   Since v1.217.0 MMCA.Common no longer references `Asp.Versioning.OpenApi`; the guard stays because it
   costs nothing and still protects any other consumer of the API descriptions from the same null.
-- **Every REST host adopts it the same way.** The extracted services call `AddCommonApiVersioning`
-  in their startup: ADC's Conference
-  (`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:226`) and Identity
-  (`MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:162`) hosts, Store's Catalog host
-  (`MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:146`), and the same call is made
-  by the other extracted hosts (ADC Engagement `Program.cs:156`, ADC Notification `Program.cs:145`,
-  Store Sales `Program.cs:154`, Store Identity `Program.cs:141`) and by the monolith reference host
-  (`MMCA.Helpdesk/Source/Hosts/MMCA.Helpdesk.Web/Program.cs:35`).
+- **REST hosts adopt it through `MMCA.Common.ServiceHost` or by one direct call.** The extracted services do not call
+  `AddCommonApiVersioning` themselves: each composes its start-up with `builder.AddMmcaServiceHost(...)`,
+  and `MMCA.Common.ServiceHost` makes the call
+  (`Source/Hosting/MMCA.Common.ServiceHost/ServiceHostBuilderExtensions.cs:107`). The seven call sites
+  are ADC's Conference (`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:82`),
+  Engagement (`Program.cs:58`), Identity (`Program.cs:82`) and Notification (`Program.cs:58`) hosts and
+  Store's Catalog (`MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:32`), Identity
+  (`Program.cs:37`) and Sales (`Program.cs:51`) hosts. The monolith reference host, which does not use
+  `MMCA.Common.ServiceHost`, calls the registration directly
+  (`MMCA.Helpdesk/Source/Hosts/MMCA.Helpdesk.Web/Program.cs:36`) and registers no OpenAPI document.
 
 Application controllers beyond `ServiceInfo` declare `[ApiVersion("1.0")]` today: the second version
 exists on the discovery endpoint to keep the versioning path honest, not because any business
@@ -159,16 +169,18 @@ resource has yet needed to evolve its shape.
 - **The class-level version attributes are not inherited.** Each per-service subclass must repeat the
   `[ApiVersion(...)]` and routing attributes (the same inheritance caveat ADR-036 records for ADC's
   sealed `OAuthController`); the shared behavior lives in the base, but the attributes do not.
-- **Adoption is per host.** A new REST host that forgets `AddCommonApiVersioning` gets no versioning
-  and no reported versions, the same audit-the-inventory caveat other opt-in framework registrations
+- **Adoption is per host outside `MMCA.Common.ServiceHost`.** A host composed with
+  `AddMmcaServiceHost` gets the registration with no call of its own, but a REST host that composes
+  its start-up by hand (as Helpdesk does) and forgets `AddCommonApiVersioning` gets no versioning and
+  no reported versions, the same audit-the-inventory caveat other opt-in framework registrations
   carry; the shared fitness contract only guards a host once its subclass is added.
 - **Header versioning is less discoverable than a URL segment.** A version chosen by header does not
   show up in a copied URL or a browser address bar, so the version in play is only visible to a
   caller that reads request/response headers.
 - **The OpenAPI document is dev/CI only, and there is one: `v1`.** `MapCommonOpenApi` is a no-op
-  in Production (`OpenApiEndpointExtensions.cs:62`), so the machine-readable contract is an internal
-  dev/CI artifact rather than a public production surface. Since v1.217.0 each host registers only the
-  `v1` document, so a version a controller adds beyond `1.0` (today only the `2.0` `ServiceInfo`
+  in Production (`OpenApiEndpointExtensions.cs:61`), so the machine-readable contract is an internal
+  dev/CI artifact rather than a public production surface. Since v1.217.0 each extracted service host registers
+  only the `v1` document (Helpdesk registers none), so a version a controller adds beyond `1.0` (today only the `2.0` `ServiceInfo`
   action) is served and exercised by the fitness contract above but appears in no generated document.
   The framework baseline and each consumer's contract test fetch `/openapi/v1.json`
   (`MMCA.Common/Tests/Presentation/MMCA.Common.API.Tests/OpenApi/OpenApiBaselineTests.cs`,
@@ -362,6 +374,55 @@ sites, host OpenAPI registrations, the design-time skip helper, both `deploy.yml
    `AddCommonOpenApi` (`WebApplicationBuilderExtensions.cs:101`) and `MapCommonOpenApi`
    (`OpenApiEndpointExtensions.cs:60`, guard `:62`, throw `:67`, `.AllowAnonymous()` `:74`).
 
+## Revision (2026-11-23)
+
+Re-verified against current source. The versioning policy, the `ServiceInfo` exemplar, the fitness
+contract and the committed-document gate are unchanged. What moved is where the registrations are
+made: the seven extracted service hosts now compose their start-up through `MMCA.Common.ServiceHost`,
+which makes the `AddCommonApiVersioning`, `AddCommonOpenApi` and `MapCommonOpenApi` calls the
+earlier revisions credit to each host's `Program.cs`. Line numbers cited inside the earlier dated
+revisions (host call sites, host OpenAPI registrations, the design-time skip helper, both
+`deploy.yml` gates and both `Directory.Build.props` blocks) are left as recorded.
+
+1. No ADC or Store host calls `AddCommonApiVersioning`. Each calls `builder.AddMmcaServiceHost(...)`
+   (ADC Conference `Program.cs:82`, Engagement `:58`, Identity `:82`, Notification `:58`; Store
+   Catalog `:32`, Identity `:37`, Sales `:51`), which calls `services.AddCommonApiVersioning()`
+   (`MMCA.Common/Source/Hosting/MMCA.Common.ServiceHost/ServiceHostBuilderExtensions.cs:107`). Helpdesk
+   Web is the one host that still calls it directly (`Program.cs:36`), and it registers no OpenAPI
+   document. The Decision bullet and the per-host adoption trade-off are reworded to match.
+2. The hosts keep only `builder.Services.AddOpenApi()` (ADC Conference `Program.cs:80`, Engagement
+   `:56`, Identity `:80`, Notification `:56`; Store Catalog `:30`, Identity `:35`, Sales `:49`), so the
+   XML-comment generator still sees the call in the host project. `AddCommonOpenApi` is called by
+   `ServiceHostBuilderExtensions.cs:128` and `MapCommonOpenApi` by `UseMmcaServiceHostAsync`
+   (`ServiceHostApplicationExtensions.cs:57`), which first throws when the host skipped
+   `AddOpenApi()` (`ServiceHostApplicationExtensions.cs:50`, check in
+   `ServiceHostOpenApi.cs:24`). ServiceHost also pins the `v1` document to OpenAPI 3.1 through named
+   options (`ServiceHostBuilderExtensions.cs:125`-`:127`, comment `:118`-`:124`) so a committed
+   document is one contract whichever framework line built the host. The Decision now records this.
+3. The design-time schema-initializer skip is no longer called from any host `Program.cs`: its one
+   call site is `UseMmcaServiceHostAsync` (`ServiceHostApplicationExtensions.cs:53`). The helper is
+   declared at `Source/Presentation/MMCA.Common.API/Startup/DatabaseInitializationExtensions.cs:167`,
+   with the Development plus `MmcaOpenApiDesignTime` check at `:174` and the key constant at `:31`.
+4. Both consumers now switch the package's own build hook off (`OpenApiGenerateDocumentsOnBuild`
+   false: `MMCA.ADC/Directory.Build.props:213`, `MMCA.Store/Directory.Build.props:210`), not Store
+   alone. The shared design-time environment in both repos also sets `InternalCommands__Enabled=false`
+   and `Scheduler__Enabled=false` (`MMCA.ADC/Directory.Build.props:251`,
+   `MMCA.Store/Directory.Build.props:248`). Store's extra environment adds only
+   `PaymentReconciliation__Enabled=false` beside a placeholder service-token key
+   (`MMCA.Store/Directory.Build.props:295`); no backfill switch exists there, so the 2026-09-25
+   mention of "the two backfills" no longer describes the file.
+5. Anchors re-verified against current source: `AddCommonApiVersioning`
+   (`WebApplicationBuilderExtensions.cs:39`, comment `:41`-`:43`, options `:46`-`:48`, explorer
+   `:50`-`:54`, backfill `:56`, result filter `:60`), `AddCommonOpenApi`
+   (`WebApplicationBuilderExtensions.cs:108`, doc comment `:94`-`:107`, backfill `:110`, transformers
+   `:115`-`:119`), `MapCommonOpenApi` (`OpenApiEndpointExtensions.cs:59`, guard `:61`, keyed `v1`
+   check `:63`-`:64`, throw `:66`-`:70`, `.AllowAnonymous()` `:73`, AV0030 suppression `:55`-`:58`),
+   the `Directory.Build.props` blocks (ADC `PackageReference` `:203`, target `:237`; Store
+   `PackageReference` `:200`, target `:234`), the `OpenAPI documents are current` steps
+   (`MMCA.ADC/.github/workflows/deploy.yml:387`, count check `:396`-`:397`, diff `:399`, upload
+   `:409`; `MMCA.Store/.github/workflows/deploy.yml:316`, count check `:326`-`:327`, diff `:329`,
+   upload `:339`; four and three documents) and `EntityControllerBase.cs:30-32`.
+
 ## Related
 ADR-010 (integration-event schema versioning: the asynchronous, `SchemaVersion`-carried,
 consumer-resolved axis this deliberately contrasts with; HTTP versioning here is request-time and
@@ -371,4 +432,4 @@ than asserted), ADR-036 (the other controller-convention decision that records t
 `[ApiVersion]` non-inheritance, handled there by ADC's sealed `OAuthController` subclass), ADR-034
 (the generic entity controller bases, which take the opposite shape: `[ApiController]` /
 `[Route("[controller]")]` / `[ApiVersion("1.0")]` sit on the generic base itself,
-`EntityControllerBase.cs:31-33`).
+`EntityControllerBase.cs:30-32`).

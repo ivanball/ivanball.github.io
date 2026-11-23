@@ -9,7 +9,9 @@ workflow). Revised 2026-09-25 (the section 10 carried-score caveat is discharged
 MMCA.ADC's scorecard now scores section 10 on the v2 criteria as well). Revised 2026-10-21: evidence
 dates moved to the 2026-10-18 re-scores, the articles no longer name the old titles as current, and
 the drift prompt is now a tracked harness file. Revised 2026-10-26: evidence dates moved to the
-2026-10-22 re-scores, which lowered MMCA.Common's section 10 row from M4/I9 to M4/I8.
+2026-10-22 re-scores, which lowered MMCA.Common's section 10 row from M4/I9 to M4/I8. Revised
+2026-11-23: evidence dates moved to the 2026-10-29 re-scores at v1.265.1 with every cited value
+unchanged, and the backlog headers are recorded as carrying the framework pin as well.
 
 ## Context
 The 34-category Architecture Evaluation Criteria
@@ -57,7 +59,7 @@ two overlap-heavy categories in place and adding criteria to eleven others.**
    and stating the scope-out in the scorecard's N/A note (Sigma-weight 79). MMCA.Common was scoped
    out the same way at the rebase and is no longer: it scores the category from 2026-09-11, first at
    M2/I5 when `MMCA.Common.AI` shipped under [ADR-120](120-governed-chat-client-boundary.md), and at
-   M3/I6 from 2026-09-15 (M4/I9 as of 2026-10-22, `Website/docs-src/governance/common-ArchitectureScorecard.md:80`), so its weight-2 row rejoined both denominators (Sigma-weight 82).
+   M3/I6 from 2026-09-15 (M4/I9 as of 2026-10-29, `Website/docs-src/governance/common-ArchitectureScorecard.md:80`), so its weight-2 row rejoined both denominators (Sigma-weight 82).
    MMCA.ADC scores it: its AI
    session-scoring feature calls the Anthropic Messages API in production, so the weight-2 category
    is live in both of its denominators from the 2026-09-04 re-score
@@ -88,10 +90,10 @@ two overlap-heavy categories in place and adding criteria to eleven others.**
    its weight-2 row re-enters both denominators and its sum returns to 81. Since the rebase, every
    repo has re-scored section 10 against the v2 criteria, so no row carries a merged-prior figure:
    MMCA.Common re-scored it on 2026-09-04 and confirmed it, and its row reads M4/I8 after the
-   2026-10-22 re-score (`Website/docs-src/governance/common-ArchitectureScorecard.md:74`); MMCA.Store's row reads M3/I8
+   2026-10-29 re-score (`Website/docs-src/governance/common-ArchitectureScorecard.md:74`); MMCA.Store's row reads M3/I8
    (`Website/docs-src/governance/store-ArchitectureScorecard.md:51`); MMCA.ADC's row scores it on the
    v2 criteria at M3/I8 (`Website/docs-src/governance/adc-ArchitectureScorecard.md:74`, evidence as of
-   2026-10-22 per `:5`). MMCA.Common's section 16 scope-out ended on 2026-09-11, taking its sum to 82.
+   2026-10-29 per `:5`). MMCA.Common's section 16 scope-out ended on 2026-09-11, taking its sum to 82.
 
 6. **Landing order.** The rubric, the three scorecards, the three backlogs, and this record land in
    one Website PR, because the workflow reads its category list from the scorecard rows and a rubric
@@ -115,10 +117,10 @@ scorecard rows for a decision three lines can record.
 ## Trade-offs
 - The index trend line carries a denominator change. The headers recorded both the old and the
   new fractions only in the 2026-09-04 cycle where it happened (the rubric v2 PR, Website `b697c84`,
-  and the same-day MMCA.ADC re-score, Website `994fad9`); today the scorecard headers carry only the
-  current fractions and the rubric version, and the backlog headers only the current fractions and
-  the evidence date, so a cross-boundary comparison has to read the scorecard's version line rather
-  than a header note.
+  and the same-day MMCA.ADC re-score, Website `994fad9`); today both the scorecard and the backlog
+  headers carry the current fractions alone, with the evidence date and the framework pin, and only
+  the scorecard adds the rubric version (no backlog header names one), so a cross-boundary comparison
+  has to read the scorecard's version line rather than a header note.
 - §10 is scored at carried figures that were earned against different criteria until the first
   re-score, which the row says explicitly. Store's §10 sits at implementation 8, so its
   implementation-band priority rises from 2 to 3 with the weight before any new evidence is read.
@@ -196,3 +198,36 @@ evidence date of the three scorecards and MMCA.Common's section 10 implementatio
    `adc-ArchitectureScorecard.md:5`, `:74`; `store-ArchitectureScorecard.md:5`, `:51`;
    `feature-flags-cqrs-pipeline.md:272`, `:389`; `architecture-fitness-functions.md:169`, `:579`,
    `:662-663`.
+
+## Revision (2026-11-23)
+Re-verified against current source. The decision, the 34-category numbering, the section 10 and
+section 16 replacements, and every scored value this record cites are unchanged; what moved is the
+evidence date of the three scorecards, the line positions of the article Notes and the drift
+prompt entries, and the description of the backlog headers.
+
+1. The scorecards were re-scored on 2026-10-29 at v1.265.1, all three still on rubric version 2
+   (`Website/docs-src/governance/common-ArchitectureScorecard.md:5`, `adc-ArchitectureScorecard.md:5`,
+   `store-ArchitectureScorecard.md:5`). The values are unchanged: MMCA.Common section 10 M4/I8
+   (`common-ArchitectureScorecard.md:74`) and section 16 M4/I9 (`:80`); MMCA.ADC section 10 M3/I8
+   (`adc-ArchitectureScorecard.md:74`) and section 16 M4/I9 (`:80`); MMCA.Store section 10 M3/I8
+   (`store-ArchitectureScorecard.md:51`). Items 2 and 5 of the Decision now carry the 2026-10-29 date.
+2. The backlog headers carry the current fractions, the framework pin (v1.265.1) and the evidence
+   date, and still no rubric version (`Website/docs-src/governance/common-RemediationBacklog.md:3`,
+   `adc-RemediationBacklog.md:3`, `store-RemediationBacklog.md:3`). The first Trade-offs bullet now
+   names the pin.
+3. The article mentions of the former titles still say "former" and still sit in the Notes blocks
+   (`Website/docs-src/articles/feature-flags-cqrs-pipeline.md:413`, Notes from `:277`;
+   `architecture-fitness-functions.md:682-683`, Notes from `:579`). The one body sentence outside a
+   Notes block is unchanged at `architecture-fitness-functions.md:169`, and the rubric article's Part C
+   label is unchanged at `34-category-architecture-rubric.md:61` (rubric
+   `ArchitectureEvaluationCriteria.md:768`).
+4. The drift prompt's v2 entries for section 10 and section 16 now sit at
+   `Docs/Planning/Drift/DriftAnalysis-prompt.md:158` and `:164`; the section 16 entry still reads N/A
+   in both apps, contradicting MMCA.ADC's scored row (`adc-ArchitectureScorecard.md:80`), so the
+   Trade-offs bullet still flags it as stale.
+5. Anchors re-verified against current source: `common-ArchitectureScorecard.md:5`, `:74`, `:80`;
+   `adc-ArchitectureScorecard.md:5`, `:74`, `:80`; `store-ArchitectureScorecard.md:5`, `:51`;
+   `common-RemediationBacklog.md:3`, `adc-RemediationBacklog.md:3`, `store-RemediationBacklog.md:3`;
+   `feature-flags-cqrs-pipeline.md:277`, `:413`; `architecture-fitness-functions.md:169`, `:579`,
+   `:682-683`; `34-category-architecture-rubric.md:61`; `ArchitectureEvaluationCriteria.md:768`;
+   `DriftAnalysis-prompt.md:158`, `:164`.

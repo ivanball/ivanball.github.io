@@ -277,7 +277,9 @@
           <code>MMCA.Helpdesk/AGENTS.md:62</code>.
           Revised 2026-11-17: the abstract per-module <code>ModuleApplicationDbContext</code> DbSet holders were deleted
           from ADC, Store and Helpdesk (nothing derived from or referenced them, and their <code>DbSet</code> lists had
-          drifted from the model); no module declares a DbContext class of any kind.</p>
+          drifted from the model); no module declares a DbContext class of any kind.
+          Revised 2026-11-23: the ADC Decision bullet now says the two attendee hot-path databases run at S2
+          Standard instead of Basic while <code>conferenceMode</code> is on; anchors refreshed.</p>
           <h2 id="context">Context</h2>
           <p>When the modules were first extracted into independently-deployable services, all services in an
           app still pointed at a <strong>single shared SQL database</strong> with a single <code>OutboxMessages</code> table. That
@@ -297,7 +299,7 @@
           module&#39;s entity configurations alone (rule stated at <code>MMCA.Helpdesk/AGENTS.md:64</code>). ADC
           Notification still owns the <code>ADC_Notification</code> database, but its <code>PushNotification</code> and
           <code>UserNotification</code> entities live in MMCA.Common
-          (<code>MMCA.ADC/Source/Services/MMCA.ADC.Notification.Service/Program.cs:269-270</code>), so its module
+          (<code>MMCA.ADC/Source/Services/MMCA.ADC.Notification.Service/Program.cs:141-142</code>), so its module
           projects are API, Application and Shared only, with no Infrastructure project. The default engine is SQL Server (<code>SQLServerDbContext</code>); ADR-018
           later added <code>SqliteDbContext</code> and <code>CosmosDbContext</code>, and ADR-113 added <code>PostgreSQLDbContext</code>, each
           a sealed subclass of the abstract <code>ApplicationDbContext</code>. The singleton <code>PhysicalDbContextFactory</code>
@@ -307,13 +309,15 @@
           <code>DataSourceResolver</code>, and to an engine by configuration base class (<code>[UseDataSource]</code>, ADR-018).
           The forbidden split is <em>per-module</em>, not per-engine.</li>
           <li><strong>ADC</strong> runs <code>ADC_Identity</code>, <code>ADC_Conference</code>, <code>ADC_Engagement</code>, <code>ADC_Notification</code>: locally on
-          the shared Aspire SQL container and in Azure as four Basic-tier databases. Those four are the
+          the shared Aspire SQL container and in Azure as four Basic-tier databases, of which
+          <code>ADC_Conference</code> and <code>ADC_Engagement</code> move to S2 Standard while <code>conferenceMode</code> is on
+          (<code>MMCA.ADC/infra/main.bicep:215-217</code>, <code>:1308-1310</code>). Those four are the
           entire application data estate: the legacy <code>AtlDevCon</code> database was exported to the bacpac blob
           <code>sql-archive/AtlDevCon-20260902.bacpac</code> and dropped on 2026-09-02, and <code>infra/main.bicep</code> no
           longer declares it. That bacpac was itself deleted permanently on 2026-10-03 (blob soft delete and
           versioning were off), so there is no restore path to the pre-cutover <code>AtlDevCon</code> data; its contents
           had already been copied into the per-service databases at cutover, and those four databases keep
-          their own PITR plus LTR (<code>MMCA.ADC/infra/main.bicep:1114</code>, <code>MMCA.ADC/infra/main.bicep:1166</code>,
+          their own PITR plus LTR (<code>MMCA.ADC/infra/main.bicep:1271</code>, <code>MMCA.ADC/infra/main.bicep:1323</code>,
           <code>MMCA.ADC/infra/POST-CUTOVER-atldevcon-downgrade.md:103</code>, <code>MMCA.ADC/infra/DISASTER-RECOVERY.md:27</code>).</li>
           <li><strong>Per-source outbox.</strong> Each database has its own <code>OutboxMessages</code>; the <code>OutboxProcessor</code> drains
           only the sources its host owns, so no service ever sees another&#39;s rows.</li>
@@ -452,6 +456,36 @@
           DbContext class at all, and the rule is restated at <code>MMCA.Helpdesk/AGENTS.md:64</code>. The earlier
           revisions keep the wording and anchors they recorded; their <code>ModuleApplicationDbContext</code> anchors are
           superseded by this revision. Source: the 2026-11-17 Infrastructure-projects drift review (item A5).</p>
+          <h2 id="revision-2026-11-23">Revision (2026-11-23)</h2>
+          <p>Re-verified against current source. The decision is unchanged: one sealed context class per engine,
+          one instance per database, no module DbContext class, and four per-service <code>ADC_*</code> databases with
+          PITR plus LTR as the only restore path. The ADC Decision bullet now qualifies the Basic tier for
+          conference mode, and its anchors moved. The earlier revisions keep the anchors they recorded (their
+          <code>ApplicationDbContext.cs:46</code>, <code>SQLServerDbContextModelSnapshot.cs:95</code> / <code>:156</code>, <code>Program.cs:269-270</code>,
+          <code>main.bicep:1114</code> and <code>main.bicep:1166</code> anchors are superseded by this revision).</p>
+          <ol>
+          <li>Two of the four ADC databases leave Basic in conference mode: <code>conferenceScaledDatabaseNames</code>
+          (<code>MMCA.ADC/infra/main.bicep:215-217</code>) lists <code>ADC_Conference</code> and <code>ADC_Engagement</code>, and the
+          per-service database resource gives those two <code>S2</code> / <code>Standard</code> while <code>conferenceMode</code> is on and
+          <code>Basic</code> (capacity 5) otherwise (<code>MMCA.ADC/infra/main.bicep:1308-1310</code>). The four names are
+          declared at <code>MMCA.ADC/infra/main.bicep:1292-1295</code> and locally at
+          <code>MMCA.ADC/Source/Hosting/MMCA.ADC.AppHost/Program.cs:37-40</code>.</li>
+          <li>Anchors re-verified against current source: the abstract <code>ApplicationDbContext</code> at
+          <code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/ApplicationDbContext.cs:53</code>
+          (was <code>:46</code>); the comment placing <code>PushNotification</code> and <code>UserNotification</code> in MMCA.Common at
+          <code>MMCA.ADC/Source/Services/MMCA.ADC.Notification.Service/Program.cs:141-142</code> (was <code>:269-270</code>);
+          the <code>Notification</code> schema mappings at
+          <code>MMCA.ADC/Source/Hosting/MMCA.ADC.Migrations.SqlServer.Notification/Migrations/SQLServerDbContextModelSnapshot.cs:111</code>
+          and <code>:172</code> (was <code>:95</code>, <code>:156</code>), over the MMCA.Common entity types declared at <code>:25</code> and <code>:114</code>;
+          the Notification module is still the three API, Application and Shared projects under
+          <code>MMCA.ADC/Source/Modules/Notification</code>; the <code>AtlDevCon</code> archived-and-dropped note at
+          <code>MMCA.ADC/infra/main.bicep:1271</code> (was <code>:1114</code>), with the 2026-10-03 bacpac deletion sentence at
+          <code>:1276-1277</code> and a second mention in the LTR comment at <code>:1321-1322</code>; the <code>serviceDatabaseLtr</code>
+          policy at <code>MMCA.ADC/infra/main.bicep:1323</code> (was <code>:1166</code>), weekly <code>P4W</code>, monthly <code>P12M</code>, yearly
+          <code>P1Y</code> at <code>:1328-1330</code> (values unchanged); <code>MMCA.Helpdesk/AGENTS.md:64</code>,
+          <code>MMCA.ADC/infra/POST-CUTOVER-atldevcon-downgrade.md:103</code> and
+          <code>MMCA.ADC/infra/DISASTER-RECOVERY.md:27</code> are unchanged.</li>
+          </ol>
           
         <div class="doc-foot btn-row">
           <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
@@ -473,6 +507,7 @@
             <li><a href="#revision-2026-10-26">Revision (2026-10-26)</a></li>
             <li><a href="#revision-2026-10-28">Revision (2026-10-28)</a></li>
             <li><a href="#revision-2026-11-17">Revision (2026-11-17)</a></li>
+            <li><a href="#revision-2026-11-23">Revision (2026-11-23)</a></li>
             </ul>
           </nav>
         </aside>

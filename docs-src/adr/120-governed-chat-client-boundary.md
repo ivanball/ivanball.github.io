@@ -64,6 +64,11 @@ Revised 2026-10-26: the Anthropic SDK pin is 13.3.0, ADC's section 16 score read
 scorecard does, `ContentPolicyGuardrail` keeps item metadata like the PII policy and both guardrails keep
 `CreatedAt` (since v1.261.0), the type-level fitness rule's namespace root is stated, and anchors are refreshed.
 Revised 2026-10-28: anchors refreshed after MMCA.Common v1.265.1.
+Revised 2026-11-23: the two `Microsoft.Extensions.AI` pins follow the framework and the vendor pins
+are current, an enabled host's `Ai:Endpoint` must be https outside Development (v1.313.0; absolute
+since v1.207.0), the Trade-offs list every startup refusal an enabled host can meet, a disabled host
+still gets the bound settings (with the provider and endpoint checks skipped) and only the
+`IChatClient` is absent, and anchors are refreshed.
 
 ## Context
 Rubric section 16, AI-Native Application Architecture, asks one question of a product feature that
@@ -85,11 +90,11 @@ folded into the prompt contract (`:93-94`), the 256-token output ceiling is one 
 (`:71`) set on the request (`:116`) and clamped again by `Ai:MaxOutputTokens` at the framework
 boundary, `ModelId` (`:74`) and `PromptVersion` (`:85`) read through the injected contract rather
 than standing as independent literals, nothing in the module constructs an `HttpClient` for Anthropic
-(`MMCA.ADC.Conference.Infrastructure/DependencyInjection.cs:36-50`), and Infrastructure is the only
+(`MMCA.ADC.Conference.Infrastructure/DependencyInjection.cs:41-55`), and Infrastructure is the only
 layer that names the package (`MMCA.ADC.Conference.Infrastructure.csproj:19`, reason at `:15-18`).
 Token counters come off the framework meter `MMCA.Common.AI` rather than a meter named for the
-feature (`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:160`, meter registration
-at `:179-180`). That division is the whole point of this record: ADR-111 names the alternative in
+feature (`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:254`, meter registration
+at `:273-274`). That division is the whole point of this record: ADR-111 names the alternative in
 its own trade-offs, where one feature, one provider and one model leave no general model-calling
 abstraction, so a second AI feature inherits the conventions by imitation rather than by
 construction. ADC scored M2/I5 on section 16 in the 2026-09-04 cycle, before the package existed,
@@ -120,8 +125,9 @@ start, and the evaluation harness ships beside the package.**
    takes a `FrameworkReference` on `Microsoft.AspNetCore.App`
    (`MMCA.Common/Source/Core/MMCA.Common.AI/MMCA.Common.AI.csproj:11`) for the hosting environment,
    the distributed cache, the configuration binder and the options validation pipeline, plus exactly
-   one runtime package: `Microsoft.Extensions.AI` (`:30`), pinned at 10.11.0
-   (`MMCA.Common/Directory.Packages.props:105`). The csproj states the reason in place
+   one runtime package: `Microsoft.Extensions.AI` (`:30`), pinned per framework through
+   `$(MmcaExtensionsVersion)` (`MMCA.Common/Directory.Packages.props:163`: 10.11.1 on net10.0 at
+   `:53`, 11.0.1 on net11.0 at `:65`). The csproj states the reason in place
    (`MMCA.Common.AI.csproj:15-29`): everything the package governs is expressed in
    `Microsoft.Extensions.AI` primitives, so it needs nothing from Domain, Application or
    Infrastructure, must stay installable by a host that has taken none of them, and must not pin a
@@ -133,21 +139,26 @@ start, and the evaluation harness ships beside the package.**
    an ungoverned `IChatClient` (`:34`). Two adapters ship, each one factory and one registration
    call: `MMCA.Common.AI.Anthropic` (`AnthropicAiProviderFactory.cs:14`, name at `:17`, the SDK's own
    `AsIChatClient` at `:48`, `AddAnthropicAiProvider()` at `DependencyInjection.cs:26`) over the
-   official Anthropic SDK (`MMCA.Common.AI.Anthropic.csproj:13`, pinned at 13.3.0,
-   `Directory.Packages.props:112`), and `MMCA.Common.AI.OpenAI` (`OpenAiProviderFactory.cs:18`, name
+   official Anthropic SDK (`MMCA.Common.AI.Anthropic.csproj:13`, pinned at 13.12.0,
+   `Directory.Packages.props:170`), and `MMCA.Common.AI.OpenAI` (`OpenAiProviderFactory.cs:18`, name
    at `:21`, `GetChatClient(model).AsIChatClient()` at `:49-51`, `AddOpenAiProvider()` at
    `DependencyInjection.cs:26`) over `Microsoft.Extensions.AI.OpenAI` and the official OpenAI SDK
-   (`MMCA.Common.AI.OpenAI.csproj:13-14`, pinned at 10.11.0 and 2.14.0, `Directory.Packages.props:117-118`).
-   `Ai:Provider` is a plain string (`AiSettings.cs:55`) matched case-insensitively against the
+   (`MMCA.Common.AI.OpenAI.csproj:13-14`; `Microsoft.Extensions.AI.OpenAI` on
+   `$(MmcaExtensionsVersion)` and `OpenAI` at 2.15.0, `Directory.Packages.props:175-176`).
+   `Ai:Provider` is a plain string (`AiSettings.cs:56`) matched case-insensitively against the
    registered factory names (`Providers/AiProviderValidator.cs:41-42`), and
-   `CreateProviderChatClient` (`DependencyInjection.cs:239`) asks the match to build the client
-   (`:244-247`). A name with no factory behind it is refused at boot, not on a user's first request:
+   `CreateProviderChatClient` (`DependencyInjection.cs:241`) matches the factory and asks it to build
+   the client (`:246-249`). A name with no factory behind it is refused at boot, not on a user's first request:
    `AiProviderValidator` (`AiProviderValidator.cs:16`) is an `IValidateOptions<AiSettings>` the
    configuration overload registers (`DependencyInjection.cs:94`) and `ValidateOnStart` runs
-   (`:126`), with the registered names, or the adapter packages when there are none, in the message
-   (`AiProviderValidator.cs:48-63`). `Ai:Endpoint` (`AiSettings.cs:83`) routes either adapter through
+   (`:128`), with the registered names, or the adapter packages when there are none, in the message
+   (`AiProviderValidator.cs:48-63`). `Ai:Endpoint` (`AiSettings.cs:85`) routes either adapter through
    an AI gateway, a regional endpoint or a compatible server (`AnthropicAiProviderFactory.cs:43-46`,
-   `OpenAiProviderFactory.cs:44-47`).
+   `OpenAiProviderFactory.cs:44-47`). Because every call carries `Ai:ApiKey` in its headers, an
+   enabled host's endpoint must be an absolute URI and must be https outside Development, or options
+   validation fails at startup (`ValidateEndpoint` at `AiSettings.cs:209-229`, called at `:183`); the
+   Development answer comes from the host environment, stamped onto the settings by a
+   `PostConfigure` (`DependencyInjection.cs:125-126`) and failing closed (`AiSettings.cs:236-239`).
 
 3. **The dependency direction is build-gated in both directions.** `EnforceAiLayerBoundary`
    (`MMCA.Common/Source/Build/MMCA.Common.LayerEnforcement.targets:86`) runs for `MMCA.Common.AI` and
@@ -171,16 +182,16 @@ start, and the evaluation harness ships beside the package.**
    optional `GuardrailChatClient` (present only when the host registers at least one
    `IChatGuardrail` or one `IChatRequestRedactor`) -> `UsageRecordingChatClient` -> optional
    `DistributedCache` -> `OpenTelemetry` -> `PromptTagging` -> `Logging` -> the provider client
-   (registration at `:149-184`, order documented at `:22-41`). Bounds are outermost so a call the
+   (registration at `:149-186`, order documented at `:22-41`). Bounds are outermost so a call the
    configuration forbids is refused before it is inspected, logged, cached or counted, and a
    guardrail block is refused before it is counted. `PromptTaggingChatClient`
    (`Chat/PromptTaggingChatClient.cs:21`) is composed just inside the OpenTelemetry layer
-   (`DependencyInjection.cs:183`) so the activity it decorates is that layer's own `gen_ai` span: it
+   (`DependencyInjection.cs:185`) so the activity it decorates is that layer's own `gen_ai` span: it
    copies `mmca.prompt.name`, `mmca.prompt.version` and `mmca.prompt.hash` onto it (`:63`) and only
    ever onto an activity from the framework's own source (`:56-57`), so a host with no listener gets
-   no stray tags. Telemetry rides the same name as the meter (`DependencyInjection.cs:181`), and
+   no stray tags. Telemetry rides the same name as the meter (`DependencyInjection.cs:183`), and
    prompt and completion text reach traces only on a host positively identified as Development
-   (`:177`, gate at `:262-266`), which fails closed.
+   (`:179`, gate at `:264-268`), which fails closed.
 
 5. **What a call may do is configuration, and the outermost client enforces it.** `BoundedChatClient`
    (`MMCA.Common/Source/Core/MMCA.Common.AI/Chat/BoundedChatClient.cs:65`) clamps `MaxOutputTokens`
@@ -206,7 +217,7 @@ start, and the evaluation harness ships beside the package.**
    request has to name it in the confirmed list (`:43`, read at `:78-109`, checked at
    `BoundedChatClient.cs:269`), per request and never per session. With no policy registered every
    tool is stripped (`:251-254`), so the layer fails closed, and that combination is refused at
-   registration instead (`DependencyInjection.cs:219-226`).
+   registration instead (`DependencyInjection.cs:221-228`).
 
 7. **A host that inspects nothing does not start.** `GuardrailChatClient`
    (`Chat/GuardrailChatClient.cs:31`) runs every registered `IChatRequestRedactor`
@@ -217,9 +228,9 @@ start, and the evaluation harness ships beside the package.**
    (`InspectStreamedUpdateAsync`, a default interface member that allows so an implementation written
    earlier keeps compiling, `:57-60`; the per-update loop at `GuardrailChatClient.cs:99-116`), with
    the first block throwing `ChatGuardrailException`. `Ai:RequireGuardrail` defaults to true
-   (`AiSettings.cs:117`), and an enabled host that registered neither a guardrail nor a redactor is
+   (`AiSettings.cs:119`), and an enabled host that registered neither a guardrail nor a redactor is
    refused at registration with the one-line fix in the message
-   (`DependencyInjection.cs:208-217`, both refusals in `RefuseAnUngovernedHost` at `:202`). The
+   (`DependencyInjection.cs:210-219`, both refusals in `RefuseAnUngovernedHost` at `:204`). The
    framework ships two content policies that answer that refusal on their own. The first,
    `PiiRedactionGuardrail` (`Guardrails/PiiRedactionGuardrail.cs:40`), removes email addresses and
    North American phone numbers from every outgoing message, including reasoning text, tool results
@@ -262,23 +273,27 @@ start, and the evaluation harness ships beside the package.**
    with no marker passes through by reference and a rebuilt text item keeps its
    `AdditionalProperties` and `Annotations` (`:337-341`), and both policies keep
    `ChatMessage.CreatedAt` on the message they rebuild (`:356`, `PiiRedactionGuardrail.cs:97`),
-   since v1.261.0 (`MMCA.Common/CHANGELOG.md:65`, L244). A configured pattern that does not compile fails the host at
+   since v1.261.0 (`MMCA.Common/CHANGELOG.md:1002`, L244). A configured pattern that does not compile fails the host at
    startup rather than on a user's request (`ContentPolicySettings.cs:83`, `ValidateOnStart` at
    `Guardrails/GuardrailServiceCollectionExtensions.cs:67-70`), and
    `AddContentPolicyGuardrail(IConfiguration)` (`GuardrailServiceCollectionExtensions.cs:62`)
    registers one singleton under both interfaces (`:72-76`), so registering it satisfies
    `Ai:RequireGuardrail` exactly as the PII policy does. `PiiRedactionGuardrail` ships from
-   MMCA.Common v1.207.0 and `ContentPolicyGuardrail` from v1.208.0 (`MMCA.Common/CHANGELOG.md:1375`,
-   `:1329`).
+   MMCA.Common v1.207.0 and `ContentPolicyGuardrail` from v1.208.0 (`MMCA.Common/CHANGELOG.md:2310-2312`,
+   `:2265-2266`).
 
 8. **The configuration surface is one section, validated, and the switch is the registration.**
-   `AiSettings` (`MMCA.Common/Source/Core/MMCA.Common.AI/AiSettings.cs:22`) binds `Ai` (`:25`) and
-   carries `Enabled` (`:46`), `Provider` (`:55`), `Model` (`:65`), `ApiKey` (`:76`), `Endpoint`
-   (`:83`), `MaxOutputTokens` (`:90`, default 1024 at `:28`), `Timeout` (`:96`, default 30 seconds at
-   `:31`), `AllowTools` (`:103`), `RequireGuardrail` (`:117`), `EnableCache` (`:123`) and
-   `PerCallInputTokenBudget` (`:131`). `Provider`, `Model` and `ApiKey` are required only once
-   `Enabled` is true (`:140-190`), so the section ships in every appsettings file. When `Ai:Enabled`
-   is false **nothing is registered** (`DependencyInjection.cs:129-132`): a consumer gates on
+   `AiSettings` (`MMCA.Common/Source/Core/MMCA.Common.AI/AiSettings.cs:23`) binds `Ai` (`:26`) and
+   carries `Enabled` (`:47`), `Provider` (`:56`), `Model` (`:66`), `ApiKey` (`:78`), `Endpoint`
+   (`:85`), `MaxOutputTokens` (`:92`, default 1024 at `:29`), `Timeout` (`:98`, default 30 seconds at
+   `:32`), `AllowTools` (`:105`), `RequireGuardrail` (`:119`), `EnableCache` (`:125`) and
+   `PerCallInputTokenBudget` (`:133`). `Provider`, `Model` and `ApiKey` are required, and the
+   `Endpoint` rules checked, only once `Enabled` is true (`:153-201`, early exit at `:155-158`), so
+   the section ships in every appsettings file. When `Ai:Enabled` is false the host still gets the
+   bound `AiSettings` (`DependencyInjection.cs:123-128`, and the provider validator on the
+   configuration overload, `:94`, which passes a disabled host at once,
+   `Providers/AiProviderValidator.cs:27-30`, so only the `[Range]` annotations at `AiSettings.cs:91`
+   and `:132` still apply) but **no `IChatClient` is registered** (`:130-134`): a consumer gates on
    `GetService<IChatClient>()` being present, not on a flag it has to read, so a feature with no key
    in a given environment is off by construction.
 
@@ -343,12 +358,12 @@ start, and the evaluation harness ships beside the package.**
   ceiling as its defaults (`AnthropicAiProviderFactory.cs:24-27`), and `BoundedChatClient` still
   pins and clamps per call. A governance layer that can be talked out of its limits by a caller
   argument is documentation.
-- **Off by absence beats off by flag.** Registering nothing when `Ai:Enabled` is false means a
+- **Off by absence beats off by flag.** Registering no client when `Ai:Enabled` is false means a
   feature cannot half-run against a missing key: the dependency is either resolvable or the code path
   does not exist. A boolean everyone has to remember to check is the version of this that fails.
 - **A refusal at registration beats a finding at review.** "We shipped a model call and nothing
   inspects it" and "we turned tools on and nothing decides which" are both deployment failures now,
-  with the fix in the message (`DependencyInjection.cs:198-201`). A bound nobody reaches is not a
+  with the fix in the message (`DependencyInjection.cs:200-203`). A bound nobody reaches is not a
   bound, and the tenth user is the wrong person to discover it.
 - **Hashing the prompt is what makes a model dependency evaluable at all.** Recorded golden answers
   are valid for one exact combination of name, version, model and text. Deriving the identity from
@@ -371,10 +386,10 @@ start, and the evaluation harness ships beside the package.**
   client did not come from the configured adapter.
 
 ## Trade-offs
-- **Off by absence puts a null on the consumer.** Because nothing is registered when `Ai:Enabled` is
-  false, a feature resolves the client with `GetService` and holds a nullable dependency: ADC's
+- **Off by absence puts a null on the consumer.** Because no client is registered when `Ai:Enabled`
+  is false, a feature resolves the client with `GetService` and holds a nullable dependency: ADC's
   registration does exactly that and its scoring service takes `IChatClient?`
-  (`MMCA.ADC.Conference.Infrastructure/DependencyInjection.cs:36-50`,
+  (`MMCA.ADC.Conference.Infrastructure/DependencyInjection.cs:41-55`, `GetService` at `:53`,
   `SessionScoringService.cs:48`). The disabled path is a branch the consumer writes, not a flag the
   framework reads for it.
 - **A provider is now two references and a name, not one.** A host has to add the adapter package
@@ -385,13 +400,20 @@ start, and the evaluation harness ships beside the package.**
 - **Spend is queried under framework names, and the `provider` dimension changed value.** ADC's token
   counters report on `MMCA.Common.AI` under the framework's counter names, so the App Insights spend
   alert and any saved query key on those rather than on a per-service meter
-  (`MMCA.ADC.Conference.Service/Program.cs:179-180`). Reading the tag from the client's metadata also
+  (`MMCA.ADC.Conference.Service/Program.cs:273-274`). Reading the tag from the client's metadata also
   moves the value from `Anthropic` to `anthropic`, which a saved query has to follow in the same
-  release (`MMCA.Common/UPGRADING.md:1145-1147`).
-- **Two defaults can now refuse a host that used to start.** `Ai:RequireGuardrail` true and
-  `Ai:AllowTools` with no `IChatToolPolicy` are both startup failures, and pinning the model turns a
-  `PromptContract` that disagrees with `Ai:Model` into a refused call
-  (`MMCA.Common/UPGRADING.md:1149-1160`). That is the intended direction, and it is a breaking one.
+  release (`MMCA.Common/UPGRADING.md:1923-1925`).
+- **An enabled host is refused at startup, not on a first request.** Options validation fails a blank
+  `Ai:Provider`, `Ai:Model` or `Ai:ApiKey` (`AiSettings.cs:160-181`), a `Timeout` at or below zero or
+  above the one-hour cap (`:188-200`, cap at `:39`), a provider name no factory matches
+  (`Providers/AiProviderValidator.cs:32-34`), and an `Ai:Endpoint` that is relative (since v1.207.0)
+  or, outside Development, not https (`AiSettings.cs:209-229`; the https rule is a breaking change of
+  v1.313.0, `MMCA.Common/CHANGELOG.md:64`, `MMCA.Common/UPGRADING.md:73`). `Ai:RequireGuardrail` true
+  and `Ai:AllowTools` with no `IChatToolPolicy` are both registration failures, and a content-policy
+  pattern that does not compile fails the host too (Decision item 7). Pinning the model refuses per
+  call instead: a `PromptContract` that disagrees with `Ai:Model` becomes a refused call
+  (`MMCA.Common/UPGRADING.md:1927-1938`). That is the intended direction, and each default that can
+  refuse was a breaking one.
 - **The input budget is an estimate, and says so.** It reads message text plus instructions only, so
   images, tool schemas, provider-side additions and non-Latin scripts are under-counted
   (`BoundedChatClient.cs:52-58`). It is a runaway guardrail with headroom, never a billing figure.
@@ -437,17 +459,17 @@ start, and the evaluation harness ships beside the package.**
   free-standing model literal and no per-service meter; its output ceiling is one named constant
   (`:71`) that `Ai:MaxOutputTokens` clamps again.
 - **Upgrading across this release is a mapped change, not a silent one.**
-  `MMCA.Common/UPGRADING.md:1115-1164` carries the old-to-new table (the removed `AiProvider` enum, the
+  `MMCA.Common/UPGRADING.md:1893-1942` carries the old-to-new table (`:1916-1921`) (the removed `AiProvider` enum, the
   `string? configuredProvider` constructor, the factory), the four mechanical steps for a host on the
   Anthropic provider, the `provider` tag casing change and the three new default bounds.
 - **ADC runs on the adapter package, the shipped guardrails and the harness.** The Conference module
   references `MMCA.Common.AI` alone (`MMCA.ADC.Conference.Infrastructure.csproj:19`); the host
-  references the adapter (`MMCA.ADC.Conference.Service.csproj:34`) and calls
-  `AddAnthropicAiProvider()` (`MMCA.ADC.Conference.Service/Program.cs:147`),
-  `AddConferenceAiGuardrails(configuration)` (`:158`) and `AddMmcaChatClient` (`:160`).
-  `AddConferenceAiGuardrails` (`MMCA.ADC.Conference.Infrastructure/DependencyInjection.cs:85`)
-  registers `AddPiiRedactionGuardrail()` (`:95`), `AddContentPolicyGuardrail(configuration)` (`:96`)
-  and the module's own `SessionScoreResponseGuardrail` (`:99`). The golden suite runs on the shipped
+  references the adapter (`MMCA.ADC.Conference.Service.csproj:33`) and calls
+  `AddAnthropicAiProvider()` (`MMCA.ADC.Conference.Service/Program.cs:240`),
+  `AddConferenceAiGuardrails(configuration)` (`:252`) and `AddMmcaChatClient` (`:254`).
+  `AddConferenceAiGuardrails` (`MMCA.ADC.Conference.Infrastructure/DependencyInjection.cs:90`)
+  registers `AddPiiRedactionGuardrail()` (`:100`), `AddContentPolicyGuardrail(configuration)` (`:101`)
+  and the module's own `SessionScoreResponseGuardrail` (`:104`). The golden suite runs on the shipped
   bases (`GoldenReplayTests.cs:35`, `PromptContractTests.cs:180`).
 - **Store and Helpdesk adopt nothing.** Section 16 remains N/A for both until a product feature of
   theirs calls a model.
@@ -578,6 +600,52 @@ anchors moved as the v1.264.0, v1.265.0 and v1.265.1 blocks landed above them.
    `[1.261.0]` block starts at `:50`), the `PiiRedactionGuardrail` release entry at `:1375` (the
    `[1.207.0]` block starts at `:1345`) and the `ContentPolicyGuardrail` release entry at `:1329`
    (the `[1.208.0]` block starts at `:1324`). The earlier revisions keep their anchors as written.
+
+## Revision (2026-11-23)
+Re-verified against current source. No decision changed in direction; the pipeline, the refusals,
+the guardrails and ADC's wiring are unchanged. Package pins moved, v1.313.0 added an https endpoint
+rule the live sections did not state, the disabled-path wording overstated what is skipped, and most
+anchors moved.
+
+1. Decision items 1 and 2 state the current pins: `Microsoft.Extensions.AI` and
+   `Microsoft.Extensions.AI.OpenAI` take `$(MmcaExtensionsVersion)`, 10.11.1 on net10.0 and 11.0.1 on
+   net11.0 (`MMCA.Common/Directory.Packages.props:163`, `:175`, `:53`, `:65`), the Anthropic SDK is
+   13.12.0 (`:170`) and `OpenAI` 2.15.0 (`:176`), the two vendor SDKs on one pin for both frameworks.
+   The extensions train and Anthropic 13.12.0 shipped in v1.315.0 (`MMCA.Common/CHANGELOG.md:18`),
+   `OpenAI` 2.15.0 in v1.285.0 (`MMCA.Common/CHANGELOG.md:636`).
+   `MMCA.Common.AI` still has exactly one runtime package (`MMCA.Common.AI.csproj:30`; MinVer at
+   `:31` is build-only).
+2. Decision item 2 and the Trade-offs state that an enabled host's `Ai:Endpoint` must be an absolute
+   URI, and https outside Development, or options validation fails at startup
+   (`MMCA.Common/Source/Core/MMCA.Common.AI/AiSettings.cs:209-229`, called at `:183`, skipped while
+   disabled at `:155-158`), with Development read from the host environment stamped by a
+   `PostConfigure` (`DependencyInjection.cs:125-126`) and failing closed (`AiSettings.cs:236-239`).
+   The absolute-URI rule dates from v1.207.0; the https rule is a breaking change of v1.313.0
+   (`MMCA.Common/CHANGELOG.md:64`, `MMCA.Common/UPGRADING.md:73`). The Trade-offs bullet now lists
+   every startup refusal an enabled host can meet: the required `Provider`, `Model` and `ApiKey`
+   (`AiSettings.cs:160-181`), the `Timeout` bounds (`:188-200`), an unmatched provider
+   (`Providers/AiProviderValidator.cs:32-34`), the endpoint rules, the two registration refusals and
+   an uncompilable content-policy pattern, with the pinned model kept as a per-call refusal.
+3. Decision item 8, the Rationale and the Trade-offs state that a disabled host registers no
+   `IChatClient` but does get the bound `AiSettings` and, on the configuration overload, the provider
+   validator (`DependencyInjection.cs:94`, `:123-128`, gate at `:130-134`); both `AiSettings.Validate`
+   and the provider validator return early for a disabled host (`AiSettings.cs:155-158`,
+   `Providers/AiProviderValidator.cs:27-30`), so only the `[Range]` annotations (`AiSettings.cs:91`,
+   `:132`) still apply. They read "nothing is registered", as the lead of the code's own remark still
+   does (`DependencyInjection.cs:66`) although its body names the bound settings (`:66-67`).
+4. Anchors re-verified against current source: `DependencyInjection.cs` (`ValidateOnStart` at
+   `:128`, pipeline at `:149-186`, sensitive-data flag at `:179`, source name at `:183`, prompt
+   tagging at `:185`, the Development gate at `:264-268`, `RefuseAnUngovernedHost` at `:204`, its
+   refusals at `:210-219` and `:221-228`, `CreateProviderChatClient` at `:241`, match and build at `:246-249`,
+   the Rationale remark at `:200-203`), `AiSettings` (class at `:23` through
+   `PerCallInputTokenBudget` at `:133`, `Validate` at `:153-201`), the release entries for the
+   v1.261.0 metadata fix, `PiiRedactionGuardrail` and `ContentPolicyGuardrail`
+   (`MMCA.Common/CHANGELOG.md:1002`, `:2310-2312`, `:2265-2266`), the `[1.207.0]` block of
+   `MMCA.Common/UPGRADING.md` (`:1893-1942`, table at `:1916-1921`, casing note at `:1923-1925`,
+   defaults at `:1927-1938`), and ADC's wiring (`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:240`,
+   `:252`, `:254`, meter and source at `:273-274`; `MMCA.ADC.Conference.Service.csproj:33`; the
+   Conference `DependencyInjection.cs` client registration at `:41-55`, guardrails at `:90`, `:100`,
+   `:101`, `:104`). The earlier revisions keep their anchors as written.
 
 ## Related
 [ADR-111](111-ai-session-scoring-governance.md) (the record this one extends: every scoring-specific

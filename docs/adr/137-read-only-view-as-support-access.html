@@ -256,8 +256,10 @@
           <h1 id="adr-137-read-only-view-as-support-access-reasoned-15-minutes-visible-to-the-user">ADR-137: Read-Only View-As Support Access (Reasoned, 15 Minutes, Visible to the User)</h1>
           <h2 id="status">Status</h2>
           <p>Accepted (2026-11-07). Ships in the MMCA.Common release after v1.277.0. Off by default
-          (<code>ViewAs:Enabled</code>, <code>MMCA.Common/Source/Core/MMCA.Common.Application/Auth/ViewAs/ViewAsSettings.cs:28</code>);
-          a consumer opts in per host.</p>
+          (<code>ViewAs:Enabled</code>, <code>MMCA.Common/Source/Core/MMCA.Common.Application/Auth/ViewAs/ViewAsSettings.cs:40</code>);
+          a consumer opts in per host. Revised 2026-11-23: the refusal list now names the service-account and
+          locked-account refusals, the table gate names its <code>ViewAs:DataSourceName</code> condition, and anchors are
+          refreshed after v1.315.0.</p>
           <h2 id="context">Context</h2>
           <p>A support or operations user who is asked &quot;why does my screen look like this&quot; cannot see what one
           user sees without that user&#39;s password, and MMCA had no staff access path at all. Writing one raises
@@ -283,39 +285,46 @@
           their sign-in history; off by default.</strong></p>
           <ol>
           <li><strong>Permission and reason.</strong> <code>POST {userId}/view-as</code> on <code>UsersAdminControllerBase</code>
-          (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/Administration/UsersAdminControllerBase.cs:137</code>)
-          requires <code>users:view-as</code> (<code>:138</code>; <code>AdministrationPermissions.ViewAsUsers</code>,
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/Administration/UsersAdminControllerBase.cs:159</code>)
+          requires <code>users:view-as</code> (<code>:160</code>; <code>AdministrationPermissions.ViewAsUsers</code>,
           <code>MMCA.Common/Source/Core/MMCA.Common.Shared/Auth/Permissions/AdministrationPermissions.cs:27</code>) on
-          top of the class-level <code>users:manage</code> (<code>UsersAdminControllerBase.cs:46</code>;
+          top of the class-level <code>users:manage</code> (<code>UsersAdminControllerBase.cs:67</code>;
           <code>AdministrationPermissions.cs:18</code>). The body is <code>StartViewAsRequest(Reason)</code>
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Shared/Auth/Requests/AdministrationRequests.cs:32</code>), and a
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Shared/Auth/Requests/AdministrationRequests.cs:34</code>), and a
           reason of 10 to 500 characters after trimming is required
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Domain/Auth/ViewAsGrant.cs:20</code>, <code>:23</code>, <code>:74-81</code>). The action is
-          <code>[NonIdempotent]</code> (<code>UsersAdminControllerBase.cs:139</code>): every call is a new grant row.</li>
-          <li><strong>Refusals.</strong> The caller&#39;s own account (<code>ViewAs.Self</code>, <code>ViewAsGrant.cs:66-72</code>); an account the
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Domain/Auth/ViewAsGrant.cs:21</code>, <code>:24</code>, <code>:117-124</code>). The action
+          is <code>[NonIdempotent]</code> (<code>UsersAdminControllerBase.cs:161</code>): every call is a new grant row.</li>
+          <li><strong>Refusals.</strong> The caller&#39;s own account (<code>ViewAs.Self</code>, <code>ViewAsGrant.cs:109-115</code>); an account the
           consumer&#39;s resolver does not find (<code>ViewAs.TargetNotFound</code>) or reports soft-deleted
-          (<code>ViewAs.TargetDeleted</code>); and an account whose role itself holds <code>users:view-as</code>
-          (<code>ViewAs.TargetIsStaff</code>), so staff cannot view each other
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Auth/ViewAs/ViewAsService.cs:134-150</code>). A host
+          (<code>ViewAs.TargetDeleted</code>); a machine client&#39;s service account (<code>ViewAs.TargetIsServiceAccount</code>,
+          Forbidden, <a href="140-machine-clients-oauth-client-credentials.html">ADR-140</a>); a locked account (<code>ViewAs.TargetLocked</code>,
+          refused unconditionally, <code>ViewAsService.cs:186-189</code>; the lock also writes the soft-deleted-user
+          marker, which refuses the account&#39;s tokens only while it lives, max(access-token lifetime plus
+          clock skew, 20 minutes), <code>MMCA.Common/Source/Core/MMCA.Common.Application/Auth/SoftDeletedUserCache.cs:41</code>,
+          <code>:51</code>); and an account whose
+          role itself holds <code>users:view-as</code> (<code>ViewAs.TargetIsStaff</code>), so staff cannot view each other
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Auth/ViewAs/ViewAsService.cs:165-195</code>). A host
           that enabled view-as but registered no <code>IViewAsSubjectResolver</code> refuses every grant
-          (<code>ViewAs.NotConfigured</code>, <code>:74-79</code>).</li>
+          (<code>ViewAs.NotConfigured</code>, <code>:82-87</code>).</li>
           <li><strong>The <code>ViewAsGrant</code> row is the audit record.</strong> There is no separate audit-event API, and the field
           audit trail (<a href="075-audit-trail.html">ADR-075</a>) fires only on entity changes, so the row
           (<code>Id</code>, <code>StaffUserId</code>, <code>TargetUserId</code>, <code>Reason</code>, <code>GrantedAt</code>, <code>ExpiresAt</code>, <code>EndedAt</code>;
-          <code>ViewAsGrant.cs:29-47</code>) is it. It is written before the token is minted, so no token exists without
-          its row (<code>ViewAsService.cs:88-89</code>). It is a flat bookkeeping record like <code>RefreshSession</code>, with no
-          soft-delete flag, so no query filter hides it from the per-request check (<code>ViewAsGrant.cs:10-15</code>).
-          Rows are kept <code>ViewAs:RetentionDays</code> (default 90, <code>[Range(1, 3650)]</code>, <code>ViewAsSettings.cs:34-35</code>),
+          <code>ViewAsGrant.cs:32-51</code>; plus the <code>StaffDisplay</code> and <code>TargetDisplay</code> email snapshots, <code>:59</code>, <code>:66</code>,
+          see the support access log revision) is it. It is written before the token is minted, so no token exists without
+          its row (<code>ViewAsService.cs:102</code>, <code>:109-115</code>). It is a flat bookkeeping record like <code>RefreshSession</code>,
+          with no soft-delete flag, so no query filter hides it from the per-request check
+          (<code>ViewAsGrant.cs:12-15</code>).
+          Rows are kept <code>ViewAs:RetentionDays</code> (default 90, <code>[Range(1, 3650)]</code>, <code>ViewAsSettings.cs:55-56</code>),
           matching the audit trail&#39;s default
           (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/AuditTrail/AuditTrailSettings.cs:38</code>),
-          and swept on each new grant rather than by a hosted service (<code>ViewAsService.cs:88</code>).</li>
+          and swept on each new grant rather than by a hosted service (<code>ViewAsService.cs:101</code>).</li>
           <li><strong>The token: no <code>sid</code>, no <code>mfa</code>, at most 15 minutes.</strong> <code>ViewAsService</code> mints through the raw
           <code>ITokenService</code>, not the session-stamping wrapper the sign-in workflow uses, so the token carries
-          no <code>sid</code> and no <code>mfa</code> claim and opens no refresh session (<code>ViewAsService.cs:16-22</code>). It carries the
+          no <code>sid</code> and no <code>mfa</code> claim and opens no refresh session (<code>ViewAsService.cs:18-22</code>). It carries the
           viewed account&#39;s standard claims plus <code>act_sub</code> (the staff user,
-          <code>MMCA.Common/Source/Core/MMCA.Common.Shared/Auth/AuthClaimTypes.cs:79</code>) and <code>vag</code> (the grant id,
-          <code>:85</code>) (<code>ViewAsService.cs:91-102</code>). Its lifetime is min(15 minutes, the configured access-token
-          lifetime) (<code>:47-50</code>; <code>ViewAsGrant.MaxLifetime</code>, <code>ViewAsGrant.cs:26</code>, and the clamp at <code>:83-86</code>),
+          <code>MMCA.Common/Source/Core/MMCA.Common.Shared/Auth/AuthClaimTypes.cs:122</code>) and <code>vag</code> (the grant id,
+          <code>:128</code>) (<code>ViewAsService.cs:104-115</code>). Its lifetime is min(15 minutes, the configured access-token
+          lifetime) (<code>:55-58</code>; <code>ViewAsGrant.MaxLifetime</code>, <code>ViewAsGrant.cs:30</code>, and the clamp at <code>:126-129</code>),
           minted by <code>ITokenService.GenerateShortLivedAccessToken</code>, which the framework&#39;s <code>TokenService</code>
           honors exactly
           (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Auth/TokenService.cs:118-128</code>).</li>
@@ -327,17 +336,22 @@
           view-as is enabled
           (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/Pipeline/MiddlewarePipelineBuilder.cs:126-133</code>;
           <code>MiddlewarePipelineStepNames.cs:65</code>). A request without <code>act_sub</code> passes after one claim lookup
-          (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Middleware/ViewAsGuardMiddleware.cs:52-56</code>). For a
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Middleware/ViewAsGuardMiddleware.cs:57-62</code>). For a
           view-as request:<ul>
           <li>while <code>ViewAs:Enabled</code> is false, 401, so a token minted before the switch was turned off reaches
-          nothing (<code>:60-65</code>);</li>
-          <li>any method other than GET, HEAD or OPTIONS, 403 (<code>:67-72</code>, <code>:84-85</code>), except the one action marked
-          <code>[ViewAsEndEndpoint]</code> (<code>:87-89</code>, <code>:135-136</code>);</li>
+          nothing (<code>:64-72</code>);</li>
+          <li>any method other than GET, HEAD or OPTIONS, 403 (<code>:74-79</code>, <code>:106-107</code>), except a POST to the
+          action marked <code>[ViewAsEndEndpoint]</code> (<code>:109-111</code>, <code>:244-245</code>) or to an endpoint marked
+          <code>ViewAsReadOnlyEndpointAttribute</code> (<code>:117-119</code>, see the 2026-11-08 revision);</li>
           <li>the grant must exist, name this staff user and this account, and be neither ended nor expired
-          (<code>ViewAsService.cs:119-131</code>; <code>ViewAsGrant.IsActiveAt</code>, <code>ViewAsGrant.cs:101</code>), else 401
-          (<code>ViewAsGuardMiddleware.cs:74-79</code>). The check is one uncached primary-key read per view-as request,
-          because a cached &quot;live&quot; answer on one replica would outlive an End handled on another, and a store
-          error or a missing <code>IViewAsService</code> answers 401 (<code>:29-34</code>, <code>:105-113</code>), unlike
+          (<code>ViewAsService.cs:132-144</code>; <code>ViewAsGrant.IsActiveAt</code>, <code>ViewAsGrant.cs:172</code>), else 401
+          (<code>ViewAsGuardMiddleware.cs:81-85</code>). On a host with <code>ViewAs:HostsGrantStore</code> true the check is one
+          uncached primary-key read per view-as request, because a cached &quot;live&quot; answer on one replica
+          would outlive an End handled on another; on a service without the store it is the token&#39;s own
+          expiry plus the shared-cache grant-ended marker (<code>:96-99</code>, <code>:161-201</code>, see the multi-service
+          revision). A store or cache error, a missing <code>IViewAsService</code> or a missing cache answers 401
+          (<code>:34-40</code>, <code>:101-103</code>, <code>:139-143</code>, <code>:176-181</code>, <code>:196-200</code>),
+          unlike
           <code>SoftDeletedUserMiddleware</code>, which fails open (<a href="047-soft-deleted-user-session-revocation.html">ADR-047</a>).</li>
           </ul>
           </li>
@@ -345,15 +359,15 @@
           <code>Auth.ViewAsReadOnly</code> (Forbidden) while the caller carries <code>act_sub</code>
           (<code>MMCA.Common/Source/Core/MMCA.Common.Application/UseCases/Decorators/ViewAsCommandDecorator.cs:36-45</code>),
           and is registered last, so it runs first
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/DependencyInjection.cs:141</code>). That covers a command
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/DependencyInjection.cs:159</code>). That covers a command
           sent from a GET handler or a hub method, and a refused command does no flag, permission, logging,
           validation or transaction work. Queries carry no view-as decorator.</li>
           <li><strong>Ending a view.</strong> <code>POST auth/view-as/end</code> on <code>AuthControllerBase</code>, <code>[ViewAsEndEndpoint]</code> and
           <code>[NonIdempotent]</code>
-          (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/AuthControllerBase.cs:253-256</code>), marks
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/AuthControllerBase.cs:370-372</code>), marks
           the grant ended, so the same token is refused on its next request rather than at expiry. It answers
-          404 while disabled (<code>:269-272</code>) and 400 <code>ViewAs.NotViewing</code> for a token that is not a view-as token
-          (<code>:274-278</code>).</li>
+          404 while disabled (<code>:386-389</code>) and 400 <code>ViewAs.NotViewing</code> for a token that is not a view-as token
+          (<code>:391-395</code>).</li>
           <li><strong>Web only, through a separate overlay cookie in the same-origin proxy.</strong> The token never reaches
           script and the staff user&#39;s session cookies are never touched:<ul>
           <li>The cookie is <code>mmca_view_as</code>, HttpOnly, Secure by the session cookies&#39; rule, the proxy&#39;s
@@ -361,25 +375,28 @@
           (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/SessionCookies/ViewAsOverlayCookie.cs:31</code>,
           <code>:92-104</code>, <code>:118-131</code>).</li>
           <li><strong>When it is written.</strong> The proxy treats a POST whose last path segment is <code>view-as</code> as a grant
-          (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI.Web/SameOriginProxy/SameOriginApiProxyEndpoint.cs:340-344</code>)
-          and writes the cookie only from a 2xx answer (<code>SameOriginProxyTransformer.cs:119-121</code>) whose token
-          parses as a JWT carrying both <code>act_sub</code> and <code>vag</code> (<code>:238-251</code>); the browser gets the same JSON with
-          the token replaced by its claims-only form (<code>:162-184</code>). Any other answer passes through and no
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI.Web/SameOriginProxy/SameOriginApiProxyEndpoint.cs:342-346</code>)
+          and writes the cookie only from a 2xx answer (<code>SameOriginProxyTransformer.cs:118-121</code>) whose token
+          parses as a JWT carrying both <code>act_sub</code> and <code>vag</code> (<code>:267-275</code>); the browser gets the same JSON with
+          the token replaced by its claims-only form (<code>:175-213</code>). Any other answer passes through and no
           cookie is written.</li>
           <li><strong>While it is live</strong> its token replaces the session bearer for every forwarded call except sign-in
-          and sign-out (<code>SameOriginApiProxyEndpoint.cs:405-417</code>), and it also answers server rendering,
+          and sign-out (<code>SameOriginApiProxyEndpoint.cs:407-419</code>), and it also answers server rendering,
           <code>POST /auth/session/token</code> and the Blazor Server handoff (<code>ViewAsOverlayCookie.cs:21-25</code>;
-          <code>SameOriginApiProxyEndpoint.cs:441-444</code>; <code>SessionHandoffEndpoints.cs:31-33</code>).</li>
+          <code>MMCA.Common/Source/Presentation/MMCA.Common.API/SessionCookies/SessionCookieEndpoints.cs:69</code>,
+          <code>:80</code>; <code>SessionHandoffEndpoints.cs:31-33</code>), and the proxy&#39;s local <code>POST {prefix}/auth/refresh</code>
+          answers with the overlay&#39;s claims and expiry, rotating nothing
+          (<code>SameOriginApiProxyEndpoint.cs:436-446</code>).</li>
           <li><strong>When it is deleted.</strong> On end (whatever the upstream answered), on sign-out, on a successful
           sign-in, when it has already expired, and when the upstream answers 401 to its bearer
-          (<code>SameOriginProxyTransformer.cs:133-138</code>). The end path is <code>SameOriginApiProxy:ViewAsEndPath</code>
-          (default <code>auth/view-as/end</code>, <code>SameOriginApiProxySettings.cs:99</code>).</li>
+          (<code>SameOriginProxyTransformer.cs:157-167</code>). The end path is <code>SameOriginApiProxy:ViewAsEndPath</code>
+          (default <code>auth/view-as/end</code>, <code>SameOriginApiProxySettings.cs:108</code>).</li>
           </ul>
           </li>
           <li><strong>Banner and button.</strong> <code>ViewAsBanner</code> (&quot;Viewing as {name}, read-only, ends in mm:ss&quot; with End,
           <code>MMCA.Common/Source/Presentation/MMCA.Common.UI/Components/Auth/ViewAsBanner.razor.cs:13-21</code>;
-          <code>SharedResource.resx:931-935</code>) renders nothing for an ordinary principal and sits in <code>MainLayout</code>
-          above every page (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI/Layout/MainLayout.razor:82-83</code>).
+          <code>SharedResource.resx:949-953</code>) renders nothing for an ordinary principal and sits in <code>MainLayout</code>
+          above every page (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI/Layout/MainLayout.razor:87</code>).
           End posts through the proxy and reloads the app on the staff user&#39;s own session, as does the
           countdown reaching zero. <code>ViewAsButton</code> asks for the reason and posts the grant from the browser; it
           shows only to a principal holding <code>users:view-as</code> that is not itself viewing
@@ -389,18 +406,21 @@
           (<code>MMCA.Common/Source/Core/MMCA.Common.Shared/Auth/Responses/SignInHistoryEntryKind.cs:19</code>;
           <code>MMCA.Common/Source/Core/MMCA.Common.Application/Auth/Sessions/SignInHistory.cs:55-56</code>, <code>:80-103</code>)
           in the same newest-first list capped at 50, with no device or address, never current, and ended
-          either <code>ViewAsEnded</code> (<code>SignInEndReasons.cs:26</code>) or <code>Expired</code>.
+          either <code>ViewAsEnded</code> (<code>SignInEndReasons.cs:27</code>) or <code>Expired</code>.
           <code>SignInHistoryTable</code> labels it &quot;Viewed by support&quot;
-          (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI/Components/Auth/SignInHistoryTable.razor.cs:71-73</code>;
-          <code>SharedResource.resx:952-953</code>). See the sign-in history amendment of
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI/Components/Auth/SignInHistoryTable.razor.cs:72</code>;
+          <code>SharedResource.resx:970-971</code>). See the sign-in history amendment of
           <a href="097-multi-device-refresh-sessions.html">ADR-097</a>.</li>
           <li><strong>Off by default.</strong> <code>ViewAsSettings</code> binds the <code>ViewAs</code> section with <code>ValidateOnStart</code>
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:186-191</code>). While
-          <code>Enabled</code> is false the grant and end actions answer 404 (<code>UsersAdminControllerBase.cs:155-158</code>;
-          <code>AuthControllerBase.cs:269-272</code>), the <code>ViewAsGrants</code> table is in no model
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/ApplicationDbContext.cs:951-956</code>),
-          the store answers as if no grant existed (<code>EFViewAsGrantStore.cs:19-21</code>, <code>:51-54</code>), and the guard
-          refuses every view-as token (point 6).</li>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:193-196</code>). While
+          <code>Enabled</code> is false the grant and end actions answer 404 (<code>UsersAdminControllerBase.cs:177-180</code>;
+          <code>AuthControllerBase.cs:386-389</code>), the <code>ViewAsGrants</code> table is in no model, the store answers as if
+          no grant existed (<code>EFViewAsGrantStore.cs:21-23</code>, <code>:39</code>, <code>:56-59</code>), and the guard refuses every
+          view-as token (point 6). The table is mapped only on a context where <code>Enabled</code> and
+          <code>HostsGrantStore</code> hold and whose physical source is the one <code>ViewAs:DataSourceName</code> names (default
+          <code>Default</code>, <code>[Required]</code>, <code>ViewAsSettings.cs:62-63</code>)
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/ApplicationDbContext.cs:434</code>,
+          <code>:585</code>, <code>:1098-1104</code>).</li>
           </ol>
           <h2 id="rationale">Rationale</h2>
           <ul>
@@ -446,21 +466,21 @@
           <code>IX_ViewAsGrants_TargetUserId_GrantedAt</code> and <code>IX_ViewAsGrants_GrantedAt</code>
           (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Auth/ViewAsGrantModelBuilderExtensions.cs:15</code>,
           <code>:18</code>, <code>:21</code>, <code>:33-48</code>), scaffolded with <code>DesignTimeDbContextOptions.EnableViewAsGrants = true</code>
-          (<code>MMCA.Common/UPGRADING.md:98-103</code>). A consumer that leaves it off adds nothing.</li>
+          (<code>MMCA.Common/UPGRADING.md:740-745</code>). A consumer that leaves it off adds nothing.</li>
           <li><strong>A privacy disclosure for any consumer that enables it</strong>, stating that staff can view an account
-          read-only and that the account holder sees each view (<code>ViewAsSettings.cs:16-19</code>).</li>
+          read-only and that the account holder sees each view (<code>ViewAsSettings.cs:16-20</code>).</li>
           <li><strong>Consumer wiring.</strong> Register an <code>IViewAsSubjectResolver</code> over the app&#39;s users, grant <code>users:view-as</code>
           to the staff role that also holds <code>users:manage</code>, and place <code>ViewAsButton</code> on the admin user page
-          (<code>MMCA.Common/UPGRADING.md:104-112</code>).</li>
+          (<code>MMCA.Common/UPGRADING.md:746-753</code>).</li>
           <li><strong>Binary-breaking constructors.</strong> <code>AuthSessionIssuer</code> and <code>UserSessionsAdministrationService</code> gain an
           optional trailing <code>IViewAsGrantStore</code> (<code>AuthSessionIssuer.cs:60</code>;
           <code>UserSessionsAdministrationService.cs:20</code>). Source that constructs them by hand still compiles, but
-          the old constructors are removed from the public API
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/PublicAPI.Unshipped.txt:77-78</code>), so an assembly
+          the old constructors are removed from the public API, which lists only the new signatures
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/PublicAPI.Shipped.txt:29</code>, <code>:314</code>), so an assembly
           compiled against them must be rebuilt.</li>
           <li><strong>App-specific claims are not reproduced</strong> in the view-as token (see Trade-offs).</li>
           <li><strong>MAUI is excluded.</strong> The overlay lives in the web proxy; MAUI heads do not offer view-as
-          (<code>MMCA.Common/UPGRADING.md:112</code>).</li>
+          (<code>MMCA.Common/UPGRADING.md:754</code>).</li>
           </ul>
           <h2 id="revision-2026-11-07-multi-service-hosts">Revision (2026-11-07): multi-service hosts</h2>
           <p><strong>Context.</strong> Adopting v1.278.0 in MMCA.ADC, which runs Identity, Conference, Engagement and
@@ -592,6 +612,48 @@
           a view-as token.</li>
           <li>Without the mark the behaviour is as before: the read is refused on the peer.</li>
           </ul>
+          <h2 id="revision-2026-11-23">Revision (2026-11-23)</h2>
+          <p>Re-verified against current source. The decision is unchanged: the permission and reason gate, the
+          15-minute unrenewed token, the always-present fail-closed guard, the outermost command decorator, the
+          overlay cookie and the user-visible grant row all hold as written. Two points of the Decision now say
+          more than they did, and the anchors moved with v1.315.0.</p>
+          <ol>
+          <li><strong>Two more refusals.</strong> <code>ViewAsService.Refuse</code> also refuses a machine client&#39;s service account
+          (<code>ViewAs.TargetIsServiceAccount</code>, Forbidden, ADR-140) and a locked account (<code>ViewAs.TargetLocked</code>,
+          Validation), the second unconditionally
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Auth/ViewAs/ViewAsService.cs:177-189</code>). The
+          source comment&#39;s reason (the lock&#39;s soft-deleted-user marker means the token could never be used)
+          holds only while the marker lives, max(access-token lifetime plus clock skew, 20 minutes)
+          (<code>SoftDeletedUserCache.cs:41</code>, <code>:51</code>), so the refusal, not the marker, is what keeps a locked
+          account out. Point 2 now lists them.</li>
+          <li><strong>The table gate names its data source.</strong> The <code>ViewAsGrants</code> table is mapped only on a context
+          where <code>Enabled</code> and <code>HostsGrantStore</code> hold AND whose physical source is the one
+          <code>ViewAs:DataSourceName</code> names (default <code>Default</code>, <code>[Required]</code>,
+          <code>MMCA.Common/Source/Core/MMCA.Common.Application/Auth/ViewAs/ViewAsSettings.cs:62-63</code>;
+          <code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/ApplicationDbContext.cs:1098-1104</code>).
+          Point 12 now states it.</li>
+          <li><strong>The erasure parameter is no longer trailing.</strong> The 2026-11-07 support access log revision says
+          <code>DeleteUserHandlerBase</code> takes an optional trailing <code>IViewAsGrantStore</code>; it is still optional, but an
+          optional <code>IInternalCommandScheduler</code> now follows it
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Users/UseCases/DeleteUser/DeleteUserHandlerBase.cs:102-103</code>).
+          The blanking still runs right after the refresh-session revocation, in the erasure&#39;s one save
+          (<code>DeleteUserHandlerBase.cs:187</code>).</li>
+          <li>Anchors re-verified against current source: <code>UsersAdminControllerBase.cs:67</code>, <code>:159-161</code>,
+          <code>:177-180</code>; <code>AdministrationRequests.cs:34</code>; <code>ViewAsGrant.cs:12-15</code>, <code>:21</code>, <code>:24</code>, <code>:30</code>, <code>:32-51</code>,
+          <code>:109-115</code>, <code>:117-124</code>, <code>:126-129</code>, <code>:172</code>; <code>ViewAsService.cs:18-22</code>, <code>:55-58</code>, <code>:82-87</code>, <code>:101</code>,
+          <code>:102</code>, <code>:104-115</code>, <code>:132-144</code>, <code>:165-195</code>; <code>ViewAsSettings.cs:16-20</code>, <code>:40</code>, <code>:55-56</code>;
+          <code>AuthClaimTypes.cs:122</code>, <code>:128</code>; <code>ViewAsGuardMiddleware.cs:34-40</code>, <code>:57-62</code>, <code>:64-72</code>, <code>:74-79</code>,
+          <code>:81-85</code>, <code>:101-103</code>, <code>:106-107</code>, <code>:109-111</code>, <code>:139-143</code>, <code>:244-245</code>; <code>DependencyInjection.cs:159</code>
+          (Application); <code>AuthControllerBase.cs:370-372</code>, <code>:386-389</code>, <code>:391-395</code>;
+          <code>SameOriginApiProxyEndpoint.cs:342-346</code>, <code>:407-419</code>, <code>:436-446</code>; <code>SessionCookieEndpoints.cs:69</code>, <code>:80</code>;
+          <code>SameOriginProxyTransformer.cs:118-121</code>, <code>:157-167</code>, <code>:175-213</code>, <code>:267-275</code>;
+          <code>SameOriginApiProxySettings.cs:108</code>; <code>SharedResource.resx:949-953</code>, <code>:970-971</code>;
+          <code>MainLayout.razor:87</code>; <code>SignInEndReasons.cs:27</code>; <code>SignInHistoryTable.razor.cs:72</code>;
+          <code>DependencyInjection.cs:193-196</code> (Infrastructure); <code>ApplicationDbContext.cs:434</code>, <code>:585</code>;
+          <code>EFViewAsGrantStore.cs:21-23</code>, <code>:39</code>, <code>:56-59</code>; <code>PublicAPI.Shipped.txt:29</code>, <code>:314</code> (the
+          constructors moved there from <code>PublicAPI.Unshipped.txt</code> at release); <code>MMCA.Common/UPGRADING.md:740-745</code>,
+          <code>:746-753</code>, <code>:754</code>.</li>
+          </ol>
           <h2 id="related">Related</h2>
           <p><a href="014-cqrs-decorator-pipeline.html">ADR-014</a> (the decorator pipeline the view-as decorator now heads),
           <a href="020-permission-based-authorization.html">ADR-020</a> (the <code>users:view-as</code> permission),
@@ -621,6 +683,7 @@
             <li><a href="#revision-2026-11-07-multi-service-hosts">Revision (2026-11-07): multi-service hosts</a></li>
             <li><a href="#revision-2026-11-07-support-access-log">Revision (2026-11-07): support access log</a></li>
             <li><a href="#revision-2026-11-08-read-only-grpc-endpoints">Revision (2026-11-08): read-only gRPC endpoints</a></li>
+            <li><a href="#revision-2026-11-23">Revision (2026-11-23)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

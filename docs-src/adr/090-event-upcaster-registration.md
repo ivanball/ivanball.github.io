@@ -14,6 +14,7 @@ Revised 2026-10-07: anchors refreshed after the v1.233.0 release.
 Revised 2026-10-21: anchors refreshed after the outbox releases through v1.247.0.
 Revised 2026-10-26: a terminal unresolvable-type miss now stamps `LockedUntil` to the current time
 instead of clearing it, so the dead-letter retention window runs from the last failed attempt.
+Revised 2026-11-23: anchors refreshed after the outbox releases through v1.309.0.
 
 ## Context
 ADR-010 splits event evolution into a signal and a discipline. The signal (`SchemaVersion`, a
@@ -256,3 +257,28 @@ Anchors inside the earlier revisions are left as recorded.
    `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/OutboxMessage.cs`,
    `FromDomainEvent` (`:140`) stores `GetStorageName` at `:148`, `DeserializeEvent` (`:176`) calls
    `ResolveEventType` at `:178` (defined at `:199`), and the fallback is at `:209`, all unchanged.
+
+## Revision (2026-11-23)
+Re-verified against current source. The decision, the mechanism, both delivery paths, and the
+terminal unresolvable-type behavior recorded by the 2026-10-26 revision (`RetryCount` set to
+`MaxRetries`, `LockedUntil` stamped to the current UTC time, `ProcessedOn` left null) are
+unchanged; only line anchors in `OutboxProcessor.cs` and `OutboxCleanupService.cs` moved. Anchors
+inside the earlier revisions are left as recorded.
+
+1. **Anchors re-verified against current source:** In
+   `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/Processing/OutboxProcessor.cs`,
+   the `DeserializeEvent` call is at `:577`, the `HandleUnresolvableType` call at `:580`, and the
+   method at `:1074`, with its XML summary at `:1058-1068` (`ProcessedOn` stays null,
+   `:1064-1065`). The terminal miss sets `RetryCount` to `MaxRetries` at `:1089` and stamps
+   `LockedUntil` at `:1093` (comment at `:1091-1092`); the dead-letter counter increment is at
+   `:1094-1097`, tagged `event_type` (`:1096`) and `reason` `type_unresolvable` (`:1097`). The
+   `RetryCount < MaxRetries` poll filter sits in `FetchCandidatesAsync` (`:305`, filter at `:316`),
+   and the backlog gauge `CountPendingAsync` (`:273`) copies it at `:290`. In
+   `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/Administration/OutboxCleanupService.cs`,
+   `SweepDeadLettersAsync` (`:155`) computes the cutoff at `:163-164` and keys it on
+   `LockedUntil ?? OccurredOn` at `:172` (key selector at `:173`). In
+   `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/OutboxMessage.cs`,
+   `FromDomainEvent` (`:140`) stores `GetStorageName` at `:148`, `DeserializeEvent` (`:176`) calls
+   `ResolveEventType` at `:178` (defined at `:199`), and the fallback is at `:209`, all unchanged.
+   `AddEventUpcaster` remains at `DependencyInjection.Extensibility.cs:81` (singleton via
+   `TryAddEnumerable` at `:86`).

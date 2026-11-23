@@ -286,7 +286,8 @@
           than a <code>SupportsOutbox</code> member.
           Revised 2026-10-07: anchors refreshed after the v1.233.0 release.
           Revised 2026-10-21: anchors refreshed against the Common v1.250.0 source (Aspire data-source helpers).
-          Revised 2026-10-26: anchors refreshed after the Common v1.261.0 release.</p>
+          Revised 2026-10-26: anchors refreshed after the Common v1.261.0 release.
+          Revised 2026-11-23: anchors refreshed after the Common v1.314.0 release.</p>
           <h2 id="context">Context</h2>
           <p>ADR-006 (database-per-service) splits storage along the <strong>Name</strong> axis: several physically separate
           databases, all on the same engine (SQL Server), one per service. A second, orthogonal axis is the
@@ -325,10 +326,10 @@
           engine shim base (<code>EntityTypeConfigurationSQLServer</code> / <code>EntityTypeConfigurationPostgreSQL</code> /
           <code>EntityTypeConfigurationCosmos</code> / <code>EntityTypeConfigurationSqlite</code>), or annotates
           <code>[UseDataSource(DataSource.X)]</code> directly
-          (<code>Source/Core/MMCA.Common.Infrastructure/UseDataSourceAttribute.cs:13</code>). The
+          (<code>Source/Core/MMCA.Common.Infrastructure/UseDataSourceAttribute.cs:14</code>). The
           engine-aware <code>EntityTypeConfiguration&lt;TEntity, TId&gt;</code> reads that attribute
           (<code>EntityTypeConfiguration.cs:43-46</code>) and hands the mapping to that engine
-          (<code>:77</code>): table + schema for SQL Server and PostgreSQL, whose two mappings are deliberately
+          (<code>:78</code>): table + schema for SQL Server and PostgreSQL, whose two mappings are deliberately
           identical, table for SQLite, container + partition key for Cosmos, plus
           the right key generation (server identity, vs. client-side <code>CosmosIntIdValueGenerator</code>, vs. never).
           The configuration <strong>body is portable</strong>: moving an entity between engines is a single attribute
@@ -342,11 +343,11 @@
           <li><strong>Configuration drives routing.</strong> <code>DataSourceResolver</code> builds a per-engine logical-to-physical map
           from the engine-specific connection strings (<code>SQLServerConnectionString</code> /
           <code>PostgreSQLConnectionString</code> / <code>CosmosConnectionString</code> / <code>SqliteConnectionString</code>, each read by
-          its engine: <code>DataSourceResolver.cs:519-520</code> for the top-level section and <code>:522-523</code> for a named
+          its engine: <code>DataSourceResolver.cs:520-521</code> for the top-level section and <code>:523-524</code> for a named
           entry delegate to the registry, for example <code>SQLServerDataSourceEngine.cs:52-63</code>,
           plus <code>CosmosDatabaseName</code> and a migrations assembly for the
           two server engines, <code>SQLServerMigrationsAssembly</code> and <code>PostgreSQLMigrationsAssembly</code>, which SQLite
-          and Cosmos leave empty at the top level (<code>DataSourceResolver.cs:274</code>, <code>:306-307</code>;
+          and Cosmos leave empty at the top level (<code>DataSourceResolver.cs:275</code>, <code>:307-308</code>;
           <code>SqliteDataSourceEngine.cs:74</code>, <code>CosmosDataSourceEngine.cs:73</code>) and which a named entry can override per source
           (<code>DataSourceEntrySettings.cs:37</code>, <code>:64</code>); a named entry also carries a <code>SqliteMigrationsAssembly</code>
           (<code>DataSourceEntrySettings.cs:55</code>, read by its engine at <code>SqliteDataSourceEngine.cs:77-80</code>)), read from either
@@ -356,7 +357,7 @@
           database on it, that database is the host&#39;s single database and becomes <code>Default</code>, which is what lets
           a host declare its databases only under <code>DataSources</code> and still route the framework-owned tables
           (outbox, inbox, scheduled jobs, audit trail) that resolve to the <code>Default</code> name
-          (<code>Source/Core/MMCA.Common.Infrastructure/Persistence/DataSources/DataSourceResolver.cs:261-296</code>).
+          (<code>Source/Core/MMCA.Common.Infrastructure/Persistence/DataSources/DataSourceResolver.cs:262-297</code>).
           Several distinct databases with no top-level value leave <code>Default</code> empty, since there is no single
           answer: a genuinely multi-database host names the one it wants shared by adding a
           <code>DataSources:Default</code> entry. Logical names with no entry for an engine collapse onto that engine&#39;s
@@ -387,15 +388,15 @@
           <li><strong>The host surface reads the same two shapes.</strong> The Aspire AppHost helpers
           <code>With{SQLServer,PostgreSQL,Cosmos,Sqlite}DataSource</code> inject the <code>DataSources__{logicalName}__*</code>
           environment variables for the source they attach
-          (<code>Source/Hosting/MMCA.Common.Aspire.Hosting/Extensions.cs:541</code>, <code>:571</code>, <code>:600-601</code>, <code>:625</code>). The
+          (<code>Source/Hosting/MMCA.Common.Aspire.Hosting/Extensions.cs:596</code>, <code>:626</code>, <code>:655-656</code>, <code>:680</code>). The
           database health checks enumerate the top-level section and every named
           entry, deduplicated by connection string, so each physical relational database (SQL Server,
           PostgreSQL or SQLite) contributes exactly one readiness check and the entries that collapse onto one
           database contribute one between them; a Cosmos database contributes none
-          (the per-engine enumeration at <code>Source/Hosting/MMCA.Common.Aspire/Extensions.Health.cs:268-305</code>,
-          registered at <code>:216-249</code>). The requirement that a host have a
+          (the per-engine enumeration at <code>Source/Hosting/MMCA.Common.Aspire/Extensions.Health.cs:326-363</code>,
+          deduplicated at <code>:352-360</code>, registered at <code>:237-285</code>). The requirement that a host have a
           database at all is engine-agnostic: <code>AddInfrastructureHealthChecks(requireDatabase)</code> is satisfied by
-          SQL Server, PostgreSQL or SQLite, declared in either shape (<code>:69-73</code>, the rule at <code>:225-231</code>).</li>
+          SQL Server, PostgreSQL or SQLite, declared in either shape (<code>:57-61</code>, <code>:76</code>, the rule at <code>:247-253</code>).</li>
           </ol>
           <h2 id="rationale">Rationale</h2>
           <ul>
@@ -583,6 +584,34 @@
           <code>CosmosDataSourceEngine.cs:73</code>, <code>DataSourceEntrySettings.cs:37</code>, <code>:55</code>, <code>:64</code>, and
           <code>Extensions.Health.cs:69-73</code>.</li>
           </ol>
+          <h2 id="revision-2026-11-23">Revision (2026-11-23)</h2>
+          <p>Re-verified against current source (Common v1.314.0). No decision changed: the <code>[UseDataSource]</code>
+          attribute, the engine-delegated mapping, the registry-delegated connection-string reads, the
+          default-seed rule, the top-level migrations assembly only the two server engines carry, the Aspire
+          data-source helpers, the deduplicated relational-only health checks and the 2026-08-29 substitution
+          rule all behave as described. Only line anchors moved.</p>
+          <ol>
+          <li>The 2026-08-29 substitution behavior sits at these current locations in
+          <code>Source/Core/MMCA.Common.Infrastructure/Persistence/DataSources/DataSourceResolver.cs</code>: the
+          preference order (<code>:35-36</code>), the per-engine map loop (<code>:75-78</code>), the configured engines (<code>:80</code>,
+          <code>ConfiguredEngines</code> at <code>:173-179</code>, predicate <code>HasAnyConnectionString</code> at <code>:195-200</code>), the pick
+          (<code>:81</code> through <code>PickSubstituteEngine</code> at <code>:185-189</code>), the no-database case that substitutes
+          nothing (<code>:47-52</code>, the <code>?? engine</code> fallback at <code>:129</code>), and the startup message (<code>:526</code>). Still
+          correct as that revision cites them: <code>:93</code>, <code>:128-129</code>, <code>:83-89</code>, <code>:109-119</code> and <code>:120-124</code>.</li>
+          <li>Anchors re-verified against current source: <code>UseDataSourceAttribute.cs:14</code> (class declaration);
+          <code>EntityTypeConfiguration.cs:78</code> (the <code>DataSourceEngines.For(engine).ApplyKeyAndTableMapping</code>
+          call); <code>DataSourceResolver.cs:520-521</code> and <code>:523-524</code> (connection-string reads, delegating to the
+          engine registry), <code>:262-297</code> (<code>ResolveDefaultSeed</code>), <code>:275</code> and <code>:307-308</code> (top-level migrations
+          assembly); <code>Source/Hosting/MMCA.Common.Aspire.Hosting/Extensions.cs:596</code> (SQL Server, helper
+          declared at <code>:586</code>), <code>:626</code> (PostgreSQL, <code>:616</code>), <code>:655-656</code> (Cosmos connection string plus
+          database name, <code>:645</code>) and <code>:680</code> (SQLite, <code>:670</code>);
+          <code>Source/Hosting/MMCA.Common.Aspire/Extensions.Health.cs:326-363</code> (<code>RelationalSources</code>,
+          deduplicated by connection string at <code>:352-360</code>), <code>:237-285</code> (<code>AddDatabaseHealthChecks</code>, which
+          enumerates only the three relational keys at <code>:243-245</code>), <code>:247-253</code> (the <code>requireDatabase</code>
+          throw), and <code>:57-61</code> and <code>:76</code> (the <code>requireDatabase</code> parameter and
+          <code>AddInfrastructureHealthChecks</code>). The Status note dated 2026-09-09 still cites
+          <code>EntityTypeConfiguration.cs:77</code>; the call is at <code>:78</code>.</li>
+          </ol>
           
         <div class="doc-foot btn-row">
           <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
@@ -605,6 +634,7 @@
             <li><a href="#revision-2026-10-07">Revision (2026-10-07)</a></li>
             <li><a href="#revision-2026-10-21">Revision (2026-10-21)</a></li>
             <li><a href="#revision-2026-10-26">Revision (2026-10-26)</a></li>
+            <li><a href="#revision-2026-11-23">Revision (2026-11-23)</a></li>
             </ul>
           </nav>
         </aside>

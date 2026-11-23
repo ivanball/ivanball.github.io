@@ -1,7 +1,7 @@
 # ADR-130: Per-Engine Data Source Strategy (Engine Facts Instead of Branching on the Enum)
 
 ## Status
-Accepted (2026-10-01). Shipped in MMCA.Common v1.218.0 (`MMCA.Common/CHANGELOG.md:881`). Revised
+Accepted (2026-10-01). Shipped in MMCA.Common v1.218.0 (`MMCA.Common/CHANGELOG.md:1818`). Revised
 2026-10-06: the release status now records v1.218.0 as shipped. Refines [ADR-018](018-polyglot-persistence.md) (engine as
 a routing decision) and [ADR-113](113-postgresql-as-a-first-class-engine.md) (the fourth engine)
 without changing [ADR-006](006-database-per-service.md) (one sealed context class per engine, one
@@ -12,7 +12,9 @@ startup bar only in Development; the replaced shape is cited through its squash 
 anchors refreshed. Revised 2026-10-25: re-checked for the PostgreSQL data-source extension point
 v1.257.0 adds; the engine strategy is unchanged and the extension point is recorded in ADR-113 (see
 Revision (2026-10-25) below). Revised 2026-10-26: anchors refreshed after the v1.261.0 release.
-Revised 2026-10-28: anchors refreshed after the v1.265.1 release.
+Revised 2026-10-28: anchors refreshed after the v1.265.1 release. Revised 2026-11-23: only the
+branching test's failure message names this record (the stale-entry test's does not); anchors
+refreshed after the v1.315.0 release.
 
 ## Context
 MMCA.Common persists through four engines named by one shipped public enum, `DataSource`
@@ -79,27 +81,27 @@ registry keyed by the shipped enum. Call sites read engine facts; they no longer
   `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DataSources/Engines/`). Cosmos builds
   no soft-delete filter (`CosmosDataSourceEngine.cs:117`).
 - **Call sites read the engine.** A context exposes its engine as `ApplicationDbContext.Engine`
-  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/ApplicationDbContext.cs:61`).
+  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/ApplicationDbContext.cs:68`).
   The resolver orders substitution by `SubstitutionPriority`
   (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DataSources/DataSourceResolver.cs:36`)
   and reads migration policy, migrations assemblies and connection strings through the engine
-  (`:307`, `:413`, `:470`, `:478`, `:490`, `:515`, `:520`, `:523`);
+  (`:308`, `:414`, `:471`, `:479`, `:491`, `:516`, `:521`, `:524`);
   `PhysicalDataSource.UsesMigrations` switches on `Migrations`
   (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DataSources/PhysicalDataSource.cs:42`);
   the row-version mapping and stamp read `RowVersion`
-  (`ApplicationDbContext.cs:592`,
+  (`ApplicationDbContext.cs:740`,
   `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Interceptors/AuditSaveChangesInterceptor.cs:67`);
   include support reads `IsRelational`
   (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DataSources/DataSourceService.cs:32`);
   context creation, key mapping and the soft-delete SQL call the behaviour hooks
   (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/Factory/PhysicalDbContextFactory.cs:32`,
-  `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Configuration/EntityTypeConfiguration/EntityTypeConfiguration.cs:77`,
+  `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Configuration/EntityTypeConfiguration/EntityTypeConfiguration.cs:78`,
   `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/SoftDeleteFilterSql.cs:36`, `:71`).
   The one policy constant that still names an engine is the resolver's framework default,
   `SQLServer` (`DataSourceResolver.cs:23`).
 - **Outbox support is the engine's relational flag.** `ApplicationDbContext.SupportsOutbox` is gone;
   the outbox routing decision reads `context.Engine.Capabilities.IsRelational`
-  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Messaging/InProcessEventBus.cs:82`,
+  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Messaging/InProcessEventBus.cs:83`,
   `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Messaging/BrokerEventBus.cs:70`,
   `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Interceptors/DomainEventSaveChangesInterceptor.cs:259`).
 - **Explicit-key insert is engine-neutral at the API.** `IUnitOfWork.RequestIdentityInsert` is renamed
@@ -118,15 +120,15 @@ registry keyed by the shipped enum. Call sites read engine facts; they no longer
   dialect (`SQLServerDataSourceEngine.cs:19`, `:49`) and emits `SET IDENTITY_INSERT [schema].[table] ON` or `OFF`
   (`:163`); the other three return `null`, so the save runs unchanged.
 - **Raw SQL is registered only where it can run.** `AddRawSqlQueryExecutor`
-  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:426`, called at `:116`)
+  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:450`, called at `:117`)
   resolves the host's framework default engine and registers `IRawSqlQueryExecutor` only when that
-  engine is relational (`:435-438`). A Cosmos-default host gets no registration, so a service that
+  engine is relational (`:459-462`). A Cosmos-default host gets no registration, so a service that
   injects the executor fails at resolution instead of on its first statement: at container build in
   Development, where the default host validates the container, and on first resolution elsewhere
-  (`:416-422`).
+  (`:440-446`).
   Both branches are tested
-  (`MMCA.Common/Tests/Core/MMCA.Common.Infrastructure.Tests/DependencyInjectionInfrastructureTests.cs:273`,
-  `:294`).
+  (`MMCA.Common/Tests/Core/MMCA.Common.Infrastructure.Tests/DependencyInjectionInfrastructureTests.cs:160`,
+  `:181`).
 - **SQLite quotes with double quotes everywhere.** `SqliteDataSourceEngine.QuoteColumn` returns
   `"col"` (`SqliteDataSourceEngine.cs:111-112`), the same form as its soft-delete filter (`:115`), so
   filtered-index predicates on SQLite (the outbox, internal-command and push-notification `DedupKey`
@@ -140,13 +142,14 @@ registry keyed by the shipped enum. Call sites read engine facts; they no longer
   engine adds one property per settings class.
 
 A source-scanning fitness test keeps new branches out:
-`MMCA.Common/Tests/Architecture/MMCA.Common.Architecture.Tests/Governance/DataSourceBranchingFitnessTests.cs:71`
+`MMCA.Common/Tests/Architecture/MMCA.Common.Architecture.Tests/Governance/DataSourceBranchingFitnessTests.cs:76`
 fails on any `DataSource.<Engine>` reference or engine-context type check outside a file-level
 allow-list of the reviewed remaining references (engine classes, sealed contexts naming themselves,
 settings defaults, the design-time helper, the configuration shim bases, `IndexBuilderExtensions`'
 default parameter, framework-default engine requests and `FrameworkDefaultEngine`), each entry
-carrying its reason, and `:83` fails on an allow-list entry that no longer has a hit, so the list
-cannot go stale. Its failure message names this record.
+carrying its reason, and `:88` fails on an allow-list entry that no longer has a hit, so the list
+cannot go stale. The branching test's failure message names this record (`:19`, `:84`); the
+stale-entry message tells the reader to remove the entry and does not name it (`:96-98`).
 
 ## Rationale
 - **One place per engine.** An engine's behavior is now one class, and a fifth engine is one class
@@ -164,7 +167,7 @@ cannot go stale. Its failure message names this record.
   the three row-version strategies).
 - **Fail at resolution, not at first statement.** Registering the raw-SQL executor conditionally
   turns a call-time `NotSupportedException` on Cosmos into a resolution failure, caught at container
-  build in Development and on first resolution elsewhere (`DependencyInjection.cs:416-422`). In
+  build in Development and on first resolution elsewhere (`DependencyInjection.cs:440-446`). In
   Development that is a startup failure, the stance of
   [ADR-070](070-fail-fast-configuration-contract.md); elsewhere it is a lazy first-use failure,
   which ADR-070 rules out for configuration, but still earlier than the first statement.
@@ -179,7 +182,7 @@ cannot go stale. Its failure message names this record.
 - **Breaking for consumers.** The `RequestIdentityInsert` rename has no alias
   (`IUnitOfWork.cs:45`); a Cosmos-default host that injects `IRawSqlQueryExecutor` now fails at
   resolution (container build in Development, first resolution elsewhere,
-  `DependencyInjection.cs:416-422`, `:435-438`); and a SQLite consumer with migrations sees a model diff on
+  `DependencyInjection.cs:440-446`, `:459-462`); and a SQLite consumer with migrations sees a model diff on
   the outbox, internal-command and push-notification filtered indexes and needs a migration.
 - **Static means not replaceable.** A consumer cannot substitute or add an engine; the registry is
   internal (`DataSourceEngines.cs:19`) and so is the contract (`IDataSourceEngine.cs:18`). That is
@@ -317,6 +320,31 @@ anchor moved, because later release sections were added above it.
    `InProcessEventBus.cs:82`, `BrokerEventBus.cs:70` and `DomainEventSaveChangesInterceptor.cs:259`,
    include support at `DataSourceService.cs:32`, and `AddRawSqlQueryExecutor` at
    `DependencyInjection.cs:426` (called at `:116`, relational check at `:435`) are unchanged.
+
+## Revision (2026-11-23)
+Re-verified against current source. The engine contract, the registry, the capabilities table, the
+call sites that read engine facts and the raw-SQL registration are unchanged; the fitness-test
+paragraph now says which failure message names this record, and line anchors moved.
+
+1. **Fitness-test failure message.** The `Remedy` constant naming ADR-130
+   (`MMCA.Common/Tests/Architecture/MMCA.Common.Architecture.Tests/Governance/DataSourceBranchingFitnessTests.cs:19`)
+   is used only by the branching test (`:84`); the stale-entry test's message (`:96-98`) does not
+   name the record. The Decision no longer says both failure messages do.
+2. Anchors re-verified against current source: the v1.218.0 release heading is
+   `MMCA.Common/CHANGELOG.md:1818`, with the `RequestIdentityInsert` rename entry at `:1824` and the
+   Removed entry at `:1874`, cited in the Status block (the anchors in the earlier revisions are left
+   as written); `ApplicationDbContext.Engine` at `ApplicationDbContext.cs:68` and its row-version
+   read at `:740` (`AuditSaveChangesInterceptor.cs:67` unchanged); the resolver reads engine facts
+   at `DataSourceResolver.cs:308` (top-level migrations assembly), `:414` and `:471` (migration
+   policy), `:479` (migrations assembly), `:491` (migration policy), `:516` (connection identity),
+   `:521` and `:524` (connection strings), with `:23` and `:36` unchanged; key mapping at
+   `EntityTypeConfiguration.cs:78`; the outbox routing reads `IsRelational` at
+   `InProcessEventBus.cs:83` (`BrokerEventBus.cs:70` and `DomainEventSaveChangesInterceptor.cs:259`
+   unchanged); `AddRawSqlQueryExecutor` is declared at `DependencyInjection.cs:450` (called at
+   `:117`), with the relational check and registration at `:459-462` and its doc comment at
+   `:440-446`; its two branches are tested at `DependencyInjectionInfrastructureTests.cs:160` and
+   `:181`; and the fitness tests sit at `DataSourceBranchingFitnessTests.cs:76` (branching) and
+   `:88` (stale entries).
 
 ## Related
 [ADR-006](006-database-per-service.md) (one sealed context per engine),

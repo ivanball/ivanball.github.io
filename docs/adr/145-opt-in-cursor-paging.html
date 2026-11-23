@@ -6,21 +6,21 @@
   <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#0e151f" media="(prefers-color-scheme: dark)">
   <title>ADR-145: Opt-In Cursor Paging on List Endpoints (Beside Offset Paging) · MMCA · Ivan Ball-llovera</title>
-  <meta name="description" content="Accepted (2026-11-12). Released in MMCA.Common v1.289.0 (MMCA.Common/CHANGELOG.md:7, :24). Off for every controller unless it carries…">
+  <meta name="description" content="Accepted (2026-11-12). Released in MMCA.Common v1.289.0 (MMCA.Common/CHANGELOG.md:511, :529). Off for every controller unless it carries…">
   <link rel="canonical" href="https://ivanball.github.io/docs/adr/145-opt-in-cursor-paging.html">
   <link rel="icon" href="../../assets/img/favicon.svg" type="image/svg+xml">
   <link rel="alternate" type="application/rss+xml" title="Ivan Ball-llovera: deep dives on enterprise .NET" href="https://ivanball.github.io/feed.xml">
   <meta property="og:type" content="article">
   <meta property="og:site_name" content="Ivan Ball-llovera">
   <meta property="og:title" content="ADR-145: Opt-In Cursor Paging on List Endpoints (Beside Offset Paging)">
-  <meta property="og:description" content="Accepted (2026-11-12). Released in MMCA.Common v1.289.0 (MMCA.Common/CHANGELOG.md:7, :24). Off for every controller unless it carries…">
+  <meta property="og:description" content="Accepted (2026-11-12). Released in MMCA.Common v1.289.0 (MMCA.Common/CHANGELOG.md:511, :529). Off for every controller unless it carries…">
   <meta property="og:url" content="https://ivanball.github.io/docs/adr/145-opt-in-cursor-paging.html">
   <meta property="og:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <meta property="og:image:alt" content="Ivan Ball-llovera, Principal Software Architect">
   <meta property="og:locale" content="en_US">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="ADR-145: Opt-In Cursor Paging on List Endpoints (Beside Offset Paging)">
-  <meta name="twitter:description" content="Accepted (2026-11-12). Released in MMCA.Common v1.289.0 (MMCA.Common/CHANGELOG.md:7, :24). Off for every controller unless it carries…">
+  <meta name="twitter:description" content="Accepted (2026-11-12). Released in MMCA.Common v1.289.0 (MMCA.Common/CHANGELOG.md:511, :529). Off for every controller unless it carries…">
   <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Platform","item":"https://ivanball.github.io/platform.html"},{"@type":"ListItem","position":2,"name":"Reference","item":"https://ivanball.github.io/docs/index.html"},{"@type":"ListItem","position":3,"name":"Architecture Decision Records","item":"https://ivanball.github.io/docs/adr/index.html"},{"@type":"ListItem","position":4,"name":"145 · Opt-In Cursor Paging on List Endpoints (Beside Offset Paging)","item":"https://ivanball.github.io/docs/adr/145-opt-in-cursor-paging.html"}]}</script>
   <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);if(localStorage.getItem('mmca-rail')==='hidden')document.documentElement.setAttribute('data-rail','hidden');if(localStorage.getItem('mmca-cites')==='shown')document.documentElement.setAttribute('data-cites','shown');}catch(e){}})();</script>
@@ -256,9 +256,10 @@
           <h1 id="adr-145-opt-in-cursor-paging-on-list-endpoints-beside-offset-paging">ADR-145: Opt-In Cursor Paging on List Endpoints (Beside Offset Paging)</h1>
           <h2 id="status">Status</h2>
           <p>Accepted (2026-11-12). Released in MMCA.Common v1.289.0
-          (<code>MMCA.Common/CHANGELOG.md:7</code>, <code>:24</code>). Off for every controller unless it carries
+          (<code>MMCA.Common/CHANGELOG.md:511</code>, <code>:529</code>). Off for every controller unless it carries
           <code>[SupportsCursorPaging]</code>
-          (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Pagination/SupportsCursorPagingAttribute.cs:3-14</code>).</p>
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Pagination/SupportsCursorPagingAttribute.cs:3-14</code>).
+          Revised 2026-11-23: anchors refreshed after later MMCA.Common releases (through v1.315.0) moved them.</p>
           <h2 id="context">Context</h2>
           <p>The generic list surface of <a href="034-generic-entity-query-layer.html">ADR-034</a> pages by offset:
           <code>GET {controller}/paged</code> takes a page number and size and reports the total in the <code>X-Pagination</code>
@@ -288,9 +289,9 @@
           <li><strong>The action.</strong> <code>GetCursorPageAsync</code> answers <code>GET {controller}/cursor</code> with the parameters
           <code>sortColumn</code>, <code>sortDirection</code>, <code>cursor</code> and <code>pageSize</code> (default 10, <code>[Range(1, int.MaxValue)]</code>), and
           returns <code>KeysetCollectionResult&lt;TEntityDTO&gt;</code> or Problem Details (400, 500)
-          (<code>EntityControllerBase.cs:401-411</code>). It is <code>virtual</code>, like the other generic reads.</li>
+          (<code>EntityControllerBase.cs:403-413</code>). It is <code>virtual</code>, like the other generic reads.</li>
           <li><strong>Page size is clamped twice, never rejected above the floor.</strong> The action takes
-          <code>Math.Min(pageSize, MaxPageSize)</code> (<code>EntityControllerBase.cs:417</code>), where <code>MaxPageSize</code> is
+          <code>Math.Min(pageSize, MaxPageSize)</code> (<code>EntityControllerBase.cs:419</code>), where <code>MaxPageSize</code> is
           <code>ApplicationSettings.MaxPageSize</code> (default 500) clamped to the pipeline&#39;s unbounded-result ceiling
           (<code>EntityControllerBase.cs:58-64</code>;
           <code>MMCA.Common/Source/Core/MMCA.Common.Application/Settings/ApplicationSettings.cs:17</code>).
@@ -298,12 +299,12 @@
           <li><strong>Direction.</strong> <code>sortDirection</code> must be empty, <code>asc</code> or <code>desc</code> (case-insensitive); anything else is
           <code>Error.InvalidSortDirection</code>, answered before any read
           (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Services/QueryFieldService.cs:591-605</code>;
-          <code>EntityControllerBase.cs:413-415</code>). Only <code>desc</code> sets <code>Descending</code> (<code>EntityControllerBase.cs:418</code>).</li>
+          <code>EntityControllerBase.cs:415-417</code>). Only <code>desc</code> sets <code>Descending</code> (<code>EntityControllerBase.cs:420</code>).</li>
           <li><strong>One sort column, validated against the response contract.</strong> <code>EntityQueryService.GetPageByCursorAsync</code>
           validates the name exactly as the list read does (<code>DTOToEntityPropertyMap</code>, <code>FieldContract</code> and the
           entity&#39;s properties) and fails before the repository runs; a name found in <code>DTOToEntityPropertyMap</code>
           is replaced by its entity value
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Services/EntityQueryService.cs:528-559</code>). The
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Services/EntityQueryService.cs:528-560</code>). The
           repository resolves the name to a public instance property of the entity and answers
           <code>Error.InvalidEntityField</code> for anything else, a mapped navigation path included
           (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Repositories/KeysetQueryBuilder.cs:35-47</code>;
@@ -322,33 +323,33 @@
           extra row only proves a next page exists, and <code>NextCursor</code> is null on the last page
           (<code>EFReadRepository.cs:669-686</code>; <code>KeysetPagination.cs:93-107</code>).</li>
           <li><strong>Read scope and tenant filter apply.</strong> The action resolves <code>GetReadSpecificationAsync</code> once and
-          passes it down (<code>EntityControllerBase.cs:420-425</code>), the hook the other generic reads use
+          passes it down (<code>EntityControllerBase.cs:422-427</code>), the hook the other generic reads use
           (<code>EntityControllerBase.cs:115</code>, <code>:170</code>). Only the specification&#39;s criteria apply
           (<code>applyShape: false</code>, <code>EFReadRepository.cs:648-650</code>). The context&#39;s global query filters stay in
-          force: the tenant filter is a named query filter (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/ApplicationDbContext.cs:618</code>,
-          <code>:713</code>), and the one filter a specification can lift is the soft-delete filter
+          force: the tenant filter is a named query filter (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/ApplicationDbContext.cs:626</code>,
+          <code>:721</code>), and the one filter a specification can lift is the soft-delete filter
           (<code>EFReadRepository.cs:41</code>, <code>:573-582</code>).</li>
           <li><strong>What the keyset read deliberately lacks.</strong> Compared with <code>GET {controller}/paged</code> there is no total
           count, no <code>X-Pagination</code> header, no <code>fields</code> projection, no includes and no filter dictionary: the
-          keyset read takes a specification only (<code>EntityControllerBase.cs:396-400</code>;
+          keyset read takes a specification only (<code>EntityControllerBase.cs:398-402</code>;
           <code>MMCA.Common/Source/Core/MMCA.Common.Application/Interfaces/Mapping/IEntityQueryService.cs:173</code>).
           The result type carries no total and no page number by design (<code>KeysetPagination.cs:78-85</code>).</li>
           <li><strong>The service method is a defaulted interface member.</strong> <code>IEntityQueryService.GetPageByCursorAsync</code>
           has a default body answering <code>Error.Unexpected</code> with <code>Query.CursorPagingNotSupported</code> (500), so an
           implementation that predates it keeps compiling; <code>EntityQueryService</code> overrides it and maps the rows
           with <code>DTOMapper</code> in repository order (<code>IEntityQueryService.cs:24-28</code>, <code>:160-182</code>;
-          <code>EntityQueryService.cs:561-565</code>).</li>
+          <code>EntityQueryService.cs:562-566</code>).</li>
           <li><strong>The opt-in marker and the convention.</strong> <code>[SupportsCursorPaging]</code> is a public, inherited class
           attribute, so declaring it on an abstract base opts in every derived controller
           (<code>SupportsCursorPagingAttribute.cs:9-14</code>). The action carries the internal
-          <code>[OptInAction(typeof(SupportsCursorPagingAttribute))]</code> (<code>EntityControllerBase.cs:402</code>), an
+          <code>[OptInAction(typeof(SupportsCursorPagingAttribute))]</code> (<code>EntityControllerBase.cs:404</code>), an
           <code>IActionModelConvention</code> that removes the action from the controller&#39;s application model unless the
           controller carries the marker
           (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Pagination/OptInActionAttribute.cs:16-33</code>). A
           removed action has no route and no API description, so the API document of a controller without the
           marker is exactly what it was; the convention is read off the base action, so an override that does
           not opt in is removed as well (<code>OptInActionAttribute.cs:10-14</code>). The change feed (<code>GetChangesAsync</code>,
-          ADR-144) uses the same convention with its own marker (<code>EntityControllerBase.cs:454-455</code>).</li>
+          ADR-144) uses the same convention with its own marker (<code>EntityControllerBase.cs:456-457</code>).</li>
           <li><strong>Reflection-based authorization tests skip what is not an endpoint.</strong> The convention removes the
           action from the application model, not from the type: <code>GetCursorPageAsync</code> is still a public method of
           every derived controller. A fitness test that enumerates controller methods by reflection and demands
@@ -434,6 +435,30 @@
           <li><strong>Watch:</strong> a reflection-based authorization or anonymous-read fitness test added in any consumer must
           apply the skip in Decision, point 12, or it fails on the first controller without the marker.</li>
           </ul>
+          <h2 id="revision-2026-11-23">Revision (2026-11-23)</h2>
+          <p>Re-verified against current source. The decision is unchanged: the <code>GET {controller}/cursor</code> action,
+          its clamping, direction and sort-column validation, the read-scope hook, the named tenant filter, the
+          deliberately thin keyset read and the opt-in convention all behave as Decision states. Only line
+          anchors moved, as later releases added lines above them.</p>
+          <ol>
+          <li>Anchors re-verified against current source:<ul>
+          <li>The v1.289.0 release heading and its cursor-paging entry: <code>MMCA.Common/CHANGELOG.md:511</code>, <code>:529</code>.</li>
+          <li><code>GetCursorPageAsync</code>, from <code>[HttpGet(&quot;cursor&quot;)]</code> through the <code>[Range]</code> page size:
+          <code>EntityControllerBase.cs:403-413</code>; <code>[OptInAction(typeof(SupportsCursorPagingAttribute))]</code> at <code>:404</code>;
+          the remarks on the thin read at <code>:398-402</code>.</li>
+          <li>Direction check and failure: <code>EntityControllerBase.cs:415-417</code>; <code>Math.Min(pageSize, MaxPageSize)</code>
+          at <code>:419</code>; the <code>desc</code>-only <code>Descending</code> at <code>:420</code>; <code>GetReadSpecificationAsync</code> and the
+          <code>QueryService.GetPageByCursorAsync</code> call at <code>:422-427</code>.</li>
+          <li>The change feed&#39;s <code>[HttpGet(&quot;changes&quot;)]</code> and its <code>[OptInAction(typeof(SupportsChangeFeedAttribute))]</code>:
+          <code>EntityControllerBase.cs:456-457</code>.</li>
+          <li><code>EntityQueryService.GetPageByCursorAsync</code> validation and the mapped-name swap:
+          <code>EntityQueryService.cs:528-560</code>; the repository call and the <code>DTOMapper.MapToDTOs</code> mapping at
+          <code>:562-566</code>.</li>
+          <li><code>TenantFilterName</code> and its <code>HasQueryFilter(TenantFilterName, filter)</code> application:
+          <code>ApplicationDbContext.cs:626</code>, <code>:721</code>.</li>
+          </ul>
+          </li>
+          </ol>
           
         <div class="doc-foot btn-row">
           <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
@@ -451,6 +476,7 @@
             <li><a href="#trade-offs">Trade-offs</a></li>
             <li><a href="#alternatives-rejected">Alternatives rejected</a></li>
             <li><a href="#consequences">Consequences</a></li>
+            <li><a href="#revision-2026-11-23">Revision (2026-11-23)</a></li>
             </ul>
           </nav>
         </aside>
