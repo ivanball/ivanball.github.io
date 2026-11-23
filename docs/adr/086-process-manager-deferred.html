@@ -277,7 +277,10 @@
           <a href="143-process-manager-primitive.html">ADR-143</a> (no framework state table, no correlation store, no
           package; MMCA.Store&#39;s order flow is its first adopter). The MassTransit saga state machine below, its
           correlation store and its trigger remain deferred for workflow state that fits no aggregate. See the
-          Revision below.</p>
+          Revision below. Revised 2026-11-23: both unpaid-order arming sites now go through
+          <code>ProcessTimeoutScheduler.ArmAsync</code> rather than a direct future-dated <code>ScheduleAsync</code>, and the order
+          measures its payment window from a stored <code>PaymentWindowStartedOn</code>; anchors refreshed; the deferral
+          stands.</p>
           <h2 id="context">Context</h2>
           <p><a href="054-saga-compensation-and-reconciliation.html">ADR-054</a> decided how this workspace achieves
           cross-boundary consistency without two-phase commit: <strong>choreography</strong>. Each step of a workflow raises
@@ -312,13 +315,13 @@
           <code>MassTransitStateMachine</code>, <code>SagaStateMachineInstance</code>, <code>ISaga</code> and <code>InMemorySagaRepository</code> returns
           <strong>no match in any repo</strong>, which is the verifiable form of &quot;no orchestrated workflow exists&quot;.
           <code>PaymentReconciliationService</code> in MMCA.Store&#39;s Sales module is still the only reconciliation sweep
-          (<code>MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Infrastructure/Payments/Reconciliation/PaymentReconciliationService.cs:69</code>).
+          (<code>MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Infrastructure/Payments/Reconciliation/PaymentReconciliationService.cs:81</code>).
           <code>PeriodicBackgroundService</code> has five production subclasses: that sweep
-          (<code>PaymentReconciliationService.cs:75</code>) plus four MMCA.Common maintenance jobs
+          (<code>PaymentReconciliationService.cs:87</code>) plus four MMCA.Common maintenance jobs
           (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Auth/RefreshSessionCleanupService.cs:53</code>,
           <code>.../Persistence/Auth/PermissionGrantRefreshService.cs:36</code>,
           <code>.../Persistence/InternalCommands/Administration/InternalCommandCleanupService.cs:46</code>,
-          <code>.../Persistence/Outbox/Administration/OutboxCleanupService.cs:49</code>), none of which coordinates a
+          <code>.../Persistence/Outbox/Administration/OutboxCleanupService.cs:50</code>), none of which coordinates a
           workflow.</p>
           <p>Writing an orchestrator now would therefore be building the coordinator before the workflow. This
           record exists because the alternative failure mode is worse: the first genuine multi-step
@@ -368,7 +371,7 @@
           (<a href="016-lockstep-versioning-masstransit-pin.html">ADR-016</a>): <code>MassTransit</code>, <code>MassTransit.RabbitMQ</code>,
           <code>MassTransit.Azure.ServiceBus.Core</code>, <code>MassTransit.AmazonSQS</code> and
           <code>MassTransit.SqlTransport.PostgreSQL</code> are all held at 8.5.12 in
-          <code>MMCA.Common/Directory.Packages.props:125-127,130,136</code>, because v9 requires a commercial license.
+          <code>MMCA.Common/Directory.Packages.props:188-190,193,199</code>, because v9 requires a commercial license.
           The build gate checks a fixed list of exactly those five ids, so the EF saga repository the design
           needs would be a sixth MassTransit package, guarded only once its id is added. The design
           assumes the v8 saga state machine and its EF Core saga repository are sufficient, an assumption no
@@ -646,6 +649,66 @@
           <code>MassTransitStateMachine</code>, <code>SagaStateMachineInstance</code>, <code>ISaga</code>, <code>InMemorySagaRepository</code> and
           <code>MassTransit.EntityFrameworkCore</code> still returns no match.</li>
           </ol>
+          <h2 id="revision-2026-11-23">Revision (2026-11-23)</h2>
+          <p>Re-verified against current source. The deferral, its trigger, the coordinator&#39;s shape, the v8
+          licensing constraint, the single-aggregate resolution of 2026-11-12 and the absence evidence are
+          unchanged. What moved is how MMCA.Store arms and measures the unpaid-order deadline, plus anchors.
+          The Context and Decision anchors are re-pointed in place; the earlier Revisions are kept as written.</p>
+          <ol>
+          <li><strong>Both arming sites go through <code>ProcessTimeoutScheduler</code>, not a direct <code>ScheduleAsync</code>.</strong> The
+          2026-10-28 Revision&#39;s &quot;future-dated <code>IInternalCommandScheduler.ScheduleAsync</code> calls&quot; now read as
+          <code>ProcessTimeoutScheduler.ArmAsync</code> calls: <code>CheckOutDeadlineScheduler</code> builds one over its injected
+          internal-command scheduler and clock
+          (<code>MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Application/ShoppingCarts/UseCases/CheckOut/CheckOutDeadlineScheduler.cs:31,37</code>)
+          and arms through it (<code>ArmAsync</code> declared at <code>:55</code>, the call at <code>:63-66</code>), and
+          <code>OrderPaymentFailedSagaHandler</code> constructs one (<code>.../Orders/Saga/OrderPaymentFailedSagaHandler.cs:83</code>)
+          and re-arms at <code>:87</code>. Every remaining direct <code>ScheduleAsync</code> in MMCA.Store passes <code>runAt: null</code>
+          (for example <code>.../Orders/DomainEventHandlers/OrderCancelledHandler.cs:37,39</code>), so the unpaid-order
+          deadline is the one per-instance wait in MMCA.Store. It is not the only one in the four <code>Source</code>
+          trees: MMCA.ADC&#39;s roster import arms a backstop directly,
+          <code>StartTicketRosterImportHandler</code> scheduling <code>ExpireTicketRosterImportInternalCommand(runId)</code> through
+          the <code>TimeSpan delay</code> overload
+          (<code>MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Application/Tickets/UseCases/StartRosterImport/StartTicketRosterImportHandler.cs:121-122</code>,
+          <code>MMCA.Common/Source/Core/MMCA.Common.Application/InternalCommands/IInternalCommandScheduler.cs:59-62</code>)
+          at <code>TicketImportRun.AbandonAfter</code>, 30 minutes
+          (<code>MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Domain/Tickets/TicketImportRun.cs:37</code>).
+          That wait carries only the run id and its handler loads and fails the one <code>TicketImportRun</code>
+          (<code>.../Tickets/UseCases/ExpireRosterImport/ExpireTicketRosterImportHandler.cs:26,36</code>), so it is a
+          single-aggregate deadline like the order&#39;s and does not meet the trigger. MMCA.Helpdesk <code>Source</code>
+          has no <code>ScheduleAsync</code> call.</li>
+          <li><strong>The payment window has its own stored start.</strong> <code>PlacedOrderFinalizer</code> gains
+          <code>StartPaymentWindow</code> (<code>.../ShoppingCarts/UseCases/CheckOut/PlacedOrderFinalizer.cs:36</code>), which
+          both checkout flows call before finalizing (<code>CheckOutHandler.cs:206</code>,
+          <code>.../Orders/UseCases/GuestCheckout/GuestCheckOutHandler.cs:120</code>), and <code>Order.DecideTimeout</code>
+          (<code>MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Domain/Orders/Order.cs:1115</code>) re-derives the
+          due instant from <code>PaymentWindowStartedOn</code> (<code>Order.cs:69</code>), falling back to the last transition
+          when no window start is stored (<code>Order.cs:1125</code>): an older row, or an order whose
+          <code>StartPaymentWindow</code> was refused because it was no longer <code>PendingPayment</code> (<code>Order.cs:570</code>), which
+          the finalizer logs and continues past (<code>PlacedOrderFinalizer.cs:40-44,77</code>). The window start is a column on <code>Order</code>, so the state the
+          deadline acts on still fits one aggregate and the trigger is still not met.</li>
+          <li>Anchors re-verified against current source: the MassTransit pin, still five v8 packages at
+          8.5.12, is <code>MMCA.Common/Directory.Packages.props:188-190,193,199</code>, replacing <code>:125-127,130,136</code>;
+          <code>PaymentReconciliationService.cs:81</code> (class) and <code>:87</code> (base), replacing <code>:69</code>/<code>:75</code>, and it is
+          still the only MMCA.Store <code>PeriodicBackgroundService</code> subclass; <code>OutboxCleanupService.cs:50</code>,
+          replacing <code>:49</code>, while <code>RefreshSessionCleanupService.cs:53</code>, <code>PermissionGrantRefreshService.cs:36</code>
+          and <code>InternalCommandCleanupService.cs:46</code> hold, so the count of five holds and ADC and Helpdesk
+          have none. <code>UsingAzureServiceBus</code> is at
+          <code>MMCA.Common/Source/Hosting/MMCA.Common.Azure/Messaging/AzureServiceBusTransport.cs:79</code>
+          (2026-10-26 cited <code>:33</code>). <code>InProcessMessageBus</code> takes <code>IDomainEventDispatcher</code> at
+          <code>.../Messaging/InProcessMessageBus.cs:18</code> and dispatches at <code>:24</code>. In the 2026-11-12 Revision,
+          <code>Order</code> derives the base at <code>Order.cs:48</code> (was <code>:47</code>), the saga-state sentence is at <code>:41-43</code>,
+          <code>DecideTimeout</code> spans <code>:1115-1135</code> (was <code>:984-1004</code>) and the re-derivation is <code>:1125-1129</code> (was
+          <code>:988-998</code>); the process-manager upgrade note is <code>MMCA.Common/UPGRADING.md:465-466</code> (was <code>:241</code>).
+          In the 2026-10-28 Revision, <code>PlacedOrderFinalizer</code> injects the scheduler at <code>:27</code> (was <code>:22</code>),
+          <code>FinalizeAsync</code> is at <code>:51</code>, the label block at <code>:55-67</code> (was <code>:33-45</code>) and the arm call at
+          <code>:71</code> (was <code>:49</code>); <code>CheckOutHandler.cs</code> injects the finalizer at <code>:48</code> (was <code>:47</code>), runs
+          <code>ExecuteInTransactionAsync</code> at <code>:106</code>, <code>WriteAsync</code> at <code>:150</code> and <code>FinalizeAsync</code> at <code>:213</code> (was
+          <code>:104</code>, <code>:148</code>, <code>:210</code>); guest checkout&#39;s <code>:31</code> and <code>:65</code> hold and its <code>FinalizeAsync</code> is at
+          <code>:123</code> (was <code>:122</code>); <code>OrderCancelledSagaHandler.cs</code> no longer has a <code>RestoreAsync</code> member, and
+          its <code>IncrementAsync</code> call is at <code>:179</code>. A per-repo content sweep of the four <code>Source</code> trees for
+          <code>MassTransitStateMachine</code>, <code>SagaStateMachineInstance</code>, <code>ISaga</code>, <code>InMemorySagaRepository</code> and
+          <code>MassTransit.EntityFrameworkCore</code> still returns no match.</li>
+          </ol>
           <h2 id="related">Related</h2>
           <p><a href="054-saga-compensation-and-reconciliation.html">ADR-054</a> (the accepted mechanism this record defers an
           alternative to: choreographed compensation, the persisted aggregate marker, and the reconciliation
@@ -686,6 +749,7 @@
             <li><a href="#revision-2026-10-26">Revision (2026-10-26)</a></li>
             <li><a href="#revision-2026-10-28">Revision (2026-10-28)</a></li>
             <li><a href="#revision-2026-11-12-the-deferral-is-revisited-and-resolved-for-single-aggregate-state">Revision (2026-11-12): the deferral is revisited, and resolved for single-aggregate state</a></li>
+            <li><a href="#revision-2026-11-23">Revision (2026-11-23)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

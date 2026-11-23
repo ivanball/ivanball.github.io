@@ -6,21 +6,21 @@
   <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#0e151f" media="(prefers-color-scheme: dark)">
   <title>ADR-142: Outbound Webhooks (Signed Delivery over Internal Commands, with a Dedicated Delivery Lane) · MMCA · Ivan Ball-llovera</title>
-  <meta name="description" content="Accepted (2026-11-12). Released in v1.289.0, MMCA.Common/CHANGELOG.md:7 (entries at :42 and :75). Off unless the host calls AddWebhooks(configuration)…">
+  <meta name="description" content="Accepted (2026-11-12). Released in v1.289.0, MMCA.Common/CHANGELOG.md:511 (entries at :547, :580 and :581). Off unless the host calls…">
   <link rel="canonical" href="https://ivanball.github.io/docs/adr/142-outbound-webhooks-and-delivery-lane.html">
   <link rel="icon" href="../../assets/img/favicon.svg" type="image/svg+xml">
   <link rel="alternate" type="application/rss+xml" title="Ivan Ball-llovera: deep dives on enterprise .NET" href="https://ivanball.github.io/feed.xml">
   <meta property="og:type" content="article">
   <meta property="og:site_name" content="Ivan Ball-llovera">
   <meta property="og:title" content="ADR-142: Outbound Webhooks (Signed Delivery over Internal Commands, with a Dedicated Delivery Lane)">
-  <meta property="og:description" content="Accepted (2026-11-12). Released in v1.289.0, MMCA.Common/CHANGELOG.md:7 (entries at :42 and :75). Off unless the host calls AddWebhooks(configuration)…">
+  <meta property="og:description" content="Accepted (2026-11-12). Released in v1.289.0, MMCA.Common/CHANGELOG.md:511 (entries at :547, :580 and :581). Off unless the host calls…">
   <meta property="og:url" content="https://ivanball.github.io/docs/adr/142-outbound-webhooks-and-delivery-lane.html">
   <meta property="og:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <meta property="og:image:alt" content="Ivan Ball-llovera, Principal Software Architect">
   <meta property="og:locale" content="en_US">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="ADR-142: Outbound Webhooks (Signed Delivery over Internal Commands, with a Dedicated Delivery Lane)">
-  <meta name="twitter:description" content="Accepted (2026-11-12). Released in v1.289.0, MMCA.Common/CHANGELOG.md:7 (entries at :42 and :75). Off unless the host calls AddWebhooks(configuration)…">
+  <meta name="twitter:description" content="Accepted (2026-11-12). Released in v1.289.0, MMCA.Common/CHANGELOG.md:511 (entries at :547, :580 and :581). Off unless the host calls…">
   <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Platform","item":"https://ivanball.github.io/platform.html"},{"@type":"ListItem","position":2,"name":"Reference","item":"https://ivanball.github.io/docs/index.html"},{"@type":"ListItem","position":3,"name":"Architecture Decision Records","item":"https://ivanball.github.io/docs/adr/index.html"},{"@type":"ListItem","position":4,"name":"142 · Outbound Webhooks (Signed Delivery over Internal Commands, with a Dedicated Delivery Lane)","item":"https://ivanball.github.io/docs/adr/142-outbound-webhooks-and-delivery-lane.html"}]}</script>
   <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);if(localStorage.getItem('mmca-rail')==='hidden')document.documentElement.setAttribute('data-rail','hidden');if(localStorage.getItem('mmca-cites')==='shown')document.documentElement.setAttribute('data-cites','shown');}catch(e){}})();</script>
@@ -255,9 +255,12 @@
           <p class="eyebrow doc-kicker">Architecture Decision Record</p>
           <h1 id="adr-142-outbound-webhooks-signed-delivery-over-internal-commands-with-a-dedicated-delivery-lane">ADR-142: Outbound Webhooks (Signed Delivery over Internal Commands, with a Dedicated Delivery Lane)</h1>
           <h2 id="status">Status</h2>
-          <p>Accepted (2026-11-12). Released in v1.289.0, <code>MMCA.Common/CHANGELOG.md:7</code> (entries at <code>:42</code>
-          and <code>:75</code>). Off unless the host calls <code>AddWebhooks(configuration)</code> and sets <code>Webhooks:Enabled</code>
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Webhooks/WebhookSettings.cs:16-17</code>, default false).</p>
+          <p>Accepted (2026-11-12). Released in v1.289.0, <code>MMCA.Common/CHANGELOG.md:511</code> (entries at <code>:547</code>,
+          <code>:580</code> and <code>:581</code>). Off unless the host calls <code>AddWebhooks(configuration)</code> and sets <code>Webhooks:Enabled</code>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Webhooks/WebhookSettings.cs:16-17</code>, default false).
+          Revised 2026-11-23: the delivery handler&#39;s disabled-host failure is now stated (a delivery row run
+          where <code>Webhooks:Enabled</code> is false fails, retries and dead-letters without sending), and anchors are
+          refreshed.</p>
           <h2 id="context">Context</h2>
           <p>An integration event leaves its aggregate through the outbox (<a href="003-outbox-dual-dispatch.html">ADR-003</a>,
           <a href="100-outbox-opt-in-resolved-from-messaging-mode.html">ADR-100</a>) and reaches two kinds of receiver: the
@@ -354,15 +357,19 @@
           under the stable name <code>MMCA.Webhooks.Deliver.v1</code>
           (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Webhooks/Delivery/DeliverWebhookInternalCommand.cs:5-23</code>),
           and retries come from the <code>InternalCommands:*</code> settings (<code>WebhookSettings.cs:8-9</code>). The handler maps the
-          outcome (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Webhooks/Delivery/DeliverWebhookInternalCommandHandler.cs:73-124</code>):
+          outcome (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Webhooks/Delivery/DeliverWebhookInternalCommandHandler.cs:73-125</code>):
           2xx completes the row; 410 Gone records the failure, disables the subscription and completes the row; a
           refused target records a fixed reason and completes the row, since retrying cannot change it; any other
           status (redirects included), a transport failure (timeouts included) or an unreadable secret fails the
           row so it retries with backoff and dead-letters after <code>MaxAttempts</code>
           (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Webhooks/Delivery/WebhookSendStatus.cs:6-25</code>). A
           missing, deleted or disabled subscription completes the row without sending
-          (<code>DeliverWebhookInternalCommandHandler.cs:52-57</code>). The handler is not <code>ITransactional</code>: the outcome is
-          recorded on its own save (<code>:12-16</code>).</p>
+          (<code>DeliverWebhookInternalCommandHandler.cs:52-57</code>). Before any read or send, a host with
+          <code>Webhooks:Enabled</code> false fails the row with <code>WebhookErrorCodes.DeliveryFailed</code> and one handler Warning line
+          (the logging decorator adds its own failure line), so
+          a row queued before webhooks were switched off retries, dead-letters and stays requeue-able
+          (<code>:41-50</code>, <code>:160-161</code>). The handler is not <code>ITransactional</code>: the outcome is recorded on its own save
+          (<code>:12-16</code>).</p>
           </li>
           <li><p><strong>The outbound address policy, enforced twice.</strong> <code>OutboundAddressPolicy.IsPublicAddress</code> denies, for
           IPv4, <code>0/8</code>, <code>10/8</code>, <code>100.64/10</code>, <code>127/8</code>, <code>169.254/16</code>, <code>172.16/12</code>, <code>192.0.0/24</code>, <code>192.168/16</code>,
@@ -405,7 +412,13 @@
           and its registry are registered only when <code>Webhooks:Enabled</code> and <code>InternalCommands:Enabled</code> are both
           true (<code>WebhookDeliveryLane.cs:51-80</code>). A host that drains the queue with webhooks disabled registers no
           lane, so its shared loop still picks up a delivery row
-          (<code>MMCA.Common/Tests/Core/MMCA.Common.Infrastructure.Tests/Persistence/InternalCommands/Processing/InternalCommandProcessorTests.cs:575</code>):
+          (<code>MMCA.Common/Tests/Core/MMCA.Common.Infrastructure.Tests/Persistence/InternalCommands/Processing/InternalCommandProcessorTests.cs:608</code>),
+          and, when that host called <code>AddWebhookDelivery()</code> (a registration independent of <code>Webhooks:Enabled</code>,
+          <code>MMCA.Common/Source/Core/MMCA.Common.Application/DependencyInjection.Webhooks.cs:94-97</code>), the real
+          handler there fails it without sending (Decision 4,
+          <code>DeliverWebhookInternalCommandHandler.cs:41-50</code>), spending an attempt and eventually dead-lettering it
+          (a host without that call has no handler and dead-letters the row at once,
+          <code>InternalCommandProcessorTests.cs:354</code>):
           every replica that drains a queue holding delivery rows needs the same <code>Webhooks:Enabled</code> value.</p>
           <ul>
           <li><strong>One guarded predicate on the shared loop.</strong> The registry <code>InternalCommandLanes</code> exists only together
@@ -425,10 +438,10 @@
           (<code>WebhookDeliveryLane.cs:40-47</code>).</li>
           <li><strong>The receiver cooldown CHARGES an attempt without sending.</strong> A failed real attempt cools its receiver
           down on this replica, from the instant the attempt failed; a success closes the cooldown
-          (<code>InternalCommandLaneProcessor.cs:491-513</code>, <code>:556-572</code>). While a receiver cools down, each of its rows
+          (<code>InternalCommandLaneProcessor.cs:495-517</code>, <code>:560-576</code>). While a receiver cools down, each of its rows
           whose turn comes is not sent and its handler is not invoked: it is charged one failed attempt through
           the unchanged failure path, with the error code <code>InternalCommands.ReceiverCoolingDown</code> and the message
-          &quot;Receiver cooling down after a failed delivery.&quot; (<code>:60-64</code>, <code>:367-370</code>, <code>:515-536</code>), so it keeps the
+          &quot;Receiver cooling down after a failed delivery.&quot; (<code>:60-64</code>, <code>:367-370</code>, <code>:519-540</code>), so it keeps the
           normal retry timeline and dead-letters on the normal attempt budget (<code>:35-42</code>). The configured
           <code>ReceiverCooldownSeconds</code> (default 60, range 5 to 120, <code>WebhookSettings.cs:43-49</code>) is clamped to
           <code>min(configured, S - TimeoutSeconds - 1 s)</code>, never below 1 second, where <code>S</code> is the shortest span from
@@ -440,17 +453,17 @@
           (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/InternalCommands/Processing/ReceiverCooldowns.cs:3-12</code>).</li>
           <li><strong>The start budget.</strong> No row of a batch starts once <code>TimeoutSeconds</code> has elapsed since the batch&#39;s
           first start; when every running row has finished, the rows that never started are released uncharged
-          and are due again at once (<code>InternalCommandLaneProcessor.cs:31-33</code>, <code>:373</code>, <code>:378-380</code>, <code>:538-554</code>;
+          and are due again at once (<code>InternalCommandLaneProcessor.cs:31-33</code>, <code>:373</code>, <code>:378-380</code>, <code>:542-558</code>;
           <code>WebhookDeliveryLane.cs:48</code>).</li>
           <li><strong>Visibility.</strong> The lane emits the <code>lane</code> tag <code>webhooks</code> (<code>WebhookDeliveryLane.cs:22-23</code>), its own
-          depth gauge (<code>InternalCommandLaneProcessor.cs:147</code>), a short-circuit counter for charged rows (<code>:535</code>),
-          a cooldown-opened counter (<code>:569</code>) and a released counter (<code>:458</code>).</li>
+          depth gauge (<code>InternalCommandLaneProcessor.cs:147</code>), a short-circuit counter for charged rows (<code>:539</code>),
+          a cooldown-opened counter (<code>:573</code>) and a released counter (<code>:462</code>).</li>
           </ul>
           </li>
           <li><p><strong>The gates that keep it true.</strong> In <code>MMCA.Common/Tests/</code>: the shared loop carries no command-type
           predicate without a lane and skips only lane rows with one
-          (<code>Core/MMCA.Common.Infrastructure.Tests/Persistence/InternalCommands/Processing/InternalCommandProcessorTests.cs:557</code>,
-          <code>:575</code>, <code>:593</code>, <code>:629</code>); the lane claims only its type, charges a cooling receiver&#39;s row without renew
+          (<code>Core/MMCA.Common.Infrastructure.Tests/Persistence/InternalCommands/Processing/InternalCommandProcessorTests.cs:590</code>,
+          <code>:608</code>, <code>:626</code>, <code>:662</code>); the lane claims only its type, charges a cooling receiver&#39;s row without renew
           or handler, retries it on the normal backoff, dead-letters it on its last attempt and never opens or
           extends a cooldown from a charge
           (<code>.../InternalCommandLaneProcessorTests.cs:65</code>, <code>:271</code>, <code>:295</code>, <code>:318</code>, <code>:341</code>); host default handlers
@@ -486,7 +499,7 @@
           cooldown window per replica; every other due row of that receiver costs one database write and one
           attempt, so its backlog drains on the normal retry budget instead of accumulating
           (<code>InternalCommandLaneProcessor.cs:35-42</code>). Only HTTP 410 disables a subscription
-          (<code>DeliverWebhookInternalCommandHandler.cs:105-110</code>), so nothing else would bound that backlog.</li>
+          (<code>DeliverWebhookInternalCommandHandler.cs:106-111</code>), so nothing else would bound that backlog.</li>
           <li><strong>The subscription keeps its own tenant filter</strong> because the marker&#39;s interceptor would refuse it in an
           untenanted host (<code>ArchitectureRules.Tenancy.cs:16-19</code>).</li>
           </ul>
@@ -499,7 +512,7 @@
           creates can exceed, <code>WebhookSettings.cs:62-67</code>), so one tenant CAN dominate other tenants&#39; delivery
           latency. It cannot delay the shared queue.</li>
           <li><strong>A slow but succeeding receiver never cools down.</strong> A success closes the cooldown
-          (<code>InternalCommandLaneProcessor.cs:509-512</code>), and one receiver never runs two rows at once, so its backlog
+          (<code>InternalCommandLaneProcessor.cs:513-516</code>), and one receiver never runs two rows at once, so its backlog
           drains at one row per response time per replica.</li>
           <li><strong>The cooldown is per replica.</strong> It lives in memory (<code>ReceiverCooldowns.cs:3-7</code>), so R replicas each
           spend a real attempt per window on a failing receiver.</li>
@@ -545,7 +558,7 @@
           its rows dead-letter at about 0.2 per minute; a subscription receiving more events
           than that accumulates pending rows forever, each one more row the shared predicate scans past. Revisit
           if a subscription is ever disabled on sustained failure (today only 410 does it,
-          <code>DeliverWebhookInternalCommandHandler.cs:105-110</code>), which would bound the backlog another way.</li>
+          <code>DeliverWebhookInternalCommandHandler.cs:106-111</code>), which would bound the backlog another way.</li>
           <li><strong>A public &quot;any command names a lane&quot; API.</strong> It needs a public attribute or key with validation, a
           registry several callers write, a receiver-key notion only webhooks have, and per-lane metric
           documentation. The lane is an internal record
@@ -584,6 +597,31 @@
           Standard Webhooks library on the receiving side; the evidence is the unit and integration tiers named in
           Decision 8.</li>
           </ul>
+          <h2 id="revision-2026-11-23">Revision (2026-11-23)</h2>
+          <p>Re-verified against current source. The eight decisions, the lane design and the adopter wiring are
+          unchanged; the delivery handler&#39;s behavior on a host with webhooks disabled was not stated, and the
+          anchors in the changelog, the lane processor and the shared-loop tests moved.</p>
+          <ol>
+          <li><strong>A host with <code>Webhooks:Enabled</code> false fails a delivery row without sending.</strong> Before reading the
+          subscription, the handler returns <code>WebhookErrorCodes.DeliveryFailed</code> with the message &quot;Webhooks are
+          disabled in this host (Webhooks:Enabled is false).&quot; and logs one handler Warning (the logging decorator adds its own failure line), so the row retries,
+          dead-letters and stays requeue-able
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Webhooks/Delivery/DeliverWebhookInternalCommandHandler.cs:41-50</code>,
+          <code>:160-161</code>), pinned by
+          <code>MMCA.Common/Tests/Core/MMCA.Common.Application.Tests/Webhooks/DeliverWebhookInternalCommandHandlerTests.cs:305</code>.
+          Decision 4 now states it.</li>
+          <li><strong>The multi-replica consequence is stated.</strong> A host draining the queue with webhooks disabled still
+          picks a delivery row up in its shared loop (the shared-loop test uses a recording handler,
+          <code>MMCA.Common/Tests/Core/MMCA.Common.Infrastructure.Tests/Persistence/InternalCommands/Processing/InternalCommandProcessorTests.cs:608</code>,
+          <code>:613</code>), and the real handler there fails it per item 1, spending an attempt toward dead-letter.
+          Decision 7 now says so; the conclusion that every replica needs the same <code>Webhooks:Enabled</code> value is
+          unchanged.</li>
+          <li>Anchors re-verified against current source: <code>MMCA.Common/CHANGELOG.md:511</code> (entries <code>:547</code>, <code>:580</code>,
+          <code>:581</code>); <code>InternalCommandLaneProcessor.cs:495-517</code> (ApplyOutcome), <code>:513-516</code> (success close),
+          <code>:519-540</code> (charge), <code>:542-558</code> (release), <code>:560-576</code> (open cooldown), <code>:539</code>, <code>:573</code>, <code>:462</code>
+          (counters); <code>InternalCommandProcessorTests.cs:590</code>, <code>:608</code>, <code>:626</code>, <code>:662</code>;
+          <code>DeliverWebhookInternalCommandHandler.cs:106-111</code> (410 disables the subscription).</li>
+          </ol>
           
         <div class="doc-foot btn-row">
           <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
@@ -601,6 +639,7 @@
             <li><a href="#trade-offs">Trade-offs</a></li>
             <li><a href="#alternatives-rejected">Alternatives rejected</a></li>
             <li><a href="#consequences">Consequences</a></li>
+            <li><a href="#revision-2026-11-23">Revision (2026-11-23)</a></li>
             </ul>
           </nav>
         </aside>

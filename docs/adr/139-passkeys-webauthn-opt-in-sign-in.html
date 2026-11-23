@@ -261,7 +261,10 @@
           (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Auth/Passkeys/PasskeySettings.cs:24-25</code>, default
           false).
           Amended 2026-11-12: MMCA.ADC is the first consumer to carry the code path,
-          switched off in production (see Consequences).</p>
+          switched off in production (see Consequences).
+          Revised 2026-11-23: a passkey sign-in mints through the private <code>IssueTokensCoreAsync</code> (the
+          issuance choke point), not the protected <code>IssueTokensAsync</code> wrapper that now runs a second-factor
+          challenge first; Fido2 is at 4.3.3; anchors refreshed.</p>
           <h2 id="context">Context</h2>
           <p>A password plus a TOTP code is phishable: a convincing proxy page collects both and replays them
           within the code&#39;s window. The only passwordless path the framework offered was the emailed sign-in
@@ -269,15 +272,19 @@
           Nothing in MMCA.Common spoke WebAuthn.</p>
           <p>Five forces shaped the decision:</p>
           <ul>
-          <li><strong>The token path already has one choke point.</strong> Every interactive sign-in mints through
-          <code>AuthenticationServiceBase.IssueTokensAsync</code>
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Auth/AuthenticationServiceBase.cs:627-646</code>), which
-          opens a refresh session (<a href="097-multi-device-refresh-sessions.html">ADR-097</a>). A new sign-in method that
-          goes through it inherits sessions, sign-in history and revocation with no second path.</li>
+          <li><strong>The token path already has one choke point.</strong> Every interactive sign-in mints through the
+          private <code>AuthenticationServiceBase.IssueTokensCoreAsync</code>, which refuses a service account and
+          hands off to <code>AuthSessionIssuer.IssueAsync</code>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Auth/AuthenticationServiceBase.cs:725-743</code>), which
+          opens a refresh session (<a href="097-multi-device-refresh-sessions.html">ADR-097</a>). The framework&#39;s own
+          sign-ins call it directly (<code>AuthenticationServiceBase.cs:281</code>, <code>:397</code>, <code>:585</code>, <code>:626</code>); an app-level
+          sign-in goes through the protected <code>IssueTokensAsync</code> wrapper, which runs the second-factor
+          challenge first (<code>AuthenticationServiceBase.cs:691-713</code>). A new app-level sign-in method that mints
+          through <code>IssueTokensAsync</code> (and so reaches <code>IssueTokensCoreAsync</code>) inherits sessions, sign-in history and revocation with no second path.</li>
           <li><strong>The second-factor claim already exists.</strong> <code>mfa</code> is an amr-style claim whose presence is the
           assertion and whose value names the method (<code>otp</code>, <code>recovery</code>;
           <code>MMCA.Common/Source/Core/MMCA.Common.Shared/Auth/AuthClaimTypes.cs:49-69</code>), and a refresh carries it
-          over (<code>AuthenticationServiceBase.cs:391-396</code>).</li>
+          over (<code>AuthenticationServiceBase.cs:445-450</code>).</li>
           <li><strong>WebAuthn verification is security-critical parsing.</strong> Attestation and assertion verification means
           CBOR, COSE keys, signature formats and origin binding. The maintained .NET library for it,
           Fido2NetLib, pulls <code>NSec.Cryptography</code> and the native libsodium.</li>
@@ -296,8 +303,12 @@
           <ol>
           <li><strong>One package holds the WebAuthn library, behind a core contract.</strong> <code>MMCA.Common.Passkeys</code>
           references Application and the <code>Fido2</code> package and nothing else
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Passkeys/MMCA.Common.Passkeys.csproj:7-13</code>), pinned exactly at
-          4.3.2 (<code>MMCA.Common/Directory.Packages.props:103</code>). It supplies the internal
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Passkeys/MMCA.Common.Passkeys.csproj:7-13</code>), at 4.3.3
+          (<code>MMCA.Common/Directory.Packages.props:153</code>; the comment at <code>:148-152</code> states why it is kept to one
+          reviewed version and inside this package). The CPM entry is a bare version, which NuGet reads as
+          a floor (<code>[4.3.3, )</code>); what holds it to 4.3.3 is the committed lock file
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Passkeys/packages.lock.json:7-8</code>) restored with
+          <code>--locked-mode</code> in CI (<code>MMCA.Common/.github/workflows/ci.yml:146</code>). It supplies the internal
           <code>Fido2PasskeyCeremony</code> behind the core <code>IPasskeyCeremony</code>
           (<code>MMCA.Common/Source/Core/MMCA.Common.Passkeys/Fido2PasskeyCeremony.cs:17</code>). Two gates keep the
           boundary true:<ul>
@@ -328,8 +339,8 @@
           the row (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Auth/EFPasskeyCredentialStore.cs:74-78</code>).
           Nothing in the row is secret (<code>PasskeyCredential.cs:15-18</code>). <code>PasskeyCredentials</code> is mapped only
           while <code>Passkeys:Enabled</code> is true and only on the source <code>Passkeys:DataSourceName</code> names
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/ApplicationDbContext.cs:514-517</code>,
-          <code>:1038-1040</code>), the view-as grants shape; <code>DesignTimeDbContextOptions.EnablePasskeys</code> opens the
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/ApplicationDbContext.cs:588-592</code>,
+          <code>:1113-1118</code>), the view-as grants shape; <code>DesignTimeDbContextOptions.EnablePasskeys</code> opens the
           same gate for <code>dotnet ef</code>
           (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/Design/DesignTimeDbContextOptions.cs:129</code>).</li>
           <li><strong>Challenges are single-use, five minutes, in the shared store.</strong> <code>PasskeyChallenges.IssueAsync</code>
@@ -346,15 +357,16 @@
           (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Auth/Passkeys/PasskeyService.cs:264-271</code>).</li>
           <li><strong>A passkey sign-in is a normal sign-in with <code>mfa=passkey</code>.</strong>
           <code>AuthenticationServiceBase.SignInWithPasskeyAsync</code> runs the app&#39;s login-candidate check, sets the
-          method to <code>AuthClaimTypes.MultiFactorMethodPasskey</code> and mints through <code>IssueTokensAsync</code>
-          (<code>AuthenticationServiceBase.cs:549-578</code>; <code>AuthClaimTypes.cs:71-76</code>), so the token pair, the refresh
-          session and the sign-in history are the ones every other sign-in produces. A passkey is
-          possession plus the authenticator&#39;s own user verification, so it satisfies the second factor
-          itself. Failures answer one vague <code>AssertionFailed</code> to the caller and log the specific reason as a
+          method to <code>AuthClaimTypes.MultiFactorMethodPasskey</code> and mints through <code>IssueTokensCoreAsync</code>
+          (<code>AuthenticationServiceBase.cs:603-632</code>, candidate check <code>:617-621</code>, method <code>:623</code>, mint <code>:626</code>;
+          <code>AuthClaimTypes.cs:71-76</code>), so the token pair, the refresh session and the sign-in history are
+          the ones every other sign-in produces. A passkey is possession plus the authenticator&#39;s own user
+          verification, so it satisfies the second factor itself, which is why it skips the second-factor
+          challenge <code>IssueTokensAsync</code> would run (<code>AuthenticationServiceBase.cs:596-600</code>). Failures answer one vague <code>AssertionFailed</code> to the caller and log the specific reason as a
           Warning with no key material (<code>PasskeyService.cs:18-24</code>, <code>:277-281</code>).</li>
           <li><strong>Registration needs a recent interactive sign-in, judged by <code>auth_time</code>.</strong> Every interactive
           sign-in that opens a session stamps <code>auth_time</code> (Unix seconds), and a refresh carries it UNCHANGED
-          (<code>AuthClaimTypes.cs:78-91</code>; <code>AuthenticationServiceBase.cs:398-401</code>;
+          (<code>AuthClaimTypes.cs:98-111</code>; <code>AuthenticationServiceBase.cs:452-455</code>;
           <code>MMCA.Common/Source/Core/MMCA.Common.Application/Auth/Sessions/AuthSessionIssuer.cs:173-190</code>).
           <code>PasskeyStepUp.IsSatisfiedBy</code> admits a caller whose <code>auth_time</code> is at most <code>MaxSignInAge</code> (10
           minutes) old; a token with no <code>auth_time</code> never qualifies
@@ -373,7 +385,8 @@
           disabled (<code>:54</code>). The last passkey can be deleted only while the account still has a password or
           an external login, under a per-account lock so two concurrent deletes cannot both see &quot;one more
           remains&quot; (<code>PasskeyService.cs:153-179</code>; <code>PasskeyChallenges.cs:92-94</code>); the app answers the external
-          half by overriding <code>HasExternalLoginAsync</code> (<code>AuthenticationServiceBase.cs:586-610</code>, default false).</li>
+          half by overriding <code>HasExternalLoginAsync</code>, which <code>HasSignInMethodBesidesPasskeysAsync</code> asks
+          (<code>AuthenticationServiceBase.cs:640-652</code>; the virtual at <code>:654-664</code>, default false).</li>
           <li><strong>One more token-issuing proxy path.</strong> <code>auth/passkeys/signin</code> joins the same-origin proxy&#39;s
           default token-issuing paths
           (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI.Web/SameOriginProxy/SameOriginApiProxySettings.cs:33</code>,
@@ -381,13 +394,14 @@
           <li><strong>Web only.</strong> <code>IPasskeyCapability</code> defaults to <code>UnavailablePasskeyCapability</code>, so a MAUI head
           hides the passkey button and the add-passkey action; <code>AddBrowserDeviceCapabilities</code> swaps in the
           browser implementation over <code>passkeys.js</code>
-          (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/Capabilities/DependencyInjection.cs:57-59</code>,
-          <code>:113-114</code>). The login page offers passkeys only when <code>SignIn:OfferPasskeys</code> is true and the
-          capability is available (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI/Pages/Auth/Login.razor.cs:105-108</code>),
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/Capabilities/DependencyInjection.cs:60</code>,
+          <code>:119</code>). The login page offers passkeys only when <code>SignIn:OfferPasskeys</code> is true, the
+          capability is available and an <code>IPasskeyUIService</code> is registered
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI/Pages/Auth/Login.razor.cs:196-203</code>),
           and browser autofill asks for a challenge only where conditional mediation is available
           (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI/wwwroot/passkeys.js:137-143</code>).</li>
           <li><strong>Service accounts never sign in with a passkey.</strong> <code>SignInWithPasskeyAsync</code> treats an account
-          whose <code>IAuthUser.IsServiceAccount</code> is true as vanished (<code>AuthenticationServiceBase.cs:555-561</code>;
+          whose <code>IAuthUser.IsServiceAccount</code> is true as vanished (<code>AuthenticationServiceBase.cs:609-615</code>;
           <a href="140-machine-clients-oauth-client-credentials.html">ADR-140</a>).</li>
           </ol>
           <h2 id="rationale">Rationale</h2>
@@ -397,7 +411,7 @@
           <li><strong>A separate package keeps native code where ADR-134 puts vendor code.</strong> A host that does not
           reference <code>MMCA.Common.Passkeys</code> restores no Fido2, NSec or libsodium, and the core layers stay
           free of a native dependency; the two gates make that a build failure rather than a review comment.</li>
-          <li><strong>The existing choke point and claim.</strong> Minting through <code>IssueTokensAsync</code> with a new <code>mfa</code> value
+          <li><strong>The existing choke point and claim.</strong> Minting through <code>IssueTokensCoreAsync</code> with a new <code>mfa</code> value
           means sessions, sign-in history, revocation and every <code>IRequiresMfa</code> use case treat a passkey sign-in
           correctly with no change.</li>
           <li><strong><code>auth_time</code> measures the thing that matters.</strong> &quot;Recently signed in&quot; is a property of the sign-in,
@@ -409,7 +423,7 @@
           <h2 id="trade-offs">Trade-offs</h2>
           <ul>
           <li><strong>A new third-party dependency in the auth path,</strong> with a native library behind it. Mitigated by the
-          exact pin, the package boundary and the fact that a host opts in by reference.</li>
+          committed lock file restored in locked mode (decision 1), the package boundary and the fact that a host opts in by reference.</li>
           <li><strong>Passkeys are bound to the relying party id.</strong> A credential registered under one
           <code>Passkeys:RelyingPartyId</code> is never offered for another, so a later domain change orphans every
           passkey (<code>PasskeySettings.cs:13-17</code>). The production domain has to be settled before the feature
@@ -445,39 +459,78 @@
           <h2 id="consequences">Consequences</h2>
           <ul>
           <li>A host opts in by referencing <code>MMCA.Common.Passkeys</code> from its Identity service, calling
-          <code>AddPasskeys</code>, setting the RP id, name and origins, adding the <code>PasskeyCredentials</code> migration with
+          <code>AddPasskeys</code>, setting <code>Passkeys:Enabled</code>, <code>Passkeys:RelyingPartyId</code> and <code>Passkeys:Origins</code>, adding the <code>PasskeyCredentials</code> migration with
           <code>EnablePasskeys</code>, routing a <code>PasskeysControllerBase</code> subclass, setting <code>SignIn:OfferPasskeys</code> and
-          placing <code>PasskeysPanel</code> on the profile page (<code>MMCA.Common/UPGRADING.md:54-70</code>).</li>
+          placing <code>PasskeysPanel</code> on the profile page (<code>MMCA.Common/UPGRADING.md:544-560</code>).</li>
           <li>MMCA.ADC is the first consumer to carry the code path, and carries it switched OFF in
           production. Its Identity service references
-          the package (<code>MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/MMCA.ADC.Identity.Service.csproj:35</code>)
-          and calls <code>AddPasskeys</code> (<code>MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:170-174</code>),
+          the package (<code>MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/MMCA.ADC.Identity.Service.csproj:34</code>)
+          and calls <code>AddPasskeys</code> (<code>MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:190-194</code>),
           but its base <code>appsettings.json</code> sets <code>Passkeys:Enabled</code> false
           (<code>MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/appsettings.json:133-134</code>). Only the
           service&#39;s <code>appsettings.Development.json</code> (<code>:33-34</code> of that file) and the AppHost
-          (<code>MMCA.ADC/Source/Hosting/MMCA.ADC.AppHost/Program.cs:490</code>) turn it on, and no file under
+          (<code>MMCA.ADC/Source/Hosting/MMCA.ADC.AppHost/Program.cs:483-484</code>) turn it on, and no file under
           <code>MMCA.ADC/infra/</code> sets <code>Passkeys</code> or <code>SignIn:OfferPasskeys</code>, so in production every passkey route
           answers 404 (<code>PasskeysControllerBase.cs:53-54</code>, <code>:71-73</code>). <code>SignIn:OfferPasskeys</code> is true only in
           the web head&#39;s Development settings
           (<code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/appsettings.Development.json:13</code>) and through the
-          AppHost (<code>MMCA.ADC/Source/Hosting/MMCA.ADC.AppHost/Program.cs:492</code>); the web head hands it to the
-          browser (<code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs:195-199</code>), so the framework login
+          AppHost (<code>MMCA.ADC/Source/Hosting/MMCA.ADC.AppHost/Program.cs:486</code>). The base web-head settings
+          state it as false so the client config always carries it
+          (<code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/appsettings.json:48-54</code>), and the framework client-config
+          endpoint forwards the <code>SignIn</code> section to the browser with no ADC line
+          (<code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs:117-124</code>; <code>:128</code> on net11.0, <code>:130-134</code> on
+          the gated net10.0 line), so the framework login
           page&#39;s passkey button and ADC&#39;s profile Passkeys card
           (<code>MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.UI/Pages/Users/Profile/Profile.razor:110</code>)
           never render where it is false; the login button also needs an available passkey capability and a
-          registered passkey UI service (<code>Login.razor.cs:105-108</code>). The controller is a sealed <code>PasskeysControllerBase</code> subclass routed
+          registered passkey UI service (<code>Login.razor.cs:196-203</code>). The controller is a sealed <code>PasskeysControllerBase</code> subclass routed
           at <code>auth/passkeys</code>
           (<code>MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.API/Controllers/Passkeys/PasskeysController.cs:19-21</code>).
           The <code>AddPasskeyCredentials</code> migration creates the one <code>PasskeyCredentials</code> table with a unique
           index on <code>CredentialId</code> and an index on <code>UserId</code>
           (<code>MMCA.ADC/Source/Hosting/MMCA.ADC.Migrations.SqlServer.Identity/Migrations/20261112192534_AddPasskeyCredentials.cs:14-45</code>),
-          so once the migration runs the table exists, unused, while the switch is off (<code>Program.cs:171-173</code> of the Identity
+          so once the migration runs the table exists, unused, while the switch is off (<code>Program.cs:190-193</code> of the Identity
           service). ADC also overrides <code>HasExternalLoginAsync</code>. Turning passkeys on in production waits on a
           decision about ADC&#39;s production domain, because a passkey is bound to the relying-party id
           (<code>appsettings.json:129-130</code> of the Identity service; recorded in
           <a href="../governance/adc-RemediationBacklog.html">the ADC backlog</a>). Store and Helpdesk leave it off.</li>
           <li><code>MMCA.Common/FACTS.md</code> lists the new package.</li>
           </ul>
+          <h2 id="revision-2026-11-23">Revision (2026-11-23)</h2>
+          <p>Re-verified against current source. The package boundary, the gated hard-deleted table, the
+          single-use challenges, the signature-counter rule, <code>mfa=passkey</code>, the <code>auth_time</code> step-up, the
+          controller base, web-only capability and ADC&#39;s switched-off adoption are unchanged. What moved is the
+          name of the issuance choke point, the Fido2 version and most anchors.</p>
+          <ol>
+          <li><strong>The choke point is <code>IssueTokensCoreAsync</code>.</strong> <code>IssueTokensAsync</code> is now a protected wrapper that
+          runs a second-factor challenge with no code before issuing
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Auth/AuthenticationServiceBase.cs:691-713</code>); the
+          issuance itself is the private <code>IssueTokensCoreAsync</code>, which refuses a service account and calls
+          <code>AuthSessionIssuer.IssueAsync</code> (<code>AuthenticationServiceBase.cs:725-743</code>). The framework&#39;s own
+          sign-ins call it directly (<code>:281</code>, <code>:397</code>, <code>:585</code>), and so does <code>SignInWithPasskeyAsync</code>
+          (<code>:626</code>), so a passkey sign-in deliberately skips the second-factor challenge
+          (<code>:596-600</code>). Context, decision 7 and Rationale now name it.</li>
+          <li><strong>Fido2 is at 4.3.3</strong> (<code>MMCA.Common/Directory.Packages.props:153</code>). The entry is a bare CPM
+          version (a floor, <code>[4.3.3, )</code> in <code>MMCA.Common/Source/Core/MMCA.Common.Passkeys/packages.lock.json:7</code>),
+          held to one version by the lock file and the CI <code>--locked-mode</code> restore
+          (<code>MMCA.Common/.github/workflows/ci.yml:146</code>); decision 1 and Trade-offs say so.</li>
+          <li><strong>The login gate names its third condition.</strong> <code>OffersPasskeys()</code> also requires a registered
+          <code>IPasskeyUIService</code> (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI/Pages/Auth/Login.razor.cs:200-203</code>);
+          decision 11 now states it, as Consequences already did.</li>
+          <li><strong>The web head forwards <code>SignIn</code> through the framework.</strong> ADC&#39;s web head has no line of its own for
+          <code>OfferPasskeys</code>: the framework client-config endpoint forwards the host&#39;s <code>SignIn</code> section
+          (<code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs:117-124</code>; <code>:128</code> on net11.0, <code>:130-134</code> on
+          net10.0), and the base
+          <code>appsettings.json</code> states it as false (<code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/appsettings.json:54</code>).</li>
+          <li>Anchors re-verified against current source: <code>AuthenticationServiceBase.cs:445-450</code> (mfa carried on
+          refresh), <code>:452-455</code> (auth_time carried), <code>:603-632</code> (<code>SignInWithPasskeyAsync</code>), <code>:609-615</code>
+          (service account as vanished), <code>:640-652</code> and <code>:654-664</code> (<code>HasExternalLoginAsync</code>);
+          <code>AuthClaimTypes.cs:98-111</code> (<code>AuthTime</code>); <code>ApplicationDbContext.cs:588-592</code>, <code>:1113-1118</code>;
+          <code>MMCA.Common.UI/Services/Capabilities/DependencyInjection.cs:60</code>, <code>:119</code>;
+          <code>Login.razor.cs:196-203</code>; <code>MMCA.Common/UPGRADING.md:544-560</code>;
+          <code>MMCA.ADC.Identity.Service.csproj:34</code>; the Identity service&#39;s <code>Program.cs:190-194</code>;
+          <code>MMCA.ADC.AppHost/Program.cs:483-484</code>, <code>:486</code>.</li>
+          </ol>
           <h2 id="related">Related</h2>
           <p><a href="036-external-oauth-login.html">ADR-036</a> (the exchange-code burn the challenge store copies),
           <a href="050-jwt-refresh-token-rotation.html">ADR-050</a> (the rotation that carries <code>mfa</code> and <code>auth_time</code>),
@@ -503,6 +556,7 @@
             <li><a href="#trade-offs">Trade-offs</a></li>
             <li><a href="#alternatives-rejected">Alternatives rejected</a></li>
             <li><a href="#consequences">Consequences</a></li>
+            <li><a href="#revision-2026-11-23">Revision (2026-11-23)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

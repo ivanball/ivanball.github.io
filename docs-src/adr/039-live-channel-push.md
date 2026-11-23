@@ -11,6 +11,8 @@ Revised 2026-09-25 (re-anchored the backplane-prefix citation, which now lives i
 Revised 2026-10-21: anchors refreshed after the ADC live poll manage endpoint moved.
 Revised 2026-10-26: linked ADR-135 as the owner of the application namespace behind the backplane
 prefix; anchors refreshed after the connection-cap, backplane-prefix and poll-read-scope code moved.
+Revised 2026-11-23: anchors refreshed after the backplane-prefix registration, the application
+namespace resolver and the ADC live poll manage endpoint moved.
 ## Context
 
 Conference-day features (live polls, session Q&A, live result counters) need sub-second fan-out of
@@ -188,6 +190,22 @@ anchors have moved since the 2026-10-21 refresh.
      and applies it at `:109` and `:124`.
    - The manage endpoint (`GET /api/livepolls/manage`) is still declared at
      `MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.API/Controllers/LivePollsController.cs:186`.
+
+## Revision (2026-11-23)
+Re-verified against current source. No change to the channel model, the per-application backplane
+prefix or the ADC live poll manage surface recorded on 2026-09-07. Three anchors recorded in the
+earlier revisions have moved; those sections stay as written and the current anchors are listed
+here.
+
+1. Anchors re-verified against current source:
+   - The Redis backplane prefix is resolved through `ApplicationNamespace.Resolve` at
+     `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.Notifications.cs:59`
+     and applied as the channel prefix at `:60-61`.
+   - The resolver `ApplicationNamespace.Resolve(IConfiguration?, IHostEnvironment?)` is declared at
+     `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Configuration/ApplicationNamespace.cs:54`.
+   - The manage endpoint (`GET /api/livepolls/manage`) carries its route attribute at
+     `MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.API/Controllers/LivePollsController.cs:172`,
+     with `GetSessionManagePollsAsync` declared at `:176`.
 
 ## Related
 

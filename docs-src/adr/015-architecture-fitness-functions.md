@@ -57,6 +57,11 @@ cloud vendor target's match list and anchors are refreshed. See Revision (2026-1
 Revised 2026-10-28: the release roll-over ran at v1.264.0, so every unshipped file is header-only
 again and the 25 shipped baselines hold 8,662 declarations (the `MMCA.Common.Gcp` surface now
 shipped); the `ui-e2e`, `CHANGELOG.md` and `AGENTS.md` anchors are refreshed. See Revision (2026-10-28) at the end.
+Revised 2026-11-23: the whole-solution test floor is per framework (`--minimum-expected-tests 11250`
+on each of the `net10.0` and `net11.0` legs, replacing the single 2000 floor), the public API gate
+covers 29 projects with 11,665 shipped declarations, the cloud vendor build target names
+`MMCA.Common.Azure.Startup` as a fifth adapter, and the build layer's further per-package boundary
+targets are recorded.
 
 ## Context
 The codebase rests on invariants that are easy to state and easy to erode by accident: clean-
@@ -103,9 +108,11 @@ and MMCA.Helpdesk (`Tests/Architecture/MMCA.Helpdesk.Architecture.Tests/Architec
 boundary itself is recorded in [ADR-120](120-governed-chat-client-boundary.md).
 
 These tests run inside the normal `dotnet test` / CI tier, so a violated invariant fails CI like any
-other test (the whole-solution run that carries them is additionally floored at
-`--minimum-expected-tests 2000`, `.github/workflows/ci.yml:163`, so a discovery or filter regression
-that silently drops the suite fails the job instead of passing green on a handful of tests). Centralizing the rules in a package, rather than copying them per repo, means a new
+other test (the whole-solution run that carries them runs once per target framework, the
+`build-and-test-tfm` matrix over `net10.0` and `net11.0` (`.github/workflows/ci.yml:110`), and each
+leg is additionally floored at `--minimum-expected-tests 11250` (`:177`), so a discovery or filter
+regression that silently drops the suite fails the leg instead of passing green on a handful of
+tests). Centralizing the rules in a package, rather than copying them per repo, means a new
 invariant is written once and inherited by every consumer.
 
 ## Rationale
@@ -932,6 +939,88 @@ found missing has since run, so its items 3 and 4 are dated readings) and the an
    "twenty-one today"; it now reads "twenty-one by 2026-10-01", the audit that sentence was written
    in and the first entry that counts 21, and the current pair count is the 25 in the 2026-10-26
    entry.
+
+## Revision (2026-11-23): per-framework test floor, 29 baseline pairs, the fifth cloud adapter
+Re-verified against current source at v1.315.0 (`MMCA.Common/FACTS.md:14`). The two enforcement
+layers plus the public API gate, the `MMCA.Common.UI.Maui` exclusion, the RS rule severities, both
+cloud vendor rules and their two Cosmos exemptions, and the language-model isolation pair are as the
+earlier entries describe. What moved is the CI test floor, the baseline pair count and content, the
+cloud adapter list, and most anchors; the build layer also holds more boundaries than this record named.
+
+1. **The whole-solution test floor is per framework.** `build-and-test-tfm`
+   (`MMCA.Common/.github/workflows/ci.yml:100`) is a matrix over `tfm: [net10.0, net11.0]` (`:110`),
+   and each leg runs `MMCA.Common.slnx` with `--framework` and `--minimum-expected-tests 11250`
+   (`:177`, rationale in the comment at `:171-175`). The single `--minimum-expected-tests 2000` floor that
+   the Decision and several earlier entries cite is a dated reading, under anchors that moved with
+   the file (`ci.yml:175-183` in the 2026-08-23 and 2026-09-11 entries, `:161` in the 2026-10-01
+   entry, `:163` from the 2026-10-07 entry through the 2026-10-28 one); the Decision is corrected in
+   place. The legs, plus `build-and-test-checks` (`:188`, which
+   carries the FACTS gate at `:212`), are aggregated by the required `build-and-test` job (`:236`),
+   and a docs-only PR still skips the heavy steps through the `changes` job (`:45`). The architecture
+   test project still runs there: its `MMCA.Common.slnx` entry is `:79`. `release.yml` keeps one
+   combined two-framework run floored at 22500 (`MMCA.Common/.github/workflows/release.yml:101`).
+2. **The public API gate covers 29 projects.** `PublicAPI.Shipped.txt` / `PublicAPI.Unshipped.txt`
+   pairs exist in 29 `Source` projects, the four additions since the 2026-10-26 count being
+   `MMCA.Common.Passkeys`, `MMCA.Common.Azure.Startup`, `MMCA.Common.ServiceHost` and
+   `MMCA.Common.Mcp`. The exclusion is unchanged (`MMCA.Common/Directory.Build.props:148`), so the gate
+   still covers every published package except `MMCA.Common.UI.Maui`; the package count is
+   `MMCA.Common/FACTS.md:20`.
+3. **The shipped baselines hold 11,665 declarations across 11,694 non-empty lines** in the 29
+   `PublicAPI.Shipped.txt` files, each carrying one `#nullable enable` header, with no `*REMOVED*`
+   markers (the 2026-10-28 entry read 8,662 across 8,687 in 25 files). The `MMCA.Common` metapackage's
+   file (`Source/MMCA.Common/PublicAPI.Shipped.txt:1`) is still the only header-only shipped file, and
+   all 29 `PublicAPI.Unshipped.txt` files are header-only.
+4. **The cloud vendor build target has a fifth adapter.** `MMCA.Common.Azure.Startup` joins
+   `MMCA.Common.Azure`, `MMCA.Common.Aws`, `MMCA.Common.Gcp` and `MMCA.Common.Testing.Azure` both in the
+   `_MmcaIsCloudAdapter` property that exempts an adapter from the target
+   (`MMCA.Common/Source/Build/MMCA.Common.LayerEnforcement.targets:129`) and in the forbidden adapter
+   `ProjectReference` list a core project may not carry (`:150`). The four-adapter list in the
+   2026-10-26 entry is a dated reading for the target. The runtime rule's lists still name four
+   adapters (namespace roots at
+   `MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Rules/Layering/ArchitectureRules.CloudVendors.cs:38-41`,
+   assembly prefixes at `:59-62`) and catch `MMCA.Common.Azure.Startup` only through the
+   `MMCA.Common.Azure` entry.
+5. **The build layer holds more boundaries than the three this record names.** Besides the layer
+   guards (`MMCA.Common.LayerEnforcement.targets:20`, `:38`, `:53`, `:67`), `EnforceAiLayerBoundary`
+   (`:86`) and `EnforceCloudVendorBoundary` (`:131`), the same file carries
+   `EnforcePasskeysBoundary` (`:167`), `EnforceUILayerBoundary` (`:185`), `EnforceUIMauiLayerBoundary`
+   (`:203`), `EnforceUIWebLayerBoundary` (`:221`), `EnforceTestingAspireLayerBoundary` (`:248`),
+   `EnforceServiceHostLayerBoundary` (`:279`) and `EnforceAzureStartupBoundary` (`:303`), all of the
+   same shape: a pre-build reference check that fails the build. A consumer-facing counterpart,
+   `MMCA.Common/Source/Build/MMCA.Common.Shared.targets`, ships in the `MMCA.Common.Shared` package under
+   `buildTransitive/` (`:4-6`), so NuGet imports it into every consuming project. Its
+   `MmcaEnforceConsumerLayerBoundaries` target (`:66`) fires only under the condition at `:68`: a
+   project not named `MMCA.Common*` whose name ends in `.Shared`, `.Domain`, `.Application`,
+   `.Infrastructure`, `.API` or `.UI` (`:46-55`), unless it opts out with
+   `MmcaLayerEnforcement=false` (`:36`, `:43`). Hosts, `.Contracts`, tests and migrations are not
+   judged (`:32-34`). It is the reference-level mirror of the runtime purity, transport and module
+   rules (`:8-12`).
+6. **Anchors re-verified against current source:** the `ui-e2e` run with `--minimum-expected-tests 1`
+   is `ci.yml:489` (step name `:484`). The live method and base counts are `MMCA.Common/FACTS.md:98`
+   and the executed count `:101`, where the Status block's earlier sentences and the revisions cite
+   `:51` / `:54`, `:81` / `:84` and `:89-92`; read `FACTS.md` for the values. The `PublicApiAnalyzers`
+   5.6.0 `PackageVersion` is `MMCA.Common/Directory.Packages.props:368` (its comment ending on
+   `:367`). In `MMCA.Common/Directory.Build.props`: the public API gate comment `:138-147` (RS0016 /
+   RS0017 at `:140-141`, the Maui rationale `:144-146`), the ItemGroup condition `:148`, the
+   `PackageReference` `:149-152`, the `AdditionalFiles` `:153-154`, the RS0041 rationale `:34-38`, the
+   `NoWarn` line `:46` (now `S8970;RS0041;S3881`) and `TreatWarningsAsErrors` `:19`. In
+   `MMCA.Common/.editorconfig`: the global `severity = error` `:313`, the PublicApiAnalyzers overrides
+   header `:837-842` (RS0016 / RS0017 inheriting at `:839-840`), RS0026 / RS0027 `error` at `:849-850`
+   (rationale `:844-848`), RS0041 `none` at `:854` (comment `:851-853`) and RS0051-RS0056 `none` at
+   `:857-862` (comment `:855-856`). In the cloud vendor target: the exemptions `:135-136`, their
+   rationale `:118-125` with the `Microsoft.Azure.Cosmos` allowance `:120-123`, and the two errors
+   `:152` (vendor) and `:154` (adapter). `CloudVendorIsolationTestsBase` is at
+   `CloudVendorIsolationTestsBase.cs:16`, its two facts at `:28` and `:32` (methods `:29`, `:33`), and
+   the `AllowedVendorPrefixes` hook at `:25` (summary `:21-24`); `AiDependencyIsolationTestsBase`
+   `:19`, facts `:23` / `:27` still resolve. In `ArchitectureRules.CloudVendors.cs` the no-dot comment
+   ends at `:29`, the `Azure`, `Microsoft.Azure` and `Amazon` roots are `:30-32`, `Google`,
+   `FirebaseAdmin` and `Grpc.Auth` `:33-35`, `MMCA.Common.Gcp` `:40`, and the dotted assembly prefixes
+   start at `:51`. `ArchitectureRules.Protos.cs` has its entry point at `:38` (the body's `:37` is now
+   the closing `</remarks>`). In `MMCA.Common/CHANGELOG.md`: [1.265.1] `:944`, [1.265.0] `:950`,
+   [1.264.0] `:956`, [1.257.0] `:1049` with the dot-free type-rule fix `:1074`, [1.255.0] `:1091` with
+   the cloud vendor rule names `:1099`, and the v1.153.0 heading `:4858` with its "Three new build
+   gates" bullet `:4913` (PublicApiAnalyzers on `:4917`). The `Promote-PublicApi.ps1` roll-over
+   sentence is `MMCA.Common/AGENTS.md:39`.
 
 ## Related
 ADR-009 (resilience gate), ADR-010 (event-version gate), ADR-016 (MassTransit pin gate, and the

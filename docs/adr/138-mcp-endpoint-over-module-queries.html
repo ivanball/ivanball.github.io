@@ -262,7 +262,8 @@
           for server-to-server callers, OAuth 2.1 for desktop clients stays deferred, and ADC&#39;s tools are
           scoped to one event with a <code>list_events</code> tool. See the Revision (2026-11-08) at the end.
           Revised 2026-11-08 (MMCA.Common v1.282.0): a tool now declares <code>[McpToolPublic]</code> or <code>[McpToolPermission]</code>, enforced at test time; the runtime rule is unchanged. See the Revision (2026-11-08, access declaration) at the end.
-          Revised 2026-11-17 (MMCA.Common v1.300.0): the <code>mcp</code> policy no longer sits beside a <code>UserPolicy</code>, which was removed with <code>FixedPolicy</code> because no consumer named them; <code>auth-ip</code> and <code>mcp</code> are the only named rate-limit policies, and the rate-limit anchors are refreshed. See the Revision (2026-11-17) at the end.</p>
+          Revised 2026-11-17 (MMCA.Common v1.300.0): the <code>mcp</code> policy no longer sits beside a <code>UserPolicy</code>, which was removed with <code>FixedPolicy</code> because no consumer named them; <code>auth-ip</code> and <code>mcp</code> are the only named rate-limit policies, and the rate-limit anchors are refreshed. See the Revision (2026-11-17) at the end.
+          Revised 2026-11-23: <code>MapCommonMcp</code> now refuses startup when a registered tool declares neither access attribute (MMCA.Common v1.313.0), so the declaration is enforced at startup as well as by the test, superseding the 2026-11-08 test-time-only sentence above; <code>McpHiddenText</code> is public with a <code>Strip</code> for tool results (v1.315.0); ADC has adopted the endpoint and wraps speaker-written result text as untrusted. See the Revision (2026-11-23) at the end.</p>
           <h2 id="context">Context</h2>
           <p>AI clients (Claude Code, Claude Desktop, any Model Context Protocol client) can query an application
           through tools a server exposes. A consumer that wants to offer its data to such a client had no
@@ -289,13 +290,13 @@
           <h2 id="decision">Decision</h2>
           <p><strong>An opt-in Presentation package wraps the official SDK, exposes read-only tools over the existing
           query handlers, and governs each tool by configuration, permission and rate limit. Startup is refused
-          when any description hides text.</strong></p>
+          when any description hides text or any tool leaves its access undeclared.</strong></p>
           <ol>
           <li><strong>One package, the only reference to the SDK.</strong> <code>MMCA.Common.Mcp</code> sits under <code>Source/Presentation</code>,
           references <code>MMCA.Common.API</code> and <code>ModelContextProtocol.AspNetCore</code>
           (<code>MMCA.Common/Source/Presentation/MMCA.Common.Mcp/MMCA.Common.Mcp.csproj:11-12</code>), pinned exactly at
-          2.4.0 (<code>MMCA.Common/Directory.Packages.props:123</code>), and is in the solution
-          (<code>MMCA.Common/MMCA.Common.slnx:21</code>). No other framework package references it.</li>
+          2.4.0 (<code>MMCA.Common/Directory.Packages.props:181</code>), and is in the solution
+          (<code>MMCA.Common/MMCA.Common.slnx:25</code>). No other framework package references it.</li>
           <li><strong>Two calls opt a host in.</strong> <code>builder.AddCommonMcpServer(options =&gt; ...)</code>
           (<code>MMCA.Common/Source/Presentation/MMCA.Common.Mcp/McpHostingExtensions.cs:52</code>) binds the <code>Mcp</code>
           section with <code>ValidateOnStart</code> (<code>:57-63</code>; <code>McpSettings.cs:22</code>) and, only when <code>Mcp:Enabled</code> is true
@@ -303,10 +304,10 @@
           streamable HTTP transport (<code>:77-78</code>), the two governance filters (<code>:79-83</code>) and the tool classes the
           host names, by type (<code>CommonMcpOptions.ToolTypes</code>, <code>:87</code>) or by assembly
           (<code>CommonMcpOptions.ToolAssemblies</code>, <code>:89-92</code>; <code>CommonMcpOptions.cs:12</code>, <code>:15</code>).
-          <code>app.MapCommonMcp()</code> (<code>:112</code>) maps <code>/mcp</code> (<code>DefaultPath</code>, <code>:41</code>) anonymous at the HTTP layer with
-          the <code>mcp</code> rate-limit policy (<code>:130-132</code>). With MCP disabled nothing is mapped, so the path answers 404
-          (<code>:100-106</code>, <code>:117-126</code>); with <code>Mcp:Enabled</code> true but <code>AddCommonMcpServer</code> never called, the host
-          refuses to start (<code>:119-123</code>).</li>
+          <code>app.MapCommonMcp()</code> (<code>:114</code>) maps <code>/mcp</code> (<code>DefaultPath</code>, <code>:41</code>) anonymous at the HTTP layer with
+          the <code>mcp</code> rate-limit policy (<code>:134-136</code>). With MCP disabled nothing is mapped, so the path answers 404
+          (<code>:105-106</code>, <code>:119-128</code>); with <code>Mcp:Enabled</code> true but <code>AddCommonMcpServer</code> never called, the host
+          refuses to start (<code>:123-124</code>).</li>
           <li><strong>Tools are read-only wrappers over query handlers.</strong> A tool is a static <code>[McpServerToolType]</code> class
           in the module&#39;s API project, each method <code>[McpServerTool(ReadOnly = true)]</code> with a <code>[Description]</code>,
           injecting the query handler the HTTP endpoint injects, so the decorator pipeline applies to a tool
@@ -319,18 +320,19 @@
           call to it is refused with <code>Mcp.ToolUnavailable</code> (<code>:63-66</code>).</li>
           <li><strong>Permission.</strong> An optional <code>[McpToolPermission(&quot;area:capability&quot;)]</code> on the tool method
           (<code>McpToolPermissionAttribute.cs:11</code>) is checked through <code>IAuthorizationService</code> against the same
-          <code>perm:</code> policy <code>[HasPermission]</code> resolves (<code>McpToolGovernance.cs:102-119</code>;
+          <code>perm:</code> policy <code>[HasPermission]</code> resolves (<code>McpToolGovernance.cs:130-145</code>;
           <code>MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/PermissionPolicy.cs:12</code>, <code>:17</code>), so a
           role grant or a direct permission claim admits the caller exactly as on the module&#39;s HTTP endpoint.
-          A tool without the attribute is public. A caller who lacks the permission, or is not signed in, does
+          A tool without the attribute is public at runtime (<code>McpToolGovernance.cs:132-135</code>), and must carry
+          <code>[McpToolPublic]</code> instead or the endpoint refuses to start (point 6). A caller who lacks the permission, or is not signed in, does
           not see the tool in <code>tools/list</code> (<code>:38</code>) and is refused with <code>Mcp.Forbidden</code> (<code>:68-74</code>).</li>
           <li><strong>Rate.</strong> <code>Mcp:Tools:&lt;name&gt;:PermitsPerMinute</code> (<code>McpToolSettings.cs:17</code>; validated to be 1 or more,
           <code>McpHostingExtensions.cs:60-62</code>) limits one caller per tool, keyed by user id, else client IP, else
-          one shared <code>anonymous</code> key (<code>McpToolGovernance.cs:121-124</code>), in a one-minute fixed window with no
+          one shared <code>anonymous</code> key (<code>McpToolGovernance.cs:147-150</code>), in a one-minute fixed window with no
           queue (<code>McpToolRateLimiter.cs:16-25</code>); the call after the limit is refused with <code>Mcp.RateLimited</code>
           (<code>McpToolGovernance.cs:76-83</code>).</li>
           <li><strong>Refusals are tool results, not exceptions.</strong> Each is an <code>IsError</code> result whose text carries the
-          code (<code>:126-132</code>), so the model reads it and stops rather than retrying blindly. The filtered
+          code (<code>:154-158</code>), so the model reads it and stops rather than retrying blindly. The filtered
           <code>tools/list</code> is marked private to the caller (<code>:46-47</code>), since it depends on who asked.</li>
           <li>The filters read <code>IOptionsMonitor&lt;McpSettings&gt;.CurrentValue</code> on every request (<code>:32</code>, <code>:61</code>), and a
           changed permit count starts a fresh window (<code>McpToolRateLimiter.cs:13-18</code>).</li>
@@ -338,24 +340,29 @@
           </li>
           <li><strong>The endpoint is metered as a whole too.</strong> <code>AddCommonRateLimiting</code> registers the <code>mcp</code> policy beside
           the global limiter (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/WebApplicationBuilderExtensions.RateLimiting.cs:57</code>,
-          <code>:439</code>), and <code>MapCommonMcp</code> requires it on the mapped endpoint
-          (<code>MMCA.Common/Source/Presentation/MMCA.Common.Mcp/McpHostingExtensions.cs:132</code>): one bucket per user
-          id, then name, then client IP (<code>WebApplicationBuilderExtensions.RateLimiting.cs:208-224</code>), at
+          <code>:442</code>), and <code>MapCommonMcp</code> requires it on the mapped endpoint
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.Mcp/McpHostingExtensions.cs:136</code>): one bucket per user
+          id, then name, then client IP (<code>WebApplicationBuilderExtensions.RateLimiting.cs:209-224</code>), at
           <code>RateLimiting:McpPermitLimit</code> requests per minute (default 60, <code>[Range(1, 1_000_000)]</code>,
           <code>MMCA.Common/Source/Presentation/MMCA.Common.API/RateLimiting/RateLimitingSettings.cs:42-43</code>), so an
           anonymous caller of a public tool is metered, unlike under the global limiter, which exempts
           anonymous traffic outside the hub paths (<code>WebApplicationBuilderExtensions.RateLimiting.cs:102</code>). A
           caller with no user and no IP gets no limiter (<code>:215</code>), the same fail-open choice as the <code>auth-ip</code>
           policy (<code>:345</code>).</li>
-          <li><strong>Startup refuses hidden text (R023).</strong> Before mapping, <code>MapCommonMcp</code> runs
+          <li><strong>Startup refuses hidden text (R023) and undeclared access.</strong> Before mapping, <code>MapCommonMcp</code> runs
           <code>ToolDescriptionInspector.ThrowIfHiddenText</code> over the server instructions, title and description, and
           over every tool&#39;s name, title, annotation title, description and each string of its input and output
           schema, where parameter descriptions live
-          (<code>MMCA.Common/Source/Presentation/MMCA.Common.Mcp/ToolDescriptionInspector.cs:55-93</code>,
-          <code>McpHostingExtensions.cs:128</code>). A Unicode format character (category Cf: zero-width characters, bidi
-          controls, <code>:36</code>), a tag character U+E0000 to U+E007F (<code>:97</code>) or an HTML comment opener <code>&lt;!--</code>
-          (<code>:16</code>) fails startup with a message naming each location (<code>:88-92</code>). Visible text, accented letters
-          and emoji included, passes (<code>MMCA.Common/Tests/Presentation/MMCA.Common.Mcp.Tests/ToolDescriptionInspectionTests.cs:79-82</code>).</li>
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.Mcp/ToolDescriptionInspector.cs:25-93</code>,
+          <code>McpHostingExtensions.cs:131</code>). The character checks live in the public <code>McpHiddenText</code> class: a
+          Unicode format character (category Cf: zero-width characters, bidi controls,
+          <code>MMCA.Common/Source/Presentation/MMCA.Common.Mcp/McpHiddenText.cs:36</code>), a tag character U+E0000 to
+          U+E007F (<code>:83</code>) or an HTML comment opener <code>&lt;!--</code> (<code>:16</code>) fails startup with a message naming each
+          location (<code>ToolDescriptionInspector.cs:54-57</code>). Visible text, accented letters and emoji included,
+          passes (<code>MMCA.Common/Tests/Presentation/MMCA.Common.Mcp.Tests/ToolDescriptionInspectionTests.cs:79-82</code>).
+          It then runs <code>McpToolGovernance.ThrowIfAccessUndeclared</code> (<code>McpHostingExtensions.cs:132</code>;
+          <code>McpToolGovernance.cs:95-112</code>), which fails startup with a message naming every registered tool
+          that carries neither <code>[McpToolPermission]</code> nor <code>[McpToolPublic]</code>.</li>
           <li><strong>Authentication: public tools anonymous, permissioned tools bearer.</strong> The endpoint allows anonymous
           callers; a permissioned tool is listed and callable only for a caller the host&#39;s bearer handler signed
           in with that permission, so <code>UseAuthentication</code> must run before the endpoint, as it does for
@@ -391,7 +398,7 @@
           endpoint to monitor.</li>
           <li><strong>The per-tool limit is per instance.</strong> <code>McpToolRateLimiter</code> is an in-memory partitioned limiter, so N
           replicas allow up to N times <code>PermitsPerMinute</code> per caller; the endpoint-wide <code>mcp</code> policy can use the
-          shared Redis counters when <code>RateLimiting:Distributed</code> is on (<code>WebApplicationBuilderExtensions.RateLimiting.cs:241-248</code>).</li>
+          shared Redis counters when <code>RateLimiting:Distributed</code> is on (<code>WebApplicationBuilderExtensions.RateLimiting.cs:224</code>, <code>:268</code>).</li>
           <li><strong>Anonymous callers behind one address share a bucket.</strong> The per-tool key falls back to the client IP,
           so users behind one NAT share a public tool&#39;s limit, and a caller with neither identity shares the
           <code>anonymous</code> key.</li>
@@ -411,8 +418,10 @@
           for an operator&#39;s AI client would be a permanent read path to all data, outside the module
           boundaries and their authorization. Diagnostics stay with the telemetry backends.</li>
           <li><strong>Scanning tool results for injected instructions</strong> (dropped 2026-11-06). Results are module data
-          returned by the host&#39;s own query handlers; the check this record keeps is on descriptions, the text
-          the host authors and a model reads as guidance.</li>
+          returned by the host&#39;s own query handlers; the startup check this record keeps is on descriptions,
+          the text the host authors and a model reads as guidance. A tool that returns third-party text
+          removes its invisible characters with <code>McpHiddenText.Strip</code> (<code>McpHiddenText.cs:63-78</code>), which
+          detects nothing and only cleans; see the Revision (2026-11-23).</li>
           <li><strong>Building the tools on Common.AI&#39;s <code>IChatClient</code></strong> (2026-11-07). The server never calls a model: the
           model is the user&#39;s own client. Coupling the package to the AI boundary would add a dependency with
           nothing to do.</li>
@@ -420,10 +429,11 @@
           <h2 id="consequences">Consequences</h2>
           <ul>
           <li>Each consumer that offers MCP adds two calls, its tool classes and, behind a gateway, a route to
-          <code>/mcp</code>. ADC is the intended first adopter, with public schedule, session and speaker tools; Store and
+          <code>/mcp</code>. ADC has adopted it in its Conference service, with public schedule, session and speaker
+          tools (<code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:367</code>, <code>:378</code>); Store and
           Helpdesk leave it off.</li>
-          <li><code>MMCA.Common/FACTS.md</code> lists the 27th package and its single framework reference
-          (<code>FACTS.md:32</code>, <code>:67</code>).</li>
+          <li><code>MMCA.Common/FACTS.md</code> lists the package and its single framework
+          reference, <code>MMCA.Common.API</code>; no other package&#39;s row names it.</li>
           <li>A host that offers only public data needs no privacy-notice change for this endpoint: no personal
           data is exposed and the AI provider is the user&#39;s own client.</li>
           </ul>
@@ -510,6 +520,68 @@
           <li><code>auth-ip</code> and <code>mcp</code> are the only named policies <code>AddCommonRateLimiting</code> registers; a host that wants
           a general per-user tightening policy registers its own.</li>
           </ul>
+          <h2 id="revision-2026-11-23">Revision (2026-11-23)</h2>
+          <p>Re-verified against current source. The package boundary, the per-tool filters, the endpoint-wide
+          <code>mcp</code> policy and the hidden-text inspection of descriptions are unchanged. What moved: undeclared
+          access is now refused at startup rather than only by a test, the hidden-text checks became a public
+          class with a cleaner for tool results, and ADC has adopted the endpoint.</p>
+          <ol>
+          <li><strong>Undeclared access fails startup</strong> (MMCA.Common v1.313.0, a breaking change,
+          <code>MMCA.Common/CHANGELOG.md:62</code>). <code>MapCommonMcp</code> calls <code>McpToolGovernance.ThrowIfAccessUndeclared</code>
+          after the hidden-text check
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.Mcp/McpHostingExtensions.cs:132</code>), and it throws with
+          a message naming every registered tool that carries neither <code>[McpToolPermission]</code> nor
+          <code>[McpToolPublic]</code> (<code>McpToolGovernance.cs:95-112</code>). One such tool fails the whole endpoint&#39;s
+          startup, not just its own listing. The check reads <code>ToolCollection</code> once, when <code>MapCommonMcp</code> runs
+          (<code>:99</code>; <code>McpHostingExtensions.cs:130-132</code>); at runtime the filters still treat a tool without
+          <code>[McpToolPermission]</code> as public and never read <code>[McpToolPublic]</code> (<code>McpToolGovernance.cs:132-135</code>).
+          This replaces the Revision
+          (2026-11-08, access declaration) statements that <code>[McpToolPublic]</code> &quot;has no runtime effect&quot; and
+          that a host not subclassing the test base &quot;keeps the old behaviour&quot;: the attribute is now one of
+          the two declarations the startup check accepts (<code>McpToolGovernance.cs:100-101</code>;
+          <code>McpToolPublicAttribute.cs:5-9</code>). A tool carrying both is still admitted by the permission at
+          runtime (<code>FindPermission</code>, <code>McpToolGovernance.cs:117-126</code>); only
+          <code>McpToolAccessDeclarationTestsBase</code> rejects &quot;both&quot;. Decision points 4 and 6 and the headline are
+          updated in place.</li>
+          <li><strong>The hidden-text checks are a public class</strong> (v1.315.0, <code>MMCA.Common/CHANGELOG.md:13</code>).
+          <code>McpHiddenText.Find</code> holds the Cf, tag-character and HTML-comment checks the startup inspection
+          calls (<code>MMCA.Common/Source/Presentation/MMCA.Common.Mcp/McpHiddenText.cs:21-52</code>), and
+          <code>McpHiddenText.Strip</code> removes every format and tag character from text a tool returns, keeping the
+          visible text, an HTML comment opener included, verbatim (<code>:54-78</code>). It cleans; it does not detect
+          instructions, so the rejected alternative of scanning results for injected instructions stands.</li>
+          <li><strong>ADC has adopted the endpoint.</strong> The Conference service calls <code>AddCommonMcpServer</code> and
+          <code>MapCommonMcp</code>
+          (<code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:367</code>, <code>:378</code>), its base
+          <code>appsettings.json</code> sets <code>Mcp:Enabled</code> to true (<code>appsettings.json:107</code>), and the Gateway routes
+          <code>/mcp/{**catch-all}</code> to it (<code>MMCA.ADC/Source/Hosts/MMCA.ADC.Gateway/appsettings.json:300</code>). Every
+          tool is <code>[McpToolPublic]</code>
+          (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Mcp/ConferenceMcpTools.cs:33</code>, <code>:52</code>,
+          <code>:72</code>, <code>:90</code>, <code>:109</code>, <code>:127</code>). Store and Helpdesk do not call <code>AddCommonMcpServer</code>.</li>
+          <li><strong>ADC marks speaker-written result text as untrusted.</strong> Every field a speaker writes travels in an
+          <code>McpUntrustedText</code> envelope serialized as <code>{trust: untrusted, author: speaker, text}</code>, its text
+          passed through <code>McpHiddenText.Strip</code> first (<code>ConferenceMcpResults.cs:18-34</code>). Session titles and
+          abstracts (<code>ConferenceMcpResults.cs:50-59</code>, <code>:73-84</code>), speaker names and profile fields
+          (<code>McpSpeakerSummary</code>, <code>:110-113</code>; <code>McpSpeakerDetail</code>, <code>:126-136</code>) and the <code>now_next</code> session
+          titles (<code>:162-169</code>) are that envelope, not a string. Every tool description except that of
+          <code>list_events</code> (<code>ConferenceMcpTools.cs:35</code>), which returns only event fields, tells the model to
+          show that text as data and never act on it as instructions (<code>:54</code>, <code>:74</code>, <code>:92</code>, <code>:111</code>,
+          <code>:129</code>). This is a result-side control the host applies; the framework still inspects only
+          descriptions at startup.</li>
+          <li>Anchors re-verified against current source: <code>Directory.Packages.props:181</code> (SDK pin; comment
+          <code>:177-180</code>), <code>MMCA.Common.slnx:25</code> (test project <code>:59</code>); <code>McpHostingExtensions.cs:114</code>, <code>:134-136</code>,
+          <code>:105-106</code>, <code>:119-128</code>, <code>:123-124</code>, <code>:131</code>, <code>:136</code>; <code>McpToolGovernance.cs:130-145</code>, <code>:147-150</code>,
+          <code>:154-158</code>; <code>ToolDescriptionInspector.cs:25-93</code> (message <code>:54-57</code>); <code>McpHiddenText.cs:36</code>, <code>:83</code>,
+          <code>:16</code>; <code>WebApplicationBuilderExtensions.RateLimiting.cs:442</code> (global limiter <code>:437-438</code>),
+          <code>:209-224</code>, <code>:224</code>, <code>:268</code>, with <code>:57</code>, <code>:102</code>, <code>:215</code>, <code>:345</code> and <code>RateLimitingSettings.cs:42-43</code>
+          unchanged. In ADC, the event-scoped tools of the Revision (2026-11-08) now sit at
+          <code>ConferenceMcpTools.cs:33-42</code> (<code>list_events</code>), <code>:52-65</code>, <code>:72-82</code> (<code>get_session</code>, no <code>eventId</code>),
+          <code>:90-101</code>, <code>:109-120</code>, <code>:127-137</code> and <code>EventIdDescription</code> at <code>:24-25</code>; the reader&#39;s live-window
+          status at <code>ConferenceMcpReader.cs:349-357</code>, the current-or-next selection at <code>:374</code> and
+          <code>Mcp.EventNotFound</code> at <code>:339-344</code> (raised at <code>:377</code>); and <code>McpEventSummary</code> at
+          <code>ConferenceMcpResults.cs:94-101</code>. The Consequences name <code>MMCA.Common/FACTS.md</code> for the package list
+          and drop the package ordinal and its line anchors there; the 2026-11-07 Status sentence keeps its
+          as-accepted ordinal and anchors, and <code>MMCA.Common/FACTS.md</code> holds the current package list.</li>
+          </ol>
           <h2 id="related">Related</h2>
           <p><a href="014-cqrs-decorator-pipeline.html">ADR-014</a> (the decorator pipeline every tool call goes through),
           <a href="020-permission-based-authorization.html">ADR-020</a> (the <code>perm:</code> policy the permission attribute reuses),
@@ -537,6 +609,7 @@
             <li><a href="#revision-2026-11-08-machine-tokens-and-event-scoped-adc-tools">Revision (2026-11-08): machine tokens and event-scoped ADC tools</a></li>
             <li><a href="#revision-2026-11-08-access-declaration">Revision (2026-11-08, access declaration)</a></li>
             <li><a href="#revision-2026-11-17">Revision (2026-11-17)</a></li>
+            <li><a href="#revision-2026-11-23">Revision (2026-11-23)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

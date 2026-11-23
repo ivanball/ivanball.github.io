@@ -279,10 +279,13 @@
           every later <code>publish-maui</code> anchor in <code>release.yml</code> by +2. Revised 2026-10-26: anchors refreshed
           after the <code>ci.yml</code> canaries moved back to <code>:475-476</code> and <code>:693-694</code> and newly added packages
           extended the FACTS list and the solution file. Revised 2026-10-28: anchors refreshed after the
-          <code>ci.yml</code> canaries moved to <code>:507-508</code> and <code>:725-726</code> in the 2026-10-26 <code>ci.yml</code> change.</p>
+          <code>ci.yml</code> canaries moved to <code>:507-508</code> and <code>:725-726</code> in the 2026-10-26 <code>ci.yml</code> change. Revised
+          2026-11-23: <code>release.yml</code> now gates in two pack jobs that both publish jobs need, so a gate failure
+          blocks every push, while any publish-job failure or a withheld approval can still leave a release
+          half-published; the MAUI pack job now restores <code>--locked-mode</code> and runs the vulnerability audit.</p>
           <h2 id="context">Context</h2>
           <p>The <code>MMCA.Common.*</code> packages have shipped to GitHub Packages since the first release (the package
-          list and its count are generated and CI-gated in <code>MMCA.Common/FACTS.md:19-47</code>, so this record links
+          list and its count are generated and CI-gated in <code>MMCA.Common/FACTS.md:20-52</code>, so this record links
           to them rather than restating them). That was the right default while the framework had exactly one consumer group (this account&#39;s own
           repositories), which already authenticate to GitHub for other reasons.</p>
           <p>It stopped being right the moment the framework was documented publicly. GitHub Packages&#39; <strong>NuGet</strong>
@@ -306,20 +309,27 @@
           So this is purely about people outside the account.</p>
           <h2 id="decision">Decision</h2>
           <p>Every release publishes to <strong>both</strong> registries, from the same tag, in the same workflow run (two
-          independent jobs, see Trade-offs).</p>
+          pack jobs that gate, then two publish jobs that push, see Trade-offs).</p>
           <ul>
-          <li><code>release.yml</code> keeps its existing <code>dotnet nuget push</code> to <code>https://nuget.pkg.github.com/ivanball/index.json</code>
-          unchanged (<code>release.yml:120</code>, <code>:241</code>), and gains a second push to <code>https://api.nuget.org/v3/index.json</code>
-          with <code>--skip-duplicate</code> (<code>release.yml:140</code>, <code>:257</code>). Both the main (ubuntu) job and the MAUI (windows)
-          job push to both registries, so when both jobs succeed (see Trade-offs) the lockstep release
-          stays whole across every published id: the
-          packable projects in <code>MMCA.Common.slnx</code> (<code>MMCA.Common.slnx:8-38</code>) ship from the ubuntu job, and
-          <code>MMCA.Common.UI.Maui</code> ships from the windows job (ADR-042 splits the MAUI package into its own
-          job). <code>MMCA.Common/FACTS.md:19-47</code> is the source of truth for that set, and the workflow comment
-          that introduces the MAUI job points at it rather than restating a count (<code>release.yml:142-145</code>).</li>
+          <li><code>release.yml</code> keeps its <code>dotnet nuget push</code> to <code>https://nuget.pkg.github.com/ivanball/index.json</code>
+          (<code>release.yml:168</code>, <code>:376</code>), and adds a second push to <code>https://api.nuget.org/v3/index.json</code>
+          with <code>--skip-duplicate</code> (<code>release.yml:188</code>, <code>:391</code>). The workflow runs in two stages
+          (<code>release.yml:10-19</code>): a <code>pack</code> job (ubuntu, <code>release.yml:21-22</code>) and a <code>pack-maui</code> job
+          (windows, <code>release.yml:235-236</code>) hold <code>contents: read</code> only (<code>release.yml:27-28</code>, <code>:241-242</code>)
+          and run every step that runs repository or package code (<code>release.yml:10-12</code>), then hand the packed files as an artifact to <code>publish</code>
+          (<code>release.yml:132</code>) and <code>publish-maui</code> (<code>release.yml:341</code>). Both publish jobs run on ubuntu
+          (<code>release.yml:134</code>, <code>:343</code>), check out and build nothing, and only download, attest and push.
+          Both publish jobs push to both registries, so when both succeed (see Trade-offs) the lockstep
+          release stays whole across every published id: the packable projects in <code>MMCA.Common.slnx</code>
+          (<code>MMCA.Common.slnx:11-45</code>) pack in the ubuntu job, and <code>MMCA.Common.UI.Maui</code> packs in the windows
+          job (ADR-042 splits the MAUI package into its own job) and is pushed from ubuntu by
+          <code>publish-maui</code> (<code>release.yml:339-343</code>). <code>MMCA.Common/FACTS.md:20-52</code> is the source of truth for
+          that set, and the workflow comment that introduces the MAUI pack job points at it rather than
+          restating a count (<code>release.yml:231-234</code>). A <code>github-release</code> job (<code>release.yml:196-197</code>) needs
+          both publish jobs, so the GitHub release is created only after every push succeeded.</li>
           <li><strong>Authentication to nuget.org is trusted publishing, not a stored API key.</strong> Each publishing job
           requests a GitHub OIDC token (<code>permissions: id-token: write</code>) and exchanges it through
-          <code>NuGet/login</code>, pinned by commit SHA with a <code># v1</code> comment (<code>release.yml:133</code>, <code>:249</code>), for an API
+          <code>NuGet/login</code>, pinned by commit SHA with a <code># v1</code> comment (<code>release.yml:181</code>, <code>:384</code>), for an API
           key valid for one hour, immediately before the push. No long-lived credential exists in the
           repository. nuget.org itself now marks API keys &quot;Not recommended&quot; and
           redirects its own API-keys page to trusted publishing.</li>
@@ -330,10 +340,10 @@
           <li><strong>One policy covers both jobs</strong>, because it keys on the workflow file rather than the job. Each
           job still needs its own <code>id-token: write</code> permission and its own exchange: a short-lived key is
           single-use and cannot cross a job boundary.</li>
-          <li>The nuget.org steps are guarded by <code>github.repository_owner == &#39;ivanball&#39;</code> (<code>release.yml:132</code>,
-          <code>:139</code>, <code>:248</code>, <code>:255</code>), so a fork skips the trusted-publishing exchange it can never satisfy
+          <li>The nuget.org steps are guarded by <code>github.repository_owner == &#39;ivanball&#39;</code> (<code>release.yml:180</code>,
+          <code>:187</code>, <code>:383</code>, <code>:390</code>), so a fork skips the trusted-publishing exchange it can never satisfy
           instead of failing on it. The guard covers the nuget.org steps only. The GitHub Packages push
-          target is hardcoded to the <code>ivanball</code> namespace (<code>release.yml:120</code>, <code>:241</code>), which a fork&#39;s own
+          target is hardcoded to the <code>ivanball</code> namespace (<code>release.yml:168</code>, <code>:376</code>), which a fork&#39;s own
           <code>GITHUB_TOKEN</code> has no write scope for, so a fork&#39;s run reaches that push and fails there. Releasing
           from a fork is therefore not a path this workflow supports on either registry.</li>
           <li><strong>The <code>MMCA.</code> ID prefix reservation has been granted</strong> (2026-07-28), so the ids are protected from
@@ -359,11 +369,12 @@
           <li><strong>The install line has to be true.</strong> Documentation that cannot be followed is worse than no
           documentation, because the reader concludes the project is broken rather than that the registry is
           unusual. Every other adoption improvement is downstream of this one.</li>
-          <li><strong>Publishing to both costs one workflow step.</strong> There is no maintenance split: within each job the
-          nupkgs from that job&#39;s one pack step (<code>release.yml:92</code>, <code>:211</code>) go to both feeds, so the
-          registries receive identical content whenever both pushes succeed. Each job pushes to GitHub
-          Packages (<code>release.yml:120</code>, <code>:241</code>) before the nuget.org login and push (<code>release.yml:131-140</code>,
-          <code>:247-257</code>), so a failed nuget.org step leaves GitHub Packages ahead until the release is re-run.</li>
+          <li><strong>Publishing to both costs one workflow step.</strong> There is no maintenance split: the nupkgs from
+          each pack job&#39;s one pack step (<code>release.yml:103-104</code>, <code>:312-313</code>) are the bytes its publish job
+          sends to both feeds, so the registries receive identical content whenever both pushes succeed.
+          Each publish job pushes to GitHub Packages (<code>release.yml:168</code>, <code>:376</code>) before the nuget.org login
+          and push (<code>release.yml:179-188</code>, <code>:382-391</code>), so a failed nuget.org step leaves GitHub Packages
+          ahead until the release is re-run.</li>
           <li><strong>A credential that cannot be stored cannot be leaked.</strong> A stored key would also have carried a
           365-day maximum lifetime, and expiry is the failure mode a presence check cannot catch: the secret
           is still there, so the step still runs, and the release fails at the push. Trusted publishing
@@ -382,26 +393,32 @@
           <ul>
           <li><strong>A published version can never be withdrawn.</strong> nuget.org allows unlisting, not deletion. A bad
           release is now permanent public history, which raises the stakes on the release gates. Inside
-          <code>release.yml</code>, both publishing jobs declare <code>environment: release</code> (<code>release.yml:19</code>, <code>:156</code>), so
-          each waits on that environment&#39;s protection rules, which are configured in repository settings
-          and are therefore not reviewable from this repository; both jobs refuse to publish unless the
-          tagged commit is an ancestor of <code>origin/main</code> (<code>release.yml:38-46</code>, <code>:175-184</code>), because a <code>v*</code> tag
-          is the one ref pushed outside the branch-protection flow; and both run the SBOM hard gate
-          (<code>release.yml:106-110</code>, <code>:221-228</code>). The ubuntu job adds three more: it restores <code>--locked-mode</code>
-          (<code>release.yml:66</code>), so its irreversible push cannot carry a transitive version nobody reviewed; it
-          runs a fail-closed vulnerability audit (<code>release.yml:79-84</code>); and it enforces a test floor of
-          <code>--minimum-expected-tests 2000</code> (<code>release.yml:86-89</code>). The MAUI job has none of those three: it has
-          no restore step of its own, and its build restores implicitly without <code>--locked-mode</code>
-          (<code>release.yml:207-208</code>). Both jobs also attest build provenance (<code>release.yml:97-100</code>, <code>:216-219</code>).
-          The rest run on the merged pull request rather than on the tag, and the ancestry assertion is what
-          makes them cover the tagged tree: its comment names the FACTS drift gate, the vulnerability audit,
-          the Helpdesk consumer canary (<code>ci.yml:507-508</code>), the package-consumption canary (<code>ci.yml:725-726</code>),
-          ui-e2e and the perf gate (<code>release.yml:31-35</code>).</li>
-          <li><strong>The two publishing jobs are independent, so a release can land half-published.</strong> <code>publish</code>
-          (<code>release.yml:11</code>) and <code>publish-maui</code> (<code>release.yml:146</code>) declare no <code>needs:</code> on each other, so
-          they run in parallel and a failure in one does not stop the other&#39;s pushes. The lockstep release
-          is whole only when both jobs succeed; the MAUI job&#39;s timeout comment (<code>release.yml:148-152</code>)
-          names the half-published outcome as the reason its timeout stays at 40 minutes.</li>
+          <code>release.yml</code>, both publishing jobs declare <code>environment: release</code> (<code>release.yml:140</code>, <code>:348</code>), so
+          each waits on that environment&#39;s protection rules (a required reviewer and a <code>v*</code> deployment
+          policy, <code>release.yml:137-139</code>), which are configured in repository settings and are therefore not
+          reviewable from this repository. Both pack jobs refuse to continue unless the tagged commit is an
+          ancestor of <code>origin/main</code> (<code>release.yml:43-51</code>, <code>:257-266</code>), because a <code>v*</code> tag is the one ref
+          pushed outside the branch-protection flow; both restore <code>--locked-mode</code> (<code>release.yml:75</code>,
+          <code>:297-298</code>), so an irreversible push cannot carry a transitive version nobody reviewed; both run
+          the same fail-closed vulnerability audit action (<code>release.yml:91-96</code>, <code>:302-307</code>); and both run
+          the SBOM hard gate (<code>release.yml:110-114</code>, <code>:315-322</code>). The ubuntu pack job adds a test floor of
+          <code>--minimum-expected-tests 22500</code> (<code>release.yml:101</code>); <code>pack-maui</code> runs no tests. Both publish jobs
+          attest build provenance on the bytes they push (<code>release.yml:156-159</code>, <code>:364-367</code>). The pack build
+          turns analyzers off (<code>release.yml:85</code>), so the analyzers and the remaining gates run on the merged
+          pull request rather than on the tag, and the ancestry assertion is what makes them cover the
+          tagged tree: its comment names the FACTS drift gate, the Helpdesk consumer canary (<code>ci.yml:676</code>,
+          <code>consumer-source-build</code>), the package-consumption canary (<code>ci.yml:924</code>, <code>package-consumption</code>),
+          ui-e2e and the perf gate (<code>release.yml:35-42</code>, <code>:249-256</code>). That comment also still lists the
+          vulnerability audit among the PR-only checks, which it no longer is: the audit runs on both the
+          pull request and the tag.</li>
+          <li><strong>A gate failure blocks every push, but a push failure can still leave a release
+          half-published.</strong> <code>publish</code> and <code>publish-maui</code> both declare <code>needs: [pack, pack-maui]</code>
+          (<code>release.yml:133</code>, <code>:342</code>), so no registry receives any package of the lockstep set until every
+          gate in both pack jobs has passed. The two publish jobs do not need each other, so they run in
+          parallel after both pack jobs, and each waits on its own <code>release</code> approval (<code>release.yml:140</code>,
+          <code>:348</code>): a push failure in one, or one approval withheld, does not stop the other&#39;s pushes. The
+          lockstep release is whole only when both publish jobs succeed, which is also the condition for the
+          <code>github-release</code> job (<code>release.yml:196-197</code>).</li>
           <li><strong>Two registries can report different availability.</strong> nuget.org indexing lags a push by minutes,
           so immediately after a release the two feeds disagree briefly. Consumers pinned to exact versions
           are unaffected; anyone restoring the newest version within that window may not see it yet.</li>
@@ -419,8 +436,8 @@
           package owned by <code>ivanball</code>, which is broader than a glob-limited key would have been. Acceptable
           because the counterweight is far tighter: this policy&#39;s exchange only happens from one
           repository&#39;s one workflow file. It is not the account&#39;s only exchange: MMCA.Helpdesk&#39;s
-          <code>release-templates.yml:61-70</code> runs a second one as <code>ivanball</code> to publish <code>MMCA.Templates</code>, through
-          the unpinned tag <code>NuGet/login@v1</code> (<code>release-templates.yml:63</code>). If its policy is owner-scoped too,
+          <code>release-templates.yml:77-86</code> runs a second one as <code>ivanball</code> to publish <code>MMCA.Templates</code>, through
+          the unpinned tag <code>NuGet/login@v1</code> (<code>release-templates.yml:79</code>). If its policy is owner-scoped too,
           it can also authorize pushes of the <code>MMCA.Common.*</code> ids; the policies themselves live on nuget.org
           and are not determinable from source.</li>
           <li><strong>Prefix reservation is a manual, account-level action</strong> that cannot be expressed in this
@@ -519,13 +536,58 @@
           benchmark step of the <code>performance-smoke</code> job (<code>ci.yml:395</code>), not a coverage-job step (the
           <code>coverage</code> job starts at <code>ci.yml:442</code>).</li>
           </ol>
+          <h2 id="revision-2026-11-23">Revision (2026-11-23)</h2>
+          <p>Re-verified against current source. The decision is unchanged: every release still pushes to GitHub
+          Packages and then, behind the owner guard, logs in through the SHA-pinned <code>NuGet/login</code> and pushes
+          to nuget.org with <code>--skip-duplicate</code>, the trusted-publishing policy is still bound to the
+          <code>release.yml</code> file name (<code>release.yml:174-177</code>), and <code>release.yml</code> still has no backfill path. What moved is the
+          workflow structure: <code>release.yml</code> now splits each package set into a gating pack job and a pushing
+          publish job, which changes the job-independence trade-off and the MAUI gates.</p>
+          <ol>
+          <li>The Decision now records the two stages (<code>release.yml:10-19</code>): <code>pack</code> (ubuntu,
+          <code>release.yml:21-22</code>) and <code>pack-maui</code> (windows, <code>release.yml:235-236</code>) hold <code>contents: read</code> only
+          (<code>release.yml:27-28</code>, <code>:241-242</code>) and run every step that runs repository or package code
+          (<code>release.yml:10-12</code>, with analyzers off at <code>:85</code>); <code>publish</code>
+          (<code>release.yml:132</code>) and <code>publish-maui</code> (<code>release.yml:341</code>) both run on ubuntu
+          (<code>release.yml:134</code>, <code>:343</code>), check out nothing, and download, attest and push. So
+          <code>MMCA.Common.UI.Maui</code> packs on windows but is pushed from ubuntu (<code>release.yml:339-343</code>).</li>
+          <li>The Decision adds the <code>github-release</code> job (<code>release.yml:196-197</code>), which needs both publish
+          jobs.</li>
+          <li>The Trade-offs entry on job independence is rewritten: both publish jobs declare
+          <code>needs: [pack, pack-maui]</code> (<code>release.yml:133</code>, <code>:342</code>), so a gate failure in either pack job
+          blocks every registry push. The residual risk is narrower: the publish jobs still do not need
+          each other and each waits on its own <code>release</code> approval (<code>release.yml:140</code>, <code>:348</code>), so any
+          publish-job failure (download, attestation, login, push, cancellation or the 10-minute timeout,
+          <code>release.yml:136</code>, <code>:345</code>) or a withheld approval can still leave a release half-published. The MAUI timeout
+          comment no longer names that outcome: <code>timeout-minutes: 40</code> now sits on <code>pack-maui</code>
+          (<code>release.yml:240</code>) and its comment (<code>release.yml:237-239</code>) cites workload-install variance.</li>
+          <li>The MAUI gates changed: <code>pack-maui</code> now restores <code>--locked-mode</code> (<code>release.yml:297-298</code>), runs
+          the same vulnerability audit action (<code>release.yml:302-307</code>) and builds <code>--no-restore</code>
+          (<code>release.yml:309-310</code>). Only the test floor stays ubuntu-only, now
+          <code>--minimum-expected-tests 22500</code> (<code>release.yml:101</code>). The ADR-038 note in Related is corrected to
+          match.</li>
+          <li>Anchors re-verified against current source: the GitHub Packages pushes (<code>release.yml:168</code>,
+          <code>:376</code>), the nuget.org pushes (<code>:188</code>, <code>:391</code>), the SHA-pinned <code>NuGet/login</code> lines (<code>:181</code>,
+          <code>:384</code>), the owner guards (<code>:180</code>, <code>:187</code>, <code>:383</code>, <code>:390</code>), the login and push pairs
+          (<code>:179-188</code>, <code>:382-391</code>), the environment declarations (<code>:140</code>, <code>:348</code>) and their rule comment
+          (<code>:137-139</code>), the ancestry assertions (<code>:43-51</code>, <code>:257-266</code>) and comments (<code>:35-42</code>,
+          <code>:249-256</code>), the locked-mode restore (<code>:75</code>), the vulnerability audit (<code>:91-96</code>), the pack steps
+          (<code>:103-104</code>, <code>:312-313</code>), the SBOM gates (<code>:110-114</code>, <code>:315-322</code>), the provenance attestations
+          (<code>:156-159</code>, <code>:364-367</code>), the MAUI pack job comment (<code>:231-234</code>), the CI canaries
+          (<code>ci.yml:676</code>, <code>consumer-source-build</code>; <code>ci.yml:924</code>, <code>package-consumption</code>; <code>ci.yml:507</code> is now
+          the <code>performance-smoke</code> job), the published set (<code>MMCA.Common/FACTS.md:20-52</code>, heading at <code>:20</code>,
+          the <code>MMCA.Common</code> metapackage at <code>:52</code>), the packable projects (<code>MMCA.Common.slnx:11-45</code>, from the
+          metapackage at <code>:11</code> to <code>MMCA.Common.Testing.UI</code> at <code>:45</code>), and the Helpdesk exchange
+          (<code>release-templates.yml:77-86</code>, unpinned <code>NuGet/login@v1</code> at <code>:79</code>).</li>
+          </ol>
           <h2 id="related">Related</h2>
           <p>ADR-016 (lockstep versioning: every package ships at one version, so both registries receive the
-          same set of ids per release, enumerated in <code>MMCA.Common/FACTS.md:19-47</code>),
-          ADR-038 (supply-chain provenance: the SBOM hard gate runs before both jobs&#39; pushes, while the
-          locked-mode restore and the vulnerability audit run in the ubuntu job only; keyless publishing extends that posture to the credential itself),
-          ADR-042 (the MAUI package&#39;s separate windows job, which needs the same dual push to keep the
-          release whole).</p>
+          same set of ids per release, enumerated in <code>MMCA.Common/FACTS.md:20-52</code>),
+          ADR-038 (supply-chain provenance: the locked-mode restore, the vulnerability audit and the SBOM hard
+          gate run in both pack jobs, which both publish jobs need, so all three run before any push; keyless
+          publishing extends that posture to the credential itself),
+          ADR-042 (the MAUI package&#39;s separate windows pack job, whose package the ubuntu <code>publish-maui</code> job
+          pushes to both registries to keep the release whole).</p>
           
         <div class="doc-foot btn-row">
           <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
@@ -546,6 +608,7 @@
             <li><a href="#revision-2026-10-21">Revision (2026-10-21)</a></li>
             <li><a href="#revision-2026-10-26">Revision (2026-10-26)</a></li>
             <li><a href="#revision-2026-10-28">Revision (2026-10-28)</a></li>
+            <li><a href="#revision-2026-11-23">Revision (2026-11-23)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

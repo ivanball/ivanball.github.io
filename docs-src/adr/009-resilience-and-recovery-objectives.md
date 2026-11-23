@@ -47,6 +47,11 @@ factory-created clients, and the infrastructure health checks, the gateway's
 opt-in connect-failure retry and the executable outage tier are recorded. See the Revision
 (2026-11-12) at the end.
 
+Revised 2026-11-23: the YARP forwarder client is built by YARP's stock factory unless the gateway
+retry is enabled, Store's Stripe pipeline is its own class shared by the payment service and the tax
+calculator, and the RabbitMQ check's rationale names the framework's own check rather than a
+package; other anchors refreshed. See the Revision (2026-11-23) at the end.
+
 ## Context
 The framework already supplies the *mechanisms* for surviving partial failure: a standard Polly
 resilience handler (timeout / retry / circuit breaker), the outbox for at-least-once delivery
@@ -65,9 +70,12 @@ resilience handler (timeout / retry / circuit breaker), the outbox for at-least-
    named clients), and every gRPC client registered through
    `AddTypedGrpcClient`, wires the **standard resilience handler**. A client constructed by hand with
    `new HttpClient(...)` is outside this default and owns its own bounds, and so is the YARP
-   forwarder's client, which YARP's own forwarder client factory builds
-   (`MMCA.Common/Source/Hosting/MMCA.Common.Gateway/Forwarding/GatewayRetryForwarderHttpClientFactory.cs:12`;
-   [ADR-088](088-gateway-edge-responsibilities.md) records no Polly pipeline on that hop). Two
+   forwarder's client, which YARP's own forwarder client factory builds: YARP's stock factory by
+   default, replaced by the framework's subclass of it
+   (`MMCA.Common/Source/Hosting/MMCA.Common.Gateway/Forwarding/GatewayRetryForwarderHttpClientFactory.cs:12`)
+   only when `MmcaGateway:Retry:Enabled` is set
+   (`MMCA.Common/Source/Hosting/MMCA.Common.Gateway/GatewayReverseProxyExtensions.cs:108-110`);
+   [ADR-088](088-gateway-edge-responsibilities.md) records no Polly pipeline on that hop. Two
    factory-created clients are outside it on purpose. The outbound webhook client clears every
    additional handler a host default adds, the resilience pipeline included
    (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Webhooks/WebhookServiceCollectionExtensions.cs:101`,
@@ -79,22 +87,22 @@ resilience handler (timeout / retry / circuit breaker), the outbox for at-least-
    (`MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Gateway/GatewayHealthCheckExtensions.cs:190`,
    `:204-221`). The HTTP default is the
    global `ConfigureHttpClientDefaults` registration
-   (`MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Extensions.cs:50-108`, scoped by its comment at
-   `:48-49`, the handler at `:60-85`), which takes its timeouts, retry budget and sampling window from
-   `HttpResilienceDefaults` (`:62-65`) and switches the retry off for POST and PATCH (`:74`). The
+   (`MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Extensions.cs:57-116`, scoped by its comment at
+   `:54-56`, the handler at `:68-93`), which takes its timeouts, retry budget and sampling window from
+   `HttpResilienceDefaults` (`:70-73`) and switches the retry off for POST and PATCH (`:82`). The
    framework no longer ships a typed HTTP service-client helper: `AddTypedServiceClient` was removed
    in v1.254.0, gRPC through `AddTypedGrpcClient` is the supported cross-service client, and a host
-   that wants a typed `HttpClient` registers it itself (`MMCA.Common/CHANGELOG.md:193`).
+   that wants a typed `HttpClient` registers it itself (`MMCA.Common/CHANGELOG.md:1130`).
    `AddTypedGrpcClient` reads the `Grpc`-prefixed members of the same `HttpResilienceDefaults`
-   (`MMCA.Common/Source/Presentation/MMCA.Common.Grpc/DependencyInjection.cs:141-167`). Its timeouts
+   (`MMCA.Common/Source/Presentation/MMCA.Common.Grpc/DependencyInjection.cs:142-168`). Its timeouts
    are the east-west path's own, not the outbound-HTTP 30s/90s: an 8-second attempt and a 20-second
    total, about ten times the slowest measured east-west gRPC p99 of 784 ms
-   (`MMCA.Common/Source/Core/MMCA.Common.Shared/Resilience/HttpResilienceDefaults.cs:68-76`). It shares
-   the HTTP path's retry budget and breaker sampling window (`:33`, `:19`), states its own breaker
-   shape (`:78-94`), and retries only a failure to reach the peer before the request was sent: an
+   (`MMCA.Common/Source/Core/MMCA.Common.Shared/Resilience/HttpResilienceDefaults.cs:67-75`). It shares
+   the HTTP path's retry budget and breaker sampling window (`:32`, `:18`), states its own breaker
+   shape (`:77-93`), and retries only a failure to reach the peer before the request was sent: an
    `HttpRequestException` whose `HttpRequestError` is a name-resolution, connect or TLS handshake
-   failure (`DependencyInjection.cs:154-159`). An optional per-client `configureResilience` callback
-   runs after those defaults, so it wins only where it sets a value (`:98-100`, `:165-166`). This is
+   failure (`DependencyInjection.cs:155-160`). An optional per-client `configureResilience` callback
+   runs after those defaults, so it wins only where it sets a value (`:92-97`, `:166-167`). This is
    enforced by fitness functions on both halves (`ResilienceHandlerTests` in
    `MMCA.Common.Grpc.Tests` for gRPC, `ServiceDefaultsRetryTests` in `MMCA.Common.Aspire.Tests` for
    the HTTP default) so the policy cannot silently regress.
@@ -148,12 +156,12 @@ restore is drilled.
   (`:46`), and a 429 is retried only within the `Retry-After` budget (`:65`, `:77`).
 - Per-consumer DR docs can drift from reality. The drill-result table is hand-maintained and lags the
   drills (its last rows are 2026-08-10 in `MMCA.ADC/infra/DISASTER-RECOVERY.md:204` and 2026-07-28 in
-  `MMCA.Store/infra/DISASTER-RECOVERY.md:212`), so it is not the operative mitigation: drill recency
-  is enforced from `dr-drill.yml` run history by each consumer's `dr-freshness` deploy gate
-  (`MMCA.ADC/.github/workflows/deploy.yml:846-858`, `MMCA.Store/.github/workflows/deploy.yml:791-802`).
+  `MMCA.Store/infra/DISASTER-RECOVERY.md:216-218`), so it is not the operative mitigation: drill
+  recency is enforced from `dr-drill.yml` run history by each consumer's `dr-freshness` deploy gate
+  (`MMCA.ADC/.github/workflows/deploy.yml:1242-1254`, `MMCA.Store/.github/workflows/deploy.yml:1005-1016`).
 - A gRPC client that needs bespoke timeouts passes `AddTypedGrpcClient`'s `configureResilience`
   callback, which adjusts the standard handler after the defaults
-  (`MMCA.Common/Source/Presentation/MMCA.Common.Grpc/DependencyInjection.cs:98-100`, `:166`); there is
+  (`MMCA.Common/Source/Presentation/MMCA.Common.Grpc/DependencyInjection.cs:92-97`, `:167`); there is
   still no switch that opts the client out of resilience entirely: intentional friction.
 
 ## Revision (2026-08-18)
@@ -508,3 +516,72 @@ recorded.
    outbox drain after a broker outage whose scenario names the outbox database (`:11-21`, `:134`,
    `:162`). [ADR-117](117-apphost-integration-test-base.md)
    owns the test base.
+
+## Revision (2026-11-23)
+Re-verified against current source. The Decision's three points, the reference objectives, the gRPC
+values (8s attempt, 20s total, one retry, the 0.5 / 10 / 10s breaker), the before-send gRPC retry
+predicate, the POST and PATCH opt-out on the HTTP default, the removal of `AddTypedServiceClient`,
+the Stripe single-retry-owner configuration, the health-check timeout and both consumers' 8-day
+`dr-freshness` gates stand as recorded. Three statements are made more precise, and line positions
+moved.
+
+1. **Which factory builds the YARP forwarder client depends on configuration.** Decision point 1
+   cited the framework's `GatewayRetryForwarderHttpClientFactory`
+   (`MMCA.Common/Source/Hosting/MMCA.Common.Gateway/Forwarding/GatewayRetryForwarderHttpClientFactory.cs:12`,
+   a subclass of YARP's `ForwarderHttpClientFactory`) as the builder. `AddMmcaGateway` registers it
+   only when `MmcaGateway:Retry:Enabled` is true
+   (`MMCA.Common/Source/Hosting/MMCA.Common.Gateway/GatewayReverseProxyExtensions.cs:108-110`; off by
+   default, `GatewaySettings.cs:64`), so in the default configuration YARP's stock factory builds the
+   client. Either way it is not a factory-created client and the standard handler does not reach it.
+   Decision point 1 now says so.
+2. **Store's Stripe pipeline is its own class, shared by two callers.** The retry-then-breaker
+   pipeline the 2026-09-11 to 2026-10-28 revisions place inside `StripePaymentService` now lives in
+   `StripeResiliencePipeline`
+   (`MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Infrastructure/Payments/Stripe/StripeResiliencePipeline.cs:42-79`:
+   retry `:43`, breaker `:60`, both `ShouldHandle` predicates through `IsTransientFailure` at `:52-53`
+   and `:66-67`, `IsTransientFailure` at `:105-112` with the timeout arm at `:110`). It is registered
+   once as a singleton (`.../Sales.Infrastructure/DependencyInjection.cs:42`) so breaker state
+   accumulates across calls. `StripePaymentService` runs its checkout-session and expiry calls through
+   it (`ExecuteStripeAsync` at `StripePaymentService.cs:452-461`, called at `:130`, `:164` and
+   `:218`), and `StripeTaxCalculator` runs its tax calculation through it
+   (`StripeTaxCalculator.cs:83`). The pipeline covers those payment and tax calls only, not all Stripe
+   traffic: `StripeWebhookRegistrationService` builds the shared client and calls the webhook endpoint
+   API directly (`StripeWebhookRegistrationService.cs:166-171`), outside both the retry and the
+   breaker. The SDK client is built with `maxNetworkRetries: 0` (`StripeClientFactory.cs:51`) and an
+   explicit `Timeout` (`:46`), so the pipeline is the single retry owner for the calls it wraps and
+   the webhook registration calls get no retry at all. The settings defaults are
+   unchanged: `RequestTimeoutSeconds` 30 (`StripeSettings.cs:53`, range 1 to 120 at `:52`),
+   `RetryMaxAttempts` 3 (`:93`, range 1 to 10 at `:92`) and `RetryDelayMs` 500 (`:97`, range 100 to
+   10000 at `:96`).
+3. **The RabbitMQ health check is the framework's own.** The 2026-11-12 revision explains the reused
+   connection by "the health-check package calls its connection factory without a token". The Xabaril
+   `AspNetCore.HealthChecks.*` checks were replaced by internal `IHealthCheck` classes
+   (`MMCA.Common/CHANGELOG.md:222`, in the `## [1.307.0]` section at `:188`), and the RabbitMQ check is
+   `RabbitMqHealthCheck`
+   (`MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Health/RabbitMqHealthCheck.cs:15`, registered at
+   `Extensions.Health.cs:118-123`). The mechanism stands as recorded, with the reason now in source:
+   the connection holder's own creation token, on the check-timeout budget, is what ends a handshake
+   against a port that accepts the connection but never answers, and the probe's token only bounds its
+   wait for that connection (`Extensions.Health.cs:108-116`;
+   `MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Health/RabbitMqHealthConnection.cs:5-22`).
+4. Anchors re-verified against current source: `ConfigureHttpClientDefaults` at
+   `MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Extensions.cs:57-116` (scoping comment `:54-56`,
+   handler `:68-93`, `HttpResilienceDefaults` values `:70-73`, POST and PATCH excluded `:82`); the
+   `AddTypedServiceClient` removal at `MMCA.Common/CHANGELOG.md:1130`, under `### Breaking` of the
+   `## [1.254.0] - 2026-10-24` section at `:1115` (no match remains under `MMCA.Common/Source`);
+   `AddTypedGrpcClient`'s handler at
+   `MMCA.Common/Source/Presentation/MMCA.Common.Grpc/DependencyInjection.cs:142-168` (predicate
+   `:155-160`, breaker `:161-164`, `configureResilience` documented at `:92-97` and invoked last at
+   `:166-167`); `HttpResilienceDefaults` gRPC values at
+   `MMCA.Common/Source/Core/MMCA.Common.Shared/Resilience/HttpResilienceDefaults.cs:67-75`, breaker
+   `:77-93`, `MaxRetryAttempts` `:32`, `CircuitBreakerSamplingDuration` `:18`; the Store drill table's
+   2026-07-28 rows at `MMCA.Store/infra/DISASTER-RECOVERY.md:216-218` (ADC's last row unchanged at
+   `MMCA.ADC/infra/DISASTER-RECOVERY.md:204`); the `dr-freshness` gates at
+   `MMCA.ADC/.github/workflows/deploy.yml:1242-1254` and `MMCA.Store/.github/workflows/deploy.yml:1005-1016`
+   (both over `dr-drill.yml` with `window-days: '8'` at `:1251` and `:1013`, through the shared
+   `freshness-gate` composite action at `:1247` and `:1009`); and the infrastructure health checks in
+   `MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Extensions.Health.cs` (behavior documented at
+   `:51-54`, timeout resolved at `:79` and handed to the database checks at `:81`, the Redis check at
+   `:95-100` and the RabbitMQ check at `:118-123`, the holder constructed at `:116`, `CheckTimeout` at
+   `:294-307` with the range test at `:299` and the throw at `:301-303`). Citations inside the earlier
+   Revision sections are left as recorded.

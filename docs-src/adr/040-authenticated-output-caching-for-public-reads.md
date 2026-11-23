@@ -40,33 +40,38 @@ the Revision (2026-10-21)). Revised 2026-10-26: anchors refreshed after the host
 service base and both Bicep templates grew (see the Revision (2026-10-26)). Revised 2026-10-28:
 the Trade-offs now record that the framework wrapper's own XML doc also states the `TryAdd`
 store-precedence claim (still unverified by any test), and anchors are refreshed (see the
-Revision (2026-10-28)).
+Revision (2026-10-28)). Revised 2026-11-23: the Decision now records the policy's permission
+bypass, its third departure (no request coalescing) and the `[PublicCachedReads]` and
+`[EvictOutputCache]` conventions; ADC has eleven public policies with ten passing the bypass
+audience, Store Catalog has three, and the Redis output-cache store is switched on by the composed
+host's `UseRedisOutputCaching` flag, whose registration a test now pins (see the Revision
+(2026-11-23)).
 
 ## Context
 
 The framework's read-scaling design leans on ASP.NET Core output caching: anonymous-readable
 endpoints (`[AllowAnonymous]` GETs like event/session/speaker catalogs) carry named policies with
 tag-based eviction, primed by startup warmup and load-tested by k6. Five minutes is the usual TTL,
-but it is a default, not a rule: a payload that cannot wait five minutes takes a shorter one. Three
-of Store Catalog's four policies run five minutes
-(`MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:158`, `:159`, `:168`), while
+but it is a default, not a rule: a payload that cannot wait five minutes takes a shorter one. Two
+of Store Catalog's three policies run five minutes
+(`MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:59-60`, `:68-69`), while
 `ProductsCache` runs 60 seconds because each variant's effective price moves on the clock when a
-discount window opens or closes, with no mutation to evict on (`:165`, the reasoning at
-`:160-164`). ADC runs two 60-second policies (`NowNextCache`, a clock-dependent now-and-next
+discount window opens or closes, with no mutation to evict on (`:64-65`, the reasoning at
+`:62-63`). ADC runs two 60-second policies (`NowNextCache`, a clock-dependent now-and-next
 snapshot, and `BookmarkCountsCache`, written by another service;
-`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:293,307`).
+`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:202,216`).
 
 That design was silently inert for the traffic that matters. The shared UI HttpClient pipeline
 attaches the stored Bearer token to every outgoing API request: the main authenticated path,
 `AuthenticatedServiceBase.CreateAuthenticatedClientAsync`, sets it on the client's default
 `Authorization` header itself
-(`MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/Api/AuthenticatedServiceBase.cs:62-73`,
-the handler scope issue it avoids at `:56-61`), and `AuthDelegatingHandler` attaches it as the
+(`MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/Api/AuthenticatedServiceBase.cs:67-77`,
+the handler scope issue it avoids at `:61-66`), and `AuthDelegatingHandler` attaches it as the
 fallback for any request still lacking one
-(`MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/Auth/AuthDelegatingHandler.cs:52-58`; a
+(`MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/Auth/AuthDelegatingHandler.cs:192-198`; a
 request that sets the `SkipBearer` option, which the token-refresh POST does, passes through
-untouched, `:18-23`, checked at `:47-50`, and so does a request that already carries an
-`Authorization` header, such as the forced-refresh replay, `:10-13`, `:52`). That covers reads of
+untouched, `:44`, checked at `:187`, and so does a request that already carries an
+`Authorization` header, such as the forced-refresh replay, `:15-18`, `:192`). That covers reads of
 public endpoints whose payload is identical for every caller. ASP.NET Core's
 built-in default output-cache policy refuses both cache lookup and cache storage for any request
 carrying an `Authorization` header (or an authenticated identity). The result: every logged-in
@@ -87,25 +92,44 @@ authenticated caller (mobile hosts, cross-service calls, curl with a token) unca
 ## Decision
 
 `MMCA.Common.API` ships `PublicEndpointOutputCachePolicy`, an `IOutputCachePolicy` that mirrors
-the built-in default policy with two deliberate departures, one relaxation and one tightening. The
-relaxation: it does not disable cache lookup or storage when the request carries an
-`Authorization` header or an authenticated identity
-(`MMCA.Common/Source/Presentation/MMCA.Common.API/Caching/PublicEndpointOutputCachePolicy.cs:83-90`). It
+the built-in default policy with three deliberate departures: a relaxation, a tightening and no
+request coalescing. The relaxation: it does not disable cache lookup or storage when the request
+carries an `Authorization` header or an authenticated identity
+(`MMCA.Common/Source/Presentation/MMCA.Common.API/Caching/PublicEndpointOutputCachePolicy.cs:106-116`). It
 enforces the same response-side guards (GET/HEAD only; never store `Set-Cookie` responses or
 non-200s), varies the cache key by every query-string parameter (`CacheVaryByRules.QueryKeys =
-"*"`, the same rule as the default policy; a raw `IOutputCachePolicy` registration replaces the
-whole default chain, so the policy must restate it), and takes the expiration and eviction tags
+"*"`, `:127`, the same rule as the default policy; a raw `IOutputCachePolicy` registration replaces
+the whole default chain, so the policy must restate it), and takes the expiration and eviction tags
 as constructor arguments. The tightening, which the default policy lacks: when a tenant has
 been resolved for the request, the key varies by `ITenantContext.TenantId` under
 `VaryByValues["t"]`, so one tenant's rows are never served to another from the shared entry
-(`PublicEndpointOutputCachePolicy.cs:103-111`,
-the key constant at `:50`). An unresolved tenant (a single-tenant host, a background call) adds
+(`PublicEndpointOutputCachePolicy.cs:129-137`,
+the key constant at `:53`). An unresolved tenant (a single-tenant host, a background call) adds
 nothing, and the vary rule is a backstop, not a license: a caller-dependent payload still must not
-use this policy (`:37-42`).
+use this policy (`:40-45`). The third departure: the policy sets `AllowLocking = false`
+(`:118-122`), where the default policy enables locking. With locking on, concurrent misses for one
+key wait on the first request's execution, which runs under that request's `RequestAborted` token,
+so one client disconnecting cancels the shared query and every waiter answers 500. The cost is that
+simultaneous misses each run the query once.
 
 Hosts register it per named policy via the `OutputCacheOptions.AddPublicEndpointPolicy(name,
 expiration, tags)` extension and reference it from `[OutputCache(PolicyName = ...)]` exactly like
-any built-in policy. Tag-based eviction from mutating commands is unchanged.
+any built-in policy. An entity controller can instead mark its inherited base reads with the
+class-level `[PublicCachedReads(policy)]` convention
+(`MMCA.Common/Source/Presentation/MMCA.Common.API/Caching/PublicCachedReadsAttribute.cs:42`), which
+appends `[AllowAnonymous]` and `[OutputCache(PolicyName = ...)]` to those reads and throws when an
+override of one declares its own authorization requirement without `[AllowAnonymous]` (`:29-33`).
+Tag-based eviction from mutating requests is unchanged; controllers declare it with the
+`[EvictOutputCache]` result filter
+(`MMCA.Common/Source/Presentation/MMCA.Common.API/Caching/EvictOutputCacheAttribute.cs:36`). Both
+apps use both. ADC Conference marks 14 controllers with `[PublicCachedReads]` (for example
+`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/Events/EventsController.cs:48`,
+`Sessions/SessionsController.cs:44`, `Speakers/SpeakersController.cs:47`,
+`Sponsors/SponsorsController.cs:39`) and declares `[EvictOutputCache]` in 17 Conference API
+controller files, with no hand-written `EvictByTagAsync` left in that project. Store Catalog uses
+both on its categories and products controllers
+(`MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.API/Controllers/CategoriesController.cs:32-33`,
+`ProductsController.cs:45-46`).
 
 The contract for applying it is strict: ONLY endpoints that are `[AllowAnonymous]` AND whose
 response does not vary by caller identity. A cached response is served verbatim to every
@@ -117,15 +141,27 @@ expiration, bypassRoles, tags)` overload makes callers in a bypass role skip the
 (no lookup, no storage), so they always read fresh and their elevated responses are never stored.
 Use it when the payload is identical for every caller EXCEPT a privileged read audience (ADC's
 audience is two roles, `Organizer` and `ContentEditor`, who see unpublished rows per BR-108).
-Per-user payloads remain out of scope: bypass roles handle role-shaped variance, not
-identity-shaped variance. Membership is checked with the framework's wide `HasRole` extension
+Per-user payloads remain out of scope: bypass roles and bypass permissions handle role- and
+permission-shaped variance, not identity-shaped variance. Membership is checked with the framework's wide `HasRole` extension
 (`MMCA.Common/Source/Core/MMCA.Common.Shared/Auth/ClaimsPrincipalExtensions.cs:76-78`, which reads
 `ClaimTypes.Role` plus bare `role`/`roles` claims, `:60-68`, and compares the role value
 case-insensitively, `:78`), not
 the BCL `ClaimsPrincipal.IsInRole`, which matches only the identity's own role claim type: against an identity provider
 that emits bare `role`/`roles` claims, `IsInRole` would miss the bypass while the permission
 handler granted the elevated payload, and that response would be stored under the shared public
-key (`PublicEndpointOutputCachePolicy.cs:142-147`).
+key (`PublicEndpointOutputCachePolicy.cs:168-189`, the `HasRole` call at `:175`).
+
+When the elevated payload is gated by a permission rather than a fixed role, the policy also takes
+bypass PERMISSIONS: its four-argument constructor accepts `bypassPermissions`
+(`PublicEndpointOutputCachePolicy.cs:92`), checked after the roles through the registered
+`IPermissionRegistry` and `PermissionAuthorizationHandler.Holds` (`:180-188`), the same evaluation
+the permission handler grants the payload by, so a holder by claim, by role or by stored grant
+skips the cache the same way. The `AddPublicEndpointPolicy` extension has no permission overload
+(`MMCA.Common/Source/Presentation/MMCA.Common.API/Caching/OutputCacheOptionsExtensions.cs:20`,
+`:34`), so a host registers that form directly with `AddPolicy(name, new
+PublicEndpointOutputCachePolicy(...))`. ADC's sessions policy does, passing
+`ConferencePermissions.SessionAssetsManage` beside the role audience
+(`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:186-192`).
 
 That audience is declared ONCE and shared, never restated per policy. ADC keeps it in
 `ConferenceReadAudience.PrivilegedRoles`
@@ -135,14 +171,16 @@ and the API-layer visibility check reads the same list
 `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Authorization/CurrentUserServiceExtensions.cs:24`).
 Two lists naming different roles would put a privileged payload in the shared public entries and
 serve it to everyone, so the single declaration is the guard, not a convention. Nor is the bypass a
-narrow exception in practice: eleven of ADC's twelve public policies pass it
-(`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:276-307`, the array at `:275`),
-the exception being `NowNextCache` (`:293`), whose published-data payload is identical for every
-role. Breadth has a second driver that role-shaped variance does not cover: the admin surfaces read
+narrow exception in practice: ten of ADC's eleven public policies pass it
+(`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:175-216`, the array at `:174`),
+the exception being `NowNextCache` (`:202`), whose published-data payload is identical for every
+role. ADC's twelfth named policy, `ConferenceCache`, stays on the built-in default semantics
+(`:143-144`) because a `[HasPermission]`-gated controller also references it, and this policy must
+never back a permission-gated endpoint. Breadth has a second driver that role-shaped variance does not cover: the admin surfaces read
 back right after mutating, and a write that never touches a controller (the BR-207 speaker
 auto-link, an Engagement bookmark) evicts only by publishing `OutputCacheEvictionRequested`, a
-broker round trip that is prompt but not instant (`Program.cs:260-266`), so a cached stale row
-version makes the next save throw `DbUpdateConcurrencyException` (`Program.cs:267-269`).
+broker round trip that is prompt but not instant (`Program.cs:159-165`), so a cached stale row
+version makes the next save throw `DbUpdateConcurrencyException` (`Program.cs:166-168`).
 
 ## Rationale
 
@@ -165,8 +203,8 @@ version makes the next save throw `DbUpdateConcurrencyException` (`Program.cs:26
   bounded staleness window.** That acceptance did not survive contact with the deployed topology:
   ADC's Conference service and Store's Catalog service both run `minReplicas: 1` with an HTTP scale
   rule at 50 concurrent requests and a ceiling of at least two replicas (Store `maxReplicas: 2`,
-  `MMCA.Store/infra/main.bicep:1813`; ADC `conferenceScaledMaxReplicas`,
-  `MMCA.ADC/infra/main.bicep:2256`, which is 2 normally and 4 with `conferenceMode` on, `:192`), so
+  `MMCA.Store/infra/main.bicep:2144`; ADC `conferenceScaledMaxReplicas`,
+  `MMCA.ADC/infra/main.bicep:2548`, which is 2 normally and 4 with `conferenceMode` on, `:214`), so
   every `EvictByTagAsync` reached only the replica that handled the mutation and the others kept
   serving the pre-edit payload for the full 5-minute TTL.
 
@@ -186,25 +224,34 @@ version makes the next save throw `DbUpdateConcurrencyException` (`Program.cs:26
   reproduced in the steady state and it arrives when there is least room to diagnose it.
 
   Both apps had Redis provisioned and already wired as `IDistributedCache`, so closing this was a
-  registration rather than new infrastructure. Both hosts make it through the framework wrapper
-  `AddRedisOutputCaching()`
-  (`MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Caching/RedisCachingExtensions.cs:91`), which
-  holds the framework's single `AddStackExchangeRedisOutputCache` call (`:99`) and no-ops when the
-  connection string is blank (`:94`), so each host calls it unconditionally, top-level, before
-  `AddOutputCache`
-  (`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:202`,
-  `MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:105`), leaning on framework
-  behavior that the code comments state: `AddOutputCache` registers its store with `TryAdd` (ADC
-  `Program.cs:198-199`, Store `Program.cs:102-103`, and the wrapper's own XML doc,
-  `RedisCachingExtensions.cs:76-78`), so an explicit Redis registration wins regardless of call
-  order (the Store comment and the wrapper doc spell out that consequence; the ADC comment states
-  only the `TryAdd`). Read that as framework behavior per those comments; nothing in these repos
-  verifies it (the only tests that call the wrapper directly,
-  `MMCA.Common/Tests/Hosting/MMCA.Common.Aspire.Tests/Health/RedisReadinessSafetyTests.cs:65` and
-  `:94-100`, cover the health check and the no-op; the `WebApplicationFactory<Program>`
-  integration tests run it only indirectly, through the host's `Program.cs`; and no test asserts
-  which `IOutputCacheStore` wins, the test references to it being Moq mocks, for example
-  `MMCA.Common/Tests/Presentation/MMCA.Common.API.Tests/Caching/OutputCacheEvictionHandlerTests.cs:110`).
+  registration rather than new infrastructure. Neither host calls the wrapper itself: each sets
+  `UseRedisOutputCaching = true` on the composed service host
+  (`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:129`,
+  `MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:53`), which then calls the
+  framework wrapper `AddRedisOutputCaching()` only when that flag is set
+  (`MMCA.Common/Source/Hosting/MMCA.Common.ServiceHost/ServiceHostBuilderExtensions.cs:90-93`),
+  before `AddOutputCache` (`:110`, with its `NoCache` base policy at `:112`). The wrapper
+  (`MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Caching/RedisCachingExtensions.cs:103`) holds the
+  framework's single `AddStackExchangeRedisOutputCache` call (`:111`), puts the store on a
+  registered `RedisConfigurationOptionsPipeline` configurator when one exists (`:113-123`, the
+assignment at `:121`), and
+  no-ops when the connection string is blank (`:106-109`). Precedence over the built-in store leans
+  on framework behavior that the comments state: `AddOutputCache` registers its store with `TryAdd`
+  (the ADC host comment, `Program.cs:120-121`, and the wrapper's own XML doc,
+  `RedisCachingExtensions.cs:88-90`, which adds that the explicit Redis store wins either way; the
+  Store comment, `Program.cs:51-52`, states neither). Read that as framework behavior per those
+  comments. Tests now pin the registration but not the resolution:
+  `MMCA.Common/Tests/Hosting/MMCA.Common.ServiceHost.Tests/ServiceHostBuilderExtensionsTests.cs:304-313`
+  asserts a Redis `IOutputCacheStore` descriptor is registered when `UseRedisOutputCaching` is true
+  and `:289-300` that none is when it is false; the tests that call the wrapper directly
+  (`MMCA.Common/Tests/Hosting/MMCA.Common.Aspire.Tests/Health/RedisReadinessSafetyTests.cs:65` and
+  `:94-100`, the health check and the no-op;
+  `MMCA.Common/Tests/Hosting/MMCA.Common.Azure.Tests/Redis/RedisConfiguratorConnectionPathTests.cs:52`,
+  the configurator connection path) do not resolve the store either. No test resolves
+  `IOutputCacheStore` from a provider, so which store wins over the `TryAdd` memory store is still
+  unasserted; the other test references to it are doubles, Moq mocks such as
+  `MMCA.Common/Tests/Presentation/MMCA.Common.API.Tests/Caching/OutputCacheEvictionHandlerTests.cs:110`
+  or the hand-rolled recording store at `EvictOutputCacheAttributeTests.cs:500`.
 
   A single-replica service may still use the in-memory store: with one replica there is no
   propagation problem to solve. The rule is about replica count, not about environment.
@@ -215,20 +262,20 @@ version makes the next save throw `DbUpdateConcurrencyException` (`Program.cs:26
   `OutputCacheEvictionRequested` over the existing outbox, broker and inbox path, best-effort and
   per tag. ADC's bookmark counts, written by Engagement and read through Conference, now use
   exactly that: `UserSessionBookmarkCacheEvictionHandler`
-  (`MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Application/UserSessionBookmarks/DomainEventHandlers/UserSessionBookmarkCacheEvictionHandler.cs:37`)
-  only signals a request (`:56`), and the hosted `BookmarkCacheEvictionProcessor` raises the event
+  (`MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Application/UserSessionBookmarks/DomainEventHandlers/UserSessionBookmarkCacheEvictionHandler.cs:38`)
+  only signals a request (`:58`), and the hosted `BookmarkCacheEvictionProcessor` raises the event
   (`MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Infrastructure/Caching/BookmarkCacheEvictionProcessor.cs:71`),
   paced to at most one broadcast per 10-second `PacingWindow` per replica (`:46`) so a burst of
   stars cannot keep the tag permanently cold. The Conference host consumes it
   (`AddOutputCacheEvictionHandler()` at
-  `MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:313`, and
+  `MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:279`, and
   `RegisterOutputCacheEvictionConsumer()` at
   `MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/ConferenceBrokerConsumers.cs:37`, wired
-  through `AddBrokerMessaging` at `Program.cs:432`), keeping the short TTL as the backstop for a
+  through `AddBrokerMessaging` at `Program.cs:359`), keeping the short TTL as the backstop for a
   lost or late event rather than the only defense (`BookmarkCountsCache`, 60 seconds,
-  `Program.cs:307`). A payload that changes on the clock still has no mutation to evict on, so a
-  short TTL remains its whole answer (`NowNextCache`, 60 seconds, ADC `Program.cs:293`; Store's
-  `ProductsCache`, 60 seconds, `MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:165`, whose discount
+  `Program.cs:216`). A payload that changes on the clock still has no mutation to evict on, so a
+  short TTL remains its whole answer (`NowNextCache`, 60 seconds, ADC `Program.cs:202`; Store's
+  `ProductsCache`, 60 seconds, `MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:64-65`, whose discount
   edits still evict the `catalog:products` tag at once but whose discount windows open and close with
   no write at all). When adding a cached endpoint, check
   which process owns every write that can change its payload, and whether time alone changes it.
@@ -484,3 +531,83 @@ line anchors in the role helper and both Bicep templates.
    `RedisCachingExtensions.cs` (`AddRedisOutputCaching` `:91`, the blank-string no-op `:94`,
    `AddStackExchangeRedisOutputCache` `:99`). The earlier Revision sections keep the anchors they
    were written with.
+
+## Revision (2026-11-23)
+
+Re-verified against current source. The decision, the strict apply-only-to-identity-independent
+contract, the tenant vary rule, the wide `HasRole` bypass check, the three 60-second TTLs (ADC
+`NowNextCache` and `BookmarkCountsCache`, Store `ProductsCache`), both registered eviction halves on
+each host and both replica ceilings are unchanged. What moved: the Decision now records three
+properties of the policy and two framework conventions it did not mention, the ADC and Store policy
+counts are corrected, and the Redis output-cache registration path is restated.
+
+1. **The bypass also takes permissions.** `PublicEndpointOutputCachePolicy` has a four-argument
+   constructor with `bypassPermissions`
+   (`MMCA.Common/Source/Presentation/MMCA.Common.API/Caching/PublicEndpointOutputCachePolicy.cs:92`),
+   checked after the roles (`:175`) through `IPermissionRegistry` and
+   `PermissionAuthorizationHandler.Holds` (`:180-188`). The `AddPublicEndpointPolicy` extension
+   still has only the two role-or-none overloads
+   (`MMCA.Common/Source/Presentation/MMCA.Common.API/Caching/OutputCacheOptionsExtensions.cs:20`,
+   `:34`), so ADC's sessions policy registers the permission form directly with `AddPolicy` and
+   `ConferencePermissions.SessionAssetsManage`
+   (`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:186-192`). Decision updated.
+2. **The policy disables request coalescing.** It sets `AllowLocking = false` (`:118-122`), so one
+   client disconnecting cannot cancel a shared query and turn every waiter into a 500. The built-in
+   default enables locking, so this is a third departure, not the two the Decision listed. Decision
+   updated.
+3. **Two framework conventions apply the policy and eviction declaratively.** The class-level
+   `[PublicCachedReads(policy)]`
+   (`MMCA.Common/Source/Presentation/MMCA.Common.API/Caching/PublicCachedReadsAttribute.cs:42`)
+   stamps `[AllowAnonymous]` and `[OutputCache]` onto an entity controller's base reads and throws
+   on a gated override (`:29-33`); `[EvictOutputCache]`
+   (`MMCA.Common/Source/Presentation/MMCA.Common.API/Caching/EvictOutputCacheAttribute.cs:36`)
+   declares controller eviction. ADC Conference uses both: `[PublicCachedReads]` on 14 controllers
+   (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/Events/EventsController.cs:48`
+   among them) and `[EvictOutputCache]` in 17 Conference API controller files, with no hand-written
+   `EvictByTagAsync` in that project. Store Catalog uses both too
+   (`MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.API/Controllers/CategoriesController.cs:32-33`,
+   `ProductsController.cs:45-46`). Decision updated.
+4. **ADC has eleven public policies, and ten pass the bypass audience.** They are registered at
+   `Program.cs:175-216` (the audience array at `:174`); only `NowNextCache` (`:202`) omits it.
+   `ConferenceCache` is registered with built-in default semantics (`:143-144`) because a
+   `[HasPermission]`-gated controller references it, and no `ConferencePublicCache` name exists in
+   ADC `Source`. The twelve/eleven count of earlier revisions no longer holds. Decision updated.
+5. **Store Catalog has three public policies, all without a bypass.** `CategoriesCache` and
+   `ProductImagesCache` run five minutes and `ProductsCache` 60 seconds
+   (`MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:59-60`, `:68-69`, `:64-65`).
+   `CatalogCache` no longer exists: the policy names are declared at
+   `MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.Shared/Caching/CatalogCacheTags.cs:25`,
+   `:31` and `:34`. Context updated.
+6. **The Redis output-cache store is switched on by a host flag, not a host call.** Both hosts set
+   `UseRedisOutputCaching = true` (ADC `Program.cs:129`, Store `Program.cs:53`), and the composed
+   host calls `AddRedisOutputCaching()` only then
+   (`MMCA.Common/Source/Hosting/MMCA.Common.ServiceHost/ServiceHostBuilderExtensions.cs:90-93`),
+   before `AddOutputCache` (`:110`). The wrapper also applies a `RedisConfigurationOptionsPipeline`
+   configurator (`RedisCachingExtensions.cs:113-123`). The Store host comment no longer states the
+   `TryAdd` or the order. A test now asserts the Redis store descriptor is registered
+   (`MMCA.Common/Tests/Hosting/MMCA.Common.ServiceHost.Tests/ServiceHostBuilderExtensionsTests.cs:304-313`,
+   and its absence when the flag is off at `:289-300`), but no test resolves `IOutputCacheStore`,
+   so resolution precedence over the `TryAdd` memory store is still unasserted. A second test calls
+   the wrapper directly
+   (`MMCA.Common/Tests/Hosting/MMCA.Common.Azure.Tests/Redis/RedisConfiguratorConnectionPathTests.cs:52`),
+   and not every test store is a Moq mock (`EvictOutputCacheAttributeTests.cs:500`). Trade-offs
+   updated.
+7. Anchors re-verified against current source: `PublicEndpointOutputCachePolicy.cs` (relaxed
+   lookup/storage `:106-116`, `QueryKeys` `:127`, tenant vary `:129-137`, key constant `:53`, the
+   tenancy note `:40-45`, the `HasRole` bypass `:168-189`); `AuthenticatedServiceBase.cs`
+   (`CreateAuthenticatedClientAsync` `:67` through the header `:76-77`, the scope note `:61-66`);
+   `AuthDelegatingHandler.cs` (`SkipBearer` `:44`, checked `:187`, the header-null check `:192`,
+   the attach `:197`, the class doc on both pass-throughs `:15-18`); ADC Conference `Program.cs`
+   (the `TryAdd` comment `:120-121`, the broker-round-trip reasoning `:159-165`, the
+   `DbUpdateConcurrencyException` sentence `:166-168`, `BookmarkCountsCache` `:216`,
+   `AddOutputCacheEvictionHandler()` `:279`, `AddBrokerMessaging` with
+   `ConferenceBrokerConsumers.Register` `:359`); `ConferenceBrokerConsumers.cs:37`;
+   `RedisCachingExtensions.cs` (`AddRedisOutputCaching` `:103`, the blank-string no-op `:106-109`,
+   `AddStackExchangeRedisOutputCache` `:111`, the `TryAdd` doc `:88-90`);
+   `UserSessionBookmarkCacheEvictionHandler.cs` (class `:38`, `signal.Request()` `:58`);
+   `MMCA.ADC/infra/main.bicep` (`conferenceScaledMaxReplicas` `:214`, the Conference scale rule
+   `:2548` inside `conferenceApp` `:2402`); `MMCA.Store/infra/main.bicep` (Catalog scale rule
+   `:2144` inside `catalogApp` `:2028`). Store Catalog's eviction consumer is registered in
+   `MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/CatalogBrokerConsumers.cs:43`, wired
+   through `AddBrokerMessaging` at `Program.cs:110`, with `AddOutputCacheEvictionHandler()` at
+   `Program.cs:86`. The earlier Revision sections keep the anchors they were written with.

@@ -262,7 +262,10 @@
           shipped fitness-function base, so the Decision and Trade-offs record adopted state instead of
           pending work. Revised 2026-10-21: anchors refreshed after MMCA.Common moved the convention
           registration and the permission-grant and internal-command hard deletes. Revised 2026-10-26: anchors
-          refreshed after MMCA.Common moved the outbox cleanup and permission-grant hard deletes.</p>
+          refreshed after MMCA.Common moved the outbox cleanup and permission-grant hard deletes. Revised
+          2026-11-23: the framework&#39;s batched retention sweeps now delete through one helper that refuses
+          soft-deletable entities, the Context list adds the view-as grant and passkey credential hard
+          deletes, and the framework gate now also covers every optional table.</p>
           <h2 id="context">Context</h2>
           <p>EF Core picks a delete behavior for you. A required relationship gets <code>Cascade</code>, an optional one gets
           <code>ClientSetNull</code>, and neither choice appears anywhere a reviewer reads. The consequence is a database
@@ -282,17 +285,21 @@
           (<a href="005-soft-delete-vs-erasure.html">ADR-005</a>), so at runtime today no cascade ever fires from ordinary
           application code. The genuine hard deletes are narrow and deliberate: the framework&#39;s own cleanup
           jobs against leaf tables (audit trail retention at
-          <code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/AuditTrail/AuditTrailCleanupJob.cs:158-161</code>,
-          refresh sessions at <code>.../Persistence/Auth/RefreshSessionCleanupService.cs:127</code>, permission grants at
-          <code>.../Persistence/Auth/EFPermissionGrantStore.cs:143-146</code>, internal commands at
-          <code>.../Persistence/InternalCommands/Administration/InternalCommandAdministration.cs:223-225</code> and
-          <code>.../Persistence/InternalCommands/Administration/InternalCommandCleanupService.cs:112</code> and <code>:147</code>,
-          outbox messages at <code>.../Persistence/Outbox/Administration/OutboxCleanupService.cs:105</code>, <code>:165</code> and
-          <code>:181</code>), ADC&#39;s session-score replacement
-          (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Sessions/UseCases/DecisionSupport/ScoreEventSessions/SessionScoringRunner.cs:170</code>),
+          <code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/AuditTrail/AuditTrailCleanupJob.cs:119</code>,
+          refresh sessions at <code>.../Persistence/Auth/RefreshSessionCleanupService.cs:127</code>, internal commands at
+          <code>.../Persistence/InternalCommands/Administration/InternalCommandCleanupService.cs:110</code> and <code>:151</code>,
+          outbox and inbox messages at <code>.../Persistence/Outbox/Administration/OutboxCleanupService.cs:104</code>,
+          <code>:168</code> and <code>:189</code>, all batched through <code>.../Persistence/Retention/BatchedDelete.cs:120</code>, which
+          refuses a soft-deletable entity at <code>:84-88</code>), the framework&#39;s other leaf-table deletes (permission
+          grants at <code>.../Persistence/Auth/EFPermissionGrantStore.cs:145</code>, view-as grants at
+          <code>.../Persistence/Auth/EFViewAsGrantStore.cs:109</code>, passkey credentials through the change tracker at
+          <code>.../Persistence/Auth/EFPasskeyCredentialStore.cs:79</code>, internal commands at
+          <code>.../Persistence/InternalCommands/Administration/InternalCommandAdministration.cs:225</code>), ADC&#39;s
+          session-score replacement
+          (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Sessions/UseCases/DecisionSupport/ScoreEventSessions/SessionScoringRunner.cs:169</code>),
           and Store&#39;s product image blob removal
-          (<code>MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.Infrastructure/Services/ProductImageStorageService.cs:101</code>
-          and <code>:124</code>), which removes <code>ProductImageData</code> rows through the change tracker; the audit interceptor
+          (<code>MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.Infrastructure/Services/ProductImageStorageService.cs:103</code>
+          and <code>:126</code>), which removes <code>ProductImageData</code> rows through the change tracker; the audit interceptor
           leaves an <code>EntityState.Deleted</code> entry as it is
           (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Interceptors/AuditSaveChangesInterceptor.cs:101-102</code>),
           so that is a real <code>DELETE</code>.</p>
@@ -326,8 +333,8 @@
           </li>
           <li><p><strong>It is registered on the one base context, after the other two finalizing conventions.</strong>
           <code>ApplicationDbContext.ConfigureConventions</code>
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/ApplicationDbContext.cs:378</code>)
-          adds it at <code>:400</code>, deliberately last of the three, so it never stamps a relationship the
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/ApplicationDbContext.cs:491</code>)
+          adds it at <code>:513</code>, deliberately last of the three, so it never stamps a relationship the
           cross-source degrade convention has already removed. Because there is one context class per engine
           over one abstract base (<a href="006-database-per-service.html">ADR-006</a>), that single registration reaches
           every module, every database and every repo.</p>
@@ -384,8 +391,13 @@
           because those models had no convention-sourced foreign key to flip. MMCA.Common&#39;s own
           tables (outbox, inbox, internal commands, scheduler, audit trail, refresh sessions, permission
           grants, notifications) declare no relationships between each other
-          (<code>MMCA.Common/Tests/Architecture/MMCA.Common.Architecture.Tests/Domain/DeleteBehaviorConventionTests.cs:21-26</code>),
-          so nothing flips inside the framework and its own gate passes vacuously today. That is the point of
+          (<code>MMCA.Common/Tests/Architecture/MMCA.Common.Architecture.Tests/Domain/DeleteBehaviorConventionTests.cs:23-25</code>),
+          and neither do the nine tables a host maps only when it opts in (audit trail, scheduler, refresh
+          sessions, stored permission grants, view-as grants, feature-flag overrides, passkey credentials,
+          machine clients, webhook subscriptions; switched on at <code>:149-157</code>).
+          The gate runs over the Sqlite model (<code>:33</code>), the SQL Server model (<code>:36-51</code>) and a SQL Server model
+          that maps every optional table (<code>:78-94</code>, asserting the nine tables are present at <code>:57-76</code>), so nothing
+          flips inside the framework and its own gate passes vacuously today. That is the point of
           a vacuous gate: the day a framework table gains a relationship, the test decides whether its delete
           behavior was a decision or an accident, before consumers inherit it in a migration.</li>
           <li><strong>Optional relationships move too, from <code>ClientSetNull</code> to <code>Restrict</code>.</strong> A client-side null-out is
@@ -457,6 +469,41 @@
           set-based delete at <code>.../Persistence/Auth/EFPermissionGrantStore.cs:143-146</code> (<code>ExecuteDeleteAsync</code>
           at <code>:145</code>). The earlier dated revisions keep the anchors that were accurate on their own dates.</li>
           </ol>
+          <h2 id="revision-2026-11-23">Revision (2026-11-23)</h2>
+          <p>Re-verified against current source. No decision or rationale changed: the convention is still
+          registered last of the three finalizing conventions, every cited hard delete is still a delete
+          against a leaf table, and the framework gate still passes vacuously. The Context list and the
+          framework-gate trade-off were updated to match the source: the gate now covers more of the model.</p>
+          <ol>
+          <li>The framework retention sweeps (audit trail, refresh sessions, processed and dead-letter internal
+          commands, processed and dead-letter outbox messages, inbox messages) now delete in id batches
+          through one helper: <code>ExecuteDeleteAsync</code> at
+          <code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Retention/BatchedDelete.cs:120</code>,
+          which throws for an <code>IAuditableEntity</code> (<code>:84-88</code>), so none of those sweeps can erase a
+          soft-deletable row. The view-as grant purge in item 2 is also a retention delete (run on
+          <code>RetentionDays</code> at
+          <code>MMCA.Common/Source/Core/MMCA.Common.Application/Auth/ViewAs/ViewAsService.cs:101</code>), but it is
+          one unbatched <code>ExecuteDeleteAsync</code> outside the helper; <code>ViewAsGrant</code> is not an <code>IAuditableEntity</code>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Domain/Auth/ViewAsGrant.cs:18</code>), so no soft-deletable row
+          is at risk there.</li>
+          <li>The Context list now names two framework hard deletes it omitted: the view-as grant purge
+          (<code>.../Persistence/Auth/EFViewAsGrantStore.cs:109</code>, <code>ExecuteDeleteAsync</code> by <code>GrantedAt</code>) and the
+          passkey credential removal (<code>.../Persistence/Auth/EFPasskeyCredentialStore.cs:79</code>, a
+          change-tracker <code>Remove</code>). Both are leaf tables.</li>
+          <li>The framework&#39;s own gate now also asserts a SQL Server model that maps every optional table
+          (<code>MMCA.Common/Tests/Architecture/MMCA.Common.Architecture.Tests/Domain/DeleteBehaviorConventionTests.cs:78-94</code>),
+          built with all nine opt-in tables switched on (<code>:149-157</code>: audit trail, scheduler, refresh
+          sessions, stored permission grants, view-as grants, feature-flag overrides, passkeys, machine
+          clients, webhooks) and guarded by a fact that all nine are present (<code>:57-76</code>). The Trade-offs
+          bullet names them.</li>
+          <li>Anchors re-verified against current source: <code>ApplicationDbContext.cs:491</code> with the registration
+          at <code>:513</code> (degrade <code>:500</code>, soft-delete unique index <code>:506</code>), <code>AuditTrailCleanupJob.cs:119</code>,
+          <code>InternalCommandCleanupService.cs:110</code>/<code>:151</code>, <code>OutboxCleanupService.cs:104</code>/<code>:168</code>/<code>:189</code>,
+          <code>EFPermissionGrantStore.cs:145</code>, <code>InternalCommandAdministration.cs:225</code>,
+          <code>SessionScoringRunner.cs:169</code>, <code>ProductImageStorageService.cs:103</code>/<code>:126</code>, and
+          <code>DeleteBehaviorConventionTests.cs:23-25</code>. The earlier dated revisions keep the anchors that were
+          accurate on their own dates.</li>
+          </ol>
           <h2 id="related">Related</h2>
           <p><a href="006-database-per-service.html">ADR-006</a> (one context class per engine over one abstract base, which is
           what makes this a single registration),
@@ -486,6 +533,7 @@
             <li><a href="#revision-2026-10-06">Revision (2026-10-06)</a></li>
             <li><a href="#revision-2026-10-21">Revision (2026-10-21)</a></li>
             <li><a href="#revision-2026-10-26">Revision (2026-10-26)</a></li>
+            <li><a href="#revision-2026-11-23">Revision (2026-11-23)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

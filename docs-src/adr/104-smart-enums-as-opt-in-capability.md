@@ -20,6 +20,9 @@ moved; the eighteen shipped declarations are unchanged.
 Revised 2026-11-12: MMCA.Helpdesk is the first adopter (`TicketLifecycle`, a domain type behind the
 `TicketStatus` wire enum), and `EnumerationNameValueConverter<T>` is recorded beside the integer
 converter (Context, Decision points 9, 11, 12 and 13, Trade-offs).
+Revised 2026-11-23: the shipped surface is twenty declarations (fourteen in Shared, six in
+Infrastructure) and the Context counts forty test methods; `AddAPI` no longer registers a
+`CurrencyJsonConverter` (`Currency` carries its own attribute), and anchors are refreshed.
 
 ## Context
 A bounded set of named values shows up everywhere in this workspace: the state that triggered a
@@ -35,8 +38,8 @@ sealed class whose members are `public static readonly` fields, so each member i
 The framework ships that base. `Enumeration<TEnumeration>`
 (`MMCA.Common/Source/Core/MMCA.Common.Shared/ValueObjects/Enumeration.cs:77-78`) is complete rather
 than sketched: reflection-based member discovery, `Result`-returning lookups, type-guarded equality,
-a System.Text.Json converter factory, `DataContract` attribution for the XML formatter, and a pair
-of EF Core value converters in Infrastructure. Thirty-three test methods across three files pin its
+a System.Text.Json converter factory, `DataContract` attribution for the XML formatter, and three
+EF Core value converters in Infrastructure. Forty test methods across three files pin its
 contract. It also sits in the `MMCA.Common.Shared.ValueObjects` namespace but deliberately does not
 derive from `ValueObject`. The `ValueObjectsAreImmutableSealedInShared` fitness rule asserts three
 things about every concrete class deriving from `ValueObject`: the type is sealed
@@ -109,14 +112,17 @@ whose members need behavior or data, and nothing in the framework pushes a consu
    `[JsonConverter]` off the type being converted without walking base types, so the attribute on
    the base (`:72`) covers only a member typed as the base. `AddAPI` adds the factory to
    `JsonSerializerOptions.Converters`
-   (`MMCA.Common/Source/Presentation/MMCA.Common.API/DependencyInjection.cs:59`, rationale at
-   `:56-58`), beside the `CurrencyJsonConverter` precedent (`:54`), so a concrete enumeration
-   serializes by name across every host that calls `AddAPI` with no per-type attribute.
+   (`MMCA.Common/Source/Presentation/MMCA.Common.API/DependencyInjection.cs:60`, rationale at
+   `:57-59`), beside the `StronglyTypedIdJsonConverterFactory` registration (`:66`), so a concrete
+   enumeration serializes by name across every host that calls `AddAPI` with no per-type attribute.
+   `Currency` takes the other route: it carries its converter as a type attribute
+   (`MMCA.Common/Source/Core/MMCA.Common.Shared/ValueObjects/Financial/Currency.cs:15`), so `AddAPI`
+   does not register it.
 
 8. **XML rides the DataContract attributes already on the type.** The base is `[DataContract]`
    (`Enumeration.cs:71`) with `[DataMember(Order = 1)] Name` (`:100`) and
    `[DataMember(Order = 2)] Value` (`:104`), and `AddAPI` registers
-   `AddXmlDataContractSerializerFormatters()` (`DependencyInjection.cs:67`).
+   `AddXmlDataContractSerializerFormatters()` (`DependencyInjection.cs:68`).
 
 9. **Persistence is a plain `int` column by default, or the member name where the column already
    holds names.**
@@ -146,7 +152,8 @@ whose members need behavior or data, and nothing in the framework pushes a consu
     converter and pins the documented limitation that an unattributed enumeration under unconfigured
     options falls back to the default object shape (`:68-75`); `EnumerationValueConverterTests`
     (`MMCA.Common/Tests/Core/MMCA.Common.Infrastructure.Tests/Persistence/Conversions/EnumerationValueConverterTests.cs:1-226`,
-    14 methods) covers both converters including the null pass-through (`:70-78`).
+    14 methods) covers the three converters, including the nullable converter's null pass-through
+    (`:71-79`) and the name converter (from `:90`).
 
 11. **The rule for choosing.** Use a plain C# enum when the members are names for states or options
     and every decision about them is made by the code that reads them: it is the cheaper type, it
@@ -161,10 +168,10 @@ whose members need behavior or data, and nothing in the framework pushes a consu
 
 12. **The surface is frozen public API.** Every member of the base and the factory is in
     `MMCA.Common.Shared`'s shipped baseline
-    (`MMCA.Common/Source/Core/MMCA.Common.Shared/PublicAPI.Shipped.txt:965-970`, `:1318-1322`,
-    `:1622-1624`), and the three converters are in Infrastructure's
-    (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/PublicAPI.Shipped.txt:372-375`, `:378-379`):
-    the name converter shipped with v1.289.0 (`:372-373`). Under
+    (`MMCA.Common/Source/Core/MMCA.Common.Shared/PublicAPI.Shipped.txt:986-991`, `:1351-1355`,
+    `:1663-1665`), and the three converters are in Infrastructure's
+    (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/PublicAPI.Shipped.txt:378-381`, `:384-385`):
+    the name converter shipped with v1.289.0 (`:378-379`). Under
     ADR-015's RS0016/RS0017 gate, removing or reshaping any of it is a reviewable text diff and a
     breaking change to the package surface, which is precisely why leaving an unadopted capability
     in place is a decision rather than an oversight.
@@ -173,7 +180,7 @@ whose members need behavior or data, and nothing in the framework pushes a consu
     MMCA.Common, MMCA.Store or MMCA.ADC derives from `Enumeration<T>`. MMCA.Helpdesk, the reference
     app and template source, declares one: `TicketLifecycle`
     (`MMCA.Helpdesk/Source/Modules/Tickets/MMCA.Helpdesk.Tickets.Domain/Tickets/TicketLifecycle.cs:21`),
-    the ticket aggregate's status type (`MMCA.Helpdesk/Source/Modules/Tickets/MMCA.Helpdesk.Tickets.Domain/Tickets/Ticket.cs:34`).
+    the ticket aggregate's status type (`MMCA.Helpdesk/Source/Modules/Tickets/MMCA.Helpdesk.Tickets.Domain/Tickets/Ticket.cs:37`).
     Its four members carry the lifecycle rule as data (`IsLocked`, true for `Closed` only,
     `TicketLifecycle.cs:23-26`, `:31-35`), and each member's value and name equal those of the
     `TicketStatus` enum
@@ -192,7 +199,7 @@ whose members need behavior or data, and nothing in the framework pushes a consu
     migration: the newest migration in the Tickets migrations project
     (`20261112163619_AddWebhookSubscriptions`) names no status column. Within MMCA.Common, the only
     code that references it is the base file itself, the EF converters, the `AddAPI` registration
-    of its JSON converter factory (`DependencyInjection.cs:19`, `:59`) and the three test files.
+    of its JSON converter factory (`DependencyInjection.cs:19`, `:60`) and the three test files.
     Everywhere else it appears only as text, in comments and in one `SuppressMessage`
     justification string, as the precedent the strongly typed identifiers and the entity base cite
     (for example `IStronglyTypedId.cs:54`, `BaseEntity.cs:31`, `:50`). Besides Helpdesk's set, the only derivations are the five private
@@ -214,7 +221,7 @@ whose members need behavior or data, and nothing in the framework pushes a consu
   (`EnumerationValueConverter.cs:9-11`).
 - **A converter factory beats per-type attributes.** Registering the factory once in `AddAPI` means
   a consumer's concrete enumeration is correct by default across every endpoint, instead of being
-  correct only where someone remembered the attribute (`DependencyInjection.cs:56-59`).
+  correct only where someone remembered the attribute (`DependencyInjection.cs:57-60`).
 - **`Result` lookups match the rest of the framework.** `FromValue`/`FromName` returning
   `Result<TEnumeration>` (`Enumeration.cs:121`, `:142`) keeps parsing a value rather than an
   exception, which is ADR-013's posture and what every `Create` factory on a value object already
@@ -235,9 +242,9 @@ whose members need behavior or data, and nothing in the framework pushes a consu
   `Enumeration<T>`, and the rule in Decision point 11 is prose, not a fitness function. Nothing
   fails a build when a set that would benefit from behavior stays a `switch`, and nothing fails when
   a trivial set is declared as a smart enumeration.
-- **Public API surface with one consumer.** Eighteen shipped declarations across two packages
-  (`Shared/PublicAPI.Shipped.txt:578-583`, `:780-784`, `:1016-1018`;
-  `Infrastructure/PublicAPI.Shipped.txt:347-348`, `:351-352`) are frozen under ADR-015 and can only
+- **Public API surface with one consumer.** Twenty shipped declarations across two packages
+  (`Shared/PublicAPI.Shipped.txt:986-991`, `:1351-1355`, `:1663-1665`;
+  `Infrastructure/PublicAPI.Shipped.txt:378-381`, `:384-385`) are frozen under ADR-015 and can only
   be removed as a breaking change.
 - **The JSON attribute does not inherit.** A concrete enumeration serialized outside `AddAPI`'s
   options (a hand-built `JsonSerializerOptions`, a `System.Text.Json` call in a test or a tool)
@@ -351,6 +358,38 @@ revision above are superseded by the ones below and in the live sections.
    `EnumerationValueConverter` at
    `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/PublicAPI.Shipped.txt:347-348` and
    `NullableEnumerationValueConverter` at `:351-352`.
+
+## Revision (2026-11-23)
+Re-verified against current source. No decision or rationale changed, and adoption is still the one
+Helpdesk set. Three statements are corrected and the anchors that moved are re-pointed.
+
+1. The shipped surface is twenty declarations, not eighteen: fourteen in Shared
+   (`MMCA.Common/Source/Core/MMCA.Common.Shared/PublicAPI.Shipped.txt:986-991`, `:1351-1355`,
+   `:1663-1665`) and six in Infrastructure
+   (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/PublicAPI.Shipped.txt:378-381`,
+   `:384-385`). The name converter added in v1.289.0 (`MMCA.Common/CHANGELOG.md:511`, `:537`)
+   brought the two extra declarations (`:378-379`). No `PublicAPI.Unshipped.txt` under
+   `Source/Core` carries an `Enumeration` entry. The Trade-offs and Decision point 12 now cite the
+   same ranges.
+2. The Context said thirty-three test methods pin the contract; the three files hold forty
+   (`EnumerationTests.cs` 15, `EnumerationSerializationTests.cs` 11,
+   `EnumerationValueConverterTests.cs` 14), matching Decision point 10 and the Trade-offs. Decision
+   point 10 now says `EnumerationValueConverterTests` covers the three converters, since its name
+   converter section starts at `:90`, and the Context lists three EF Core value converters rather
+   than a pair.
+3. Decision point 7 cited a `CurrencyJsonConverter` registration in `AddAPI` as the precedent for
+   the factory. `AddAPI`'s `AddJsonOptions` block registers only the enumeration and strongly typed
+   identifier factories
+   (`MMCA.Common/Source/Presentation/MMCA.Common.API/DependencyInjection.cs:55-67`), and `Currency`
+   carries its converter as a type attribute
+   (`MMCA.Common/Source/Core/MMCA.Common.Shared/ValueObjects/Financial/Currency.cs:15`, class at
+   `:75`), as the `AddAPI` summary says (`DependencyInjection.cs:31-32`).
+4. Anchors re-verified against current source: `DependencyInjection.cs:19` (alias, unchanged),
+   `:60` (factory registration, rationale `:57-59`), `:68` (XML formatters);
+   `EnumerationValueConverterTests.cs:71-79` (null pass-through), `:215` (fixture, unchanged);
+   `MMCA.Helpdesk/Source/Modules/Tickets/MMCA.Helpdesk.Tickets.Domain/Tickets/Ticket.cs:37` (the
+   `Status` property); `EnumerationTests.cs:122`, `:134` and
+   `EnumerationSerializationTests.cs:111`, `:122` (fixtures, unchanged).
 
 ## Related
 [ADR-037](037-field-level-encryption-at-rest.md) (the precedent for recording a shipped, tested and

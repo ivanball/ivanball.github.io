@@ -270,7 +270,10 @@
           <code>Retry-After</code> and that the two hosts place <code>UseUiRateLimiting()</code> at different points relative to the
           error-handling middleware (before it in ADC, after it in Store), and anchors refreshed against Common v1.261.0
           (both consumers pin 1.260.0). Revised 2026-10-28: anchors refreshed after the v1.265.1 release (both
-          consumers pin <code>MMCA.Common.UI.Web</code> 1.265.1).</p>
+          consumers pin <code>MMCA.Common.UI.Web</code> 1.265.1). Revised 2026-11-23: both hosts now run the one composed
+          <code>AddMmcaBlazorWebHost</code> / <code>UseMmcaBlazorWebPipeline</code> head, so the limiter sits at the same point (before the
+          error-handling middleware) in both, and the extension-bearing-path exemption is gone: a path is exempt by
+          prefix or by matching a real static asset, and a file extension alone exempts nothing.</p>
           <h2 id="context">Context</h2>
           <p><a href="019-rate-limiting.html">ADR-019</a> layers rate limiting, and <a href="088-gateway-edge-responsibilities.html">ADR-088</a>
           makes the Gateway the layer that carries the outermost one. Both records describe traffic that arrives
@@ -278,8 +281,7 @@
           externally reachable origin</strong> on its own Container Apps FQDN, so the Gateway&#39;s edge limiter guards the
           Gateway&#39;s own hostname and never sees a single request to the front door a browser actually loads
           (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI.Web/Hardening/UiRateLimitingSettings.cs:11-16</code>, and the same
-          statement at the registration site in <code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs:146-148</code> and
-          <code>MMCA.Store/Source/Hosts/UI/MMCA.Store.UI.Web/Program.cs:95-97</code>).</p>
+          statement in ADC&#39;s head at <code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs:73-74</code>).</p>
           <p>Two properties of this origin make that gap expensive rather than cosmetic.</p>
           <p><strong>A page load here is not a cheap request.</strong> Under <a href="056-blazor-render-mode-strategy.html">ADR-056</a>&#39;s
           Interactive Auto strategy the first render is always a Server circuit, so every page load opens one and
@@ -288,7 +290,7 @@
           An unauthenticated loop over the page and negotiate endpoints therefore accumulates server memory, not
           just request volume, and the container it accumulates in is typically 0.25 vCPU / 0.5 GiB
           (<code>MMCA.Common.UI.Web/Hardening/BlazorCircuitLimitSettings.cs:27-28</code>; ADC&#39;s UI container doubles to 0.5 vCPU /
-          1 GiB only under its <code>conferenceMode</code> deployment parameter, <code>MMCA.ADC/infra/main.bicep:157,182</code>).</p>
+          1 GiB only under its <code>conferenceMode</code> deployment parameter, <code>MMCA.ADC/infra/main.bicep:179,204</code>).</p>
           <p><strong>The framework knob that looks like the answer is not one.</strong> <code>CircuitOptions</code> exposes
           <code>DisconnectedCircuitMaxRetained</code> and <code>DisconnectedCircuitRetentionPeriod</code>, and both bound only circuits
           that have already DROPPED their connection and are being held for reconnect; nothing in <code>CircuitOptions</code>
@@ -330,11 +332,11 @@
           <code>DisconnectedCircuitMaxRetained</code> drops from the framework&#39;s 100 to <strong>25</strong> by default, because a retained
           circuit holds the same state an active one does while serving nobody
           (<code>MMCA.Common.UI.Web/Hardening/BlazorCircuitLimitSettings.cs:40-46</code>), and both hosts keep 25
-          (<code>MMCA.ADC.UI.Web/appsettings.json:30</code>, <code>MMCA.Store.UI.Web/appsettings.json:52</code>). The retention <strong>period</strong> is
+          (<code>MMCA.ADC.UI.Web/appsettings.json:30</code>, <code>MMCA.Store.UI.Web/appsettings.json:53</code>). The retention <strong>period</strong> is
           where the two apps deliberately differ. The kit defaults it to 60 seconds, because a visitor who really did
           drop off wifi reconnects within seconds, and its own documentation names the exception
           (<code>MMCA.Common.UI.Web/Hardening/BlazorCircuitLimitSettings.cs:48-57</code>): Store keeps 60
-          (<code>MMCA.Store.UI.Web/appsettings.json:53</code>), while ADC raises it back to the ASP.NET Core default of 180
+          (<code>MMCA.Store.UI.Web/appsettings.json:54</code>), while ADC raises it back to the ASP.NET Core default of 180
           (<code>MMCA.ADC.UI.Web/appsettings.json:31</code>) because a conference venue&#39;s shared wifi drops connections for far
           longer than a home network does and an attendee walking between rooms should come back to the session state
           they left.</p>
@@ -342,40 +344,44 @@
           <li><p><strong>A UI-host-local per-IP fixed window CHAINED with a replica-wide concurrency ceiling, both rejecting 429.</strong>
           The two limiters answer different questions, so a request must satisfy both:
           <code>PartitionedRateLimiter.CreateChained</code> over a per-client-IP fixed window and a single-partition concurrency
-          limiter (<code>MMCA.Common.UI.Web/Hardening/UiRateLimitingExtensions.cs:232-238</code>). The rejection status is 429
-          (<code>:215</code>), and a fixed-window rejection also carries a <code>Retry-After</code> header in whole seconds (a concurrency
-          rejection has no hint and sends none; <code>:45-64</code>, wired at <code>:216</code>). The concurrency half queues nothing
-          (<code>QueueLimit = 0</code>), so a saturated host sheds load instead of growing latency (<code>:180-185</code>, rationale at
+          limiter (<code>MMCA.Common.UI.Web/Hardening/UiRateLimitingExtensions.cs:252-258</code>). The rejection status is 429
+          (<code>:235</code>), and a fixed-window rejection also carries a <code>Retry-After</code> header in whole seconds (a concurrency
+          rejection has no hint and sends none; <code>:47-66</code>, wired at <code>:236</code>). The concurrency half queues nothing
+          (<code>QueueLimit = 0</code>), so a saturated host sheds load instead of growing latency (<code>:200-205</code>, rationale at
           <code>MMCA.Common.UI.Web/Hardening/UiRateLimitingSettings.cs:64-74</code>).
           The Blazor circuit transport (<code>/_blazor</code>: negotiate, the circuit WebSocket and its long-polling fallback) is
           the one path held to the per-IP window alone: a circuit WebSocket would hold a concurrency permit for the
           circuit&#39;s whole lifetime and starve page loads, so the concurrency half gives that prefix the no-limiter
           partition and open circuits are bounded by <code>MaxActiveCircuits</code> instead
-          (<code>MMCA.Common.UI.Web/Hardening/UiRateLimitingExtensions.cs:37-43,158-186</code>).</p>
+          (<code>MMCA.Common.UI.Web/Hardening/UiRateLimitingExtensions.cs:39-45,178-206</code>).</p>
           </li>
           <li><p><strong>Exemptions are what keep the limiter off the first real visitor rather than off the attacker.</strong> Health and
           liveness probes are exempt, because throttling them turns a traffic spike into a failed probe and a container
-          restart; so are the two framework asset roots and any path OUTSIDE the same-origin API proxy prefix whose last
-          segment carries a file extension, since a single page load pulls dozens of static files served from disk with
-          an ETag (<code>MMCA.Common.UI.Web/Hardening/UiRateLimitingExtensions.cs:66-78,80-116</code>). Proxied traffic is API
-          traffic whatever its last segment looks like, so <code>/api/report.csv</code> is counted (<code>:113-115</code>). The default exempt
-          list also carries <code>/hubs</code>, mirroring the Gateway&#39;s own bypass list, so a host that ever fronts a SignalR hub on
-          this origin is covered by declaration rather than by accident (<code>:66-78</code>), and the same hub traffic arriving
-          through the proxy is exempt at <code>{SameOriginApiProxy:PathPrefix}/hubs</code> (<code>:107</code>), with the prefix read through the
-          proxy&#39;s own options so the limiter and the proxy cannot disagree (<code>:224-230</code>; v1.232.0,
-          <code>MMCA.Common/CHANGELOG.md:639</code>). Because these are the kit&#39;s defaults, both hosts exempt them, and both use-site
-          comments name <code>/hubs</code> (<code>MMCA.Store.UI.Web/Program.cs:232-235</code>, ADC&#39;s at <code>MMCA.ADC.UI.Web/Program.cs:225-227</code>).
-          <code>/_blazor</code> deliberately has no extension and no exemption from the per-IP window, because the negotiate
-          endpoint is exactly what opens a circuit; it is kept out of the concurrency ceiling only, as above
-          (<code>MMCA.Common.UI.Web/Hardening/UiRateLimitingExtensions.cs:94-98</code>). An unresolvable client IP <strong>fails open</strong>
+          restart; so are the two framework asset roots (<code>/_framework</code>, <code>/_content</code>), matched on whole segments
+          (<code>MMCA.Common.UI.Web/Hardening/UiRateLimitingExtensions.cs:68-80</code>, the match at <code>:102-104</code>). Beyond those
+          prefixes, a request is exempt only when the endpoint routing selected for it is a real static asset mapped by
+          <code>MapStaticAssets</code>, read from its <code>StaticAssetDescriptor</code> metadata, since a single page load pulls dozens of
+          them and each is served with an ETag for almost nothing (<code>:106-128</code>). A file extension alone exempts nothing:
+          a path such as <code>/missing.png</code> that maps to no static asset renders the not-found page and is counted like any
+          page route (<code>:88-93</code>), and proxied API traffic is counted whatever its last segment looks like. The default
+          exempt list also carries <code>/hubs</code>, mirroring the Gateway&#39;s own bypass list, so a host that ever fronts a
+          SignalR hub on this origin is covered by declaration rather than by accident (<code>:72-75,80</code>), and the same hub
+          traffic arriving through the proxy is exempt at <code>{SameOriginApiProxy:PathPrefix}/hubs</code> (<code>:76-78,104</code>), with
+          the prefix read through the proxy&#39;s own options so the limiter and the proxy cannot disagree (<code>:244-250</code>;
+          v1.232.0, <code>MMCA.Common/CHANGELOG.md:1546</code>). Because these are the kit&#39;s defaults, both hosts exempt them.
+          <code>/_blazor</code> deliberately has no exemption from the per-IP window, because the negotiate endpoint is exactly
+          what opens a circuit; it is kept out of the concurrency ceiling only, as above
+          (<code>MMCA.Common.UI.Web/Hardening/UiRateLimitingExtensions.cs:93-96</code>). An unresolvable client IP <strong>fails open</strong>
           rather than collapsing every unattributable request into one shared bucket, which would throttle an
-          in-process <code>TestServer</code> to a standstill (<code>:140-146</code>).</p>
+          in-process <code>TestServer</code> to a standstill (<code>:156-162</code>).</p>
           </li>
-          <li><p><strong>Forwarded headers come first, with one framework posture shared by every host.</strong> Both UI hosts open their
-          pipeline with <code>UseCommonUiForwardedHeaders()</code> (<code>MMCA.ADC.UI.Web/Program.cs:217</code>,
-          <code>MMCA.Store.UI.Web/Program.cs:207</code>), defined in <code>MMCA.Common.API</code>
+          <li><p><strong>Forwarded headers come first, with one framework posture shared by every host.</strong> The composed UI pipeline
+          opens with <code>UseCommonUiForwardedHeaders()</code>
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI.Web/Hosting/BlazorWebHostExtensions.cs:185</code>), and both UI
+          hosts run that pipeline (<code>MMCA.ADC.UI.Web/Program.cs:128,130</code>, <code>MMCA.Store.UI.Web/Program.cs:92</code>). The method
+          is defined in <code>MMCA.Common.API</code>
           (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/CommonForwardedHeadersExtensions.cs:24-25</code>, shipped in
-          v1.211.0, <code>MMCA.Common/CHANGELOG.md:1179-1182</code>). It applies <code>CommonForwardedHeaders.Create()</code>: <code>X-Forwarded-For</code>,
+          v1.211.0, <code>MMCA.Common/CHANGELOG.md:2117</code>). It applies <code>CommonForwardedHeaders.Create()</code>: <code>X-Forwarded-For</code>,
           <code>X-Forwarded-Proto</code> and <code>X-Forwarded-Host</code> by default, with the known-proxy and known-network allow-lists
           cleared because cloud ingress reaches the container from addresses in neither default list
           (<code>.../MMCA.Common.API/Startup/CommonForwardedHeaders.cs:14-20,33-34,42-53</code>). The service pipeline&#39;s
@@ -387,27 +393,30 @@
           the caller&#39;s IP rather than the ingress&#39;s.</p>
           </li>
           <li><p><strong>Both limiters go in after forwarded headers and before request localization, antiforgery and the
-          component endpoints that open a circuit or render a page.</strong> <code>AddUiRateLimiting</code> at registration and
-          <code>UseUiRateLimiting()</code> in the pipeline (<code>MMCA.ADC.UI.Web/Program.cs:155</code> and <code>:228</code>,
-          <code>MMCA.Store.UI.Web/Program.cs:102</code> and <code>:236</code>). The two hosts place it at different points relative to the
-          error-handling middleware: ADC&#39;s sits directly after the security headers and BEFORE <code>UseExceptionHandler</code>,
-          <code>UseStatusCodePagesWithReExecute(&quot;/not-found&quot;)</code>, <code>MapDefaultEndpoints</code> and <code>UseHttpsRedirection</code>
-          (<code>MMCA.ADC.UI.Web/Program.cs:228</code>, those at <code>:237-241</code>), while Store&#39;s sits AFTER all four
-          (<code>MMCA.Store.UI.Web/Program.cs:220,228-230</code>, limiter at <code>:236</code>), so in Store the status-code re-execute
-          middleware wraps the limiter&#39;s 429. The circuit
-          ceiling is registered beside it, with the retention half applied to <code>AddInteractiveServerComponents</code> from
-          the same section so the two numbers cannot drift apart (<code>RetentionFrom</code> at <code>MMCA.ADC.UI.Web/Program.cs:79</code>
-          and <code>MMCA.Store.UI.Web/Program.cs:85</code>, <code>AddBoundedBlazorCircuits()</code> at <code>MMCA.ADC.UI.Web/Program.cs:89</code> and
-          <code>MMCA.Store.UI.Web/Program.cs:93</code>, both through
+          component endpoints that open a circuit or render a page.</strong> Neither host calls the kit directly: both
+          register through the composed <code>builder.AddMmcaBlazorWebHost(...)</code> (<code>MMCA.ADC.UI.Web/Program.cs:26</code>,
+          <code>MMCA.Store.UI.Web/Program.cs:30</code>) and build their pipeline through <code>app.UseMmcaBlazorWebPipeline(...)</code>
+          (<code>MMCA.ADC.UI.Web/Program.cs:128,130</code>, <code>MMCA.Store.UI.Web/Program.cs:92</code>), shipped in v1.289.0
+          (<code>MMCA.Common/CHANGELOG.md:550</code>). The registration half calls <code>AddUiRateLimiting</code>
+          (<code>MMCA.Common.UI.Web/Hosting/BlazorWebHostExtensions.cs:96</code>), and the pipeline runs, in a fixed order,
+          forwarded headers, security headers and <code>UseUiRateLimiting()</code> (<code>:185-187</code>), then outside Development
+          <code>UseExceptionHandler</code> (<code>:193-196</code>; in Development the head&#39;s optional <code>DevelopmentPipeline</code> callback runs
+          in its place, <code>:189-192</code>, and ADC&#39;s net11.0 head passes none, <code>MMCA.ADC.UI.Web/Program.cs:125-128</code>),
+          <code>UseStatusCodePagesWithReExecute(&quot;/not-found&quot;)</code> (<code>:198</code>), <code>MapDefaultEndpoints</code> (<code>:199</code>),
+          <code>UseHttpsRedirection</code> (<code>:200</code>), request localization (<code>:201</code>) and antiforgery (<code>:202</code>). The limiter
+          therefore sits ahead of the exception handler and the status-code re-execute in both hosts, so a throttled
+          request answers 429 without re-rendering a page (rationale at <code>:166-170</code>). The circuit ceiling is registered
+          beside it, with the retention half applied to <code>AddInteractiveServerComponents</code> from the same section so the
+          two numbers cannot drift apart (<code>RetentionFrom</code> at <code>:92</code>, <code>AddBoundedBlazorCircuits()</code> at <code>:95</code>, both through
           <code>MMCA.Common.UI.Web/Hardening/BlazorCircuitLimitExtensions.cs:28-41,51-61</code>).</p>
           </li>
           <li><p><strong>One framework kit, consumed by both hosts, with the same section names and the same shape.</strong> The kit
-          ships in <code>MMCA.Common.UI.Web</code> from v1.206.0 (<code>MMCA.Common/CHANGELOG.md:1417-1429</code>) and binds
+          ships in <code>MMCA.Common.UI.Web</code> from v1.206.0 (<code>MMCA.Common/CHANGELOG.md:2337</code>) and binds
           <code>UiRateLimiting</code> (<code>MMCA.Common.UI.Web/Hardening/UiRateLimitingSettings.cs:36</code>) and <code>BlazorCircuitLimits</code>
           (<code>MMCA.Common.UI.Web/Hardening/BlazorCircuitLimitSettings.cs:20</code>). It ships the limiter <strong>enabled</strong> by
           default with one escape hatch for a load or capacity proof driven from a single runner IP
           (<code>UiRateLimitingSettings.cs:38-43</code>; the early return that honours it at
-          <code>UiRateLimitingExtensions.cs:219-222</code>), and defaults <code>MaxActiveCircuits = 200</code>
+          <code>UiRateLimitingExtensions.cs:239-242</code>), and defaults <code>MaxActiveCircuits = 200</code>
           (<code>BlazorCircuitLimitSettings.cs:38</code>) and <code>GlobalConcurrencyLimit = 200</code> (<code>UiRateLimitingSettings.cs:76</code>).
           The kit is deliberately separate from the Gateway&#39;s limiter even though it is shaped like it, <strong>because
           <code>MMCA.Common.Gateway</code> is the reverse-proxy kit and a UI host is not a reverse proxy</strong>
@@ -417,14 +426,14 @@
           per-IP window defaults to <strong>300 per minute</strong>, set well above a single visitor because an office or
           mobile-carrier NAT presents many visitors as one IP, and its documentation tells a host whose audience sits
           behind one address to raise it (<code>MMCA.Common.UI.Web/Hardening/UiRateLimitingSettings.cs:45-58</code>, window at
-          <code>:60-62</code>). Store keeps 300 (<code>MMCA.Store.UI.Web/appsettings.json:37</code>). ADC sets <strong>1200 per minute</strong>, four
+          <code>:60-62</code>). Store keeps 300 (<code>MMCA.Store.UI.Web/appsettings.json:38</code>). ADC sets <strong>1200 per minute</strong>, four
           times the storefront&#39;s, because on conference day the attendees are physically in one venue behind one NAT
           and present to this limiter as a SINGLE client IP (<code>MMCA.ADC.UI.Web/appsettings.json:15-21</code>, restated at
-          <code>MMCA.ADC.UI.Web/Program.cs:153-154</code>). A conference-day deployment widens it again: the <code>conferenceMode</code>
+          <code>MMCA.ADC.UI.Web/Program.cs:74-76</code>). A conference-day deployment widens it again: the <code>conferenceMode</code>
           parameter overrides the window to <strong>12000 per minute per replica</strong> through the environment
-          (<code>MMCA.ADC/infra/main.bicep:2843</code>). Every value is also written out explicitly in each host&#39;s
+          (<code>MMCA.ADC/infra/main.bicep:3153</code>). Every value is also written out explicitly in each host&#39;s
           <code>appsettings.json</code>, so the deployed posture is stated rather than inherited
-          (<code>MMCA.ADC.UI.Web/appsettings.json:19-24,28-32</code>, <code>MMCA.Store.UI.Web/appsettings.json:35-40,50-54</code>).</p>
+          (<code>MMCA.ADC.UI.Web/appsettings.json:19-24,28-32</code>, <code>MMCA.Store.UI.Web/appsettings.json:36-41,51-55</code>).</p>
           </li>
           </ul>
           <h2 id="rationale">Rationale</h2>
@@ -451,19 +460,19 @@
           conference day peaked near 67 concurrent users, and its UI container scales between one and two replicas
           by default and runs a fixed four under <code>conferenceMode</code> (the floor is raised to the ceiling), which also
           doubles the container to 0.5 vCPU / 1 GiB (<code>MMCA.ADC.UI.Web/appsettings.json:25-27</code>,
-          <code>MMCA.ADC/infra/main.bicep:2880-2881</code> defined at <code>:191-192</code>, resources at <code>:2788</code> defined at <code>:182</code>, the
-          <code>uiApp</code> container app at <code>:2752</code>).</li>
+          <code>MMCA.ADC/infra/main.bicep:3190-3191</code> defined at <code>:213-214</code>, resources at <code>:3098</code> defined at <code>:204</code>, the
+          <code>uiApp</code> container app at <code>:3062</code>).</li>
           <li><strong>Binding is validated at startup, and the hot path does not pay for it.</strong> Both sections go through
           <code>ValidateDataAnnotations().ValidateOnStart()</code>, and the limiter then closes over the already-bound instance
           rather than resolving <code>IOptions</code> on every request, precisely because an out-of-range value has already failed
-          the start-up validation (<code>MMCA.Common.UI.Web/Hardening/UiRateLimitingExtensions.cs:202-211</code>,
+          the start-up validation (<code>MMCA.Common.UI.Web/Hardening/UiRateLimitingExtensions.cs:222-231</code>,
           <code>MMCA.Common.UI.Web/Hardening/BlazorCircuitLimitExtensions.cs:55-58</code>).</li>
           </ul>
           <h2 id="trade-offs">Trade-offs</h2>
           <ul>
           <li><strong>Both ceilings are per replica, in memory.</strong> The effective allowance is the configured number multiplied by
           the replica count (two at most for ADC&#39;s UI by default, a fixed four under <code>conferenceMode</code>,
-          <code>MMCA.ADC/infra/main.bicep:192,2880-2881</code>), so two replicas carry an abuse ceiling of 400 circuits and four carry 800,
+          <code>MMCA.ADC/infra/main.bicep:214,3190-3191</code>), so two replicas carry an abuse ceiling of 400 circuits and four carry 800,
           against a real peak of well under 100. That is the same trade the Gateway kit documents and is accepted for
           the same reason: an edge limiter has to answer in microseconds on every request, and a shared counter would
           put a network round trip in front of the whole site
@@ -471,9 +480,9 @@
           <code>MMCA.Common.UI.Web/Hardening/BlazorCircuitLimitSettings.cs:23-27</code>).</li>
           <li><strong>One kit moves both hosts at once.</strong> Because the limiter, the circuit ceiling and the forwarded-header
           posture are framework code, a behaviour change reaches both UI hosts together at the lockstep version bump
-          (ADR-016), and the per-host differences are configuration values plus where each host&#39;s hand-composed
-          pipeline calls <code>UseUiRateLimiting()</code> (in Store, after the status-code re-execute middleware that then wraps the
-          429; in ADC, before it: <code>MMCA.Store.UI.Web/Program.cs:228,236</code>, <code>MMCA.ADC.UI.Web/Program.cs:228,239</code>). The cost is the other side of
+          (ADR-016). Both hosts also run the same composed pipeline, so the limiter&#39;s placement is framework code too
+          (<code>MMCA.Common.UI.Web/Hosting/BlazorWebHostExtensions.cs:181-216</code>), and the per-host differences are
+          configuration values plus the head-specific callbacks the pipeline accepts. The cost is the other side of
           the same coin: a host that needs a different shape, not just a different number, has no local copy to bend
           and must change the framework.</li>
           <li><strong>A refusal is an exception on a framework contract</strong>, so the diagnostic is a Warning log rather than a typed
@@ -481,17 +490,20 @@
           message the app controls (<code>MMCA.Common.UI.Web/Hardening/BoundedCircuitHandler.cs:24-29,111-114</code>).</li>
           <li><strong>Fail-open on an unresolvable client IP is a deliberate hole.</strong> A caller the host cannot attribute takes the
           no-limiter partition, which is the right call for an in-process <code>TestServer</code> and is a gap if anything else ever
-          reaches this host without a remote address (<code>MMCA.Common.UI.Web/Hardening/UiRateLimitingExtensions.cs:140-146</code>).</li>
-          <li><strong>The extension-bearing-path rule is a heuristic.</strong> Anything outside the API proxy prefix whose last segment
-          has a file extension is exempt from both limiters, which is how a static asset is told apart from a page route
-          without depending on middleware ordering; a page route that ever ends in a dotted segment would inherit that
-          exemption silently. Proxied API paths are excluded from the rule, so a dotted API route stays counted
-          (<code>MMCA.Common.UI.Web/Hardening/UiRateLimitingExtensions.cs:86-98,104-116</code>).</li>
+          reaches this host without a remote address (<code>MMCA.Common.UI.Web/Hardening/UiRateLimitingExtensions.cs:156-162</code>).</li>
+          <li><strong>The static-asset exemption depends on endpoint routing running first.</strong> A static asset is told apart from
+          a page route by the endpoint routing selected, not by the shape of the path, which a <code>WebApplication</code>
+          resolves ahead of the whole user pipeline because it inserts <code>UseRouting</code> first; only a path in the
+          static-asset manifest qualifies, so a dotted page route or a missing file is counted
+          (<code>MMCA.Common.UI.Web/Hardening/UiRateLimitingExtensions.cs:114-128</code>). A host that composed its pipeline
+          without that implicit routing step would lose the <code>StaticAssetDescriptor</code> exemption (<code>:127</code>) for every
+          manifest asset outside the exempt prefixes; assets under <code>/_framework</code> and <code>/_content</code> stay exempt by
+          prefix whatever routing does (<code>:80,102-104,126</code>).</li>
           <li><strong>A per-IP window is the wrong shape for a venue, and is widened rather than replaced.</strong> ADC&#39;s fourfold
           default widening buys a margin over one NAT&#39;d venue at the cost of letting a single scripted client burn four
           times as many requests before it is shed, and the conference-day override to 12000 per minute makes that forty
           times the storefront&#39;s window for the day (<code>MMCA.ADC.UI.Web/appsettings.json:15-21</code>,
-          <code>MMCA.ADC/infra/main.bicep:2843</code>, <code>MMCA.Common.UI.Web/Hardening/UiRateLimitingSettings.cs:52-55</code>).</li>
+          <code>MMCA.ADC/infra/main.bicep:3153</code>, <code>MMCA.Common.UI.Web/Hardening/UiRateLimitingSettings.cs:52-55</code>).</li>
           </ul>
           <h2 id="revision-2026-09-25-one-framework-kit-one-forwarded-header-posture">Revision (2026-09-25): one framework kit, one forwarded-header posture</h2>
           <p>The hardening kit this record decides now lives once, in <code>MMCA.Common.UI.Web/Hardening/</code>, first shipped in
@@ -631,17 +643,57 @@
           <code>MMCA.Common/CHANGELOG.md:639</code> (v1.232.0 proxy-prefix and hub-exemption entry), <code>:1179-1182</code> (v1.211.0
           forwarded headers), <code>:1417-1429</code> (v1.206.0 kit).</li>
           </ol>
+          <h2 id="revision-2026-11-23">Revision (2026-11-23)</h2>
+          <p>Re-verified against current source. The three layers, their defaults, the <code>/_blazor</code> carve-out, the proxied
+          hub exemption, both hosts&#39; configuration values and ADC&#39;s <code>conferenceMode</code> posture are unchanged; both
+          consumers now pin <code>MMCA.Common.UI.Web</code> 1.315.0 (<code>MMCA.ADC/Directory.Packages.props:199</code>,
+          <code>MMCA.Store/Directory.Packages.props:51</code>). Three statements moved (items 1 to 3), and anchors were re-pointed
+          (item 4).</p>
+          <ol>
+          <li>Neither UI host composes its own registration or pipeline any longer. Both call the composed
+          <code>builder.AddMmcaBlazorWebHost(...)</code> (<code>MMCA.ADC.UI.Web/Program.cs:26</code>, <code>MMCA.Store.UI.Web/Program.cs:30</code>) and
+          <code>app.UseMmcaBlazorWebPipeline(...)</code> (<code>MMCA.ADC.UI.Web/Program.cs:128,130</code>, <code>MMCA.Store.UI.Web/Program.cs:92</code>),
+          shipped in v1.289.0 (<code>MMCA.Common/CHANGELOG.md:550</code>), which register <code>RetentionFrom</code>,
+          <code>AddBoundedBlazorCircuits</code> and <code>AddUiRateLimiting</code>
+          (<code>MMCA.Common.UI.Web/Hosting/BlazorWebHostExtensions.cs:92,95,96</code>) and run forwarded headers, the limiter and
+          request localization (<code>:185,187,201</code>). The Decision&#39;s forwarded-headers and placement bullets, the
+          Trade-offs bullet on one kit, and the Related entry for ADR-079 now say so; the UI host still does not join
+          the ADR-079 service pipeline.</li>
+          <li>The two hosts no longer place the limiter at different points: the composed pipeline runs
+          <code>UseUiRateLimiting()</code> before <code>UseExceptionHandler</code>, the <code>/not-found</code> status-code re-execute,
+          <code>MapDefaultEndpoints</code> and <code>UseHttpsRedirection</code> (<code>BlazorWebHostExtensions.cs:187,195,198-200</code>) in both, so a
+          throttled request answers 429 without a re-rendered page in Store as well as ADC (<code>:166-170</code>). This replaces
+          the 2026-10-26 Revision&#39;s item 2.</li>
+          <li>The extension-bearing-path exemption is gone. A request is exempt by prefix (<code>/health</code>, <code>/alive</code>,
+          <code>/_framework</code>, <code>/_content</code>, <code>/hubs</code>, plus <code>{SameOriginApiProxy:PathPrefix}/hubs</code>;
+          <code>MMCA.Common.UI.Web/Hardening/UiRateLimitingExtensions.cs:80,102-104</code>) or when its matched endpoint carries
+          <code>StaticAssetDescriptor</code> metadata (<code>:122-128</code>), and a file extension alone exempts nothing (<code>:88-93</code>). The
+          Decision&#39;s exemptions bullet now says so, and the Trade-offs bullet on the extension heuristic is replaced by
+          one on the static-asset rule&#39;s dependence on endpoint routing (<code>:114-121</code>).</li>
+          <li>Anchors re-verified against current source:
+          <code>MMCA.Common.UI.Web/Hardening/UiRateLimitingExtensions.cs:252-258</code> (chain), <code>:235</code> (429), <code>:47-66,236</code>
+          (<code>Retry-After</code>), <code>:200-205</code> (<code>QueueLimit = 0</code>), <code>:39-45,178-206</code> (<code>/_blazor</code> transport), <code>:68-80</code>
+          (exempt prefixes), <code>:244-250</code> (proxy options), <code>:93-96</code> (<code>/_blazor</code> remark), <code>:156-162</code> (fail open),
+          <code>:222-231</code> (validation), <code>:239-242</code> (<code>Enabled</code> early return);
+          <code>MMCA.ADC.UI.Web/Program.cs:73-74</code> (registration statement), <code>:74-76</code> (NAT restatement), <code>:51,74</code> (ADR-088
+          comments; Store&#39;s <code>Program.cs</code> carries none); <code>MMCA.Store.UI.Web/appsettings.json:36-41</code> (<code>UiRateLimiting</code>,
+          <code>PermitLimit</code> at <code>:38</code>), <code>:51-55</code> (<code>BlazorCircuitLimits</code>, retained at <code>:53</code>, retention at <code>:54</code>);
+          <code>MMCA.ADC/infra/main.bicep:3153</code> (conference-day window), <code>:3062</code> (<code>uiApp</code>), <code>:3098</code> (resources, defined
+          at <code>:204</code>), <code>:3190-3191</code> (UI scale, defined at <code>:213-214</code>), <code>:179</code> (<code>conferenceMode</code>);
+          <code>MMCA.Common/CHANGELOG.md:2337</code> (v1.206.0 kit), <code>:2117</code> (v1.211.0 forwarded headers), <code>:1546</code> (v1.232.0
+          proxy-prefix and hub-exemption release).</li>
+          </ol>
           <h2 id="related">Related</h2>
           <p><a href="019-rate-limiting.html">ADR-019</a> (the layered rate-limiting posture this adds a layer to),
           <a href="088-gateway-edge-responsibilities.html">ADR-088</a> (the Gateway edge whose limiter this host is outside of, and
-          which the registration comments name directly at <code>MMCA.ADC.UI.Web/Program.cs:82,146</code> and
-          <code>MMCA.Store.UI.Web/Program.cs:95</code>), <a href="056-blazor-render-mode-strategy.html">ADR-056</a> (the Interactive Auto
+          which ADC&#39;s head comments name directly at <code>MMCA.ADC.UI.Web/Program.cs:51,74</code>),
+          <a href="056-blazor-render-mode-strategy.html">ADR-056</a> (the Interactive Auto
           strategy that makes a first render a Server circuit and a returning session a WebAssembly one, which is what
           makes the ceiling both necessary and generous), <a href="079-shared-http-middleware-pipeline.html">ADR-079</a> (the shared
-          service pipeline the UI hosts deliberately do not call: each hand-composes its own and reuses two pieces of
-          that pipeline through public methods, its forwarded-headers posture and its request-localization half
-          (<code>MMCA.ADC.UI.Web/Program.cs:217,245</code>, <code>MMCA.Store.UI.Web/Program.cs:207,240</code>), and this middleware sits in
-          the hand-composed pipeline after forwarded headers and before the component endpoints),
+          service pipeline the UI hosts deliberately do not call: the composed UI pipeline reuses two pieces of it
+          through public methods, its forwarded-headers posture and its request-localization half
+          (<code>MMCA.Common.UI.Web/Hosting/BlazorWebHostExtensions.cs:185,201</code>), and this middleware sits in that composed
+          pipeline after forwarded headers and before the component endpoints),
           <a href="016-lockstep-versioning-masstransit-pin.html">ADR-016</a> (the lockstep bump that moves both hosts onto a kit change together).</p>
           
         <div class="doc-foot btn-row">
@@ -665,6 +717,7 @@
             <li><a href="#revision-2026-10-21">Revision (2026-10-21)</a></li>
             <li><a href="#revision-2026-10-26">Revision (2026-10-26)</a></li>
             <li><a href="#revision-2026-10-28">Revision (2026-10-28)</a></li>
+            <li><a href="#revision-2026-11-23">Revision (2026-11-23)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

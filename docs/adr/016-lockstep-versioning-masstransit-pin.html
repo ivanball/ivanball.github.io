@@ -320,7 +320,10 @@
           <code>MessageBusProvider</code> switch; anchors are rebased after v1.261.0.
           Revised 2026-10-28: Decision 3 now says <code>MassTransit*</code> is the only license-motivated dependabot
           ignore among five semver-major ignores, and ADC&#39;s emulator-tier comment names 8.5.12 in agreement
-          with its entry; anchors refreshed after v1.265.1.</p>
+          with its entry; anchors refreshed after v1.265.1.
+          Revised 2026-11-23: Decision 3 now lists seven other semver-major dependabot ignores (<code>MessagePack</code>
+          is no longer ignored; Firebase.Messaging, EF Core, Data.Sqlite and Npgsql are), with <code>MassTransit*</code>
+          still the only license-motivated one; anchors refreshed after the consumers moved to 1.315.0.</p>
           <h2 id="context">Context</h2>
           <p>MMCA.Common publishes its <code>MMCA.Common.*</code> NuGet package set (see <code>FACTS.md</code> for the authoritative
           list and count) consumed by three downstream repos: the two
@@ -351,10 +354,10 @@
           to local-source mode, keeps no lock files. What makes the one-pass sweep safe is not that
           framework-to-app (<code>[C-&gt;A]</code>) changes are non-breaking: breaking changes ship deliberately, as
           MINOR bumps, and the version number is therefore not a breakage signal on its own
-          (<code>Website/docs-src/guides/common-VERSIONING.md:44-50</code>). It is safe because every first-party
+          (<code>Website/docs-src/guides/common-VERSIONING.md:49-56</code>). It is safe because every first-party
           caller moves in the same change set, an API removal is proven against Helpdesk&#39;s source build
-          first (<code>common-VERSIONING.md:69-70</code>), and there is no <code>[Obsolete]</code> grace period to keep in step
-          (<code>common-VERSIONING.md:72-78</code>).</p>
+          first (<code>common-VERSIONING.md:73-74</code>), and there is no <code>[Obsolete]</code> grace period to keep in step
+          (<code>common-VERSIONING.md:76-82</code>).</p>
           </li>
           <li><p><strong>Pin a commercial-license dependency below its paid major, enforced by a fitness function.</strong>
           <code>DependencyVersionTestsBase</code> parses <code>Directory.Packages.props</code> and fails the build when a pinned
@@ -367,36 +370,39 @@
           <code>MassTransit.SqlTransport.PostgreSQL</code>, against an exclusive ceiling of 9
           (<code>MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Bases/Governance/DependencyVersionTestsBase.cs:16-41</code>,
           the list at <code>:18-25</code>, the test at <code>:27-40</code>, the ceiling at <code>:34</code>). All five are pinned on 8.5.12
-          under the v8 comment (<code>MMCA.Common/Directory.Packages.props:119-124</code>, the entries at <code>:125-127</code>,
-          <code>:130</code> and <code>:136</code>), and dependabot ignores every <code>MassTransit*</code> semver-major update
-          (<code>MMCA.Common/.github/dependabot.yml:57-60</code>). SixLabors.ImageSharp was a second instance (gated
+          under the v8 comment (<code>MMCA.Common/Directory.Packages.props:182-187</code>, the entries at <code>:188-190</code>,
+          <code>:193</code> and <code>:199</code>), and dependabot ignores every <code>MassTransit*</code> semver-major update
+          (<code>MMCA.Common/.github/dependabot.yml:60-63</code>). SixLabors.ImageSharp was a second instance (gated
           below major 4) until v1.258.0, which removed the package, its fitness test and its package-id list
-          (<code>MMCA.Common/CHANGELOG.md:98</code>, under the 1.258.0 heading at <code>:94</code>); its dependabot ignore is
+          (<code>MMCA.Common/CHANGELOG.md:1035</code>, under the 1.258.0 heading at <code>:1031</code>); its dependabot ignore is
           gone too, leaving <code>MassTransit*</code> as the only license-motivated package ignore under <code>ignore:</code>
-          (<code>MMCA.Common/.github/dependabot.yml:56-60</code>). The four other semver-major ignores there,
-          <code>Microsoft.VisualStudio.Threading.Analyzers</code>, <code>Microsoft.OpenApi</code>, <code>StackExchange.Redis</code> and
-          <code>MessagePack</code> (<code>:64-65</code>, <code>:72-73</code>, <code>:76-77</code>, <code>:78-79</code>), hold back breaking or build-constrained
-          majors and have no fitness test; see the 2026-10-25 revision.</p>
+          (<code>MMCA.Common/.github/dependabot.yml:59-63</code>). The seven other semver-major ignores there,
+          <code>Microsoft.VisualStudio.Threading.Analyzers</code> (<code>:67-68</code>), <code>Microsoft.OpenApi</code> (<code>:75-76</code>),
+          <code>StackExchange.Redis</code> (<code>:78-79</code>), <code>Xamarin.Firebase.Messaging</code> (<code>:83-84</code>),
+          <code>Microsoft.EntityFrameworkCore*</code> (<code>:94-95</code>), <code>Microsoft.Data.Sqlite</code> (<code>:96-97</code>) and <code>Npgsql*</code>
+          (<code>:101-102</code>), hold back breaking, build-constrained, NU1608 or NU1202 majors and have no fitness
+          test; <code>Xamarin.AndroidX.Biometric</code> is held by a version range, not a semver-major ignore
+          (<code>:85-86</code>). See the 2026-10-25 revision.</p>
           <p>The assertions run in MMCA.Common only, the one repo that subclasses the base
           (<code>MMCA.Common/Tests/Architecture/MMCA.Common.Architecture.Tests/Governance/DependencyVersionTests.cs:9</code>).
           Helpdesk declares no MassTransit package. Store and ADC take <code>MassTransit</code>,
           <code>MassTransit.RabbitMQ</code> and <code>MassTransit.SqlTransport.PostgreSQL</code> transitively through
           <code>MMCA.Common.Infrastructure</code>
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/MMCA.Common.Infrastructure.csproj:52-53</code>,
-          <code>:57</code>), and <code>MassTransit.Azure.ServiceBus.Core</code> through <code>MMCA.Common.Azure</code> and
-          <code>MMCA.Common.Testing.Azure</code> (<code>MMCA.Common/Source/Hosting/MMCA.Common.Azure/MMCA.Common.Azure.csproj:28</code>,
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/MMCA.Common.Infrastructure.csproj:49-50</code>,
+          <code>:54</code>), and <code>MassTransit.Azure.ServiceBus.Core</code> through <code>MMCA.Common.Azure</code> and
+          <code>MMCA.Common.Testing.Azure</code> (<code>MMCA.Common/Source/Hosting/MMCA.Common.Azure/MMCA.Common.Azure.csproj:27</code>,
           <code>MMCA.Common/Source/Hosting/MMCA.Common.Testing.Azure/MMCA.Common.Testing.Azure.csproj:21</code>),
-          which both declare (<code>MMCA.ADC/Directory.Packages.props:128-129</code>,
-          <code>MMCA.Store/Directory.Packages.props:17-18</code>). Each <strong>also</strong> declares one MassTransit entry of its
+          which both declare (<code>MMCA.ADC/Directory.Packages.props:178</code>, <code>:183</code>,
+          <code>MMCA.Store/Directory.Packages.props:37-38</code>). Each <strong>also</strong> declares one MassTransit entry of its
           own: <code>MassTransit.Azure.ServiceBus.Core</code> 8.5.12 for the Service Bus emulator test tier, carrying
-          a comment that names Common&#39;s lockstep v8 pin (<code>MMCA.ADC/Directory.Packages.props:68-73</code>,
-          <code>MMCA.Store/Directory.Packages.props:92-97</code>). Common&#39;s own MassTransit entries are on that same
-          8.5.12 (<code>MMCA.Common/Directory.Packages.props:125-127</code>), so all three repos sit on one patch
+          a comment that names Common&#39;s lockstep v8 pin (<code>MMCA.ADC/Directory.Packages.props:112-117</code>,
+          <code>MMCA.Store/Directory.Packages.props:110-115</code>). Common&#39;s own MassTransit entries are on that same
+          8.5.12 (<code>MMCA.Common/Directory.Packages.props:188-190</code>), so all three repos sit on one patch
           version. Alignment there is a convention the app-side comments carry, not something the gate
           enforces: Store&#39;s comment names the lockstep pin without a patch number
-          (<code>MMCA.Store/Directory.Packages.props:93-94</code>), so it holds across patch bumps, while ADC&#39;s names
+          (<code>MMCA.Store/Directory.Packages.props:111-112</code>), so it holds across patch bumps, while ADC&#39;s names
           the patch, 8.5.12, matching its 8.5.12 entry today but due for a hand edit on every patch bump
-          (<code>MMCA.ADC/Directory.Packages.props:69</code>, <code>:73</code>).
+          (<code>MMCA.ADC/Directory.Packages.props:113</code>, <code>:117</code>).
           What the pin governs, and what the fitness function reads, is the major, so an app-side entry on
           a different v8 patch would still be inside the decision.
           They still do not subclass the test: its default list also names the four package ids they do
@@ -457,14 +463,15 @@
           <code>Messaging/Consumers/ConsumerOriginRestore.cs:2</code>, <code>Messaging/Transports/IBrokerTransport.cs:1</code>,
           <code>Messaging/Transports/BrokerTransportPolicies.cs:1</code>, <code>Messaging/Transports/RabbitMqBrokerTransport.cs:1</code>
           and <code>Messaging/Transports/PostgreSqlBrokerTransport.cs:1</code>. <code>MMCA.Common.Azure</code> has two,
-          <code>Source/Hosting/MMCA.Common.Azure/Messaging/AzureServiceBusTransport.cs:1</code> and
+          <code>Source/Hosting/MMCA.Common.Azure/Messaging/AzureServiceBusTransport.cs:2</code> and
           <code>Messaging/ServiceBusEmulatorSupport.cs:4</code>; <code>MMCA.Common.Aws</code> has one,
           <code>Source/Hosting/MMCA.Common.Aws/Messaging/AmazonSqsTransport.cs:6</code>; and <code>MMCA.Common.Testing.Azure</code>
           has one, <code>Source/Hosting/MMCA.Common.Testing.Azure/Fixtures/ServiceBusEmulatorFixtureBase.cs:5</code>.
           <code>ServiceBusEmulatorSupport.cs</code> and <code>ServiceBusEmulatorFixtureBase.cs</code> are the emulator pair, and
           they sit on different sides: <code>ServiceBusEmulatorSupport.cs</code> ships in the <code>MMCA.Common.Azure</code>
-          adapter and the transport itself calls it for any emulator connection string, the development-stack
-          path (<code>AzureServiceBusTransport.cs:41-44</code>), while <code>ServiceBusEmulatorFixtureBase.cs</code> is the test
+          adapter and the transport itself calls it for an emulator connection string when no namespace is
+          configured (the namespace branch at <code>AzureServiceBusTransport.cs:81-84</code> wins), the development-stack
+          path (<code>AzureServiceBusTransport.cs:85-93</code>), while <code>ServiceBusEmulatorFixtureBase.cs</code> is the test
           tier in <code>MMCA.Common.Testing.Azure</code>. Each one lowers the process-global
           <code>MassTransit.AzureServiceBusTransport.Defaults</code> entity quotas the emulator rejects
           (<code>ServiceBusEmulatorSupport.cs:115-117</code>, <code>ServiceBusEmulatorFixtureBase.cs:74-76</code>), a v8 constraint
@@ -482,8 +489,8 @@
           (<code>ServiceBusEmulatorFixtureBase.cs:68</code>) on top of the quota statics.
           Application, Domain and Shared never reference it:
           <code>IMessageBus</code> is the Application-layer abstraction
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Messaging/IMessageBus.cs:28</code>) and
-          <code>BrokerMessageBus</code> is its only broker implementation (<code>BrokerMessageBus.cs:43</code>), which is the
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Messaging/IMessageBus.cs:29</code>) and
+          <code>BrokerMessageBus</code> is its only broker implementation (<code>BrokerMessageBus.cs:44</code>), which is the
           boundary ADR-008&#39;s <code>MicroserviceExtractionTests</code> already keep enforced.</p>
           <p>Three candidates as first sketched, <strong>none implemented and none evaluated against a running broker
           here</strong> (ADR-118 decision 5 has since rejected candidate 2, and its decision 4 ranks a raw-SDK
@@ -493,14 +500,14 @@
           the same API. No repo in this workspace references it, and the part that would decide it is Azure
           Service Bus parity, since production runs Service Bus while local runs RabbitMQ
           (<code>Messaging/Transports/RabbitMqBrokerTransport.cs:24</code>,
-          <code>MMCA.Common/Source/Hosting/MMCA.Common.Azure/Messaging/AzureServiceBusTransport.cs:33</code>). Its release status and its parity are external facts this
+          <code>MMCA.Common/Source/Hosting/MMCA.Common.Azure/Messaging/AzureServiceBusTransport.cs:79</code>). Its release status and its parity are external facts this
           record cannot verify and does not assert.</li>
           <li><strong>A commercial MassTransit v9 license.</strong> The straight-line option: the pin exists only because v9
           demands <code>MT_LICENSE</code> at startup and every broker-enabled host crashes without it
-          (<code>MMCA.Common/Directory.Packages.props:120-124</code>). A license retires the gate rather than routing
+          (<code>MMCA.Common/Directory.Packages.props:183-187</code>). A license retires the gate rather than routing
           around it, at a recurring cost.</li>
           <li><strong>A direct <code>Azure.Messaging.ServiceBus</code> implementation of <code>IMessageBus</code>.</strong> The largest and the
-          most owned. Publishing is one class (<code>BrokerMessageBus.cs:43</code>), but the consume side is where the
+          most owned. Publishing is one class (<code>BrokerMessageBus.cs:44</code>), but the consume side is where the
           library earns its keep: three consumers ride <code>IConsumer&lt;T&gt;</code> (<code>IntegrationEventConsumer.cs:42</code>,
           <code>UpcastingIntegrationEventConsumer.cs:36</code>, <code>FaultIntegrationEventConsumer.cs:39</code>) and the
           transport wiring supplies exponential in-process retry plus second-level delayed redelivery
@@ -508,7 +515,7 @@
           the exponential retry at <code>:85</code>, the two-level argument at <code>:11-22</code>; on RabbitMQ the redelivery
           half is opt-in behind <code>EnableDelayedRedelivery</code>, off by default,
           <code>Messaging/Transports/RabbitMqBrokerTransport.cs:33</code> and <code>Messaging/MessageBusSettings.cs:206</code>,
-          while on Service Bus it is unconditional, <code>AzureServiceBusTransport.cs:52</code>), all of which would be
+          while on Service Bus it is unconditional, <code>AzureServiceBusTransport.cs:99</code>), all of which would be
           hand-written. It also drops RabbitMQ, which the local Aspire stack provisions.</li>
           </ol>
           <p>The trial point is the same for all three and it is additive: a new <code>IBrokerTransport</code> registered
@@ -520,28 +527,28 @@
           <code>Messaging/Transports/MessageBusProviders.cs</code> (<code>InProcess</code>, <code>RabbitMq</code> and <code>PostgreSql</code> at <code>:16</code>,
           <code>:19</code> and <code>:27</code>); an adapter transport carries its own name (<code>AzureServiceBus</code> is
           <code>AzureServiceBusTransport.ProviderName</code>,
-          <code>MMCA.Common/Source/Hosting/MMCA.Common.Azure/Messaging/AzureServiceBusTransport.cs:19</code>), and
+          <code>MMCA.Common/Source/Hosting/MMCA.Common.Azure/Messaging/AzureServiceBusTransport.cs:29</code>), and
           <code>MessageBusProviders</code> only maps the two adapter names to their packages for the registration error,
           <code>AzureServiceBus</code> to <code>MMCA.Common.Azure</code> and <code>AmazonSqs</code> to <code>MMCA.Common.Aws</code> (<code>:37-38</code>). So a candidate ships <strong>beside</strong> the four existing broker transports (RabbitMQ and
           PostgreSQL built in, Azure Service Bus and Amazon SQS as adapters) instead of replacing any, and a
           consumer opts in by configuration. The two artifacts that move
           with a decision are the pin
-          (<code>MMCA.Common/Directory.Packages.props:119-124</code>, the five entries at <code>:125-127</code>, <code>:130</code> and <code>:136</code>)
+          (<code>MMCA.Common/Directory.Packages.props:182-187</code>, the five entries at <code>:188-190</code>, <code>:193</code> and <code>:199</code>)
           and the fitness function that reads it
           (<code>MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Bases/Governance/DependencyVersionTestsBase.cs:18-25</code>,
           the major ceiling at <code>:27-40</code>), plus the dependabot ignore they are paired with
-          (<code>MMCA.Common/.github/dependabot.yml:57-60</code>).</p>
+          (<code>MMCA.Common/.github/dependabot.yml:60-63</code>).</p>
           <p>A proving ground already exists: both consumers&#39; nightlies run an Azure Service Bus emulator smoke
           against their real integration-event contracts, and the tier is authoritative rather than advisory
-          (<code>MMCA.ADC/.github/workflows/cross-service-tests.yml:142</code>, the gating rationale at <code>:116-126</code>,
+          (<code>MMCA.ADC/.github/workflows/cross-service-tests.yml:146</code>, the gating rationale at <code>:120-130</code>,
           and the equivalent <code>servicebus-emulator-smoke</code> job in
-          <code>MMCA.Store/.github/workflows/cross-service-tests.yml:141</code>, rationale at <code>:121-135</code>; the deploy-side
+          <code>MMCA.Store/.github/workflows/cross-service-tests.yml:146</code>, rationale at <code>:126-140</code>; the deploy-side
           halves are recorded in ADR-066 and ADR-064). The deploy gate is a recency gate, not a per-run one:
           <code>cross-service-freshness</code> requires the <code>cross-service</code> and <code>servicebus-emulator-smoke</code> jobs to have
           both succeeded in one completed run of <code>cross-service-tests.yml</code> (whatever triggered it, so a
           dispatched green run counts too) within <code>window-days: &#39;5&#39;</code>
-          (<code>MMCA.ADC/.github/workflows/deploy.yml:886-907</code>, window at <code>:899</code>, <code>same-run</code> at <code>:904</code>;
-          <code>MMCA.Store/.github/workflows/deploy.yml:828-849</code>, window at <code>:841</code>, <code>same-run</code> at <code>:846</code>).
+          (<code>MMCA.ADC/.github/workflows/deploy.yml:1282-1303</code>, window at <code>:1295</code>, <code>same-run</code> at <code>:1300</code>;
+          <code>MMCA.Store/.github/workflows/deploy.yml:1042-1063</code>, window at <code>:1055</code>, <code>same-run</code> at <code>:1060</code>).
           The proof&#39;s age is floored to whole days and the gate fails only when that age exceeds the window
           (<code>MMCA.Common/.github/actions/freshness-gate/action.yml:25-26</code>, <code>:143-145</code>), so a red nightly blocks
           a deploy only once the last run green on both jobs is six or more whole days old.
@@ -764,6 +771,55 @@
           CHANGELOG and UPGRADING anchors inside the 2026-10-25 and 2026-10-26 revisions are left as
           recorded.</li>
           </ol>
+          <h2 id="revision-2026-11-23">Revision (2026-11-23)</h2>
+          <p>Re-verified against current source (MMCA.Common <code>main</code>, MMCA.ADC and MMCA.Store <code>main</code>, consumers on
+          1.315.0). The pin, the gate and the dependency set are unchanged: <code>MassTransit_MustNotExceed_MajorVersion8</code>
+          still reads five package ids against an exclusive ceiling of 9 (<code>DependencyVersionTestsBase.cs:18-25</code>,
+          <code>:27-40</code>, <code>:34</code>), and all three repos sit on MassTransit 8.5.12
+          (<code>MMCA.Common/Directory.Packages.props:188-190</code>, <code>:193</code>, <code>:199</code>,
+          <code>MMCA.ADC/Directory.Packages.props:117</code>, <code>MMCA.Store/Directory.Packages.props:115</code>). What moved is
+          one statement of fact in <strong>Decision</strong> and a set of anchors.</p>
+          <ol>
+          <li>Decision 3 no longer says there are four other semver-major ignores including <code>MessagePack</code>.
+          <code>MessagePack</code> is no longer under <code>ignore:</code> (<code>MMCA.Common/.github/dependabot.yml:59</code>). The seven
+          other semver-major ignores are <code>Microsoft.VisualStudio.Threading.Analyzers</code> (<code>:67-68</code>),
+          <code>Microsoft.OpenApi</code> (<code>:75-76</code>), <code>StackExchange.Redis</code> (<code>:78-79</code>), <code>Xamarin.Firebase.Messaging</code>
+          (<code>:83-84</code>), <code>Microsoft.EntityFrameworkCore*</code> (<code>:94-95</code>), <code>Microsoft.Data.Sqlite</code> (<code>:96-97</code>) and
+          <code>Npgsql*</code> (<code>:101-102</code>), eight with <code>MassTransit*</code> (<code>:62-63</code>); <code>Xamarin.AndroidX.Biometric</code> is a
+          version-range ignore (<code>&gt;= 1.1.0.31</code>, <code>:85-86</code>), not a semver-major one. Every other comment gives a
+          build-constraint, breaking-change, NU1608 or NU1202 reason, so <code>MassTransit*</code> is still the only
+          license-motivated ignore and the only one paired with a fitness test.</li>
+          <li><strong>Transport exit options</strong> is unchanged in substance. Both consumers&#39; <code>cross-service-freshness</code>
+          steps still require <code>cross-service</code> and <code>servicebus-emulator-smoke</code> in the same run within
+          <code>window-days: &#39;5&#39;</code>, and both now reference the shared composite action pinned at a commit SHA
+          tagged v1.313.0 (<code>MMCA.ADC/.github/workflows/deploy.yml:1289</code>,
+          <code>MMCA.Store/.github/workflows/deploy.yml:1049</code>) rather than a branch.</li>
+          <li>Anchors re-verified against current source: the pin header and v8 comment at
+          <code>MMCA.Common/Directory.Packages.props:182-187</code> (<code>MT_LICENSE</code> at <code>:185</code>), entries at <code>:188-190</code>,
+          <code>:193</code>, <code>:199</code> (previously <code>:119-124</code>, <code>:125-127</code>, <code>:130</code>, <code>:136</code>); the dependabot <code>ignore:</code> at
+          <code>MMCA.Common/.github/dependabot.yml:59</code> and <code>MassTransit*</code> at <code>:60-63</code> (previously <code>:56</code>,
+          <code>:57-60</code>); <code>MMCA.Common.Infrastructure.csproj:49-50</code>, <code>:54</code> (previously <code>:52-53</code>, <code>:57</code>);
+          <code>MMCA.Common.Azure.csproj:27</code> (previously <code>:28</code>); <code>MMCA.ADC/Directory.Packages.props:178</code>, <code>:183</code>
+          and <code>MMCA.Store/Directory.Packages.props:37-38</code> (previously <code>:128-129</code>, <code>:17-18</code>); the ADC
+          emulator-tier comment and entry at <code>MMCA.ADC/Directory.Packages.props:112-117</code> (patch named at
+          <code>:113</code>, entry <code>:117</code>, previously <code>:68-73</code>, <code>:69</code>, <code>:73</code>) and Store&#39;s at
+          <code>MMCA.Store/Directory.Packages.props:110-115</code> (patch-agnostic sentence <code>:111-112</code>, previously
+          <code>:92-97</code>, <code>:93-94</code>); <code>AzureServiceBusTransport.cs:2</code> (using), <code>:29</code> (<code>ProviderName</code>), <code>:79</code>
+          (<code>UsingAzureServiceBus</code>), <code>:85-93</code> (emulator branch) and <code>:99</code> (unconditional redelivery),
+          previously <code>:1</code>, <code>:19</code>, <code>:33</code>, <code>:41-44</code>, <code>:52</code>; <code>BrokerMessageBus.cs:44</code> and <code>IMessageBus.cs:29</code>
+          (previously <code>:43</code>, <code>:28</code>); the ImageSharp removal at <code>MMCA.Common/CHANGELOG.md:1035</code> under the
+          1.258.0 heading at <code>:1031</code> (previously <code>:98</code>, <code>:94</code>); the <code>cross-service-freshness</code> step at
+          <code>MMCA.ADC/.github/workflows/deploy.yml:1282-1303</code> (window <code>:1295</code>, <code>same-run</code> <code>:1300</code>) and
+          <code>MMCA.Store/.github/workflows/deploy.yml:1042-1063</code> (window <code>:1055</code>, <code>same-run</code> <code>:1060</code>),
+          previously <code>:886-907</code> and <code>:828-849</code>; the <code>servicebus-emulator-smoke</code> job at
+          <code>MMCA.ADC/.github/workflows/cross-service-tests.yml:146</code> (rationale <code>:120-130</code>) and
+          <code>MMCA.Store/.github/workflows/cross-service-tests.yml:146</code> (rationale <code>:126-140</code>), previously
+          <code>:142</code>, <code>:116-126</code> and <code>:141</code>, <code>:121-135</code>; <code>common-VERSIONING.md:49-56</code>, <code>:73-74</code>, <code>:76-82</code>
+          (previously <code>:44-50</code>, <code>:69-70</code>, <code>:72-78</code>). Unchanged: <code>MMCA.Common.Testing.Azure.csproj:21</code>,
+          <code>DependencyVersionTests.cs:9</code>, <code>ArchitectureRules.Governance.cs:42-45</code> and
+          <code>MMCA.Common/.github/actions/freshness-gate/action.yml:25-26</code>, <code>:143-145</code>. Anchors inside earlier
+          revisions are left as recorded.</li>
+          </ol>
           <h2 id="related">Related</h2>
           <p>ADR-015 (the fitness function that enforces the pins), ADR-003 / ADR-006 (MassTransit is the broker
           transport behind the outbox and database-per-service flows).
@@ -795,6 +851,7 @@
             <li><a href="#revision-2026-10-25-imagesharp-leaves-the-framework">Revision (2026-10-25, ImageSharp leaves the framework)</a></li>
             <li><a href="#revision-2026-10-26">Revision (2026-10-26)</a></li>
             <li><a href="#revision-2026-10-28">Revision (2026-10-28)</a></li>
+            <li><a href="#revision-2026-11-23">Revision (2026-11-23)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

@@ -41,6 +41,13 @@ revisit triggers instead of open-endedly. The decision below is unchanged; see t
 [ADR-115](115-strongly-typed-identifiers-opt-in.md) (2026-09-09)**: the wrapper struct becomes a
 shipped opt-in framework capability, while the aliases below stay the default, nothing migrates and
 adoption is zero by design. The decision here is unchanged.
+Revised 2026-11-23: MMCA.Helpdesk adopts one wrapper-struct identifier, `TicketCommentId`, which takes
+no alias, so the Context, the Decision and its last bullet now name that exception; the census is 50
+aliases across 10 files, 48 of them `int`, Engagement having grown to thirteen and Helpdesk Tickets
+declaring one after its child-id alias was removed; this supersedes the "adoption is zero" wording in
+the 2026-09-19 sentence and the ADR-115 note above, and the Decision now names the three Common
+framework entities typed by a bare primitive; anchors re-pointed. See the Revision (2026-11-23) at the
+end.
 
 ## Context
 Every entity needs an identity type. The framework's base entity is generic over that type:
@@ -54,17 +61,30 @@ generic parameter accepts either of the two common identity styles:
    prescribes, to make identifiers non-interchangeable at compile time.
 
 The codebase chose the first, but until now that choice lived only as a CLAUDE.md convention with no
-recorded trade-off. The wrapper-struct alternative was considered and left unadopted: **no entity in any
-of the four `Source` trees is identified by a wrapper struct**. The type itself is no longer absent from
-the workspace, since [ADR-115](115-strongly-typed-identifiers-opt-in.md) shipped the opt-in machinery in
-Common (`MMCA.Common/Source/Core/MMCA.Common.Shared/Identifiers/IStronglyTypedId.cs:60`) and the concrete
+recorded trade-off. The wrapper-struct alternative was considered and left unadopted as the default:
+**no entity in the Common, ADC or Store `Source` trees is identified by a wrapper struct**, and Helpdesk
+identifies exactly one, `TicketComment : AuditableBaseEntity<TicketCommentId>`
+(`MMCA.Helpdesk/Source/Modules/Tickets/MMCA.Helpdesk.Tickets.Domain/Tickets/TicketComment.cs:17`). The
+type itself ships as opt-in machinery under [ADR-115](115-strongly-typed-identifiers-opt-in.md) in Common
+(`MMCA.Common/Source/Core/MMCA.Common.Shared/Identifiers/IStronglyTypedId.cs:60`), and the concrete
 wrapper structs that pin its contract live in Common's test tree
 (`MMCA.Common/Tests/Core/MMCA.Common.Shared.Tests/Identifiers/TestIdentifiers.cs:10`). This ADR records the
 primitive-alias decision and its cost so the deferral is deliberate and legible.
 
 ## Decision
-Model every identifier as a **primitive named through a global-using alias**, declared per module,
-not as a wrapper struct.
+Model every module identifier as a **primitive named through a global-using alias**, declared per
+module, not as a wrapper struct. The one sanctioned exception is an identifier a module opts into a
+wrapper struct under [ADR-115](115-strongly-typed-identifiers-opt-in.md): it gets no alias, because the
+alias file is linked into every project and may only name a type every project can see, so code names
+the wrapper type directly
+(`MMCA.Helpdesk/Source/Modules/Tickets/MMCA.Helpdesk.Tickets.Shared/MMCA.Helpdesk.Tickets.GlobalUsings.IdentifierType.cs:3-7`).
+Separately, three framework entities in Common are typed by a bare primitive with no alias at all:
+`MachineClient : AuditableBaseEntity<Guid>`
+(`MMCA.Common/Source/Core/MMCA.Common.Domain/Auth/MachineClients/MachineClient.cs:21`),
+`WebhookSubscription : AuditableBaseEntity<Guid>`
+(`MMCA.Common/Source/Core/MMCA.Common.Domain/Webhooks/WebhookSubscription.cs:38`) and
+`FeatureFlagOverride : AuditableBaseEntity<string>`
+(`MMCA.Common/Source/Core/MMCA.Common.Domain/FeatureFlags/FeatureFlagOverride.cs:24`).
 
 - **Identity is a primitive behind an alias.** Each module declares
   `global using {Entity}IdentifierType = <primitive>;` in its `.Shared` project. Common declares
@@ -76,12 +96,12 @@ not as a wrapper struct.
   (`Source/Core/MMCA.Common.Domain/Entities/AuditableBaseEntity.cs:27,31`), and constrains the user
   type parameter of `AuthenticationServiceBase<TUser>`
   (`where TUser : AuditableAggregateRootEntity<UserIdentifierType>, IAuthUser`,
-  `Source/Core/MMCA.Common.Application/Auth/AuthenticationServiceBase.cs:75`), with each consuming
+  `Source/Core/MMCA.Common.Application/Auth/AuthenticationServiceBase.cs:82`), with each consuming
   app supplying the concrete `User` entity that satisfies it.
   Consumers follow the same pattern: ADC Identity
   (`MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Shared/MMCA.ADC.Identity.GlobalUsings.IdentifierType.cs:2`),
   ADC Conference with nineteen aliases
-  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Shared/MMCA.ADC.Conference.GlobalUsings.IdentifierType.cs:7-25`),
+  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Shared/MMCA.ADC.Conference.GlobalUsings.IdentifierType.cs:8-26`),
   and Store Catalog with six
   (`MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.Shared/MMCA.Store.Catalog.GlobalUsings.IdentifierType.cs:3-8`).
 - **The alias is the type; there is no wrapping struct.** The right-hand side is a bare primitive.
@@ -90,34 +110,38 @@ not as a wrapper struct.
   speakers GUIDs while its other imported entities carry integer IDs
   (`MMCA.ADC.Conference.GlobalUsings.IdentifierType.cs:1-4`), and `SessionAssetIdentifierType = System.Guid`
   is a server-minted GUID because the id is a path segment of the public blob name and so has to be
-  unguessable rather than sequential (same file, lines 4-5).
+  unguessable rather than sequential (same file, lines 5-6).
 - **Aliases are linked solution-wide via `Directory.Build.props`.** Each `GlobalUsings.*.cs` file is
   pulled into every project with a `<Compile Include ... Link=... />` block, so the alias is visible
   everywhere without a project reference: Common
-  (`MMCA.Common/Directory.Build.props:136-146`), ADC
-  (`MMCA.ADC/Directory.Build.props:122-136`), Store (`MMCA.Store/Directory.Build.props:124-135`). Adding a
+  (`MMCA.Common/Directory.Build.props:190-200`), ADC
+  (`MMCA.ADC/Directory.Build.props:327-341`), Store (`MMCA.Store/Directory.Build.props:298-309`). Adding a
   solution-wide alias is a new `GlobalUsings.*.cs` plus a matching `<Compile Include>` line, nothing more.
 - **The alias flows unchanged through every layer.** Tracing the ADC `User` aggregate: the domain
   entity is `User : AuditableAggregateRootEntity<UserIdentifierType>`
-  (`MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Domain/Users/User.cs:35`); the cross-context
-  reference to a speaker is typed `SpeakerIdentifierType? LinkedSpeakerId` (same file, line 79); the EF
+  (`MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Domain/Users/User.cs:38`); the cross-context
+  reference to a speaker is typed `SpeakerIdentifierType? LinkedSpeakerId` (same file, line 82); the EF
   configuration is `EntityTypeConfigurationSQLServer<User, UserIdentifierType>`
   (`MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Infrastructure/Persistence/EntityConfiguration/UserConfiguration.cs:13`);
   the repository handle is `GetRepository<User, UserIdentifierType>()`
-  (`MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Infrastructure/Persistence/DbContexts/Seeding/IdentityModuleDbSeeder.cs:44`);
+  (`MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Infrastructure/Persistence/DbContexts/Seeding/IdentityModuleDbSeeder.cs:43`);
   the API contract is `UserDTO : IBaseDTO<UserIdentifierType>` with a `UserIdentifierType Id`
   (`MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Shared/Users/UserDTO.cs:8,11`); and the
   integration event carries `UserIdentifierType UserId`
-  (`MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Shared/Users/IntegrationEvents/UserRegistered.cs:37`).
+  (`MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Shared/Users/IntegrationEvents/UserRegistered.cs:39`).
   No converter, serializer shim, or OpenAPI schema mapping appears at any hop: `int` and `Guid` are the
   values on the wire and in the store.
-- **The wrapper-struct alternative is deliberately deferred, not planned.** No entity in any of the
-  four `Source` trees is identified by a wrapper struct. The framework does ship the opt-in machinery
-  ([ADR-115](115-strongly-typed-identifiers-opt-in.md),
-  `MMCA.Common/Source/Core/MMCA.Common.Shared/Identifiers/IStronglyTypedId.cs:60`), and the only concrete
-  wrapper structs in the workspace are the test fixtures that pin its contract
-  (`MMCA.Common/Tests/Core/MMCA.Common.Shared.Tests/Identifiers/TestIdentifiers.cs:10`). Adoption is zero
-  by design: a considered option left unbuilt, not scheduled work.
+- **The wrapper-struct alternative stays opt-in, not the default.** The framework ships the opt-in
+  machinery ([ADR-115](115-strongly-typed-identifiers-opt-in.md),
+  `MMCA.Common/Source/Core/MMCA.Common.Shared/Identifiers/IStronglyTypedId.cs:60`), pinned by test
+  fixtures (`MMCA.Common/Tests/Core/MMCA.Common.Shared.Tests/Identifiers/TestIdentifiers.cs:10`).
+  Adoption is zero in the Common, ADC and Store `Source` trees and one identifier in Helpdesk:
+  `TicketCommentId(int Value) : IStronglyTypedId<TicketCommentId, int>`
+  (`MMCA.Helpdesk/Source/Modules/Tickets/MMCA.Helpdesk.Tickets.Shared/Tickets/TicketCommentId.cs:19`),
+  which Helpdesk's architecture tests pin as the module's only wrapper
+  (`MMCA.Helpdesk/Tests/Architecture/MMCA.Helpdesk.Architecture.Tests/ArchitectureTests.cs:237-252`).
+  Every other identifier in the workspace is a primitive: behind an alias in every module, and bare
+  in the three Common framework entities named above.
 
 ## Rationale
 - **Readable signatures at zero runtime cost.** `GetRepository<User, UserIdentifierType>()` reads as
@@ -140,7 +164,7 @@ not as a wrapper struct.
   not a distinct type. Because most aliases resolve to `int`, the compiler will not stop code from
   passing a `SessionIdentifierType` where a `UserIdentifierType` is expected. The two `Guid`-backed
   aliases, `SessionAssetIdentifierType` and `SpeakerIdentifierType`
-  (`MMCA.ADC.Conference.GlobalUsings.IdentifierType.cs:17,23`), are guarded against the `int` aliases
+  (`MMCA.ADC.Conference.GlobalUsings.IdentifierType.cs:18,24`), are guarded against the `int` aliases
   only incidentally, because their underlying type differs, not by design, and nothing stops one being
   passed for the other. This is the exact safety a wrapper struct would buy and that this decision forgoes.
 - **The alias is documentation-strength, erased at compile time.** Reflection, tooling, serialized
@@ -155,7 +179,7 @@ not as a wrapper struct.
   ever judged worth paying.
 
 ## Related
-ADR-001 (the per-entity DTO mappers are parameterized by this identifier type, `IEntityDTOMapper<TEntity, TEntityDTO, TIdentifierType>`), ADR-034 (the generic entity controllers and query contract ride on the same identifier type parameter), ADR-006 (aliases are declared per module in the module's own `.Shared` project, matching database-per-service ownership), ADR-015 (the contrast: this convention is not fitness-enforced, unlike the invariants that gate the build), [ADR-085](085-identifier-type-aliases-revisited.md) (the 2026-08-18 revisit of the wrapper-struct deferral recorded in the Trade-offs below: same decision, now with a price and named triggers), ADR-068 (the deliberate opposite case, where domain values do get wrapper types).
+ADR-001 (the per-entity DTO mappers are parameterized by this identifier type, `IEntityDTOMapper<TEntity, TEntityDTO, TIdentifierType>`), ADR-034 (the generic entity controllers and query contract ride on the same identifier type parameter), ADR-006 (aliases are declared per module in the module's own `.Shared` project, matching database-per-service ownership), ADR-015 (the contrast: this convention is not fitness-enforced, unlike the invariants that gate the build), [ADR-085](085-identifier-type-aliases-revisited.md) (the 2026-08-18 revisit of the wrapper-struct deferral recorded in the Trade-offs below: same decision, now with a price and named triggers), [ADR-115](115-strongly-typed-identifiers-opt-in.md) (the opt-in wrapper-struct capability, whose one adopter takes no alias), ADR-068 (the deliberate opposite case, where domain values do get wrapper types).
 
 ## Revision (2026-08-18)
 No decision, no behavior and no citation in this record changed. What changed is the standing of the
@@ -372,3 +396,55 @@ order that revision recorded. Five Decision citations moved without their text c
    `SpeakerIdentifierType? LinkedSpeakerId` at line 79 of the same file. The ranges recorded in the
    Revision (2026-10-21) and the `:72` recorded in the Revision (2026-10-06) stay as recorded on those
    dates.
+
+## Revision (2026-11-23)
+Re-verified against current source. The decision and its rationale are unchanged: no identifier in
+the Common, ADC or Store `Source` trees is a wrapper struct, and both `Guid`-backed aliases are still
+the only two. What moved is the adoption claim, because Helpdesk now identifies one entity by a
+wrapper struct, plus the alias census (Engagement up two, Helpdesk Tickets down one), a correction
+about unaliased framework identifiers, and a set of anchors.
+
+1. Helpdesk adopts one wrapper-struct identifier. `TicketComment : AuditableBaseEntity<TicketCommentId>`
+   (`MMCA.Helpdesk/Source/Modules/Tickets/MMCA.Helpdesk.Tickets.Domain/Tickets/TicketComment.cs:17`)
+   over `TicketCommentId(int Value) : IStronglyTypedId<TicketCommentId, int>`
+   (`MMCA.Helpdesk/Source/Modules/Tickets/MMCA.Helpdesk.Tickets.Shared/Tickets/TicketCommentId.cs:19`),
+   pinned as the module's only wrapper by
+   `MMCA.Helpdesk/Tests/Architecture/MMCA.Helpdesk.Architecture.Tests/ArchitectureTests.cs:237-252`.
+   No `Source` type in ADC or Store references `IStronglyTypedId`. The Context and the Decision's last
+   bullet now say adoption is zero in Common, ADC and Store and one identifier in Helpdesk, rather than
+   zero in all four trees.
+2. The Decision now names the sanctioned exception to "every identifier is an alias": a wrapper-struct
+   identifier gets no alias and code names the wrapper type directly, because the alias file is linked
+   into every project and may only name a type every project can see
+   (`MMCA.Helpdesk/Source/Modules/Tickets/MMCA.Helpdesk.Tickets.Shared/MMCA.Helpdesk.Tickets.GlobalUsings.IdentifierType.cs:3-7`).
+   The Decision also stops claiming that every identifier sits behind an alias: three Common framework
+   entities are typed by a bare primitive, `MachineClient` and `WebhookSubscription` by `Guid` and
+   `FeatureFlagOverride` by `string`
+   (`MMCA.Common/Source/Core/MMCA.Common.Domain/Auth/MachineClients/MachineClient.cs:21`,
+   `MMCA.Common/Source/Core/MMCA.Common.Domain/Webhooks/WebhookSubscription.cs:38`,
+   `MMCA.Common/Source/Core/MMCA.Common.Domain/FeatureFlags/FeatureFlagOverride.cs:24`). No ADC or
+   Store entity is typed by a bare primitive.
+3. Recounting every `GlobalUsings.*IdentifierType.cs` file under the four `Source` trees, one
+   `global using X = <primitive>;` line counting as one alias, gives **50 aliases across 10 files**:
+   Common Domain 1 and Shared 2; ADC Notification 2, Identity 1, Engagement 13
+   (`MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Shared/MMCA.ADC.Engagement.GlobalUsings.IdentifierType.cs:4-16`)
+   and Conference 19; Store Catalog 6, Identity 2 and Sales 3; and Helpdesk Tickets 1, `TicketIdentifierType`
+   (`MMCA.Helpdesk/Source/Modules/Tickets/MMCA.Helpdesk.Tickets.Shared/MMCA.Helpdesk.Tickets.GlobalUsings.IdentifierType.cs:8`).
+   **48 of the 50 resolve to `int`**. Against the Revision (2026-10-21) census of 49, Engagement gained
+   two and Helpdesk Tickets lost its child-id alias (formerly line 6) when `TicketCommentId` replaced
+   it, so 49 + 2 - 1 = 50. The census in the Revision (2026-10-21) above is superseded by this
+   one. The gitignored template-staging copies under `MMCA.Helpdesk/artifacts/` are not counted.
+4. The Related list now names [ADR-115](115-strongly-typed-identifiers-opt-in.md) alongside ADR-085.
+5. Anchors re-verified against current source: the `AuthenticationServiceBase<TUser>` constraint is at
+   `MMCA.Common/Source/Core/MMCA.Common.Application/Auth/AuthenticationServiceBase.cs:82`; the
+   `Directory.Build.props` alias link blocks are at `MMCA.Common/Directory.Build.props:190-200` (the
+   Common.Domain `UserIdentifierType` block at 190-194 and the Common.Shared notification block at
+   196-200), `MMCA.ADC/Directory.Build.props:327-341` (Identity, Conference, Engagement, Notification)
+   and `MMCA.Store/Directory.Build.props:298-309` (Catalog, Sales, Identity); Conference's nineteen
+   aliases are at `MMCA.ADC.Conference.GlobalUsings.IdentifierType.cs:8-26` below a seven-line header
+   comment, with `SessionAssetIdentifierType` at line 18, `SpeakerIdentifierType` at line 24 and the
+   `SessionAsset` reason on lines 5-6; ADC's `User : AuditableAggregateRootEntity<UserIdentifierType>`
+   is at `MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Domain/Users/User.cs:38` and its
+   `SpeakerIdentifierType? LinkedSpeakerId` at line 82; `GetRepository<User, UserIdentifierType>()` is
+   at `IdentityModuleDbSeeder.cs:43`; and the `UserIdentifierType UserId` parameter is at
+   `UserRegistered.cs:39`. The anchors recorded in earlier revisions stay as recorded on their dates.

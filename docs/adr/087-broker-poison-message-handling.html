@@ -268,7 +268,8 @@
           Revised 2026-10-23: the east-west gRPC breaker values moved into <code>HttpResilienceDefaults</code> (<code>Grpc</code>-prefixed), so the database-breaker search re-anchors the gRPC defaults and handler citations there; the broker breaker is unchanged.
           Revised 2026-10-26: redelivery now runs through four pluggable transports (RabbitMQ alone gates it on the flag; Azure Service Bus, Amazon SQS and PostgreSQL apply it unconditionally, SQS with its own 900-second-capped default), <code>RedeliveryIntervalsSeconds</code> defaults to <code>null</code> with the framework default held separately and <code>[0]</code> as the off switch, the fault consumer only Debug-logs faults produced by other assemblies (no Error log, no count), the fault Trade-off records the alerts and runbooks both applications now carry, and anchors are refreshed.
           Revised 2026-10-28: anchors refreshed after the MMCA.ADC <code>infra/OPERATIONS.md</code> runbook headings moved down one line.
-          Revised 2026-11-08: a <code>BrokenCircuitException</code> no longer consumes a retry. An open circuit does not increment <code>RetryCount</code> and cannot dead-letter the row, which is re-leased for about the break duration plus jitter, capped at the lease; real publish failures and failed half-open probes still count. The section &quot;<code>BrokenCircuitException</code> follows the ordinary failure path&quot; is rewritten and renamed, the one-retry-ladder rationale is restated, and the anchors in those paragraphs are refreshed.</p>
+          Revised 2026-11-08: a <code>BrokenCircuitException</code> no longer consumes a retry. An open circuit does not increment <code>RetryCount</code> and cannot dead-letter the row, which is re-leased for about the break duration plus jitter, capped at the lease; real publish failures and failed half-open probes still count. The section &quot;<code>BrokenCircuitException</code> follows the ordinary failure path&quot; is rewritten and renamed, the one-retry-ladder rationale is restated, and the anchors in those paragraphs are refreshed.
+          Revised 2026-11-23: anchors refreshed after <code>OutboxProcessor.cs</code>, the Azure Service Bus transport, the resilience defaults and both applications&#39; alert and runbook files moved; <code>ComputeCircuitOpenBackoffSeconds</code> is cited at its <code>Persistence/Polling/</code> path.</p>
           <h2 id="context">Context</h2>
           <p>Delivery in this workspace has always been at-least-once with retries on both legs: the outbox
           retries a failed publish with jittered exponential backoff and eventually dead-letters
@@ -327,8 +328,8 @@
           <li><strong>Azure Service Bus, Amazon SQS and the built-in PostgreSQL transport do not consult it.</strong>
           <code>AzureServiceBusTransport</code>
           (<code>MMCA.Common/Source/Hosting/MMCA.Common.Azure/Messaging/AzureServiceBusTransport.cs</code>) calls
-          <code>UsingAzureServiceBus</code> (<code>:33</code>) and passes <code>applyDelayedRedelivery: true</code> (<code>:52</code>), with the reasoning
-          in the class doc (<code>:10-13</code>); <code>PostgreSqlBrokerTransport</code> does the same
+          <code>UsingAzureServiceBus</code> (<code>:79</code>) and passes <code>applyDelayedRedelivery: true</code> (<code>:99</code>), with the reasoning
+          in the class doc (<code>:20-23</code>); <code>PostgreSqlBrokerTransport</code> does the same
           (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Messaging/Transports/PostgreSqlBrokerTransport.cs:104</code>,
           doc <code>:24-27</code>). <code>AmazonSqsTransport</code>
           (<code>MMCA.Common/Source/Hosting/MMCA.Common.Aws/Messaging/AmazonSqsTransport.cs</code>) applies redelivery
@@ -380,57 +381,57 @@
           <code>broker.fault.count</code> (<code>:30-33</code>) and <code>broker.circuit.open.count</code> (<code>:42-45</code>). It is one of the
           <code>MMCA.Common.*</code> meters, beside <code>MMCA.Common.Cqrs</code> and <code>MMCA.Common.Outbox</code> (<a href="041-observability-and-telemetry.html">ADR-041</a>), and the
           name is duplicated as a literal in <code>MMCA.Common.Aspire</code>
-          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Extensions.Telemetry.cs:309</code>, a duplication the Infrastructure
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Extensions.Telemetry.cs:311</code>, a duplication the Infrastructure
           declaration records in its own doc comment at <code>BrokerMetrics.cs:9-11</code>) so the Aspire service defaults
           can subscribe to it without a package reference.</p>
           <h3 id="a-circuit-breaker-around-the-outbox-integration-event-publish-and-nothing-else">A circuit breaker around the outbox integration-event publish, and nothing else</h3>
           <p><code>OutboxProcessor</code> holds a per-instance Polly <code>ResiliencePipeline</code>
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/Processing/OutboxProcessor.cs:118</code>,
-          built at <code>:1077-1088</code>) and wraps <strong>exactly one call</strong> in it: <code>state.Bus.PublishAsync(state.Event, ct)</code>
-          inside <code>DeliverAsync</code> (<code>:772-794</code>, the <code>ExecuteAsync</code> at <code>:783-787</code>, the publish at <code>:785</code>). The
-          branch for a domain event that is not an integration event (<code>IDomainEventDispatcher</code>, <code>:789-793</code>) is
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/Processing/OutboxProcessor.cs:121</code>,
+          built at <code>:1118-1129</code>) and wraps <strong>exactly one call</strong> in it: <code>state.Bus.PublishAsync(state.Event, ct)</code>
+          inside <code>DeliverAsync</code> (<code>:810-832</code>, the <code>ExecuteAsync</code> at <code>:821-825</code>, the publish at <code>:823</code>). The
+          branch for a domain event that is not an integration event (<code>IDomainEventDispatcher</code>, <code>:827-831</code>) is
           outside it, no database call is inside the delegate, and the intent is stated at the field
-          (<code>:103-117</code>, &quot;never the database calls&quot; at <code>:107</code>). The wrapped call is <code>IMessageBus.PublishAsync</code>, so
+          (<code>:106-120</code>, &quot;never the database calls&quot; at <code>:110</code>). The wrapped call is <code>IMessageBus.PublishAsync</code>, so
           what sits behind the breaker is whichever bus the host registers: the broker in a distributed host,
           and <code>InProcessMessageBus</code>
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Messaging/InProcessMessageBus.cs:19</code>, the default
-          <code>TryAddScoped</code> registration at <code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:342</code>)
-          in a monolith. That bus calls the same <code>IDomainEventDispatcher</code> (<code>InProcessMessageBus.cs:25</code>), so in a
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Messaging/InProcessMessageBus.cs:18</code>, the default
+          <code>TryAddScoped</code> registration at <code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:366</code>)
+          in a monolith. That bus calls the same <code>IDomainEventDispatcher</code> (<code>InProcessMessageBus.cs:24</code>), so in a
           monolith integration events pass through the breaker and only the non-integration domain-event branch
-          is outside it. Both the field summary (<code>OutboxProcessor.cs:104-107</code>) and the inline comment at
-          <code>:778-782</code> (&quot;Only the IMessageBus publish is wrapped&quot;) state this: the broker hop with broker
+          is outside it. Both the field summary (<code>OutboxProcessor.cs:107-110</code>) and the inline comment at
+          <code>:816-820</code> (&quot;Only the IMessageBus publish is wrapped&quot;) state this: the broker hop with broker
           messaging, the in-process integration-event handlers on a monolith. The inline comment alone adds the
-          consequence, that failing handlers can open the breaker too (<code>:780</code>); only the pure domain-event
+          consequence, that failing handlers can open the breaker too (<code>:818</code>); only the pure domain-event
           branch is described as having &quot;no transport to be dead&quot;.</p>
           <p>Its parameters live in <code>MMCA.Common/Source/Core/MMCA.Common.Shared/Resilience/BrokerResilienceDefaults.cs</code>
-          (<code>:24</code>) as static properties: <code>FailureRatio</code> 0.5 (<code>:32</code>), <code>MinimumThroughput</code> 10 (<code>:40</code>),
-          <code>SamplingDuration</code> 30 seconds (<code>:47</code>), <code>BreakDuration</code> 15 seconds (<code>:55</code>). The pipeline is a breaker
-          with <strong>no retry strategy paired with it</strong> (<code>BrokerResilienceDefaults.cs:17-22</code>,
-          <code>OutboxProcessor.cs:109-110</code>), because the outbox already is the retry: adding a Polly retry inside a
+          (<code>:25</code>) as static properties: <code>FailureRatio</code> 0.5 (<code>:33</code>), <code>MinimumThroughput</code> 10 (<code>:41</code>),
+          <code>SamplingDuration</code> 30 seconds (<code>:48</code>), <code>BreakDuration</code> 15 seconds (<code>:57</code>). The pipeline is a breaker
+          with <strong>no retry strategy paired with it</strong> (<code>BrokerResilienceDefaults.cs:18-23</code>,
+          <code>OutboxProcessor.cs:112-113</code>), because the outbox already is the retry: adding a Polly retry inside a
           loop that re-leases and retries would multiply the attempt count without changing the outcome.
-          <code>ShouldHandle</code> excludes <code>OperationCanceledException</code> (<code>:1085-1086</code>) so a host shutdown never counts
+          <code>ShouldHandle</code> excludes <code>OperationCanceledException</code> (<code>:1126-1127</code>) so a host shutdown never counts
           toward opening the circuit.</p>
           <p><strong>An open circuit is a rejection, not an attempt.</strong> <code>BrokenCircuitException</code> is caught by the same
-          <code>catch (Exception ex)</code> as any publish failure (<code>OutboxProcessor.cs:594</code>, after the shutdown-cancellation
-          rethrow at <code>:586-593</code>) and handed to <code>ApplyDeliveryFailure</code> (<code>:625</code>), which does not increment
-          <code>RetryCount</code> for it (<code>:637-641</code>) and so cannot dead-letter the row. It still records <code>LastError</code>
-          (<code>:644</code>) and re-leases the row, but for about the break rather than a backoff keyed on a count it did not
+          <code>catch (Exception ex)</code> as any publish failure (<code>OutboxProcessor.cs:597</code>, after the shutdown-cancellation
+          rethrow at <code>:588-595</code>) and handed to <code>ApplyDeliveryFailure</code> (<code>:629</code>), which does not increment
+          <code>RetryCount</code> for it (<code>:641-645</code>) and so cannot dead-letter the row. It still records <code>LastError</code>
+          (<code>:648</code>) and re-leases the row, but for about the break rather than a backoff keyed on a count it did not
           spend: <code>BrokerResilienceDefaults.BreakDuration</code> plus up to a quarter of it in jitter, capped at
-          <code>Outbox:LeaseSeconds</code> (<code>:654-657</code>, <code>PollingLoop.ComputeCircuitOpenBackoffSeconds</code> at
-          <code>PollingLoop.cs:205-206</code>). The jitter keeps a whole rejected batch from becoming claimable at the instant
+          <code>Outbox:LeaseSeconds</code> (<code>:658-661</code>, <code>PollingLoop.ComputeCircuitOpenBackoffSeconds</code> at
+          <code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Polling/PollingLoop.cs:219-220</code>). The jitter keeps a whole rejected batch from becoming claimable at the instant
           the circuit half-opens, and the row cannot hot-spin because it is leased and the next fetch skips it.
           A publish that reaches the broker and fails keeps counting, and so does the single half-open probe
           when it fails, because that probe is a real attempt. Dead-lettering therefore still happens on
-          <code>RetryCount &gt;= MaxRetries</code> (<code>:677</code>, default 5 at <code>OutboxSettings.cs:21</code>), but a very long outage
+          <code>RetryCount &gt;= MaxRetries</code> (<code>:681</code>, default 5 at <code>OutboxSettings.cs:21</code>), but a very long outage
           now spends one retry per failed probe instead of one per cycle, so it can still dead-letter about one row
           per five failed probes rather than every undelivered row.</p>
-          <p>The observability is unchanged: the run increments <code>broker.circuit.open.count</code> (<code>:665-667</code>) and writes one
-          <code>LogBrokerCircuitOpen</code> line naming the data source <strong>per batch</strong> rather than per message (latch at <code>:539</code>,
-          passed through <code>:596</code>, logged at <code>:669-672</code>, defined at <code>:1189</code>), and the per-message retry log is
-          skipped for those rows because the circuit branch returns first (<code>:674</code>). A batch here is one
+          <p>The observability is unchanged: the run increments <code>broker.circuit.open.count</code> (<code>:669-671</code>) and writes one
+          <code>LogBrokerCircuitOpen</code> line naming the data source <strong>per batch</strong> rather than per message (latch at <code>:541</code>,
+          passed through <code>:600</code>, logged at <code>:673-676</code>, defined at <code>:1196-1197</code>), and the per-message retry log is
+          skipped for those rows because the circuit branch returns first (<code>:678</code>). A batch here is one
           <code>DispatchRowsAsync</code> pass, which <code>DispatchMessagesAsync</code> makes once over the rows claimed for one
           data-source target, and each row&#39;s outcome is persisted by <code>RecordOutcomeAsync</code> outside the <code>try</code>
-          (<code>:606</code>). What the breaker buys in a distributed host is that it fails in microseconds instead of a
+          (<code>:610</code>). What the breaker buys in a distributed host is that it fails in microseconds instead of a
           connection timeout, that the log volume during an outage is one line per batch instead of one per message,
           and, since this revision, that an outage does not drain the retry budget of rows that never reached the
           broker.</p>
@@ -439,11 +440,11 @@
           queueing on it. It is <strong>not</strong> being made. A repository-wide search for <code>CircuitBreaker</code>,
           <code>BrokenCircuitException</code> and <code>ResiliencePipeline</code> across <code>Source</code> finds the outbox breaker above and
           otherwise only the HTTP and gRPC standard resilience handlers and the defaults they read
-          (<code>MMCA.Common/Source/Presentation/MMCA.Common.Grpc/DependencyInjection.cs:141,160-163</code>, with a doc
-          comment at <code>:94</code> and an inline comment at <code>:133</code>,
-          <code>MMCA.Common/Source/Core/MMCA.Common.Shared/Resilience/HttpResilienceDefaults.cs:19,82,88,94</code>, with
-          comments at <code>:62</code> and <code>:70</code>,
-          <code>MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Extensions.cs:60,63</code>), plus one doc comment that
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.Grpc/DependencyInjection.cs:142,161-164</code>, with a doc
+          comment at <code>:95</code> and an inline comment at <code>:134</code>,
+          <code>MMCA.Common/Source/Core/MMCA.Common.Shared/Resilience/HttpResilienceDefaults.cs:18,81,87,93</code>, with
+          comments at <code>:61</code> and <code>:69</code>,
+          <code>MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Extensions.cs:68,71</code>), plus one doc comment that
           names <code>BrokenCircuitException</code> as a client-side transport fault the UI result executor classifies
           (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/Api/HttpResultExecutor.cs:124</code>, in the
           doc comment at <code>:118-126</code> on <code>IsTransportFault</code> at <code>:127-128</code>), which is
@@ -455,7 +456,7 @@
           user-initiated transaction may be written (<code>SQLServerDbContext.cs:60-62</code>,
           <code>MMCA.Common/Source/Core/MMCA.Common.Application/Interfaces/Infrastructure/Persistence/IUnitOfWork.cs:47-59</code>), which
           is why <code>DbContextFactory</code> materializes the strategy explicitly
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/Factory/DbContextFactory.cs:602</code>). Wrapping a breaker around a call that is
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/Factory/DbContextFactory.cs:603</code>). Wrapping a breaker around a call that is
           already being retried inside the strategy would either count one logical failure many times or force
           the strategy to be replaced. That
           is an EF execution-strategy rework, a much larger change than a breaker, and it is not what this wave
@@ -511,9 +512,9 @@
           implicitly time-bounded by &quot;retries finish in seconds&quot; no longer is.</li>
           <li><strong>The fault consumer observes and stops there.</strong> <code>broker.fault.count</code> incrementing means a message
           is in the error queue and will stay there until someone acts. Both applications alert on the
-          Error log line rather than on the counter (MMCA.ADC <code>infra/main.bicep:650</code>, MMCA.Store
-          <code>infra/main.bicep:498</code>) and document the manual inspect, replay or discard procedure (MMCA.ADC
-          <code>infra/OPERATIONS.md:232</code>, MMCA.Store <code>infra/OPERATIONS.md:178</code>; see
+          Error log line rather than on the counter (MMCA.ADC <code>infra/main.bicep:694</code>, MMCA.Store
+          <code>infra/main.bicep:549</code>) and document the manual inspect, replay or discard procedure (MMCA.ADC
+          <code>infra/OPERATIONS.md:243</code>, MMCA.Store <code>infra/OPERATIONS.md:179</code>; see
           <a href="062-slo-alerting-as-code.html">ADR-062</a>), but <code>broker.fault.count</code> itself drives no alert and no
           automated replay path is provided. The gap moved from invisible to visible-and-hand-actioned.</li>
           <li><strong>There is no host-wide way to turn fault consumers off.</strong> The opt-out is per event type at the
@@ -522,10 +523,10 @@
           call rather than flip one setting.</li>
           <li><strong><code>BrokerMetrics</code> is <code>internal</code> and its meter name is written twice.</strong> A consumer cannot reference
           the class to add its own instruments to the meter, and the <code>MMCA.Common.Aspire</code> copy of the name
-          (<code>Extensions.Telemetry.cs:309</code>) can drift from the Infrastructure declaration with no compiler error and
+          (<code>Extensions.Telemetry.cs:311</code>) can drift from the Infrastructure declaration with no compiler error and
           no test: the symptom would be a meter that exports nothing.</li>
           <li><strong>The breaker is per processor instance, so its state is not shared.</strong> The pipeline is a per-instance
-          field (<code>OutboxProcessor.cs:118</code>, rationale <code>:112-115</code>), so with N replicas the broker sees up to N
+          field (<code>OutboxProcessor.cs:121</code>, rationale <code>:115-118</code>), so with N replicas the broker sees up to N
           independent circuits and the effective failure threshold is N times the configured one, the same
           per-replica caveat ADR-019 records for the rate limiter.</li>
           <li><strong>In a monolith, failing handlers can open a &quot;broker&quot; circuit in a host with no broker.</strong>
@@ -533,11 +534,11 @@
           (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Services/DomainEventDispatcher.cs:46-86</code>) has no
           catch, so an exception from an in-process integration-event handler surfaces through
           <code>InProcessMessageBus</code> into the breaker, and <code>ShouldHandle</code> counts every exception except
-          cancellation (<code>OutboxProcessor.cs:1085-1086</code>). Enough handler failures inside the sampling window
+          cancellation (<code>OutboxProcessor.cs:1126-1127</code>). Enough handler failures inside the sampling window
           open the circuit for 15 seconds, deferring every integration event from that processor (not only
-          the failing type), incrementing <code>broker.circuit.open.count</code> (<code>:618-620</code>) and writing the Warning
-          &quot;Message bus circuit is open for data source ...&quot; (<code>:623-627</code>, <code>:1154</code>) although no broker exists.
-          The source names this case (the field summary at <code>:104-107</code> and the comment at <code>:778-782</code>), so
+          the failing type), incrementing <code>broker.circuit.open.count</code> (<code>:669-671</code>) and writing the Warning
+          &quot;Message bus circuit is open for data source ...&quot; (<code>:673-676</code>, <code>:1196</code>) although no broker exists.
+          The source names this case (the field summary at <code>:107-110</code> and the comment at <code>:816-820</code>), so
           the behavior is documented rather than incidental.</li>
           <li><strong>Fifteen seconds of break can be worse than none for a slow broker.</strong> With a 0.5 failure ratio over
           a 30-second window and a 10-request minimum, a broker that is degraded rather than down trips the
@@ -735,6 +736,42 @@
           runbook heading is at <code>infra/OPERATIONS.md:385</code>, superseding the <code>:384</code> recorded in the
           2026-10-26 Revision.</li>
           </ol>
+          <h2 id="revision-2026-11-23">Revision (2026-11-23)</h2>
+          <p>Re-verified against current source. No decision changed: RabbitMQ still gates second-level
+          redelivery behind a default-off flag while Azure Service Bus applies it unconditionally, the outbox
+          still holds a per-instance, breaker-only Polly pipeline around the <code>IMessageBus</code> publish with the
+          <code>BrokerResilienceDefaults</code> values 0.5, 10, 30 seconds and 15 seconds, an open circuit still costs no
+          retry, and there is still no breaker in any persistence path. What moved is line layout in the cited
+          files, plus several live-section anchors the 2026-11-08 change left at their 2026-10-26 positions.</p>
+          <ol>
+          <li>Anchors re-verified against current source: <code>AzureServiceBusTransport.cs</code> <code>UsingAzureServiceBus</code>
+          <code>:79</code>, <code>applyDelayedRedelivery: true</code> <code>:99</code>, unconditional-redelivery doc <code>:20-23</code> (<code>:10-17</code> now
+          describe the Entra and connection-string sign-in); <code>AddMeter(&quot;MMCA.Common.Broker&quot;)</code> at
+          <code>MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Extensions.Telemetry.cs:311</code> (meter chain
+          <code>:307-317</code>); <code>BrokerResilienceDefaults.cs</code> class <code>:25</code>, <code>FailureRatio</code> <code>:33</code>, <code>MinimumThroughput</code>
+          <code>:41</code>, <code>SamplingDuration</code> <code>:48</code>, <code>BreakDuration</code> <code>:57</code>, no-retry text <code>:18-23</code>; in
+          <code>OutboxProcessor.cs</code> the pipeline field <code>:121</code> (summary <code>:106-120</code>, monolith text <code>:107-110</code>,
+          &quot;never the database calls&quot; <code>:110</code>, no-retry <code>:112-113</code>, per-instance rationale <code>:115-118</code>),
+          <code>BuildBrokerPublishPipeline</code> <code>:1118-1129</code> with <code>ShouldHandle</code> <code>:1126-1127</code>, <code>DeliverAsync</code>
+          <code>:810-832</code> (comment <code>:816-820</code>, failing handlers <code>:818</code>, <code>ExecuteAsync</code> <code>:821-825</code>, publish <code>:823</code>,
+          domain-event branch <code>:827-831</code>), the failure path in <code>DispatchRowsAsync</code> (<code>:529</code>, latch <code>:541</code>,
+          shutdown rethrow <code>:588-595</code>, <code>catch (Exception ex)</code> <code>:597</code>, call <code>:600</code>, <code>RecordOutcomeAsync</code>
+          <code>:610</code>) and <code>ApplyDeliveryFailure</code> (<code>:629</code>, <code>RetryCount</code> skip <code>:641-645</code>, <code>LastError</code> <code>:648</code>,
+          re-lease <code>:658-661</code>, counter <code>:669-671</code>, log <code>:673-676</code>, circuit return <code>:678</code>, <code>MaxRetries</code>
+          <code>:681</code>), and <code>LogBrokerCircuitOpen</code> <code>:1196-1197</code>;
+          <code>PollingLoop.ComputeCircuitOpenBackoffSeconds</code> at
+          <code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Polling/PollingLoop.cs:219-220</code>;
+          <code>InProcessMessageBus.cs</code> class <code>:18</code>, dispatch <code>:24</code>, default registration at
+          <code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:366</code>; the breaker
+          search hits at <code>MMCA.Common/Source/Presentation/MMCA.Common.Grpc/DependencyInjection.cs:142</code>,
+          <code>:161-164</code> (doc <code>:95</code>, inline <code>:134</code>), <code>HttpResilienceDefaults.cs:18</code>, <code>:81</code>, <code>:87</code>, <code>:93</code>
+          (comments <code>:61</code>, <code>:69</code>) and <code>MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Extensions.cs:68</code>, <code>:71</code>;
+          <code>CreateExecutionStrategy</code> at <code>DbContextFactory.cs:603</code>; the MMCA.ADC error-queue alert key at
+          <code>infra/main.bicep:694</code> (query <code>:696</code>, <code>outbox-broker-circuit-open</code> key <code>:706</code>) and runbook heading
+          at <code>infra/OPERATIONS.md:243</code> (circuit-open runbook <code>:398</code>); and the MMCA.Store
+          <code>store-alert-broker-error-queue</code> rule at <code>infra/main.bicep:549</code> (query <code>:564</code>) and runbook heading
+          at <code>infra/OPERATIONS.md:179</code>.</li>
+          </ol>
           <h2 id="related">Related</h2>
           <p><a href="003-outbox-dual-dispatch.html">ADR-003</a> (the outbox publish leg this breaker wraps, and the retry,
           jittered backoff and dead-lettering that real publish failures and failed half-open probes still use; an open circuit re-leases the row without spending a retry),
@@ -776,6 +813,7 @@
             <li><a href="#revision-2026-10-21">Revision (2026-10-21)</a></li>
             <li><a href="#revision-2026-10-26">Revision (2026-10-26)</a></li>
             <li><a href="#revision-2026-10-28">Revision (2026-10-28)</a></li>
+            <li><a href="#revision-2026-11-23">Revision (2026-11-23)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

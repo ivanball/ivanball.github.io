@@ -271,7 +271,11 @@
           9 gains the periodic-password-provider test, and anchors refreshed after the v1.257.0 and v1.261.0
           releases. Revised 2026-10-28: anchors refreshed after the v1.265.1 release. Revised 2026-11-12:
           decision 10 gains a third user, the Azure Entra token login (<code>AddAzurePostgreSqlEntraAuthentication</code>,
-          opt-in, not tried against a live server; <a href="134-cloud-neutral-core-vendor-adapters.html">ADR-134</a>).</p>
+          opt-in, not tried against a live server; <a href="134-cloud-neutral-core-vendor-adapters.html">ADR-134</a>).
+          Revised 2026-11-23: the PostgreSQL readiness check is the framework&#39;s own <code>PostgreSqlHealthCheck</code>
+          (no <code>AddNpgSql</code> call), the template injects one package id the rename cannot reach, Npgsql is versioned
+          per target framework (10.x on net10.0, 11.x on net11.0), and anchors refreshed after the v1.315.0
+          release.</p>
           <h2 id="context">Context</h2>
           <p>The framework has shipped three database engines since its first release: SQL Server, Azure Cosmos DB
           and SQLite. Every one of them is reached the same way, because <a href="006-database-per-service.html">ADR-006</a>
@@ -331,7 +335,7 @@
           <code>PhysicalDbContextFactory</code> delegates to its <code>CreateDbContext</code>
           (<code>.../DbContexts/Factory/PhysicalDbContextFactory.cs:32</code>, <code>PostgreSQLDataSourceEngine.cs:85</code>) and
           <code>ApplyConfigurationsForEntitiesInContext</code> reads its <code>EntityConfigurationInterface</code>
-          (<code>.../DbContexts/ApplicationDbContext.cs:962</code>, <code>PostgreSQLDataSourceEngine.cs:30</code>). When an
+          (<code>.../DbContexts/ApplicationDbContext.cs:1183</code>, <code>PostgreSQLDataSourceEngine.cs:30</code>). When an
           <code>INpgsqlDataSourceConfigurator</code> is registered, <code>UseNpgsql</code> receives the shared <code>NpgsqlDataSource</code>
           for the physical source&#39;s connection string instead of the string itself; with none registered the
           connection-string call is unchanged
@@ -343,7 +347,7 @@
           (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Configuration/EntityTypeConfiguration/EntityTypeConfigurationPostgreSQL.cs:21-22</code>)
           is a shim carrying <code>[UseDataSource(DataSource.PostgreSQL)]</code>, exactly like its SQL Server and
           SQLite peers, and the engine-aware base delegates to the engine&#39;s <code>ApplyKeyAndTableMapping</code>
-          (<code>EntityTypeConfiguration.cs:77</code>), where PostgreSQL applies the SAME mapping as SQL Server
+          (<code>EntityTypeConfiguration.cs:78</code>), where PostgreSQL applies the SAME mapping as SQL Server
           (<code>PostgreSQLDataSourceEngine.cs:92</code>): a table per entity inside the module schema, PascalCase identifiers, an identity key. Moving an
           entity between the two engines is a base-class change with no configuration-body edits, which is
           the ADR-018 promise. <strong>No <code>snake_case</code> naming convention is imposed.</strong> A naming-convention plugin
@@ -357,13 +361,13 @@
           <code>PostgreSQLDataSourceEngine.cs:116</code>),
           so the automatic convention and the opt-in <code>HasSoftDeleteFilter</code> extension can never disagree.
           The outbox filters are built through one <code>QuoteColumn</code> helper
-          (<code>.../DbContexts/ApplicationDbContext.cs:619-620</code>, delegating to
+          (<code>.../DbContexts/ApplicationDbContext.cs:767-768</code>, delegating to
           <code>SoftDeleteFilterSql.QuoteColumn</code> at <code>SoftDeleteFilterSql.cs:70-71</code> and on to the engine) that
           returns brackets for SQL Server (<code>.../DataSources/Engines/SQLServerDataSourceEngine.cs:114</code>) and
           SQL-standard double quotes for PostgreSQL (<code>PostgreSQLDataSourceEngine.cs:113</code>) and SQLite
           (<code>SqliteDataSourceEngine.cs:112</code>, whose soft-delete filter is <code>&quot;IsDeleted&quot; = 0</code> at <code>:115</code>).
           Cosmos answers brackets too (<code>CosmosDataSourceEngine.cs:114</code>) but builds no soft-delete filter
-          (<code>null</code> at <code>:117</code>). <code>IncludeColumns</code> (<code>.../DbContexts/ApplicationDbContext.cs:645-649</code>) asks the
+          (<code>null</code> at <code>:117</code>). <code>IncludeColumns</code> (<code>.../DbContexts/ApplicationDbContext.cs:793-797</code>) asks the
           engine for the provider&#39;s own <code>IncludeProperties</code> overload (<code>PostgreSQLDataSourceEngine.cs:109-110</code>),
           so each provider gets its own form.</p>
           </li>
@@ -387,7 +391,7 @@
           nothing to apply is created outright by <code>DatabaseInitializationExtensions</code>
           (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/DatabaseInitializationExtensions.cs:90-105</code>)
           instead of being migrated into an empty schema. <code>DesignTimeDbContextHelper.CreatePostgreSQL</code>
-          (<code>.../DbContexts/Design/DesignTimeDbContextHelper.cs:74</code>) scaffolds the migrations when a host
+          (<code>.../DbContexts/Design/DesignTimeDbContextHelper.cs:75</code>) scaffolds the migrations when a host
           wants them.</p>
           </li>
           <li><p><strong>Configuration keys mirror SQL Server&#39;s, per engine.</strong> <code>PostgreSQLConnectionString</code> and
@@ -400,36 +404,39 @@
           carry the outbox, inbox, scheduler and audit-trail tables.</p>
           </li>
           <li><p><strong>Readiness and orchestration are peers, not extras.</strong>
-          <code>AddInfrastructureHealthChecks()</code> registers an <code>AddNpgSql</code> check per declared PostgreSQL database
-          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Extensions.Health.cs:238-243</code>, through
-          <code>PostgreSqlHealthCheckRegistration.Register</code> at <code>:242</code>, which wraps <code>AddNpgSql</code> at
-          <code>.../Health/PostgreSqlHealthCheckRegistration.cs:32-33</code>), named <code>postgresql</code> for the first one
-          (<code>Extensions.Health.cs:273</code>), and <code>WithPostgreSQLDataSource(database, logicalName)</code>
-          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Aspire.Hosting/Extensions.cs:561</code>) wires a service
+          <code>AddInfrastructureHealthChecks()</code> registers one readiness check per declared PostgreSQL database
+          (sources collected at <code>MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Extensions.Health.cs:244</code>,
+          looped at <code>:263-278</code>). The check is the framework&#39;s own <code>PostgreSqlHealthCheck</code>
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Health/PostgreSqlHealthCheck.cs:26</code>), which opens a
+          connection and runs <code>SELECT 1</code> (<code>:61</code>), held as a keyed singleton (<code>Extensions.Health.cs:269-271</code>)
+          so a data source it owns is built once and disposed with the container. It is named <code>postgresql</code>
+          for the first one (<code>Extensions.Health.cs:331</code>), and <code>WithPostgreSQLDataSource(database, logicalName)</code>
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Aspire.Hosting/Extensions.cs:616</code>) wires a service
           project to its own <code>PostgresDatabaseResource</code> with the same reference / <code>WaitFor</code> / environment
           shape <code>WithSQLServerDataSource</code> uses. <strong>No Aspire client integration is added</strong>
           (<code>Aspire.Npgsql.EntityFrameworkCore.PostgreSQL</code>), because the SQL Server path does not use one
           either: the framework owns its own context construction, and taking an Aspire client package for
           one engine and not the others would make the two paths asymmetric for no gain. When a configurator
           is registered the check probes through the same shared data source, which it resolves as a keyed
-          service by connection string
-          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Health/PostgreSqlHealthCheckRegistration.cs:45</code>), so
-          MMCA.Common.Aspire reaches it without referencing MMCA.Common.Infrastructure
+          service by connection string (<code>PostgreSqlHealthCheck.cs:105-107</code>); with none it probes a data
+          source it builds from the connection string and owns (<code>:110-115</code>). MMCA.Common.Aspire reaches the
+          shared one without referencing MMCA.Common.Infrastructure
           (<code>.../DbContexts/NpgsqlDataSources.cs:13-16</code>).</p>
           </li>
           <li><p><strong>The engine is proved against a real server, not a model.</strong>
           <code>Tests/Core/MMCA.Common.Infrastructure.PostgreSQL.Tests</code> is a Testcontainers project outside
           <code>MMCA.Common.slnx</code> (the posture <code>Tests/Core/MMCA.Common.Infrastructure.Redis.Tests</code> established:
           Docker-gated, own CI job, kept out of the fast solution-wide unit loop), run by the
-          <code>postgresql-integration</code> CI job (<code>MMCA.Common/.github/workflows/ci.yml:854</code>). It creates the whole
-          schema, round-trips an auditable entity&#39;s UTC audit stamps (<code>PostgreSQLPersistenceTests.cs:119-120</code>),
-          proves a soft-deleted row is hidden (<code>:145-146</code>) AND frees its unique slot (<code>:179-180</code>), writes and
+          <code>postgresql-integration</code> CI job (<code>MMCA.Common/.github/workflows/ci.yml:1077</code>, run step <code>:1125</code>), which
+          is not a required check. It creates the whole
+          schema, round-trips an auditable entity&#39;s UTC audit stamps (<code>PostgreSQLPersistenceTests.cs:120-121</code>),
+          proves a soft-deleted row is hidden (<code>:146-147</code>) AND frees its unique slot (<code>:180-181</code>), writes and
           drains the outbox row of a local domain event, and writes the outbox row of an integration event
           and asserts it stays pending for <code>OutboxProcessor</code>
-          (<code>Tests/Core/MMCA.Common.Infrastructure.PostgreSQL.Tests/PostgreSQLPersistenceTests.cs:204-248</code>).
+          (<code>Tests/Core/MMCA.Common.Infrastructure.PostgreSQL.Tests/PostgreSQLPersistenceTests.cs:205-249</code>).
           The three failures listed in the Context section are each caught by one of those, and by nothing
           in the unit tier. A further test authenticates through a periodic password provider on the
-          configured data source (<code>PostgreSQLPersistenceTests.cs:254-255</code>, decision 10).</p>
+          configured data source (<code>PostgreSQLPersistenceTests.cs:255-256</code>, decision 10).</p>
           </li>
           <li><p><strong>Connection customization is one extension point, and cloud token authentication is its three users.</strong>
           <code>INpgsqlDataSourceConfigurator</code>
@@ -447,27 +454,28 @@
           Server, SQLite and Cosmos sources never reach a configurator (<code>INpgsqlDataSourceConfigurator.cs:19-20</code>).
           Three adapter calls register one. The Azure one is an opt-in capability of the Azure adapter
           (<a href="134-cloud-neutral-core-vendor-adapters.html">ADR-134</a>): <code>AddAzurePostgreSqlEntraAuthentication(configuration)</code>
-          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Azure/AzureServiceCollectionExtensions.cs:146</code>) is gated on
-          the boolean <code>AzurePostgreSql:EntraAuthentication:Enabled</code> (<code>:124</code>, read at <code>:150</code>-<code>:156</code>, registering
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Azure/AzureServiceCollectionExtensions.cs:152</code>) is gated on
+          the boolean <code>AzurePostgreSql:EntraAuthentication:Enabled</code> (<code>:130</code>, read at <code>:156</code>-<code>:162</code>, registering
           nothing when absent or false) and registers its configurator through <code>AddNpgsqlDataSourceConfigurator</code>
-          (<code>:172</code>). That configurator sends a Microsoft Entra access token for the <code>ossrdbms-aad</code> scope, from
+          (<code>:178</code>). That configurator sends a Microsoft Entra access token for the <code>ossrdbms-aad</code> scope, from
           <code>DefaultAzureCredential</code>, as the password through Npgsql&#39;s periodic password provider
           (<code>MMCA.Common/Source/Hosting/MMCA.Common.Azure/PostgreSql/AzurePostgreSqlEntraAuthenticationConfigurator.cs:10</code>-<code>:14</code>,
           <code>:34</code>-<code>:35</code>, <code>:54</code>), refreshed every four minutes, inside the credential&#39;s five-minute refresh margin,
           and retried 30 seconds after a failed request (<code>:17</code>-<code>:21</code>, <code>:26</code>, <code>:29</code>). Because the token is the
           password, a configured PostgreSQL connection string below <code>SSL Mode=Require</code> (or <code>VerifyCA</code> /
           <code>VerifyFull</code>) fails registration naming its key, and one supplied later fails when its data source is
-          built (<code>AzureServiceCollectionExtensions.cs:158</code>-<code>:160</code>; <code>AzurePostgreSqlEntraAuthenticationConfigurator.cs:50</code>-<code>:52</code>,
+          built (<code>AzureServiceCollectionExtensions.cs:164</code>-<code>:166</code>; <code>AzurePostgreSqlEntraAuthenticationConfigurator.cs:50</code>-<code>:52</code>,
           <code>:65</code>-<code>:81</code>, <code>:95</code>-<code>:106</code>). The gate set true without the call, or set to a value that is not a
           boolean, fails startup
           (<code>MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Integrations/HostIntegrationTripwire.cs:56</code>,
-          <code>:119</code>-<code>:131</code>; the call&#39;s marker at <code>AzureServiceCollectionExtensions.cs:162</code>-<code>:170</code>). Its limit: it
+          <code>:137</code>-<code>:141</code>, the non-boolean failure at <code>:179</code>-<code>:187</code>; the call&#39;s marker at
+          <code>AzureServiceCollectionExtensions.cs:168</code>-<code>:176</code>). Its limit: it
           has not been tried against a live Azure Database for PostgreSQL server (ADR-134). The other two are
           <code>AddAwsRdsIamAuthentication</code>
-          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Aws/AwsServiceCollectionExtensions.cs:107</code>, gated on
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Aws/AwsServiceCollectionExtensions.cs:108</code>, gated on
           <code>Rds:IamAuthentication:Enabled</code>, <code>MMCA.Common/Source/Hosting/MMCA.Common.Aws/Rds/RdsIamAuthenticationSettings.cs:11</code>, <code>:14</code>)
           and <code>AddCloudSqlIamAuthentication</code>
-          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Gcp/GcpServiceCollectionExtensions.cs:90</code>, gated on
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Gcp/GcpServiceCollectionExtensions.cs:91</code>, gated on
           <code>CloudSql:IamAuthentication:Enabled</code>, <code>MMCA.Common/Source/Hosting/MMCA.Common.Gcp/CloudSql/CloudSqlIamAuthenticationSettings.cs:13</code>, <code>:16</code>).
           Each hands Npgsql a periodic password provider
           (<code>MMCA.Common/Source/Hosting/MMCA.Common.Aws/Rds/RdsIamAuthenticationConfigurator.cs:39</code>,
@@ -481,12 +489,12 @@
           60, while Npgsql reuses whatever it was handed for the whole interval (<code>:16-21</code>). Both send the token
           as the password, so both reject a connection string below <code>SSL Mode=Require</code>
           (<code>RdsIamAuthenticationConfigurator.cs:110-117</code>, <code>CloudSqlIamAuthenticationConfigurator.cs:100-107</code>)
-          and expect no password in it (<code>MMCA.Common/CHANGELOG.md:120</code>, <code>:126</code>). Neither reaches SQL Server:
+          and expect no password in it (<code>MMCA.Common/CHANGELOG.md:1057</code>, <code>:1063</code>). Neither reaches SQL Server:
           RDS and Cloud SQL offer no IAM database authentication for it
-          (<code>AwsServiceCollectionExtensions.cs:98</code>, <code>GcpServiceCollectionExtensions.cs:80</code>), so an RDS SQL
-          Server password connection string stays in Secrets Manager (<code>MMCA.Common/CHANGELOG.md:120</code>). The
-          PostgreSQL tier covers a periodic password provider and the PostgreSql broker transport
-          (<code>MMCA.Common/CHANGELOG.md:133</code>).</p>
+          (<code>AwsServiceCollectionExtensions.cs:99-100</code>, <code>GcpServiceCollectionExtensions.cs:81-82</code>), so an RDS
+          SQL Server password connection string stays in Secrets Manager (<code>MMCA.Common/CHANGELOG.md:1057</code>).
+          The PostgreSQL tier covers a periodic password provider and the PostgreSql broker transport
+          (<code>MMCA.Common/CHANGELOG.md:1070</code>).</p>
           </li>
           </ol>
           <h3 id="rollout-the-helpdesk-canary-and-the-template-axis">Rollout: the Helpdesk canary and the template axis</h3>
@@ -495,24 +503,28 @@
           taken.</p>
           <ol>
           <li><strong>MMCA.Helpdesk canary.</strong> The <code>postgresql-canary</code> CI job
-          (<code>MMCA.Helpdesk/.github/workflows/ci.yml:146-155</code>) is ADVISORY: <code>continue-on-error: true</code> and not
-          a required check, so it reds for visibility without failing the run. It runs
-          <code>build/templates/canary-postgresql.ps1</code>, which generates an app with <code>--database postgresql</code>,
-          builds and tests it in package mode against the released framework, scaffolds its first migration
-          and applies it to a <code>postgres:17</code> service container (<code>ci.yml:157-158</code>, <code>ci.yml:191-195</code>), then
-          asserts the schema landed (<code>ci.yml:202-208</code>). The seed itself stays SQL Server: no
+          (<code>MMCA.Helpdesk/.github/workflows/ci.yml:180</code>, advisory note <code>:177-179</code>) is ADVISORY:
+          <code>continue-on-error: true</code> (<code>:189</code>) and not a required check, so it reds for visibility without
+          failing the run. It runs <code>build/templates/canary-postgresql.ps1</code>, which generates an app with
+          <code>--database postgresql</code>, builds and tests it in package mode against the released framework,
+          scaffolds its first migration and applies it to a <code>postgres:17</code> service container (<code>ci.yml:192</code>,
+          <code>ci.yml:243</code>), then asserts the schema landed (<code>ci.yml:252-265</code>). The seed itself stays SQL Server: no
           <code>Migrations.PostgreSQL</code> project is checked in, entity configurations reach
           <code>EntityTypeConfigurationPostgreSQL</code> through the template rename, and the AppHost&#39;s
           <code>WithPostgreSQLDataSource</code> branch is injected at staging time
-          (<code>MMCA.Helpdesk/build/templates/stage.ps1:428-475</code>).</li>
+          (<code>MMCA.Helpdesk/build/templates/stage.ps1:431-478</code>, the call at <code>:464</code>).</li>
           <li><strong>Template axis.</strong> <code>MMCA.Helpdesk/.template.config/template.json</code> carries a <code>database</code> choice
-          parameter with <code>sqlserver</code>, <code>sqlite</code> and <code>postgresql</code> (<code>template.json:264</code>) and two derived
+          parameter with <code>sqlserver</code>, <code>sqlite</code> and <code>postgresql</code> (<code>template.json:238-257</code>, <code>postgresql</code> at
+          <code>:252</code>) and two derived
           symbols, <code>engineName</code> and <code>engineNameUpper</code>, that rename the migrations project, the provider
           package ids, the design-time helper call, the context class, the configuration base and the
           connection-string settings. For <code>--database postgresql</code> both derive <code>PostgreSQL</code>
-          (<code>template.json:74-91</code>): the framework spells this engine the same way in both positions, which is
-          the one place this choice is simpler than the other two. The two package ids the rename cannot
-          reach (the EF provider and the readiness check) are injected by <code>stage.ps1:489-520</code>.</li>
+          (<code>toEngineName</code> at <code>template.json:74-77</code> and <code>toEngineNameUpper</code> at <code>:83-86</code> both end in
+          <code>enginePostgreSQL</code>, <code>:69-73</code>; the symbols at <code>:266</code> and <code>:274</code>): the framework spells this engine
+          the same way in both positions, which is the one place this choice is simpler than the other two.
+          The one package id the rename cannot reach, the EF provider <code>Npgsql.EntityFrameworkCore.PostgreSQL</code>,
+          is injected by <code>stage.ps1:492-513</code> as both its pin (<code>:502</code>) and its reference (<code>:511</code>); the
+          <code>Aspire.Hosting.PostgreSQL</code> reference has its own injected branch (<code>:479-491</code>).</li>
           </ol>
           <h2 id="rationale">Rationale</h2>
           <p>The shape follows from the alternatives that were weighed and declined:</p>
@@ -545,10 +557,17 @@
           <li><strong>Every consumer&#39;s package graph gains <code>Npgsql.EntityFrameworkCore.PostgreSQL</code>.</strong> It is referenced
           unconditionally from <code>MMCA.Common.Infrastructure</code>, exactly as the Cosmos, SQLite and SQL Server
           providers are: a host that configures no PostgreSQL connection string never builds the context, so
-          the cost is one entry in a lock file. <code>AspNetCore.HealthChecks.NpgSql</code> and a direct <code>Npgsql</code> pin
-          land on <code>MMCA.Common.Aspire</code> for the readiness check, and <code>Aspire.Hosting.PostgreSQL</code> on
-          <code>MMCA.Common.Aspire.Hosting</code> for the resource type.</li>
-          <li><strong>Npgsql versions on its own cadence.</strong> Its package tracks the EF Core MAJOR (10.x) rather than the
+          the cost is one entry in a lock file (<code>MMCA.Common.Infrastructure.csproj:44</code>). A direct <code>Npgsql</code>
+          reference lands on <code>MMCA.Common.Aspire</code> for its own readiness check
+          (<code>MMCA.Common.Aspire.csproj:24</code>, pinned at <code>MMCA.Common/Directory.Packages.props:471</code>; it takes
+          no third-party health-check package directly, <code>:465-470</code>), and <code>Aspire.Hosting.PostgreSQL</code> on
+          <code>MMCA.Common.Aspire.Hosting</code> for the resource type (<code>MMCA.Common.Aspire.Hosting.csproj:29</code>).
+          That integration still brings <code>AspNetCore.HealthChecks.NpgSql</code> 9.0.0 in transitively
+          (<code>MMCA.Common.Aspire.Hosting/packages.lock.json:139</code>, <code>:1478</code>), so an AppHost&#39;s package graph
+          carries it even though no framework code calls it.</li>
+          <li><strong>Npgsql versions on its own cadence.</strong> One <code>MmcaNpgsqlVersion</code> property versions both <code>Npgsql</code>
+          and the EF provider and follows the EF Core MAJOR per target framework: 10.0.4 on net10.0 and
+          11.0.0 on net11.0 (<code>MMCA.Common/Directory.Packages.props:18-21</code>, <code>:48</code>, <code>:60</code>), rather than the
           exact patch the Microsoft-owned providers share, so the dependency sweep must not expect one
           version across all four providers.</li>
           <li><strong>The engine set is enumerated in one place.</strong> Engine-specific behavior lives in one
@@ -681,6 +700,42 @@
           (PostgreSQL tier), Decision 10. The CHANGELOG anchors in the 2026-10-25 and 2026-10-26 revisions
           are left as recorded.</li>
           </ol>
+          <h2 id="revision-2026-11-23">Revision (2026-11-23)</h2>
+          <p>Re-verified against current source. The engine decision, its mapping, its timestamp handling and its
+          rationale are unchanged. The readiness check is now the framework&#39;s own class rather than a
+          third-party package, the template injects one package id the rename cannot reach, and Npgsql is versioned
+          per target framework; the remaining anchors moved.</p>
+          <ol>
+          <li><strong>Decision 8 corrected.</strong> <code>PostgreSqlHealthCheckRegistration</code> and the <code>AddNpgSql</code> call are gone.
+          <code>AddInfrastructureHealthChecks()</code> registers <code>MMCA.Common.Aspire</code>&#39;s internal <code>PostgreSqlHealthCheck</code>
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Health/PostgreSqlHealthCheck.cs:26</code>, <code>SELECT 1</code> at
+          <code>:61</code>) as a keyed singleton per PostgreSQL source (<code>Extensions.Health.cs:263-278</code>). It probes the
+          shared <code>NpgsqlDataSource</code> found by connection-string key (<code>PostgreSqlHealthCheck.cs:105-107</code>), or
+          else a data source it builds and disposes itself (<code>:110-115</code>).</li>
+          <li><strong>Rollout 2 corrected.</strong> <code>stage.ps1</code> injects one package id the rename cannot reach,
+          <code>Npgsql.EntityFrameworkCore.PostgreSQL</code>, as a pin and a reference
+          (<code>MMCA.Helpdesk/build/templates/stage.ps1:492-513</code>), beside the AppHost&#39;s
+          <code>Aspire.Hosting.PostgreSQL</code> reference in its own branch (<code>:479-491</code>); there is no
+          readiness-check package to inject.</li>
+          <li><strong>Trade-offs corrected.</strong> <code>AspNetCore.HealthChecks.NpgSql</code> is no longer a direct reference
+          (<code>MMCA.Common/Directory.Packages.props:465-470</code>); <code>MMCA.Common.Aspire</code> references <code>Npgsql</code> alone
+          (<code>MMCA.Common.Aspire.csproj:24</code>). It still arrives transitively through <code>Aspire.Hosting.PostgreSQL</code>
+          (<code>MMCA.Common.Aspire.Hosting/packages.lock.json:139</code>). <code>MmcaNpgsqlVersion</code> is 10.0.4 on net10.0 and 11.0.0 on net11.0
+          (<code>Directory.Packages.props:48</code>, <code>:60</code>; <code>MMCA.Common/CHANGELOG.md:9</code>).</li>
+          <li>Anchors re-verified against current source: <code>ApplicationDbContext.cs:1183</code>
+          (<code>EntityConfigurationInterface</code>, inside <code>ApplyConfigurationsForEntitiesInContext</code> at <code>:1181</code>),
+          <code>:767-768</code> (<code>QuoteColumn</code>) and <code>:793-797</code> (<code>IncludeColumns</code>); <code>EntityTypeConfiguration.cs:78</code>;
+          <code>DesignTimeDbContextHelper.cs:75</code>; <code>Extensions.Health.cs:244</code>, <code>:331</code> (<code>postgresql</code> name);
+          <code>MMCA.Common.Aspire.Hosting/Extensions.cs:616</code> (<code>WithPostgreSQLDataSource</code>;
+          <code>WithSQLServerDataSource</code> at <code>:586</code>); the <code>postgresql-integration</code> job at
+          <code>MMCA.Common/.github/workflows/ci.yml:1077</code> (run step <code>:1125</code>); <code>PostgreSQLPersistenceTests.cs:120-121</code>,
+          <code>:146-147</code>, <code>:180-181</code>, <code>:205-249</code>, <code>:255-256</code>; <code>AzureServiceCollectionExtensions.cs:152</code>, <code>:130</code>,
+          <code>:156-162</code>, <code>:164-166</code>, <code>:168-176</code>, <code>:178</code>; <code>HostIntegrationTripwire.cs:137-141</code> and <code>:179-187</code>;
+          <code>AwsServiceCollectionExtensions.cs:108</code>, <code>:99-100</code>; <code>GcpServiceCollectionExtensions.cs:91</code>,
+          <code>:81-82</code>; the v1.257.0 entries at <code>MMCA.Common/CHANGELOG.md:1057</code>, <code>:1063</code>, <code>:1067</code>, <code>:1070</code>;
+          <code>MMCA.Helpdesk/.github/workflows/ci.yml:180</code>, <code>:189</code>, <code>:192</code>, <code>:243</code>, <code>:252-265</code>;
+          <code>stage.ps1:431-478</code> (call <code>:464</code>); <code>template.json:238-257</code>, <code>:74-77</code>, <code>:83-86</code>, <code>:266</code>, <code>:274</code>.</li>
+          </ol>
           <h2 id="related">Related</h2>
           <p><a href="006-database-per-service.html">ADR-006</a> (one sealed context per engine, one instance per database),
           <a href="018-polyglot-persistence.html">ADR-018</a> (the engine axis this record adds a member to),
@@ -716,6 +771,7 @@
             <li><a href="#revision-2026-10-25">Revision (2026-10-25)</a></li>
             <li><a href="#revision-2026-10-26">Revision (2026-10-26)</a></li>
             <li><a href="#revision-2026-10-28">Revision (2026-10-28)</a></li>
+            <li><a href="#revision-2026-11-23">Revision (2026-11-23)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

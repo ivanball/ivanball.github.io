@@ -274,7 +274,11 @@
           Revised 2026-10-26: anchors refreshed after later edits to both apps&#39; <code>deploy.yml</code> files, ADC&#39;s
           <code>e2e.yml</code>, MMCA.Common&#39;s <code>ci.yml</code> and <code>FACTS.md</code>.
           Revised 2026-10-28: anchors refreshed after an apt-mirror step moved MMCA.Common&#39;s <code>ui-e2e</code> test
-          step in <code>ci.yml</code>.</p>
+          step in <code>ci.yml</code>.
+          Revised 2026-11-23: the green-run Trade-offs bullet now records that both apps upload their TRX
+          results on every run while the Web Vitals JSON uploads only on failure, and anchors refreshed after
+          later edits to both apps&#39; test classes and workflows, MMCA.Common&#39;s <code>ci.yml</code>, <code>FACTS.md</code> and the
+          Helpdesk package pins.</p>
           <h2 id="context">Context</h2>
           <p>Rubric section 23 asks for client-side performance that is measured rather than assumed, naming Core
           Web Vitals (LCP, INP, CLS) or an equivalent as the evidence
@@ -303,7 +307,7 @@
           <ul>
           <li><strong>The collector is a shipped, dependency-free measurement type.</strong> <code>WebVitalsCollector</code>
           (<code>MMCA.Common/Source/Hosting/MMCA.Common.Testing.E2E/Infrastructure/WebVitalsCollector.cs:20</code>, in
-          the published package <code>MMCA.Common.Testing.E2E</code>, <code>MMCA.Common/FACTS.md:45</code>) installs
+          the published package <code>MMCA.Common.Testing.E2E</code>, <code>MMCA.Common/FACTS.md:50</code>) installs
           <code>PerformanceObserver</code> hooks as a Playwright init script so they exist before first paint
           (<code>InstallAsync</code>, <code>:40</code>, script at <code>:26-35</code>), accumulating LCP, CLS, FCP and an event-timing INP
           sample into <code>window.__vitals</code>. <code>CollectAsync</code> (<code>:47</code>) reads them back and stamps TTFB from
@@ -322,59 +326,60 @@
           <li><strong>A zero INP is skipped, not read as a pass.</strong> The INP assertion runs only when a sample was
           actually recorded (<code>:148-151</code>): no interaction clearing the observer&#39;s 16 ms <code>durationThreshold</code>
           (<code>:35</code>) leaves the field at 0, which must mean neither pass-by-absence nor failure.</li>
-          <li><strong>Every run leaves a citable artifact and a citable line.</strong> <code>WriteArtifactAsync</code> (<code>:63</code>) writes
+          <li><strong>Every run writes a citable artifact and a citable line.</strong> <code>WriteArtifactAsync</code> (<code>:63</code>) writes
           <code>web-vitals-{label}.json</code> (<code>:70</code>) as a <code>WebVitalsArtifact</code> envelope (<code>:90</code>) wrapping the measured
           <code>WebVitalsSample</code> (<code>:76</code>), under <code>WEB_VITALS_OUTPUT_DIR</code> or <code>artifacts/</code> beneath the working
           directory (<code>:65-66</code>); <code>Describe</code> (<code>:118</code>) renders the same sample as one invariant-culture line
-          (<code>:122-124</code>) that <code>AssertWithinBudget</code> writes to test output.</li>
+          (<code>:122-124</code>) that <code>AssertWithinBudget</code> writes to test output. Which of the two a run keeps is a
+          workflow choice, recorded under Trade-offs.</li>
           <li><strong>The measurement flow is shipped, not hand-rolled per repo.</strong> <code>MeasureWebVitalsAsync</code>
-          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Testing.E2E/Infrastructure/WebVitalsPageExtensions.cs:32</code>,
-          an <code>extension(IPage)</code> block at <code>:15</code>) installs the collector, navigates, optionally drives one
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Testing.E2E/Infrastructure/WebVitalsPageExtensions.cs:31</code>,
+          an <code>extension(IPage)</code> block at <code>:14</code>) installs the collector, navigates, optionally drives one
           scripted interaction against a named input placeholder, collects, writes the artifact and asserts
-          the budget, in that order (<code>:43-44</code>, <code>:46-57</code>, <code>:59-62</code>). A second member,
-          <code>MeasureWebVitalsWithInteractionAsync</code> (<code>:84</code>), takes a <code>Func&lt;IPage, Task&gt;</code> interaction instead of a
+          the budget, in that order (<code>:42-43</code>, <code>:45-56</code>, <code>:58-61</code>). A second member,
+          <code>MeasureWebVitalsWithInteractionAsync</code> (<code>:83</code>), takes a <code>Func&lt;IPage, Task&gt;</code> interaction instead of a
           placeholder for the interactions that form cannot express, and carries its own name rather than
           overloading the first, whose optional parameters would make the two ambiguous at the call site
-          (<code>:70-72</code>). Install-before-navigate is the load-bearing part: observers installed after the
+          (<code>:69-71</code>). Install-before-navigate is the load-bearing part: observers installed after the
           navigation record no LCP, FCP or TTFB for that load (<code>:5-11</code>). Every suite routes through the block (ADC
-          <code>WebVitalsTests.cs:109</code>, <code>:75</code>; Store <code>:118</code>, <code>:58</code>; the framework gallery <code>WebVitalsE2ETests.cs:58</code>,
+          <code>WebVitalsTests.cs:113</code>, <code>:78</code>; Store <code>:122</code>, <code>:60</code>; the framework gallery <code>WebVitalsE2ETests.cs:58</code>,
           <code>:66</code>, <code>:74</code>, <code>:96</code>); Store&#39;s product-detail test is the one caller that still drives the collector
           directly, because it reaches its page by navigation rather than by path (Store
-          <code>WebVitalsTests.cs:86-102</code>, <code>InstallAsync</code> at <code>:88</code>, <code>CollectAsync</code> at <code>:98</code>, <code>WriteArtifactAsync</code>
-          at <code>:99</code>).</li>
+          <code>WebVitalsTests.cs:88-106</code>, <code>InstallAsync</code> at <code>:92</code>, <code>CollectAsync</code> at <code>:102</code>, <code>WriteArtifactAsync</code>
+          at <code>:103</code>).</li>
           <li><strong>Both deployed apps assert the shipped defaults.</strong> ADC&#39;s <code>WebVitalsTests</code>
           (<code>MMCA.ADC/Tests/E2E/MMCA.ADC.E2E.Tests/Workflows/WebVitalsTests.cs:32</code>) holds one shared
           <code>WebVitalsBudget</code> constructed with no arguments (<code>:36</code>, stated at <code>:34-35</code>) and measures four
-          surfaces: home (<code>:44-45</code>), the public events entry point including its redirect (<code>:55-56</code>), the
-          session list (<code>:69</code>) and login (<code>:91-92</code>). Store&#39;s
+          surfaces: home (<code>:46-47</code>), the public events entry point including its redirect (<code>:58-59</code>), the
+          session list (<code>:73</code>) and login (<code>:96-97</code>). Store&#39;s
           (<code>MMCA.Store/Tests/E2E/MMCA.Store.E2E.Tests/Workflows/WebVitalsTests.cs:25</code>) holds the same shared
-          no-argument budget (<code>:29</code>) over home (<code>:38-39</code>), the catalog browse page (<code>:53-72</code>) and login
-          (<code>:75-76</code>); only product detail, reached by navigation rather than a hard-coded id (<code>:86-102</code>),
-          still constructs the defaults inline (<code>:101</code>). Both drive one scripted search interaction on their
+          no-argument budget (<code>:29</code>) over home (<code>:39-40</code>), the catalog browse page (<code>:53-74</code>) and login
+          (<code>:78-79</code>); only product detail, reached by navigation rather than a hard-coded id (<code>:88-106</code>),
+          still constructs the defaults inline (<code>:105</code>). Both drive one scripted search interaction on their
           grid page through <code>MeasureWebVitalsWithInteractionAsync</code> so the event-timing observer records an
-          INP sample (ADC <code>:75-86</code>, Store <code>:58-69</code>): the search field comes from a page object
+          INP sample (ADC <code>:78-89</code>, Store <code>:60-71</code>): the search field comes from a page object
           (<code>PublicSessionListPage.cs:11</code>, <code>CatalogBrowsePage.cs:10</code>, both still located by placeholder text),
           and a field that is not visible within 15 seconds fails the test rather than skipping the
-          interaction (ADC <code>:82</code>, Store <code>:65</code>; rationale at ADC <code>:64-68</code>, Store <code>:46-51</code>). No consumer passes
-          the extension&#39;s best-effort <code>interactionPlaceholder</code> parameter (<code>WebVitalsPageExtensions.cs:46-57</code>).
+          interaction (ADC <code>:85</code>, Store <code>:67</code>; rationale at ADC <code>:66-70</code>, Store <code>:47-52</code>). No consumer passes
+          the extension&#39;s best-effort <code>interactionPlaceholder</code> parameter (<code>WebVitalsPageExtensions.cs:45-56</code>).
           Both apps wrap the plain measurement in a private <code>MeasureAndAssertAsync</code> that re-asserts the
-          returned sample at the call site (ADC <code>:107-112</code>, Store <code>:116-121</code>), and the interaction tests
-          re-assert inline (ADC <code>:88</code>, Store <code>:71</code>).</li>
+          returned sample at the call site (ADC <code>:111-116</code>, Store <code>:120-125</code>), and the interaction tests
+          re-assert inline (ADC <code>:91</code>, Store <code>:73</code>).</li>
           <li><strong>The numbers are calibrated against measured maxima, not picked to be safe.</strong> ADC&#39;s remarks record
           LCP 624 / FCP 444 / TTFB 27 ms / CLS 0.005 / INP 32 on run 29146540154, roughly 4x to 30x headroom
           (<code>MMCA.ADC/.../WebVitalsTests.cs:22-24</code>); Store&#39;s record LCP 172 / FCP 172 / TTFB 26 ms / CLS 0 /
           INP 24 on run 29146556386, roughly 10x to 30x
           (<code>MMCA.Store/.../WebVitalsTests.cs:17-19</code>). Both were calibrated 2026-07-11.</li>
           <li><strong>The assertions ride the deploy gate because the workflow runs the whole project.</strong> <code>e2e.yml</code> runs
-          <code>dotnet test --project ...E2E.Tests.csproj</code> with no filter (ADC <code>.github/workflows/e2e.yml:360-362</code>,
-          Store <code>:394-397</code>) and points <code>WEB_VITALS_OUTPUT_DIR</code> at the uploaded diagnostics directory (ADC
-          <code>:327</code>, Store <code>:383</code>). <code>deploy.yml</code> calls that workflow chromium-only as <code>e2e-gate</code> (ADC
-          <code>deploy.yml:808-823</code>, chromium at <code>:822</code>; Store <code>:754-768</code>, chromium at <code>:767</code>), and the <code>deploy</code>
-          job both lists it in <code>needs</code> (ADC <code>:1161</code>, Store <code>:1099</code>) and requires it to be <code>success</code> or
-          <code>skipped</code> (ADC <code>:1198</code>, Store <code>:1132</code>). A
+          <code>dotnet test --project ...E2E.Tests.csproj</code> with no filter (ADC <code>.github/workflows/e2e.yml:424-427</code>,
+          Store <code>:464-468</code>) and points <code>WEB_VITALS_OUTPUT_DIR</code> at the uploaded diagnostics directory (ADC
+          <code>:382</code>, Store <code>:450</code>). <code>deploy.yml</code> calls that workflow chromium-only as <code>e2e-gate</code> (ADC
+          <code>deploy.yml:1201</code>, chromium at <code>:1215</code>; Store <code>:965</code>, chromium at <code>:978</code>), and the <code>deploy</code>
+          job both lists it in <code>needs</code> (ADC <code>:1571</code>, Store <code>:1318</code>) and requires it to be <code>success</code> or
+          <code>skipped</code> (ADC <code>:1608</code>, Store <code>:1351</code>). A
           front-end performance budget is therefore a production precondition on the same footing as the SBOM,
           the cost guard and the freshness gates, and <code>deploy.yml</code> says so where the k6 gate is defined (ADC
-          <code>:863-864</code>, Store <code>:807-808</code>).</li>
+          <code>:1259-1260</code>, Store <code>:1021-1022</code>).</li>
           <li><strong>The framework measures its own UI, under the good band and a tighter INP ceiling.</strong>
           <code>WebVitalsE2ETests</code>
           (<code>MMCA.Common/Tests/Presentation/MMCA.Common.UI.E2E.Tests/WebVitals/WebVitalsE2ETests.cs:17</code>) measures the
@@ -402,7 +407,7 @@
           (<code>:66-73</code>), and the exact text of the sample line (<code>:32-43</code>).</li>
           </ul>
           <p>Adoption is the two deployed apps plus the framework gallery. <strong>MMCA.Helpdesk has neither</strong>: it pins
-          the package (<code>MMCA.Helpdesk/Directory.Packages.props:93</code>) but has no E2E test project at all, so the
+          the package (<code>MMCA.Helpdesk/Directory.Packages.props:95</code>) but has no E2E test project at all, so the
           seed carries no worked example of a client-side budget, the same gap ADR-063 records for
           accessibility.</p>
           <h2 id="rationale">Rationale</h2>
@@ -438,44 +443,50 @@
           <h2 id="trade-offs">Trade-offs</h2>
           <ul>
           <li><strong>The gate is ui-scoped and may legitimately skip.</strong> Both apps gate <code>e2e-gate</code> on a <code>ui</code> change
-          filter (ADC <code>deploy.yml:819</code>, Store <code>:764</code>) and <code>deploy</code> accepts <code>skipped</code> for it (ADC <code>:1198</code>,
-          Store <code>:1132</code>), so a backend-only or infra-only deploy ships with no Web Vitals measurement of that
-          commit. The test gate on such a deploy is the pull request&#39;s required checks (ADC <code>:814-818</code>,
-          Store <code>:760-763</code>), which run no browser, so they leave this budget unmeasured on those deploys.
+          filter (ADC <code>deploy.yml:1212</code>, Store <code>:975</code>) and <code>deploy</code> accepts <code>skipped</code> for it (ADC <code>:1608</code>,
+          Store <code>:1351</code>), so a backend-only or infra-only deploy ships with no Web Vitals measurement of that
+          commit. The test gate on such a deploy is the pull request&#39;s required checks (ADC <code>:1207-1211</code>,
+          Store <code>:971-974</code>), which run no browser, so they leave this budget unmeasured on those deploys.
           Same intended cost trade as the accessibility gate, and the same caveat: &quot;deployed&quot;
           does not always mean &quot;the budget ran on this commit&quot;.</li>
           <li><strong>It never runs on a pull request.</strong> The E2E project is in neither solution filter and the gate is
-          push/dispatch only (ADC <code>deploy.yml:819</code>, Store <code>:764</code>), so a regression is caught between merge and
+          push/dispatch only (ADC <code>deploy.yml:1212</code>, Store <code>:975</code>), so a regression is caught between merge and
           rollout, not before merge.</li>
           <li><strong>The measured configuration is not the production one.</strong> CI pins the UI to <code>InteractiveServer</code>
-          (ADC <code>e2e.yml:241</code>, Store <code>:229</code>), so the numbers describe Server-mode prerender-then-hydrate under
+          (ADC <code>e2e.yml:282</code>, Store <code>:290</code>), so the numbers describe Server-mode prerender-then-hydrate under
           runner contention, not production&#39;s <code>InteractiveAuto</code> on real hardware (ADC
           <code>WebVitalsTests.cs:18-21</code>, the caveat ADR-056 also records).</li>
           <li><strong>A marginal breach can be retried away.</strong> The suite runs with <code>--retry-failed-tests 2</code> (ADC
-          <code>e2e.yml:362</code>, Store <code>:396</code>), which is what absorbs a contention spike but also means a budget that
+          <code>e2e.yml:426</code>, Store <code>:466</code>), which is what absorbs a contention spike but also means a budget that
           fails once and passes twice reports green.</li>
           <li><strong>LCP and CLS are Chromium-only.</strong> On Firefox and WebKit those observers fail silently and the
           fields stay 0, so the assertions pass vacuously (<code>WebVitalsCollector.cs:14-16</code>). The deploy gate is
           chromium-only, so this is real only for MMCA.Common&#39;s three-engine <code>ui-e2e</code> matrix
-          (<code>MMCA.Common/.github/workflows/ci.yml:223</code>, matrix at <code>:232</code>), where two of the three legs assert LCP and CLS against
+          (<code>MMCA.Common/.github/workflows/ci.yml:331</code>, matrix at <code>:340</code>), where two of the three legs assert LCP and CLS against
           nothing. The gallery&#39;s <code>AssertSomethingWasMeasured</code> guard catches only the total-vacuity case
           (nothing measured at all), not this per-metric one.</li>
           <li><strong>Coverage is a hand-picked page list.</strong> Four pages in ADC and four in Store, against far larger
           inventories. Nothing forces a new page to acquire a budget, so breadth grows by discipline, the same
           caveat as the accessibility suites.</li>
           <li><strong>One page per app gets an INP sample.</strong> In both apps the interaction is page-specific, a search
-          box on the single grid page (ADC <code>WebVitalsTests.cs:64-86</code>, Store <code>:41-69</code>), and a missing field
-          now fails the test rather than being skipped (ADC <code>:82</code>, Store <code>:65</code>); on every other measured page
+          box on the single grid page (ADC <code>WebVitalsTests.cs:66-89</code>, Store <code>:42-71</code>), and a missing field
+          now fails the test rather than being skipped (ADC <code>:85</code>, Store <code>:67</code>); on every other measured page
           INP stays 0 and its assertion is skipped, so interaction latency is asserted on one page per app.
           The gallery is the only other place in the adoption set that drives one, on each of its three
           pages (<code>WebVitalsE2ETests.cs:88-116</code>).</li>
-          <li><strong>The green-run artifact is written but not kept.</strong> Both workflows upload the diagnostics bundle
-          only on failure (ADC <code>e2e.yml:390-396</code>, Store <code>:458-463</code>), and MMCA.Common&#39;s <code>ui-e2e</code> job sets no
-          <code>WEB_VITALS_OUTPUT_DIR</code> at all (its test step sets only <code>E2E_HEADLESS</code> and <code>E2E_BROWSER</code>,
-          <code>ci.yml:374-376</code>) and uploads no Web Vitals artifact of its own (its one upload is Playwright
-          traces, on failure only, <code>ci.yml:379-385</code>), so the JSON
-          lands beside the test binaries and is discarded with the runner. There is no time series: the
-          sample line in the run log is the only surviving record of a green run.</li>
+          <li><strong>The green-run JSON is written but not kept.</strong> Both apps write the JSON into the
+          <code>artifacts/</code> directory that only the failure-only diagnostics bundle uploads (ADC <code>e2e.yml:473-483</code>,
+          <code>if: failure()</code> at <code>:477</code>; Store <code>:547-557</code>, <code>:551</code>), so a green run&#39;s <code>web-vitals-*.json</code> is
+          discarded with the runner. MMCA.Common&#39;s <code>ui-e2e</code> job sets no <code>WEB_VITALS_OUTPUT_DIR</code> at all (its
+          test step sets only <code>E2E_HEADLESS</code> and <code>E2E_BROWSER</code>, <code>ci.yml:486-488</code>) and uploads no Web Vitals
+          artifact of its own (its one upload is Playwright traces, on failure only, <code>ci.yml:491-497</code>), so
+          there the JSON lands in <code>artifacts/</code> under the test run&#39;s working directory
+          (<code>WebVitalsCollector.cs:65-66</code>), which no step uploads. What both apps do keep from every run,
+          pass or fail, is the TRX results folder (ADC <code>e2e.yml:444-453</code>, Store <code>:519-528</code>, 14-day
+          retention), uploaded for its per-test durations (ADC <code>:445-446</code>, Store <code>:520-521</code>); whether each
+          TRX result also carries the test&#39;s output, and so the sample line, is not stated by either
+          workflow. That folder is the only place a green run&#39;s numbers can survive, and it expires, so
+          there is no time series.</li>
           <li><strong>Nothing stops a ceiling being raised to silence a red gate.</strong> As with ADR-060&#39;s baseline, the
           defaults are a value in source and widening them is a reviewable diff, not a tool-enforced one.</li>
           </ul>
@@ -585,6 +596,44 @@
           test step <code>:372</code>, test-step env <code>:374-376</code> (<code>E2E_HEADLESS</code> <code>:375</code>, <code>E2E_BROWSER</code> <code>:376</code>),
           failure-only trace upload <code>:379-385</code> (<code>if: failure()</code> <code>:380</code>).</li>
           </ol>
+          <h2 id="revision-2026-11-23">Revision (2026-11-23)</h2>
+          <p>Re-verified against current source. The decision, the budget, the measurement flow, the
+          chromium-only ui-scoped <code>e2e-gate</code>, ADC&#39;s two conditional gates and Store&#39;s one, the four measured
+          pages per app, the failure-only diagnostics upload, MMCA.Common&#39;s lack of any
+          <code>WEB_VITALS_OUTPUT_DIR</code> and Helpdesk&#39;s lack of any E2E test project are unchanged. One Trade-offs
+          sentence is corrected and the rest are anchor moves; the dated revisions above keep the anchors
+          they were written with.</p>
+          <ol>
+          <li>The green-run Trade-offs bullet said the sample line in the run log is the only surviving record
+          of a green run, and that the JSON lands beside the test binaries. Both apps point
+          <code>WEB_VITALS_OUTPUT_DIR</code> at <code>$GITHUB_WORKSPACE/artifacts</code> (ADC <code>e2e.yml:382</code>, Store <code>:450</code>), which
+          only the failure-only diagnostics bundle uploads (ADC <code>:473-483</code>, Store <code>:547-557</code>); in
+          MMCA.Common the JSON goes to <code>artifacts/</code> under the run&#39;s working directory
+          (<code>WebVitalsCollector.cs:65-66</code>), which no step uploads. Both apps upload the TRX results folder on
+          every run with 14-day retention (ADC <code>:444-453</code>, Store <code>:519-528</code>), the one green-run record that
+          can carry the sample line. The Decision bullet on the artifact now says the run writes it rather
+          than leaves it. The bullets now say so.</li>
+          <li>Anchors re-verified against current source: <code>MMCA.Common/FACTS.md:50</code> (the
+          <code>MMCA.Common.Testing.E2E</code> package entry); <code>WebVitalsPageExtensions.cs</code> <code>MeasureWebVitalsAsync</code>
+          <code>:31</code>, <code>extension(IPage)</code> <code>:14</code>, flow <code>:42-43</code> / <code>:45-56</code> / <code>:58-61</code>,
+          <code>MeasureWebVitalsWithInteractionAsync</code> <code>:83</code>, naming rationale <code>:69-71</code>; ADC <code>WebVitalsTests.cs</code>
+          home <code>:46-47</code>, events entry <code>:58-59</code>, sessions <code>:73</code>, login <code>:96-97</code>, interaction <code>:78-89</code>,
+          visibility <code>:85</code>, rationale <code>:66-70</code>, <code>MeasureAndAssertAsync</code> <code>:111-116</code>, inline assert <code>:91</code>,
+          callers <code>:113</code> and <code>:78</code>, trade-off span <code>:66-89</code>; Store <code>WebVitalsTests.cs</code> home <code>:39-40</code>,
+          catalog <code>:53-74</code>, interaction <code>:60-71</code>, visibility <code>:67</code>, rationale <code>:47-52</code>, login <code>:78-79</code>,
+          product detail <code>:88-106</code> (<code>InstallAsync</code> <code>:92</code>, <code>CollectAsync</code> <code>:102</code>, <code>WriteArtifactAsync</code>
+          <code>:103</code>, inline budget <code>:105</code>), <code>MeasureAndAssertAsync</code> <code>:120-125</code>, inline assert <code>:73</code>, callers
+          <code>:122</code> and <code>:60</code>, trade-off span <code>:42-71</code>; ADC <code>deploy.yml</code> <code>e2e-gate</code> <code>:1201</code> (ui-scoped <code>if</code>
+          <code>:1212</code>, chromium <code>:1215</code>, PR-checks comment <code>:1207-1211</code>), Web Vitals comment <code>:1259-1260</code>,
+          <code>needs</code> <code>:1571</code>, success-or-skipped <code>:1608-1609</code>, <code>ai-eval-gate</code> defined at <code>:670</code>; Store
+          <code>deploy.yml</code> <code>e2e-gate</code> <code>:965</code> (ui-scoped <code>if</code> <code>:975</code>, chromium <code>:978</code>, PR-checks comment
+          <code>:971-974</code>), Web Vitals comment <code>:1021-1022</code>, <code>needs</code> <code>:1318</code>, one-conditional-gate comment
+          <code>:1339-1340</code>, success-or-skipped <code>:1351</code>; ADC <code>e2e.yml</code> <code>dotnet test</code> <code>:424-427</code> (retry <code>:426</code>),
+          <code>E2E_FORCE_SERVER</code> <code>:282</code>; Store <code>e2e.yml</code> <code>dotnet test</code> <code>:464-468</code> (retry <code>:466</code>),
+          <code>E2E_FORCE_SERVER</code> <code>:290</code>; MMCA.Common <code>ci.yml</code> <code>ui-e2e</code> <code>:331</code>, matrix <code>:340</code>, test-step env
+          <code>:486-488</code>, failure-only trace upload <code>:491-497</code> (<code>if: failure()</code> <code>:492</code>);
+          <code>MMCA.Helpdesk/Directory.Packages.props:95</code>.</li>
+          </ol>
           <h2 id="related">Related</h2>
           <p><a href="063-accessibility-conformance-gate.html">ADR-063</a> (the structural sibling: the same package, the same
           Playwright suite and the same deploy gate, applied to WCAG 2.1 AA instead of load performance),
@@ -618,6 +667,7 @@
             <li><a href="#revision-2026-10-21">Revision (2026-10-21)</a></li>
             <li><a href="#revision-2026-10-26">Revision (2026-10-26)</a></li>
             <li><a href="#revision-2026-10-28">Revision (2026-10-28)</a></li>
+            <li><a href="#revision-2026-11-23">Revision (2026-11-23)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

@@ -1,7 +1,7 @@
 # ADR-128: Time as an Input (No Ambient Clock Reads in Domain and Application)
 
 ## Status
-Accepted (2026-10-01). Revised 2026-10-06: async-lambda clock reads are attributed to, and exempted with, their source member. Revised 2026-10-07: anchors refreshed after the v1.233.0 release.
+Accepted (2026-10-01). Revised 2026-10-06: async-lambda clock reads are attributed to, and exempted with, their source member. Revised 2026-10-07: anchors refreshed after the v1.233.0 release. Revised 2026-11-23: all four repos now adopt the rule and none overrides `AllowedClockReaders` (Store's backfill member entry went with the deleted member and Helpdesk subclasses the base).
 
 ## Context
 Expiry windows, payment deadlines, discount windows, overdue checks and cutoffs are business rules,
@@ -78,15 +78,14 @@ instant as a parameter. The rule is an IL-scanning fitness test, shipped once in
 - **MMCA.ADC adopts it with no exemptions.** Its subclass
   (`MMCA.ADC/Tests/Architecture/MMCA.ADC.Architecture.Tests/Domain/ClockReadTests.cs:8`) supplies
   `AdcArchitectureMap` (`:10`) and does not override `AllowedClockReaders`.
-- **MMCA.Store adopts it with one reviewed exemption.** Its subclass
+- **MMCA.Store adopts it with no exemptions.** Its subclass
   (`MMCA.Store/Tests/Architecture/MMCA.Store.Architecture.Tests/Domain/ClockReadTests.cs:9`) supplies
-  `StoreArchitectureMap` (`:11`) and allowlists the single member
-  `MMCA.Store.Sales.Domain.Orders.Order.RepublishFulfillment` (`:18-21`), documented as backfill-only:
-  its one caller, the one-shot `OrderFulfilledBackfillService`, supplies no clock, and the member is
-  removed with the backfill services (`:13-17`).
-- **MMCA.Helpdesk does not adopt it.** Helpdesk has an architecture test project
-  (`MMCA.Helpdesk/Tests/Architecture/MMCA.Helpdesk.Architecture.Tests/`), but no type in the repo
-  subclasses `ClockReadTestsBase` or calls the rule, so its Domain and Application code is not checked.
+  `StoreArchitectureMap` (`:11`) and does not override `AllowedClockReaders`.
+- **MMCA.Helpdesk adopts it with no exemptions.** Its subclass
+  (`MMCA.Helpdesk/Tests/Architecture/MMCA.Helpdesk.Architecture.Tests/Domain/ClockReadTests.cs:14`)
+  supplies `HelpdeskArchitectureMap` (`:16`) and deliberately does not override `AllowedClockReaders`:
+  an entry names a full type or member, so one written in the template source would name the seed's
+  own types and cover nothing in a module an adopter scaffolds (`:9-12`).
 
 ## Rationale
 - **A test can only drive what it can supply.** Passing the instant in makes every time-dependent
@@ -106,7 +105,9 @@ instant as a parameter. The rule is an IL-scanning fitness test, shipped once in
   rule keeps every consumer allowlist to its own decisions.
 - **An allowlist lets a repo adopt the day the rule ships.** A repo with existing reads subclasses, runs
   once, and either threads the instant through or parks the reported member with a reason
-  (`ClockReadTestsBase.cs:10-12`). Store's single entry is the result of that pass.
+  (`ClockReadTestsBase.cs:10-12`). No adopting repo carries an entry today: MMCA.Common, MMCA.ADC and
+  MMCA.Helpdesk never needed one, and MMCA.Store's only entry went when the member it named was
+  deleted (`MMCA.Store/Tests/Architecture/MMCA.Store.Architecture.Tests/Domain/ClockReadTests.cs:9-12`).
 
 ## Trade-offs
 - **The rule bans five getters, not the idea of a clock.** A read through any other path (a static
@@ -124,9 +125,7 @@ instant as a parameter. The rule is an IL-scanning fitness test, shipped once in
   when none remain (`:75-76`).
 - **A type or namespace entry exempts more than one read.** A type entry exempts every member of that
   type and a namespace entry every type under it (`:48-51`, `:101-105`), which is wider than a member
-  entry; Store uses the narrow form.
-- **MMCA.Helpdesk is unguarded.** As the reference app and template source, it hands an adopter no
-  clock-read test until it subclasses the base.
+  entry; prefer the member form when an entry is genuinely needed.
 
 ## Revision (2026-10-06)
 - Since MMCA.Common v1.232.0 (L142) a read inside an async lambda or async local function is
@@ -157,6 +156,28 @@ statement that every anchor was re-verified no longer held for that file.
    `BaseDomainEvent.cs:18-25`, `:28`; `ClockReadTestsBase.cs:10-12`, `:15`, `:17`, `:24`, `:26-28`;
    the Common, ADC and Store `ClockReadTests.cs` anchors. The anchors inside the 2026-10-06 revision
    stay as written.
+
+## Revision (2026-11-23)
+Re-verified against current source. The decision, the five banned getters, the scope, the IL scan,
+the attribution, the single framework exemption and the base are unchanged. The adoption picture
+moved: all four repos now subclass the base, and none overrides `AllowedClockReaders`.
+
+1. MMCA.Store carries no exemption. Its subclass is the map alone
+   (`MMCA.Store/Tests/Architecture/MMCA.Store.Architecture.Tests/Domain/ClockReadTests.cs:9-12`), and
+   neither `Order.RepublishFulfillment` nor `OrderFulfilledBackfillService` exists in the Store source
+   any more, so the member entry and its backfill-only note are gone. The Decision bullet, the
+   Rationale's "Store's single entry" sentence and the Trade-offs' "Store uses the narrow form" clause
+   are rewritten to match.
+2. MMCA.Helpdesk adopts the rule
+   (`MMCA.Helpdesk/Tests/Architecture/MMCA.Helpdesk.Architecture.Tests/Domain/ClockReadTests.cs:14`,
+   map at `:16`) with `AllowedClockReaders` deliberately not overridden (`:9-12`). The Decision bullet
+   saying Helpdesk does not adopt it is replaced, and the "MMCA.Helpdesk is unguarded" trade-off is
+   removed.
+3. Anchors re-verified against current source:
+   `MMCA.Common/Tests/Architecture/MMCA.Common.Architecture.Tests/Domain/ClockReadTests.cs:14`, `:20`;
+   `MMCA.ADC/Tests/Architecture/MMCA.ADC.Architecture.Tests/Domain/ClockReadTests.cs:8`, `:10`;
+   `ClockReadTestsBase.cs:24`, `:26-28`; the Store and Helpdesk anchors above. The anchors inside the
+   2026-10-06 and 2026-10-07 revisions stay as written.
 
 ## Related
 [ADR-015](015-architecture-fitness-functions.md) (the fitness-function style and the shared

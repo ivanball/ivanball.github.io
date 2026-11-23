@@ -9,7 +9,9 @@ claim path and the `ConfigureScheduler` mapping moved in source. Revised 2026-10
 after the outbox claim path and the consumer `AddScheduledJobs` calls moved in source. Revised
 2026-10-28: anchors refreshed after the ADC Identity host's `AddScheduledJobs` call moved in source. Revised
 2026-11-07: a cron override applies when the host restarts, not on a running host (the runner reads its
-settings once), and a cron with no next occurrence parks the job; see Revision (2026-11-07). The implementation lands in the MMCA.Common "enterprise capability wave" release
+settings once), and a cron with no next occurrence parks the job; see Revision (2026-11-07). Revised 2026-11-23: anchors refreshed after the outbox claim path, the
+scheduler runner and settings, the `ConfigureScheduler` mapping and the consumer `AddScheduledJobs` calls
+moved in source. The implementation lands in the MMCA.Common "enterprise capability wave" release
 and is opt-in: a host calls `AddScheduledJobs(configuration)` and sets `Scheduler:Enabled`. Until it does,
 the framework creates no table and starts no runner.
 
@@ -37,11 +39,11 @@ scheduling product (Hangfire or Quartz.NET) or to extend the durable polling loo
 ### The scheduler is the outbox claim-lease pattern applied to cron, not Hangfire and not Quartz.NET
 A persistent job store plus a single-runner claim lease, reusing the exact idiom the outbox proved. The
 outbox claims a batch with an `ExecuteUpdateAsync` that sets `LockedUntil` and `LockToken` in one statement
-(`.../Persistence/Outbox/Processing/OutboxProcessor.cs:372-376`, inside `ClaimEligibleAsync`, `:345`) over a shared
+(`.../Persistence/Outbox/Processing/OutboxProcessor.cs:375-379`, inside `ClaimEligibleAsync`, `:348`) over a shared
 `FilterClaimable` predicate that admits only eligible, unprocessed rows whose `LockedUntil` is null or already
-in the past (`:424-430`; a batch carrying an ordering key claims through `FilterUnblocked`, which composes it,
-`:368-370`, `:444`), then re-reads the claimed
-set by `LockToken` so a partial claim processes only its own rows (`:384-389`). A due job is claimed the same way, so two replicas can
+in the past (`:427-433`; a batch carrying an ordering key claims through `FilterUnblocked`, which composes it,
+`:371-373`, `:442`, `:447`), then re-reads the claimed
+set by `LockToken` so a partial claim processes only its own rows (`:388-392`). A due job is claimed the same way, so two replicas can
 never run the same occurrence, and a replica that dies mid-run releases its job when the lease expires.
 
 Hangfire would have brought its own schema, its own storage abstraction, a dashboard surface to authorize
@@ -70,8 +72,8 @@ carries `JobName` (the primary key), `CronExpression`, `NextRunOn`, `LastRunOn`,
 `LastError`, `LastDurationMs`, `LockedUntil` and `LockToken` (`ScheduledJobEntry.cs:26-74`). It is deliberately **not** an `IAuditableEntity`: it
 self-stamps nothing, it is never soft-deleted, and no global query filter reaches it. That falls out of the
 mapping rather than being asserted: the soft-delete filter is applied only to entity types assignable to
-`IAuditableEntity` (`.../Persistence/DbContexts/ApplicationDbContext.cs:457`, `:466`), and
-`ConfigureScheduler` maps the table with no `HasQueryFilter` call of its own (`:809-845`). That is the
+`IAuditableEntity` (`.../Persistence/DbContexts/ApplicationDbContext.cs:605`, `:614`), and
+`ConfigureScheduler` maps the table with no `HasQueryFilter` call of its own (`:958-994`). That is the
 `OutboxMessage` precedent: infrastructure rows are not domain rows.
 
 The table lives in the **Default** source and only there. The outbox exists once per relational database
@@ -84,7 +86,7 @@ one schedule and four claims for one occurrence.
 `ScheduledJobRunner` (`.../Infrastructure/Scheduling/ScheduledJobRunner.cs`) subclasses `BackgroundService`
 directly, because a fixed period is the wrong shape: after each cycle it waits until the **earliest**
 `NextRunOn` across the store, through `TimeProvider`, capped by the polling interval and floored at one
-second (`ComputeWaitTime`, `.../Infrastructure/Scheduling/ScheduledJobRunner.cs:146-160`). That mirrors the
+second (`ComputeWaitTime`, `.../Infrastructure/Scheduling/ScheduledJobRunner.cs:149-163`). That mirrors the
 outbox smart wait: it shortens the sleep when a job falls due before the next poll, so a job starts on time
 rather than up to one interval late. It does not reduce wakes: because the polling interval is the cap, a
 host whose only job is nightly still runs a cycle every interval (30 seconds at the default). The cycle is: claim the due jobs with the `ExecuteUpdateAsync` lease, execute each in a
@@ -102,7 +104,7 @@ job that must run for every window is not served by this scheduler.
 ### Settings, metrics and registration
 `SchedulerSettings` binds the `Scheduler` section with `Enabled`, `PollingIntervalSeconds` (default 30),
 `LeaseSeconds` (default 300) and `DataSource`, the engine of the Default database that holds the table
-(default `SQLServer`; `.../Infrastructure/Scheduling/SchedulerSettings.cs:26`, `:34`, `:43`, `:52`), through the mandatory
+(default `SQLServer`; `.../Infrastructure/Scheduling/SchedulerSettings.cs:26`, `:34`, `:46`, `:55`), through the mandatory
 `AddOptions<T>().Bind(...).ValidateDataAnnotations().ValidateOnStart()` chain of
 [ADR-070](070-fail-fast-configuration-contract.md), so a malformed scheduler section stops the host at boot
 rather than at 03:00.
@@ -123,28 +125,28 @@ queue and a schedule has no queue.
 
 Registration is two calls. `AddScheduledJobs(configuration)` binds the settings and registers the runner;
 `AddScheduledJob<TJob>()` adds one job from any module, using the accumulate-across-modules idiom that
-`AddPermissions` (`MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/AuthorizationExtensions.cs:105`)
-and its `EnsurePermissionRegistry` helper (`:119`) already establish. That registration takes **no schedule
+`AddPermissions` (`MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/AuthorizationExtensions.cs:115`)
+and its `EnsurePermissionRegistry` helper (`:192`, called at `:119`) already establish. That registration takes **no schedule
 argument** (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.Jobs.cs:72`): the schedule is
 the job's own `CronExpression` property, and the one way to retime a shipped job without a release is
 configuration, the `Scheduler:Jobs:{Name}:Cron` section bound by `SchedulerSettings.Jobs`
-(`.../Infrastructure/Scheduling/SchedulerSettings.cs:54-60`) into `ScheduledJobOverrideSettings.Cron` (`:74`).
+(`.../Infrastructure/Scheduling/SchedulerSettings.cs:63`) into `ScheduledJobOverrideSettings.Cron` (`:78`).
 The runner resolves the two per job on every cycle, the override when it is present and non-blank and the
-compiled-in default otherwise (`ResolveCronExpression`, `.../Infrastructure/Scheduling/ScheduledJobRunner.cs:170`).
+compiled-in default otherwise (`ResolveCronExpression`, `.../Infrastructure/Scheduling/ScheduledJobRunner.cs:173`).
 The table is created only when the settings flag is on, the same gating [ADR-075](075-audit-trail.md) uses.
-Every cycle the registered jobs are **upserted by `JobName`** (`SyncRegistrationsAsync`, `:267`): a row whose
+Every cycle the registered jobs are **upserted by `JobName`** (`SyncRegistrationsAsync`, `:270`): a row whose
 expression changed has the expression rewritten and the next occurrence recomputed from the current instant,
-and a row whose expression is unchanged is left alone (`:287-293`). **An override applies on restart, not on a
+and a row whose expression is unchanged is left alone (`:290-295`). **An override applies on restart, not on a
 running host.** The runner reads `IOptions<SchedulerSettings>.Value` once, at construction
-(`ScheduledJobRunner.cs:46`), and every cycle resolves the cron from that copy (`:286`), so a
+(`ScheduledJobRunner.cs:47`), and every cycle resolves the cron from that copy (`:289`), so a
 `Scheduler:Jobs:{Name}:Cron` edit reaches the table on the first cycle after the host restarts
-(`SchedulerSettings.cs:68-75`).
+(`SchedulerSettings.cs:71-78`).
 
 ### Design-time gets the same flag
 `DesignTimeDbContextOptions.EnableScheduler`
 (`.../Persistence/DbContexts/Design/DesignTimeDbContextOptions.cs:41`) is the design-time mirror of
 `Scheduler:Enabled`, and `DesignTimeDbContextHelper` feeds it to the context as a fixed
-`SchedulerSettings` (`.../Design/DesignTimeDbContextHelper.cs:160-161`). Without that flag the design-time
+`SchedulerSettings` (`.../Design/DesignTimeDbContextHelper.cs:161-162`). Without that flag the design-time
 model diverges from the runtime model and `dotnet ef` breaks for every consumer.
 
 ### The framework dogfoods it
@@ -204,14 +206,14 @@ Helpdesk one.
   would put a time zone on every entry and a policy decision on every ambiguous or skipped local hour.
 - **Nothing enforces that a cron expression is sensible.** A typo that still parses binds a job to a
   schedule nobody intended, and Cronos parsing is the only check. It runs when the runner syncs registrations
-  on a cycle (`ScheduledJobRunner.cs:295`), the first one after a 15-second startup delay (`:69`), not at host
-  startup, and the override setting carries no validation attribute (`SchedulerSettings.cs:74`). A malformed
+  on a cycle (`ScheduledJobRunner.cs:298`), the first one after a 15-second startup delay (`:70`), not at host
+  startup, and the override setting carries no validation attribute (`SchedulerSettings.cs:78`). A malformed
   expression such as `* * * * ? ?` does not stop the host: it is logged and its row is parked at
-  `DateTime.MaxValue` with `LastOutcome` `Skipped` (`ScheduledJobRunner.cs:296-319`, `:342-365`). Parsing cannot catch `0 3 * * 1`
+  `DateTime.MaxValue` with `LastOutcome` `Skipped` (`ScheduledJobRunner.cs:298-322`, `:345-368`). Parsing cannot catch `0 3 * * 1`
   written when `0 3 * * *` was meant. An expression that parses but has **no next occurrence**, such as
   `0 0 31 2 *` (31 February), parks the job the same way and more quietly: Cronos returns no occurrence
-  rather than an error (`ScheduledJobRunner.cs:176-178`, `:195`), so the row's `NextRunOn` becomes
-  `DateTime.MaxValue` (`:313`, `:342`) with no parse-error log line and no `Skipped` outcome, and the
+  rather than an error (`ScheduledJobRunner.cs:187`, `:198`), so the row's `NextRunOn` becomes
+  `DateTime.MaxValue` (`:316`, `:345`) with no parse-error log line and no `Skipped` outcome, and the
   job never runs again until the expression changes.
 - **One runner per host, and it is shared.** A slow job delays the jobs due behind it, exactly as
   [ADR-052](052-background-job-execution.md)'s single-reader drain does for its queue.
@@ -327,6 +329,35 @@ A correction, not a behavior change. No decision, rationale or default changed.
    and a completed run does the same when its expression has no further occurrence (`:488`). Unlike an
    unparsable expression, nothing is logged and `LastOutcome` is not set to `Skipped`, so the only sign
    is a `NextRunOn` of `DateTime.MaxValue`. The cron trade-off now records it.
+
+## Revision (2026-11-23)
+Re-verified against current source. No decision, rationale, trade-off, default or adoption statement
+changed; the claim lease, the keyed claim path, the partial-claim re-read, the soft-delete exclusion, the
+restart-only override, the parking of an unparsable or occurrence-less cron, the defaults (30, 300,
+`SQLServer`) and the consumer-adoption host set (ADC three of four hosts without Notification, Store
+three, Helpdesk one) behave and stand as described. Only anchors in the body moved.
+
+1. Anchors re-verified against current source: the outbox claim `ExecuteUpdateAsync`
+   (`OutboxProcessor.cs:375-379`, setting `LockedUntil` and `LockToken` at `:377`) inside
+   `ClaimEligibleAsync` (`:348`), `FilterClaimable` (`:427-433`), the keyed `FilterUnblocked` branch
+   (`:371-373`), `FilterUnblocked` itself (`:442`) composing `FilterClaimable` (`:447`), and the
+   partial-claim re-read by `LockToken` (`:388-392`); the soft-delete filter
+   (`ApplicationDbContext.cs:605`, `:614`), `ConfigureScheduler` (`:958-994`, called at `:568`) and the
+   `LastError` 2048-character cap (`:980`); `ComputeWaitTime` (`ScheduledJobRunner.cs:149-163`), the
+   settings copy taken at construction (`:47`), the startup delay (`:70`), `ResolveCronExpression`
+   (`:173`), `TryGetNextOccurrence` (`:187`, Cronos at `:198`), `SyncRegistrationsAsync` (`:270`) with
+   its per-job resolve (`:289`), unchanged-row skip (`:290-295`), parse (`:298`), new-row park (`:316`,
+   `Skipped` at `:317`) and changed-row update (`:345-368`), and the completion path's park (`:521`);
+   `SchedulerSettings` `Enabled`, `PollingIntervalSeconds`, `LeaseSeconds`, `DataSource` and `Jobs`
+   (`SchedulerSettings.cs:26`, `:34`, `:46`, `:55`, `:63`) and the override `Cron` with its restart note
+   (`:71-78`); `AddPermissions` (`AuthorizationExtensions.cs:115`) and `EnsurePermissionRegistry`
+   (`:192`, called at `:119`); the design-time scheduler settings (`DesignTimeDbContextHelper.cs:161-162`).
+   The `AddScheduledJobs` calls are at `MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:219`,
+   `MMCA.ADC.Conference.Service/Program.cs:290`, `MMCA.ADC.Engagement.Service/Program.cs:118`,
+   `MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:94`,
+   `MMCA.Store.Identity.Service/Program.cs:102`, `MMCA.Store.Sales.Service/Program.cs:106` and
+   `MMCA.Helpdesk/Source/Hosts/MMCA.Helpdesk.Web/Program.cs:105`; `MMCA.ADC.Notification.Service` still
+   has no call. The earlier revision entries above are left as written; their anchors are stale.
 
 ## Related
 [ADR-003](003-outbox-dual-dispatch.md) (the outbox whose claim-lease idiom and smart wait this reuses

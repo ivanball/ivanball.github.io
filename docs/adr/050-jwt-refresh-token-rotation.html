@@ -272,7 +272,7 @@
           type declares them; neither Domain analyzer ledger mentions them any more (the unshipped ledger holds
           only <code>#nullable enable</code>, <code>Source/Core/MMCA.Common.Domain/PublicAPI.Unshipped.txt:1</code>, and the shipped
           <code>IAuthUser</code> entries list only <code>PasswordHash</code> and <code>PasswordSalt</code>, <code>PublicAPI.Shipped.txt:16-18</code>), so the
-          removal record survives only in Common&#39;s changelog (<code>MMCA.Common/CHANGELOG.md:3623</code>). The only callable copies left are on a
+          removal record survives only in Common&#39;s changelog (<code>MMCA.Common/CHANGELOG.md:4559</code>). The only callable copies left are on a
           Common test double
           (<code>MMCA.Common/Tests/Core/MMCA.Common.Application.Tests/Users/UserUseCaseTestDoubles.cs:83,89</code>), which is
           not dead code: <code>DeleteUserHandlerBaseTests.cs:81</code> still calls <code>UpdateRefreshToken</code> on it. Beyond that,
@@ -297,7 +297,8 @@
           silently reverting to the seven-day default (Common v1.247.0), so the Trade-offs bullet and the
           Decision&#39;s sliding-expiry bullet are corrected; the changelog removal anchor is refreshed. Revised
           2026-11-02: opt-in lost-response recovery (Common v1.273.0) can rotate a never-presented successor
-          instead of revoking the family; see Revision below.</p>
+          instead of revoking the family; see Revision below. Revised 2026-11-23: anchors refreshed after
+          later Common releases moved the changelog removal record.</p>
           <p>Note (2026-09-03): the body bullet on account deactivation and erasure described shipped code when this
           record was written (ADC revoked in <code>Delete()</code> and <code>Anonymize()</code>, Store in <code>Deactivate()</code> and
           <code>Anonymize()</code>), and stopped describing it on 2026-08-26, when the refresh-sessions sweep removed the
@@ -684,6 +685,17 @@
           or a presentation past the window, still revokes the family (<code>:363</code>). ADR-097 carries the full
           rule. The body above is not re-anchored by this revision.</li>
           </ol>
+          <h2 id="revision-2026-11-23">Revision (2026-11-23)</h2>
+          <p>Re-verified against current source. The decision, the superseded status and the removal of the
+          refresh-token members from <code>IAuthUser</code> are unchanged; only the changelog anchor in Status moved, as
+          later releases were prepended to <code>MMCA.Common/CHANGELOG.md</code>.</p>
+          <ol>
+          <li>Anchors re-verified against current source: the removal record in Status is
+          <code>MMCA.Common/CHANGELOG.md:4559</code> (the BREAKING multi-device refresh sessions entry; <code>:3623</code> is now
+          unrelated text). For reference, the v1.273.0 heading is now <code>MMCA.Common/CHANGELOG.md:834</code> and
+          the v1.247.0 <code>[Range(1, int.MaxValue)]</code> lifetime entry is <code>:1279</code>. The 2026-11-02 and earlier
+          revisions keep the anchors they recorded.</li>
+          </ol>
           <h2 id="related">Related</h2>
           <p>ADR-004 (the stateless RS256/JWKS access token this refresh flow reissues, and the algorithm pinning
           <code>GetPrincipalFromExpiredToken</code> relies on), ADR-032 (the password hashing that gates the login which opens
@@ -715,6 +727,7 @@
             <li><a href="#revision-2026-10-26">Revision (2026-10-26)</a></li>
             <li><a href="#revision-2026-10-28">Revision (2026-10-28)</a></li>
             <li><a href="#revision-2026-11-02">Revision (2026-11-02)</a></li>
+            <li><a href="#revision-2026-11-23">Revision (2026-11-23)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

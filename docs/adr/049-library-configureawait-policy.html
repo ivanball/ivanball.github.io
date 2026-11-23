@@ -257,7 +257,7 @@
           <h2 id="status">Status</h2>
           <p>Accepted (2026-07-20; measurements re-anchored 2026-08-07, 2026-08-14, 2026-08-18, 2026-08-23,
           2026-08-31, 2026-09-01, 2026-09-03, 2026-09-11, 2026-09-19, 2026-10-01, 2026-10-06, 2026-10-07, 2026-10-21,
-          2026-10-26 and 2026-10-28).
+          2026-10-26, 2026-10-28 and 2026-11-23).
           Revised 2026-09-19: the framework site counts and the consumer-scale upper bound are re-measured, and
           the occurrence-versus-line delta still turns on the same two ADC handler lines. The policy, the gate
           and the exemption are unchanged.
@@ -273,7 +273,11 @@
           consumer-scale upper bound (2,256 combined) are re-measured, and the <code>Directory.Build.props</code>
           <code>NoWarn</code>, <code>ServerTokenStorageService</code> and <code>SubmitQuestionHandler</code> anchors are refreshed.
           Revised 2026-10-28: the framework site counts (1,417, 164 exempt, 1,253 gated) and the
-          consumer-scale upper bound (2,444 combined, after Store growth to 924) are re-measured.</p>
+          consumer-scale upper bound (2,444 combined, after Store growth to 924) are re-measured.
+          Revised 2026-11-23: the framework site counts (1,935, 208 exempt, 1,727 gated) and the
+          consumer-scale upper bound (2,603 combined, Store 900, ADC 1,703) are re-measured, the double-await
+          set grows from three lines to six, and the <code>.editorconfig</code>, drift-script and <code>Directory.Build.props</code>
+          anchors are refreshed.</p>
           <h2 id="context">Context</h2>
           <p>MMCA.Common ships as NuGet packages consumed by host applications, not as an application itself.
           Library code that awaits without <code>ConfigureAwait(false)</code> captures the caller&#39;s <code>SynchronizationContext</code>
@@ -320,8 +324,8 @@
           <li><strong>Standard .NET library guidance, applied at the boundary where it holds.</strong> The rule is scoped to
           exactly the code that ships in packages; it is not blanket-applied to the apps, where it would be
           360+ sites of pure noise (measured across Store/ADC before this decision, and the current scale is
-          far past that: a raw <code>\bawait\b</code> scan of <code>*.cs</code> on 2026-10-28 counts 924 occurrences in
-          <code>MMCA.Store/Source</code> and 1,520 in <code>MMCA.ADC/Source</code>, 2,444 combined, which is the upper bound on the
+          far past that: a raw <code>\bawait\b</code> scan of <code>*.cs</code> on 2026-11-23 counts 900 occurrences in
+          <code>MMCA.Store/Source</code> and 1,703 in <code>MMCA.ADC/Source</code>, 2,603 combined, which is the upper bound on the
           CA2007 sites the rule would open there).</li>
           <li><strong>Mechanical, with the enforcement and the remediation at different levels.</strong> The build gate is the
           enforced half: a new context-capturing await in packaged non-UI code fails the build, so it costs no
@@ -332,17 +336,19 @@
           <ul>
           <li><strong>Visual noise in framework source.</strong> Every await in <code>Source/</code> (except UI packages) carries
           <code>.ConfigureAwait(false)</code> (the adoption commit added 324 calls, bringing the gated total to 537;
-          1,253 gated sites as of the 2026-10-28 snapshot, out of 1,417 across <code>Source/</code> once the 164 calls
+          1,727 gated sites as of the 2026-11-23 snapshot, out of 1,935 across <code>Source/</code> once the 208 calls
           in the exempt UI packages are counted back in).
           The gate makes it uniform, so the noise is consistent rather than sporadic.</li>
           <li><strong>A per-repo delta in an otherwise shared analyzer baseline.</strong> The workspace keeps one
           byte-identical <code>.editorconfig</code> baseline across the four repos; this policy lives in the marked
-          repo-delta section of MMCA.Common&#39;s file (<code>MMCA.Common/.editorconfig:821-838</code>), so the divergence
+          repo-delta section of MMCA.Common&#39;s file (<code>MMCA.Common/.editorconfig:796-814</code>), so the divergence
           is documented. It is not mechanically guarded: the workspace drift script
           (<code>Tools\Scripts\compare-analyzer-config.ps1</code>) compares only the lines before the
-          <code># REPO-SPECIFIC DELTAS</code> marker (<code>Tools/Scripts/compare-analyzer-config.ps1:26-28</code>), so it guards
-          the shared baseline (including <code>CA2007</code> at <code>none</code>, <code>MMCA.Common/.editorconfig:348</code>) and would not
-          notice the gate at <code>:834-835</code> or the exemption at <code>:837-838</code> being changed or deleted.</li>
+          <code># REPO-SPECIFIC DELTAS</code> marker (<code>Tools/Scripts/compare-analyzer-config.ps1:39-45</code>), and compares
+          them as a case-insensitive, order-insensitive line comparison rather than byte for byte (<code>:12-13</code>,
+          <code>:48</code>), so it guards the shared baseline (including <code>CA2007</code> at <code>none</code>,
+          <code>MMCA.Common/.editorconfig:348</code>) and would not notice the gate at <code>:810-811</code> or the exemption at
+          <code>:813-814</code> being changed or deleted.</li>
           <li><strong>UI exclusion relies on project naming.</strong> The <code>MMCA.Common.UI*</code> path glob is what exempts the
           component packages; a renamed or relocated UI project would silently fall under the gate (the
           build would fail loudly on the first missing <code>ConfigureAwait</code>, so the failure is visible, just
@@ -956,6 +962,72 @@
           the new exempt call at
           <code>MMCA.Common/Source/Presentation/MMCA.Common.UI/Theme/ColorModeStamp.cs:35</code>.</li>
           </ol>
+          <h2 id="revision-2026-11-23">Revision (2026-11-23)</h2>
+          <p>Re-verified against current source. The policy, the <code>[Source/**.cs]</code> gate and the
+          <code>[Source/Presentation/MMCA.Common.UI*/**.cs]</code> exemption are unchanged, with the same globs and
+          severities. What moved is both counted figures, the double-await set, and the <code>.editorconfig</code>,
+          drift-script and <code>Directory.Build.props</code> anchors. Framework counts are taken at MMCA.Common <code>main</code>
+          <code>4816b36d</code>; consumer counts at Store <code>c0237af6</code> and ADC <code>f03013ed2</code>.</p>
+          <ol>
+          <li><strong>Framework site counts.</strong> <code>MMCA.Common/Source/**/*.cs</code> holds 1,935 <code>ConfigureAwait(false)</code>
+          occurrences across 335 files (1,935 matching lines, so no line carries two), of which 208 sit
+          inside the exempt UI packages across 50 files (<code>MMCA.Common.UI</code> 115 across 27 files,
+          <code>MMCA.Common.UI.Maui</code> 63 across 19, <code>MMCA.Common.UI.Web</code> 30 across 4), leaving 1,727 under the
+          gate across 285 files. The <code>MMCA.Common.UI.Web</code> per-file split moved:
+          <code>SameOriginProxy/SameOriginApiProxyEndpoint.cs</code> 16, <code>SameOriginProxy/SameOriginProxyTransformer.cs</code> 9,
+          <code>Services/ServerTokenStorageService.cs</code> 4, <code>SameOriginProxy/SessionHandoffEndpoints.cs</code> 1. The
+          exempt call the 2026-10-28 revision placed at
+          <code>MMCA.Common/Source/Presentation/MMCA.Common.UI/Theme/ColorModeStamp.cs:35</code> is gone: that line is
+          now a bare <code>await module.InvokeVoidAsync(&quot;stampColorMode&quot;, ...)</code> and the file holds no
+          <code>ConfigureAwait</code> call, which is legal because the package is exempt. The Trade-offs entry now
+          carries these figures.</li>
+          <li><strong>Consumer-scale upper bound.</strong> A raw <code>\bawait\b</code> scan of <code>*.cs</code> gives 900 occurrences (897
+          matching lines) across 170 files in <code>MMCA.Store/Source</code> (down from 924) and 1,703 occurrences
+          (1,700 lines) across 346 files in <code>MMCA.ADC/Source</code>, 2,603 occurrences (2,597 lines) combined. The
+          Rationale now carries the occurrence figures. Raw <code>await</code> still overcounts CA2007 sites, so this
+          remains an upper bound.</li>
+          <li><strong>The double-await set grows from three lines to six.</strong> Each of these lines carries two <code>await</code>
+          tokens (no line carries three):
+          <code>MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Infrastructure/Payments/Stripe/StripeWebhookRegistrationService.cs:147</code>
+          (previously <code>:143</code>),
+          <code>MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.UI/Pages/Products/ProductDetail.Images.razor.cs:190</code>
+          and <code>:206</code> (new),
+          <code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Sessions/UseCases/DecisionSupport/ScoreEventSessions/ScoreEventSessionsInternalCommandHandler.cs:85</code>
+          (previously <code>:83</code>),
+          <code>MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Application/SessionQuestions/UseCases/Submit/SubmitQuestionHandler.cs:149</code>
+          (unchanged) and
+          <code>MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.UI/Pages/Users/Profile/Profile.razor.cs:117</code>
+          (new).</li>
+          <li><strong>The repo-delta section no longer continues with the S8969/S8970 block.</strong> That block now sits in
+          the shared baseline above the marker (<code>MMCA.Common/.editorconfig:773-780</code>). After the CA2007
+          block the delta section continues with the IDE0130 overrides (<code>:816-833</code>) and the
+          PublicApiAnalyzers RS block (<code>:835-862</code>).</li>
+          <li><strong>The drift script&#39;s comparison is described precisely.</strong> It compares the lines before the marker
+          as a case-insensitive, order-insensitive line comparison with <code>Compare-Object</code>
+          (<code>Tools/Scripts/compare-analyzer-config.ps1:12-13</code>, <code>:48</code>), not byte for byte. The four baselines
+          are identical in any case: the marker sits at <code>:797</code> in all four <code>.editorconfig</code> files and the
+          script reports no drift. It still does not guard the delta section. The Trade-offs entry now
+          says so.</li>
+          <li><strong>Anchors re-verified against current source:</strong> the CA2007 part of the repo-delta section spans
+          <code>MMCA.Common/.editorconfig:796-814</code> (marker block <code>:796-801</code>, marker line <code>:797</code>, rationale
+          comment <code>:803-809</code>, gate <code>[Source/**.cs]</code> at <code>:810</code> with <code>warning</code> at <code>:811</code>, exemption at <code>:813</code>
+          with <code>none</code> at <code>:814</code>), previously <code>:821-838</code>; the shared-baseline <code>CA2007</code> <code>none</code> stays at
+          <code>:348</code>, with <code>MA0004</code> at <code>:524</code>, <code>RCS1090</code> at <code>:611</code> and <code>VSTHRD111</code> at <code>:684</code> (previously <code>:536</code>,
+          <code>:635</code> and <code>:712</code>), all <code>none</code> and on the same lines in <code>MMCA.Store/.editorconfig</code>,
+          <code>MMCA.ADC/.editorconfig</code> and <code>MMCA.Helpdesk/.editorconfig</code>;
+          <code>Tools/Scripts/compare-analyzer-config.ps1:39-45</code> (marker <code>:39</code>, <code>IndexOf</code> <code>:43</code>, slice <code>:45</code>)
+          slices only the lines before the marker (previously <code>:26-28</code>); <code>TreatWarningsAsErrors</code> at
+          <code>MMCA.Common/Directory.Build.props:19</code> and <code>CodeAnalysisTreatWarningsAsErrors</code> at <code>:25</code>
+          (previously <code>:7</code> and <code>:13</code>), with four <code>NoWarn</code> elements at <code>:46</code>, <code>:55</code>, <code>:94</code> and <code>:100</code>, none
+          naming CA2007; the <code>ServerTokenStorageService</code> declaration at
+          <code>MMCA.Common/Source/Presentation/MMCA.Common.UI.Web/Services/ServerTokenStorageService.cs:48</code>
+          (previously <code>:47</code>), with four <code>ConfigureAwait(false)</code> calls at <code>:138</code>, <code>:251</code>, <code>:281</code> and <code>:288</code>
+          (previously three). The SA1210/SA1211 remediation examples sit at
+          <code>Website/docs-src/guides/common-GETTING-STARTED.md:190</code> (<code>SA1210 SA1211</code>) and
+          <code>MMCA.Helpdesk/build/templates/stage.ps1:1270</code> (previously <code>:1247</code>, and naming <code>SA1210</code> only);
+          a per-repo search of MMCA.Common, MMCA.Store, MMCA.ADC, MMCA.Helpdesk and Website finds
+          <code>--diagnostics CA2007</code> nowhere outside this ADR.</li>
+          </ol>
           
         <div class="doc-foot btn-row">
           <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
@@ -987,6 +1059,7 @@
             <li><a href="#revision-2026-10-21">Revision (2026-10-21)</a></li>
             <li><a href="#revision-2026-10-26">Revision (2026-10-26)</a></li>
             <li><a href="#revision-2026-10-28">Revision (2026-10-28)</a></li>
+            <li><a href="#revision-2026-11-23">Revision (2026-11-23)</a></li>
             </ul>
           </nav>
         </aside>

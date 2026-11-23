@@ -255,7 +255,7 @@
           <p class="eyebrow doc-kicker">Architecture Decision Record</p>
           <h1 id="adr-122-dev-only-relaxations-are-environment-gated-and-fail-closed">ADR-122: Dev-Only Relaxations Are Environment-Gated and Fail Closed</h1>
           <h2 id="status">Status</h2>
-          <p>Accepted (2026-09-11). Revised 2026-10-01: citations re-anchored. Revised 2026-10-06: the plain-check inventory adds the Development-only design-time database skip. Revised 2026-10-07: the inventory names the <code>!IsProduction()</code> OpenAPI and Scalar mappings as outside the rule, the UI-side null-aware pseudo-locale check, and the Serilog file sink as out of scope. Revised 2026-10-26: the session cookies now also set <code>Secure</code> on a Development HTTPS request, so only a plain-http Development run omits it, and the cookie bullet describes the session and culture cookies separately; CORS and pseudo-locale anchors refreshed. Revised 2026-11-17: <code>MapCommonScalarUi</code> and the Scalar dependency are removed (no host called it), so <code>MapCommonOpenApi</code> is the one <code>!IsProduction()</code> mapping the inventory names outside the rule (MMCA.Common v1.300.0).</p>
+          <p>Accepted (2026-09-11). Revised 2026-10-01: citations re-anchored. Revised 2026-10-06: the plain-check inventory adds the Development-only design-time database skip. Revised 2026-10-07: the inventory names the <code>!IsProduction()</code> OpenAPI and Scalar mappings as outside the rule, the UI-side null-aware pseudo-locale check, and the Serilog file sink as out of scope. Revised 2026-10-26: the session cookies now also set <code>Secure</code> on a Development HTTPS request, so only a plain-http Development run omits it, and the cookie bullet describes the session and culture cookies separately; CORS and pseudo-locale anchors refreshed. Revised 2026-11-17: <code>MapCommonScalarUi</code> and the Scalar dependency are removed (no host called it), so <code>MapCommonOpenApi</code> is the one <code>!IsProduction()</code> mapping the inventory names outside the rule (MMCA.Common v1.300.0). Revised 2026-11-23: the fail-closed gates grow from three to five (the webhook insecure-targets gate and the AI endpoint https rule), the cookie bullet adds the view-as overlay cookie, which reads a nullable environment, the plain-check inventory adds the Development-only anonymous gRPC reflection mapping and the Blazor exception-handler branch, and anchors are refreshed.</p>
           <h2 id="context">Context</h2>
           <p>Several capabilities are useful locally and dangerous in a deployed environment: EF Core rendering
           parameter values into logs and exception messages, an SMTP session that skips TLS, prompt and
@@ -271,9 +271,11 @@
           validated setting may be honored.</p>
           <h2 id="decision">Decision</h2>
           <p><strong>A relaxation applies only when the environment is positively identified as Development. An
-          unknown, absent, or unparseable environment yields the production posture.</strong> Three subsystems
-          implement the rule against a nullable environment and cross-reference each other in their own
-          documentation:</p>
+          unknown, absent, or unparseable environment yields the production posture.</strong> Five gates implement
+          the rule against a nullable environment. The AI telemetry and webhook gates cite the EF gate or
+          this record in their own documentation; the SMTP resolver cites the <code>AddForwardedJwtBearer</code>
+          resolution it mirrors (<code>.../Infrastructure/Mail/SmtpTransportSecurity.cs:7-11</code>), and the AI
+          endpoint rule states only that it fails closed (<code>MMCA.Common/Source/Core/MMCA.Common.AI/AiSettings.cs:231-235</code>):</p>
           <ul>
           <li><strong>EF sensitive-data logging.</strong> <code>SensitiveDataLoggingGate.IsEnabled</code> is an AND of the setting and
           the environment, written so that a null environment is not Development
@@ -287,32 +289,52 @@
           (<code>:61-77</code>, message text at <code>:85</code>).</li>
           <li><strong>AI prompt and completion telemetry.</strong> <code>IsDevelopmentHost</code> scans the service collection for a
           registered <code>IHostEnvironment</code> instance and returns false when it finds none
-          (<code>MMCA.Common/Source/Core/MMCA.Common.AI/DependencyInjection.cs:262-266</code>, called at <code>:177</code>), documented as &quot;Fails
-          CLOSED ... Mirrors the gate on <code>Persistence:EnableSensitiveDataLogging</code>&quot; at <code>:257-260</code>.</li>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.AI/DependencyInjection.cs:264-268</code>, called at <code>:179</code>), documented as &quot;Fails
+          CLOSED ... Mirrors the gate on <code>Persistence:EnableSensitiveDataLogging</code>&quot; at <code>:259-261</code>.</li>
+          <li><strong>AI endpoint scheme.</strong> When <code>Ai:Enabled</code> is true (validation returns early otherwise,
+          <code>MMCA.Common/Source/Core/MMCA.Common.AI/AiSettings.cs:155-158</code>), a non-https <code>Ai:Endpoint</code> fails
+          validation outside Development, because every call carries the API key in its headers
+          (<code>:218-226</code>). The Development check reads the
+          validation context&#39;s <code>IHostEnvironment</code> and otherwise falls back to the stamped
+          <code>IsDevelopmentHost</code> (<code>:236-239</code>, property <code>:140</code>, stamped at <code>DependencyInjection.cs:126</code> as
+          <code>GetService&lt;IHostEnvironment&gt;()?.IsDevelopment() == true</code>), so no environment means https only.</li>
+          <li><strong>Webhook insecure targets.</strong> <code>WebhookInsecureTargets.AreAllowed</code> is
+          <code>settings.AllowInsecureTargetsInDevelopment &amp;&amp; environment is not null &amp;&amp; environment.IsDevelopment()</code>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Webhooks/WebhookInsecureTargets.cs:17-18</code>, its
+          documentation citing this record at <code>:7-9</code>), and every consumer of the flag goes through it: the
+          target validator (<code>.../Webhooks/DnsWebhookTargetValidator.cs:30</code>), the sender
+          (<code>.../Webhooks/HttpWebhookSender.cs:45</code>) and the HTTP client&#39;s connect callback
+          (<code>.../Webhooks/WebhookServiceCollectionExtensions.cs:97-99</code>). A host that sets the flag outside
+          Development logs one startup warning that it is ignored
+          (<code>.../Webhooks/InsecureWebhookTargetsNoticeService.cs:27</code>, message text at <code>:40</code>).</li>
           </ul>
           <p><code>RequireHttpsMetadata</code> on forwarded JWT bearer is the hybrid the SMTP gate was modelled on: explicit
           argument, then configuration, then <code>!environment.IsDevelopment()</code>
           (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/WebApplicationBuilderExtensions.Authentication.cs:64-66</code>),
           with a startup-warning filter registered when a non-Development host opts out (<code>:68-72</code>).</p>
           <p><strong>The remaining environment-conditional relaxations are plain <code>IsDevelopment()</code> checks, not
-          fail-closed gates</strong>, and this record names them as such: each server-side check reads a non-nullable
-          environment the host always supplies, so there is no unknown case for them to close against (the one
-          UI-side check, noted under the pseudo-locale, reads a nullable environment and treats null as not
-          Development). They are listed here so the Development-gated inventory is complete, not to claim a
-          guarantee their code does not make.</p>
+          fail-closed gates</strong>, and this record names them as such: most read a non-nullable environment the
+          host always supplies, so there is no unknown case for them to close against (two read a nullable
+          environment and treat null as not Development: the view-as overlay cookie, noted under the cookie
+          flag, and the UI-side check noted under the pseudo-locale). They are listed here so the
+          Development-gated inventory is complete, not to claim a guarantee their code does not make.</p>
           <ul>
           <li>CORS: the pipeline selects <code>CorsPolicyAllowAll</code> in Development and <code>CorsPolicyAllowSpecificOrigins</code>
           otherwise (<code>.../Startup/Pipeline/MiddlewarePipelineBuilder.cs:98-100</code>); the allow-any policy is
-          registered at <code>.../Startup/WebApplicationBuilderExtensions.cs:145-148</code> behind an analyzer
-          suppression that states the scope (<code>:144</code>). The Aspire gateway takes the same shape on its default
+          registered at <code>.../Startup/WebApplicationBuilderExtensions.cs:152-155</code> behind an analyzer
+          suppression that states the scope (<code>:151</code>). The Aspire gateway takes the same shape on its default
           policy (<code>MMCA.Common/Source/Hosting/MMCA.Common.Aspire/GatewayCorsExtensions.cs:34-42</code>). See
           ADR-082.</li>
           <li>Cookie <code>Secure</code> flag: the session cookies use
           <code>Secure = !environment.IsDevelopment() || context.Request.IsHttps</code>
-          (<code>.../MMCA.Common.API/SessionCookies/SessionCookieJar.cs:68</code>), so every non-Development host sets
+          (<code>.../MMCA.Common.API/SessionCookies/SessionCookieJar.cs:69</code>), so every non-Development host sets
           the flag whatever the request scheme, and in Development an HTTPS request also gets it; only a
-          plain-http request in Development goes without it, whatever the host name (rationale at <code>:60-63</code>). The culture cookie uses <code>Secure = !app.Environment.IsDevelopment()</code>
-          (<code>.../Startup/WebApplicationExtensions.cs:135</code>).</li>
+          plain-http request in Development goes without it, whatever the host name (rationale at <code>:60-64</code>). The culture cookie uses <code>Secure = !app.Environment.IsDevelopment()</code>
+          (<code>.../Startup/WebApplicationExtensions.cs:135</code>). The view-as overlay cookie takes the session
+          cookies&#39; shape, <code>Secure = !development || context.Request.IsHttps</code>, but reads the environment
+          as <code>services?.GetService&lt;IWebHostEnvironment&gt;()?.IsDevelopment() == true</code>
+          (<code>.../MMCA.Common.API/SessionCookies/ViewAsOverlayCookie.cs:122</code>, <code>:127</code>), so a context with no
+          request services reads as not Development and gets the flag.</li>
           <li>HSTS: <code>_enableHsts = options.Value.EnableHsts &amp;&amp; !environment.IsDevelopment()</code>
           (<code>MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Security/SecurityHeaders.cs:175</code>), so Development
           is the only way to suppress it once a host enables it. CSP is built from the same flag
@@ -321,14 +343,22 @@
           <li>Pseudo-locale: added to the supported cultures and accepted by <code>/culture/set</code> only in Development
           (<code>.../Startup/WebApplicationExtensions.cs:81-84</code>, <code>:120-123</code>). The culture switcher offers it in
           the menu only when <code>Services.GetService&lt;IHostEnvironment&gt;()?.IsDevelopment() == true</code>
-          (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI/Globalization/CultureSwitcher.razor:24-27</code>), so
-          a WASM render, which registers no <code>IHostEnvironment</code> (<code>:21-22</code>), does not offer it; the WASM bootstrap takes the
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI/Globalization/CultureSwitcher.razor:37-40</code>), so
+          a WASM render, which registers no <code>IHostEnvironment</code> (<code>:34-36</code>), does not offer it; the WASM bootstrap takes the
           decision as an explicit <code>allowPseudoLocale</code> argument from the host
           (<code>.../MMCA.Common.UI/Services/Culture/MmcaCultureBootstrap.cs:41</code>, documented at <code>:31-34</code>).</li>
           <li>Design-time database skip: database initialization returns early only when the host is
           Development and the <code>OpenApiDesignTimeKey</code> setting is true
           (<code>.../Startup/DatabaseInitializationExtensions.cs:174-177</code>), so a build-time OpenAPI run does not
           touch a database.</li>
+          <li>gRPC reflection: the shared service host maps the reflection service, declared <code>AllowAnonymous()</code>
+          for the fallback authorization policy, only in Development
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.ServiceHost/ServiceHostApplicationExtensions.cs:59-64</code>),
+          so a deployed host exposes no anonymous descriptor endpoint.</li>
+          <li>Blazor error handling: <code>UseMmcaBlazorWebPipeline</code> runs the host&#39;s <code>DevelopmentPipeline</code> callback
+          in Development and only outside it installs
+          <code>UseExceptionHandler(&quot;/Error&quot;, createScopeForErrors: true)</code>
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI.Web/Hosting/BlazorWebHostExtensions.cs:189-196</code>).</li>
           </ul>
           <p>One endpoint mapping is gated on <code>!IsProduction()</code> rather than on Development, so it does not
           follow this record&#39;s rule: in a host that calls it, Staging or any environment name other than
@@ -342,24 +372,35 @@
           rolling file sink (written outside Production, <code>ShouldWriteFileSink</code> at <code>:87-88</code>, see ADR-041) are
           also environment-conditional but relax no security control, so they are not part of this inventory.
           The same holds for the error page&#39;s Development guidance block, which adds static text only
-          (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI.Web/Components/Pages/Error.razor:37</code>).</p>
-          <p>The two fail-closed gates that are pure functions are unit-tested on exactly the closing case: the
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI.Web/Components/Pages/Error.razor:42-54</code>), and for
+          the key-ring-at-rest startup warning, which the Azure and Google Cloud data protection registrations
+          skip in Development when no key-encryption key is configured
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Azure.Startup/AzureDataProtectionExtensions.cs:95-99</code>,
+          <code>MMCA.Common/Source/Hosting/MMCA.Common.Gcp/GoogleCloudDataProtectionExtensions.cs:116-121</code>): it
+          suppresses a warning, not a control.</p>
+          <p>The three fail-closed gates that are pure functions are tested on exactly the closing case: the
           EF gate with no environment registered is false
           (<code>MMCA.Common/Tests/Core/MMCA.Common.Infrastructure.Tests/Persistence/SensitiveDataLoggingGateTests.cs:45-46</code>,
-          outside-Development at <code>:28-33</code>), and SMTP with no environment enables TLS
-          (<code>.../Mail/SmtpTransportSecurityTests.cs:38</code>), as does an unparseable configured value (<code>:54</code>).</p>
+          outside-Development at <code>:28-33</code>), SMTP with no environment enables TLS
+          (<code>.../Mail/SmtpTransportSecurityTests.cs:38</code>), as does an unparseable configured value (<code>:54</code>), and
+          the webhook gate, exercised through the target validator with the flag set and no environment,
+          refuses both a localhost and a private-address target
+          (<code>.../Webhooks/DnsWebhookTargetValidatorTests.cs:147-159</code>, assertion citing this record at <code>:156</code>).</p>
           <h2 id="rationale">Rationale</h2>
           <ul>
           <li><strong>Unknown is not safe.</strong> The failure this prevents is not a developer flipping a flag on purpose,
           it is a flag arriving somewhere nobody looked. Treating an absent environment as production means
           the accident costs a missing debug aid instead of a log full of tokens.</li>
-          <li><strong>A pure function is testable; an inline <code>if</code> is not.</strong> Extracting the EF and SMTP decisions into
-          static resolvers is what makes the null-environment case assertable at all.</li>
+          <li><strong>A pure function is testable; an inline <code>if</code> is not.</strong> Extracting the EF, SMTP and webhook
+          decisions into static resolvers is what makes the null-environment case assertable at all.</li>
           <li><strong>Opting out of the secure default is loud.</strong> SMTP TLS and <code>RequireHttpsMetadata</code> both emit a
-          startup warning when a deployed host disables them, so the posture appears in the logs of the
-          deployment that chose it rather than only in a configuration file.</li>
-          <li><strong>Plain checks stay plain.</strong> CORS, cookies, HSTS, CSP and the pseudo-locale run where the host
-          guarantees an environment, so adding a null dance there would be ceremony without a case.</li>
+          startup warning when a deployed host disables them, and the webhook flag warns when a deployed
+          host sets it, so the posture appears in the logs of the deployment that chose it rather than only
+          in a configuration file.</li>
+          <li><strong>Plain checks stay plain.</strong> CORS, the session and culture cookies, HSTS, CSP and the server-side
+          pseudo-locale checks run where the host guarantees an environment, so adding a null dance there
+          would be ceremony without a case. The two checks that can see no environment (the view-as
+          overlay cookie and the UI culture switcher) read null as not Development.</li>
           </ul>
           <h2 id="trade-offs">Trade-offs</h2>
           <ul>
@@ -369,7 +410,8 @@
           <li><strong>Design-time and test hosts lose the aid.</strong> A directly-constructed test context cannot turn
           sensitive-data logging on, because it registers no environment; it has to supply one to get it.</li>
           <li><strong>Two shapes, one rule.</strong> A reader has to check which subsystem is a gate and which is a plain
-          check; this record is the inventory, and the plain checks carry no null guarantee.</li>
+          check; this record is the inventory, and apart from the two nullable reads it names, the plain
+          checks carry no null guarantee.</li>
           <li><strong>The inventory is manual.</strong> Nothing fails a build when a new environment-conditional branch is
           added without following the rule.</li>
           </ul>
@@ -440,6 +482,42 @@
           cites the shared service-host call (<code>ServiceHostApplicationExtensions.cs:57</code>) through which the ADC
           and Store service hosts map the document.</li>
           </ol>
+          <h2 id="revision-2026-11-23">Revision (2026-11-23)</h2>
+          <p>Re-verified against current source. The rule, the three gates the record named and the existing
+          plain checks are unchanged in behavior; the inventory missed two fail-closed gates, one nullable
+          server-side check and two Development-gated branches, and several anchors moved.</p>
+          <ol>
+          <li>Two more fail-closed gates are named in the Decision. The webhook insecure-targets gate
+          (<code>WebhookInsecureTargets.cs:17-18</code>, documentation citing this record at <code>:7-9</code>) is the one
+          decision the validator (<code>DnsWebhookTargetValidator.cs:30</code>), the sender
+          (<code>HttpWebhookSender.cs:45</code>) and the connect callback (<code>WebhookServiceCollectionExtensions.cs:97-99</code>)
+          consult, with a startup warning when a deployed host sets the flag
+          (<code>InsecureWebhookTargetsNoticeService.cs:27</code>, <code>:40</code>). The AI endpoint https rule
+          (<code>AiSettings.cs:218-226</code>) falls back to the stamped <code>IsDevelopmentHost</code> (<code>:236-239</code>, <code>:140</code>,
+          stamped at <code>DependencyInjection.cs:126</code>). The Rationale now counts the webhook gate among the
+          static resolvers and the loud opt-outs.</li>
+          <li>The cookie bullet adds the view-as overlay cookie, which reads a nullable environment
+          (<code>ViewAsOverlayCookie.cs:122</code>) and sets <code>Secure = !development || context.Request.IsHttps</code>
+          (<code>:127</code>); the &quot;non-nullable environment&quot; sentence now names it beside the UI-side check.</li>
+          <li>The plain-check inventory adds the Development-only anonymous gRPC reflection mapping
+          (<code>ServiceHostApplicationExtensions.cs:59-64</code>) and the Blazor pipeline&#39;s Development branch, which
+          installs <code>UseExceptionHandler(&quot;/Error&quot;, createScopeForErrors: true)</code> only outside Development
+          (<code>BlazorWebHostExtensions.cs:189-196</code>). The out-of-scope paragraph adds the key-ring-at-rest
+          startup warning that the Azure and Google Cloud data protection registrations skip in
+          Development (<code>AzureDataProtectionExtensions.cs:95-99</code>,
+          <code>GoogleCloudDataProtectionExtensions.cs:116-121</code>). The Decision now states which gates&#39; own
+          documentation cites the EF gate or this record, and that the AI endpoint rule applies only when
+          <code>Ai:Enabled</code> is true (<code>AiSettings.cs:155-158</code>); the Rationale and Trade-offs name the two
+          nullable plain checks.</li>
+          <li>The closing-case test paragraph adds the webhook gate&#39;s null-environment test
+          (<code>DnsWebhookTargetValidatorTests.cs:147-159</code>, assertion <code>:156</code>).</li>
+          <li>Anchors re-verified against current source: the AI gate moved to <code>DependencyInjection.cs:264-268</code>
+          (call <code>:179</code>, remarks text <code>:259-261</code>), the allow-any CORS policy to
+          <code>WebApplicationBuilderExtensions.cs:152-155</code> (suppression <code>:151</code>), the session cookie <code>Secure</code>
+          expression to <code>SessionCookieJar.cs:69</code> (rationale <code>:60-64</code>), the culture switcher check to
+          <code>CultureSwitcher.razor:37-40</code> (WASM comment <code>:34-36</code>), and the error page&#39;s Development block to
+          <code>Error.razor:42-54</code>; all other citations still hold.</li>
+          </ol>
           <h2 id="related">Related</h2>
           <p><a href="070-fail-fast-configuration-contract.html">ADR-070</a> (binds and validates settings at startup; this
           record governs when a validated setting may be honored),
@@ -471,6 +549,7 @@
             <li><a href="#revision-2026-10-07">Revision (2026-10-07)</a></li>
             <li><a href="#revision-2026-10-26">Revision (2026-10-26)</a></li>
             <li><a href="#revision-2026-11-17">Revision (2026-11-17)</a></li>
+            <li><a href="#revision-2026-11-23">Revision (2026-11-23)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

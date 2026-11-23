@@ -279,7 +279,10 @@
           tables. Revised 2026-10-26: anchors refreshed after the gateway <code>Program.cs</code>, AppHost, bicep and
           resilience-defaults edits that moved the cited lines. Revised 2026-10-28: anchors refreshed after
           the Store gateway <code>Program.cs</code>, both bicep templates and ADC <code>RouteMapTests</code> edits that moved the
-          cited lines.</p>
+          cited lines. Revised 2026-11-23: the route counts are recounted from the two tables, now 45 routes in
+          ADC and 18 in Store (superseding the 33 and 15 above), Store&#39;s gateway comment reads &quot;eighteen
+          routes&quot; and still agrees with its table, and both AppHost gateway blocks are described as the one
+          <code>WithMmcaGateway</code> call each now is, with anchors refreshed.</p>
           <h2 id="context">Context</h2>
           <p>Before this record, both gateways built their route table by hand, in code. ADC made 26
           <code>MapForwarder</code> calls and Store made 10. Neither host called <code>AddReverseProxy</code> or <code>LoadFromConfig</code>, and neither <code>appsettings.json</code> had
@@ -287,8 +290,8 @@
           Aspire service-discovery names (<code>http://identity</code>, <code>http://conference</code>, <code>http://catalog</code> and so on)
           resolved through <code>AddHttpForwarderWithServiceDiscovery</code>, which is the part of the arrangement that was
           right and stays, now as <code>AddServiceDiscoveryDestinationResolver</code>
-          (<code>MMCA.ADC/Source/Hosts/MMCA.ADC.Gateway/Program.cs:157</code>,
-          <code>MMCA.Store/Source/Hosts/MMCA.Store.Gateway/Program.cs:151</code>).</p>
+          (<code>MMCA.ADC/Source/Hosts/MMCA.ADC.Gateway/Program.cs:169</code>,
+          <code>MMCA.Store/Source/Hosts/MMCA.Store.Gateway/Program.cs:157</code>).</p>
           <p><strong>The problem was not that the table was duplicated across deployment artifacts. It was that one table
           was described three times inside one repository, and the three already disagreed.</strong> ADC was the worked
           example:</p>
@@ -310,10 +313,11 @@
           was pinned by no test at all.</p>
           <p><strong>What is genuinely elsewhere is not the route table, and that distinction is worth recording</strong>,
           because it is the duplication a reader assumes exists. The Aspire AppHost holds references and
-          start-ordering (<code>MMCA.ADC/Source/Hosting/MMCA.ADC.AppHost/Program.cs:354-362</code>,
-          <code>MMCA.Store/Source/Hosting/MMCA.Store.AppHost/Program.cs:329-335</code>) and the bicep templates hold
+          start-ordering, expressed as one <code>WithMmcaGateway(6001, ...)</code> call naming the services the gateway
+          references and waits for (<code>MMCA.ADC/Source/Hosting/MMCA.ADC.AppHost/Program.cs:358-361</code>,
+          <code>MMCA.Store/Source/Hosting/MMCA.Store.AppHost/Program.cs:311-320</code>), and the bicep templates hold
           <code>services__&lt;name&gt;__http__0</code> environment variables on the gateway container app
-          (<code>MMCA.ADC/infra/main.bicep:2657-2660</code>, <code>MMCA.Store/infra/main.bicep:2044-2046</code>). Both are <strong>address
+          (<code>MMCA.ADC/infra/main.bicep:2967-2970</code>, <code>MMCA.Store/infra/main.bicep:2394-2396</code>). Both are <strong>address
           books</strong>: service name to URL, with no path prefix anywhere in them. They answer &quot;where does
           <code>conference</code> resolve&quot; and never &quot;what reaches conference&quot;, so neither is a second route table and
           neither should become one.</p>
@@ -321,7 +325,7 @@
           ADC set <code>ForwarderRequestConfig.ActivityTimeout</code> from <code>Gateway:ForwarderActivityTimeoutSeconds</code>,
           defaulted to <code>HttpResilienceDefaults.TotalRequestTimeout</code> plus 10 seconds, so 100 seconds against the
           90-second client budget
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Shared/Resilience/HttpResilienceDefaults.cs:22</code>), plus a
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Shared/Resilience/HttpResilienceDefaults.cs:21</code>), plus a
           one-hour <code>Gateway:HubActivityTimeoutSeconds</code> for the SignalR route. <strong>Store set no activity timeout
           anywhere.</strong> Both of its <code>ForwarderRequestConfig</code> constructions omitted it, so every Store route, the
           Stripe webhook forward included, ran on YARP&#39;s implicit default with no relationship to the resilience
@@ -340,13 +344,13 @@
           <h3 id="1-reverseproxy-configuration-is-the-route-table">1. <code>ReverseProxy</code> configuration is the route table</h3>
           <p>Each gateway calls <code>AddReverseProxy().LoadFromConfig(builder.Configuration.GetSection(&quot;ReverseProxy&quot;))</code>
           and <code>MapReverseProxy()</code>, and the <code>MapForwarder</code> lists are deleted. ADC wires it at
-          <code>MMCA.ADC/Source/Hosts/MMCA.ADC.Gateway/Program.cs:154-157</code> and maps it at <code>:240</code>; Store at
-          <code>MMCA.Store/Source/Hosts/MMCA.Store.Gateway/Program.cs:148-151</code> and <code>:183</code>. Routes and clusters live
-          in the gateway&#39;s own <code>appsettings.json</code>: 33 routes over five clusters for ADC (8 identity, 18
-          conference, 5 engagement, 2 notification, at
-          <code>MMCA.ADC/Source/Hosts/MMCA.ADC.Gateway/appsettings.json:80-261</code>) and 15 routes over three clusters
-          for Store (3 catalog, 8 identity, 4 sales, at
-          <code>MMCA.Store/Source/Hosts/MMCA.Store.Gateway/appsettings.json:51-144</code>). Destinations stay
+          <code>MMCA.ADC/Source/Hosts/MMCA.ADC.Gateway/Program.cs:166-169</code> and maps it at <code>:231</code>; Store at
+          <code>MMCA.Store/Source/Hosts/MMCA.Store.Gateway/Program.cs:154-157</code> and <code>:189</code>. Routes and clusters live
+          in the gateway&#39;s own <code>appsettings.json</code>: 45 routes over five clusters for ADC (13 identity, 22
+          conference, 8 engagement, 2 notification, at
+          <code>MMCA.ADC/Source/Hosts/MMCA.ADC.Gateway/appsettings.json:80-347</code>, clusters from <code>:348</code>) and 18
+          routes over three clusters for Store (4 catalog, 9 identity, 5 sales, at
+          <code>MMCA.Store/Source/Hosts/MMCA.Store.Gateway/appsettings.json:52-162</code>, clusters from <code>:163</code>). Destinations stay
           Aspire service-discovery names, so nothing about ADR-008&#39;s transport-at-the-edge posture, the AppHost
           wiring or the bicep address book changes: what changed is that the path-prefix-to-cluster mapping is
           data rather than a sequence of calls.</p>
@@ -366,24 +370,24 @@
           <p>ADC&#39;s <code>RouteMapTests</code> is the enumeration of the configured table rather than a hand-typed parallel
           list, and it covers every route rather than 23 of 26. A behavioral theory drives each pinned route
           through the real proxy pipeline
-          (<code>MMCA.ADC/Tests/Hosts/MMCA.ADC.Gateway.Tests/RouteMapTests.cs:178-210</code>) with a recording fake
-          substituted for <code>IHttpForwarder</code> in the factory&#39;s test services (<code>:502-503</code>), and two completeness
+          (<code>MMCA.ADC/Tests/Hosts/MMCA.ADC.Gateway.Tests/RouteMapTests.cs:214-216</code>) with a recording fake
+          substituted for <code>IHttpForwarder</code> in the factory&#39;s test services (<code>:575</code>), and two completeness
           facts read the host&#39;s loaded <code>IProxyConfig</code> and compare it against the same pinned table, so a route
           or cluster added to <code>appsettings.json</code> without a corresponding expectation fails, and an expectation
-          with no route fails as well (<code>:212</code>, <code>:234</code>). That two-way check is what the previous one-way theory could not
+          with no route fails as well (<code>:248-249</code>, <code>:270-271</code>). That two-way check is what the previous one-way theory could not
           do, and it is the reason a configuration table is safe to adopt: configuration is not compile-checked,
           so the check has to be a test. <code>/Sponsors</code>, <code>/CheckIns</code> and <code>/Points</code> are pinned by it now.</p>
           <p>Store gained the equivalent suite it had none of
-          (<code>MMCA.Store/Tests/Hosts/MMCA.Store.Gateway.Tests/RouteMapTests.cs:46</code>): all fifteen route prefixes are
-          pinned to their owning cluster (<code>:102-119</code>) and to its destination (<code>:126-148</code>, driven through the same
-          recording forwarder at <code>:201-218</code>), with the forwarder budget and the per-cluster version settings
-          asserted separately (<code>:350-368</code>, <code>:370-389</code>, <code>:391-409</code>). <strong>Updated
+          (<code>MMCA.Store/Tests/Hosts/MMCA.Store.Gateway.Tests/RouteMapTests.cs:46</code>): all eighteen route prefixes are
+          pinned to their owning cluster (<code>:87-108</code>) and to its destination (<code>:116-142</code>, driven by the theory at
+          <code>:202-204</code> through the same recording forwarder, substituted at <code>:456</code>), with the forwarder budget
+          and the per-cluster version settings asserted separately (<code>:335-337</code>, <code>:355-357</code>, <code>:376-378</code>). <strong>Updated
           2026-08-27: Store&#39;s half is no longer one-way.</strong> ADC&#39;s two completeness facts are ported, so the
           loaded <code>IProxyConfig</code> is compared back against the pinned table in both directions: a route added to
-          <code>appsettings.json</code> with no matching entry fails (<code>:220-240</code>, the reasoning stated inline at
-          <code>:234-236</code>) and so does a cluster (<code>:298-332</code>). The same comparison now doubles as the drift gate on
+          <code>appsettings.json</code> with no matching entry fails (<code>:221-222</code>, the reasoning stated inline at
+          <code>:235-236</code>) and so does a cluster (<code>:283-284</code>). The same comparison now doubles as the drift gate on
           the shared <code>MMCA.Common.Gateway</code> cluster profile, asserting that no cluster declares an activity
-          timeout of its own any more (<code>:319-323</code>).</p>
+          timeout of its own any more (<code>:304-307</code>).</p>
           <h3 id="4-the-http-version-policy-is-expressed-in-cluster-configuration">4. The HTTP version policy is expressed in cluster configuration</h3>
           <p>Each cluster declares its own <code>HttpRequest</code> version and version policy beside the destination it
           applies to, which is where <a href="012-grpc-host-transport.html">ADR-012</a>&#39;s per-host profile actually belongs:
@@ -391,27 +395,27 @@
           Notification, Store&#39;s Sales) state neither, keeping the version-negotiating default their traffic
           needs: the SignalR websocket on ADC&#39;s Notification hub route, and HTTP/1.1-capable REST plus the
           Stripe webhook on Store&#39;s Sales, which has no websocket route
-          (<code>MMCA.Store/Source/Hosts/MMCA.Store.Gateway/Program.cs:136-140</code>). ADC&#39;s <code>identity</code>, <code>conference</code> and
+          (<code>MMCA.Store/Source/Hosts/MMCA.Store.Gateway/Program.cs:139-143</code>). ADC&#39;s <code>identity</code>, <code>conference</code> and
           <code>engagement</code> clusters carry <code>Version</code> with
-          <code>RequestVersionExact</code> (<code>appsettings.json:267-270</code>, <code>:276-279</code>, <code>:285-288</code>) and its two Notification
-          clusters carry no <code>HttpRequest</code> block at all (<code>:290-294</code>, <code>:295-299</code>); Store&#39;s <code>catalog</code> and <code>identity</code>
-          clusters carry them (<code>appsettings.json:147-150</code>, <code>:156-159</code>) and its <code>sales</code> cluster states neither
-          (<code>:164-168</code>).</p>
+          <code>RequestVersionExact</code> (<code>appsettings.json:353-356</code>, <code>:362-365</code>, <code>:371-374</code>) and its two Notification
+          clusters carry no <code>HttpRequest</code> block at all (<code>:376-380</code>, <code>:381-385</code>); Store&#39;s <code>catalog</code> and <code>identity</code>
+          clusters carry them (<code>appsettings.json:165-168</code>, <code>:174-177</code>) and its <code>sales</code> cluster states neither
+          (<code>:182-186</code>).</p>
           <p>Resolving that profile is the framework&#39;s job, not each host&#39;s. <code>GatewayClusterProfileConfigFilter</code> in
           the <code>MMCA.Common.Gateway</code> package merges three sources per property rather than per block, so a cluster
           that states one value keeps inheriting the rest: the cluster&#39;s own <code>HttpRequest</code>, then
           <code>MmcaGateway:ClusterRequestOverrides[clusterId]</code>, then <code>MmcaGateway:ClusterRequestDefaults</code>
           (<code>MMCA.Common/Source/Hosting/MMCA.Common.Gateway/Configuration/GatewayClusterProfileConfigFilter.cs:59-74</code>,
           precedence stated at <code>:9-17</code>). A <code>GatewayClusterRequestProfile</code> carries <code>Version</code>, <code>VersionPolicy</code>,
-          <code>ActivityTimeout</code> and <code>AllowResponseBuffering</code> (<code>.../MMCA.Common.Gateway/GatewaySettings.cs:58</code>, <code>:64</code>,
-          <code>:67</code>, <code>:70</code>), declared once in <code>ClusterRequestDefaults</code> (<code>:22</code>) and narrowed per cluster in
+          <code>ActivityTimeout</code> and <code>AllowResponseBuffering</code> (<code>.../MMCA.Common.Gateway/GatewaySettings.cs:87</code>, <code>:93</code>,
+          <code>:96</code>, <code>:99</code>), declared once in <code>ClusterRequestDefaults</code> (<code>:22</code>) and narrowed per cluster in
           <code>ClusterRequestOverrides</code> (<code>:29</code>). The version pair is text rather than typed, so a mistyped value
-          fails at startup with a message naming the cluster instead of binding to a silent default (<code>:76-111</code>).
+          fails at startup with a message naming the cluster instead of binding to a silent default (<code>:105-140</code>).
           Whatever the merge resolves reaches the forwarder as stated: dropping one cluster to HTTP/1.1 is a
           statement in that cluster&#39;s own profile, never a switch applied over the loaded table
           (<code>GatewayClusterProfileConfigFilter.cs:18-22</code>). Both gateways declare their shared profile in that
           section, ADC with the one-hour SignalR override its hub route needs
-          (<code>MMCA.ADC/Source/Hosts/MMCA.ADC.Gateway/appsettings.json:43-51</code>,
+          (<code>MMCA.ADC/Source/Hosts/MMCA.ADC.Gateway/appsettings.json:42-50</code>,
           <code>MMCA.Store/Source/Hosts/MMCA.Store.Gateway/appsettings.json:22-25</code>), so the effective per-cluster
           policy is readable without opening <code>Program.cs</code> in either.</p>
           <h3 id="5-stores-timeout-parity-is-fixed-in-the-same-move">5. Store&#39;s timeout parity is fixed in the same move</h3>
@@ -422,10 +426,10 @@
           (<code>MMCA.Store/Source/Hosts/MMCA.Store.Gateway/appsettings.json:22-25</code>), and the shared cluster profile
           of section 4 merges those 100 seconds into all three clusters, none of which states a timeout of its
           own. ADC declares the same 100 seconds in the same place, with the one-hour override its hub cluster
-          needs (<code>MMCA.ADC/Source/Hosts/MMCA.ADC.Gateway/appsettings.json:43-51</code>). The route-map test pins the
+          needs (<code>MMCA.ADC/Source/Hosts/MMCA.ADC.Gateway/appsettings.json:42-50</code>). The route-map test pins the
           resolved value on every route
-          (<code>MMCA.Store/Tests/Hosts/MMCA.Store.Gateway.Tests/RouteMapTests.cs:57</code>, asserted at <code>:350-368</code>) and
-          pins the absence of any per-cluster declaration beside it (<code>:319-323</code>), so a cluster that reintroduced
+          (<code>MMCA.Store/Tests/Hosts/MMCA.Store.Gateway.Tests/RouteMapTests.cs:57</code>, asserted at <code>:335-337</code>) and
+          pins the absence of any per-cluster declaration beside it (<code>:304-307</code>), so a cluster that reintroduced
           its own would fail rather than silently opt out of the shared budget. This is
           folded into this record rather than filed separately because the reason
           Store never got it is exactly the reason this record exists: a per-route setting buried in a call site
@@ -438,14 +442,21 @@
           matching neither. The argument for configuration is not aesthetic: a hand-maintained list of calls
           produces exactly this, and adding discipline has already been tried. The gate that replaced the
           hand-typed list closes the code-versus-test half of that and not the comment half: a comment is
-          still an ungated description of the table. ADC&#39;s <code>RouteMapTests</code> label (&quot;17 REST controllers +
-          SessionSelection&quot;) currently agrees with its 18 conference entries
-          (<code>MMCA.ADC/Tests/Hosts/MMCA.ADC.Gateway.Tests/RouteMapTests.cs:146-164</code>), and Store&#39;s gateway
-          comment describing the <code>ReverseProxy</code> section as &quot;fifteen routes, three clusters&quot;
-          (<code>MMCA.Store/Source/Hosts/MMCA.Store.Gateway/Program.cs:124</code>) agrees with its table of 15 routes
-          (<code>MMCA.Store/Source/Hosts/MMCA.Store.Gateway/appsettings.json:51-144</code>). Both agree because someone
-          corrected them by hand, not because anything holds them there: the next route added without a
-          comment edit reopens the gap, just no longer load-bearing.</li>
+          still an ungated description of the table, and it has drifted again. Store&#39;s <code>RouteMapTests</code>
+          summary still calls its theory data &quot;The fifteen routes the ReverseProxy section declares&quot;
+          (<code>MMCA.Store/Tests/Hosts/MMCA.Store.Gateway.Tests/RouteMapTests.cs:112</code>) above a table of 18
+          entries (<code>:116-142</code>). ADC&#39;s <code>RouteMapTests</code> label (&quot;17 REST controllers + SessionSelection&quot;)
+          heads a conference block of 22 entries (<code>MMCA.ADC/Tests/Hosts/MMCA.ADC.Gateway.Tests/RouteMapTests.cs:168-197</code>),
+          matching the 22 conference routes in configuration
+          (<code>MMCA.ADC/Source/Hosts/MMCA.ADC.Gateway/appsettings.json:162-300</code>): 18 entries follow the label
+          directly (<code>:169-186</code>), and the other four sit under the upload comment (<code>:188-190</code>), the
+          feature-flag comment that also covers the audit-history route (<code>:192-194</code>) and the MCP comment
+          (<code>:196-197</code>), so the label counts controllers rather than routes. Store&#39;s gateway comment
+          describing the <code>ReverseProxy</code> section as &quot;eighteen routes, three clusters&quot;
+          (<code>MMCA.Store/Source/Hosts/MMCA.Store.Gateway/Program.cs:127</code>) does agree with its table of 18
+          routes (<code>MMCA.Store/Source/Hosts/MMCA.Store.Gateway/appsettings.json:52-162</code>), because someone
+          corrected it by hand, not because anything holds it there: the gate pins the table, never the
+          prose describing it, so the gap is no longer load-bearing but stays open.</li>
           <li><strong>A route table is data, and data belongs in configuration.</strong> Nothing in a forwarder registration is
           a decision the compiler can check anyway: the path is a string, the destination is a string, the
           cluster name is a string. Writing them as C# buys a build step and no verification.</li>
@@ -493,8 +504,8 @@
           stronger convergence force than either repo noticing the other&#39;s diff. Configuration still makes
           divergence easier to see rather than impossible, and the route table itself remains consumer-owned
           by design.</li>
-          <li><strong>A JSON table reviews less well than a code diff.</strong> A reviewer reading ADC&#39;s 33 routes in
-          <code>appsettings.json</code>, or Store&#39;s 15, has no types, no navigation and no compiler; the gain in editability is partly a
+          <li><strong>A JSON table reviews less well than a code diff.</strong> A reviewer reading ADC&#39;s 45 routes in
+          <code>appsettings.json</code>, or Store&#39;s 18, has no types, no navigation and no compiler; the gain in editability is partly a
           loss in review signal, offset only by the test.</li>
           </ul>
           <h2 id="revision-2026-10-01">Revision (2026-10-01)</h2>
@@ -602,6 +613,57 @@
           (<code>:240</code>) anchors still hold. The 2026-10-26 revision&#39;s Store <code>Program.cs</code> and bicep anchors are
           superseded by these.</li>
           </ol>
+          <h2 id="revision-2026-11-23">Revision (2026-11-23)</h2>
+          <p>Re-verified against current source. No decision changed: both gateways still call
+          <code>AddReverseProxy().LoadFromConfig(...)</code> with <code>AddMmcaGateway</code> and
+          <code>AddServiceDiscoveryDestinationResolver</code>, ADC&#39;s <code>identity</code>, <code>conference</code> and <code>engagement</code> clusters
+          still declare <code>Version</code> 2.0 with <code>RequestVersionExact</code> while neither Notification cluster declares an
+          <code>HttpRequest</code> block, Store&#39;s <code>sales</code> cluster still states no version pair,
+          <code>HttpResilienceDefaults.TotalRequestTimeout</code> is still 90 seconds under the shared 100-second
+          <code>ActivityTimeout</code>, and the AppHost and bicep still hold address books with no path data. Three
+          current-state statements moved.</p>
+          <ol>
+          <li>Both route tables grew. ADC now configures 45 routes over its five clusters (13 identity, 22
+          conference, 8 engagement, 2 notification;
+          <code>MMCA.ADC/Source/Hosts/MMCA.ADC.Gateway/appsettings.json:80-347</code>) and Store 18 over its three (4
+          catalog, 9 identity, 5 sales; <code>MMCA.Store/Source/Hosts/MMCA.Store.Gateway/appsettings.json:52-162</code>).
+          Section 1, section 3 and the Trade-offs carry the new counts; the earlier Status sentences that
+          name 33 and 15 stay as dated record.</li>
+          <li>Store&#39;s gateway comment now reads &quot;eighteen routes, three clusters&quot;
+          (<code>MMCA.Store/Source/Hosts/MMCA.Store.Gateway/Program.cs:127</code>) and still agrees with its table,
+          but Store&#39;s <code>RouteMapTests</code> summary still says &quot;fifteen routes&quot; over 18 entries
+          (<code>MMCA.Store/Tests/Hosts/MMCA.Store.Gateway.Tests/RouteMapTests.cs:112</code>, <code>:116-142</code>). ADC&#39;s
+          conference label &quot;17 REST controllers + SessionSelection&quot; heads a block of 22 entries, 18
+          directly beneath it and four under the upload, feature-flag (covering audit history too) and
+          MCP comments (<code>MMCA.ADC/Tests/Hosts/MMCA.ADC.Gateway.Tests/RouteMapTests.cs:168-197</code>). The
+          Rationale now cites the Store summary as the live example; all three descriptions remain
+          ungated.</li>
+          <li>Neither AppHost writes its gateway block as inline <code>WithReference</code> and <code>WaitFor</code> lines any more:
+          each is one <code>WithMmcaGateway(6001, ...)</code> call naming the services the gateway references and
+          waits for (<code>MMCA.ADC/Source/Hosting/MMCA.ADC.AppHost/Program.cs:358-361</code>,
+          <code>MMCA.Store/Source/Hosting/MMCA.Store.AppHost/Program.cs:311-320</code>). The Context says so; the
+          address-book principle is unchanged.</li>
+          <li>Anchors re-verified against current source: ADC gateway wiring
+          (<code>MMCA.ADC/Source/Hosts/MMCA.ADC.Gateway/Program.cs:166-169</code>, resolver at <code>:169</code>) and
+          <code>MapReverseProxy</code> (<code>:231</code>); Store gateway wiring
+          (<code>MMCA.Store/Source/Hosts/MMCA.Store.Gateway/Program.cs:154-157</code>, resolver at <code>:157</code>),
+          <code>MapReverseProxy</code> (<code>:189</code>) and its Sales cluster-profile explanation (<code>:139-143</code>, the downstream
+          health probe explanation at <code>:99-123</code>, its Sales paragraph at <code>:115-123</code> and the
+          <code>AddGatewayDownstreamHealthChecks</code> call at <code>:124</code>); the ADC cluster <code>HttpRequest</code> blocks (<code>appsettings.json:353-356</code>,
+          <code>:362-365</code>, <code>:371-374</code>) and Notification clusters (<code>:376-380</code>, <code>:381-385</code>) and the ADC
+          <code>MmcaGateway</code> profile (<code>:42-50</code>); the Store cluster blocks (<code>appsettings.json:165-168</code>,
+          <code>:174-177</code>, <code>:182-186</code>); <code>TotalRequestTimeout</code>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Shared/Resilience/HttpResilienceDefaults.cs:21</code>);
+          <code>GatewayClusterRequestProfile</code> (<code>MMCA.Common/Source/Hosting/MMCA.Common.Gateway/GatewaySettings.cs:87</code>,
+          <code>:93</code>, <code>:96</code>, <code>:99</code>, parse errors at <code>:105-140</code>); ADC <code>RouteMapTests</code> (theory <code>:214-216</code>,
+          completeness facts <code>:248-249</code> and <code>:270-271</code>, <code>IHttpForwarder</code> replacement <code>:575</code>); Store
+          <code>RouteMapTests</code> (pinned tables <code>:87-108</code> and <code>:116-142</code>, theory <code>:202-204</code>, completeness facts
+          <code>:221-222</code> and <code>:283-284</code>, per-cluster timeout absence <code>:304-307</code>, timeout, h2c and Sales
+          theories <code>:335-337</code>, <code>:355-357</code>, <code>:376-378</code>, <code>IHttpForwarder</code> replacement <code>:456</code>); and the bicep
+          gateway address books (<code>MMCA.ADC/infra/main.bicep:2967-2970</code>, inside <code>gatewayApp</code> at <code>:2899</code>;
+          <code>MMCA.Store/infra/main.bicep:2394-2396</code>). The 2026-10-26 and 2026-10-28 revisions&#39; anchors are
+          superseded by these.</li>
+          </ol>
           <h2 id="related">Related</h2>
           <p><a href="008-service-extraction-topology.html">ADR-008</a> (amended: the Gateway keeps the route-to-service map it
           was given, now expressed as configuration rather than as forwarder registrations),
@@ -640,6 +702,7 @@
             <li><a href="#revision-2026-10-21">Revision (2026-10-21)</a></li>
             <li><a href="#revision-2026-10-26">Revision (2026-10-26)</a></li>
             <li><a href="#revision-2026-10-28">Revision (2026-10-28)</a></li>
+            <li><a href="#revision-2026-11-23">Revision (2026-11-23)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

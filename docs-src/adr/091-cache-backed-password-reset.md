@@ -12,6 +12,8 @@ Revised 2026-10-21: session revocation is saved before the new password is appli
 when the aggregate rejects it, and the reset email is localized (English and Spanish).
 Revised 2026-10-26: anchors refreshed after the v1.261.0 release.
 Revised 2026-10-28: anchors refreshed after the v1.265.1 release.
+Revised 2026-11-23: both AppHosts now set `PasswordReset__ResetUrl` through the shared `WithUiLinks`
+helper, not MMCA.ADC's alone, and anchors are refreshed.
 
 ## Context
 Both consumer apps shipped authenticated password *change* (`PUT /Auth/password`) and nothing for a
@@ -99,12 +101,15 @@ address, and so does a 500 when the SMTP hop is down.
    `ResetPasswordCommand` record, a handler that is a constructor call on the base, and a sealed
    `PasswordResetController` supplying the two command factories. Configuration is one key
    (`PasswordReset:ResetUrl`) in each Identity service's `appsettings.json` (MMCA.ADC
-   `Source/Services/MMCA.ADC.Identity.Service/appsettings.json:115`, MMCA.Store
-   `Source/Services/MMCA.Store.Identity.Service/appsettings.json:114`) and as `PasswordReset__ResetUrl`
-   in `infra/main.bicep` for production (MMCA.ADC `:2011`, MMCA.Store `:1647`). Only MMCA.ADC's Aspire
-   AppHost also sets it for local runs (`Source/Hosting/MMCA.ADC.AppHost/Program.cs:504`); MMCA.Store's
-   local runs use the `appsettings.json` default. MMCA.ADC and MMCA.Store both
-   adopted it in v1.160.0.
+   `Source/Services/MMCA.ADC.Identity.Service/appsettings.json:168`, MMCA.Store
+   `Source/Services/MMCA.Store.Identity.Service/appsettings.json:118`) and as `PasswordReset__ResetUrl`
+   in `infra/main.bicep` for production (MMCA.ADC `:2288`, MMCA.Store `:1961`). Both Aspire AppHosts
+   also set it for local runs through the shared `WithUiLinks` helper, which derives the link from the
+   UI resource's https endpoint
+   (`MMCA.Common/Source/Hosting/MMCA.Common.Aspire.Hosting/IdentityLinkExtensions.cs:74`, `:84`;
+   MMCA.ADC `Source/Hosting/MMCA.ADC.AppHost/Program.cs:474`, MMCA.Store
+   `Source/Hosting/MMCA.Store.AppHost/Program.cs:381`), so the `appsettings.json` default serves only
+   a standalone run outside the AppHost. MMCA.ADC and MMCA.Store both adopted it in v1.160.0.
 
 ## Rationale
 - **No migration is the whole point.** A reset credential is short-lived by nature, and the
@@ -277,3 +282,27 @@ moved.
    Holding: `PasswordResetTokenService.cs:36`, `:41`, `:43`, `:68`, `:107`, `:128`;
    `ResetPasswordHandlerBase.cs:48`, `:106`, `:110`, `:112`, `:117`, `:120`;
    `ForgotPasswordHandlerBase.cs:82`, `:114`, `:129` to `:134`, `:155`.
+
+## Revision (2026-11-23)
+Re-verified against current source. The cache-backed token, the distributed lock on redemption,
+the session revocation ahead of the password write, the anti-enumeration contract, the URL-fragment
+link and the localized email all hold as recorded. One statement moved: how local runs get the
+reset link.
+
+1. **Both AppHosts set the reset link.** The `WithUiLinks` extension in
+   `MMCA.Common/Source/Hosting/MMCA.Common.Aspire.Hosting/IdentityLinkExtensions.cs:74` sets
+   `PasswordReset__ResetUrl` from the UI resource's https endpoint (`:84`, `:85`), and both
+   MMCA.ADC (`Source/Hosting/MMCA.ADC.AppHost/Program.cs:474`) and MMCA.Store
+   (`Source/Hosting/MMCA.Store.AppHost/Program.cs:381`) call it; neither AppHost names the key
+   literally. Decision 6 now says this; the earlier statement that only MMCA.ADC's AppHost sets the
+   key, kept as written in the 2026-10-01 and 2026-10-21 revisions, no longer describes MMCA.Store.
+2. Anchors re-verified against current source: MMCA.ADC Identity `appsettings.json:168` (the
+   `ResetUrl` key, was `:115`) and MMCA.Store Identity `appsettings.json:118` (was `:114`);
+   MMCA.ADC `infra/main.bicep:2288` (was `:2011`) and MMCA.Store `infra/main.bicep:1961` (was
+   `:1647`). In `MMCA.Common/CHANGELOG.md`: M240 at `:1270` under `[1.247.0]` (heading `:1240`),
+   the localized-email entry at `:1392` under `[1.243.0]` (heading `:1360`), and the
+   `IDistributedLock` breaking change and its fix (L91) at `:1966` and `:1971` under `[1.213.0]`
+   (heading `:1962`). Holding: `PasswordResetTokenService.cs:36`, `:41`, `:43`, `:68`, `:107`,
+   `:128`; `ResetPasswordHandlerBase.cs:48`, `:106`, `:110`, `:112`, `:117`, `:120`;
+   `ForgotPasswordHandlerBase.cs:82`, `:114`, `:129` to `:134`, `:155`;
+   `UserEmailResources.cs:32-35`.

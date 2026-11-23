@@ -24,7 +24,11 @@ visitor while `AppBarComponentTypes` stay signed-in only, lists the two contract
 had not named (`FooterComponentTypes`, `NotFoundContentType`), and re-anchors the `IUIModule`,
 `MainLayout` and `NavMenu` citations. Revised 2026-10-28: anchors refreshed after both Blazor Web
 hosts gained a `MapCommonServiceWorker()` call ahead of their assembly wiring. Revised 2026-11-04: records the `NavGroups` contract member and `NavItem.Order`, which let a
-module describe a nav group (icon, initially expanded, order) by key and order its items.
+module describe a nav group (icon, initially expanded, order) by key and order its items. Revised
+2026-11-23: records the ninth contract member (`NavGroups`) in the member count, the framework's
+`TwoFactorUIModule` adopter and its page gate, the shared `GetMmcaRazorComponentAssemblies` helper
+that replaced the per-host assembly wiring, declared nav ordering in the Trade-offs, the Store MAUI
+module's device settings page, and anchors that moved.
 
 Amended 2026-11-17 (MMCA.Common v1.301.0): the notification-page gate is unconditional (a host that
 registers no `NotificationUIModule` answers the notification routes with the not-found page, and the
@@ -54,12 +58,12 @@ being rendered.
 Ship the application shell in the framework package and let each module plug into it by implementing
 `IUIModule`, resolved from DI as `IEnumerable<IUIModule>`.
 
-- **The contract is eight members, six of them defaulted.** `NavItems`, `Assembly`,
+- **The contract is nine members, seven of them defaulted.** `NavItems`, `NavGroups`, `Assembly`,
   `AppBarComponentTypes`, `PublicAppBarComponentTypes`, `LayoutComponentTypes`,
   `ContentHeaderComponentTypes`, `FooterComponentTypes` and `NotFoundContentType`
-  (`MMCA.Common/Source/Presentation/MMCA.Common.UI/Common/Interfaces/IUIModule.cs:14,17,23,31,34,40,53,62`);
-  the five component lists default to `[]` and `NotFoundContentType` to `null`, so a module that only
-  contributes pages and navigation is two properties.
+  (`MMCA.Common/Source/Presentation/MMCA.Common.UI/Common/Interfaces/IUIModule.cs:14,22,25,31,39,42,48,61,70`);
+  `NavGroups` and the five component lists default to `[]` and `NotFoundContentType` to `null`, so a
+  module that only contributes pages and navigation is two properties.
   A `NavItem` is a record of title, href, icon and a required `TitleResource` that makes the title
   and group resource keys, followed by three optional visibility gates (`RequiredRole`,
   `RequiredClaim`, `RequiredPermission`), a `NavSection` and an optional collapsible `Group`
@@ -71,45 +75,52 @@ Ship the application shell in the framework package and let each module plug int
 - **The router discovers module pages at runtime from the registrations.** `Routes.razor` injects
   `IEnumerable<IUIModule>` (`MMCA.Common.UI/Routes.razor:7`) and hands
   `UIModules.Select(m => m.Assembly)` to the `Router`'s `AdditionalAssemblies`, with `AppAssembly`
-  pinned to the shell's own assembly and `NotFoundPage` to the shipped 404 page (`:12-14`). Nothing in
+  pinned to the shell's own assembly and `NotFoundPage` to the shipped 404 page (`:11-13`). Nothing in
   the shell names a module.
 - **The shell ships the routable pages every app needs.** Home `/` (`MMCA.Common.UI/Pages/Home.razor:1`),
   Login `/login` and Register `/register` (`Pages/Auth/Login.razor:1`, `Pages/Auth/Register.razor:1`),
-  the OAuth return page `/auth/oauth-complete` (`Pages/Auth/OAuthComplete.razor:1`), `/not-found`
+  the OAuth return page `/auth/oauth-complete` (`Pages/Auth/OAuthComplete.razor:1`), the sign-in link
+  page `/auth/sign-in-link` (`Pages/Auth/SignInLinks/SignInLink.razor:1`), `/not-found`
   (`Pages/NotFound.razor:1`), `/forbidden` (`Pages/Forbidden.razor:1`), the account-recovery and
   session pages `/confirm-email`, `/forgot-password`, `/reset-password` and `/profile/sessions`
   (`Pages/Auth/ConfirmEmail.razor:1`, `ForgotPassword.razor:1`, `ResetPassword.razor:1`,
-  `Sessions.razor:1`), and the notification surfaces `/notifications`, `/notifications/inbox` (plus
-  `/notifications/inbox/{Id:int}`), `/notifications/send`
+  `Sessions.razor:1`), the two-factor account page `/profile/two-factor`
+  (`Pages/Auth/TwoFactor/TwoFactorAccount.razor:1`), and the notification surfaces `/notifications`,
+  `/notifications/inbox` (plus `/notifications/inbox/{Id:int}`), `/notifications/send`
   (`Pages/Notifications/NotificationList.razor:1`, `NotificationInbox.razor:1-2`, `NotificationSend.razor:1`).
   A host that registers no `NotificationUIModule` (it never called `AddNotificationUI()`) gets the
   not-found page on those routes instead, with no flag to set: the router asks
-  `NotificationPageGate.Hides` before `AuthorizeRouteView` runs (`MMCA.Common.UI/Routes.razor:14-23`),
-  and the gate matches the three notification page types whenever no registered module is a
-  `NotificationUIModule` (`MMCA.Common.UI/Notifications/NotificationPageGate.cs:14`, `:20-21`,
-  `:26-27`); on a server render the answer carries a 404 status (`Routes.razor:21-22`).
+  `NotificationPageGate.Hides` and `TwoFactorPageGate.Hides` before `AuthorizeRouteView` runs
+  (`MMCA.Common.UI/Routes.razor:15-25`), and the notification gate matches the three notification
+  page types whenever no registered module is a `NotificationUIModule`
+  (`MMCA.Common.UI/Notifications/NotificationPageGate.cs:14`, `:20-21`, `:26-27`). The two-factor gate
+  does the same for its one page, `TwoFactorAccount`, whenever no registered module is a
+  `TwoFactorUIModule` (a host that never called `AddTwoFactorUI()`,
+  `MMCA.Common.UI/TwoFactor/TwoFactorPageGate.cs:18-19`, `:24-25`). On a server render either answer
+  carries a 404 status (`Routes.razor:23-24`).
 - **Unauthenticated and unauthorized both resolve inside the shell.** `AuthorizeRouteView` sends an
   anonymous visitor through `RedirectToLogin` and an authenticated-but-unauthorized one to the
-  dedicated `Forbidden` page rather than a bare alert (`Routes.razor:29-52`, `RedirectToLogin` at `:43`,
-  `Forbidden` at `:49`).
+  dedicated `Forbidden` page rather than a bare alert (`Routes.razor:28-51`, `RedirectToLogin` at `:42`,
+  `Forbidden` at `:48`).
 - **The nav menu is assembled from the registrations, trimmed per user.** `NavMenu` injects the same
   enumeration (`MMCA.Common.UI/Layout/NavMenu.razor:9`), flattens every module's `NavItems`, drops
   items whose `RequiredRole`, `RequiredClaim` or `RequiredPermission` the current principal does not
-  carry (the three filters compose, each skipped when its property is null, `:263-265`), and splits the
-  remainder into the General, My Account and Administration sections (`:268-270`).
+  carry (the three filters compose, each skipped when its property is null,
+  `MMCA.Common.UI/Layout/NavMenu.razor.cs:125-127`), and splits the remainder into the General, My
+  Account and Administration sections (`:130-132`).
 - **Five component extension points render module-supplied types.** `MainLayout` reads the five
-  component lists off the registrations (`MMCA.Common.UI/Layout/MainLayout.razor:173-177`) and renders
+  component lists off the registrations (`MMCA.Common.UI/Layout/MainLayout.razor:192-196`) and renders
   them through `DynamicComponent`. The top app bar has two slots that differ only in who sees them:
   `PublicAppBarComponentTypes` render for every visitor, signed in or not, ahead of the culture and
-  theme controls (`:43-46`), and `AppBarComponentTypes` render inside `AuthorizeView` for a signed-in
-  user only (`:50-57`); the mobile quick-actions row repeats both in the same order and with the same
-  gate (`NavMenu.razor:44-47`, `:50-57`). Content headers render inside the main landmark directly
-  above the page body (`MainLayout.razor:84-87`), footer components inside the page's one
-  `contentinfo` footer (`:125-128`), and layout components at the root of the layout (`:136-139`), so a
-  module can add a search box or an icon with a badge, a banner above the page, its own footer links,
-  or a drawer without touching the layout. The not-found page renders the first registered
-  `NotFoundContentType` in place of its default content (`MMCA.Common.UI/Pages/NotFound.razor:23-25`,
-  `:47`).
+  theme controls (`:44-47`), and `AppBarComponentTypes` render inside `AuthorizeView` for a signed-in
+  user only (`:51-59`, the loop at `:55-58`); the mobile quick-actions row repeats both in the same
+  order and with the same gate (`NavMenu.razor:44-47`, `:50-57`). Content headers render inside the
+  main landmark directly above the page body (`MainLayout.razor:90-93`), footer components inside the
+  page's one `contentinfo` footer (`:146-149`), and layout components at the root of the layout
+  (`:154-157`), so a module can add a search box or an icon with a badge, a banner above the page, its
+  own footer links, or a drawer without touching the layout. The not-found page renders the first
+  registered `NotFoundContentType` in place of its default content
+  (`MMCA.Common.UI/Pages/NotFound.razor:24-27`, `:49`).
 - **The layout contains a failing page and clears stale toasts.** `MainLayout` renders the page body
   inside an `ErrorBoundary` (`MMCA.Common.UI/Layout/MainLayout.razor:97-109`), so a page that throws
   while rendering shows a page-error state with a Retry button in its place (`:101-108`) instead of
@@ -120,15 +131,20 @@ Ship the application shell in the framework package and let each module plug int
   setting turns it on or off.
 - **Registration is one call.** `AddUIModule<TModule>()` runs the Scrutor scan for the module's entity
   services and then registers the descriptor as a singleton `IUIModule`
-  (`MMCA.Common.UI/DependencyInjection.cs:332-341`); modules with extra services register the
-  descriptor directly with `AddSingleton<IUIModule, TModule>()` after their own registrations
-  (`MMCA.Common.UI/Notifications/DependencyInjection.cs:39`,
-  `MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.UI/DependencyInjection.cs:76`).
+  (`MMCA.Common.UI/DependencyInjection.cs:485-495`, the scan at `:488-492`, the descriptor at `:494`);
+  modules with extra services register the descriptor directly with `AddSingleton<IUIModule, TModule>()`
+  after their own registrations (`MMCA.Common.UI/Notifications/DependencyInjection.cs:39`,
+  `MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.UI/DependencyInjection.cs:90`).
+  `AddTwoFactorUI()` registers its descriptor with
+  `TryAddEnumerable(ServiceDescriptor.Singleton<IUIModule, TwoFactorUIModule>())`, so a host that
+  calls it from two places registers the module once
+  (`MMCA.Common.UI/TwoFactor/DependencyInjection.cs:31`).
 - **MudBlazor is the single component vendor, and the framework's own contracts sit in front of it.**
   The shell, its pages and every module UI render MudBlazor components; nothing here mixes in a second
   component library. For toasts and yes/no confirmation a framework contract stands in front of the
-  vendor (other vendor types, such as the `MudDataGrid<TDto>` that `ListPageActions` takes, are
-  referenced directly: `ListPageActions.cs:5`, `:29`): `IToastService` and `IAppDialogService`
+  vendor (other vendor types, such as the `MudDataGrid<TDto>` a list page exposes through
+  `DataGridListPageBase.GridRef`, are referenced directly:
+  `MMCA.Common.UI/Pages/Common/DataGridListPageBase.cs:177`): `IToastService` and `IAppDialogService`
   (`MMCA.Common/Source/Presentation/MMCA.Common.UI/Common/Interfaces/IToastService.cs`,
   `IAppDialogService.cs`, namespace `MMCA.Common.UI.Common.Interfaces`). `IToastService` carries the
   five severities every component library exposes and is fire-and-forget by design (during SSR
@@ -142,21 +158,22 @@ Ship the application shell in the framework package and let each module plug int
   (`MMCA.Common.UI/Components/Forms/ConfirmationDialog.razor:6`, `:14-15`, `:24-27`, `:92`).
   Both facades are registered by one extracted call, `AddCommonUiFacades()`, which
   TryAdd-registers `MudToastService` and `MudAppDialogService` over MudBlazor's `ISnackbar` and
-  `IDialogService` (`MMCA.Common.UI/DependencyInjection.cs:238-241`). The same call also
-  TryAdd-registers `IPendingToastService` (`:242`), a toast parked in `sessionStorage` that survives
+  `IDialogService` (`MMCA.Common.UI/DependencyInjection.cs:276-279`). The same call also
+  TryAdd-registers `IPendingToastService` (`:280`), a toast parked in `sessionStorage` that survives
   a `forceLoad` navigation; its implementation names no vendor type (it wraps `IJSRuntime`,
   `MMCA.Common.UI/Services/PendingToastService.cs:13`), and the layout's `PendingToastHost`
-  (`MainLayout.razor:19`) shows it through `IToastService`
+  (`MainLayout.razor:20`) shows it through `IToastService`
   (`MMCA.Common.UI/Components/Notifications/PendingToastHost.razor:3`). `AddUIShared` calls it
-  (`DependencyInjection.cs:167`), the Helpdesk Web head calls it directly
-  (`MMCA.Helpdesk/Source/Hosts/UI/MMCA.Helpdesk.UI.Web/Program.cs:24`), and so does the shipped bUnit base
+  (`DependencyInjection.cs:185`), the Helpdesk Web head calls it directly
+  (`MMCA.Helpdesk/Source/Hosts/UI/MMCA.Helpdesk.UI.Web/Program.cs:25`), and so does the shipped bUnit base
   (`MMCA.Common/Source/Hosting/MMCA.Common.Testing.UI/Infrastructure/BunitComponentTestBase.cs:54`),
   so a component test resolves the contracts without pulling in the rest of the shared-UI surface.
   The framework helpers that raise a toast take the toast facade
   (`MMCA.Common.UI/Common/ResultUiExtensions.cs:255-257`, `:276-278`, and
-  `ListPageActions.DeleteWithConfirmationAsync` at `MMCA.Common.UI/Pages/Common/ListPageActions.cs:61`).
+  `ListPageActions.DeleteWithConfirmationAsync` at `MMCA.Common.UI/Pages/Common/ListPageActions.cs:32`,
+  its toast parameter at `:36`).
   The delete confirmation is the component-side exception: `DeleteWithConfirmationAsync` asks its
-  question through the `DeleteConfirmation` component it is handed (`ListPageActions.cs:58`, `:72`),
+  question through the `DeleteConfirmation` component it is handed (`ListPageActions.cs:33`, `:47`),
   and that component injects MudBlazor's `IDialogService` directly rather than going through
   `IAppDialogService` (`MMCA.Common.UI/Components/Forms/DeleteConfirmation.razor:2`), though it opens
   the same `ConfirmationDialog`, destructive and with its own `confirm-delete` test id (`:9`,
@@ -165,34 +182,48 @@ Ship the application shell in the framework package and let each module plug int
   than either service (for example
   `MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.UI/Pages/Orders/ShipOrderDialog.razor:4-9`).
 
-- **Blazor Web heads feed the same enumeration to the endpoint side.** `MapRazorComponents<App>()`
-  takes the module assemblies from `GetServices<IUIModule>()` in addition to the shell assemblies
-  (`MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs:326-340`, which also de-duplicates at `:334`, and
-  `MMCA.Store/Source/Hosts/UI/MMCA.Store.UI.Web/Program.cs:284-294`), so the router's view and the
-  endpoint's view of the routable assemblies come from one source.
+- **Blazor Web heads feed the same enumeration to the endpoint side.** Both hosts pass
+  `app.GetMmcaRazorComponentAssemblies(clientAssembly)` to `MapRazorComponents<App>()`'s
+  `AddAdditionalAssemblies` (`MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs:162`, `:165`;
+  `MMCA.Store/Source/Hosts/UI/MMCA.Store.UI.Web/Program.cs:121`, `:124`). The framework helper
+  concatenates MMCA.Common.UI, MMCA.Common.UI.Web and the head's client assembly with the assembly of
+  every registered `IUIModule` and removes duplicates, first occurrence kept
+  (`MMCA.Common/Source/Presentation/MMCA.Common.UI.Web/Hosting/BlazorWebHostExtensions.cs:225-243`,
+  `.Distinct()` at `:241`), so the router's view and the endpoint's view of the routable assemblies
+  come from one source.
 
 Adoption today is every module UI in both apps plus the framework's own and its test host: ADC
 Conference, Identity and Engagement
-(`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/ConferenceUIModule.cs:14`,
-`Identity/MMCA.ADC.Identity.UI/IdentityUIModule.cs:17`,
-`Engagement/MMCA.ADC.Engagement.UI/EngagementUIModule.cs:18`); Store Catalog, Sales and Identity
+(`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/ConferenceUIModule.cs:31`,
+`Identity/MMCA.ADC.Identity.UI/IdentityUIModule.cs:19`,
+`Engagement/MMCA.ADC.Engagement.UI/EngagementUIModule.cs:22`); Store Catalog, Sales and Identity
 (`MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.UI/CatalogUIModule.cs:16`,
 `Sales/MMCA.Store.Sales.UI/SalesUIModule.cs:17`, `Identity/MMCA.Store.Identity.UI/IdentityUIModule.cs:14`),
 where the Catalog shop search and the Sales cart button are the public app bar components, because a
 signed-out shopper searches and fills a browser cart too (`CatalogUIModule.cs:31`, `SalesUIModule.cs:33`);
-the framework's own notification module
-(`MMCA.Common/Source/Presentation/MMCA.Common.UI/Notifications/NotificationUIModule.cs:15`); and the
-backend-less component gallery, whose stub descriptor is the only reason its `/components` page is
+the framework's own two modules, the notification module
+(`MMCA.Common/Source/Presentation/MMCA.Common.UI/Notifications/NotificationUIModule.cs:15`) and the
+two-factor module, which contributes a My Account nav item and the `MultiFactorRequiredListener`
+layout component (`MMCA.Common/Source/Presentation/MMCA.Common.UI/TwoFactor/TwoFactorUIModule.cs:16`,
+`:24`, `:28`) and which Store registers through `AddTwoFactorUI()` in all three of its heads
+(`MMCA.Store/Source/Hosts/UI/MMCA.Store.UI.Web/Program.cs:71`,
+`MMCA.Store.UI.Web.Client/Program.cs:43`, `MMCA.Store.UI/MauiProgram.cs:72`) while ADC does not; and
+the backend-less component gallery, whose stub descriptor is the only reason its `/components` page is
 routable (`MMCA.Common/Tests/Presentation/MMCA.Common.UI.Gallery/Stubs/GalleryUIModule.cs:14`,
-registered at `GalleryHost.cs:97`). Two adopters are **host-only**: ADC's `DeviceUIModule` adds the
-MAUI-only device settings page plus the deep-link listener
-(`MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI/DeviceUIModule.cs:18`, registered at `MauiProgram.cs:167`), and
-Store's `MauiUIModule` contributes no nav and no pages at all, existing purely to hang the native
-theme sync on the layout extension point (`MMCA.Store/Source/Hosts/UI/MMCA.Store.UI/MauiUIModule.cs:14`,
-registered at `MauiProgram.cs:89`). MMCA.Helpdesk deliberately does **not** adopt this: the seed's
-Blazor head owns its own `Routes.razor` and `MainLayout` and never calls `AddUIShared`, because it has
-no `ApiSettings`-backed client pipeline (`MMCA.Helpdesk/Source/Hosts/UI/MMCA.Helpdesk.UI.Web/Program.cs:33-35`);
-it registers the facades on their own with `AddCommonUiFacades()` instead (`:21-24`).
+registered at `GalleryHost.cs:126`; by default the gallery also registers `NotificationUIModule` at
+`:100` and calls `AddTwoFactorUI()` at `:116`, each behind a configuration gate that defaults to true,
+`Gallery:NotificationUI` at `:97` and `Gallery:TwoFactorUI` at `:113`, which the not-found routing
+tests set to false to leave that module out). Two adopters are **host-only**: ADC's `DeviceUIModule` adds the
+MAUI-only device settings page plus the `DeepLinkListener`, `BiometricGate`,
+`PushRegistrationListener` and `NativeThemeSync` layout components
+(`MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI/DeviceUIModule.cs:18`, `:30`, registered at
+`MauiProgram.cs:178`), and Store's `MauiUIModule` contributes a device settings nav item and page plus
+the `DeepLinkListener`, `BiometricGate` and `NativeThemeSync` layout components
+(`MMCA.Store/Source/Hosts/UI/MMCA.Store.UI/MauiUIModule.cs:20`, `:27-30`, `:38`, `:40-45`, registered
+at `MauiProgram.cs:107`). MMCA.Helpdesk deliberately does **not** adopt this: the seed's Blazor head
+owns its own `Routes.razor` and `MainLayout` and never calls `AddUIShared`, because it has no
+`ApiSettings`-backed client pipeline (`MMCA.Helpdesk/Source/Hosts/UI/MMCA.Helpdesk.UI.Web/Program.cs:34-36`);
+it registers the facades on their own with `AddCommonUiFacades()` instead (`:25`, reason at `:22-24`).
 
 ## Rationale
 - **One composition model across both tiers.** A module already declares its server-side surface
@@ -202,14 +233,14 @@ it registers the facades on their own with `AddCommonUiFacades()` instead (`:21-
   app built on this framework; shipping them in the package is what makes a new head a configuration
   exercise rather than a copy of another app's `Components` folder.
 - **Defaulted members keep the common case small.** Most modules contribute pages and nav only, so
-  the five component lists default to empty and `NotFoundContentType` to null, rather than forcing
-  every descriptor to spell out six empty members.
+  `NavGroups` and the five component lists default to empty and `NotFoundContentType` to null, rather
+  than forcing every descriptor to spell out seven empty members.
 - **The authentication gate belongs to the slot, not to each component.** A signed-in-only control
   (the notification bell) and an every-visitor control (a storefront's search box or cart) need
   different visibility, and a single gated slot left the second kind no place in the app bar. Two
   slots keep `AppBarComponentTypes` exactly as gated as before, so no existing contributor changes
   behavior, and a public component that should still look different per sign-in state decides that
-  itself (`IUIModule.cs:25-31`).
+  itself (`IUIModule.cs:33-39`).
 - **Runtime discovery beats a compile-time list.** Because the router reads the registrations, the
   same shell serves a web head, a WASM client and a MAUI hybrid head with different module sets, and a
   head-specific module (device settings, native theme sync) is just another registration that other
@@ -232,26 +263,30 @@ it registers the facades on their own with `AddCommonUiFacades()` instead (`:21-
   it through the facade stub.
 
 ## Trade-offs
-- **`Assembly` is required even when it carries no route.** A host-only module that contributes only a
-  layout component still has to return an assembly, which then joins `AdditionalAssemblies` and adds
-  nothing; `MauiUIModule` documents exactly that (`MMCA.Store/Source/Hosts/UI/MMCA.Store.UI/MauiUIModule.cs:23-27`).
-- **The contract carries no route-uniqueness or ordering guarantee.** Nothing checks that two modules
-  declare different `@page` routes, and nav items render in DI registration order within their
-  section, so the menu's top-level ordering is a function of the host's registration sequence rather
-  than anything declared.
+- **`Assembly` is required even when it adds no route.** A module must return an assembly whether or
+  not that assembly carries a new page. The framework's own `NotificationUIModule` and
+  `TwoFactorUIModule` return MMCA.Common.UI's assembly
+  (`MMCA.Common.UI/Notifications/NotificationUIModule.cs:27`, `MMCA.Common.UI/TwoFactor/TwoFactorUIModule.cs:31`),
+  which is already the router's `AppAssembly` (`Routes.razor:11`), so their entry in
+  `AdditionalAssemblies` adds nothing.
+- **The contract carries no route-uniqueness guarantee, and ordering is opt-in.** Nothing checks that
+  two modules declare different `@page` routes. Nav ordering is declared through `NavGroup.Order` and
+  `NavItem.Order` (`MMCA.Common.UI/Layout/NavMenu.razor.cs:51-66`,
+  `MMCA.Common.UI/Common/NavGroup.cs:23`, `MMCA.Common.UI/Common/NavItem.cs:27`; ADC declares its groups at
+  `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/ConferenceUIModule.cs:97`), but both
+  sorts are stable, so whatever a host leaves undeclared still renders in DI registration order.
 - **Descriptors are singletons with eagerly built `NavItems`.** Every adopter initializes the list in
   a property initializer, so nav content cannot depend on scoped state; per-user variation is limited
   to the `RequiredRole` / `RequiredClaim` / `RequiredPermission` filtering the shell applies at
   render time.
 - **Hiding a nav item is not authorization.** The trimming in `NavMenu` is presentation only; route
-  protection still comes from `AuthorizeRouteView` and the pages' own attributes (`Routes.razor:29-52`).
-- **Blazor Web heads wire the assemblies twice.** The router's `AdditionalAssemblies` and the
-  endpoint's `AddAdditionalAssemblies` are separate calls, so both hosts repeat the enumeration in
-  `Program.cs` (`MMCA.ADC.UI.Web/Program.cs:326-340`, `MMCA.Store.UI.Web/Program.cs:284-294`); they
-  derive it from the same `IUIModule` registrations, but the duplication is real. The two hosts also
-  build the list differently: ADC concatenates and applies `.Distinct()` (`:333-334`), because the shell
-  assemblies it lists can overlap a module's, while Store spreads the module assemblies into a
-  collection expression with no de-duplication (`MMCA.Store.UI.Web/Program.cs:290-294`).
+  protection still comes from `AuthorizeRouteView` and the pages' own attributes (`Routes.razor:28-51`).
+- **Blazor Web heads read the assemblies in two places.** The router's `AdditionalAssemblies`
+  (`Routes.razor:12`) and the endpoint's `AddAdditionalAssemblies` (fed by
+  `GetMmcaRazorComponentAssemblies`, `MMCA.Common.UI.Web/Hosting/BlazorWebHostExtensions.cs:225-243`)
+  are separate consumers of the same `IUIModule` registrations. Both live in the framework, so no
+  host repeats the enumeration, but a change to how modules contribute assemblies has two places to
+  agree.
 - **The reference seed does not demonstrate the pattern.** Helpdesk's hand-rolled shell means an
   adopter following it gets the framework's components but not this composition model.
 - **One vendor is also one upstream ceiling, and the facades cover two surfaces only.** A MudBlazor
@@ -436,6 +471,72 @@ composition, the vendor choice and the Helpdesk non-adoption are unchanged.
    (`MMCA.Common.UI/Layout/MainLayout.razor:97-109`), and the layout recovers the boundary on every
    navigation (`:202`, `:207-212`), because the router keeps the same layout instance across pages.
    The Decision gains a bullet for it and for the always-on toast sweeper.
+
+## Revision (2026-11-23)
+Re-verified against current source. The composition model, the router, the nav trimming, the vendor
+choice, the facades, the layout's error containment and the Helpdesk non-adoption are unchanged; the
+member count, the adopter list, the endpoint wiring and two trade-offs had drifted, and many anchors
+moved.
+
+1. **Nine contract members, seven defaulted.** The Decision still said eight and six after the
+   2026-11-04 revision added `NavGroups` (default `[]`,
+   `MMCA.Common/Source/Presentation/MMCA.Common.UI/Common/Interfaces/IUIModule.cs:22`). The Decision
+   and the Rationale's defaulted-members bullet now count it.
+2. **A second framework adopter and a second page gate.** `TwoFactorUIModule`
+   (`MMCA.Common.UI/TwoFactor/TwoFactorUIModule.cs:16`) contributes a My Account nav item (`:24`) and
+   the `MultiFactorRequiredListener` layout component (`:28`); `AddTwoFactorUI()` registers it with
+   `TryAddEnumerable`, so a repeated call registers it once
+   (`MMCA.Common.UI/TwoFactor/DependencyInjection.cs:31`). Store registers it in its Web, WASM client
+   and MAUI heads (`MMCA.Store/Source/Hosts/UI/MMCA.Store.UI.Web/Program.cs:71`,
+   `MMCA.Store.UI.Web.Client/Program.cs:43`, `MMCA.Store.UI/MauiProgram.cs:72`); ADC does not. The
+   router also asks `TwoFactorPageGate.Hides` (`MMCA.Common.UI/Routes.razor:15`), which answers the one
+   page `TwoFactorAccount` (`/profile/two-factor`) with the not-found page when no
+   `TwoFactorUIModule` is registered (`TwoFactor/TwoFactorPageGate.cs:18-19`, `:24-25`). The route
+   list also gains `/auth/sign-in-link` (`Pages/Auth/SignInLinks/SignInLink.razor:1`) and
+   `/profile/two-factor` (`Pages/Auth/TwoFactor/TwoFactorAccount.razor:1`).
+3. **The endpoint wiring is one framework helper.** Both Blazor Web hosts now pass
+   `app.GetMmcaRazorComponentAssemblies(clientAssembly)` to `AddAdditionalAssemblies`
+   (`MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs:165`,
+   `MMCA.Store/Source/Hosts/UI/MMCA.Store.UI.Web/Program.cs:124`), and the helper de-duplicates for
+   both (`MMCA.Common/Source/Presentation/MMCA.Common.UI.Web/Hosting/BlazorWebHostExtensions.cs:225-243`,
+   `.Distinct()` at `:241`). The per-host divergence (ADC de-duplicates, Store does not) and the
+   in-host repetition the double-wiring trade-off described are gone; the trade-off now states the
+   remaining split between the router and the endpoint.
+4. **Nav ordering is declarable.** The Trade-offs bullet still said top-level ordering was a function
+   of registration order only. `NavGroup.Order` and `NavItem.Order` (`MMCA.Common.UI/Layout/NavMenu.razor.cs:51-66`,
+   `MMCA.Common.UI/Common/NavGroup.cs:23`, `MMCA.Common.UI/Common/NavItem.cs:27`) order units and items, ADC declares its groups
+   (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/ConferenceUIModule.cs:97`), and
+   registration order is only the stable-sort default.
+5. **Store's host-only module grew, and ADC's was under-described.** Store's `MauiUIModule` now
+   contributes a device settings nav item and routable page plus the `DeepLinkListener`,
+   `BiometricGate` and `NativeThemeSync` layout components
+   (`MMCA.Store/Source/Hosts/UI/MMCA.Store.UI/MauiUIModule.cs:27-30`, `:38`, `:40-45`). ADC's
+   `DeviceUIModule` did not change: the earlier revisions named only its deep-link listener, and the
+   Decision now also lists the `BiometricGate`, `PushRegistrationListener` and `NativeThemeSync` layout
+   components it already registered (`MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI/DeviceUIModule.cs:30`). The
+   Store change removed
+   the `Assembly` trade-off's only example of a module with no route, so the trade-off now names the
+   framework modules whose assembly is already the router's `AppAssembly`
+   (`MMCA.Common.UI/Notifications/NotificationUIModule.cs:27`, `TwoFactor/TwoFactorUIModule.cs:31`,
+   `Routes.razor:11`).
+6. **The vendor-type example was wrong.** `ListPageActions` has no MudBlazor reference and takes no
+   `MudDataGrid` (`MMCA.Common.UI/Pages/Common/ListPageActions.cs:5` is its namespace). The direct
+   vendor reference the Decision illustrates is `DataGridListPageBase.GridRef`
+   (`MMCA.Common.UI/Pages/Common/DataGridListPageBase.cs:177`). The 2026-10-07 revision's
+   `ListPageActions` anchors are left as written there.
+7. Anchors re-verified against current source: `IUIModule.cs:14,22,25,31,39,42,48,61,70` (the
+   public app bar note `:33-39`); `Routes.razor` (router `:11-13`, gates `:15-25`, 404 status
+   `:23-24`, `AuthorizeRouteView` `:28-51`, `RedirectToLogin` `:42`, `Forbidden` `:48`);
+   `NavMenu.razor.cs` (filters `:125-127`, section split `:130-132`); `MainLayout.razor` (list reads
+   `:192-196`, public app bar `:44-47`, signed-in app bar `:51-59`, content headers `:90-93`, footer
+   `:146-149`, layout root `:154-157`, `PendingToastHost` `:20`); `DependencyInjection.cs`
+   (`AddUIModule` `:485-495`, `AddCommonUiFacades` `:276-280`, called from `AddUIShared` at `:185`);
+   ADC Engagement `DependencyInjection.cs:90`; `ListPageActions.cs` (`DeleteWithConfirmationAsync`
+   `:32`, `DeleteConfirmation` `:33`, toast `:36`, `ShowAsync` `:47`); `NotFound.razor:24-27`, `:49`;
+   ADC `ConferenceUIModule.cs:31`, `IdentityUIModule.cs:19`, `EngagementUIModule.cs:22`; ADC
+   `MauiProgram.cs:178`; Store `MauiUIModule.cs:20`, `MauiProgram.cs:107`; `GalleryHost.cs:126`; the
+   Helpdesk Web head (`AddCommonUiFacades()` `:25`, reason `:22-24`, no-`AddUIShared` note `:34-36`).
+   The earlier revisions' anchors are left as written there.
 
 ## Related
 ADR-059 (the server-side `IModule` contract this mirrors in the presentation layer), ADR-056 (the

@@ -1,9 +1,12 @@
 # ADR-142: Outbound Webhooks (Signed Delivery over Internal Commands, with a Dedicated Delivery Lane)
 
 ## Status
-Accepted (2026-11-12). Released in v1.289.0, `MMCA.Common/CHANGELOG.md:7` (entries at `:42`
-and `:75`). Off unless the host calls `AddWebhooks(configuration)` and sets `Webhooks:Enabled`
+Accepted (2026-11-12). Released in v1.289.0, `MMCA.Common/CHANGELOG.md:511` (entries at `:547`,
+`:580` and `:581`). Off unless the host calls `AddWebhooks(configuration)` and sets `Webhooks:Enabled`
 (`MMCA.Common/Source/Core/MMCA.Common.Application/Webhooks/WebhookSettings.cs:16-17`, default false).
+Revised 2026-11-23: the delivery handler's disabled-host failure is now stated (a delivery row run
+where `Webhooks:Enabled` is false fails, retries and dead-letters without sending), and anchors are
+refreshed.
 
 ## Context
 An integration event leaves its aggregate through the outbox ([ADR-003](003-outbox-dual-dispatch.md),
@@ -102,15 +105,19 @@ connect time, and a dedicated delivery lane so deliveries never delay other inte
    under the stable name `MMCA.Webhooks.Deliver.v1`
    (`MMCA.Common/Source/Core/MMCA.Common.Application/Webhooks/Delivery/DeliverWebhookInternalCommand.cs:5-23`),
    and retries come from the `InternalCommands:*` settings (`WebhookSettings.cs:8-9`). The handler maps the
-   outcome (`MMCA.Common/Source/Core/MMCA.Common.Application/Webhooks/Delivery/DeliverWebhookInternalCommandHandler.cs:73-124`):
+   outcome (`MMCA.Common/Source/Core/MMCA.Common.Application/Webhooks/Delivery/DeliverWebhookInternalCommandHandler.cs:73-125`):
    2xx completes the row; 410 Gone records the failure, disables the subscription and completes the row; a
    refused target records a fixed reason and completes the row, since retrying cannot change it; any other
    status (redirects included), a transport failure (timeouts included) or an unreadable secret fails the
    row so it retries with backoff and dead-letters after `MaxAttempts`
    (`MMCA.Common/Source/Core/MMCA.Common.Application/Webhooks/Delivery/WebhookSendStatus.cs:6-25`). A
    missing, deleted or disabled subscription completes the row without sending
-   (`DeliverWebhookInternalCommandHandler.cs:52-57`). The handler is not `ITransactional`: the outcome is
-   recorded on its own save (`:12-16`).
+   (`DeliverWebhookInternalCommandHandler.cs:52-57`). Before any read or send, a host with
+   `Webhooks:Enabled` false fails the row with `WebhookErrorCodes.DeliveryFailed` and one handler Warning line
+   (the logging decorator adds its own failure line), so
+   a row queued before webhooks were switched off retries, dead-letters and stays requeue-able
+   (`:41-50`, `:160-161`). The handler is not `ITransactional`: the outcome is recorded on its own save
+   (`:12-16`).
 
 5. **The outbound address policy, enforced twice.** `OutboundAddressPolicy.IsPublicAddress` denies, for
    IPv4, `0/8`, `10/8`, `100.64/10`, `127/8`, `169.254/16`, `172.16/12`, `192.0.0/24`, `192.168/16`,
@@ -153,7 +160,13 @@ connect time, and a dedicated delivery lane so deliveries never delay other inte
    and its registry are registered only when `Webhooks:Enabled` and `InternalCommands:Enabled` are both
    true (`WebhookDeliveryLane.cs:51-80`). A host that drains the queue with webhooks disabled registers no
    lane, so its shared loop still picks up a delivery row
-   (`MMCA.Common/Tests/Core/MMCA.Common.Infrastructure.Tests/Persistence/InternalCommands/Processing/InternalCommandProcessorTests.cs:575`):
+   (`MMCA.Common/Tests/Core/MMCA.Common.Infrastructure.Tests/Persistence/InternalCommands/Processing/InternalCommandProcessorTests.cs:608`),
+   and, when that host called `AddWebhookDelivery()` (a registration independent of `Webhooks:Enabled`,
+   `MMCA.Common/Source/Core/MMCA.Common.Application/DependencyInjection.Webhooks.cs:94-97`), the real
+   handler there fails it without sending (Decision 4,
+   `DeliverWebhookInternalCommandHandler.cs:41-50`), spending an attempt and eventually dead-lettering it
+   (a host without that call has no handler and dead-letters the row at once,
+   `InternalCommandProcessorTests.cs:354`):
    every replica that drains a queue holding delivery rows needs the same `Webhooks:Enabled` value.
    - **One guarded predicate on the shared loop.** The registry `InternalCommandLanes` exists only together
      with the lane (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/InternalCommands/Processing/InternalCommandLanes.cs:3-13`).
@@ -172,10 +185,10 @@ connect time, and a dedicated delivery lane so deliveries never delay other inte
      (`WebhookDeliveryLane.cs:40-47`).
    - **The receiver cooldown CHARGES an attempt without sending.** A failed real attempt cools its receiver
      down on this replica, from the instant the attempt failed; a success closes the cooldown
-     (`InternalCommandLaneProcessor.cs:491-513`, `:556-572`). While a receiver cools down, each of its rows
+     (`InternalCommandLaneProcessor.cs:495-517`, `:560-576`). While a receiver cools down, each of its rows
      whose turn comes is not sent and its handler is not invoked: it is charged one failed attempt through
      the unchanged failure path, with the error code `InternalCommands.ReceiverCoolingDown` and the message
-     "Receiver cooling down after a failed delivery." (`:60-64`, `:367-370`, `:515-536`), so it keeps the
+     "Receiver cooling down after a failed delivery." (`:60-64`, `:367-370`, `:519-540`), so it keeps the
      normal retry timeline and dead-letters on the normal attempt budget (`:35-42`). The configured
      `ReceiverCooldownSeconds` (default 60, range 5 to 120, `WebhookSettings.cs:43-49`) is clamped to
      `min(configured, S - TimeoutSeconds - 1 s)`, never below 1 second, where `S` is the shortest span from
@@ -187,16 +200,16 @@ connect time, and a dedicated delivery lane so deliveries never delay other inte
      (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/InternalCommands/Processing/ReceiverCooldowns.cs:3-12`).
    - **The start budget.** No row of a batch starts once `TimeoutSeconds` has elapsed since the batch's
      first start; when every running row has finished, the rows that never started are released uncharged
-     and are due again at once (`InternalCommandLaneProcessor.cs:31-33`, `:373`, `:378-380`, `:538-554`;
+     and are due again at once (`InternalCommandLaneProcessor.cs:31-33`, `:373`, `:378-380`, `:542-558`;
      `WebhookDeliveryLane.cs:48`).
    - **Visibility.** The lane emits the `lane` tag `webhooks` (`WebhookDeliveryLane.cs:22-23`), its own
-     depth gauge (`InternalCommandLaneProcessor.cs:147`), a short-circuit counter for charged rows (`:535`),
-     a cooldown-opened counter (`:569`) and a released counter (`:458`).
+     depth gauge (`InternalCommandLaneProcessor.cs:147`), a short-circuit counter for charged rows (`:539`),
+     a cooldown-opened counter (`:573`) and a released counter (`:462`).
 
 8. **The gates that keep it true.** In `MMCA.Common/Tests/`: the shared loop carries no command-type
    predicate without a lane and skips only lane rows with one
-   (`Core/MMCA.Common.Infrastructure.Tests/Persistence/InternalCommands/Processing/InternalCommandProcessorTests.cs:557`,
-   `:575`, `:593`, `:629`); the lane claims only its type, charges a cooling receiver's row without renew
+   (`Core/MMCA.Common.Infrastructure.Tests/Persistence/InternalCommands/Processing/InternalCommandProcessorTests.cs:590`,
+   `:608`, `:626`, `:662`); the lane claims only its type, charges a cooling receiver's row without renew
    or handler, retries it on the normal backoff, dead-letters it on its last attempt and never opens or
    extends a cooldown from a charge
    (`.../InternalCommandLaneProcessorTests.cs:65`, `:271`, `:295`, `:318`, `:341`); host default handlers
@@ -230,7 +243,7 @@ connect time, and a dedicated delivery lane so deliveries never delay other inte
   cooldown window per replica; every other due row of that receiver costs one database write and one
   attempt, so its backlog drains on the normal retry budget instead of accumulating
   (`InternalCommandLaneProcessor.cs:35-42`). Only HTTP 410 disables a subscription
-  (`DeliverWebhookInternalCommandHandler.cs:105-110`), so nothing else would bound that backlog.
+  (`DeliverWebhookInternalCommandHandler.cs:106-111`), so nothing else would bound that backlog.
 - **The subscription keeps its own tenant filter** because the marker's interceptor would refuse it in an
   untenanted host (`ArchitectureRules.Tenancy.cs:16-19`).
 
@@ -242,7 +255,7 @@ connect time, and a dedicated delivery lane so deliveries never delay other inte
   creates can exceed, `WebhookSettings.cs:62-67`), so one tenant CAN dominate other tenants' delivery
   latency. It cannot delay the shared queue.
 - **A slow but succeeding receiver never cools down.** A success closes the cooldown
-  (`InternalCommandLaneProcessor.cs:509-512`), and one receiver never runs two rows at once, so its backlog
+  (`InternalCommandLaneProcessor.cs:513-516`), and one receiver never runs two rows at once, so its backlog
   drains at one row per response time per replica.
 - **The cooldown is per replica.** It lives in memory (`ReceiverCooldowns.cs:3-7`), so R replicas each
   spend a real attempt per window on a failing receiver.
@@ -288,7 +301,7 @@ dead receiver's backlog stays bounded.
   its rows dead-letter at about 0.2 per minute; a subscription receiving more events
   than that accumulates pending rows forever, each one more row the shared predicate scans past. Revisit
   if a subscription is ever disabled on sustained failure (today only 410 does it,
-  `DeliverWebhookInternalCommandHandler.cs:105-110`), which would bound the backlog another way.
+  `DeliverWebhookInternalCommandHandler.cs:106-111`), which would bound the backlog another way.
 - **A public "any command names a lane" API.** It needs a public attribute or key with validation, a
   registry several callers write, a receiver-key notion only webhooks have, and per-lane metric
   documentation. The lane is an internal record
@@ -325,3 +338,28 @@ dead receiver's backlog stays bounded.
 - **What is not verified.** Nothing here has been exercised against real third-party receivers or a
   Standard Webhooks library on the receiving side; the evidence is the unit and integration tiers named in
   Decision 8.
+
+## Revision (2026-11-23)
+Re-verified against current source. The eight decisions, the lane design and the adopter wiring are
+unchanged; the delivery handler's behavior on a host with webhooks disabled was not stated, and the
+anchors in the changelog, the lane processor and the shared-loop tests moved.
+
+1. **A host with `Webhooks:Enabled` false fails a delivery row without sending.** Before reading the
+   subscription, the handler returns `WebhookErrorCodes.DeliveryFailed` with the message "Webhooks are
+   disabled in this host (Webhooks:Enabled is false)." and logs one handler Warning (the logging decorator adds its own failure line), so the row retries,
+   dead-letters and stays requeue-able
+   (`MMCA.Common/Source/Core/MMCA.Common.Application/Webhooks/Delivery/DeliverWebhookInternalCommandHandler.cs:41-50`,
+   `:160-161`), pinned by
+   `MMCA.Common/Tests/Core/MMCA.Common.Application.Tests/Webhooks/DeliverWebhookInternalCommandHandlerTests.cs:305`.
+   Decision 4 now states it.
+2. **The multi-replica consequence is stated.** A host draining the queue with webhooks disabled still
+   picks a delivery row up in its shared loop (the shared-loop test uses a recording handler,
+   `MMCA.Common/Tests/Core/MMCA.Common.Infrastructure.Tests/Persistence/InternalCommands/Processing/InternalCommandProcessorTests.cs:608`,
+   `:613`), and the real handler there fails it per item 1, spending an attempt toward dead-letter.
+   Decision 7 now says so; the conclusion that every replica needs the same `Webhooks:Enabled` value is
+   unchanged.
+3. Anchors re-verified against current source: `MMCA.Common/CHANGELOG.md:511` (entries `:547`, `:580`,
+   `:581`); `InternalCommandLaneProcessor.cs:495-517` (ApplyOutcome), `:513-516` (success close),
+   `:519-540` (charge), `:542-558` (release), `:560-576` (open cooldown), `:539`, `:573`, `:462`
+   (counters); `InternalCommandProcessorTests.cs:590`, `:608`, `:626`, `:662`;
+   `DeliverWebhookInternalCommandHandler.cs:106-111` (410 disables the subscription).

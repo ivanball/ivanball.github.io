@@ -258,7 +258,10 @@
           <p>Accepted (2026-10-26). Revised 2026-10-28: the Redis output-cache store is now a fifth namespaced
           keyspace (its <code>InstanceName</code> defaults to the cache key prefix), and the cache anchors are refreshed. Revised 2026-11-04: Common v1.277.0
           removed <code>DistributedCacheService</code>; the namespace reaches the cache through <code>HybridCacheService</code>, which
-          applies it to both its entry keys and its generation keys. See the Revision (2026-11-04).</p>
+          applies it to both its entry keys and its generation keys. See the Revision (2026-11-04). Revised
+          2026-11-23: cross-service cache keys take a second namespace (<code>Cache:CrossServiceKeyPrefix</code>, else
+          <code>Jwt:Audience</code>, else the host namespace), the one exception to &quot;one name&quot;, and the output-cache
+          store is adopted through the composed service host; anchors refreshed.</p>
           <h2 id="context">Context</h2>
           <p>Several framework subsystems write into infrastructure that more than one deployed application can
           point at: Redis (distributed cache entries, distributed-lock keys, distributed rate-limit counters,
@@ -267,13 +270,13 @@
           problem, not a tidiness one, and nothing in the infrastructure itself warns when two applications
           collide in it.</p>
           <p>The resolver&#39;s own remarks record the failure this decision closes (SEC-Common-53,
-          <code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Configuration/ApplicationNamespace.cs:14-19</code>).
+          <code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Configuration/ApplicationNamespace.cs:15-20</code>).
           Two MMCA hosts on one Redis or one broker shared every keyspace by default: the cache prefix
           defaulted to empty, the lock keys reused it, the broker endpoint prefix was optional, and the SignalR
           backplane had no prefix knob. Because <code>NotificationHub</code> ships in the framework, its backplane channel
           name is identical in every consumer, so a user-targeted push or a live-channel event published in one
           application reached the other application&#39;s clients holding the same numeric user id
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.Notifications.cs:50-55</code>).
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.Notifications.cs:53-58</code>).
           The same shape put two applications&#39; consumers on the same queue names
           (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.Messaging.cs:90-93</code>).</p>
           <p>Until now the decision lived only as revision lines spread across the ADRs that own each keyspace
@@ -281,53 +284,72 @@
           <h2 id="decision">Decision</h2>
           <p>One resolver, <code>ApplicationNamespace</code>, names the shared-infrastructure keyspaces of five subsystems
           (distributed cache and lock keys, distributed rate-limit counters, the Redis output-cache store, the
-          SignalR backplane, broker endpoint names), and isolation is the default rather than an opt-in.</p>
+          SignalR backplane, broker endpoint names), and isolation is the default rather than an opt-in. The
+          one exception is the cross-service cache keys, which follow the token audience when one is
+          configured (see the bullet below).</p>
           <ul>
           <li><strong>One resolver, one precedence.</strong> <code>ApplicationNamespace.Resolve</code>
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Configuration/ApplicationNamespace.cs:53</code>)
-          returns the explicit <code>Application:Namespace</code> value when set (<code>:31</code>, <code>:55-59</code>), otherwise the host
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Configuration/ApplicationNamespace.cs:54</code>)
+          returns the explicit <code>Application:Namespace</code> value when set (<code>:32</code>, <code>:56-60</code>), otherwise the host
           application name from <code>IHostEnvironment.ApplicationName</code> or, when no environment is passed or its
-          name is blank, the <code>applicationName</code> configuration key (<code>:40</code>, <code>:61-65</code>), otherwise the constant
-          <code>app</code> (<code>:34</code>, <code>:67</code>).</li>
+          name is blank, the <code>applicationName</code> configuration key (<code>:41</code>, <code>:62-66</code>), otherwise the constant
+          <code>app</code> (<code>:35</code>, <code>:68</code>).</li>
           <li><strong>The value is sanitized for every consumer at once.</strong> <code>Sanitize</code> replaces each run of characters
           outside <code>[a-zA-Z0-9_-]</code> with <code>-</code>, trims leading and trailing dashes, and returns <code>app</code> when nothing
-          survives (<code>ApplicationNamespace.cs:42-43</code>, <code>:77-83</code>), so one value is legal as a Redis key part, a
+          survives (<code>ApplicationNamespace.cs:43-44</code>, <code>:78-84</code>), so one value is legal as a Redis key part, a
           SignalR channel prefix and a MassTransit queue name.</li>
-          <li><strong>Never empty.</strong> Every branch of <code>Resolve</code> yields a non-empty string (<code>ApplicationNamespace.cs:46-48</code>,
-          <code>:67</code>), so a host that configures nothing still gets its own keyspace.</li>
+          <li><strong>Never empty.</strong> Every branch of <code>Resolve</code> yields a non-empty string (<code>ApplicationNamespace.cs:47-49</code>,
+          <code>:68</code>), so a host that configures nothing still gets its own keyspace.</li>
           <li><strong>Distributed cache and distributed lock keys.</strong> <code>CacheKeyNamespace.From(IServiceProvider)</code> uses an
           explicit <code>Cache:KeyPrefix</code> when set and otherwise <code>&quot;{namespace}:&quot;</code>
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Caching/CacheKeyPrefix.cs:72-87</code>, the
-          <code>Resolve</code> call at <code>:82</code>). That one namespace is passed to <code>HybridCacheService</code>, the shared-store
-          cache (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.Caching.cs:192</code>,
-          <code>:198</code>), which qualifies both its <code>hc:</code> entry keys and its <code>hcg:</code> prefix-invalidation generation keys
-          with it (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Caching/HybridCacheService.cs:417</code>,
-          <code>CachePrefixGenerations.cs:278</code>), and to <code>RedisDistributedLock</code> (<code>DependencyInjection.Caching.cs:114-115</code>).
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Caching/CacheKeyPrefix.cs:85-100</code>, the
+          <code>Resolve</code> call at <code>:95-97</code>). That one namespace is passed to <code>HybridCacheService</code>, the shared-store
+          cache (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.Caching.cs:194</code>,
+          <code>:198-204</code>), which qualifies both its <code>hc:</code> entry keys (other than the cross-service keys below) and
+          its <code>hcg:</code> prefix-invalidation generation keys with it (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Caching/HybridCacheService.cs:448</code>,
+          <code>CachePrefixGenerations.cs:281</code>), and to <code>RedisDistributedLock</code> (<code>DependencyInjection.Caching.cs:116-117</code>).
           The in-process <code>MemoryCacheService</code> takes no prefix, because its keyspace is private to the
-          process (<code>:94-97</code>).</li>
+          process (<code>:95-98</code>).</li>
+          <li><strong>Cross-service cache keys (the one exception).</strong> The keys one service writes and another reads
+          (<code>CrossServiceCacheKeys</code>, such as the soft-deleted-user marker) take a second namespace,
+          <code>CacheKeyNamespace.CrossServiceFrom</code>: an explicit <code>Cache:CrossServiceKeyPrefix</code> when set, otherwise
+          the sanitized <code>Jwt:Audience</code> plus <code>:</code>, otherwise the host namespace from <code>From(IServiceProvider)</code>
+          (<code>CacheKeyPrefix.cs:55</code>, <code>:116-130</code>). It is passed to <code>HybridCacheService</code> alongside the host
+          namespace (<code>DependencyInjection.Caching.cs:204</code>), which qualifies a cross-service key with it and
+          adds no generation suffix, so every service of one deployment resolves the same stored key
+          (<code>HybridCacheService.cs:442-445</code>). With an audience configured, these keys follow <code>Jwt:Audience</code>
+          rather than <code>Application:Namespace</code> or <code>Cache:KeyPrefix</code>; two applications stay apart because they
+          accept different audiences (<code>CacheKeyPrefix.cs:110-115</code>). <code>CrossServiceCacheKeyTests</code> pins the
+          shared read across services, the survival of a prefix wipe, ordinary keys staying per service,
+          separation from another application and the explicit override
+          (<code>MMCA.Common/Tests/Core/MMCA.Common.Infrastructure.Tests/Caching/CrossServiceCacheKeyTests.cs:25</code>,
+          <code>:53</code>, <code>:67</code>, <code>:79</code>, <code>:91</code>).</li>
           <li><strong>Redis output-cache store.</strong> <code>AddCaching</code> post-configures <code>RedisOutputCacheOptions.InstanceName</code>
           to the same <code>CacheKeyNamespace</code> prefix when the host left it empty, and keeps an <code>InstanceName</code> a
-          host set explicitly (<code>DependencyInjection.Caching.cs:69-76</code>, the keep-explicit check at <code>:72</code>).
+          host set explicitly (<code>DependencyInjection.Caching.cs:70-77</code>, the keep-explicit check at <code>:73</code>).
           The registration comment records that the store prefixes both its value keys and its tag keys
-          with that name, so tag eviction sees the same key shape (<code>:60-65</code>); no test pins that key shape. <code>AddInfrastructure</code> calls <code>AddCaching</code>
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:140</code>), so no consumer
-          change is needed: <code>AddRedisOutputCaching</code> still registers the store with the connection string
-          alone (<code>MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Caching/RedisCachingExtensions.cs:99</code>) and
-          the isolation is applied downstream. The registration is inert when no store is registered.
+          with that name, so tag eviction sees the same key shape (<code>:64-69</code>); no test pins that key shape. <code>AddInfrastructure</code> calls <code>AddCaching</code>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:141</code>), so no consumer
+          change is needed: <code>AddRedisOutputCaching</code> registers the store with the connection string, or
+          with the options a registered Redis configurator builds from it, and sets no <code>InstanceName</code>
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Caching/RedisCachingExtensions.cs:111</code>, <code>:113-123</code>),
+          so the isolation is applied downstream. The registration is inert when no store is registered.
           <code>OutputCacheNamespaceTests</code> pins the namespace default, the <code>Cache:KeyPrefix</code> override and the
           kept explicit value
           (<code>MMCA.Common/Tests/Core/MMCA.Common.Infrastructure.Tests/Caching/OutputCacheNamespaceTests.cs:41</code>,
-          <code>:51</code>, <code>:61</code>). The store is adopted by
-          <code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:202</code> and
-          <code>MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:105</code>.</li>
+          <code>:51</code>, <code>:61</code>). The store is adopted through the composed service host: <code>UseRedisOutputCaching = true</code>
+          in <code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:129</code> and
+          <code>MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:53</code> makes
+          <code>MMCA.Common/Source/Hosting/MMCA.Common.ServiceHost/ServiceHostBuilderExtensions.cs:90-93</code> call
+          <code>AddRedisOutputCaching</code>; neither consumer calls it directly.</li>
           <li><strong>Distributed rate-limit counters.</strong> <code>RateLimitKeyNamespace</code> uses <code>Cache:KeyPrefix</code> without its
           trailing colon when set, otherwise the resolved namespace
-          (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/WebApplicationBuilderExtensions.RateLimiting.cs:220-226</code>,
-          the <code>Resolve</code> call at <code>:224</code>), and qualifies each Redis counter key as
-          <code>{namespace}:{scope}:{key}</code> (<code>:275</code>).</li>
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/WebApplicationBuilderExtensions.RateLimiting.cs:233-239</code>,
+          the <code>Resolve</code> call at <code>:237</code>), and qualifies each Redis counter key as
+          <code>{namespace}:{scope}:{key}</code> (<code>:288</code>).</li>
           <li><strong>SignalR Redis backplane.</strong> When a <code>redis</code> connection string is present, the backplane
           <code>ChannelPrefix</code> is the resolved namespace
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.Notifications.cs:56-58</code>).
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.Notifications.cs:59-61</code>).
           There is no subsystem-specific override here: <code>Application:Namespace</code> is the only knob.</li>
           <li><strong>Broker endpoint names.</strong> Unless <code>MessageBus:PreserveDefaultEndpointNames</code> is set, the endpoint
           name formatter takes <code>MessageBus:EndpointPrefix</code> when set and otherwise the resolved namespace
@@ -336,25 +358,29 @@
           <code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Messaging/MessageBusSettings.cs:80</code>, <code>:90</code>).</li>
           <li><strong>When to set the override.</strong> Set <code>Application:Namespace</code> only when two hosts of the SAME
           application must share a keyspace (a web head and a worker draining one backplane), and keep it
-          different everywhere else (<code>ApplicationNamespace.cs:22-25</code>). The subsystem keys remain for
+          different everywhere else (<code>ApplicationNamespace.cs:23-26</code>). The subsystem keys remain for
           pinning narrower scopes: <code>MessageBus:EndpointPrefix</code> pins the broker endpoints alone, while
-          <code>Cache:KeyPrefix</code> (<code>CacheKeyPrefix.cs:36-41</code>) pins four Redis keyspaces together, the cache and
-          lock keys (<code>CacheKeyPrefix.cs:77-80</code>), the rate-limit counters
-          (<code>WebApplicationBuilderExtensions.RateLimiting.cs:222-225</code>) and the output-cache <code>InstanceName</code>
-          (<code>DependencyInjection.Caching.cs:71</code>). Only an explicit <code>RedisOutputCacheOptions.InstanceName</code>, set
-          in code, pins the output cache alone (<code>DependencyInjection.Caching.cs:69</code>).</li>
+          <code>Cache:KeyPrefix</code> (<code>CacheKeyPrefix.cs:35-45</code>) pins four Redis keyspaces together, the cache and
+          lock keys (<code>CacheKeyPrefix.cs:89-93</code>), the rate-limit counters
+          (<code>WebApplicationBuilderExtensions.RateLimiting.cs:235-238</code>) and the output-cache <code>InstanceName</code>
+          (<code>DependencyInjection.Caching.cs:75</code>). With no <code>Jwt:Audience</code> configured it pins the cross-service
+          cache keys as well, since they fall back to the same namespace (<code>CacheKeyPrefix.cs:127-128</code>). It
+          does not pin them when a <code>Jwt:Audience</code> is configured; <code>Cache:CrossServiceKeyPrefix</code> pins those, set to the same value on
+          every service of the deployment (<code>CacheKeyPrefix.cs:47-55</code>). Only an explicit
+          <code>RedisOutputCacheOptions.InstanceName</code>, set in code, pins the output cache alone
+          (<code>DependencyInjection.Caching.cs:73</code>).</li>
           </ul>
           <p>Adoption differs per consumer. Every MMCA.ADC service pins <code>Application:Namespace</code> to <code>adc</code> and
           <code>Cache:KeyPrefix</code> to <code>adc:</code>
-          (<code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/appsettings.json:38</code>, <code>:45</code>; likewise the
-          Identity, Engagement and Notification services at <code>appsettings.json:46</code>, <code>:58</code>, <code>:72</code>), so its four
+          (<code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/appsettings.json:52</code>, <code>:59</code>; likewise the
+          Identity, Engagement and Notification services at <code>appsettings.json:46</code>, <code>:64</code>, <code>:76</code>), so its four
           services deliberately share one keyspace. Every MMCA.Store service pins its own value
           (<code>store-sales</code>, <code>store-identity</code>, <code>store-catalog</code>) with a matching <code>Cache:KeyPrefix</code>
           (<code>MMCA.Store/Source/Services/MMCA.Store.Sales.Service/appsettings.json:52</code>, <code>:55</code>; the Identity and
           Catalog services at <code>appsettings.json:42</code>, <code>:45</code>), so a project rename cannot move a keyspace
           (<code>MMCA.Store/Source/Services/MMCA.Store.Sales.Service/appsettings.json:39-43</code>). Both ADC and Store
           also set <code>MessageBus:PreserveDefaultEndpointNames</code> to <code>true</code> in every service
-          (<code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/appsettings.json:62</code>,
+          (<code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/appsettings.json:85</code>,
           <code>MMCA.Store/Source/Services/MMCA.Store.Sales.Service/appsettings.json:69</code>), so no deployed ADC or
           Store host prefixes its broker endpoints: their live queues and subscriptions keep MassTransit&#39;s
           default names, and each runs one application per broker namespace
@@ -365,9 +391,12 @@
           <li><strong>One name, not one default per subsystem.</strong> Each subsystem already had, or needed, its own
           prefix setting. Deriving all of them from one value means a host that is isolated for caching is
           also isolated in the output cache, on the backplane and on the broker, and an operator who needs
-          two hosts to share a keyspace changes one key rather than remembering one per subsystem.</li>
+          two hosts to share a keyspace changes one key rather than remembering one per subsystem. The
+          cross-service cache keys are the deliberate exception: they must be shared by every service of a
+          deployment while each service keeps its own namespace, so they follow the token audience those
+          services share (<code>CacheKeyPrefix.cs:110-115</code>).</li>
           <li><strong>The safe state needs no configuration.</strong> The host application name is distinct per deployed app
-          and is available without configuration (<code>ApplicationNamespace.cs:22-23</code>), so isolation does not
+          and is available without configuration (<code>ApplicationNamespace.cs:23-24</code>), so isolation does not
           depend on an operator remembering a setting; the collision that the default used to permit was
           silent.</li>
           <li><strong>Sharing is the deliberate act.</strong> Two hosts of one application that must cooperate (a backplane
@@ -384,22 +413,28 @@
           deploy), the backplane moves channel, and an unset <code>EndpointPrefix</code> yields prefixed queue names;
           the CHANGELOG entry tells hosts to set <code>Application:Namespace</code> where two hosts of one application
           must share a keyspace and to drain old broker queues on cutover
-          (<code>MMCA.Common/CHANGELOG.md:2410-2417</code>). Output-cache entries and tag keys gain the same prefix, so
-          the output cache also starts cold on the first deploy (<code>MMCA.Common/CHANGELOG.md:47</code>).
+          (<code>MMCA.Common/CHANGELOG.md:3347-3354</code>). Output-cache entries and tag keys gain the same prefix, so
+          the output cache also starts cold on the first deploy (<code>MMCA.Common/CHANGELOG.md:984</code>).
           <code>MessageBus:PreserveDefaultEndpointNames</code> keeps MassTransit&#39;s unprefixed names for a deployment
           that cannot rename its queues and subscriptions (<code>DependencyInjection.Messaging.cs:95-97</code>).</li>
           <li><strong>Two hosts of one application need the override.</strong> If they run under different application
           names, the default separates keyspaces that are meant to be shared, so a backplane message or a
           lock held by one is invisible to the other until <code>Application:Namespace</code> is set on both.</li>
           <li><strong>The fallback is shared.</strong> A host whose application name is unavailable resolves to <code>app</code>
-          (<code>ApplicationNamespace.cs:34</code>), and two such hosts on one Redis or broker share a keyspace again.
+          (<code>ApplicationNamespace.cs:35</code>), and two such hosts on one Redis or broker share a keyspace again.
           The backplane and broker call sites pass no <code>IHostEnvironment</code>
-          (<code>DependencyInjection.Notifications.cs:56</code>, <code>DependencyInjection.Messaging.cs:101</code>), so they read
-          the name from the <code>applicationName</code> configuration key (<code>ApplicationNamespace.cs:40</code>, <code>:61-65</code>)
+          (<code>DependencyInjection.Notifications.cs:59</code>, <code>DependencyInjection.Messaging.cs:101</code>), so they read
+          the name from the <code>applicationName</code> configuration key (<code>ApplicationNamespace.cs:41</code>, <code>:62-66</code>)
           and depend on the host having populated it; a host that leaves the key unset and sets no
           <code>Application:Namespace</code> resolves to <code>app</code> there.</li>
+          <li><strong>The cross-service keyspace is only as distinct as the audience.</strong> With an audience configured
+          and no <code>Cache:CrossServiceKeyPrefix</code>, the namespace is the sanitized audience plus <code>:</code>
+          (<code>CacheKeyPrefix.cs:126-129</code>), so two applications configured with the same <code>Jwt:Audience</code> on one
+          Redis share their cross-service keys. The deployed consumers use distinct audiences
+          (<code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/appsettings.json:161</code>,
+          <code>MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/appsettings.json:84</code>).</li>
           <li><strong>Sanitization can merge names.</strong> Distinct raw names that differ only in characters outside
-          <code>[a-zA-Z0-9_-]</code> sanitize to the same value (<code>ApplicationNamespace.cs:81</code>).</li>
+          <code>[a-zA-Z0-9_-]</code> sanitize to the same value (<code>ApplicationNamespace.cs:82</code>).</li>
           </ul>
           <h2 id="revision-2026-10-28">Revision (2026-10-28)</h2>
           <p>Re-verified against current source. The resolver, its precedence, sanitization, the rate-limit,
@@ -440,6 +475,54 @@
           output-cache <code>PostConfigure</code> <code>:69-76</code> (keep-explicit check <code>:72</code>). The 2026-10-28 Revision&#39;s anchors
           record that pass as written.</li>
           </ol>
+          <h2 id="revision-2026-11-23">Revision (2026-11-23)</h2>
+          <p>Re-verified against current source. The resolver, its precedence, sanitization, and the cache, lock,
+          output-cache, rate-limit, backplane and broker keyspaces behave as recorded. What moved is a second
+          cache namespace for cross-service keys, the path by which consumers adopt the output-cache store,
+          and most line anchors.</p>
+          <ol>
+          <li>Cross-service cache keys are namespaced separately. <code>CacheKeyPrefixOptions.CrossServiceKeyPrefix</code>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Caching/CacheKeyPrefix.cs:55</code>) feeds
+          <code>CacheKeyNamespace.CrossServiceFrom</code> (<code>:116-130</code>): the explicit value, otherwise the sanitized
+          <code>Jwt:Audience</code>, otherwise <code>From(IServiceProvider)</code>. <code>AddCommonHybridCache</code> passes it to
+          <code>HybridCacheService</code>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.Caching.cs:204</code>), which
+          qualifies a cross-service key with it and no generation suffix
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Caching/HybridCacheService.cs:442-445</code>). A
+          Decision bullet records it, the override paragraph notes that <code>Cache:KeyPrefix</code> does not pin these
+          keys when an audience is configured (and does pin them when none is), the Decision intro and the
+          Rationale&#39;s &quot;One name&quot; bullet name the exception, and a Trade-offs bullet records that two
+          applications sharing one audience share these keys. The test anchors are
+          <code>CrossServiceCacheKeyTests.cs:25</code>, <code>:53</code>, <code>:67</code>, <code>:79</code>, <code>:91</code>; the CHANGELOG entry is
+          <code>MMCA.Common/CHANGELOG.md:111</code>.</li>
+          <li>The output-cache store is adopted through the composed service host, not by a direct call:
+          <code>UseRedisOutputCaching = true</code> in
+          <code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:129</code> and
+          <code>MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:53</code> makes
+          <code>MMCA.Common/Source/Hosting/MMCA.Common.ServiceHost/ServiceHostBuilderExtensions.cs:90-93</code> call
+          <code>AddRedisOutputCaching</code>.</li>
+          <li>Anchors re-verified against current source: <code>ApplicationNamespace.cs</code> remarks <code>:14-19</code> -&gt; <code>:15-20</code>
+          and <code>:22-25</code> -&gt; <code>:23-26</code> (rationale <code>:22-23</code> -&gt; <code>:23-24</code>), <code>Resolve</code> <code>:53</code> -&gt; <code>:54</code>,
+          <code>ConfigurationKey</code> <code>:31</code> -&gt; <code>:32</code>, explicit branch <code>:55-59</code> -&gt; <code>:56-60</code>, host key <code>:40</code> -&gt; <code>:41</code>,
+          host-name branch <code>:61-65</code> -&gt; <code>:62-66</code>, <code>Fallback</code> <code>:34</code> -&gt; <code>:35</code>, return <code>:67</code> -&gt; <code>:68</code>, regex
+          <code>:42-43</code> -&gt; <code>:43-44</code>, <code>Sanitize</code> <code>:77-83</code> -&gt; <code>:78-84</code> (merge <code>:81</code> -&gt; <code>:82</code>), never-empty doc
+          <code>:46-48</code> -&gt; <code>:47-49</code>; <code>CacheKeyPrefix.cs</code> <code>From(IServiceProvider)</code> <code>:72-87</code> -&gt; <code>:85-100</code>
+          (<code>Resolve</code> <code>:82</code> -&gt; <code>:95-97</code>, explicit-prefix branch <code>:77-80</code> -&gt; <code>:89-93</code>), <code>KeyPrefix</code>
+          <code>:36-41</code> -&gt; <code>:35-45</code>; <code>DependencyInjection.Caching.cs</code> <code>HybridCacheService</code> <code>:192</code>, <code>:198</code> -&gt;
+          <code>:194</code>, <code>:198-204</code>, <code>RedisDistributedLock</code> <code>:114-115</code> -&gt; <code>:116-117</code>, <code>MemoryCacheService</code>
+          <code>:94-97</code> -&gt; <code>:95-98</code>, output-cache <code>PostConfigure</code> <code>:69-76</code> -&gt; <code>:70-77</code> (keep-explicit check
+          <code>:72</code> -&gt; <code>:73</code>, assignment <code>:75</code>, comment <code>:60-65</code> -&gt; <code>:64-69</code>), the override paragraph&#39;s <code>:71</code>
+          -&gt; <code>:75</code> and <code>:69</code> -&gt; <code>:73</code>; <code>HybridCacheService.cs:417</code> -&gt; <code>:448</code>;
+          <code>CachePrefixGenerations.cs:278</code> -&gt; <code>:281</code>; <code>DependencyInjection.cs:140</code> -&gt; <code>:141</code>;
+          <code>RedisCachingExtensions.cs:99</code> -&gt; <code>:111</code>; <code>WebApplicationBuilderExtensions.RateLimiting.cs</code>
+          <code>:220-226</code> -&gt; <code>:233-239</code> (<code>Resolve</code> <code>:224</code> -&gt; <code>:237</code>, override <code>:222-225</code> -&gt; <code>:235-238</code>, key
+          <code>:275</code> -&gt; <code>:288</code>); <code>DependencyInjection.Notifications.cs</code> context <code>:50-55</code> -&gt; <code>:53-58</code>,
+          <code>ChannelPrefix</code> <code>:56-58</code> -&gt; <code>:59-61</code>, trade-offs <code>:56</code> -&gt; <code>:59</code>; ADC Conference <code>appsettings.json</code>
+          <code>:38</code>, <code>:45</code>, <code>:62</code> -&gt; <code>:52</code>, <code>:59</code>, <code>:85</code>, Engagement and Notification <code>Namespace</code>
+          <code>:58</code>, <code>:72</code> -&gt; <code>:64</code>, <code>:76</code>; <code>MMCA.Common/CHANGELOG.md:2410-2417</code> -&gt; <code>:3347-3354</code> (SEC-Common-53)
+          and <code>:47</code> -&gt; <code>:984</code> (output cache starts cold). The earlier Revisions&#39; anchors record those passes
+          as written.</li>
+          </ol>
           <h2 id="related">Related</h2>
           <ul>
           <li><a href="019-rate-limiting.html">ADR-019</a> (Layered Rate Limiting): owns the distributed rate-limit counter
@@ -473,6 +556,7 @@
             <li><a href="#trade-offs">Trade-offs</a></li>
             <li><a href="#revision-2026-10-28">Revision (2026-10-28)</a></li>
             <li><a href="#revision-2026-11-04">Revision (2026-11-04)</a></li>
+            <li><a href="#revision-2026-11-23">Revision (2026-11-23)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

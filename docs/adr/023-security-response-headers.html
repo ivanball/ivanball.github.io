@@ -277,7 +277,10 @@
           Revised 2026-10-07: anchors refreshed after the v1.233.0 release.
           Revised 2026-10-21: re-verified against current source, no content or anchor change.
           Revised 2026-10-26: anchors refreshed after ADC #291 moved the Blazor host&#39;s pipeline lines.
-          Revised 2026-10-28: anchors refreshed after ADC #300 moved the Blazor host&#39;s pipeline lines.</p>
+          Revised 2026-10-28: anchors refreshed after ADC #300 moved the Blazor host&#39;s pipeline lines.
+          Revised 2026-11-23: the UI hosts no longer wire the security headers themselves; both get the Blazor
+          CSP, the security headers and the pipeline order from the framework&#39;s <code>AddMmcaBlazorWebHost</code> and
+          <code>UseMmcaBlazorWebPipeline</code>, while the Gateways still wire them directly.</p>
           <h2 id="context">Context</h2>
           <p>Every client-facing host (the YARP Gateway and the Blazor UI web host in each app) must stamp the same
           hardened HTTP response headers: <code>X-Content-Type-Options</code>, <code>X-Frame-Options</code>, <code>Referrer-Policy</code>,
@@ -314,11 +317,12 @@
           a functional policy rather than one silently missing both directives, while the JSON, WebSocket and
           static responses of API and Gateway hosts are unaffected. A host wanting a stricter or looser policy
           configures the <code>&quot;SecurityHeaders&quot;</code> section or registers its own provider.</li>
-          <li><strong>HTML hosts register their own <code>ICspPolicyProvider</code></strong> before calling <code>AddCommonSecurityHeaders</code>
+          <li><strong>An HTML host&#39;s <code>ICspPolicyProvider</code> is registered</strong> before <code>AddCommonSecurityHeaders</code> runs
           (the default registration uses <code>TryAddSingleton</code>, so it is skipped when a provider is already
-          registered). Both apps register
+          registered). Both apps get
           one shared <code>BlazorCspPolicyProvider</code> (a single <code>internal sealed</code> class living in
-          <code>MMCA.Common.UI.Web</code>) via <code>AddCommonBlazorCsp</code> ahead of <code>AddCommonSecurityHeaders</code>. It pins
+          <code>MMCA.Common.UI.Web</code>) through the framework&#39;s composed Blazor host registration, which calls
+          <code>AddCommonBlazorCsp</code> ahead of <code>AddCommonSecurityHeaders</code>. It pins
           <code>connect-src</code> to <code>&#39;self&#39;</code> plus the configured API/Gateway origin (https + wss, from the shared
           <code>ApiSettings</code>), adds <code>script-src &#39;self&#39; &#39;wasm-unsafe-eval&#39;</code>, <code>style-src &#39;self&#39; &#39;unsafe-inline&#39;</code>,
           <code>img-src &#39;self&#39; data: https:</code> and <code>font-src &#39;self&#39;</code>, emits an opt-in <code>frame-src</code> when the host
@@ -331,8 +335,10 @@
           localhost WebSocket), and the second of those is not localhost-scoped. The 2026-09-19 revision below
           records the emitted policy directive by directive.</li>
           <li><strong>Adopted at both edges of both apps:</strong> Store and ADC each wire <code>AddCommonSecurityHeaders</code> +
-          <code>UseCommonSecurityHeaders</code> in their Gateway host and their UI web host, with the UI host also
-          registering <code>BlazorCspPolicyProvider</code>. The middleware carries a unit test
+          <code>UseCommonSecurityHeaders</code> directly in their Gateway host. Neither UI web host calls them itself:
+          both call the framework&#39;s <code>AddMmcaBlazorWebHost</code> and <code>UseMmcaBlazorWebPipeline</code>, which register
+          <code>BlazorCspPolicyProvider</code> (via <code>AddCommonBlazorCsp</code>) ahead of the security headers and insert
+          <code>UseCommonSecurityHeaders</code> right after the forwarded headers. The middleware carries a unit test
           (<code>SecurityHeadersMiddlewareTests</code> in <code>MMCA.Common.Aspire.Tests</code>).</li>
           </ul>
           <h2 id="rationale">Rationale</h2>
@@ -371,8 +377,8 @@
           convention (<code>SecurityHeaders.cs:265-266</code> and the interface summary at <code>:83-84</code>,
           <code>DependencyInjection.cs:56-58</code>).</li>
           <li><strong>A shared Blazor CSP provider constrains per-host divergence.</strong> <code>BlazorCspPolicyProvider</code> now lives
-          once in <code>MMCA.Common.UI.Web</code>, over the shared <code>ApiSettings</code> type, and both apps register it via
-          <code>AddCommonBlazorCsp</code>, so the connect-src/origin logic is no longer copied per app. The remaining
+          once in <code>MMCA.Common.UI.Web</code>, over the shared <code>ApiSettings</code> type, and both apps get it through
+          <code>AddCommonBlazorCsp</code> (called by <code>AddMmcaBlazorWebHost</code>), so the connect-src/origin logic is no longer copied per app. The remaining
           trade-off is that a host needing genuinely different CSP logic cannot edit an app-local class: it must
           supply its own <code>ICspPolicyProvider</code> (registered before <code>AddCommonSecurityHeaders</code>) instead.</li>
           <li><strong>Failing closed moves the pain onto a running app.</strong> A Blazor host whose <code>ApiSettings</code> endpoint is
@@ -609,6 +615,46 @@
           (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI.Web/DependencyInjection.cs:67</code>) still calls
           <code>ValidateOnStart</code> at <code>:71</code> and registers with plain <code>AddSingleton</code> at <code>:77</code>.</li>
           </ol>
+          <h2 id="revision-2026-11-23">Revision (2026-11-23)</h2>
+          <p>Re-verified against current source. The headers, the emitted policies, the fail-closed behavior and
+          the pipeline ordering are unchanged, and the framework anchors in the live sections still hold. What
+          moved is ownership of the UI host&#39;s wiring: the composed Blazor host helpers in Common now register
+          and order it, so the ADC Blazor host anchors in the earlier revisions point at other code or past the end of the file today.</p>
+          <ol>
+          <li><strong>The UI hosts take the security headers from the framework.</strong> Neither UI host calls
+          <code>AddCommonBlazorCsp</code>, <code>AddCommonSecurityHeaders</code> or <code>UseCommonSecurityHeaders</code> itself. Store&#39;s
+          calls <code>AddMmcaBlazorWebHost</code> and <code>UseMmcaBlazorWebPipeline</code>
+          (<code>MMCA.Store/Source/Hosts/UI/MMCA.Store.UI.Web/Program.cs:30</code>, <code>:92</code>), and ADC&#39;s does the same
+          (<code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs:26</code>, <code>:128</code> on the net11.0 line and <code>:130</code>
+          on the <code>#else</code> net10.0 line). <code>AddMmcaBlazorWebHost</code> registers <code>AddCommonBlazorCsp</code> and then
+          <code>AddCommonSecurityHeaders</code>
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI.Web/Hosting/BlazorWebHostExtensions.cs:157-158</code>,
+          comment <code>:156</code>), and <code>UseMmcaBlazorWebPipeline</code> (<code>:181</code>) runs <code>UseCommonUiForwardedHeaders()</code>
+          (<code>:185</code>), <code>UseCommonSecurityHeaders()</code> (<code>:186</code>), <code>UseUiRateLimiting()</code> (<code>:187</code>) and later
+          <code>UseHttpsRedirection()</code> (<code>:200</code>). The ordering is still forwarded headers, then security
+          headers, then rate limiting, then the HTTPS redirect. The ADC host&#39;s rationale comments are now
+          <code>Program.cs:73-82</code> (CSP and per-origin HSTS) and <code>:108-115</code> (pipeline order, no <code>UseHsts</code>).</li>
+          <li><strong>The Gateways still wire the middleware directly</strong>: ADC
+          (<code>MMCA.ADC/Source/Hosts/MMCA.ADC.Gateway/Program.cs:135</code>, <code>:188</code>) and Store
+          (<code>MMCA.Store/Source/Hosts/MMCA.Store.Gateway/Program.cs:81</code>, <code>:175</code>). The Decision and
+          Trade-offs bullets now say who registers what.</li>
+          <li>Anchors re-verified against current source: <code>BlazorCspPolicyProvider</code>
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI.Web/Security/BlazorCspPolicyProvider.cs</code>) has its
+          constructor at <code>:33-42</code> (<code>IOptions&lt;BlazorCspSettings&gt;</code> at <code>:35</code>, <code>IsDevelopment()</code> read once at
+          <code>:41</code>), the Browser Link and Hot Reload comment at <code>:67-70</code>, the Development <code>connect-src</code>
+          block at <code>:71-74</code> (append <code>:73</code>), <code>BuildFrameSrc</code> at <code>:82-94</code> (canonicalize and de-duplicate
+          <code>:89-91</code>, return <code>:93</code>), the <code>img-src</code> rationale at <code>:96-99</code>, and <code>BuildPolicy</code> at <code>:100</code> with
+          its string at <code>:101-110</code>: <code>default-src</code> <code>:101</code>, <code>script-src</code> with the Development
+          <code>&#39;unsafe-inline&#39;</code> <code>:102</code>, <code>style-src</code> <code>:103</code>, <code>img-src</code> <code>:104</code>, <code>font-src</code> <code>:105</code>,
+          <code>connect-src</code> <code>:106</code>, the optional <code>frame-src</code> <code>:107</code>, then <code>base-uri</code>, <code>form-action</code> and
+          <code>frame-ancestors</code> <code>:108-110</code>. The ADC UI host test project sits in the no-database CI filter at
+          <code>MMCA.ADC/MMCA.ADC.CI.slnf:64</code> (Store&#39;s stays at <code>MMCA.Store/MMCA.Store.CI.slnf:55</code>). In the
+          framework, the static default&#39;s <code>TryAddSingleton</code> is still
+          <code>MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Security/SecurityHeaders.cs:288</code> (register-first
+          guidance <code>:265-266</code>, interface summary <code>:83-84</code>, interface <code>:86</code>), and <code>AddCommonBlazorCsp</code>
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI.Web/DependencyInjection.cs:67</code>) still
+          registers with plain <code>AddSingleton</code> at <code>:77</code>, with its call-before comment at <code>:56-58</code>.</li>
+          </ol>
           <h2 id="related">Related</h2>
           <p>ADR-019 (rate limiting, the other always-on edge protection living in the same Aspire layer), ADR-022
           (browser session-cookie auth, the other browser-edge security control), ADR-008 (the gateway topology
@@ -637,6 +683,7 @@
             <li><a href="#revision-2026-10-21">Revision (2026-10-21)</a></li>
             <li><a href="#revision-2026-10-26">Revision (2026-10-26)</a></li>
             <li><a href="#revision-2026-10-28">Revision (2026-10-28)</a></li>
+            <li><a href="#revision-2026-11-23">Revision (2026-11-23)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

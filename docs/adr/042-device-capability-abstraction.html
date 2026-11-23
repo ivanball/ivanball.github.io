@@ -266,20 +266,24 @@
           <code>Fallbacks/</code> folder.
           Revised 2026-10-06: the concern sub-folder list gains <code>Navigation/</code> (nine, not eight), and the
           lifecycle no-op is cited at the extension rather than the ADC call site.
-          Revised 2026-10-19: the ADC <code>MauiProgram.cs</code> anchors are re-pointed (<code>:161</code> and <code>:171</code>); no decision changed.</p>
+          Revised 2026-10-19: the ADC <code>MauiProgram.cs</code> anchors are re-pointed (<code>:161</code> and <code>:171</code>); no decision changed.
+          Revised 2026-11-23: the default set is 26 contracts (<code>IPasskeyCapability</code> and <code>IDeviceMetadataReporter</code>
+          join), the MAUI package overrides 21 and five stay outside it, both UI packages build on net10.0 and
+          net11.0 (ADR-141), and the MAUI release splits into a windows <code>pack-maui</code> job and an ubuntu
+          <code>publish-maui</code> push behind the <code>release</code> environment.</p>
           <h2 id="context">Context</h2>
           <p>The consumer apps ship the same Blazor component set through three heads: MAUI Blazor Hybrid
           (Android/iOS/MacCatalyst/Windows), Blazor Server SSR, and WebAssembly. Native device capabilities
           (share sheet, clipboard, haptics, geolocation, local notifications, connectivity, biometrics,
           text-to-speech) only exist on the MAUI head, and some have partial browser equivalents
           (<code>navigator.share</code>, <code>navigator.clipboard</code>, <code>navigator.onLine</code>, aria-live regions). Shared Razor
-          components cannot reference MAUI APIs: <code>MMCA.Common.UI</code> is a single-target net10.0 Razor class
-          library that must stay WASM-compatible (its layer rule allows Shared only), and any MAUI-typed code
-          in it would break the web heads at compile time.</p>
+          components cannot reference MAUI APIs: <code>MMCA.Common.UI</code> is a Razor class library (built for
+          net10.0 and net11.0, <code>MMCA.Common/Directory.Build.props:7</code>) that must stay WASM-compatible (its
+          layer rule allows Shared only), and any MAUI-typed code in it would break the web heads at compile time.</p>
           <p>Two constraints shape the packaging. First, per-head service selection already has a working
           precedent: <code>ITokenStorageService</code> resolves to a per-head implementation registered after
           <code>AddUIShared</code> (<code>builder.Services.AddCommonMauiTokenStorage()</code>,
-          <code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI/MauiProgram.cs:171</code>). Second, MMCA.Common&#39;s CI and release
+          <code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI/MauiProgram.cs:182</code>). Second, MMCA.Common&#39;s CI and release
           pipelines run on ubuntu-latest, which cannot build MAUI target frameworks at all, while the
           framework&#39;s packages release in lockstep (ADR-016).</p>
           <h2 id="decision">Decision</h2>
@@ -292,29 +296,38 @@
           <code>IGeolocationService</code>, <code>IExternalLinkService</code>, <code>ITextToSpeechService</code>, <code>IAccessibilityAnnouncer</code>,
           <code>ILocalNotificationService</code>, <code>IScreenshotService</code>, <code>IDevicePreferences</code>, <code>IBatteryStatusService</code>,
           <code>IBiometricAuthenticator</code>, <code>ISpeechToTextService</code>, <code>IExternalAuthBroker</code>, <code>IDeepLinkDispatcher</code>,
-          <code>IConnectivityStatusService</code>, <code>ILocalCacheStore</code>). Six more have joined since, for 24 today, all
+          <code>IConnectivityStatusService</code>, <code>ILocalCacheStore</code>). Eight more have joined since, for 26 today, all
           TryAdd-registered by <code>AddDeviceCapabilityDefaults</code>
-          (<code>Source/Presentation/MMCA.Common.UI/Services/Capabilities/DependencyInjection.cs:37-85</code>): the
+          (<code>Source/Presentation/MMCA.Common.UI/Services/Capabilities/DependencyInjection.cs:38-94</code>): the
           additions are <code>IGeocodingService</code> (Wave 3), <code>IMediaPickerService</code> (ADR-045), the push pair
-          <code>IPushRegistrationService</code> and <code>IPushDeviceTokenProvider</code> (ADR-044), <code>IBarcodeScannerService</code>
-          for camera barcode/QR scanning (<code>Capabilities/DependencyInjection.cs:70</code>), and
-          <code>IAppLifecycleNotifier</code> for the native window&#39;s background/foreground callbacks
-          (<code>Capabilities/DependencyInjection.cs:82</code>). <code>AddMauiDeviceCapabilities</code>
-          (<code>Source/Presentation/MMCA.Common.UI.Maui/DependencyInjection.cs:44-84</code>) natively overrides 20 of
-          the 24. Four stay outside it. <code>IDeepLinkDispatcher</code> and <code>IAppLifecycleNotifier</code> need no override
+          <code>IPushRegistrationService</code> and <code>IPushDeviceTokenProvider</code> (ADR-044), <code>IPasskeyCapability</code> for
+          WebAuthn sign-in (ADR-139, <code>Capabilities/DependencyInjection.cs:60</code>), <code>IDeviceMetadataReporter</code>
+          for per-session device metadata (<code>Capabilities/DependencyInjection.cs:71</code>; its contract is the one
+          that lives outside <code>Services/Capabilities/</code>, at
+          <code>Services/Auth/Devices/IDeviceMetadataReporter.cs</code>),
+          <code>IBarcodeScannerService</code> for camera barcode/QR scanning (<code>Capabilities/DependencyInjection.cs:79</code>),
+          and <code>IAppLifecycleNotifier</code> for the native window&#39;s background/foreground callbacks
+          (<code>Capabilities/DependencyInjection.cs:91</code>). <code>AddMauiDeviceCapabilities</code>
+          (<code>Source/Presentation/MMCA.Common.UI.Maui/DependencyInjection.cs:45-96</code>) natively overrides 21 of
+          the 26 (it also registers the non-capability <code>IInitialThemeModeSource</code> at <code>:69</code> and the
+          capabilities JS module through <code>AddMauiCapabilitiesJsModule()</code> at <code>:94</code>). Five stay
+          outside it. <code>IPasskeyCapability</code> has no MAUI implementation: it keeps the unavailable default on a
+          MAUI head, so the passkey affordances stay hidden there, and only <code>AddBrowserDeviceCapabilities</code>
+          overrides it (<code>Capabilities/DependencyInjection.cs:58-60</code>, <code>:119</code>). <code>IDeepLinkDispatcher</code> and
+          <code>IAppLifecycleNotifier</code> need no override
           because the shared default IS the real implementation: the MAUI package feeds the notifier from the
           native window instead of replacing it, through <code>AttachMmcaAppLifecycle</code>
           (<code>Source/Presentation/MMCA.Common.UI.Maui/WindowLifecycleExtensions.cs:33</code>), which forwards the
           window&#39;s <code>Stopped</code> and <code>Resumed</code> events and no-ops when the head registered no notifier
           (<code>WindowLifecycleExtensions.cs:38-42</code>; ADC calls it from <code>CreateWindow</code> at
-          <code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI/App.xaml.cs:65</code>). The other two are deliberately opt-in per head:
+          <code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI/App.xaml.cs:36</code>). The last two are deliberately opt-in per head:
           <code>IPushDeviceTokenProvider</code> comes from the platform-conditional <code>AddMauiPushDeviceTokenProvider</code>
-          (<code>Source/Presentation/MMCA.Common.UI.Maui/DependencyInjection.cs:124-132</code>, FCM on Android, APNs on
+          (<code>Source/Presentation/MMCA.Common.UI.Maui/DependencyInjection.cs:136-144</code>, FCM on Android, APNs on
           iOS/MacCatalyst, nothing on windows, and both providers stay configuration-gated), while
           <code>AddMauiDeviceCapabilities</code> registers only the <code>IPushRegistrationService</code> half of the push pair
-          (<code>:73</code>); and <code>IBarcodeScannerService</code> ships behind the opt-in <code>UseCommonBarcodeScanner</code>
+          (<code>:74</code>); and <code>IBarcodeScannerService</code> ships behind the opt-in <code>UseCommonBarcodeScanner</code>
           (<code>Source/Presentation/MMCA.Common.UI.Maui/HostingDependencyInjection.cs:104</code>, called by ADC at
-          <code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI/MauiProgram.cs:161</code>), so a head that never scans ships
+          <code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI/MauiProgram.cs:172</code>), so a head that never scans ships
           neither the ZXing handler nor a camera permission declaration. Each capability has an independent
           fallback story, and per-capability contracts let heads adopt incrementally.</p>
           </li>
@@ -333,13 +346,19 @@
           contract) and <code>AddMauiDeviceCapabilities()</code> / <code>UseMauiDeviceCapabilities()</code> (the MAUI package)
           replace the defaults without touching them.</p>
           </li>
-          <li><p><strong><code>MMCA.Common.UI.Maui</code> is the one MAUI-TFM package.</strong> It multi-targets
-          net10.0-android/ios/maccatalyst/windows, references <code>MMCA.Common.UI</code> plus <code>Microsoft.Maui.Controls</code>
-          and <code>Plugin.LocalNotification</code> (majors track MAUI majors, pinned together in
-          <code>Directory.Packages.props</code>), and stays OUT of <code>MMCA.Common.slnx</code>, the same mechanism that keeps
-          the UI gallery and E2E projects out of the ubuntu unit run. Dedicated windows jobs build
-          (<code>ci.yml</code> <code>build-maui</code>, a required gate) and pack (<code>release.yml</code> <code>publish-maui</code>, same tag, own
-          SBOM gate) it, so the lockstep release stays whole. Layer rule: UI + Shared only
+          <li><p><strong><code>MMCA.Common.UI.Maui</code> is the one MAUI-TFM package.</strong> It multi-targets android, ios,
+          maccatalyst and windows10.0.19041.0 once per .NET line, net10.0 and net11.0, for eight TFMs
+          (<code>Source/Presentation/MMCA.Common.UI.Maui/MMCA.Common.UI.Maui.csproj:18</code>), references
+          <code>MMCA.Common.UI</code> plus <code>Microsoft.Maui.Controls</code> (on the per-line <code>MmcaMauiVersion</code>,
+          <code>Directory.Packages.props:50</code>, <code>:62</code>) and <code>Plugin.LocalNotification</code> (one fixed pin for both lines,
+          <code>Directory.Packages.props:331</code>), and stays OUT of <code>MMCA.Common.slnx</code>, the same mechanism that keeps
+          the UI gallery and E2E projects out of the ubuntu unit run. A dedicated windows job builds it
+          (<code>ci.yml</code> <code>build-maui</code>, <code>.github/workflows/ci.yml:260</code>, a required gate) and another packs it
+          with its own SBOM gate (<code>release.yml</code> <code>pack-maui</code>, <code>.github/workflows/release.yml:235</code>, same
+          tag); the ubuntu <code>publish-maui</code> job (<code>release.yml:341</code>) only attests and pushes, with no restore,
+          build or test (<code>release.yml:344</code>, attestation step <code>:364</code>), after both pack jobs and
+          behind the <code>release</code> environment approval (<code>release.yml:342</code>, <code>:348</code>), so the lockstep release
+          stays whole. Layer rule: UI + Shared only
           (<code>Source/Build/MMCA.Common.LayerEnforcement.targets</code>, <code>EnforceUIMauiLayerBoundary</code>); it is
           deliberately absent from the ubuntu NetArchTest runtime map because its assemblies cannot load
           there, and the compile-time target is the enforcement.</p>
@@ -387,7 +406,8 @@
           <h2 id="trade-offs">Trade-offs</h2>
           <ul>
           <li>A second build runner raises release surface: ubuntu and windows must both succeed for a whole
-          release. Accepted; the <code>publish-maui</code> job is gated by the same tag and SBOM discipline.</li>
+          release. Accepted; the <code>pack-maui</code> job carries the same tag and SBOM discipline, and
+          <code>publish-maui</code> waits on the same <code>release</code> environment as the main push.</li>
           <li>The TryAdd-default plus later-plain-Add pattern relies on registration order (<code>AddUIShared</code>
           first). Documented on both extension methods; the order is already load-bearing in every host for
           other reasons.</li>
@@ -410,10 +430,10 @@
           per-head service contract here before a hybrid head can use it.</li>
           <li>Biometrics, speech-to-text, and the external-auth broker now ship native MAUI implementations,
           all three registered by <code>AddMauiDeviceCapabilities()</code>
-          (<code>Source/Presentation/MMCA.Common.UI.Maui/DependencyInjection.cs:63</code>, <code>:64</code>, and the broker scoped
-          at <code>:82</code>). The residual trade-off is configuration, not code: <code>MauiExternalAuthBroker</code> registers
+          (<code>Source/Presentation/MMCA.Common.UI.Maui/DependencyInjection.cs:64</code>, <code>:65</code>, and the broker scoped
+          at <code>:89</code>). The residual trade-off is configuration, not code: <code>MauiExternalAuthBroker</code> registers
           unconditionally but reports <code>IsAvailable == false</code>
-          (<code>Source/Presentation/MMCA.Common.UI.Maui/Capabilities/Auth/MauiExternalAuthBroker.cs:43</code>)
+          (<code>Source/Presentation/MMCA.Common.UI.Maui/Capabilities/Auth/MauiExternalAuthBroker.cs:54</code>)
           until the head supplies <code>OAuth:MobileRedirectScheme</code>, so a misconfigured head quietly keeps the web
           anchor flow rather than failing fast.</li>
           </ul>
@@ -444,6 +464,46 @@
           <code>AddCommonMauiTokenStorage</code> at <code>:171</code> (was <code>:165</code>), still after <code>AddUIShared</code>, so last-registration-wins
           holds for both. The framework definition (<code>HostingDependencyInjection.cs:104</code>) is unchanged. The
           2026-10-06 list above keeps its <code>:155</code>/<code>:165</code> as the values verified that day.</p>
+          <h2 id="revision-2026-11-23">Revision (2026-11-23)</h2>
+          <p>Re-verified against current source. The decision is unchanged: one contract per capability, safe
+          TryAdd defaults in <code>AddUIShared</code>, per-head plain-Add overrides, and one MAUI-TFM package built and
+          packed on windows. What moved is the size of the contract set, the framework lines both UI packages
+          build for, and the shape of the MAUI release jobs.</p>
+          <ol>
+          <li>The default set is 26 contracts, not 24. Two were missing from this ADR: <code>IPasskeyCapability</code>
+          (ADR-139, <code>Source/Presentation/MMCA.Common.UI/Services/Capabilities/DependencyInjection.cs:60</code>,
+          contract at <code>Services/Capabilities/Auth/IPasskeyCapability.cs</code>) and <code>IDeviceMetadataReporter</code>
+          (<code>Capabilities/DependencyInjection.cs:71</code>, contract at <code>Services/Auth/Devices/IDeviceMetadataReporter.cs</code>,
+          the one contract outside <code>Services/Capabilities/</code>). Eight have joined since introduction, not six.</li>
+          <li><code>AddMauiDeviceCapabilities</code> overrides 21 of the 26
+          (<code>Source/Presentation/MMCA.Common.UI.Maui/DependencyInjection.cs:49-65</code>, <code>:74</code>, <code>:80</code>, <code>:84</code>,
+          <code>:89</code>); the new override is <code>MauiDeviceMetadataReporter</code> at <code>:80</code>. Five defaults stay outside it,
+          the fifth being <code>IPasskeyCapability</code>, which has no MAUI implementation and is overridden only by
+          <code>AddBrowserDeviceCapabilities</code> (<code>Capabilities/DependencyInjection.cs:119</code>).</li>
+          <li><code>MMCA.Common.UI</code> builds for net10.0 and net11.0 (<code>MMCA.Common/Directory.Build.props:7</code>,
+          <code>build/Frameworks.props:23</code>; it is not in <code>MmcaSingleTargetProjects</code>, <code>build/Frameworks.props:27</code>),
+          and <code>MMCA.Common.UI.Maui</code> builds each of its four platforms on both lines, eight TFMs
+          (<code>Source/Presentation/MMCA.Common.UI.Maui/MMCA.Common.UI.Maui.csproj:18</code>), per ADR-141.</li>
+          <li>The two MAUI package pins differ in shape: <code>Microsoft.Maui.Controls</code> follows the per-line
+          <code>MmcaMauiVersion</code> (<code>Directory.Packages.props:50</code>, <code>:62</code>), while <code>Plugin.LocalNotification</code> is one
+          fixed <code>14.1.2</code> pin for both lines (<code>Directory.Packages.props:331</code>). The pin comment still says the
+          plugin&#39;s majors track MAUI majors and calls 14.x the net10 line (<code>Directory.Packages.props:329-330</code>),
+          so the net11.0 line currently builds on that plugin line. The Decision bullet now states the pins
+          as source has them.</li>
+          <li>The MAUI release is two jobs. <code>pack-maui</code> (<code>.github/workflows/release.yml:235</code>, windows-latest)
+          packs the package and runs its SBOM gate (<code>release.yml:315-329</code>); <code>publish-maui</code>
+          (<code>release.yml:341</code>, ubuntu-latest) only attests and pushes, with no restore, build or test
+          (<code>:344</code>, attestation step <code>:364</code>, <code>attestations: write</code> <code>:353</code>), needs both pack jobs (<code>:342</code>) and waits on the
+          <code>release</code> environment (<code>:348</code>). The Decision bullet and the first trade-off are reworded to match.
+          <code>build-maui</code> (<code>.github/workflows/ci.yml:260</code>, windows-latest) remains the required CI gate.</li>
+          <li>Anchors re-verified against current source: <code>AddDeviceCapabilityDefaults</code> 38-94 (barcode <code>:79</code>,
+          lifecycle <code>:91</code>), <code>AddMauiDeviceCapabilities</code> 45-96 (push registration <code>:74</code>, biometrics <code>:64</code>,
+          speech-to-text <code>:65</code>, broker <code>:89</code>), <code>AddMauiPushDeviceTokenProvider</code> 136-144,
+          <code>MauiExternalAuthBroker.cs:54</code>, ADC <code>App.xaml.cs:36</code> (inside <code>CreateWindow</code>, <code>:18</code>), and ADC
+          <code>MauiProgram.cs</code> <code>:172</code> (<code>UseCommonBarcodeScanner</code>) and <code>:182</code> (<code>AddCommonMauiTokenStorage</code>),
+          both still after <code>AddUIShared</code> (<code>:104</code>). The 2026-10-06 and 2026-10-19 sections keep the values
+          verified on their dates.</li>
+          </ol>
           
         <div class="doc-foot btn-row">
           <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
@@ -462,6 +522,7 @@
             <li><a href="#revision-2026-10-01">Revision (2026-10-01)</a></li>
             <li><a href="#revision-2026-10-06">Revision (2026-10-06)</a></li>
             <li><a href="#revision-2026-10-19">Revision (2026-10-19)</a></li>
+            <li><a href="#revision-2026-11-23">Revision (2026-11-23)</a></li>
             </ul>
           </nav>
         </aside>

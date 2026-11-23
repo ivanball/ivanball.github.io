@@ -8,7 +8,10 @@ Revised 2026-10-07: anchors refreshed after the v1.233.0 release. Revised 2026-1
 refreshed after the v1.247.0 release. Revised 2026-10-26: the `X-CSRF` gate is documented with
 its one exemption (an HTTP/2 WebSocket extended `CONNECT`, held to the same-origin check instead),
 and anchors refreshed after the v1.255.0 consumer adoption. Revised 2026-10-28: anchors refreshed
-after the v1.265.1 consumer adoption.
+after the v1.265.1 consumer adoption. Revised 2026-11-23: `auth/passkeys/signin` is documented as the
+fifth token-issuing path, the view-as overlay answer on both token endpoints (ADR-137) and the
+`/auth/session/handoff` endpoint are named, the proxy registration is credited to
+`AddMmcaBlazorWebHost`, and anchors refreshed.
 
 ## Context
 The apps are Blazor Web Apps: a server-rendered (SSR) prerender pass runs on the first request, then
@@ -17,8 +20,8 @@ JWT-based (ADR-004): login returns an access token plus a refresh token, and the
 access token as a bearer header on API calls. (In both apps the WebAssembly client and the
 notification hub now call the same-origin proxy
 (`MMCA.Common/Source/Presentation/MMCA.Common.UI.Web/SameOriginProxy/SameOriginApiProxyServiceExtensions.cs:24-25`),
-which attaches that bearer from the HttpOnly cookie (`SameOriginApiProxyEndpoint.cs:108`,
-`SameOriginProxyTransformer.cs:60`); see ADR-131.) That leaves a gap on **fresh GET requests**
+which attaches that bearer from the HttpOnly cookie (`SameOriginApiProxyEndpoint.cs:110`,
+`SameOriginProxyTransformer.cs:77`); see ADR-131.) That leaves a gap on **fresh GET requests**
 the browser issues directly: a deep link, an F5 refresh, or "open in new tab" of an `[Authorize]`
 page. At SSR-prerender time there is no interactive client yet and no `Authorization` header, so
 `[Authorize]` would fail and bounce the user to `/login` even though they are logged in. Storing the
@@ -34,23 +37,28 @@ companion, and both apps' Web UI hosts wire it.
   `mmca_auth_refresh` (the refresh token). In the framework's default mode the browser seeds them via
   `POST /auth/session-cookie` at login and `SessionCookieJar` writes them
   (`MMCA.Common/Source/Presentation/MMCA.Common.API/SessionCookies/SessionCookieEndpoints.cs:52`).
-  Both apps run the same-origin proxy (`MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs:168`,
-  `MMCA.Store/Source/Hosts/UI/MMCA.Store.UI.Web/Program.cs:160`), which sets
+  Both apps run the same-origin proxy: `AddMmcaBlazorWebHost` registers it for every Blazor Web
+  host (`MMCA.Common/Source/Presentation/MMCA.Common.UI.Web/Hosting/BlazorWebHostExtensions.cs:142`,
+  called at
+  `MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs:26` and
+  `MMCA.Store/Source/Hosts/UI/MMCA.Store.UI.Web/Program.cs:30`), and `UseMmcaBlazorWebPipeline`
+  (`BlazorWebHostExtensions.cs:181`) maps it through `MapCommonSameOriginApiProxy` (`:210`), called
+  at ADC `Program.cs:128` and `:130` and Store `Program.cs:92`. The proxy sets
   `ClaimsOnlyBrowserTokens = true`
   (`MMCA.Common/Source/Presentation/MMCA.Common.UI.Web/SameOriginProxy/SameOriginApiProxyServiceExtensions.cs:73`),
   so that `POST` answers 204 without writing anything (`SessionCookieEndpoints.cs:41-55`). The cookies
   are instead written server-side: by the proxy transformer on the token-issuing paths `auth/login`,
-  `auth/register`, `auth/oauth/exchange` and `auth/sign-in-link/redeem`
-  (`SameOriginProxyTransformer.cs:141`, `SameOriginApiProxySettings.cs:32`) and by `POST /auth/session-cookie/handoff` for the Server circuit
-  (`SessionHandoffEndpoints.cs:18`, `:55`). `DELETE /auth/session-cookie` clears them at logout
-  (`SessionCookieEndpoints.cs:58-62`).
+  `auth/register`, `auth/oauth/exchange`, `auth/sign-in-link/redeem` and `auth/passkeys/signin`
+  (`SameOriginProxyTransformer.cs:133`, `:256`, `SameOriginApiProxySettings.cs:33`) and by
+  `POST /auth/session-cookie/handoff` for the Server circuit (`SessionHandoffEndpoints.cs:18`,
+  `:62`). `DELETE /auth/session-cookie` clears them at logout (`SessionCookieEndpoints.cs:58-62`).
 - **SameSite is a setting.** `SessionCookieSettings.SameSite` defaults to `Lax`
   (`MMCA.Common/Source/Presentation/MMCA.Common.API/SessionCookies/SessionCookieSettings.cs:19`). The
   proxy replaces it with `SameOriginApiProxy:SessionCookieSameSite` (default `Strict`,
-  `SameOriginApiProxySettings.cs:98`, applied at `SameOriginApiProxyServiceExtensions.cs:72`), and both
+  `SameOriginApiProxySettings.cs:116`, applied at `SameOriginApiProxyServiceExtensions.cs:72`), and both
   apps configure `Lax` so a signed-in user arriving from a mailed deep link keeps the session on the
-  first server render (`MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/appsettings.json:69-70`,
-  `MMCA.Store/Source/Hosts/UI/MMCA.Store.UI.Web/appsettings.json:65-66`).
+  first server render (`MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/appsettings.json:86-87`,
+  `MMCA.Store/Source/Hosts/UI/MMCA.Store.UI.Web/appsettings.json:64-65`).
 - **An SSR-time scheme reads the access cookie.** `SessionCookieAuthenticationHandler` (scheme
   `"SessionCookie"`) reads `mmca_auth_access` during prerender, parses its claims
   (`SessionCookieAuthenticationHandler.cs:51`), checks expiry (`:55`), and populates
@@ -62,19 +70,24 @@ companion, and both apps' Web UI hosts wire it.
 - **The refresh token never leaves the server.** `POST /auth/session/token`
   (`SessionCookieEndpoints.cs:69`) is a same-origin "validate-or-refresh" endpoint the browser calls to
   hydrate its **in-memory** token; `CookieSessionRefresher` reads the HttpOnly refresh cookie
-  server-side, refreshes if needed, and returns a token plus expiry (`:87`). With
+  server-side, refreshes if needed, and returns a token plus expiry (`:87`, `:97`). With
   `ClaimsOnlyBrowserTokens` set, as in both apps, that token is `SessionClaimsToken`, an unsigned copy
-  of the claims that no API accepts, not the access token (`:84-86`). The refresh token is never
-  exposed to JavaScript.
+  of the claims that no API accepts, not the access token (`:94-96`). A live view-as overlay cookie
+  (ADR-137) is answered first, as a claims-only token on the proxy, without touching the staff user's
+  session and without ever being refreshed (`:80-85`). The circuit's token handoff
+  (`POST /auth/session/handoff`) also answers a live overlay first and never refreshes it, but hands
+  the circuit the real view-as access token as `SessionHandoffProtector` ciphertext, not a claims-only
+  token (`SessionHandoffEndpoints.cs:17`, `:33-36`). The
+  refresh token is never exposed to JavaScript.
 - **CSRF defense-in-depth.** The seed/clear endpoints (`POST` and `DELETE /auth/session-cookie`)
   deliberately disable antiforgery (they carry no antiforgery token, `SessionCookieEndpoints.cs:56`,
   `:62`) and rest on the cookies' `SameSite` value; the `/auth/session/token` refresh endpoint
-  additionally rejects cross-site requests via the `Sec-Fetch-Site` header (`:72`, `:100-102`). Under the
+  additionally rejects cross-site requests via the `Sec-Fetch-Site` header (`:72`, `:110-112`). Under the
   proxy, unsafe methods on `/api/**` and both handoff endpoints require the `X-CSRF: 1` header
-  (`SameOriginApiProxyEndpoint.cs:266`, `SessionHandoffEndpoints.cs:26`, `:44`), which is the CSRF gate
+  (`SameOriginApiProxyEndpoint.cs:273`, `SessionHandoffEndpoints.cs:26`, `:51`), which is the CSRF gate
   the apps rely on rather than SameSite. The one exemption is an HTTP/2 WebSocket extended `CONNECT`,
   which cannot carry the header and is instead held to this host's own `Origin` by the proxy's
-  same-origin gate (`SameOriginApiProxyEndpoint.cs:182-201`, `:265-266`).
+  same-origin gate (`SameOriginApiProxyEndpoint.cs:146-152`, `:184-193`, `:273`).
 
 This is a backend-for-frontend (BFF) style token-storage layer: the browser holds an HttpOnly session
 whose refresh half it cannot read, the SSR pass authenticates from the access cookie without trusting
@@ -105,7 +118,8 @@ it as the security boundary, and the real enforcement stays at the API.
   calls); the two must stay in sync. With the proxy on, the circuit's `ITokenRefresher` and
   `ISessionCookieSync` are replaced by `HandoffTokenRefresher` and `HandoffSessionCookieSync`
   (`SameOriginApiProxyServiceExtensions.cs:83-84`), so the sync runs through the protected handoff
-  endpoints (`SessionHandoffEndpoints.cs:17-18`).
+  endpoints `POST /auth/session/handoff` and `POST /auth/session-cookie/handoff`
+  (`SessionHandoffEndpoints.cs:17-18`).
 - **CSRF surface.** Cookie-based auth reintroduces CSRF considerations a pure bearer-header scheme
   avoids; mitigated by the cookies' `SameSite` value (Lax in both apps), the refresh endpoint's
   `Sec-Fetch-Site` check and, under the proxy, the `X-CSRF` header on unsafe methods, but it is a
@@ -194,6 +208,41 @@ on v1.265.1.
    `MMCA.Store/Source/Hosts/UI/MMCA.Store.UI.Web/appsettings.json:65-66` (`SessionCookieSameSite`
    `Lax`). Unchanged and re-confirmed:
    `MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/appsettings.json:69-70`.
+
+## Revision (2026-11-23)
+Re-verified against current source. The decision is unchanged: both apps run the same-origin proxy,
+the server is the only writer of the session cookies, `/auth/session/token` returns a claims-only
+token and checks `Sec-Fetch-Site`, unsafe proxied methods require `X-CSRF`, and both apps configure
+`SessionCookieSameSite` as `Lax`. Three omissions are corrected and the anchors moved.
+
+1. The token-issuing paths now name the fifth default, `auth/passkeys/signin`
+   (`MMCA.Common/Source/Presentation/MMCA.Common.UI.Web/SameOriginProxy/SameOriginApiProxySettings.cs:33`).
+2. The refresh bullet names the view-as overlay branch (ADR-137): a live overlay cookie is answered
+   first on `/auth/session/token`, claims-only on the proxy, and never refreshed
+   (`MMCA.Common/Source/Presentation/MMCA.Common.API/SessionCookies/SessionCookieEndpoints.cs:80-85`),
+   and the circuit's token handoff `POST /auth/session/handoff` also answers a live overlay first and
+   never refreshes it, but returns the view-as access token as `SessionHandoffProtector` ciphertext
+   rather than a claims-only token (`SessionHandoffEndpoints.cs:17`, `:33-36`), which the Trade-offs
+   now also name.
+3. Neither host calls `AddCommonSameOriginApiProxy` directly any more: `AddMmcaBlazorWebHost`
+   registers it (`MMCA.Common/Source/Presentation/MMCA.Common.UI.Web/Hosting/BlazorWebHostExtensions.cs:142`),
+   called at `MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs:26` and
+   `MMCA.Store/Source/Hosts/UI/MMCA.Store.UI.Web/Program.cs:30`, and `UseMmcaBlazorWebPipeline`
+   (`:181`) maps it through `MapCommonSameOriginApiProxy` (`:210`), called at ADC `Program.cs:128`
+   and `:130` and Store `Program.cs:92`.
+4. Anchors re-verified against current source: `SessionCookieEndpoints.cs:87` and `:97` (token plus
+   expiry), `:94-96` (`SessionClaimsToken` under claims-only), `:110-112` (`IsCrossSite`);
+   `SameOriginApiProxySettings.cs:116` (`SessionCookieSameSite` default `Strict`);
+   `SameOriginApiProxyEndpoint.cs:110` (bearer taken from the session cookie), `:273` (`X-CSRF` gate
+   with the WebSocket exemption), `:146-152` and `:184-193` (same-origin gate and WebSocket upgrade
+   detection); `SameOriginProxyTransformer.cs:77` (bearer attached), `:133` and `:256` (token-issuing
+   completion and cookie write); `SessionHandoffEndpoints.cs:51` (cookie handoff `X-CSRF` check) and
+   `:62` (cookie write); `MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/appsettings.json:86-87` and
+   `MMCA.Store/Source/Hosts/UI/MMCA.Store.UI.Web/appsettings.json:64-65` (`SessionCookieSameSite`
+   `Lax`). Unchanged and re-confirmed: `SessionCookieEndpoints.cs:41-55`, `:52`, `:56`, `:58-62`,
+   `:69`, `:72`; `SameOriginApiProxyServiceExtensions.cs:24`, `:72`, `:73`, `:83-84`;
+   `SessionHandoffEndpoints.cs:18`, `:26`; `SessionCookieAuthenticationHandler.cs:51`, `:55`;
+   `SessionCookieSettings.cs:19`.
 
 ## Related
 ADR-004 (the JWT/JWKS validation the API performs on every call, which is why the SSR handler can skip

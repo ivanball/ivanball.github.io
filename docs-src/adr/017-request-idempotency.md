@@ -21,6 +21,11 @@ Revised 2026-10-28: the 2026-08-18 statement that register is `[Idempotent]` is 
 superseded since 2026-10-01 (every POST on `AuthControllerBase` and `OAuthControllerBase` is
 `[NonIdempotent]`; the shared auth `[Idempotent]` actions live in the password-reset and
 email-confirmation bases, so "both ways" holds across the shared auth bases rather than within one).
+Revised 2026-11-23: the shared admin lock, unlock and view-as POSTs are now declared
+`[NonIdempotent]` by `UsersAdminControllerBase` itself and inherited by both consumers, which no longer
+override them (the 2026-10-07 statement that each consumer override declares them is recorded as
+superseded); the auth POST inventory adds `revoke/current` and `view-as/end`, and anchors are
+refreshed.
 
 ## Context
 Write endpoints (POST / PUT / PATCH) are exposed to **client retries and double-submits**: a flaky
@@ -328,6 +333,43 @@ now carries that reading in its 2026-10-28 clause. The earlier sections are left
    `:122-123`, blank-to-null at `:170`, the 422 reuse title at `:327`, the `ETag` replay at `:391-392`
    and the anonymous subject at `:541-542`; `idempotency.degraded` is at `IdempotencyMetrics.cs:46-47`
    and the record's `ETag` at `IdempotencyRecord.cs:26`.
+
+## Revision (2026-11-23)
+Re-verified against current source. The Decision, Rationale and Trade-offs are unchanged, and every
+POST on `AuthControllerBase` and `OAuthControllerBase` is still `[NonIdempotent]`. What moved is the
+user-admin declaration: `UsersAdminControllerBase` now declares its own POSTs, so the Revision
+(2026-10-07) item 2 and the Revision (2026-10-21) consumer-override reading no longer hold, and the
+Revision (2026-10-28) statement that the 2026-10-21 anchors still hold is stale. The earlier sections
+are left as written.
+
+1. **The shared user-admin base declares its POSTs; consumers inherit them.**
+   `UsersAdminControllerBase` marks all three of its POSTs `[NonIdempotent]` with a justification:
+   view-as
+   (`MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/Administration/UsersAdminControllerBase.cs:159`,
+   `:161`), lock (`:213-214`) and unlock (`:245-246`). Neither consumer overrides them: the ADC
+   `UsersAdminController` is a sealed subclass whose remarks say the base declares the intent and
+   nothing is overridden
+   (`MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.API/Controllers/UsersAdminController.cs:19-21`,
+   `:27`), and the Store `AdminUsersController`
+   (`MMCA.Store/Source/Modules/Identity/MMCA.Store.Identity.API/Controllers/AdminUsersController.cs:35`)
+   carries no `[HttpPost]` or `[NonIdempotent]` of its own. A new consumer of that base that does
+   not override these actions passes without supplying a declaration: the gate reflects the
+   derived type's public instance methods
+   (`MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Rules/Cqrs/ArchitectureRules.Idempotency.cs:69`),
+   which for an inherited action is the base's own method carrying the marker (`:31-33`); the
+   `inherit: true` lookup (`:81`) matters only when a consumer overrides one.
+2. **`AuthControllerBase` has seven POSTs, not five.** Besides login, register, refresh, revoke and
+   the per-session revoke, `revoke/current`
+   (`MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/AuthControllerBase.cs:219-220`) and
+   `view-as/end` (`:370`, `[NonIdempotent]` at `:372`) are POSTs, and both are `[NonIdempotent]`, so
+   "every POST on `AuthControllerBase` is `[NonIdempotent]`" still holds.
+3. Anchors re-verified against current source: in `AuthControllerBase.cs`, login `:75-76`, register
+   `:100-101`, refresh `:164-165`, revoke `:189-190` and the per-session revoke `:423-424`; the OAuth
+   exchange (still the only `[HttpPost]` on `OAuthControllerBase`) is at
+   `.../Controllers/OAuthControllerBase.cs:289-290`, with `complete` the `[HttpGet]` at `:204` and the
+   other `[HttpGet]` verbs at `:115`, `:125`, `:138`, `:154` and `:174`; the entity create POST is
+   still at `.../Controllers/AggregateRootEntityControllerBase.cs:75-76`, and the entity update PUT is
+   at `.../Controllers/CrudEntityControllerBase.cs:89-90`.
 
 ## Related
 ADR-003 (handler idempotency for outbox/event consumers, a distinct concern), ADR-013 (Result is the

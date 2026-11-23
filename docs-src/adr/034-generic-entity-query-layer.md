@@ -23,6 +23,8 @@ Revised 2026-10-26: anchors refreshed after the create's `Location` and `Created
 delete action in `AggregateRootEntityControllerBase.cs` moved up one line.
 Revised 2026-10-28: eight filter strategies (seven built-in primitive strategies plus the strongly
 typed identifier) implement `CanParseValue`, not six; `EmailFilterStrategy` takes the default.
+Revised 2026-11-23: the read base also declares two opt-in GET routes, a keyset `cursor` page and a
+`changes` feed, both `virtual` and clamped to `MaxPageSize`; anchors refreshed.
 ## Context
 Every module exposes many entities, and most of them need the same read and write
 surface: list, page, look up for a dropdown, fetch by id, create, delete. Hand
@@ -45,14 +47,22 @@ contract, supplied by two controller bases over a shared query pipeline.
 
 1. **Generic read controller.** `EntityControllerBase<TEntity, TEntityDTO,
    TIdentifierType>`
-   (`Source/Presentation/MMCA.Common.API/Controllers/EntityControllerBase.cs:34`,
+   (`Source/Presentation/MMCA.Common.API/Controllers/EntityControllerBase.cs:33`,
    `[ApiController]` / `[Route("[controller]")]` / `[ApiVersion("1.0")]` at
-   `EntityControllerBase.cs:31-33`) exposes four core GET routes for any entity
-   (plus a `[HttpGet("export")]` CSV action inserted between the paged and lookup
-   routes): `[HttpGet]` list (`EntityControllerBase.cs:107`), `[HttpGet("paged")]`
-   (`EntityControllerBase.cs:154`), `[HttpGet("lookup")]` for id/name dropdown
-   entries (`EntityControllerBase.cs:317`), and `[HttpGet("{id}")]`
-   (`EntityControllerBase.cs:356`).
+   `EntityControllerBase.cs:30-32`) exposes four core GET routes for any entity
+   (plus a `[HttpGet("export")]` CSV action at `EntityControllerBase.cs:253`, between
+   the paged and lookup routes): `[HttpGet]` list (`EntityControllerBase.cs:106`),
+   `[HttpGet("paged")]` (`EntityControllerBase.cs:153`), `[HttpGet("lookup")]` for
+   id/name dropdown entries (`EntityControllerBase.cs:318`), and `[HttpGet("{id}")]`
+   (`EntityControllerBase.cs:357`). Two further GET routes are declared on the base but
+   are opt-in through `[OptInAction]`: `[HttpGet("cursor")]` (`EntityControllerBase.cs:403`,
+   gated on `SupportsCursorPagingAttribute` at `:404`), a keyset page ordered by the sort
+   column with `Id` as tie-break, and `[HttpGet("changes")]` (`EntityControllerBase.cs:456`,
+   gated on `SupportsChangeFeedAttribute` at `:457`), a change feed of upserts and
+   tombstones ordered by `(LastModifiedOn, Id)`. Both clamp the page size to `MaxPageSize`
+   (`:419`, `:467`) and are scoped by `GetReadSpecificationAsync`; the cursor read takes no
+   filters, field projection or includes and emits no pagination header (remarks at
+   `:398-402`).
 
 2. **Generic write controller.** `AggregateRootEntityControllerBase<TEntity,
    TEntityDTO, TIdentifierType, TCreateRequest>`
@@ -69,51 +79,54 @@ contract, supplied by two controller bases over a shared query pipeline.
    duplicate (ADR-017).
 
 3. **Sparse fieldsets via `fields`.** A comma-separated `fields` query parameter
-   (`EntityControllerBase.cs:111`, `:163`, `:365`) drives a server-side projection:
+   (`EntityControllerBase.cs:110`, `:162`, `:366`) drives a server-side projection:
    `QueryFieldService.ApplyFieldSelection`
-   (`Source/Core/MMCA.Common.Application/Services/QueryFieldService.cs:283`) builds a
+   (`Source/Core/MMCA.Common.Application/Services/QueryFieldService.cs:290`) builds a
    `MemberInit` expression that selects only the requested writable properties
-   (`QueryFieldService.cs:341`) so only those columns leave the database. The
+   (`QueryFieldService.cs:358`) so only those columns leave the database. The
    compiled projections are cached per field set, capped at `MaxCacheEntries` 512
    (`QueryFieldService.cs:39`); once the cache is full, a new field set skips the
-   server-side projection (`QueryFieldService.cs:302-303`) and the response is still
+   server-side projection (`QueryFieldService.cs:310-318`) and the response is still
    trimmed to the requested fields.
 
 4. **Dynamic per-type filtering.** The paged route binds
    `Dictionary<string, (string Operator, string Value)> filters` through
-   `[ModelBinder(typeof(QueryFilterModelBinder))]` (`EntityControllerBase.cs:166`),
+   `[ModelBinder(typeof(QueryFilterModelBinder))]` (`EntityControllerBase.cs:165`),
    which parses `filters[Property].operator` / `filters[Property].value` query keys
    (`Source/Presentation/MMCA.Common.API/ModelBinders/QueryFilterModelBinder.cs:24`).
    `QueryFilterService.ApplyFilters`
-   (`Source/Core/MMCA.Common.Application/Services/Filtering/QueryFilterService.cs:81`,
-   with a second overload at `:102`) resolves a `IFilterStrategy`
+   (`Source/Core/MMCA.Common.Application/Services/Filtering/QueryFilterService.cs:82`,
+   with a second overload at `:103`) resolves a `IFilterStrategy`
    (`Source/Core/MMCA.Common.Application/Services/Filtering/IFilterStrategy.cs:6`)
    per property CLR type from a strategy registry (string, bool, int, long, DateTime,
    decimal, Guid and their nullables, plus the `Email` value object through
    `EmailFilterStrategy`; declared at `QueryFilterService.cs:34`, entries at `:37-50`),
    each strategy declaring its `SupportedOperators` (`IFilterStrategy.cs:24`). Extra types
-   register via `QueryFilterService.RegisterStrategy` (`QueryFilterService.cs:65`); a
+   register via `QueryFilterService.RegisterStrategy` (`QueryFilterService.cs:66`); a
    strongly typed identifier column (ADR-115) needs no registration, because
    `ResolveStrategy` (`QueryFilterService.cs:413`) builds a `StronglyTypedIdFilterStrategy`
    on first use (`:421`) and memoizes it beside the built-ins.
 
-5. **Sort.** `sortColumn` / `sortDirection` (`EntityControllerBase.cs:161-162`)
-   feed `QueryFieldService.ApplySorting` (`QueryFieldService.cs:155`), an
+5. **Sort.** `sortColumn` / `sortDirection` (`EntityControllerBase.cs:160-161`)
+   feed `QueryFieldService.ApplySorting` (`QueryFieldService.cs:162`, second overload at
+   `:191`), an
    `OrderBy("<col> ascending|descending")` over the entity property the DTO name
    maps to.
 
 6. **Pagination and the `X-Pagination` header.** The paged route clamps the
    requested page size with `Math.Min(pageSize, MaxPageSize)`
-   (`EntityControllerBase.cs:169`), where `MaxPageSize` resolves
+   (`EntityControllerBase.cs:168`), where `MaxPageSize` resolves
    `IOptions<ApplicationSettings>` from the request's services and falls back to
-   500 (`EntityControllerBase.cs:59`, resolution at `:63`, default at
+   500 (`EntityControllerBase.cs:58`, resolution at `:62`, default at
    `Source/Core/MMCA.Common.Application/Settings/ApplicationSettings.cs:17`), then
    clamps the configured value to between 1 and
-   `EntityQueryPipeline.MaxUnboundedResultLimit` (`EntityControllerBase.cs:64`), so
+   `EntityQueryPipeline.MaxUnboundedResultLimit` (`EntityControllerBase.cs:63`), so
    configuration cannot raise the page size above the pipeline ceiling. It
    is read per request rather than captured in the constructor so a configuration
    change takes effect without a restart. The pagination metadata is serialized
-   into the `X-Pagination` response header (`EntityControllerBase.cs:188`).
+   into the `X-Pagination` response header by `Response.AppendPaginationHeader`
+   (`EntityControllerBase.cs:187`; header name at
+   `Source/Presentation/MMCA.Common.API/Pagination/PaginationHeaderExtensions.cs:17`).
 
 7. **A last-resort safety ceiling.** Independent of the API page-size clamp,
    `EntityQueryPipeline.MaxUnboundedResultLimit = 1000`
@@ -124,7 +137,7 @@ contract, supplied by two controller bases over a shared query pipeline.
    caller that omits pagination cannot trigger an unbounded full-table load.
 
 8. **Two include paths.** `includeFKs` / `includeChildren`
-   (`EntityControllerBase.cs:112-113` for the list overload, `:159-160` for the
+   (`EntityControllerBase.cs:111-112` for the list overload, `:158-159` for the
    paged overload) select navigation loading. `EntityQueryPipeline`
    (`EntityQueryPipeline.cs:13`) runs PATH 1 for source-supported includes via EF
    Core `.Include()` translated to SQL (`EntityQueryPipeline.cs:129-135`) and PATH 2
@@ -139,10 +152,10 @@ contract, supplied by two controller bases over a shared query pipeline.
 - **Bounded dynamic querying, not open SQL.** Filtering is dynamic over the wire but
   not unbounded in the engine: each property is filtered only by a registered
   `IFilterStrategy` whose `SupportedOperators` are validated before the database is
-  touched (`QueryFilterService.ValidateFilters`, `QueryFilterService.cs:166` and `:182`,
+  touched (`QueryFilterService.ValidateFilters`, `QueryFilterService.cs:167` and `:183`,
   invoked at `Source/Core/MMCA.Common.Application/Services/EntityQueryService.cs:304`),
   and `MaxUnboundedResultLimit` (`EntityQueryPipeline.cs:23`) plus the `MaxPageSize`
-  clamp (`EntityControllerBase.cs:169`) bound the result size.
+  clamp (`EntityControllerBase.cs:168`) bound the result size.
 - **Composes with manual DTO mapping (ADR-001).** Entities are projected to DTOs by
   an injected `IEntityDTOMapper` (`EntityQueryService.cs:36`, property at `:91`) via
   `DTOMapper.MapToDTOs` (`EntityQueryService.cs:361`); a `DTOToEntityPropertyMap`
@@ -161,29 +174,35 @@ contract, supplied by two controller bases over a shared query pipeline.
 - **Dynamic filtering is an injection and over-fetch surface.** Arbitrary
   client-supplied property/operator/value triples are an attack surface; it is
   bounded by validating properties and operators up front
-  (`QueryFilterService.ValidateFilters`, `QueryFilterService.cs:166`), routing each
+  (`QueryFilterService.ValidateFilters`, `QueryFilterService.cs:167`), routing each
   type through its registered `IFilterStrategy` rather than free-form expression
   evaluation, and capping rows with `MaxUnboundedResultLimit`
   (`EntityQueryPipeline.cs:23`). Sparse fieldsets reject non-writable properties
-  with `InvalidEntityField` during field validation (`QueryFieldService.cs:559-561`),
-  and the projection itself selects only writable properties (`QueryFieldService.cs:341`).
+  with `InvalidEntityField` during field validation (`QueryFieldService.cs:576-578`),
+  and the projection itself selects only writable properties (`QueryFieldService.cs:358`).
 - **Generic endpoints are less self-documenting than bespoke ones.** One generic
   shape per entity is consistent but conveys less domain intent than a named,
   purpose-built endpoint; the query contract (filter key syntax, operators) must be
   learned once rather than read off each endpoint.
-- **Opting out means overriding the base.** All five reads (list, paged, CSV export, lookup
-  and by-id: `EntityControllerBase.cs:110`, `:158`, `:257`, `:320`, `:361`) and the two
-  writes (`AggregateRootEntityControllerBase.cs:80`, `:111`) are `virtual`, so a controller
-  that needs bespoke behavior overrides the specific action rather than abandoning the base,
-  but the default surface is opt-out, not opt-in.
+- **Opting out means overriding the base.** All five default reads (list, paged, CSV export,
+  lookup and by-id: `EntityControllerBase.cs:109`, `:157`, `:258`, `:321`, `:362`), the two
+  opt-in reads (cursor and change feed: `:408`, `:461`) and the two writes
+  (`AggregateRootEntityControllerBase.cs:80`, `:111`) are `virtual`, so a controller that
+  needs bespoke behavior overrides the specific action rather than abandoning the base, but
+  the default surface is opt-out, not opt-in. The two opt-in reads are the exception: their
+  convention is read off the base action, so an override still needs `[SupportsCursorPaging]`
+  or `[SupportsChangeFeed]` on the controller or it is removed as well
+  (`OptInActionAttribute.cs:12-13`, `:29-32`; `SupportsCursorPagingAttribute.cs:14`,
+  `SupportsChangeFeedAttribute.cs:14`).
 - **The CSV export widens the inherited surface, so it fails closed.** `ExportAsync`
-  (`EntityControllerBase.cs:257`) reads pages of `MaxPageSize` rows (`:277`) up to
-  `MaxExportRows` (default `DefaultMaxExportRows` 100_000, `EntityControllerBase.cs:472`),
-  announcing that ceiling in the `X-Export-Row-Limit` header (`:481`, appended at `:625`).
-  When the controller declares no row scope it refuses with a 403 carrying
-  `Export.RowScopeRequired` (`:273-274`, code at `:487`) unless `AllowUnscopedExport`
-  (`:508`, default `false`) opts in, so a controller that forgot to scope its export serves
-  no rows rather than every row.
+  (`EntityControllerBase.cs:258`) reads pages of `MaxPageSize` rows (`:278`) up to
+  `MaxExportRows` (default `DefaultMaxExportRows` 100_000, `EntityControllerBase.cs:513`;
+  settings default at `Source/Core/MMCA.Common.Application/Settings/ApplicationSettings.cs:33`),
+  announcing that ceiling in the `X-Export-Row-Limit` header (`ExportRowLimitHeaderName`
+  `:522`, appended at `:681`). When the controller declares no row scope it refuses with a
+  403 carrying `Export.RowScopeRequired` (`:274-275`, code at `:528`) unless
+  `AllowUnscopedExport` (`:549`, default `false`) opts in, so a controller that forgot to
+  scope its export serves no rows rather than every row.
 
 ## Revision (2026-09-07)
 The query layer's shape is unchanged. What a caller is allowed to **name** is not, from the
@@ -226,7 +245,7 @@ answers 400. The fix is to add the field to the DTO, map it in `DTOToEntityPrope
 ADR-001 (manual DTO mapping: the generic controllers project through
 `IEntityDTOMapper`), ADR-002 (navigation populators: the unsupported-include path),
 ADR-013 (Result pattern at the edge: every action returns through
-`HandleFailure(result.Errors)`, `EntityControllerBase.cs:129`), ADR-017 (idempotency:
+`HandleFailure(result.Errors)`, `EntityControllerBase.cs:128`), ADR-017 (idempotency:
 the generic create is `[Idempotent]`, `AggregateRootEntityControllerBase.cs:76`),
 ADR-019 (rate limiting: these GET routes are the authenticated read surface the
 always-on global limiter caps per principal).
@@ -383,3 +402,37 @@ that section is left as recorded and the current set is stated here.
    `QueryFilterService.cs` value check `:318` and `Email` registry entry `:50`. The by-id fast path
    anchors recorded in revisions 2026-07-25 and 2026-09-07 stay as recorded; revision 2026-10-06
    item 1 already gives their current locations.
+
+## Revision (2026-11-23)
+Re-verified against current source. The two controller bases, the dynamic query contract, the
+pipeline bounds and the fail-closed export are unchanged; the read base gained two opt-in routes and
+the `EntityControllerBase.cs`, `QueryFieldService.cs` and `QueryFilterService.cs` anchors moved.
+
+1. **Two opt-in GET routes sit on the read base.** `[HttpGet("cursor")]`
+   (`Source/Presentation/MMCA.Common.API/Controllers/EntityControllerBase.cs:403`,
+   `GetCursorPageAsync` `:408`) returns a keyset page ordered by the sort column with `Id` as
+   tie-break, and `[HttpGet("changes")]` (`:456`, `GetChangesAsync` `:461`) returns a change feed of
+   upserts and tombstones ordered by `(LastModifiedOn, Id)`. Each exists only on a controller carrying
+   its attribute through `[OptInAction]` (`SupportsCursorPagingAttribute` `:404`,
+   `SupportsChangeFeedAttribute` `:457`), clamps the page size to `MaxPageSize` (`:419`, `:467`) and
+   is scoped by `GetReadSpecificationAsync`. Both are `virtual`. Decision item 1 and Trade-offs record
+   them.
+2. Anchors re-verified against current source: `EntityControllerBase.cs` attributes `:30-32`, class
+   `:33`, `MaxPageSize` `:58`, settings read `:62`, `Math.Clamp` `:63`, `[HttpGet]` `:106`, list read
+   `:109`, list `fields` `:110` and include flags `:111-112`, `HandleFailure(result.Errors)` `:128`,
+   `[HttpGet("paged")]` `:153`, paged read `:157`, paged include flags `:158-159`, sort parameters
+   `:160-161`, paged `fields` `:162`, filter binder `:165`, `Math.Min` `:168`,
+   `AppendPaginationHeader` `:187`, `[HttpGet("export")]` `:253`, `ExportAsync` `:258`, unscoped
+   refusal `:274-275`, export page size `:278`, `[HttpGet("lookup")]` `:318`, lookup read `:321`,
+   `[HttpGet("{id}")]` `:357`, by-id read `:362`, by-id `fields` `:366`, `DefaultMaxExportRows`
+   `:513`, `ExportRowLimitHeaderName` `:522`, `ExportRowScopeRequiredErrorCode` `:528`,
+   `AllowUnscopedExport` `:549`, header append `:681`;
+   `Source/Presentation/MMCA.Common.API/Pagination/PaginationHeaderExtensions.cs:17` (`X-Pagination`);
+   `Source/Core/MMCA.Common.Application/Settings/ApplicationSettings.cs:17` (`MaxPageSize` 500) and
+   `:33` (`MaxExportRows` 100_000); `QueryFieldService.cs` `MaxCacheEntries` `:39`, `ApplySorting`
+   `:162` and `:191`, `ApplyFieldSelection` `:290`, cache-full skip `:310-318`, writable-only
+   projection `:358`, non-writable `InvalidEntityField` `:576-578`; `QueryFilterService.cs`
+   `ApplyFilters` `:82` and `:103`, `RegisterStrategy` `:66`, `ValidateFilters` `:167` and `:183`,
+   `ValidateValueParseable` call `:298` and declaration `:306`, `Filter.Value.Invalid` `:322` with
+   source `nameof(ValidateFilters)` `:324`, `ResolveStrategy` `:413`. Anchors inside the earlier
+   Revision sections are left as recorded.

@@ -11,7 +11,10 @@ citations re-anchored and the ZXing pin updated. Revised 2026-10-21: the QRCoder
 (bumped in v1.249.0), and the package and check-in page anchors are refreshed. Revised 2026-10-26:
 anchors refreshed after `Directory.Packages.props` and `CheckInScan.razor` moved; versions and
 behavior unchanged. Revised 2026-10-28: anchors refreshed for `QrErrorCorrectionLevel`,
-`IBarcodeScannerService` and `NullBarcodeScannerService`; behavior unchanged.
+`IBarcodeScannerService` and `NullBarcodeScannerService`; behavior unchanged. Revised 2026-11-23:
+the framework now requests the camera permission itself through a third contract member,
+`EnsureCameraAccessAsync`, reversing the head-owned permission sub-decision; the QRCoder pin is
+1.9.0, and the scanner and package anchors are refreshed.
 
 ## Context
 ADC's badge check-in feature ([ADR-072](072-qr-badge-check-in-and-points.md)) needs two things that
@@ -48,19 +51,26 @@ scanning ships as an ADR-042 capability whose native half is opt-in per head.**
   shipping without an accessible name; `PixelsPerModule` (default 10, clamped to at least 1 at `:77`),
   `ErrorCorrection` and `Class` cover sizing and styling. A blank payload renders nothing rather than a
   broken image (`:69-72`), and the bitmap is memoized against the three inputs that affect it
-  (`:45-59`), so a parent re-render does not re-encode.
+  (`:45-59`), so a parent re-render does not re-encode. `QrCodeButton`
+  (`Components/Sharing/QrCodeButton.razor`) sits beside it: an icon button (`:10-14`) that opens a dialog
+  (`:16-40`) showing a public page URL as a code by rendering `QrCodeImage` (`:28-31`), forwarding `PixelsPerModule` and `ErrorCorrection`
+  (`:55-65`, default `Quartile`).
 - **The error-correction level is a framework enum, not the generator's.**
   `QrErrorCorrectionLevel` (`Components/Sharing/QrErrorCorrectionLevel.cs:9-22`: `Low`, `Medium` (default),
   `Quartile`, `High`) is mapped onto QRCoder's `ECCLevel` inside the component (`QrCodeImage.razor:80-86`),
   so the package's public surface does not pin consumers to the generator that happens to back it today.
 - **Scanning is one contract on the ADR-042 pattern.** `IBarcodeScannerService`
-  (`Services/Capabilities/Media/IBarcodeScannerService.cs:12-22`) is two members: `bool IsSupported` and
-  `Task<string?> ScanAsync(CancellationToken cancellationToken = default)`. The contract is that an
-  implementation **never throws**: an unsupported head, a denied permission, a user-cancelled scan and a
-  cancelled token all return `null` (`:3-11`), and the decoded payload is documented as untrusted input.
-  `NullBarcodeScannerService` (`Services/Capabilities/Media/NullBarcodeScannerService.cs:9-17`) reports `IsSupported == false`
-  and returns `null`, TryAdd-registered by `AddDeviceCapabilityDefaults`
-  (`Services/Capabilities/DependencyInjection.cs:70`).
+  (`Services/Capabilities/Media/IBarcodeScannerService.cs:12-29`) is three members: `bool IsSupported`
+  (`:15`), `Task<bool> EnsureCameraAccessAsync(CancellationToken cancellationToken = default)` (`:22`)
+  and `Task<string?> ScanAsync(CancellationToken cancellationToken = default)` (`:28`). The contract is
+  that an implementation **never throws**: an unsupported head, a denied permission, a user-cancelled
+  scan and a cancelled token all return `null` from `ScanAsync` (`:3-11`), and the decoded payload is
+  documented as untrusted input (`:10`). `EnsureCameraAccessAsync` returns `false` when access is denied
+  or unavailable, so a caller can explain why scanning did not start, which a `null` cannot (`:17-21`).
+  `NullBarcodeScannerService` (`Services/Capabilities/Media/NullBarcodeScannerService.cs:9-21`) reports
+  `IsSupported == false` (`:12`), returns `false` from `EnsureCameraAccessAsync` (`:15-16`) and `null`
+  from `ScanAsync` (`:19-20`), TryAdd-registered by `AddDeviceCapabilityDefaults`
+  (`Services/Capabilities/DependencyInjection.cs:38`, `TryAddSingleton` at `:79`).
 - **The native implementation is opt-in and deliberately NOT folded into `UseMauiDeviceCapabilities`.**
   A head asks for the camera by name:
   `UseCommonBarcodeScanner(Func<string> cancelText, Func<string> cameraDescription)` on
@@ -72,25 +82,33 @@ scanning ships as an ADR-042 capability whose native half is opt-in per head.**
   reason sits on the opt-in method's own doc comment (`:86-87`): a head that never scans should ship
   neither the camera handler nor a camera permission declaration.
 - **The scan is a modal page with exactly one resolution.** `MauiBarcodeScannerService`
-  (`Capabilities/Media/MauiBarcodeScannerService.cs:24`) marshals to the main thread (`:67-69`), then inside
-  `ScanOnMainThreadAsync` (`:79-104`) pushes a `BarcodeScanPage` modally (`:94`) and pops it in a
-  `finally` (`:100-103`). The page holds a
+  (`Capabilities/Media/MauiBarcodeScannerService.cs:24`) marshals to the main thread (`:87-89`), then inside
+  `ScanOnMainThreadAsync` (`:111-136`) pushes a `BarcodeScanPage` modally (`:126`) and pops it in a
+  `finally` (`:132-135`). The page holds a
   `TaskCompletionSource<string?>` (`Capabilities/Media/BarcodeScanPage.cs:23-24`) that four paths can complete
   and only the first wins: a decode, the cancel button, the hardware back gesture, and
   `OnDisappearing`; the caller's `CancellationToken` is bridged to the same `Cancel()`
-  (`MauiBarcodeScannerService.cs:97`). Only 2D formats are read (`BarcodeScanPage.cs:36`), because the
+  (`MauiBarcodeScannerService.cs:129`). Only 2D formats are read (`BarcodeScanPage.cs:36`), because the
   affordance is a QR/DataMatrix scan and admitting the 1D formats multiplies false positives on a
   shaky handheld frame (`:34-35`).
-- **Permission stays with the head, not the framework.** No framework code calls
-  `Permissions.RequestAsync<Permissions.Camera>`. An undeclared or denied camera produces a preview that
-  never decodes and is cancelled out of, which the contract already renders as `null`
-  (`MauiBarcodeScannerService.cs:7-11`), so the degradation path and the cancel path are the same path.
+- **The head declares the permission; the framework requests it.** The head still declares the
+  platform permission (Android `CAMERA`, iOS `NSCameraUsageDescription`;
+  `HostingDependencyInjection.cs:97-98`). `MauiBarcodeScannerService.ScanAsync` first calls
+  `EnsureCameraAccessAsync` and returns `null` when it is `false` (`MauiBarcodeScannerService.cs:78-81`),
+  so no page opens on a camera view that would stay black (`:8-11`). `EnsureCameraAccessAsync`
+  (`:56-73`) marshals the request to the main thread (`:65`) and treats the throw from a head that never
+  declared the permission as `false` (`:67-72`); the request itself is
+  `Permissions.CheckStatusAsync<Permissions.Camera>` followed, when not granted, by
+  `Permissions.RequestAsync<Permissions.Camera>` (`:99-109`). A denial and an undeclared permission
+  therefore both read as `null` with no page shown, while a caller that wants to say why scanning did
+  not start calls `EnsureCameraAccessAsync` first, as ADC's check-in page does
+  (`CheckInScan.razor.cs:210`).
 - **Supported means Android or iOS.** `IsSupported` gates on `DeviceInfo.Current.Platform` (`:51-53`);
   Windows and Mac Catalyst heads keep the null behavior even after opting in.
 
-Packaging follows ADR-042 exactly: `QRCoder` 1.8.1 (MIT) is a `MMCA.Common.UI` dependency and
+Packaging follows ADR-042 exactly: `QRCoder` 1.9.0 is a `MMCA.Common.UI` dependency and
 `ZXing.Net.Maui.Controls` 0.10.4 (MIT) a `MMCA.Common.UI.Maui` one, both pinned in
-`MMCA.Common/Directory.Packages.props` (`:250`, `:284`), and the MAUI package keeps its
+`MMCA.Common/Directory.Packages.props` (`:324`, `:361`), and the MAUI package keeps its
 windows-job build and pack.
 
 ## Rationale
@@ -123,7 +141,7 @@ windows-job build and pack.
 ## Trade-offs
 - **The scan page's text is the caller's delegate, not a string (resolved in v1.147.0).**
   `cancelText` and `cameraDescription` arrive as `Func<string>` and are invoked once per scan, when
-  the modal page is built (`Capabilities/Media/MauiBarcodeScannerService.cs:65-69`), so a head that
+  the modal page is built (`Capabilities/Media/MauiBarcodeScannerService.cs:85-88`), so a head that
   switches culture at runtime under [ADR-027](027-multi-locale-i18n.md) gets the cancel button, page
   title and semantic description in the language that is current at the scan rather than the one
   that was current at startup. The price is on the caller: a head passes the resource lookups
@@ -199,6 +217,35 @@ two-member scanner contract and the null fallback are as recorded, and only thei
    (`IsSupported` `:15`, `ScanAsync` `:21`, never-throws contract in the doc comment at `:3-11`, the
    untrusted-payload note at `:10`); `Services/Capabilities/Media/NullBarcodeScannerService.cs:9-17`
    (`IsSupported => false` at `:12`, the `null` result at `:15-16`).
+
+## Revision (2026-11-23)
+Re-verified against current source. The headline split (QR display as a shared component, scanning as
+an opt-in ADR-042 capability), the never-throws contract, the modal page and the 2D-only formats are
+unchanged; the permission sub-decision is reversed and the scanner contract grew a member.
+1. The Decision bullet "Permission stays with the head, not the framework" is replaced. The framework
+   now requests the camera permission: `MauiBarcodeScannerService.ScanAsync` calls
+   `EnsureCameraAccessAsync` and returns `null` on `false` (`MauiBarcodeScannerService.cs:78-81`), and
+   `RequestCameraAsync` calls `Permissions.CheckStatusAsync<Permissions.Camera>` then
+   `Permissions.RequestAsync<Permissions.Camera>` (`:99-109`) on the main thread (`:65`), treating the
+   throw from an undeclared permission as `false` (`:67-72`). A denial now returns `null` with no page
+   shown instead of a preview that never decodes (`:8-11`). The head still declares the platform
+   permission (`HostingDependencyInjection.cs:97-98`). ADC's check-in page calls the new member before
+   it scans (`CheckInScan.razor.cs:210`).
+2. `IBarcodeScannerService` is three members, not two: `EnsureCameraAccessAsync` (`:22`) joins
+   `IsSupported` (`:15`) and `ScanAsync` (`:28`), and `NullBarcodeScannerService` returns `false` from
+   it (`NullBarcodeScannerService.cs:15-16`).
+3. The Packaging paragraph records `QRCoder` 1.9.0 (`MMCA.Common/Directory.Packages.props:324`),
+   moved from 1.8.1. Its license is not restated, because the 1.9.0 license is not checked here.
+4. The display bullet now names `QrCodeButton` (`Components/Sharing/QrCodeButton.razor:28-31`), the
+   shared icon button whose dialog renders `QrCodeImage` for a public page URL.
+5. Anchors re-verified against current source: `IBarcodeScannerService.cs:12-29` (doc comment `:3-11`,
+   untrusted-payload note `:10`); `NullBarcodeScannerService.cs:9-21` (`:12`, `:15-16`, `:19-20`);
+   `Services/Capabilities/DependencyInjection.cs:79` (`TryAddSingleton`, inside
+   `AddDeviceCapabilityDefaults` at `:38`); `MauiBarcodeScannerService.cs:24` (class, unmoved),
+   `:51-53` (`IsSupported`, unmoved), `:85-88` (per-scan delegate invocation), `:87-89` (main-thread
+   marshal), `:111-136` (`ScanOnMainThreadAsync`), `:126` (`PushModalAsync`), `:129` (token bridged to
+   `Cancel`), `:132-135` (`PopModalAsync` in `finally`); `Directory.Packages.props:361`
+   (ZXing.Net.Maui.Controls 0.10.4, version unchanged).
 
 ## Related
 [ADR-042](042-device-capability-abstraction.md) (the capability pattern this extends: contract in

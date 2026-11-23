@@ -18,6 +18,9 @@ Revised 2026-11-04: the stored-grant cache interval defaults to 30 seconds as of
 Revised 2026-11-08: passkeys ([ADR-139](139-passkeys-webauthn-opt-in-sign-in.md)) and machine clients
 ([ADR-140](140-machine-clients-oauth-client-credentials.md)) are further identity opt-ins of this
 shape (see Revision below).
+Revised 2026-11-23: `MMCA.Common.UI` now ships an opt-in two-factor account page at
+`/profile/two-factor` (adopted by MMCA.Store only), a registered two-factor authenticator reaches
+sign-in without a constructor argument, and anchors are refreshed (see Revision below).
 Layers stored permission grants over
 [ADR-020](020-permission-based-authorization.md)'s compiled registry and extends the shared sign-in
 workflow of [ADR-050](050-jwt-refresh-token-rotation.md) with optional collaborators.
@@ -25,7 +28,7 @@ workflow of [ADR-050](050-jwt-refresh-token-rotation.md) with optional collabora
 ## Context
 The framework already owns the hard, uniform parts of identity. `AuthenticationServiceBase<TUser>`
 carries login, registration, refresh-token rotation with reuse detection and revocation
-(`MMCA.Common/Source/Core/MMCA.Common.Application/Auth/AuthenticationServiceBase.cs:67`), the apps
+(`MMCA.Common/Source/Core/MMCA.Common.Application/Auth/AuthenticationServiceBase.cs:74`), the apps
 subclass it and supply hooks for the pieces that are genuinely theirs (their `User` factory, their
 claim set, their lookups). Password reset ships the same way: a cache-backed, hashed-at-rest,
 single-use token service
@@ -55,20 +58,23 @@ either be too thin to use or force fields an app has no column for.
 **Sign-in is a chain no consumer can afford to have changed under it.** ADC and Store both run their
 production sign-in through the shared base. A new mandatory step in that chain is a behaviour change
 in a deployed system, and the framework's own history says so: the 1.188.0 release needed an
-`UPGRADING.md` section with eight items (`MMCA.Common/UPGRADING.md:1447`), one of which (the fallback
-authorization policy, item 1 at `:1453`) broke unannotated endpoints.
+`UPGRADING.md` section with eight items (`MMCA.Common/UPGRADING.md:2225`), one of which (the fallback
+authorization policy, item 1 at `:2231`) broke unannotated endpoints.
 
 **Pages are where apps diverge most.** The framework ships credential pages in `MMCA.Common.UI`, and
 their existence is already the exception rather than the rule. A two-factor enrollment page has to
-render a QR code, present recovery codes once, and fit an app's layout and copy; two consumers have
-not yet asked for the same one.
+render a QR code, present recovery codes once, and fit an app's layout and copy, so a shared page
+cannot be imposed on every host: the one shared two-factor page (item 10) is opt-in and routes only
+in a host that registers it.
 
 ## Decision
 **The four identity completions ship as opt-in extension points: contracts and abstract bases in
 Application, implementations in Infrastructure behind their own `Add*` calls, and OPTIONAL
-constructor arguments where the shared sign-in workflow has to learn a new step. A consumer that
-adopts none of them observes no change at all. Pages stay in the consumers until two of them want the
-same one.**
+collaborators (an optional constructor argument, or the `AuthenticationValidators` parameter object)
+where the shared sign-in workflow has to learn a new step. A consumer that adopts none of them
+observes no change at all. Pages stay in the consumers by default; the shared ones are opt-in, and
+the two-factor page, adopted by one consumer so far, routes only behind its own registration
+(item 10).**
 
 1. **Two-factor is a contract plus a challenge, not a feature.** `ITwoFactorService`
    (`MMCA.Common/Source/Core/MMCA.Common.Application/Auth/TwoFactor/ITwoFactorService.cs:16`) is
@@ -79,22 +85,32 @@ same one.**
    (`MMCA.Common/Source/Core/MMCA.Common.Domain/Auth/ITwoFactorUserState.cs:27`). The framework ships
    no user table and no migration for this.
 
-2. **The sign-in hook is an optional constructor argument, and its absence is a no-op.**
+2. **The sign-in hook is optional, and a host that registers no authenticator is unchanged.**
    `AuthenticationServiceBase` gained `ITwoFactorAuthenticator? twoFactor = null` and
    `IOptions<EmailConfirmationSettings>? emailConfirmationSettings = null`
-   (`.../Auth/AuthenticationServiceBase.cs:73-74`), the optional trailing-parameter shape
+   (`.../Auth/AuthenticationServiceBase.cs:80-81`), the optional trailing-parameter shape
    `ChangePasswordHandlerBase` uses for its `TimeProvider? timeProvider = null`
-   (`.../Users/UseCases/ChangePassword/ChangePasswordHandlerBase.cs:62`). `ChallengeSecondFactorAsync` (`:550`) answers `NotEnrolled` outright when no
-   authenticator was supplied (`:554-555`), so an unadopted consumer pays not even a query, and every
-   existing subclass keeps compiling because it simply passes fewer arguments.
+   (`.../Users/UseCases/ChangePassword/ChangePasswordHandlerBase.cs:61`). While that argument is null,
+   `ChallengeSecondFactorAsync` (`:855`) takes the authenticator from
+   `AuthenticationValidators.TwoFactor` (`:859`). MMCA.Common registers no `AuthenticationValidators`:
+   the consumer does, and when it registers the type for constructor discovery (MMCA.Store does,
+   `MMCA.Store/Source/Modules/Identity/MMCA.Store.Identity.Application/DependencyInjection.cs:47`)
+   the container fills `TwoFactor` only when an `ITwoFactorAuthenticator` is registered
+   (`.../Auth/AuthenticationValidators.cs:34-35`, `:45-51`, `:73`; constructor doc
+   `AuthenticationServiceBase.cs:62-67`). A host that builds the bundle itself leaves `TwoFactor`
+   null unless it passes the authenticator. With neither it answers `NotEnrolled`
+   outright (`:860`), so an unadopted consumer pays not even a query, and every existing subclass
+   keeps compiling because it simply passes fewer arguments.
 
 3. **The step-up assertion is a claim, and presence is the whole test.** A verified challenge stamps
-   the `amr`-style `mfa` claim (`MMCA.Common/Source/Core/MMCA.Common.Shared/Auth/AuthClaimTypes.cs:62`)
-   with the method that satisfied it (`:65`, `:68`), through the same pass-through token wrapper that
-   already stamps `sid`: `CreateAccessTokenForSession`
-   (`.../Auth/AuthenticationServiceBase.cs:515-516`) hands the app's token to
-   `AuthSessionIssuer.MintForSession`, which appends `sid` and `mfa`
-   (`.../Auth/Sessions/AuthSessionIssuer.cs:587`, `:592`), so the app's
+   the `amr`-style `mfa` claim (`MMCA.Common/Source/Core/MMCA.Common.Shared/Auth/AuthClaimTypes.cs:63`)
+   with the method that satisfied it (`:66`, `:69`; the passkey method `:76` belongs to
+   [ADR-139](139-passkeys-webauthn-opt-in-sign-in.md)), through the same pass-through token wrapper
+   that already stamps `sid`: `CreateAccessTokenForSession`
+   (`.../Auth/AuthenticationServiceBase.cs:818-819`) hands the app's token to
+   `AuthSessionIssuer.MintForSession` (`.../Auth/Sessions/AuthSessionIssuer.cs:164`, `:173`), which
+   appends `sid` (`:776`) and `mfa` (`:781`), plus the `auth_time` claim of ADR-139 (`:787`), so the
+   app's
    `CreateAccessToken` hook keeps its signature. `IRequiresMfa`
    (`.../UseCases/Markers/IRequiresMfa.cs:28`) is checked by the decorators through the shared
    `AuthorizationGate` (`.../UseCases/Decorators/AuthorizationGate.cs:60`), which reads the claim via
@@ -119,14 +135,14 @@ same one.**
 5. **Stored grants union with the compiled registry and can never deny.** `PermissionGrant`
    (`MMCA.Common/Source/Core/MMCA.Common.Domain/Auth/PermissionGrant.cs:24`) is a flat
    `(Role, Permission)` row with no soft-delete flag
-   (`.../Infrastructure/Persistence/Auth/PermissionGrantModelBuilderExtensions.cs:30`). The DI call is
+   (`PermissionGrant.cs:17`). The DI call is
    the whole opt-in: `AddStoredPermissionGrants(configuration)` registers the marker
    `PermissionGrantModelGate`
    (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Auth/PermissionGrantModelGate.cs:19`,
-   `.../Infrastructure/DependencyInjection.Auth.cs:147`), and `ApplicationDbContext` resolves that marker
+   `.../Infrastructure/DependencyInjection.Auth.cs:182`), and `ApplicationDbContext` resolves that marker
    with `GetService` and maps the table only when it is present AND this context instance targets the
    physical source named by `Authentication:PermissionGrants:DataSourceName`
-   (`.../Persistence/DbContexts/ApplicationDbContext.cs:920-925`, applied at `:943-951`). No consumer calls the model-builder
+   (`.../Persistence/DbContexts/ApplicationDbContext.cs:1069-1074`, applied at `:1164-1172`). No consumer calls the model-builder
    extension by hand, a host that never opts in keeps a byte-identical model, and the other databases
    in an opted-in host stay unchanged because one database owns the rows (the refresh-session
    precedent).
@@ -148,14 +164,14 @@ same one.**
 
 7. **The administration API is two controller bases over two services, one of which ships filled in.**
    `UsersAdminControllerBase<TUserDto>`
-   (`MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/Administration/UsersAdminControllerBase.cs:43`)
+   (`MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/Administration/UsersAdminControllerBase.cs:68`)
    takes a consumer-implemented `IUserAdministrationService<TUserDto>`
    (`.../Auth/Administration/IUserAdministrationService.cs:25`), because only the app knows its user
    table. `RolesAdminControllerBase` takes `IRoleAdministrationService`
    (`.../Auth/Administration/IRoleAdministrationService.cs:29`), which the framework CAN implement in
    full because both halves are framework-owned, so `AddStoredPermissionGrants` registers a default.
    Both bases are gated on capabilities, not role names
-   (`.../Controllers/Administration/UsersAdminControllerBase.cs:42`,
+   (`.../Controllers/Administration/UsersAdminControllerBase.cs:67`,
    `.../Controllers/Administration/RolesAdminControllerBase.cs:60`), against
    `AdministrationPermissions.ManageUsers` / `ManageRoles`
    (`MMCA.Common/Source/Core/MMCA.Common.Shared/Auth/Permissions/AdministrationPermissions.cs:18`,
@@ -171,10 +187,12 @@ same one.**
 
 8. **Three separate DI calls, none of them in `AddInfrastructure`.**
    `AddTwoFactorAuthentication(config)`
-   (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.Auth.cs:40`),
-   `AddEmailConfirmation(config)` (`:68`) and `AddStoredPermissionGrants(config)` (`:139`) are opted
+   (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.Auth.cs:46`),
+   `AddEmailConfirmation(config)` (`:79`) and `AddStoredPermissionGrants(config)` (`:174`) are opted
    into one at a time. Registering a service is still not the same as changing behaviour: two-factor
-   only reaches sign-in once the app passes the resolved authenticator to its base constructor, and
+   only reaches sign-in once the host also registers its own `ITwoFactorStore`. The call registers the
+   `ITwoFactorAuthenticator` (`:62`), and the base picks it up through a container-built
+   `AuthenticationValidators` with no change to the app's constructor (`:37-43`; item 2). Email
    confirmation only gates sign-in once `RequireConfirmedEmail` is set AND the app's `User` implements
    `IEmailConfirmableUser`
    (`MMCA.Common/Source/Core/MMCA.Common.Domain/Auth/IEmailConfirmableUser.cs:22`).
@@ -182,20 +200,28 @@ same one.**
 9. **One new package, in Infrastructure only.** `Otp.NET` (MIT, netstandard2.0, no transitive graph)
    supplies the RFC 6238 grammar and the Base32 alphabet, which the BCL has no primitive for. It is
    referenced by `MMCA.Common.Infrastructure` alone
-   (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/MMCA.Common.Infrastructure.csproj:78`, used by
+   (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/MMCA.Common.Infrastructure.csproj:75`, used by
    `.../Auth/TwoFactor/TotpTwoFactorService.cs:35`); Application, Domain and Shared stay
    dependency-free, matching the `Cronos` precedent.
 
-10. **Pages stay with the consumers; the administration surface ships as routeless components.** No
-    two-factor enrollment page ships in `MMCA.Common.UI`, and nothing this decision ships carries an
-    `@page` directive. The email confirmation landing page is the one page since promoted:
-    `MMCA.Common.UI` ships it anonymous at `/confirm-email`
-    (`MMCA.Common/Source/Presentation/MMCA.Common.UI/Pages/Auth/ConfirmEmail.razor:1-3`). (The package
-    itself does ship routable pages: the credential and notification screens of the Context above, that
-    confirmation page, and the `Home`, `Forbidden` and `NotFound` shell pages, 14 `@page` directives
-    across 13 components, from
-    `MMCA.Common/Source/Presentation/MMCA.Common.UI/Pages/Auth/Login.razor:1` to
-    `.../Pages/Notifications/NotificationInbox.razor:1-2`. Apart from that confirmation page, none of them belongs to this decision.)
+10. **Pages stay with the consumers apart from three; the administration surface ships as routeless
+    components.** Three pages of this decision ship in `MMCA.Common.UI`. The email confirmation
+    landing page is anonymous at `/confirm-email`
+    (`MMCA.Common/Source/Presentation/MMCA.Common.UI/Pages/Auth/ConfirmEmail.razor:1-3`). The
+    sign-in link page of item 14 is at `/auth/sign-in-link`
+    (`.../Pages/Auth/SignInLinks/SignInLink.razor:1`). The two-factor account page is at
+    `/profile/two-factor` (`.../Pages/Auth/TwoFactor/TwoFactorAccount.razor:1`): the status, set-up
+    with a QR code and a text key, recovery codes shown once, new recovery codes, and turning it off
+    (`TwoFactorAccount.razor.cs:17-21`). It is routable only in a host that calls `AddTwoFactorUI()`
+    (`MMCA.Common/Source/Presentation/MMCA.Common.UI/TwoFactor/DependencyInjection.cs:24`), and
+    MMCA.Store is the one consumer that does
+    (`MMCA.Store/Source/Hosts/UI/MMCA.Store.UI.Web/Program.cs:71`,
+    `.../MMCA.Store.UI.Web.Client/Program.cs:43`, `.../MMCA.Store.UI/MauiProgram.cs:72`); MMCA.ADC and
+    MMCA.Helpdesk do not. (The package also ships routable pages outside this decision: the
+    credential and notification screens of the Context above and the `Home`, `Forbidden` and
+    `NotFound` shell pages. With the three above that is 16 `@page` directives across 15 components,
+    from `MMCA.Common/Source/Presentation/MMCA.Common.UI/Pages/Auth/Login.razor:1` to
+    `.../Pages/Notifications/NotificationInbox.razor:1-2`.)
     `RoleAdminList`
     (`MMCA.Common/Source/Presentation/MMCA.Common.UI/Pages/Administration/RoleAdminList.razor.cs:28`),
     `RoleAdminEdit` (`.../Pages/Administration/RoleAdminEdit.razor.cs:36`) and `UserAdminList<TUser>`
@@ -204,15 +230,15 @@ same one.**
     framework already applies to shared components, two consumers wanting the same one. The two role
     components are non-generic because roles and permissions are strings the framework already owns,
     so there is no app DTO to name
-    (`.../Presentation/MMCA.Common.UI/DependencyInjection.cs:300-301`); the roster is generic instead,
+    (`.../Presentation/MMCA.Common.UI/DependencyInjection.cs:338-339`); the roster is generic instead,
     over an app-owned DTO that only has to implement `IUserAdminDTO`
     (`MMCA.Common/Source/Core/MMCA.Common.Shared/Auth/Administration/IUserAdminDTO.cs:25`), which is
     the one place a routeless component still names app shape. The role pair talks to the controller
     base through `IRoleAdminUIService`
     (`.../UI/Services/Administration/IRoleAdminUIService.cs:22`) and its typed-client implementation
-    `RoleAdminService` (`.../UI/Services/Administration/RoleAdminService.cs:25-28`), registered by
-    `AddRoleAdministrationUI()` (`.../UI/DependencyInjection.cs:307`); the roster registers through
-    `AddUserAdministrationUI<TUserDto>()` (`.../UI/DependencyInjection.cs:281`). An app that serves no
+    `RoleAdminService` (`.../UI/Services/Administration/RoleAdminService.cs:24-27`), registered by
+    `AddRoleAdministrationUI()` (`.../UI/DependencyInjection.cs:345`); the roster registers through
+    `AddUserAdministrationUI<TUserDto>()` (`.../UI/DependencyInjection.cs:319`). An app that serves no
     role-administration endpoints registers nothing and renders neither role component, and an app
     that serves no `Admin/Users` endpoints never renders the roster.
 
@@ -225,10 +251,10 @@ same one.**
     (`.../Shared/Auth/Permissions/PermissionRegistry.cs:16`, `:55`, `:58`), so the same frozen map
     answers both questions while the hot authorization path keeps a registry that deliberately cannot
     enumerate; `AddPermissions` registers the one instance under both contracts
-    (`MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/AuthorizationExtensions.cs:135-136`),
+    (`MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/AuthorizationExtensions.cs:208-209`),
     and an unconfigured host falls back to `UnconfiguredPermissionRegistry`
     (`MMCA.Common/Source/Core/MMCA.Common.Application/Auth/UnconfiguredPermissionRegistry.cs:20-21`,
-    registered at `.../Application/DependencyInjection.cs:123`, `:129`). `SetStoredPermissionsAsync` refuses
+    registered at `.../Application/DependencyInjection.cs:141`, `:147`). `SetStoredPermissionsAsync` refuses
     two things against that list
     (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Auth/Administration/StoredPermissionRoleAdministrationService.cs:147-154`,
     `:156-168`): `AdministrationPermissions.ManageRoles`, outright, because granting the key to this
@@ -238,11 +264,11 @@ same one.**
 
 12. **The token carries the permissions, so a service that never sees the grants still honours them.**
     `TokenService` takes the host's `IPermissionRegistry`
-    (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Auth/TokenService.cs:73`) and emits one
+    (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Auth/TokenService.cs:74`) and emits one
     `AuthClaimTypes.Permission` claim (`permission`,
     `MMCA.Common/Source/Core/MMCA.Common.Shared/Auth/AuthClaimTypes.cs:24`) per permission granted to
     the token's role, ordinally ordered and de-duplicated against claims the caller already supplied
-    (`TokenService.cs:133-141`); because the registry it resolves is the layered one, stored grants are
+    (`TokenService.cs:159-171`); because the registry it resolves is the layered one, stored grants are
     baked in alongside the compiled ones. Both authorization paths accept that claim: the CQRS
     `AuthorizationGate` passes a request whose permission the registry grants to the caller's roles OR
     that the principal carries as a claim
@@ -251,7 +277,7 @@ same one.**
     `.../Shared/Auth/ClaimsPrincipalExtensions.cs:95`), and the UI gates a navigation entry on
     `NavItem.RequiredPermission`
     (`MMCA.Common/Source/Presentation/MMCA.Common.UI/Common/NavItem.cs:20`,
-    `.../UI/Layout/NavMenu.razor:265`). The deployment consequence is a design rule, not framework
+    `.../UI/Layout/NavMenu.razor.cs:127`). The deployment consequence is a design rule, not framework
     code: where modules run as separate services, the host that mints tokens (the Identity service)
     registers every module's compiled grants so a token carries the full permission set, and the
     stored grants live only in that host, reaching the other services through the claims alone.
@@ -261,16 +287,16 @@ same one.**
 
 13. **Versioned Terms of Service acceptance is a fifth completion of the same shape.**
     `AddLegalAcceptance(configuration)`
-    (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.Auth.cs:104`) is a fourth
+    (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.Auth.cs:139`) is a fourth
     separate DI call, like the three of item 8 called by nothing in the framework: it binds only
     `LegalAcceptanceOptions` (section `Legal`, `CurrentTermsVersion`), deliberately registers no
-    `ILegalAcceptanceService` (`:93-95`), and with no version configured changes nothing. The app's
+    `ILegalAcceptanceService` (`:128-130`), and with no version configured changes nothing. The app's
     `User` implements `ILegalAcceptingUser`
     (`MMCA.Common/Source/Core/MMCA.Common.Domain/Auth/ILegalAcceptingUser.cs:21`), the app supplies the
     service, and it routes a subclass of `LegalAcceptanceControllerBase`
     (`MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/Legal/LegalAcceptanceControllerBase.cs:45`).
     The version is the server's: at registration the client sends only an `AcceptedTerms` flag and the
-    server stamps its own configured version (`MMCA.Common/CHANGELOG.md:807`), a `POST` naming any
+    server stamps its own configured version (`MMCA.Common/CHANGELOG.md:1744`), a `POST` naming any
     other version is refused with `Legal.VersionNotCurrent`
     (`MMCA.Common/Source/Core/MMCA.Common.Application/Auth/Legal/LegalAcceptancePolicy.cs:33`), and
     both controller answers pass through `LegalAcceptancePolicy.Normalize` (`:47`), which re-derives
@@ -279,22 +305,22 @@ same one.**
     (`MMCA.Common/Source/Presentation/MMCA.Common.UI/Components/Legal/TermsAcceptanceGate.razor.cs:29`)
     is a layout component the host adds itself; its dialog cannot be dismissed (no backdrop click,
     Escape, close on navigation or close button, `:39-42`), so a user whose accepted version is no
-    longer current re-accepts or signs out. It shipped in 1.223.0 (`MMCA.Common/CHANGELOG.md:801`).
+    longer current re-accepts or signs out. It shipped in 1.223.0 (`MMCA.Common/CHANGELOG.md:1738`).
     MMCA.ADC adopts it
-    (`MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:249`,
-    `MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Domain/Users/User.cs:36`,
-    `.../Identity.API/Controllers/LegalAcceptanceController.cs:28`,
-    `.../Identity.UI/IdentityUIModule.cs:33`); MMCA.Store and MMCA.Helpdesk do not.
+    (`MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:215`,
+    `MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Domain/Users/User.cs:39`,
+    `.../Identity.API/Controllers/LegalAcceptanceController.cs:24`,
+    `.../Identity.UI/IdentityUIModule.cs:49`); MMCA.Store and MMCA.Helpdesk do not.
 
 14. **Sign-in links are a sixth completion of the same shape.** `AddSignInLinks(configuration)`
-    (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.Auth.cs:97`) is another
+    (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.Auth.cs:106`) is another
     separate DI call that nothing in the framework makes. It binds `SignInLinkSettings` (section
     `Authentication:SignInLinks`,
     `MMCA.Common/Source/Core/MMCA.Common.Application/Auth/SignInLinks/SignInLinkSettings.cs:13`) and
     registers `SignInLinkTokenService` behind `ISignInLinkTokenService`
     (`.../Auth/SignInLinks/ISignInLinkTokenService.cs:18`). `Enabled` defaults to false (`:20`), and
     registering the call issues nothing on its own: a link is sent or redeemed only once the app wires
-    the handler bases and a controller AND turns `Enabled` on (`DependencyInjection.Auth.cs:94-95`).
+    the handler bases and a controller AND turns `Enabled` on (`DependencyInjection.Auth.cs:103-104`).
     - **The token follows the email-confirmation design.** The service
       (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Auth/SignInLinks/SignInLinkTokenService.cs:40`)
       lives over `ICacheService` under its own `signinlink:` key prefix. It keeps only the SHA-256 of
@@ -317,15 +343,17 @@ same one.**
       script enabled still cannot spend the token. It shows a Terms and Privacy consent line when the
       host publishes a Terms URL (`:79`). After a redeem it lands on
       `SignInSettings.SignInLinkLandingPath`
-      (`MMCA.Common/Source/Presentation/MMCA.Common.UI/Common/Settings/SignInSettings.cs:28`).
-      `SignInSettings.OfferSignInLink` (`:22`, default false) adds "Email me a sign-in link" to the
+      (`MMCA.Common/Source/Presentation/MMCA.Common.UI/Common/Settings/SignInSettings.cs:37`).
+      `SignInSettings.OfferSignInLink` (`:23`, default false) adds "Email me a sign-in link" to the
       sign-in page.
     - **Send answers success on every outcome and never creates an account.**
       `SendSignInLinkHandlerBase`
-      (`MMCA.Common/Source/Core/MMCA.Common.Application/Users/UseCases/SignInLinks/SendSignInLinkHandlerBase.cs:42`)
+      (`MMCA.Common/Source/Core/MMCA.Common.Application/Users/UseCases/SignInLinks/SendSignInLinkHandlerBase.cs:44`)
       returns success for every case: a disabled feature, a malformed address, an address with no
-      account, a throttled request and a failed send (`:62-110`). An address with no account gets no
-      email (`:76-80`). The endpoint on `SignInLinkControllerBase`
+      account, a throttled request and a failed send (`:67-113`). By default an address with no account gets
+      no email (`:78-82`): that branch calls the overridable `OnNoAccountAsync` hook (`:139`), a no-op
+      unless the app overrides it to re-issue a pending invitation (`:30-34`), and the answer stays
+      success either way. The endpoint on `SignInLinkControllerBase`
       (`MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/SignInLinks/SignInLinkControllerBase.cs:35`),
       `POST sign-in-link`, therefore answers 202 to every well-formed request (`:80-97`). That keeps the
       anti-enumeration posture `ForgotPasswordHandlerBase` already has. The endpoint and its
@@ -333,27 +361,28 @@ same one.**
       (`:83`, `:111`).
     - **Redeem spends the token first, and provisions only through a hook.**
       `RedeemSignInLinkHandlerBase`
-      (`.../Users/UseCases/SignInLinks/RedeemSignInLinkHandlerBase.cs:47`) consumes the token before it
-      looks up the account (`:86`), so a caller with no token learns nothing from how the request
+      (`.../Users/UseCases/SignInLinks/RedeemSignInLinkHandlerBase.cs:58`) consumes the token (`:96-97`) before
+      it looks up the account (`:104`), so a caller with no token learns nothing from how the request
       fails. When the address has no account, the handler creates one only if the grant carries a
-      `SignInLinkProfile`, and only through the overridable `ProvisionUser` hook (`:172-178`). The
-      default hook refuses (`:136-137`), and a plain sign-in link never carries a profile. Redeeming
-      confirms an unconfirmed address (`:221`). `OnUserProvisionedAsync` (`:146`) and
-      `OnEmailOwnershipProvedAsync` (`:158`) are the app's post-save hooks.
+      `SignInLinkProfile`, and only through the overridable `ProvisionUser` hook (`:183-189`). The
+      default hook refuses (`:147-148`), and a plain sign-in link never carries a profile. Redeeming
+      confirms an unconfirmed address (`:293`). `OnUserProvisionedAsync` (`:157`) and
+      `OnEmailOwnershipProvedAsync` (`:169`) are the app's post-save hooks.
     - **A link never bypasses a second factor.** `IAuthenticationService.SignInVerifiedEmailOwnerAsync`
-      (`.../Auth/IAuthenticationService.cs:155`) is a default member that rejects (`:161`), so existing
+      (`.../Auth/IAuthenticationService.cs:174`) is a default member that rejects (`:179-180`), so existing
       implementations keep compiling. `AuthenticationServiceBase` implements it
-      (`.../Auth/AuthenticationServiceBase.cs:476`): it runs the app's sign-in gate and refuses any
-      account whose challenge answers anything but `NotEnrolled` (`:495-499`), because owning the
+      (`.../Auth/AuthenticationServiceBase.cs:558`): it refuses a service account (`:566`), runs the
+      app's sign-in gate and refuses any account whose challenge answers anything but `NotEnrolled`
+      (`:578-582`), because owning the
       mailbox does not prove the second factor.
 
-    The same release (`MMCA.Common/CHANGELOG.md:9`, `:29`) also changed the shared credential pages. A
+    The same release (`MMCA.Common/CHANGELOG.md:834`, `:854`) also changed the shared credential pages. A
     registration refused with `EmailAlreadyExists`
-    (`MMCA.Common/Source/Presentation/MMCA.Common.UI/Pages/Auth/Register.razor:237-239`) now goes
+    (`MMCA.Common/Source/Presentation/MMCA.Common.UI/Pages/Auth/Register.razor:266-268`) now goes
     straight to `/login`, with the address prefilled. `AuthEmailPrefill`
     (`MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/Navigation/AuthEmailPrefill.cs:11`)
     carries the address in navigation history state, never the URL, and the sign-in page passes it on
-    to Forgot password the same way (`.../Pages/Auth/Login.razor.cs:89`). The 409 already says the
+    to Forgot password the same way (`.../Pages/Auth/Login.razor.cs:211`). The 409 already says the
     account exists, so the hand-off reveals nothing new.
 
 ## Rationale
@@ -408,7 +437,7 @@ opt-in posture above:
 - Adopting the `PermissionGrants` table is a migration in the consumer's Identity database, as
   `RefreshSessions` was. `AddStoredPermissionGrants(configuration)` is what maps it, and only in the
   context whose physical source `Authentication:PermissionGrants:DataSourceName` names
-  (`.../Persistence/DbContexts/ApplicationDbContext.cs:920-925`), so a host that never opts in gets no
+  (`.../Persistence/DbContexts/ApplicationDbContext.cs:1069-1074`), so a host that never opts in gets no
   table in any of its databases and an opted-in host gets it in exactly one.
 - A permission granted by a stored row reaches another service only through a token claim, so it lands
   on the holder's next sign-in rather than within `CacheSeconds`. That is the same latency a role
@@ -574,6 +603,57 @@ anchors moved.
   ([ADR-140](140-machine-clients-oauth-client-credentials.md), service-account users through a
   consumer-supplied `IServiceAccountProvisioner`, the store shape this record set for `ITwoFactorStore`).
 - The anchors in items 1 to 14 were not re-verified in this revision.
+
+## Revision (2026-11-23)
+Re-verified against current source. The opt-in posture is unchanged: every completion is still its
+own `Add*` call, the sign-in collaborators are still optional, stored grants still only widen a
+role, and MMCA.ADC still adopts Terms of Service acceptance while MMCA.Store and MMCA.Helpdesk do
+not. Two decision-level behaviours moved (items 1 and 2 below), item 3 records smaller behaviour
+additions, and the anchors moved with the releases since v1.281.0.
+
+1. Item 10 said no two-factor enrollment page ships in `MMCA.Common.UI` and that only the email
+   confirmation page belongs to this decision. The package now ships a two-factor account page at
+   `/profile/two-factor`
+   (`MMCA.Common/Source/Presentation/MMCA.Common.UI/Pages/Auth/TwoFactor/TwoFactorAccount.razor:1`),
+   routable only after `AddTwoFactorUI()`
+   (`MMCA.Common/Source/Presentation/MMCA.Common.UI/TwoFactor/DependencyInjection.cs:24`) and called
+   by MMCA.Store alone (`MMCA.Store/Source/Hosts/UI/MMCA.Store.UI.Web/Program.cs:71`), and the
+   sign-in link page of item 14 (`.../Pages/Auth/SignInLinks/SignInLink.razor:1`) also belongs to
+   this decision. Item 10, the Context and the Decision summary now say so, and the package count is
+   16 `@page` directives across 15 components. The 2026-09-19 Status parenthetical keeps its
+   historical figure.
+2. Items 2 and 8 said two-factor reaches sign-in only once the app passes the authenticator to its
+   base constructor. While that argument is null the base now takes the authenticator from
+   `AuthenticationValidators.TwoFactor`
+   (`MMCA.Common/Source/Core/MMCA.Common.Application/Auth/AuthenticationServiceBase.cs:859`), which
+   the container fills once `AddTwoFactorAuthentication` registers an `ITwoFactorAuthenticator`,
+   provided the consumer registers `AuthenticationValidators` by type, as MMCA.Store does
+   (`MMCA.Common/Source/Core/MMCA.Common.Application/Auth/AuthenticationValidators.cs:34-35`, `:73`;
+   `MMCA.Store/Source/Modules/Identity/MMCA.Store.Identity.Application/DependencyInjection.cs:47`),
+   so the call plus the app's `ITwoFactorStore` arms the challenge. A host with neither still answers
+   `NotEnrolled` without a query (`AuthenticationServiceBase.cs:860`).
+3. Item 3 now records that `MintForSession` also stamps `auth_time` (`AuthSessionIssuer.cs:787`,
+   ADR-139). Item 14 now records that `SignInVerifiedEmailOwnerAsync` refuses a service account
+   (`AuthenticationServiceBase.cs:566`) and that the send handler's no-account branch runs the
+   overridable `OnNoAccountAsync` hook
+   (`MMCA.Common/Source/Core/MMCA.Common.Application/Users/UseCases/SignInLinks/SendSignInLinkHandlerBase.cs:139`).
+4. Anchors re-verified against current source: `AuthenticationServiceBase.cs:74`, `:80-81`, `:558`,
+   `:578-582`, `:818-819`, `:855`; `AuthSessionIssuer.cs:164`, `:173`, `:776`, `:781`;
+   `AuthClaimTypes.cs:63`, `:66`, `:69`; `ChangePasswordHandlerBase.cs:61`; in
+   `DependencyInjection.Auth.cs` `AddTwoFactorAuthentication` `:46`, `AddEmailConfirmation` `:79`,
+   `AddSignInLinks` `:106`, `AddLegalAcceptance` `:139`, `AddStoredPermissionGrants` `:174` and the
+   gate registration `:182`; `ApplicationDbContext.cs:1069-1074`, applied at `:1164-1172`;
+   `PermissionGrant.cs:17` for the no-soft-delete statement; `MMCA.Common.Infrastructure.csproj:75`;
+   `UsersAdminControllerBase.cs:67-68`; `AuthorizationExtensions.cs:208-209`;
+   `MMCA.Common.Application/DependencyInjection.cs:141`, `:147`; `TokenService.cs:74`, `:159-171`;
+   `NavMenu.razor.cs:127`; `MMCA.Common.UI/DependencyInjection.cs:319`, `:338-339`, `:345`;
+   `RoleAdminService.cs:24-27`; `UPGRADING.md:2225`, `:2231`; `CHANGELOG.md:1738`, `:1744`, `:834`,
+   `:854`; MMCA.ADC `Program.cs:215`, `User.cs:39`, `LegalAcceptanceController.cs:24`,
+   `IdentityUIModule.cs:49`; `SendSignInLinkHandlerBase.cs:44`, `:67-113`, `:78-82`;
+   `RedeemSignInLinkHandlerBase.cs:58`, `:96-97`, `:104`, `:147-148`, `:157`, `:169`, `:183-189`,
+   `:293`; `IAuthenticationService.cs:174`, `:179-180`; `SignInSettings.cs:23`, `:37`;
+   `Register.razor:266-268`; `Login.razor.cs:211`. The Context, items 2, 3, 5 and 7 to 14 and the
+   Trade-offs now cite these.
 
 ## Related
 [ADR-020](020-permission-based-authorization.md) (the compiled role-to-permission registry stored

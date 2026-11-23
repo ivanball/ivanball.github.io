@@ -270,6 +270,9 @@
           completed; stale <code>DeleteUserHandlerBase</code>, ADC handler and ADC <code>UsersController</code> anchors re-pointed.
           Revised 2026-10-26: anchors refreshed after MMCA.Common source moved the <code>DeleteUserHandlerBase</code>,
           <code>DataExportControllerBase</code>, notification-controller registration and global rate-limiter lines.
+          Revised 2026-11-23: the Context no longer quotes <code>UserOwnershipRule</code> remarks that source has since
+          rewritten (they now record the helper as shared by both base handlers), and anchors refreshed after
+          MMCA.Common, ADC and Store source moved.
           The implementation shipped in the MMCA.Common &quot;enterprise capability wave&quot; release.
           It is opt-in: an app subclasses <code>ExportUserDataHandlerBase</code> and registers its own
           <code>IUserDataExportSection</code> implementations, and the shipped controller base is subclassed and routed by
@@ -296,16 +299,19 @@
           own, assemble one document. They differed only in which fields they copy and which peers they call.
           Both files still carry those names, and each app still owns its <code>ExportUserDataHandlerTests</code>, but each
           handler is now a thin subclass of the base this record decided on, overriding a role test and a subject
-          projection and nothing else (ADC <code>ExportUserDataHandler.cs:36</code>, <code>:39</code>, <code>:42</code>; Store
-          <code>ExportUserDataHandler.cs:39</code>, <code>:47</code>, <code>:56</code>).</p>
-          <p>The duplication is already on the record. <code>UserOwnershipRule</code>
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Users/UserOwnershipRule.cs:21</code>) exists precisely
-          because the owner-or-privileged-role idiom &quot;was written out four times across the two apps (account
-          deletion and data export, in each)&quot; (<code>UserOwnershipRule.cs:9-20</code>). The same remarks record why it was
-          hoisted as a plain helper instead of a base class: &quot;because the two data-export handlers stay app-level
-          (their projections are entirely app-specific)&quot;. Deletion did get a base class, <code>DeleteUserHandlerBase</code>
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Users/UseCases/DeleteUser/DeleteUserHandlerBase.cs:74</code>),
-          which calls that helper at <code>DeleteUserHandlerBase.cs:101</code>.</p>
+          projection and nothing else (ADC <code>ExportUserDataHandler.cs:37</code>, <code>:40</code>, <code>:43</code>; Store
+          <code>ExportUserDataHandler.cs:40</code>, <code>:48</code>, <code>:57</code>).</p>
+          <p>The duplication was on the record before this decision. <code>UserOwnershipRule</code>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Users/UserOwnershipRule.cs:20</code>) was hoisted because
+          the owner-or-privileged-role idiom had been written out four times across the two apps (account
+          deletion and data export, in each), and its remarks at the time recorded why it was hoisted as a plain
+          helper instead of a base class: the two data-export handlers were to stay app-level because their
+          projections are entirely app-specific. Those remarks now record the outcome instead: the idiom is held
+          once as a plain helper called by both <code>DeleteUserHandlerBase</code> and <code>ExportUserDataHandlerBase</code>, so the
+          two apply the identical decision and the identical error shape (<code>UserOwnershipRule.cs:10-13</code>).
+          Deletion got its base class first, <code>DeleteUserHandlerBase</code>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Users/UseCases/DeleteUser/DeleteUserHandlerBase.cs:96</code>),
+          which calls that helper at <code>DeleteUserHandlerBase.cs:125</code>.</p>
           <p><strong>This record supersedes that reasoning for the export half.</strong> It treated a handler as one indivisible
           thing, either app-specific or not. It is two: an orchestration (authorize, load, fan out, degrade,
           envelope) identical in both apps, and projections app-specific in both. The projections being
@@ -331,11 +337,11 @@
           constraints similar to <code>DeleteUserHandlerBase</code> but not identical: both constrain <code>TUser</code> to
           <code>AuditableAggregateRootEntity&lt;UserIdentifierType&gt;</code> and <code>TQuery</code>/<code>TCommand</code> to <code>IUserOwnedRequest</code>
           (<code>ExportUserDataHandlerBase.cs:54-55</code>), and deletion additionally requires <code>TUser : IErasableUser</code>
-          (<code>DeleteUserHandlerBase.cs:80</code>) because it calls <code>Anonymize()</code>. Export never does, so it does not ask
+          (<code>DeleteUserHandlerBase.cs:104</code>) because it calls <code>Anonymize()</code>. Export never does, so it does not ask
           for that interface: a user aggregate can be exportable without being erasable. The base runs the same
           <code>UserOwnershipRule.CheckOwnership</code> gate with the export error code (<code>ExportUserDataHandlerBase.cs:81-83</code>), and exposes an abstract
           <code>HasExportPrivilege(string? currentUserRole)</code> hook (<code>:130</code>, the export twin of deletion&#39;s
-          <code>HasDeletePrivilege</code>, <code>DeleteUserHandlerBase.cs:192</code>) so the app supplies its own role
+          <code>HasDeletePrivilege</code>, <code>DeleteUserHandlerBase.cs:237</code>) so the app supplies its own role
           vocabulary (ADC evaluates <code>UserRole.IsOrganizer</code>, Store evaluates <code>UserRole.IsAdmin</code>). It then loads the
           owned aggregate, fans out to every registered <code>IUserDataExportSection</code>, and assembles a
           <code>UserDataExportDTO</code>. The subclass keeps the role test, the subject snapshot projection, and the sections.</p>
@@ -394,7 +400,7 @@
           (ADC <code>:29</code>, Store <code>:31</code>) whose only member is the <code>CreateQuery</code> override (ADC <code>:32-35</code>, Store <code>:34-38</code>).
           Neither app&#39;s <code>UsersController</code> holds an export action any more: Store&#39;s own remarks point at the
           subclass instead (<code>MMCA.Store/.../UsersController.cs:20-22</code>), and ADC&#39;s carries the list, delete and
-          avatar actions under its class-level <code>[Authorize]</code> (<code>MMCA.ADC/.../UsersController.cs:32</code>) with no export
+          avatar actions under its class-level <code>[Authorize]</code> (<code>MMCA.ADC/.../UsersController.cs:104</code>) with no export
           of its own. Both Identity service hosts turn the gate on
           (<code>MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/appsettings.json:21</code>,
           <code>MMCA.Store/Source/Services/MMCA.Store.Identity.Service/appsettings.json:18</code>), so the file download,
@@ -418,13 +424,13 @@
           its hand-written action with a <code>UsersDataExportController</code> subclass on the same URL space, so the
           published path did not move. ADC&#39;s Engagement section already carries the check-in and points data added
           by <a href="072-qr-badge-check-in-and-points.html">ADR-072</a>
-          (<code>MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Shared/Exports/UserEngagementExportDTO.cs:18</code>,
-          <code>:24</code>), so it re-registers that projection as an <code>IUserDataExportSection</code> rather than adding data. ADC
+          (<code>MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Shared/Exports/UserEngagementExportDTO.cs:20</code>,
+          <code>:26</code>), so it re-registers that projection as an <code>IUserDataExportSection</code> rather than adding data. ADC
           implements three sections, Engagement, Notifications and Conference
-          (<code>MMCA.ADC/.../Identity.Application/Users/UseCases/ExportUserData/EngagementUserDataExportSection.cs:19</code>,
+          (<code>MMCA.ADC/.../Identity.Application/Users/UseCases/ExportUserData/EngagementUserDataExportSection.cs:20</code>,
           <code>NotificationUserDataExportSection.cs:18</code>, <code>ConferenceUserDataExportSection.cs:19</code>), registered in that
           order, which is the order they appear in the document
-          (<code>MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Application/DependencyInjection.cs:63-65</code>), and
+          (<code>MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Application/DependencyInjection.cs:74-76</code>), and
           Store two, Sales and Catalog
           (<code>MMCA.Store/.../Identity.Application/Users/UseCases/ExportUserData/SalesUserDataExportSection.cs:22</code>,
           <code>CatalogUserDataExportSection.cs:22</code>), both registered in
@@ -435,8 +441,9 @@
           <li><strong>The two halves of a handler have different owners.</strong> The ownership gate, the aggregate load, the
           fan-out, the per-section catch and the envelope are the same decisions in both apps, in the same order,
           for the same regulatory reason. The field-by-field projection of a <code>User</code> cannot be: it names app types.
-          <code>UserOwnershipRule</code> is the evidence for the split; it is a helper rather than a base class only because
-          the split had not been made yet.</li>
+          <code>UserOwnershipRule</code> is the evidence for the split; it stays a plain helper rather than a base class
+          because both base handlers, <code>DeleteUserHandlerBase</code> and <code>ExportUserDataHandlerBase</code>, call it
+          (<code>UserOwnershipRule.cs:10-13</code>).</li>
           <li><strong>A degraded package beats no package when the clock is legal.</strong> Failing the whole document because
           one peer is down converts a partial answer into no answer plus a retry loop, and the retry loop does
           not make the peer come back. Best-effort with no signal would be silent data loss, which is why the
@@ -490,8 +497,8 @@
           but neither app overrides it, so nothing records that an export was produced. The only bound on how
           often a privileged caller may produce one is the framework&#39;s global limiter, which both Identity hosts
           register and which partitions every authenticated request by user id
-          (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/WebApplicationBuilderExtensions.RateLimiting.cs:162</code>,
-          <code>:174-177</code>, <code>:179</code>, wired as the <code>GlobalLimiter</code> at <code>:426-427</code>); nothing limits the export endpoint on its own.</li>
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/WebApplicationBuilderExtensions.RateLimiting.cs:172</code>,
+          <code>:184-187</code>, <code>:189</code>, wired as the <code>GlobalLimiter</code> at <code>:437-438</code>); nothing limits the export endpoint on its own.</li>
           <li><strong>The envelope now moves on the framework&#39;s schedule.</strong> A consumer&#39;s export document shape is no longer
           the consumer&#39;s to version: a change to <code>UserDataExportDTO</code> reaches every app on the next lockstep bump
           (<a href="016-lockstep-versioning-masstransit-pin.html">ADR-016</a>), the cost of not writing the orchestration
@@ -566,6 +573,35 @@
           and the <code>GlobalLimiter</code> wiring <code>:426-427</code>; ADC <code>IUserNotificationExportService.cs:14</code> in the sections
           rationale.</li>
           </ol>
+          <h2 id="revision-2026-11-23">Revision (2026-11-23)</h2>
+          <p>Re-verified against current source. No decision, rationale or trade-off changed: the export base, the
+          controller base, the per-user global limiter and both consumers&#39; adoption are as described. One Context
+          paragraph presented superseded source remarks as current, and anchors in the live sections had drifted;
+          the dated revisions above keep their anchors as written.</p>
+          <ol>
+          <li>The Context paragraph on <code>UserOwnershipRule</code> quoted remarks (&quot;was written out four times across the
+          two apps&quot; and &quot;because the two data-export handlers stay app-level&quot;) that no longer exist in
+          source. It now states that reasoning as the history behind the hoist, and records what the remarks
+          say today: the idiom is held once as a plain helper called by both <code>DeleteUserHandlerBase</code> and
+          <code>ExportUserDataHandlerBase</code>, with the identical decision and error shape
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Users/UserOwnershipRule.cs:10-13</code>). The
+          Rationale bullet on the split no longer says the rule is a helper because the split had not been
+          made; it now says the rule stays a plain helper because both base handlers call it.</li>
+          <li>Anchors re-verified against current source: <code>UserOwnershipRule.cs</code> class <code>:20</code>;
+          <code>DeleteUserHandlerBase.cs</code> class <code>:96</code>, the <code>IErasableUser</code> constraint <code>:104</code>, the
+          <code>UserOwnershipRule.CheckOwnership</code> call <code>:125</code> and <code>HasDeletePrivilege</code> <code>:237</code> (<code>Anonymize()</code> is
+          still called, <code>:166</code>; <code>ExportUserDataHandlerBase.cs</code> <code>:54-55</code>, <code>:81-83</code>, <code>:130</code>, <code>:159</code> unchanged);
+          ADC <code>ExportUserDataHandler.cs</code> base type <code>:37</code>, <code>HasExportPrivilege</code> <code>:40</code>,
+          <code>BuildSubjectSnapshotAsync</code> <code>:43</code>; Store <code>ExportUserDataHandler.cs</code> base type <code>:40</code>,
+          <code>HasExportPrivilege</code> <code>:48</code>, <code>BuildSubjectSnapshotAsync</code> <code>:57</code>; ADC <code>UsersController.cs</code> class-level
+          <code>[Authorize]</code> <code>:104</code>; ADC <code>DependencyInjection.cs</code> section registrations <code>:74-76</code> and
+          <code>EngagementUserDataExportSection.cs:20</code> (<code>NotificationUserDataExportSection.cs:18</code>,
+          <code>ConferenceUserDataExportSection.cs:19</code> unchanged); <code>UserEngagementExportDTO.cs</code> points <code>:20</code> and
+          check-ins <code>:26</code>; in <code>WebApplicationBuilderExtensions.RateLimiting.cs</code> the settings-driven
+          <code>GlobalRateLimitPartition</code> overload <code>:172</code> (the permit-count overload at <code>:164</code> delegates to it), the
+          user-id partition key <code>:184-187</code>, the limited-partition call <code>:189</code> and the <code>GlobalLimiter</code> wiring
+          <code>:437-438</code>.</li>
+          </ol>
           <h2 id="related">Related</h2>
           <p><a href="005-soft-delete-vs-erasure.html">ADR-005</a> (the erasure half of the same privacy obligation, whose
           <code>IAnonymizable</code> opt-in and <code>[Pii]</code> guard are this contract&#39;s mirror: one erases what the other copies),
@@ -598,6 +634,7 @@
             <li><a href="#revision-2026-10-06">Revision (2026-10-06)</a></li>
             <li><a href="#revision-2026-10-21">Revision (2026-10-21)</a></li>
             <li><a href="#revision-2026-10-26">Revision (2026-10-26)</a></li>
+            <li><a href="#revision-2026-11-23">Revision (2026-11-23)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

@@ -4,7 +4,7 @@
 Accepted (2026-09-12). Extends [ADR-045](045-managed-file-storage-and-avatars.md) from images to
 documents: the framework gains a document content sniffer, a blob-name sanitizer and stored response
 headers, and ADC gains a `SessionAsset` aggregate that uses them. ADR-045's avatar-only scope
-statement ("no other managed uploads exist") is superseded by this record. Revised 2026-10-01 (the upload-options overload is abstract and the template then enabled on-upload malware scanning by default, reversed 2026-10-28; see Revision below). Revised 2026-10-06: all three delete paths schedule blob removal inside the delete's transaction, so there is no post-commit tail. Revised 2026-10-07: anchors refreshed after the v1.233.0 release. Revised 2026-10-21: the file upload action now runs a claim-level pre-check that refuses a caller with neither a speaker_id claim nor the manage capability before the handler (the per-session decision stays in the handler), and anchors were refreshed. Revised 2026-10-26: the Azure storage implementation now lives in the MMCA.Common.Azure adapter and the S3 and GCS adapters implement the same abstract options overload, and anchors were refreshed. Revised 2026-10-28: the template now writes Defender for Storage, on-upload malware scanning included, off by default as a 2026-10-26 cost decision, the parameter switches the whole plan, and scanning also needs a subscription-level plan only the subscription owner can enable, so Part 5 and the scanning trade-off were rewritten and anchors refreshed.
+statement ("no other managed uploads exist") is superseded by this record. Revised 2026-10-01 (the upload-options overload is abstract and the template then enabled on-upload malware scanning by default, reversed 2026-10-28; see Revision below). Revised 2026-10-06: all three delete paths schedule blob removal inside the delete's transaction, so there is no post-commit tail. Revised 2026-10-07: anchors refreshed after the v1.233.0 release. Revised 2026-10-21: the file upload action now runs a claim-level pre-check that refuses a caller with neither a speaker_id claim nor the manage capability before the handler (the per-session decision stays in the handler), and anchors were refreshed. Revised 2026-10-26: the Azure storage implementation now lives in the MMCA.Common.Azure adapter and the S3 and GCS adapters implement the same abstract options overload, and anchors were refreshed. Revised 2026-10-28: the template now writes Defender for Storage, on-upload malware scanning included, off by default as a 2026-10-26 cost decision, the parameter switches the whole plan, and scanning also needs a subscription-level plan only the subscription owner can enable, so Part 5 and the scanning trade-off were rewritten and anchors refreshed. Revised 2026-11-23: the gateway's path-scoped body-size raise is now a dedicated YARP route with a per-route MaxRequestBodySize rather than Program.cs code, the duplicated-literal trade-off counts the gateway and UI.Web copies, and anchors were refreshed.
 
 ## Context
 A speaker finishes a talk and forty people want the deck. Until now ADC's only answer was
@@ -51,7 +51,7 @@ because the public page renders them as one ordered list and they differ only in
 columns carry a value; the pairing rule (a file must carry a blob name, a link must not) is a domain
 invariant (`.../SessionAssetInvariants.cs:62-83`). The identifier is a **server-minted GUID** rather
 than the module's usual database integer
-(`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Shared/MMCA.ADC.Conference.GlobalUsings.IdentifierType.cs:17`,
+(`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Shared/MMCA.ADC.Conference.GlobalUsings.IdentifierType.cs:18`,
 minted at `SessionAsset.cs:301`), because the id is a path segment of a public blob name and a
 sequential one would let anyone who downloaded a single asset walk the container. The asset URL is
 validated as an absolute `http` or `https` URL in the domain (`SessionAssetInvariants.cs:128-147`), so a
@@ -62,19 +62,21 @@ session's materials if they hold `conference:session-assets:manage`
 (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Shared/Authorization/ConferencePermissions.cs:47`,
 granted to Organizer through the full Conference set at `:58-72` (`:70`) and to ContentEditor through
 the ContentManagement set at `:79-88` (`:87`); the grants are declared once in
-`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Shared/Authorization/ConferencePermissionGrants.cs:47-48`,
-applied by the service at `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/DependencyInjection.cs:43`
-and by the token-minting Identity host, per `ConferencePermissionGrants.cs:12-17`)
+`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Shared/Authorization/ConferencePermissionGrants.cs:53-54`,
+applied by the service at `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/DependencyInjection.cs:45`
+and by the token-minting Identity host at
+`MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Authorization/TokenPermissionGrants.cs:56`, per
+`ConferencePermissionGrants.cs:12-17`)
 **or** if
 their token's `speaker_id` claim is among the session's current, non-deleted speakers. The second
 leg is data, not a capability, so no attribute can express it: the controller's write actions carry a
 plain `[Authorize]`
-(`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/SessionAssets/SessionAssetsController.cs:50`)
+(`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/SessionAssets/SessionAssetsController.cs:61`)
 and every handler re-asks `SessionAssetAccessService`
 (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/SessionAssets/SessionAssetAccessService.cs:22`,
 the decision at `:47`), which reads the session's own `SessionSpeakers` rows (`:135-137`). The file
 upload action alone adds a claim-level pre-check that refuses a caller holding neither a `speaker_id`
-claim nor the capability before its handler runs (`SessionAssetsController.cs:175-182`); it settles
+claim nor the capability before its handler runs (`SessionAssetsController.cs:177-191`); it settles
 no per-session question, and the link, update and delete actions have none. Reading
 the speaker list rather than the asset's `UploadedBySpeakerId` is deliberate: a co-speaker can fix a
 colleague's typo, and a speaker removed from the session loses the right immediately without any row
@@ -82,14 +84,14 @@ being rewritten.
 
 **3. The anonymous read applies the public-session rule and answers empty, not 404.** The list
 action is `[AllowAnonymous]` and output-cached under the sessions policy
-(`SessionAssetsController.cs:76-78`), because it is part of the public session page. A caller who
+(`SessionAssetsController.cs:87-89`), because it is part of the public session page. A caller who
 cannot see the session gets an **empty list**
 (`.../SessionAssets/UseCases/GetBySession/GetSessionAssetsHandler.cs:44-47`), so a guessed session id
 cannot confirm that an unannounced talk has materials. Visibility reuses the same BR-49 status
 allow-list every other public read uses, plus BR-108's published-event rule
 (`SessionAssetAccessService.cs:118-133`). A speaker or a privileged reader sees more than the public
 projection, so their response is kept out of the shared cache entry by turning cache storage off for
-that request (`SessionAssetsController.cs:90-93`).
+that request (`SessionAssetsController.cs:101-104`).
 
 **4. Document safety is a framework gate, not an ADC one.** Three additions to MMCA.Common, all
 under `MMCA.Common.Application/Interfaces/Infrastructure/Storage/`:
@@ -132,10 +134,10 @@ safe precisely because a blob name carries a fresh asset id and therefore never 
 
 **5. Storage reuses ADR-045 with its own container, and downloads go straight to the blob.** The
 Conference service registers the same `AddAzureBlobFileStorage`
-(`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:367`) against a new **public-read
-`session-assets` container** on the existing storage account (`MMCA.ADC/infra/main.bicep:1512-1518`,
-container name injected at `:2218`); the account-scoped data-plane grant already covers it, so no
-second role assignment (`:1548-1556`, comment at `:1539-1541`). The blob name is
+(`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:300`) against a new **public-read
+`session-assets` container** on the existing storage account (`MMCA.ADC/infra/main.bicep:1686-1692`,
+container name injected at `:2510`); the account-scoped data-plane grant already covers it, so no
+second role assignment (`:1722-1730`, comment at `:1713-1715`). The blob name is
 `{eventId}/{sessionId}/{assetId}/{sanitized-file-name}`
 (`UploadSessionAssetHandler.cs:90-94`), which is what makes a public container acceptable: the GUID
 segment is unguessable, so holding one asset URL reveals nothing about any other. Attendees download
@@ -144,14 +146,14 @@ Where storage is not configured, the null default stands and an upload fails wit
 `SessionAsset.StorageNotConfigured` while links keep working (`:56-62`), which is the local-dev
 posture. Microsoft Defender for Storage, on-upload malware scanning included, is switched as a whole
 by the bicep parameter `enableSessionAssetMalwareScanning`, **defaulting to false** since 2026-10-26
-as a cost decision (`MMCA.ADC/infra/main.bicep:135-136`). The settings resource is declared
-unconditionally (`:1565-1581`) and writes both the plan's `isEnabled` (`:1569`) and
-`malwareScanning.onUpload.isEnabled` (`:1572`) from that parameter, so the default actively writes
-the plan off instead of leaving an earlier plan running under an incremental deploy (`:1558-1561`);
-when it is on, the per-GB scanning cost is bounded by a 50 GB monthly cap (`:1573`). The parameter
+as a cost decision (`MMCA.ADC/infra/main.bicep:157-158`). The settings resource is declared
+unconditionally (`:1739-1755`) and writes both the plan's `isEnabled` (`:1743`) and
+`malwareScanning.onUpload.isEnabled` (`:1746`) from that parameter, so the default actively writes
+the plan off instead of leaving an earlier plan running under an incremental deploy (`:1732-1735`);
+when it is on, the per-GB scanning cost is bounded by a 50 GB monthly cap (`:1747`). The parameter
 alone does not give scanning: its description records that on-upload scanning never activated on
 this subscription because it needs the subscription-level DefenderForStorageV2 plan, which only the
-subscription owner can enable, and says to set it true only together with that plan (`:135`). The
+subscription owner can enable, and says to set it true only together with that plan (`:157`). The
 content gate is the control; malware scanning, where enabled, is defence in depth behind it.
 
 **6. Blob removal is an internal command scheduled in the delete's transaction.** Deleting the row and deleting the bytes are
@@ -187,12 +189,19 @@ server share; the per-session cap is enforced by a grouped count at
 `SessionAssetAccessService.cs:60-83`. The transport cap is the file size plus 64 KB
 of multipart headroom (`SessionAssetLimits.cs:20`), because a file at exactly the limit is otherwise
 refused by Kestrel with a bare 413 before the friendly validation error can run; the controller
-applies it with `[RequestSizeLimit]` (`SessionAssetsController.cs:151-153`). The YARP gateway
-terminates the request before the service sees it and has no endpoint to hang an attribute on, so the
-body-size raise there is **path-scoped to `/SessionAssets/file` alone**
-(`MMCA.ADC/Source/Hosts/MMCA.ADC.Gateway/Program.cs:213-232`, path match `:222`), not global: every other route keeps
-its default budget. The gateway's forwarding route itself is anonymous, as every gateway route is
-(`MMCA.ADC/Source/Hosts/MMCA.ADC.Gateway/appsettings.json:221-225`).
+applies it with `[RequestSizeLimit]` (`SessionAssetsController.cs:162`). The YARP gateway
+terminates the request before the service sees it, so the body-size raise there is **path-scoped to
+`/SessionAssets/file` alone**: that path has its own route, `conference-session-assets-file`, which
+carries YARP's per-route `MaxRequestBodySize` and wins over the `/SessionAssets` catch-all with
+`Order` -1 (`MMCA.ADC/Source/Hosts/MMCA.ADC.Gateway/appsettings.json:275-281`, path match `:278`,
+cap `:280`, reasoning `:267-274`), not a global raise: every other route keeps its default budget.
+Both gateway routes are anonymous, as every gateway route is (`:276`, `:283`). The UI.Web
+same-origin proxy raises its own cap for that one path too, also path-scoped but by a different
+mechanism: its `MaxRequestBodySizeByPath` entry
+(`MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/appsettings.json:88-89`) is read by MMCA.Common's
+`SameOriginApiProxyEndpoint`, which sets `IHttpMaxRequestBodySizeFeature` per matching request
+(`MMCA.Common/Source/Presentation/MMCA.Common.UI.Web/SameOriginProxy/SameOriginApiProxyEndpoint.cs:373`,
+assignment `:386`).
 
 **UI.** Speakers and organizers manage a session's materials through
 `Conference.UI/Pages/SessionAssets/SessionAssetsPanel.razor`, hosted on both the speaker dashboard
@@ -260,8 +269,8 @@ an attendee "materials posted" notification on a bookmarked session.
   a stored deck has been transformed, so a payload the sniffer's format rules admit is a payload the
   container serves. The sniffer bounds the format, not the content; Defender for Storage exists for
   exactly that residue, but the template writes it off by default as a cost decision
-  (`MMCA.ADC/infra/main.bicep:136`, `:1569`, `:1572`), and on-upload scanning also needs a
-  subscription-level plan only the subscription owner can enable (`:135`), so the posture the
+  (`MMCA.ADC/infra/main.bicep:158`, `:1743`, `:1746`), and on-upload scanning also needs a
+  subscription-level plan only the subscription owner can enable (`:157`), so the posture the
   template deploys is format-checked but not malware-scanned.
 - **Blob cleanup is eventually consistent.** Every delete path commits the blob-removal row with the
   delete, but the processor runs it later, so between the commit and the queue's next tick the file
@@ -269,18 +278,25 @@ an attendee "materials posted" notification on a bookmarked session.
   back; only an upload-orphan blob that cannot be scheduled is logged as needing removal by hand,
   and there is no reconciler that walks the container looking for blobs with no row.
 - **The gateway carries a duplicated literal.** The Gateway references no Conference assembly, so its
-  50 MB plus 64 KB body limit is a literal rather than `SessionAssetLimits.MaxRequestBytes`. The
-  route is pinned by `RouteMapTests` and the real enforcement is the service-side attribute, but the
-  two numbers have to be changed together.
+  50 MB plus 64 KB body limit is a literal in its route configuration rather than
+  `SessionAssetLimits.MaxRequestBytes` (`MMCA.ADC/Source/Hosts/MMCA.ADC.Gateway/appsettings.json:280`),
+  and `RouteMapTests` pins it against its own restated constant
+  (`MMCA.ADC/Tests/Hosts/MMCA.ADC.Gateway.Tests/RouteMapTests.cs:75`). The UI.Web proxy holds the same
+  literal (`MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/appsettings.json:89`), tied to the constant itself
+  by `MMCA.ADC/Tests/Hosts/MMCA.ADC.UI.Web.Tests/SameOriginApiProxyBodySizeTests.cs:30`. The real
+  enforcement is the service-side attribute, but four values have to be changed together: the
+  constant, the gateway literal, the gateway test's restated constant and the UI.Web literal (whose
+  test fails otherwise). The gateway's reasoning comment also restates the number
+  (`MMCA.ADC/Source/Hosts/MMCA.ADC.Gateway/appsettings.json:270`).
 - **Two authorization shapes now live in one module.** Every other Conference controller is readable
   from its attributes; this one is not, because half its rule is data. The handlers are the authority
   for the per-session decision and the controller stamps the claim; the one thing it decides itself
   is a claim-level pre-check on the file upload, which refuses a caller holding neither a
   `speaker_id` claim nor the manage capability before the 50 MB buffer, the sniff and the handler run
-  (`SessionAssetsController.cs:175-182`). It does not stop the upload being buffered: MVC form binding
+  (`SessionAssetsController.cs:177-191`). It does not stop the upload being buffered: MVC form binding
   has already spooled the multipart body to a temp file before the action runs, and refusing earlier
   needs a claim-level policy evaluated before binding, which the source records as a follow-up
-  (`:172-174`). That split is correct and is also the kind of thing a
+  (`:181-183`). That split is correct and is also the kind of thing a
   reviewer scanning attributes will miss. The architecture test that pins the anonymous surface names the list
   action explicitly for that reason.
 - **A speaker can publish to the public web with no review.** The capability model deliberately gives
@@ -428,6 +444,48 @@ on-upload scanning default is unchanged no longer hold.
    `SessionDetail.razor:178`; the public download list at `PublicSessionDetail.razor:121`, after the
    `ResourceLinks` row at `:111-113`; and the v1.210.0 breaking change at
    `MMCA.Common/CHANGELOG.md:1274-1275` (release heading `:1212`).
+
+## Revision (2026-11-23)
+Re-verified against current source. The decision, the six parts, the per-file and per-session
+limits, the template's Defender for Storage default (off) and the 50 GB cap are unchanged. The
+gateway's body-size raise moved from code into route configuration, so the Limits paragraph and the
+duplicated-literal trade-off are rewritten, and the anchors below moved, so the earlier lists no
+longer hold for them: the 2026-10-26 statement that the raise lives in the gateway's `Program.cs`
+(`:213-232`) and its Conference registration anchor `Program.cs:367`, the 2026-10-21 controller
+pre-check (`:168-182`, `:172-174`) and gateway route (`appsettings.json:221-225`) anchors, and the
+2026-10-28 list's moved anchors.
+
+1. The gateway no longer raises the body cap in `Program.cs`, which holds no session-asset code. The
+   raise is a dedicated YARP route, `conference-session-assets-file`, matching `/SessionAssets/file`
+   alone with `Order` -1 so it wins over the `/SessionAssets` catch-all and carrying the per-route
+   `MaxRequestBodySize` 52494336
+   (`MMCA.ADC/Source/Hosts/MMCA.ADC.Gateway/appsettings.json:275-281`, reasoning `:267-274`); both
+   routes are anonymous (`:276`, `:283`). It is still path-scoped, not global. The UI.Web same-origin
+   proxy raises its own cap for the same path through its `MaxRequestBodySizeByPath` setting
+   (`MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/appsettings.json:88-89`), which
+   `SameOriginApiProxyEndpoint.cs:373` applies per request.
+2. The "duplicated literal" trade-off now names the four values that move together: the constant
+   (`SessionAssetLimits.cs:20`), the gateway literal (`appsettings.json:280`, restated in its comment `:270`)
+   pinned by `RouteMapTests` against its own restated constant
+   (`MMCA.ADC/Tests/Hosts/MMCA.ADC.Gateway.Tests/RouteMapTests.cs:75`), and the UI.Web literal
+   (`MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/appsettings.json:89`), which
+   `MMCA.ADC/Tests/Hosts/MMCA.ADC.UI.Web.Tests/SameOriginApiProxyBodySizeTests.cs:30` ties to
+   `SessionAssetLimits.MaxRequestBytes` directly. Part 2 also names where the Identity host applies
+   the grants (`MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Authorization/TokenPermissionGrants.cs:56`).
+3. Anchors re-verified against current source: the identifier alias
+   `MMCA.ADC.Conference.GlobalUsings.IdentifierType.cs:18`; the grant calls
+   `ConferencePermissionGrants.cs:53-54` (remarks `:12-17` unmoved), applied at
+   `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/DependencyInjection.cs:45`; the
+   controller's class-level `[Authorize]` `SessionAssetsController.cs:61`, the list action
+   `:87-89` and its cache-storage switch `:101-104`, `[RequestSizeLimit]` `:162`, and the upload
+   pre-check `:177-191` with its follow-up note `:181-183`; the Conference service registration
+   `MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:300`; the public-read container
+   `MMCA.ADC/infra/main.bicep:1686-1692` (name `:1688`, `publicAccess: 'Blob'` `:1690`), its
+   container name injected at `:2510`, the account-scoped grant `:1722-1730` and its coverage
+   comment `:1713-1715`; the scanning parameter `:158` and its description `:157`; the settings
+   resource `:1739-1755` (`isEnabled` `:1743`, `onUpload.isEnabled` `:1746`, cap `:1747`,
+   incremental-deploy comment `:1732-1735`); and the v1.210.0 breaking change at
+   `MMCA.Common/CHANGELOG.md:2211-2212` (release heading `:2149`).
 
 ## Related
 [ADR-045](045-managed-file-storage-and-avatars.md) (the storage abstraction, the image path this

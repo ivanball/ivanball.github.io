@@ -27,16 +27,21 @@ pins, and anchors refreshed after v1.265.1. Revised 2026-11-12 (v1.289.0,
 `MMCA.Common/CHANGELOG.md:7`): the Azure start-up calls ship in a fourth adapter package,
 MMCA.Common.Azure.Startup (`:46`, `:67`); the composed service host takes vendor calls only as
 callbacks; MMCA.Common.Aws gains an OpenTelemetry exporter and MMCA.Common.Azure gains PostgreSQL
-Entra token login, each with its startup tripwire; and anchors refreshed.
+Entra token login, each with its startup tripwire; and anchors refreshed. Revised 2026-11-23:
+MMCA.Common.Azure gains Entra token login for Azure Redis through a new core Redis configurator
+hook and managed-identity sign-in for the Service Bus transport, the host tripwire checks four
+boolean gates (adding RDS IAM, Cloud SQL IAM and Azure Redis Entra), the infrastructure tripwire
+also checks passkeys and machine clients, the `aws-integration` floor is 13 tests, and anchors
+refreshed after v1.315.0.
 
 ## Context
 Before v1.255.0 the core packages carried the Azure SDKs themselves: MMCA.Common.Infrastructure,
 MMCA.Common.Aspire, MMCA.Common.API and MMCA.Common.Testing each referenced Azure packages, and
 MMCA.Common.Testing brought Testcontainers.ServiceBus, Azure.Messaging.ServiceBus and
-MassTransit.Azure.ServiceBus.Core into every test project that used it (`MMCA.Common/CHANGELOG.md:172`).
+MassTransit.Azure.ServiceBus.Core into every test project that used it (`MMCA.Common/CHANGELOG.md:1109`).
 A consumer that never runs on Azure (a self-hosted deployment, or one on AWS) still restored, audited
 and shipped those dependencies, and the broker selection was a closed enum, `MessageBusProvider`, so a
-second cloud's transport could only be added by editing the core (`MMCA.Common/CHANGELOG.md:173`).
+second cloud's transport could only be added by editing the core (`MMCA.Common/CHANGELOG.md:1110`).
 
 The framework already had a working shape for optional vendor code. The AI boundary
 ([ADR-120](120-governed-chat-client-boundary.md)) keeps the provider SDKs in separate packages
@@ -48,72 +53,89 @@ integrations had no equivalent: their SDKs were unconditional references of the 
 ## Decision
 **The core packages reference no cloud SDK. Each vendor integration ships in an adapter package that
 references the core, and a host opts in with one registration call per capability.** The framework
-guide states the rule (`MMCA.Common/AGENTS.md:151`).
+guide states the rule (`MMCA.Common/AGENTS.md:165`).
 
 - **Four cloud adapter packages and one test adapter.** Azure ships as two packages, the AWS and
   Google Cloud adapters as one each; the authoritative package list is `MMCA.Common/FACTS.md`
   (`MMCA.Common.Azure.Startup` at `:42`, the two Azure packages' references at `:79-80`). Every call
-  is opt-in and a no-op until its gate key is set (`MMCA.Common/CHANGELOG.md:547`, `:552`).
+  is opt-in and a no-op until its gate key is set (`MMCA.Common/CHANGELOG.md:1053`, `:1058`).
   - `MMCA.Common.Azure.Startup`: the Azure start-up calls, with no EF Core or MassTransit
     dependency, so a gateway or any host that needs only start-up wiring takes them without EF Core,
     MassTransit, Service Bus, Notification Hubs or the Blob file storage adapter; it keeps the Blob
     SDK, because the key ring is stored in a blob
     (`MMCA.Common/Source/Hosting/MMCA.Common.Azure.Startup/MMCA.Common.Azure.Startup.csproj:4`,
-    `:14-19`, `:21`, `:24`; `MMCA.Common/CHANGELOG.md:46`, `:61`). Key Vault as a configuration source,
+    `:14-19`, `:21`, `:25`; `MMCA.Common/CHANGELOG.md:551`, `:567`). Key Vault as a configuration source,
     `AddAzureKeyVaultConfiguration()`
     (`MMCA.Common/Source/Hosting/MMCA.Common.Azure.Startup/AzureKeyVaultConfigurationExtensions.cs:23`, `:80`);
     the Blob plus Key Vault DataProtection key ring, `AddAzureDataProtection()`
-    (`MMCA.Common/Source/Hosting/MMCA.Common.Azure.Startup/AzureDataProtectionExtensions.cs:20`, `:53`); and
+    (`MMCA.Common/Source/Hosting/MMCA.Common.Azure.Startup/AzureDataProtectionExtensions.cs:20`, `:54`); and
     the Azure Monitor exporter, `AddAzureMonitorExporter()`
     (`MMCA.Common/Source/Hosting/MMCA.Common.Azure.Startup/AzureMonitorExporterExtensions.cs:12`, `:42`,
-    calling `UseAzureMonitor()` at `:63`). The three types keep the `MMCA.Common.Azure` namespace
+    calling `UseAzureMonitor()` at `:65`). The three types keep the `MMCA.Common.Azure` namespace
     (`MMCA.Common.Azure.Startup.csproj:5-7`). The package carries only the Key Vault configuration,
-    DataProtection, Blob storage, Azure.Identity and Azure Monitor SDKs (`:20-28`, the direct
-    `Azure.Storage.Blobs` reference at `:24`) and references MMCA.Common.Aspire alone, for the
-    `HostIntegrationMarker` receipt (`:35-36`), which brings that package's health-check, Npgsql,
+    DataProtection, Blob storage, Azure.Identity and Azure Monitor SDKs (`:21-29`, the direct
+    `Azure.Storage.Blobs` reference at `:25`) and references MMCA.Common.Aspire alone, for the
+    `HostIntegrationMarker` receipt (`:37`), which brings that package's health-check, Npgsql,
     SqlClient and Redis references with it
     (`MMCA.Common/Source/Hosting/MMCA.Common.Aspire/MMCA.Common.Aspire.csproj:17-41`); the `EnforceAzureStartupBoundary`
     build target holds it to an allow-list of MMCA.Common.Aspire and MMCA.Common.Shared
     (`MMCA.Common/Source/Build/MMCA.Common.LayerEnforcement.targets:296-314`).
   - `MMCA.Common.Azure`: references MMCA.Common.Azure.Startup, so a host on the full adapter still
     gets the three start-up calls
-    (`MMCA.Common/Source/Hosting/MMCA.Common.Azure/MMCA.Common.Azure.csproj:44`), and forwards the
+    (`MMCA.Common/Source/Hosting/MMCA.Common.Azure/MMCA.Common.Azure.csproj:47`), and forwards the
     three moved types so a host compiled against an older binary resolves them without a rebuild
-    (`MMCA.Common/Source/Hosting/MMCA.Common.Azure/TypeForwards.cs:3-8`; `MMCA.Common/CHANGELOG.md:67`).
+    (`MMCA.Common/Source/Hosting/MMCA.Common.Azure/TypeForwards.cs:3-8`; `MMCA.Common/CHANGELOG.md:573`).
     What stays here is everything beyond start-up: Blob file storage,
     `AddAzureBlobFileStorage(configuration)`
-    (`MMCA.Common/Source/Hosting/MMCA.Common.Azure/AzureServiceCollectionExtensions.cs:41`); Notification
-    Hubs native push, `AddAzureNotificationHubsPush(configuration)` (`:85`); the Service Bus
-    transport, `AddAzureServiceBusTransport()` (`:119-120`); and Entra token login for Azure Database
-    for PostgreSQL, `AddAzurePostgreSqlEntraAuthentication(configuration)` (`:146`), gated on the
-    boolean `AzurePostgreSql:EntraAuthentication:Enabled` (`:124`, `:150-156`; section at
-    `MMCA.Common/Source/Hosting/MMCA.Common.Azure/PostgreSql/AzurePostgreSqlEntraAuthenticationSettings.cs:13`).
-    The login is one more configurator registered through `AddNpgsqlDataSourceConfigurator`
-    (`AzureServiceCollectionExtensions.cs:172`;
+    (`MMCA.Common/Source/Hosting/MMCA.Common.Azure/AzureServiceCollectionExtensions.cs:44`); Notification
+    Hubs native push, `AddAzureNotificationHubsPush(configuration)` (`:86`); the Service Bus
+    transport, `AddAzureServiceBusTransport()` (`:125`), which signs in with a `DefaultAzureCredential`
+    Entra token when `MessageBus:AzureServiceBus:FullyQualifiedNamespace` is set (pinned to
+    `MessageBus:AzureServiceBus:ManagedIdentityClientId` when that is set), so the namespace can run
+    with shared access keys off, and otherwise resolves a connection string (`:113-122`;
+    enforced at `MMCA.Common/Source/Hosting/MMCA.Common.Azure/Messaging/AzureServiceBusTransport.cs:67-77`;
+    `MMCA.Common/CHANGELOG.md:81`); Entra token login for Azure Database
+    for PostgreSQL, `AddAzurePostgreSqlEntraAuthentication(configuration)` (`:152`), gated on the
+    boolean `AzurePostgreSql:EntraAuthentication:Enabled` (`:130`, `:156-162`; section at
+    `MMCA.Common/Source/Hosting/MMCA.Common.Azure/PostgreSql/AzurePostgreSqlEntraAuthenticationSettings.cs:13`);
+    and Entra token login for Azure Cache for Redis and Azure Managed Redis,
+    `AddAzureRedisEntraAuthentication(configuration)` (`:201`), gated on the boolean
+    `AzureRedis:EntraAuthentication:Enabled` (`:185`, `:205-211`).
+    The PostgreSQL login is one more configurator registered through `AddNpgsqlDataSourceConfigurator`
+    (`AzureServiceCollectionExtensions.cs:178`;
     `MMCA.Common/Source/Hosting/MMCA.Common.Azure/PostgreSql/AzurePostgreSqlEntraAuthenticationConfigurator.cs:23`):
     Npgsql's periodic password provider sends a `DefaultAzureCredential` token for the
-    `https://ossrdbms-aad.database.windows.net/.default` scope (`AzureServiceCollectionExtensions.cs:123-128`;
+    `https://ossrdbms-aad.database.windows.net/.default` scope (`AzureServiceCollectionExtensions.cs:129-134`;
     `MMCA.Common/Source/Hosting/MMCA.Common.Azure/PostgreSql/AzurePostgreSqlAccessTokenSource.cs:15`),
     refreshed every four minutes (`AzurePostgreSqlEntraAuthenticationConfigurator.cs:26`), and a
     configured PostgreSQL connection string that does not require TLS fails registration, because the
-    token travels as the password (`AzureServiceCollectionExtensions.cs:132-135`, `:158-160`). It has
-    not been tried against a live Azure Database for PostgreSQL server. The Entra ID SQL
+    token travels as the password (`AzureServiceCollectionExtensions.cs:138-141`, `:164-166`). It has
+    not been tried against a live Azure Database for PostgreSQL server. The Redis login is a
+    configurator registered through the core `AddRedisConfigurationOptionsConfigurator`
+    (`AzureServiceCollectionExtensions.cs:223-224`;
+    `MMCA.Common/Source/Hosting/MMCA.Common.Azure/Redis/AzureRedisEntraAuthenticationConfigurator.cs:21`)
+    over Microsoft.Azure.StackExchangeRedis (`MMCA.Common.Azure.csproj:38`;
+    `MMCA.Common/Directory.Packages.props:215`), which re-authenticates open connections before each
+    token expires; a Redis connection string that carries a password or sets `ssl=false` fails when
+    its connection is configured (`AzureServiceCollectionExtensions.cs:194-196`;
+    `AzureRedisEntraAuthenticationConfigurator.cs:45-60`;
+    `MMCA.Common/CHANGELOG.md:80`). The Entra ID SQL
     authentication provider (`Microsoft.Data.SqlClient.Extensions.Azure`,
     `MMCA.Common.Azure.csproj:35`) arrives by referencing the package, with no call
-    (`MMCA.Common/CHANGELOG.md:158`).
+    (`MMCA.Common/CHANGELOG.md:1095`).
   - `MMCA.Common.Aws`: S3-compatible storage, `AddS3FileStorage(configuration)`, and the SQS/SNS
     transport, `AddAmazonSqsTransport()`
-    (`MMCA.Common/Source/Hosting/MMCA.Common.Aws/AwsServiceCollectionExtensions.cs:29`, `:50`, `:85`);
+    (`MMCA.Common/Source/Hosting/MMCA.Common.Aws/AwsServiceCollectionExtensions.cs:30`, `:51`, `:86`);
     Secrets Manager as a configuration source, `AddAwsSecretsManagerConfiguration()`, reading the
     `SecretsManager` section
     (`MMCA.Common/Source/Hosting/MMCA.Common.Aws/AwsSecretsManagerConfigurationExtensions.cs:25`,
     `:82`); the Systems Manager Parameter Store key ring, `AddAwsDataProtection()`, gated on
     `DataProtection:SsmParameterPrefix` with an optional `DataProtection:KmsKeyId`
     (`MMCA.Common/Source/Hosting/MMCA.Common.Aws/AwsDataProtectionExtensions.cs:57`, `:59`, `:76`;
-    `Amazon.AspNetCore.DataProtection.SSM` at `MMCA.Common/Directory.Packages.props:164`); SNS mobile
+    `Amazon.AspNetCore.DataProtection.SSM` at `MMCA.Common/Directory.Packages.props:232`); SNS mobile
     push with a DynamoDB installation registry, `AddAmazonSnsPush(configuration)`
-    (`AwsServiceCollectionExtensions.cs:164`; `MMCA.Common/CHANGELOG.md:119`); and RDS / Aurora IAM
-    authentication for PostgreSQL, `AddAwsRdsIamAuthentication(configuration)` (`AwsServiceCollectionExtensions.cs:107`), gated on the
+    (`AwsServiceCollectionExtensions.cs:174`; `MMCA.Common/CHANGELOG.md:1056`); and RDS / Aurora IAM
+    authentication for PostgreSQL, `AddAwsRdsIamAuthentication(configuration)` (`AwsServiceCollectionExtensions.cs:108`), gated on the
     `Rds:IamAuthentication` section
     (`MMCA.Common/Source/Hosting/MMCA.Common.Aws/Rds/RdsIamAuthenticationSettings.cs:11`) with the
     token refreshed every 10 minutes
@@ -134,9 +156,9 @@ guide states the rule (`MMCA.Common/AGENTS.md:151`).
     unsigned (`MMCA.Common/Source/Hosting/MMCA.Common.Aws/Telemetry/AwsSigV4ExportHandler.cs:16-18`).
     The exporter is tested against the SDK signer and a loopback receiver and has not been exercised
     against live X-Ray or CloudWatch Logs endpoints (`AwsTelemetryExporterExtensions.cs:72-74`).
-  - `MMCA.Common.Gcp`, over Application Default Credentials throughout (`MMCA.Common/CHANGELOG.md:121`):
+  - `MMCA.Common.Gcp`, over Application Default Credentials throughout (`MMCA.Common/CHANGELOG.md:1058`):
     Cloud Storage, `AddGoogleCloudStorage(configuration)`
-    (`MMCA.Common/Source/Hosting/MMCA.Common.Gcp/GcpServiceCollectionExtensions.cs:26`, `:48`), gated
+    (`MMCA.Common/Source/Hosting/MMCA.Common.Gcp/GcpServiceCollectionExtensions.cs:27`, `:49`), gated
     on `FileStorage:GcsBucket`
     (`MMCA.Common/Source/Hosting/MMCA.Common.Gcp/Storage/GcsFileStorageSettings.cs:15`, `:18`); Secret
     Manager as a configuration source, `AddGoogleSecretManagerConfiguration()`, reading the
@@ -144,11 +166,12 @@ guide states the rule (`MMCA.Common/AGENTS.md:151`).
     (`MMCA.Common/Source/Hosting/MMCA.Common.Gcp/GoogleSecretManagerConfigurationExtensions.cs:25`,
     `:82`); the key ring in one Cloud Storage object, `AddGoogleCloudDataProtection()`, gated on
     `DataProtection:GcsObjectUri` with optional Cloud KMS encryption at `DataProtection:GcpKmsKeyName`
-    (`MMCA.Common/Source/Hosting/MMCA.Common.Gcp/GoogleCloudDataProtectionExtensions.cs:24-25`, `:76`);
+    (`MMCA.Common/Source/Hosting/MMCA.Common.Gcp/GoogleCloudDataProtectionExtensions.cs:24`, `:37`,
+    `:42`, `:77`);
     FCM HTTP v1 push with a Firestore installation registry, `AddFirebaseCloudMessagingPush(configuration)`
-    (`GcpServiceCollectionExtensions.cs:142`), which accepts FCM registration tokens only
-    (`MMCA.Common/CHANGELOG.md:125`); Cloud SQL IAM authentication for PostgreSQL,
-    `AddCloudSqlIamAuthentication(configuration)` (`GcpServiceCollectionExtensions.cs:90`), gated on the `CloudSql:IamAuthentication`
+    (`GcpServiceCollectionExtensions.cs:149`), which accepts FCM registration tokens only
+    (`MMCA.Common/CHANGELOG.md:1062`); Cloud SQL IAM authentication for PostgreSQL,
+    `AddCloudSqlIamAuthentication(configuration)` (`GcpServiceCollectionExtensions.cs:91`), gated on the `CloudSql:IamAuthentication`
     section
     (`MMCA.Common/Source/Hosting/MMCA.Common.Gcp/CloudSql/CloudSqlIamAuthenticationSettings.cs:13`)
     with the token refreshed every minute
@@ -163,7 +186,7 @@ guide states the rule (`MMCA.Common/AGENTS.md:151`).
     `ServiceBusEmulatorFixtureBase`
     (`MMCA.Common/Source/Hosting/MMCA.Common.Testing.Azure/Fixtures/ServiceBusEmulatorFixtureBase.cs:54`).
 - **Configuration sections and keys are unchanged.** Only the call and the type names moved; no shim
-  or `[Obsolete]` alias is left in the core (`MMCA.Common/CHANGELOG.md:172`). Each adapter binds the
+  or `[Obsolete]` alias is left in the core (`MMCA.Common/CHANGELOG.md:1109`). Each adapter binds the
   section the core used: Blob storage and S3 both read `FileStorage`
   (`MMCA.Common/Source/Hosting/MMCA.Common.Aws/Storage/S3StorageClientFactory.cs:13`), and the
   Notification Hubs registration keeps the `NativePush` gate of `Enabled` plus a connection string and
@@ -191,15 +214,16 @@ guide states the rule (`MMCA.Common/AGENTS.md:151`).
 - **A broker that needs only a database is built in: `PostgreSql`.** `PostgreSqlBrokerTransport`
   (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Messaging/Transports/PostgreSqlBrokerTransport.cs:40`,
   `Name` at `:43`) runs MassTransit's SQL transport, `MassTransit.SqlTransport.PostgreSQL` at 8.5.12
-  (`MMCA.Common/Directory.Packages.props:131-136`), so any PostgreSQL is the broker, which is why it is
+  (`MMCA.Common/Directory.Packages.props:194-199`), so any PostgreSQL is the broker, which is why it is
   core rather than an adapter (`PostgreSqlBrokerTransport.cs:10-14`). It is the broker for Google
-  Cloud, which has no MassTransit v8 Pub/Sub transport (`MMCA.Common/CHANGELOG.md:129`). The
+  Cloud, which has no MassTransit v8 Pub/Sub transport (`MMCA.Common/CHANGELOG.md:1066`). The
   `MessageBus:PostgreSql` section
   (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Messaging/Transports/PostgreSqlTransportSettings.cs:11`)
   carries `Schema` and `Role` (`:20`, `:26`; both default `transport`, `PostgreSqlBrokerTransport.cs:18-19`)
   and `MigrateOnStartup`, default `true` (`PostgreSqlTransportSettings.cs:36`). Delayed redelivery is
   native and unconditional (`PostgreSqlBrokerTransport.cs:24-27`).
-- **Passwordless PostgreSQL goes through one cloud-neutral hook.** `INpgsqlDataSourceConfigurator`
+- **Passwordless PostgreSQL goes through one cloud-neutral hook, and Redis through a sibling.**
+  `INpgsqlDataSourceConfigurator`
   (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/INpgsqlDataSourceConfigurator.cs:23`,
   `Configure(NpgsqlDataSourceBuilder)` at `:27`) is registered with `AddNpgsqlDataSourceConfigurator`
   (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.Persistence.cs:24`, as an
@@ -209,6 +233,15 @@ guide states the rule (`MMCA.Common/AGENTS.md:151`).
   unchanged (`INpgsqlDataSourceConfigurator.cs:12-13`). `AddAwsRdsIamAuthentication` and
   `AddCloudSqlIamAuthentication` are both configurators behind this hook (`MMCA.Common/Source/Hosting/MMCA.Common.Aws/Rds/RdsIamAuthenticationConfigurator.cs:21`,
   `MMCA.Common/Source/Hosting/MMCA.Common.Gcp/CloudSql/CloudSqlIamAuthenticationConfigurator.cs:23`).
+  The Redis twin is `IRedisConfigurationOptionsConfigurator`
+  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Caching/IRedisConfigurationOptionsConfigurator.cs:30`),
+  registered with `AddRedisConfigurationOptionsConfigurator`
+  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.Caching.cs:253`): it
+  adjusts the StackExchange.Redis `ConfigurationOptions` of every Redis connection the framework
+  opens (the distributed cache, the Redis client, the output cache, the SignalR backplane and the
+  Redis health check), and with none registered each connection is built from its connection string
+  unchanged (`MMCA.Common/CHANGELOG.md:79`). `AddAzureRedisEntraAuthentication` is its one
+  configurator today.
 - **The push payload builders are core.** `NativePushPayloads`
   (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Notifications/Push/NativePushPayloads.cs:13`,
   `BuildFcmV1Payload` at `:20`, `BuildApnsPayload` at `:42`) is public and called by the
@@ -223,42 +256,50 @@ guide states the rule (`MMCA.Common/AGENTS.md:151`).
   is the adapter call `AddAzureMonitorExporter()`, which throws when it runs before
   `AddServiceDefaults()` because the framework's outbox and probe filter processors must be registered
   ahead of the exporter (`AzureMonitorExporterExtensions.cs:45-50`; `Extensions.Telemetry.cs:146`;
-  `MMCA.Common/CHANGELOG.md:174`).
+  `MMCA.Common/CHANGELOG.md:1111`).
 - **Startup tripwires fail fast when vendor configuration exists without its adapter.** Two
   `IValidateOptions` validators run under `ValidateOnStart`, before any hosted service starts.
   `CloudAdapterTripwire`
-  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Configuration/CloudAdapterTripwire.cs:30`,
+  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Configuration/CloudAdapterTripwire.cs:32`,
   registered by `AddInfrastructure` at
-  `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:221-223`) fails
-  `NativePush:Enabled=true` whose `INativePushSender` is still the null default (`:33`, `:48-50`),
-  naming the call of each of the three push adapters (`:53`). A tripwire fires only on a key that
+  `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:244-246`) fails
+  `NativePush:Enabled=true` whose `INativePushSender` is still the null default (`:35`, `:77-82`),
+  naming the call of each of the three push adapters (`:81`). The same validator also fails
+  `Passkeys:Enabled` without the passkey ceremony and `MachineClients:Enabled` without machine
+  clients (`:42`, `:49`, `:64-75`), so it is not cloud-only. A tripwire fires only on a key that
   declares intent, so a `FileStorage` section, which is routinely shared across a solution's
-  services, is deliberately not checked (`:22-26`); a host that lost its storage adapter fails each
-  upload with `FileStorage.NotConfigured` instead (v1.256.0, `MMCA.Common/CHANGELOG.md:144-152`).
+  services, is deliberately not checked (`:24-28`); a host that lost its storage adapter fails each
+  upload with `FileStorage.NotConfigured` instead (v1.256.0, `MMCA.Common/CHANGELOG.md:1081-1089`).
   `HostIntegrationTripwire`
-  (`MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Integrations/HostIntegrationTripwire.cs:15`, `:69`,
-  registered by `AddServiceDefaults()` at `MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Extensions.cs:44-46`)
+  (`MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Integrations/HostIntegrationTripwire.cs:15`, `:87`,
+  registered by `AddServiceDefaults()` at `MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Extensions.cs:50-52`)
   checks one gate key per host-level adapter call: `APPLICATIONINSIGHTS_CONNECTION_STRING`,
   `KeyVault:Uri` and `DataProtection:BlobStorageUri` (`:20`, `:23`, `:26`), `SecretsManager:NamePrefix`,
   `DataProtection:SsmParameterPrefix` and `AwsTelemetry:Region` (`:29`, `:32`, `:49`), and
   `GoogleSecretManager:NamePrefix`, `DataProtection:GcsObjectUri` and `GoogleCloudTelemetry:ProjectId`
-  (`:40`, `:43`, `:46`; the checks at `:73-117`), against the `HostIntegrationMarker` each adapter call
+  (`:40`, `:43`, `:46`; the checks at `:91-135`), against the `HostIntegrationMarker` each adapter call
   registers
   (`MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Integrations/HostIntegrationMarker.cs:10`,
   names at `HostIntegrationNames.cs:17`, `:20`, `:23`, `:26`, `:29`, `:32`, `:35`, `:38`, `:41`; registered at
-  `AzureKeyVaultConfigurationExtensions.cs:84`, `AzureDataProtectionExtensions.cs:57`,
-  `AzureMonitorExporterExtensions.cs:56`, `AwsSecretsManagerConfigurationExtensions.cs:125`,
+  `AzureKeyVaultConfigurationExtensions.cs:115`, `AzureDataProtectionExtensions.cs:71`,
+  `AzureMonitorExporterExtensions.cs:63`, `AwsSecretsManagerConfigurationExtensions.cs:125`,
   `AwsDataProtectionExtensions.cs:72`, `AwsTelemetryExporterExtensions.cs:122`,
-  `GoogleSecretManagerConfigurationExtensions.cs:116`, `GoogleCloudDataProtectionExtensions.cs:102`,
+  `GoogleSecretManagerConfigurationExtensions.cs:116`, `GoogleCloudDataProtectionExtensions.cs:103`,
   `GoogleCloudTelemetryExporterExtensions.cs:127`). The three Azure start-up messages name
-  MMCA.Common.Azure.Startup, or MMCA.Common.Azure, which includes it (`HostIntegrationTripwire.cs:76`,
-  `:81`, `:86`). `AzurePostgreSql:EntraAuthentication:Enabled` is a boolean gate (`:51-56`): true
-  without `AddAzurePostgreSqlEntraAuthentication(configuration)` fails, and so does a value that is
-  neither blank nor a boolean (`:119-132`, read at `:162-171`; name at `HostIntegrationNames.cs:43-44`,
-  registered at `AzureServiceCollectionExtensions.cs:169`). It also fails a host that sets more than
+  MMCA.Common.Azure.Startup, or MMCA.Common.Azure, which includes it (`HostIntegrationTripwire.cs:94`,
+  `:99`, `:104`). Four keys are boolean gates, one per passwordless login call:
+  `AzurePostgreSql:EntraAuthentication:Enabled`, `Rds:IamAuthentication:Enabled`,
+  `CloudSql:IamAuthentication:Enabled` and `AzureRedis:EntraAuthentication:Enabled` (`:56`, `:62`,
+  `:68`, `:74`; checks at `:137-156`). True without
+  `AddAzurePostgreSqlEntraAuthentication(configuration)`, `AddAwsRdsIamAuthentication(configuration)`,
+  `AddCloudSqlIamAuthentication(configuration)` or `AddAzureRedisEntraAuthentication(configuration)`
+  respectively fails, and so does a value that is neither blank nor a boolean (`:179-193`, read at
+  `:202-211`; names at `HostIntegrationNames.cs:44`, `:50`, `:53`, `:47`, registered at
+  `AzureServiceCollectionExtensions.cs:175`, `AwsServiceCollectionExtensions.cs:137`,
+  `GcpServiceCollectionExtensions.cs:113` and `AzureServiceCollectionExtensions.cs:220`). It also fails a host that sets more than
   one of the three key-ring gates, since two rings split cookies across replicas
-  (`HostIntegrationTripwire.cs:58-64`, `:134-142`). A section holding only blank placeholders stays
-  silent (`:155`).
+  (`HostIntegrationTripwire.cs:76-82`, `:158-166`). A section holding only blank placeholders stays
+  silent (`:195`).
 - **The boundary is gated twice, matched on package id.** The `EnforceCloudVendorBoundary` build target
   fails a core project whose `PackageReference` is an Azure, AWS or Google Cloud package (an
   `Azure.*`, `Microsoft.Azure.*`, `AWSSDK.*` or `Google.*` id, `FirebaseAdmin` or `Grpc.Auth`), a vendor
@@ -304,30 +345,31 @@ guide states the rule (`MMCA.Common/AGENTS.md:151`).
   Monitor and the shared key ring (`:68-72`); and `RegisterBrokerTransports` runs immediately before
   the application pipeline, for the Service Bus transport for example (`:80-84`).
 - **S3-compatible, not S3-only.** `AddS3FileStorage` targets Amazon S3, Cloudflare R2, MinIO and the
-  GCS XML API from one `FileStorage` section (`MMCA.Common/CHANGELOG.md:159`;
+  GCS XML API from one `FileStorage` section (`MMCA.Common/CHANGELOG.md:1096`;
   `MMCA.Common/Source/Hosting/MMCA.Common.Aws/Storage/S3FileStorageSettings.cs:13`,
   `S3FileStorageService.cs:23`). Request checksum calculation and response checksum validation both
   default to `WHEN_REQUIRED` rather than the AWS SDK default
-  (`S3FileStorageSettings.cs:59`, `:65`, `:72`; `AwsServiceCollectionExtensions.cs:40-41`), the posture
+  (`S3FileStorageSettings.cs:59`, `:65`, `:72`; `AwsServiceCollectionExtensions.cs:41-42`), the posture
   that keeps the non-AWS stores working. The native Google adapter reads its own `Gcs`-prefixed keys
-  of the same section, so the two never collide (`MMCA.Common/CHANGELOG.md:122`).
+  of the same section, so the two never collide (`MMCA.Common/CHANGELOG.md:1059`).
 - **The SQS transport works within SQS limits.** `AmazonSqsTransport` registers under the provider
   name `AmazonSqs`
   (`MMCA.Common/Source/Hosting/MMCA.Common.Aws/Messaging/AmazonSqsTransport.cs:37`, `:40`) and uses
   `MassTransit.AmazonSQS` at 8.5.12, the same version as every other MassTransit pin
-  (`MMCA.Common/Directory.Packages.props:125-130`). SQS caps a message delay at 900 seconds
+  (`MMCA.Common/Directory.Packages.props:188-193`). SQS caps a message delay at 900 seconds
   (`MaxDelaySeconds`, `AmazonSqsTransport.cs:43`), so an unconfigured redelivery list defaults to
   `[60, 300, 900]` (`:55`, applied at `:128`) and a configured interval over 900 fails
   `AddBrokerMessaging` instead of being silently shortened (`:159-161`). The `MMCA-*` ambient headers
   (`:46`) travel in the MassTransit envelope body, not as SQS/SNS message attributes (`:30-33`,
-  `:134-135`), so they never compete for the 10-attribute cap (`MMCA.Common/CHANGELOG.md:159`).
+  `:134-135`), so they never compete for the 10-attribute cap (`MMCA.Common/CHANGELOG.md:1096`).
 - **The adapters are exercised against real infrastructure.** The `aws-integration` CI job runs
   MMCA.Common.Aws against LocalStack through Testcontainers
-  (`MMCA.Common/.github/workflows/ci.yml:934-935`, test run with a floor of 14 tests at `:972`), and
+  (`MMCA.Common/.github/workflows/ci.yml:1197`, test run with a floor of 13 tests at `:1245`, one
+  fewer since the broadcast-topic test was removed on 2026-11-07, `:1236-1238`), and
   the `gcp-integration` job runs MMCA.Common.Gcp against fake-gcs-server and the Firestore emulator
-  (`:974-975`, floor of 14 at `:1019`); neither is a required check (`MMCA.Common/CHANGELOG.md:128`,
-  `:164`). The PostgreSQL tier covers a periodic password provider and the `PostgreSql` broker
-  (`:133`).
+  (`:1257`, floor of 14 at `:1312`); neither is a required check (`MMCA.Common/CHANGELOG.md:1065`,
+  `:1101`). The PostgreSQL tier covers a periodic password provider and the `PostgreSql` broker
+  (`:1070`).
 
 ## Rationale
 - **A broker that needs a database, not a cloud service, belongs in the core.** The SQL transport
@@ -351,7 +393,7 @@ guide states the rule (`MMCA.Common/AGENTS.md:151`).
 ## Trade-offs
 - **Every Azure host gains calls it did not need before.** `AddAzureMonitorExporter()` after
   `AddServiceDefaults()` and `AddAzureServiceBusTransport()` before `AddBrokerMessaging` are new, and
-  the Key Vault, DataProtection and push calls are renamed (`MMCA.Common/UPGRADING.md:98`).
+  the Key Vault, DataProtection and push calls are renamed (`MMCA.Common/UPGRADING.md:876`).
 - **Registration order matters in two places.** The exporter must follow `AddServiceDefaults()`
   (`AzureMonitorExporterExtensions.cs:45-50`), and an adapter transport must be registered before
   `AddBrokerMessaging` resolves it (`DependencyInjection.Messaging.cs:148`, `:177`).
@@ -364,10 +406,10 @@ guide states the rule (`MMCA.Common/AGENTS.md:151`).
   900 seconds (`AmazonSqsTransport.cs:55`).
 - **The AWS and Google Cloud tiers are not required checks.** A regression in MMCA.Common.Aws or
   MMCA.Common.Gcp shows as a red `aws-integration` or `gcp-integration` job without blocking a merge
-  (`MMCA.Common/CHANGELOG.md:128`, `:164`).
+  (`MMCA.Common/CHANGELOG.md:1065`, `:1101`).
 - **Every consumer of MMCA.Common.Infrastructure restores the SQL transport.** The built-in
   `PostgreSql` provider brings `MassTransit.SqlTransport.PostgreSQL` and Dapper to every consumer,
-  whichever broker it selects (`MMCA.Common/CHANGELOG.md:129`).
+  whichever broker it selects (`MMCA.Common/CHANGELOG.md:1066`).
 - **An IAM-only broker database cannot migrate at startup.** MassTransit's schema migrator opens its
   own connections from the connection string, so such a host sets `MigrateOnStartup=false` and
   creates the transport schema in a deployment step that connects with a password
@@ -382,11 +424,11 @@ guide states the rule (`MMCA.Common/AGENTS.md:151`).
   PostgreSQL Entra login has not been tried on a live Azure Database for PostgreSQL server. Both are
   open items.
 - **The Google push adapter takes FCM tokens only.** An APNs-platform registration fails validation,
-  so an iOS client registers an FCM token (`MMCA.Common/CHANGELOG.md:125`).
+  so an iOS client registers an FCM token (`MMCA.Common/CHANGELOG.md:1062`).
 - **Neither managed SQL Server offers IAM database authentication.** RDS for SQL Server keeps a password connection
-  string loaded from Secrets Manager (`MMCA.Common/CHANGELOG.md:120`); Cloud SQL for SQL Server (`:126`)
+  string loaded from Secrets Manager (`MMCA.Common/CHANGELOG.md:1057`); Cloud SQL for SQL Server (`:1063`)
   takes either a password connection string from Secret Manager or, on SQL Server 2022 and later, Entra
-  ID through MMCA.Common.Azure (`MMCA.Common/Source/Hosting/MMCA.Common.Gcp/GcpServiceCollectionExtensions.cs:80-83`).
+  ID through MMCA.Common.Azure (`MMCA.Common/Source/Hosting/MMCA.Common.Gcp/GcpServiceCollectionExtensions.cs:81-84`).
 
 ## Alternatives rejected
 Weighed and rejected on 2026-10-24.
@@ -413,7 +455,7 @@ Weighed and rejected on 2026-10-24.
 
 Weighed and rejected on 2026-10-25.
 - **A hand-written MassTransit transport for Google Pub/Sub.** It would give Google Cloud a native
-  broker, but no MassTransit v8 Pub/Sub transport exists (`MMCA.Common/CHANGELOG.md:129`), so the
+  broker, but no MassTransit v8 Pub/Sub transport exists (`MMCA.Common/CHANGELOG.md:1066`), so the
   framework would own a broker transport's delivery, redelivery and topology outside the MassTransit
   project. The `PostgreSql` provider gives Google Cloud a broker on Cloud SQL instead. Revisit if
   MassTransit ships a supported Pub/Sub transport on the line
@@ -423,7 +465,7 @@ Weighed and rejected on 2026-10-25.
   record names.
 - **Google's own DataProtection packages.** They are prerelease only, and a stable package cannot
   depend on a prerelease (NU5104), so the key-ring repository and the Cloud KMS encryptor are the
-  framework's own (`MMCA.Common/CHANGELOG.md:124`; `MMCA.Common/Directory.Packages.props:187-191`).
+  framework's own (`MMCA.Common/CHANGELOG.md:1061`; `MMCA.Common/Directory.Packages.props:255-259`).
   Revisit when Google publishes a stable release.
 - **Exporting Google Cloud metrics without a collector.** The Telemetry API caps a metric request at
   200 data points and the OpenTelemetry .NET SDK offers no supported way to split one metric's points
@@ -437,15 +479,15 @@ Weighed and rejected on 2026-10-25.
 
 ## Consequences
 - **The change is breaking.** The renames, moved types and new calls are mapped once in
-  `MMCA.Common/UPGRADING.md:98` (the old-to-new table at `:106-122` and the seven-step fix per host
-  at `:151-175`) rather than restated here; `Microsoft.Data.SqlClient.Extensions.Azure` now arrives only through
+  `MMCA.Common/UPGRADING.md:876` (the old-to-new table at `:884-900` and the seven-step fix per host
+  at `:929-953`) rather than restated here; `Microsoft.Data.SqlClient.Extensions.Azure` now arrives only through
   MMCA.Common.Azure, so any process whose SQL connection string uses `Authentication=Active Directory
-  ...` references that package (`MMCA.Common/CHANGELOG.md:172`).
+  ...` references that package (`MMCA.Common/CHANGELOG.md:1109`).
 - **A configured redelivery list now replaces the default.** Making the provider a string came with
   `RedeliveryIntervalsSeconds` becoming `null` when unconfigured
   (`MessageBusSettings.cs:240`), which fixes the binder appending a configured list to the old
   initializer, so `[0]` turns second-level redelivery off as documented
-  (`BrokerTransportPolicies.cs:124-125`; `MMCA.Common/CHANGELOG.md:168`).
+  (`BrokerTransportPolicies.cs:124-125`; `MMCA.Common/CHANGELOG.md:1105`).
 - **A new cloud is an adapter, not a core change.** A transport implements `IBrokerTransport`, storage
   implements `IFileStorageService`, and a tripwire message names the call, with the build and
   architecture gates holding the core free of the new SDK.
@@ -496,3 +538,66 @@ through v1.265.1, plus one test pin the record had not named.
    `:974-975` (floor 14 at `:1019`); and the two method anchors now named in full,
    `AwsServiceCollectionExtensions.cs:107` (`AddAwsRdsIamAuthentication`) and
    `GcpServiceCollectionExtensions.cs:90` (`AddCloudSqlIamAuthentication`).
+
+## Revision (2026-11-23)
+Re-verified against current source. The decision is unchanged: the core references no cloud SDK,
+the four cloud adapters and the test adapter keep their calls and gates, both boundary gates still
+hold, and every MassTransit pin still reads 8.5.12. What moved is the Azure adapter's scope (a Redis
+login and managed-identity Service Bus sign-in, v1.313.0), the startup tripwires (three more
+boolean gates, v1.310.0 and v1.313.0), one CI floor, and line numbers across the CHANGELOG,
+UPGRADING, AGENTS, ci.yml, Directory.Packages.props and the adapter sources through v1.315.0.
+
+1. MMCA.Common.Azure gains `AddAzureRedisEntraAuthentication(configuration)`
+   (`MMCA.Common/Source/Hosting/MMCA.Common.Azure/AzureServiceCollectionExtensions.cs:201`), gated
+   on `AzureRedis:EntraAuthentication:Enabled` (`:185`, `:205-211`), which puts every framework
+   Redis connection on Entra token login through
+   `MMCA.Common/Source/Hosting/MMCA.Common.Azure/Redis/AzureRedisEntraAuthenticationConfigurator.cs:21`
+   over Microsoft.Azure.StackExchangeRedis 3.3.1 (`MMCA.Common/Directory.Packages.props:215`,
+   `MMCA.Common.Azure.csproj:38`; `MMCA.Common/CHANGELOG.md:80`).
+2. The core gains a Redis sibling of the PostgreSQL hook: `IRedisConfigurationOptionsConfigurator`
+   (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Caching/IRedisConfigurationOptionsConfigurator.cs:30`),
+   registered with `AddRedisConfigurationOptionsConfigurator`
+   (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.Caching.cs:253`;
+   `MMCA.Common/CHANGELOG.md:79`). The Decision bullet on passwordless connections now names both.
+3. `AddAzureServiceBusTransport()` signs in with a `DefaultAzureCredential` Entra token when
+   `MessageBus:AzureServiceBus:FullyQualifiedNamespace` is set, optionally pinned by
+   `MessageBus:AzureServiceBus:ManagedIdentityClientId`
+   (`AzureServiceCollectionExtensions.cs:113-122`; `Messaging/AzureServiceBusTransport.cs:67-77`;
+   `MMCA.Common/CHANGELOG.md:81`).
+4. `HostIntegrationTripwire` checks four boolean gates, not one:
+   `AzurePostgreSql:EntraAuthentication:Enabled`, `Rds:IamAuthentication:Enabled`,
+   `CloudSql:IamAuthentication:Enabled` and `AzureRedis:EntraAuthentication:Enabled`
+   (`MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Integrations/HostIntegrationTripwire.cs:56`,
+   `:62`, `:68`, `:74`; checks `:137-156`), with names at `HostIntegrationNames.cs:44`, `:50`,
+   `:53`, `:47` and receipts at `AzureServiceCollectionExtensions.cs:175`,
+   `AwsServiceCollectionExtensions.cs:137`, `GcpServiceCollectionExtensions.cs:113` and
+   `AzureServiceCollectionExtensions.cs:220`. The RDS and
+   Cloud SQL gates landed in v1.310.0 (`MMCA.Common/CHANGELOG.md:145`, `:149`).
+5. `CloudAdapterTripwire` also fails `Passkeys:Enabled` without the passkey ceremony and
+   `MachineClients:Enabled` without machine clients
+   (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Configuration/CloudAdapterTripwire.cs:42`,
+   `:49`, `:64-75`), so the Decision no longer describes it as push-only.
+6. The `aws-integration` floor is 13 tests, not 14: the broadcast-topic test went with
+   `BroadcastAsync` on 2026-11-07 (`MMCA.Common/.github/workflows/ci.yml:1236-1238`, `:1245`). The
+   `gcp-integration` floor stays 14 (`:1312`).
+7. Anchors re-verified against current source: the v1.255.0 entry at `MMCA.Common/CHANGELOG.md:1091`
+   (Added `:1095-1101`, Fixed `:1105`, Breaking `:1109-1113`), the v1.256.0 entry at `:1077` (Fixed
+   `:1081-1089`), the v1.257.0 entry at `:1049` (Added `:1053-1070`, Fixed `:1074-1075`) and the
+   v1.289.0 entry at `:511` (`:551`, `:567`, `:573`); the upgrade section at
+   `MMCA.Common/UPGRADING.md:876` (table `:884-900`, seven-step fix `:929-953`); the guide bullet at
+   `MMCA.Common/AGENTS.md:165`; the CI jobs `aws-integration` at
+   `MMCA.Common/.github/workflows/ci.yml:1197` and `gcp-integration` at `:1257`; the pins at
+   `MMCA.Common/Directory.Packages.props:188-193` (MassTransit family and AmazonSQS), `:194-199`
+   (SqlTransport.PostgreSQL), `:232` (DataProtection.SSM) and the Google prerelease note at
+   `:255-259`; `AzureServiceCollectionExtensions.cs:44`, `:86`, `:125`, `:152`, `:178`;
+   `AwsServiceCollectionExtensions.cs:30`, `:51`, `:86`, `:108`, `:174`, checksum doc `:41-42`;
+   `GcpServiceCollectionExtensions.cs:27`, `:49`, `:91`, `:149`, `:81-84`;
+   `AzureDataProtectionExtensions.cs:54` (receipt `:71`), `AzureKeyVaultConfigurationExtensions.cs`
+   receipt `:115`, `AzureMonitorExporterExtensions.cs:65` (receipt `:63`),
+   `GoogleCloudDataProtectionExtensions.cs:77` (receipt `:103`); `MMCA.Common.Azure.csproj:47`
+   (the Azure.Startup reference); `MMCA.Common.Azure.Startup.csproj:21-29`, `:25`, `:37`;
+   `HostIntegrationTripwire.cs:87` (Validate), `:91-135`, `:94`, `:99`, `:104`, `:76-82`,
+   `:158-166`, `:179-193`, `:195`, `:202-211`; `CloudAdapterTripwire.cs:32`, `:35`, `:77-82`, `:81`,
+   `:24-28`, registered at `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:244-246`;
+   and `HostIntegrationTripwire` registered at
+   `MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Extensions.cs:50-52`.

@@ -263,13 +263,16 @@
           Revised 2026-10-21: the opt-in path&#39;s test citation names SQL Server, SQLite and Cosmos and points
           to where the PostgreSQL predicate is pinned; anchors refreshed.
           Revised 2026-10-28: anchors refreshed after ADR-057 grew its own revisions (its live-marker
-          citation moved).</p>
+          citation moved).
+          Revised 2026-11-23: the Trade-offs bullet on Store&#39;s sweep migration is scoped to the configurations
+          that existed at that sweep (a later Store unique index relies on the convention alone); anchors
+          refreshed.</p>
           <h2 id="context">Context</h2>
           <p>ADR-005 makes deletion <strong>soft</strong>: an <code>IAuditableEntity</code> sets <code>IsDeleted = true</code>
           (<code>MMCA.Common/Source/Core/MMCA.Common.Domain/Interfaces/IAuditableEntity.cs:11</code>) and a named global
           query filter hides the row from every query
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/ApplicationDbContext.cs:454-468</code>,
-          the filter name at <code>:475</code>). The application therefore behaves as though the row is gone.</p>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/ApplicationDbContext.cs:602-616</code>,
+          the filter name at <code>:623</code>). The application therefore behaves as though the row is gone.</p>
           <p>The database does not. A unique index still counts the hidden row, so the deleted record keeps
           occupying its unique slot forever: delete a speaker and the email unique index still refuses to
           create a new speaker with that email, with an error the user cannot act on because the conflicting
@@ -287,12 +290,12 @@
           <li><strong>A model-finalizing convention, registered once in the base context.</strong>
           <code>SoftDeleteUniqueIndexConvention</code> (<code>.../Conventions/SoftDeleteUniqueIndexConvention.cs:34</code>) is added
           by <code>ApplicationDbContext.ConfigureConventions</code>
-          (<code>.../DbContexts/ApplicationDbContext.cs:393</code>, rationale at <code>:389-392</code>). Because ADR-006 keeps one
+          (<code>.../DbContexts/ApplicationDbContext.cs:506</code>, rationale at <code>:502-505</code>). Because ADR-006 keeps one
           context class per engine over that base, a single registration reaches every module, every database
           and every consumer repo. Nothing opts in per entity.</li>
           <li><strong>Scope: unique, non-owned, soft-deletable.</strong> The convention walks entity types assignable to
           <code>IAuditableEntity</code> and not owned (<code>:46-47</code>, the same predicate the query filter uses at
-          <code>ApplicationDbContext.cs:457</code>), then applies the filter to every index that is unique
+          <code>ApplicationDbContext.cs:605</code>), then applies the filter to every index that is unique
           (<code>:49-50</code>, <code>:61-64</code>).</li>
           <li><strong>A hand-authored filter is kept and extended, not replaced and not skipped.</strong> An index that
           already declares a predicate keeps it and gains the soft-delete clause appended with <code>AND</code> (<code>:80</code>),
@@ -303,7 +306,7 @@
           a model bothered to hand-author as the only ones a soft-deleted row could keep blocking (<code>:19-26</code>):
           the framework&#39;s own push-notification dedup index, filtered on <code>[DedupKey] IS NOT NULL</code>, was exactly
           that case
-          (<code>.../Persistence/Configuration/EntityTypeConfiguration/Notifications/PushNotificationConfiguration.cs:69-73</code>).
+          (<code>.../Persistence/Configuration/EntityTypeConfiguration/Notifications/PushNotificationConfiguration.cs:79-83</code>).
           The append is <strong>idempotent</strong>: a filter that already constrains the soft-delete column is recognized
           and left alone (<code>SoftDeleteUniqueIndexConvention.cs:73-76</code>), so a second model build cannot produce
           <code>... AND [IsDeleted] = 0 AND [IsDeleted] = 0</code>. Recognition (<code>SoftDeleteFilterSql.ContainsPredicate</code>)
@@ -338,7 +341,7 @@
           convention deliberately skips (a non-unique one), and a unique index that wants to declare the
           combined predicate at its own declaration site uses the same call: the two are joined as
           <code>{additionalFilter} AND {filter}</code> (<code>:62-65</code>). The framework&#39;s own push-notification dedup index does
-          exactly that (<code>PushNotificationConfiguration.cs:69-73</code>, quoting <code>DedupKey</code> per engine through
+          exactly that (<code>PushNotificationConfiguration.cs:79-83</code>, quoting <code>DedupKey</code> per engine through
           <code>SoftDeleteFilterSql.QuoteColumn</code>, <code>SoftDeleteFilterSql.cs:70-71</code>), and since the convention started appending,
           that call is belt and braces rather than the only thing narrowing the index: it produces the same
           SQL in the same order, and the convention recognizes it and stops
@@ -364,7 +367,7 @@
           SQLite.</li>
           <li><strong>Extending a hand-authored filter, rather than replacing or skipping it, is the only option that
           is correct twice.</strong> Overwriting would drop the <code>[DedupKey] IS NOT NULL</code> clause the push-notification
-          index depends on (<code>PushNotificationConfiguration.cs:55-68</code>); skipping leaves that index enforcing
+          index depends on (<code>PushNotificationConfiguration.cs:65-78</code>); skipping leaves that index enforcing
           uniqueness against soft-deleted rows, which is the exact defect the convention exists to remove, and
           it does so only for the indexes someone thought hard enough about to filter
           (<code>SoftDeleteUniqueIndexConvention.cs:22-24</code>). Appending is the composition that keeps both
@@ -381,9 +384,9 @@
           <code>.../Persistence/Configuration/IndexBuilderExtensionsTests.cs:23-58</code> and for PostgreSQL in
           <code>.../Persistence/Configuration/NotificationConfigurationEngineTests.cs:45-46</code> (the <code>(UserId, IsRead)</code>
           index opts in at <code>UserNotificationConfiguration.cs:44-45</code>, and the dedup index&#39;s combined predicate
-          at <code>PushNotificationConfiguration.cs:69-71</code>). The convention&#39;s PostgreSQL predicate is pinned in
+          at <code>PushNotificationConfiguration.cs:79-83</code>). The convention&#39;s PostgreSQL predicate is pinned in
           <code>.../Persistence/DbContexts/PostgreSQLDbContextModelTests.cs:156</code>, over a plain unique index
-          (<code>:251-252</code>), and the combined predicate in
+          (<code>:252-253</code>), and the combined predicate in
           <code>.../Persistence/Configuration/PushNotificationConfigurationTests.cs:27-30</code>.</li>
           </ul>
           <h2 id="trade-offs">Trade-offs</h2>
@@ -399,9 +402,15 @@
           Store&#39;s and Helpdesk&#39;s migrations of the same sweep carry only the outbox columns
           (<code>MMCA.Store/Source/Hosting/MMCA.Store.Migrations.SqlServer.Catalog/Migrations/20260720031626_CommonV1120OutboxLeaseAndSoftDeleteIndexFilters.cs:12-27</code>,
           <code>MMCA.Helpdesk/Source/Hosting/MMCA.Helpdesk.Migrations.SqlServer.Tickets/Migrations/20260720031655_CommonV1120OutboxLeaseAndSoftDeleteIndexFilters.cs:12-27</code>),
-          because Store&#39;s configurations already opted in by hand and Helpdesk&#39;s single module declares no
-          unique index on a soft-deletable entity. So &quot;the framework changed your schema&quot; is true for some
-          consumers and not others, and only the generated migration says which.</li>
+          because the Store configurations that existed at that sweep already opted in by hand and
+          Helpdesk&#39;s single module declares no unique index on a soft-deletable entity. Store&#39;s later
+          unique indexes do not all opt in: <code>VerifiedPurchase</code>&#39;s <code>(OrderId, ProductId)</code> index relies on the
+          convention alone
+          (<code>MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.Infrastructure/Persistence/EntityConfiguration/VerifiedPurchaseConfiguration.cs:31-39</code>)
+          and was created already filtered
+          (<code>.../MMCA.Store.Migrations.SqlServer.Catalog/Migrations/20260906030347_AddProductReviews.cs:99-105</code>).
+          So &quot;the framework changed your schema&quot; is true for some consumers and not others, and only the
+          generated migration says which.</li>
           <li><strong>It moves that schema a second time, for the indexes it previously skipped.</strong> Because the
           convention now appends to a hand-authored filter (<code>SoftDeleteUniqueIndexConvention.cs:80</code>), every
           pre-filtered unique index on a soft-deletable entity has a new predicate, so the next migration a
@@ -502,6 +511,28 @@
           <code>057-expand-contract-schema-evolution-gate.md:115</code> (the Related section is re-pointed; the
           2026-10-01 revision&#39;s <code>:90</code> and the 2026-10-21 revision&#39;s <code>:97</code> stay as recorded).</li>
           </ol>
+          <h2 id="revision-2026-11-23">Revision (2026-11-23)</h2>
+          <p>Re-verified against current source. No decision, behavior or predicate changed: the convention
+          registration, the soft-delete query filter and the push-notification dedup index behave as the live
+          sections describe. Line numbers moved in <code>ApplicationDbContext.cs</code> and in
+          <code>PushNotificationConfiguration.cs</code> (which gained the native push outcome properties at <code>:55-63</code>), and
+          one Trade-offs sentence was broader than source supports.</p>
+          <ol>
+          <li>The Trade-offs bullet said Store&#39;s sweep migration carried only outbox columns because &quot;Store&#39;s
+          configurations already opted in by hand&quot;. That holds for the configurations that existed at the
+          2026-07-20 sweep, but not for every Store unique index today: <code>VerifiedPurchase</code>&#39;s
+          <code>(OrderId, ProductId)</code> unique index declares no filter and relies on the convention
+          (<code>MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.Infrastructure/Persistence/EntityConfiguration/VerifiedPurchaseConfiguration.cs:31-39</code>);
+          it first appears, already filtered on <code>[IsDeleted] = 0</code>, in a later migration
+          (<code>MMCA.Store/Source/Hosting/MMCA.Store.Migrations.SqlServer.Catalog/Migrations/20260906030347_AddProductReviews.cs:99-105</code>).
+          The bullet is scoped to the configurations of that sweep.</li>
+          <li>Anchors re-verified against current source: <code>ApplicationDbContext.cs</code> convention registration
+          <code>:506</code>, its rationale comment <code>:502-505</code>, <code>ApplySoftDeleteFilters</code> <code>:602-616</code>, its
+          <code>IAuditableEntity</code> and not-owned predicate <code>:605</code>, the filter name <code>:623</code>;
+          <code>PushNotificationConfiguration.cs</code> dedup index with its combined <code>HasSoftDeleteFilter</code> predicate
+          <code>:79-83</code>, its explanatory comment <code>:65-78</code>; <code>PostgreSQLDbContextModelTests.cs</code> convention predicate
+          <code>:156</code> (unchanged) and its plain unique index <code>:252-253</code>.</li>
+          </ol>
           <h2 id="related">Related</h2>
           <p>ADR-005 (decides soft-delete over erasure and owns the query filter that hides the row, but says
           nothing about uniqueness: this ADR closes that gap), ADR-057 (the expand/contract CI gate, which
@@ -529,6 +560,7 @@
             <li><a href="#revision-2026-10-07">Revision (2026-10-07)</a></li>
             <li><a href="#revision-2026-10-21">Revision (2026-10-21)</a></li>
             <li><a href="#revision-2026-10-28">Revision (2026-10-28)</a></li>
+            <li><a href="#revision-2026-11-23">Revision (2026-11-23)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

@@ -16,6 +16,8 @@ configuration moved.
 Revised 2026-10-26: Decision 1 now quotes the resolution expression as source writes it
 (`!MessageBusProviders.IsInProcess(Provider)` over a string provider, not a `MessageBusProvider`
 enum), and anchors refreshed after the settings, registration, guard and interceptor moved.
+Revised 2026-11-23: anchors refreshed after the registration block, the `InProcessEventBus` branch
+and the outbox model configuration moved.
 
 ## Context
 ADR-003 gives every host a transactional outbox: domain and integration events are written to
@@ -60,13 +62,13 @@ something, keep the schema, and refuse the one combination that cannot work.
 2. **Resolution happens once, at registration.** `AddInfrastructure` binds the section, and on the
    enabled path registers `OutboxProcessor` and `OutboxCleanupService`; on the disabled path it
    registers neither and adds `OutboxDisabledNoticeService` instead
-   (`Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:237-245`, settings read at
-   `:233-234`, reasoning at `:227-232`).
+   (`Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:260-268`, settings read at
+   `:256-257`, reasoning at `:250-255`).
 
 3. **The row writes are gated at both write points**, not only the background services:
    `InProcessEventBus` takes its direct-dispatch branch when the outbox is off, with no rows, no save
-   and no processor to retry (`Source/Core/MMCA.Common.Infrastructure/Messaging/InProcessEventBus.cs:43`,
-   branch at `:82-86`, documented at `:70-74`), and `DomainEventSaveChangesInterceptor` captures and
+   and no processor to retry (`Source/Core/MMCA.Common.Infrastructure/Messaging/InProcessEventBus.cs:44`,
+   branch at `:83-87`, documented at `:71-76`), and `DomainEventSaveChangesInterceptor` captures and
    dispatches in-process without writing rows
    (`Source/Core/MMCA.Common.Infrastructure/Persistence/Interceptors/DomainEventSaveChangesInterceptor.cs:56`,
    flag at `:66`, contract at `:46-52`, row-writing gate at `:259`). Both fall back to the outbox path when no options are resolvable, so a
@@ -77,7 +79,7 @@ something, keep the schema, and refuse the one combination that cannot work.
    `EnsureOutboxAvailableForProvider` throws when the provider is anything other than `InProcess` and
    `EnableOutbox` is explicitly `false`
    (`Source/Core/MMCA.Common.Infrastructure/DependencyInjection.Messaging.cs:241`, guard at `:243`,
-   throw at `:245-246`; called from `DependencyInjection.cs:235` and from `AddBrokerMessaging` at
+   throw at `:245-246`; called from `DependencyInjection.cs:258` and from `AddBrokerMessaging` at
    `DependencyInjection.Messaging.cs:65`, so a broker host that skips `AddInfrastructure` still fails
    at startup). The message names the
    mechanism (`BrokerEventBus` writes the rows, `OutboxProcessor` publishes them), the consequence
@@ -94,8 +96,8 @@ something, keep the schema, and refuse the one combination that cannot work.
 
 6. **The EF model does not change.** `OutboxMessage` is configured in `OnModelCreating` for every
    relational provider
-   (`Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/ApplicationDbContext.cs:417`,
-   `ConfigureOutbox` called at `:424`, configuration at `:662-720`),
+   (`Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/ApplicationDbContext.cs:530`,
+   `ConfigureOutbox` called at `:559`, configuration at `:810-868`),
    independent of the setting. Flipping the flag in either direction is a configuration change and a
    restart, with no migration in any consumer.
 
@@ -213,6 +215,26 @@ expression was stale and the anchors in Context and Decisions 1 to 4 moved.
    `_outboxEnabled` `:66` (was `:64`), `messageBusOptions` contract `:46-52` (was `:46-50`),
    row-writing gate `:259` (was `:257`). Unchanged: `InProcessEventBus.cs:43` and branch `:82`,
    `ApplicationDbContext.cs:417`, `ConfigureOutbox` call `:424` and body start `:662`.
+
+## Revision (2026-11-23)
+Re-verified against current source. No decision, default or rationale changed: `AddInfrastructure`
+still registers `OutboxProcessor` and `OutboxCleanupService` on the enabled path and
+`OutboxDisabledNoticeService` otherwise, `InProcessEventBus` still takes the direct-dispatch branch
+when the outbox resolves off and falls back to the outbox path (`?? true`) when no options are
+resolvable, the startup guard is unchanged, and `ConfigureOutbox` is still called unconditionally
+with no setting check. Only line anchors in Decisions 2, 3, 4 and 6 moved.
+
+1. Anchors re-verified against current source: `DependencyInjection.cs:260-268` (enabled/disabled
+   registration, was `:237-245`; processor `:262`, cleanup `:263`, notice `:267`), settings read
+   `:256-257` (was `:233-234`), reasoning comment `:250-255` (was `:227-232`),
+   `EnsureOutboxAvailableForProvider` call `:258` (was `:235`), section bound into
+   `IOptions<MessageBusSettings>` at `:215-216`; `InProcessEventBus.cs:44` (flag, was `:43`), branch
+   `:83-87` (was `:82-86`), outbox-off doc paragraph `:71-76` (was `:70-74`);
+   `ApplicationDbContext.cs:530` (`OnModelCreating`, was `:417`), `ConfigureOutbox` call `:559` (was
+   `:424`), body `:810-868` (was `:662-720`; `IX_OutboxMessages_Ordering` at `:862-867`), Cosmos skip
+   documented at `:802`. Unchanged: `DependencyInjection.Messaging.cs:241` (method), guard `:243`,
+   throw `:245-246`, `AddBrokerMessaging` call site `:65`; `DomainEventSaveChangesInterceptor.cs:56`,
+   `_outboxEnabled` `:66`, row-writing gate `:259`; `MessageBusSettings.cs:177`, `:185`, `:147`.
 
 ## Related
 [ADR-003](003-outbox-dual-dispatch.md) (the outbox itself: the dual-dispatch contract, the processor,

@@ -43,6 +43,13 @@ Revised 2026-11-17: the opt-in `FixedPolicy` and `UserPolicy` named policies, th
 selector and their `PermitLimit`, `QueueLimit` and `PerUserPermitLimit` settings are removed because
 no consumer named them, so `auth-ip` and `mcp` are the only named policies (MMCA.Common v1.300.0).
 See the Revision (2026-11-17).
+Revised 2026-11-23: the `auth-ip` surface is recorded as twelve framework actions (machine-client
+token, OAuth discovery, passkey sign-in and sign-in links join the original six), Store's own
+`quote-ip` policy is recorded as the one consumer-registered policy, ADC's and Store's services and UI
+hosts reach `AddCommonRateLimiting` and `AddTrustedCallerHeader` through the framework host builders
+rather than a per-app call (Helpdesk's single web host still calls `AddCommonRateLimiting` itself),
+ADC's gateway puts `auth-tight` on a third route (the machine-client token), and
+anchors are refreshed.
 ## Context
 Every service exposes read and write endpoints to the public internet through the gateway (ADR-008).
 Abusive or runaway clients (scrapers, credential stuffing, retry storms, a buggy SPA stuck in a loop)
@@ -78,8 +85,9 @@ Rate limiting is **layered**, and the always-on global limiter is **authenticate
 2. **Anonymous abuse is handled by the right-shaped control, not the global limiter.** Public reads
    are served from the output cache (`UseOutputCache`; ADC's Conference service defines one
    public-endpoint policy per public aggregate, among them `EventsCache` / `CategoriesCache` /
-   `QuestionsCache` / `RoomsCache`,
-   `MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:276-307`), and login/registration brute-force is handled by `LoginProtectionService`
+   `QuestionsCache` / `RoomsCache`, registered in the `ConfigureOutputCache` callback it hands to
+   `AddMmcaServiceHost`,
+   `MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:136`, `:175-216`), and login/registration brute-force is handled by `LoginProtectionService`
    (exponential-backoff account lockout after `MaxFailedAttempts` failed logins, plus per-IP
    registration throttling).
 3. **A per-IP cap on the anonymous authentication endpoints, on by default.** `AddCommonRateLimiting`
@@ -91,8 +99,23 @@ Rate limiting is **layered**, and the always-on global limiter is **authenticate
    and `EmailConfirmationControllerBase` decorates the two anonymous email-confirmation actions,
    `send-email-confirmation` and `confirm-email`
    (`MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/EmailConfirmationControllerBase.cs:81`,
-   `:109`), all six with `[EnableRateLimiting(WebApplicationBuilderExtensions.RateLimitPolicyAuthIp)]`,
-   so any consumer that inherits one of those bases gets them without opting in. Store's and ADC's
+   `:109`). Six more anonymous credential actions carry it the same way:
+   `MachineTokenControllerBase` on the machine-client token action
+   (`MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/MachineClients/MachineTokenControllerBase.cs:48`),
+   `OAuthControllerBase` on `discover` (`.../Controllers/OAuthControllerBase.cs:176`),
+   `PasskeysControllerBase` on `signin/options` and `signin`
+   (`.../Controllers/Passkeys/PasskeysControllerBase.cs:232`, `:257`), and `SignInLinkControllerBase`
+   on `sign-in-link` and `sign-in-link/redeem`
+   (`.../Controllers/SignInLinks/SignInLinkControllerBase.cs:83`, `:111`). All twelve carry
+   `[EnableRateLimiting(WebApplicationBuilderExtensions.RateLimitPolicyAuthIp)]`,
+   so any consumer that inherits one of those bases gets them without opting in. The list is not
+   every anonymous credential action: in `OAuthControllerBase` only `discover` carries it, so the
+   anonymous `exchange` POST that redeems a single-use code for an access and refresh token pair
+   (`.../Controllers/OAuthControllerBase.cs:289-293`), the `complete` callback (`:204-205`) and the
+   provider challenge actions (`:115-155`) carry none. An app may also
+   name the policy on its own anonymous actions: Store's guest-order controller does
+   (`MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.API/Controllers/GuestOrdersController.cs:58`,
+   `:208`). Store's and ADC's
    Identity `EmailConfirmationController` derive from that base and add no attribute of their own
    (`MMCA.Store/Source/Modules/Identity/MMCA.Store.Identity.API/Controllers/EmailConfirmationController.cs:33`,
    `MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.API/Controllers/EmailConfirmationController.cs:32`).
@@ -115,21 +138,29 @@ Rate limiting is **layered**, and the always-on global limiter is **authenticate
    rather than sharing one bucket with every other such request (a deliberate difference from the
    global limiter, which puts an unattributable authenticated request in one shared `"authenticated"`
    bucket and an unattributable anonymous hub request in one shared `"anonymous-hub"` bucket,
-   `MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/WebApplicationBuilderExtensions.RateLimiting.cs:186`,
-   `:96`, while `auth-ip` returns `NoLimiter` at `:345`); and the default is 30 rather than a tighter 10 for the same shared-IP reason,
+   `MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/WebApplicationBuilderExtensions.RateLimiting.cs:187`,
+   `:96`, while `auth-ip` returns `NoLimiter` at `:345-346`); and the default is 30 rather than a tighter 10 for the same shared-IP reason,
    since every Server-circuit user's login leaves from the UI host's address.
 4. **The only other named policy belongs to the MCP endpoint.** `AddCommonRateLimiting` also
    registers `RateLimitPolicyMcp` (`"mcp"`,
    `MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/WebApplicationBuilderExtensions.RateLimiting.cs:57`,
-   registered at `:439`), one window per user id, then name, then client IP (`:208-224`) at
+   registered at `:442`), one window per user id, then name, then client IP (`:209-225`) at
    `McpPermitLimit` requests per minute (default 60,
    `MMCA.Common/Source/Presentation/MMCA.Common.API/RateLimiting/RateLimitingSettings.cs:42-43`). It
    is inert until an endpoint names it, and `MapCommonMcp` is the one caller that does
-   (`MMCA.Common/Source/Presentation/MMCA.Common.Mcp/McpHostingExtensions.cs:132`, ADR-138). The
+   (`MMCA.Common/Source/Presentation/MMCA.Common.Mcp/McpHostingExtensions.cs:136`, ADR-138). The
    framework registers no general-purpose tightening policy: an action that needs a tighter cap than
    the global default needs a policy its host registers. The two opt-in policies that once filled
    that role were removed because no consumer named them (see the Revision
-   (2026-11-17)).
+   (2026-11-17)). Store's Sales module is the one consumer that registers its own: `quote-ip`
+   (`MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.API/QuoteRateLimiting.cs:26`), a fixed
+   one-minute window per client IP at 120 permits (`:29`, `:32`) with `NoLimiter` for an unknown IP
+   (`:43-45`), added to the host's limiter options by `AddQuoteRateLimiting` (`:55-56`) and named
+   by the bag-quote action and the best-sellers action
+   (`MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.API/Controllers/OrderQuotesController.cs:36`,
+   `.../Controllers/BestSellersController.cs:35`). It is separate from `auth-ip` so a busy checkout's
+   repeated re-pricing cannot spend the bucket that guest-order placement also draws on
+   (`QuoteRateLimiting.cs:13-21`).
 5. **The client IP these partitions key on is whatever the edge forwards, and that is trusted from any
    proxy.** Both IP-keyed decisions above (the `auth-ip` window, and the global limiter's third-choice
    fallback key) read `HttpContext.Connection.RemoteIpAddress`, which `UseForwardedHeaders` has
@@ -149,14 +180,16 @@ Rate limiting is **layered**, and the always-on global limiter is **authenticate
   behind one IP, and public reads served from the output cache, an anonymous IP cap would throttle
   legitimate visitors at scale while barely protecting an already-cached backend.
 - **Right control per threat.** Brute-force is an auth concern answered by a per-email lockout plus a
-  per-IP cap on the anonymous credential endpoints that carry it (login, register, password reset and
-  email confirmation); general overload is a per-user request cap;
+  per-IP cap on the anonymous credential endpoints that carry it (login, register, password reset,
+  email confirmation, the machine-client token, OAuth discovery, passkey sign-in and sign-in links);
+  general overload is a per-user request cap;
   infrastructure endpoints must never be throttled. A single global IP bucket conflates all three.
 
 ## Trade-offs
 - **The global limiter only protects the authenticated surface.** The anonymous surface is covered
-  endpoint by endpoint instead: the anonymous credential endpoints (login, register, password reset
-  and email confirmation) carry the `auth-ip` limiter, with the login-protection service on top of
+  endpoint by endpoint instead: the anonymous credential endpoints (login, register, password reset,
+  email confirmation, the machine-client token, OAuth discovery, passkey sign-in and sign-in links)
+  carry the `auth-ip` limiter, with the login-protection service on top of
   it for login and register; anonymous hub paths are metered per IP by the global limiter itself;
   and public reads are served from the output cache. An
   uncached anonymous endpoint added later inherits none of that: it has no global cap and must opt
@@ -174,9 +207,9 @@ Rate limiting is **layered**, and the always-on global limiter is **authenticate
   `KnownProxies` (the shared options only clear them,
   `MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/CommonForwardedHeaders.cs:49`). The first
   is declared in infrastructure instead: both Bicep templates give every service container app
-  internal-only ingress (`external: false`, `MMCA.ADC/infra/main.bicep:1873`, `:2126`, `:2279`,
-  `:2414`; `MMCA.Store/infra/main.bicep:1530`, `:1712`, `:1836`) and expose only the gateway and the
-  UI host (ADC `:2604`, `:2767`; Store `:1988`, `:2117`), so traffic from outside the environment
+  internal-only ingress (`external: false`, `MMCA.ADC/infra/main.bicep:2146`, `:2417`, `:2571`,
+  `:2719`; `MMCA.Store/infra/main.bicep:1844`, `:2043`, `:2167`) and expose only the gateway and the
+  UI host (ADC `:2914`, `:3077`; Store `:2338`, `:2467`), so traffic from outside the environment
   reaches a service only through the gateway. A caller already inside the container-apps
   environment can still reach a service directly.
 - **Per-user partitioning depends on the authenticated principal being populated** when the limiter
@@ -188,15 +221,19 @@ Rate limiting is **layered**, and the always-on global limiter is **authenticate
 - **In-process counters, where a limiter is not distributed.** A local limiter's state is
   per-instance, so across N replicas its effective ceiling is roughly N times the configured limit.
   This holds for `auth-ip` (always in-memory, `allowDistributed: false` at
-  `MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/WebApplicationBuilderExtensions.RateLimiting.cs:353`),
+  `MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/WebApplicationBuilderExtensions.RateLimiting.cs:354`),
   for the gateway limiters, and for the global, hub and `mcp` windows (`allowDistributed: true` at
-  `:195`, `:101`, `:223`) in any host that leaves `Distributed` unset (see the Revision
+  `:196`, `:101`, `:224`) in any host that leaves `Distributed` unset (see the Revision
   (2026-08-18)). ADC production sets `RateLimiting__Distributed=true` on all four services
-  (`MMCA.ADC/infra/main.bicep:1949`, `:2190`, `:2327`, `:2481`; the AppHost does the same only in its
-  opt-in multi-replica run, when `ADC_REPLICAS` is greater than 1,
-  `MMCA.ADC/Source/Hosting/MMCA.ADC.AppHost/Program.cs:459-464`, `:477`), so there those three windows share one
+  (`MMCA.ADC/infra/main.bicep:2226`, `:2482`, `:2622`, `:2788`). The AppHost does the same only in
+  its opt-in multi-replica run: it reads `MmcaReplicas.FromEnvironment("ADC_REPLICAS")` and passes
+  `distributedRateLimiting: true` for the four services and `false` for the gateway
+  (`MMCA.ADC/Source/Hosting/MMCA.ADC.AppHost/Program.cs:446-451`), and the framework helper floors
+  the count at 1, changes nothing at 1 or less, and sets `Distributed` only when that flag is true
+  (`MMCA.Common/Source/Hosting/MMCA.Common.Aspire.Hosting/MmcaReplicas.cs:43`, `:67-76`). So there
+  those three windows share one
   Redis budget across replicas and only `auth-ip` and the gateway limiters scale with replica count
-  (`MMCA.ADC/infra/main.bicep:1943-1948`). Store sets no `Distributed` value, so every Store limiter
+  (`MMCA.ADC/infra/main.bicep:2220-2225`). Store sets no `Distributed` value, so every Store limiter
   stays per-instance.
 
 ## Revision (2026-08-18)
@@ -601,6 +638,107 @@ Decision item 4 and the Trade-offs now describe that set. The `FixedPolicy`, `Us
 (2026-08-18 items 1 and 3 and its in-memory paragraphs, and the later anchor lists) are history and
 are superseded by this revision.
 
+## Revision (2026-11-23)
+
+Re-verified against current source. The layering, every default, the authenticated-only global
+limiter, the fail-open distributed windows, the in-memory `auth-ip`, the declared internal-only
+service ingress in both templates, ADC's `Distributed=true` on its four services and Store's absence
+of any service-side `RateLimiting__` key are unchanged. What moved is the breadth of the `auth-ip`
+surface, one consumer-registered policy, the path by which hosts reach the framework registrations,
+one ADC gateway route, and the anchors.
+
+1. **`auth-ip` covers twelve framework actions, not six.** The original six stand
+   (`MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/AuthControllerBase.cs:78`, `:103`;
+   `PasswordResetAuthControllerBase.cs:78`, `:102`; `EmailConfirmationControllerBase.cs:81`, `:109`;
+   `RefreshAsync` still carries none). Six more carry the same attribute: the machine-client token
+   (`Controllers/MachineClients/MachineTokenControllerBase.cs:48`), OAuth `discover`
+   (`Controllers/OAuthControllerBase.cs:176`), passkey `signin/options` and `signin`
+   (`Controllers/Passkeys/PasskeysControllerBase.cs:232`, `:257`) and `sign-in-link` and
+   `sign-in-link/redeem` (`Controllers/SignInLinks/SignInLinkControllerBase.cs:83`, `:111`). Store
+   names the policy on two guest-order actions of its own
+   (`MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.API/Controllers/GuestOrdersController.cs:58`,
+   `:208`). The OAuth `exchange` POST (`Controllers/OAuthControllerBase.cs:289-293`), the
+   `complete` callback (`:204-205`) and the provider challenge actions (`:115-155`) are anonymous
+   but carry no rate-limiting attribute. Decision item 3, the Rationale and the Trade-offs now list
+   that surface.
+2. **One consumer registers its own named policy.** Store's `quote-ip`
+   (`MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.API/QuoteRateLimiting.cs:26`, added at `:56`,
+   120 per IP per minute at `:29`) is applied at `Controllers/OrderQuotesController.cs:36` and
+   `Controllers/BestSellersController.cs:35`. It is the shape Decision item 4 prescribes (a tighter
+   or differently sized cap is a policy the host registers), so item 4 now records it.
+3. **No ADC or Store service calls `AddCommonRateLimiting` directly.** The composed service host
+   does it:
+   `AddMmcaServiceHost`
+   (`MMCA.Common/Source/Hosting/MMCA.Common.ServiceHost/ServiceHostBuilderExtensions.cs:63`) calls the
+   configuration overload at `:108`, and every ADC and Store service calls `AddMmcaServiceHost`
+   (ADC Conference `MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:82`, Engagement
+   `:58`, Identity `:82`, Notification `:58`; Store Catalog
+   `MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:32`, Identity `:37`, Sales `:51`).
+   Helpdesk's single web host, which is not a composed service host, still calls the int overload
+   itself (`MMCA.Helpdesk/Source/Hosts/MMCA.Helpdesk.Web/Program.cs:37`). The binding the 2026-10-06
+   and 2026-10-19 revisions record still holds; the per-`Program.cs` call sites they and the
+   2026-10-21, 2026-10-26 and 2026-10-28 revisions cite for ADC and Store are history.
+4. **No UI host calls `AddTrustedCallerHeader` directly.** `AddMmcaBlazorWebHost`
+   (`MMCA.Common/Source/Presentation/MMCA.Common.UI.Web/Hosting/BlazorWebHostExtensions.cs:75`) calls
+   it at `:126` (definition unchanged at `MMCA.Common/Source/Presentation/MMCA.Common.UI.Web/DependencyInjection.cs:121`),
+   and ADC's and Store's UI hosts call `AddMmcaBlazorWebHost`
+   (`MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs:26`,
+   `MMCA.Store/Source/Hosts/UI/MMCA.Store.UI.Web/Program.cs:30`). It is still two hosts in practice,
+   through framework composition rather than a per-app call.
+5. **ADC's gateway attaches `auth-tight` to a third route.** `identity-auth-token` (`/Auth/token`,
+   the ADR-140 machine-client token, a credential submission like login and register) carries it
+   (`MMCA.ADC/Source/Hosts/MMCA.ADC.Gateway/appsettings.json:106-112`, the policy at `:111`), beside
+   `identity-auth-login` (`:90-96`, `:95`) and `identity-auth-register` (`:97-103`, `:102`). The
+   `identity-auth` catch-all (`:115-119`) still carries none, so `/Auth/refresh` keeps its exemption;
+   passkey sign-in rides that catch-all and relies on the service-side `auth-ip` (`:147-149`). The
+   "two credential routes and nothing else" statements in the 2026-09-07, 2026-09-10 and 2026-10-21
+   revisions describe ADC as it was then. Store's gateway keeps the two-route set.
+6. **The AppHost's multi-replica switch is framework code.** The `ADC_REPLICAS` gate and the
+   `RateLimiting__Distributed=true` environment value now live in
+   `MMCA.Common/Source/Hosting/MMCA.Common.Aspire.Hosting/MmcaReplicas.cs` (`:43`, `:67-76`), called
+   from `MMCA.ADC/Source/Hosting/MMCA.ADC.AppHost/Program.cs:446-451`; the Trade-offs cite them.
+7. Anchors re-verified against current source. In
+   `MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/WebApplicationBuilderExtensions.RateLimiting.cs`:
+   `RateLimitPolicyMcp` `:57`, `IsRateLimitBypassed` `:76`, the `"anonymous-hub"` key `:96` and its
+   `allowDistributed: true` `:101`, `IsAnonymousHubRequest` `:112`, `"authenticated"` `:187`, the
+   global `allowDistributed: true` `:196`, `McpRateLimitPartition` `:209-225` (`allowDistributed: true`
+   `:224`), `RateLimitKeyNamespace` `:233`, the Redis key `{namespace}:{scope}:{partition}` `:288`,
+   the `auth-ip` `__unknown-ip` `NoLimiter` `:345-346` and `allowDistributed: false` `:354`, the int
+   overload `:388`, `GlobalLimiter` `:437`, the `mcp` `AddPolicy` `:442` and the `auth-ip` `AddPolicy`
+   `:452-453`. `RequireRateLimiting(RateLimitPolicyMcp)` is at
+   `MMCA.Common/Source/Presentation/MMCA.Common.Mcp/McpHostingExtensions.cs:136`, and `McpPermitLimit`
+   at `RateLimitingSettings.cs:42-43`. `MiddlewarePipelineBuilder.IsCleartextHttp2` is defined at
+   `MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/Pipeline/MiddlewarePipelineBuilder.cs:358`
+   and used at `:85`, with `UseForwardedHeaders` `:68`, `UseAuthentication` `:104` and
+   `UseRateLimiter` `:120`. In
+   `MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Gateway/GatewayRateLimitingExtensions.cs`:
+   `IsTrustedInternalCaller` `:181`, `PresentsSecret` `:196`, `FixedTimeEquals` `:212`,
+   `IsExemptFromLimiters` `:222`, called at `:270` and `:350`. The Conference output-cache policies are
+   registered in the `ConfigureOutputCache` callback (`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:136`),
+   with the public-endpoint policies running from `EventsCache` (`:175`) to `BookmarkCountsCache`
+   (`:216`), all through `AddPublicEndpointPolicy` except `SessionsCache`, a plain `AddPolicy` over a
+   `PublicEndpointOutputCachePolicy` that also bypasses by permission (`:186-192`), `RoomsCache` `:194`, `CategoriesCache` `:195` and `QuestionsCache` `:196`; the name
+   `ConferencePublicCache` the earlier revisions cite no longer exists (the module-wide
+   `ConferenceCache` policy, `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Shared/Caching/ConferenceCacheTags.cs:51`,
+   is a plain `AddPolicy`). Decision item 2 now cites `:136`, `:175-216`. In `MMCA.ADC/infra/main.bicep`
+   `RateLimiting__Distributed` is set at `:2226`, `:2482`, `:2622` and `:2788` (rationale
+   `:2220-2225`), `RateLimiting__AuthIpPermitLimit` `'300'` at `:2348` inside `conferenceMode`
+   (rationale `:2340-2345`, whose claim that `Program.cs` calls the configuration overload predates
+   the move into `AddMmcaServiceHost`; the key it names is still the right one), service ingress is internal at `:2146`, `:2417`, `:2571` and `:2719` (the
+   `external: false` at `:2730` is Notification's gRPC port mapping), the gateway and UI host are
+   external at `:2914` and `:3077`, and the trusted-caller secret is injected at `:2990` and `:3149`.
+   In `MMCA.Store/infra/main.bicep` service ingress is internal at `:1844`, `:2043` and `:2167` (the
+   `:2180` entry is Sales' gRPC port mapping), the gateway and UI host are external at `:2338` and
+   `:2467`, the trusted-caller secret is injected at `:2410` and `:2535`, and the only rate-limiting
+   keys are `GatewayRateLimiting__*`. Store's gateway declares `RateLimiterPolicies` at
+   `MMCA.Store/Source/Hosts/MMCA.Store.Gateway/appsettings.json:37` (`auth-tight` `:38`), attached to
+   `identity-auth-login` (`:86-92`, `:91`) and `identity-auth-register` (`:93-99`, `:98`) with the
+   `identity-auth` catch-all at `:102` carrying none; `CredentialRoutes_CarryTheTightRateLimiterPolicy`
+   is at `MMCA.Store/Tests/Hosts/MMCA.Store.Gateway.Tests/MmcaGatewayTests.cs:127`, with the per-route
+   loop at `:138` and the exact-set `BeEquivalentTo` at `:149`. Store's UI `GatewayRateLimiting`
+   section is at `MMCA.Store/Source/Hosts/UI/MMCA.Store.UI.Web/appsettings.json:48`, with
+   `TrustedCallerHeaderName` at `:49`. The Trade-offs anchors now cite these lines.
+
 ## Related
 ADR-004 (the JWKS/discovery traffic the limiter exempts, and the authenticated principal it keys on),
 ADR-008 (the gateway edge this protects), ADR-017 (request idempotency, the other inbound-edge
@@ -613,4 +751,4 @@ Lua script here avoids by owning its own `rl:` keyspace, qualified per applicati
 (the shared middleware pipeline that places `UseRateLimiter` after authentication and after forwarded
 headers, which is what makes both partition keys resolvable), ADR-135 (the application namespace that
 qualifies the distributed limiter's Redis partition key, one rule for every shared infrastructure
-keyspace).
+keyspace), ADR-138 (the MCP endpoint that is the one caller of the `mcp` policy).

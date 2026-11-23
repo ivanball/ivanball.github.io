@@ -298,7 +298,10 @@
           Revised 2026-10-28: anchors refreshed after the releases since v1.243.0 moved its <code>CHANGELOG.md</code> entry.
           Revised 2026-11-07: the forgotten-marker trade-off is now caught by <code>TenantScopeConventionTestsBase</code> in a
           tenancy host that subclasses it (every module entity tenant-scoped or declared global); see Revision
-          (2026-11-07).</p>
+          (2026-11-07).
+          Revised 2026-11-23: <code>MMCA.Common/Source</code> now carries one parameterless <code>IgnoreQueryFilters()</code> call site
+          (the feature-flag override store, on a non-tenant entity, so it drops only soft-delete), not zero, and
+          still no automated gate against one; anchors refreshed.</p>
           <h2 id="context">Context</h2>
           <p>MMCA.Common already partitions data along two axes and neither of them is a tenant. ADR-006 partitions by
           <strong>source name</strong> (every entity resolves to a <code>DataSourceKey(Engine, Name)</code>, each module or service owning
@@ -306,13 +309,13 @@
           to&quot;, had no recorded answer, which meant every consumer that ever needed one would invent it: a <code>TenantId</code>
           column here, a <code>Where</code> clause in each handler there, and one forgotten handler is a customer data leak.</p>
           <p>The framework does have the machinery this needs, built for a different reason. <code>ApplySoftDeleteFilters</code>
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/ApplicationDbContext.cs:454</code>,
-          called from <code>OnModelCreating</code> (<code>:417</code>) at <code>:419</code>) proves that a global predicate applied by expression tree
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/ApplicationDbContext.cs:602</code>,
+          called from <code>OnModelCreating</code> (<code>:530</code>) at <code>:554</code>) proves that a global predicate applied by expression tree
           to every matching entity type makes an invariant unforgettable, and EF10&#39;s <strong>named</strong> query filters
-          (<code>modelBuilder.Entity(clrType).HasQueryFilter(SoftDeleteFilterName, filter)</code>, <code>:466</code>, the name itself a
-          constant at <code>:475</code>) mean a second filter can be added beside the first rather than replacing it. The
-          interceptor pipeline resolved in <code>OnConfiguring</code> (declared at <code>:290</code>, the interceptor block at <code>:297-322</code>) proves that a write-side rule can be enforced
-          once for every context.</p>
+          (<code>modelBuilder.Entity(clrType).HasQueryFilter(SoftDeleteFilterName, filter)</code>, <code>:614</code>, the name itself a
+          constant at <code>:623</code>) mean a second filter can be added beside the first rather than replacing it. The
+          interceptor pipeline resolved in <code>OnConfiguring</code> (declared at <code>:378</code>, the interceptor block at
+          <code>:385-410</code>) proves that a write-side rule can be enforced once for every context.</p>
           <p>That left a specific set of open questions: whether a tenant is a row discriminator or a database, what
           happens when no tenant is resolved, where the tenant comes from on an inbound request, whether the outbox
           and the migration runner (which have no request and therefore no claims) can reach tenant data at all, and
@@ -367,7 +370,7 @@
           claim must be tried before the header (<code>:66-81</code>), and the health endpoints must stay excluded
           (<code>:87-100</code>). With tenancy enabled, a host that lists <code>Header</code> and subclasses the base therefore also
           overrides <code>AllowsHeaderResolution</code> (the opt-in fact returns early when tenancy is disabled, <code>:50-53</code>). Helpdesk opts in, listing the claim first, without subclassing that base
-          (<code>MMCA.Helpdesk/Source/Hosts/MMCA.Helpdesk.Web/appsettings.json:32</code>). The fail-closed <code>400</code> names
+          (<code>MMCA.Helpdesk/Source/Hosts/MMCA.Helpdesk.Web/appsettings.json:35</code>). The fail-closed <code>400</code> names
           <code>HeaderName</code> beside <code>ClaimType</code> whatever the order lists, so a claim-only host still tells the caller it
           may supply the header (<code>TenantResolutionMiddleware.cs:146-150</code>, <code>ClaimType</code> at <code>:147</code>, <code>HeaderName</code> at
           <code>:149</code>). Host-based resolution (tenant
@@ -390,12 +393,12 @@
           non-excluded path, it returns 400 with a ProblemDetails body.</p>
           <h3 id="writes-are-guarded-by-their-own-interceptor">Writes are guarded by their own interceptor</h3>
           <p><code>TenantSaveChangesInterceptor</code> is a <strong>separate</strong> interceptor from the audit one (one concern per
-          interceptor, matching how audit stamping and domain-event capture are already split at <code>:297-298</code>, where
-          it is registered between the two at <code>:307</code>). It stamps <code>TenantId</code> on Added entries and throws
+          interceptor, matching how audit stamping and domain-event capture are already split at <code>:385-386</code>, where
+          it is registered between the two at <code>:395</code>). It stamps <code>TenantId</code> on Added entries and throws
           <code>CrossTenantWriteException</code> on any Added, Modified, or Deleted entry whose tenant differs from the
           resolved one. It is always registered
           (<code>TryAddSingleton&lt;TenantSaveChangesInterceptor&gt;</code>,
-          <code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:70</code>), and with no tenant
+          <code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:71</code>), and with no tenant
           resolved it is inert for updates, deletes, and every entity that does not carry <code>ITenantEntity</code>: the
           system context is unrestricted on the write side exactly as it is on the read side. Inserts are the one
           exception. <code>StampOrVerifyInsert</code> throws <code>CrossTenantWriteException.ForUnresolvedTenant</code> when an Added
@@ -404,14 +407,14 @@
           because a row that no tenant can ever read is a worse outcome than a failed save; a system scope that
           names the tenant explicitly (a seeder, a per-tenant job) still writes.
           <code>DesignTimeDbContextHelper</code> registers it too
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/Design/DesignTimeDbContextHelper.cs:155</code>),
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/Design/DesignTimeDbContextHelper.cs:156</code>),
           so <code>dotnet ef</code> scaffolds against exactly the runtime interceptor pipeline for consumers with and without
           tenancy. Its absence is survivable rather than fatal: <code>OnConfiguring</code> resolves the tenant interceptor with
-          <code>GetService</code> (<code>ApplicationDbContext.cs:305</code>) and falls back to the two-interceptor chain (<code>:309-312</code>), so a
+          <code>GetService</code> (<code>ApplicationDbContext.cs:393</code>) and falls back to the two-interceptor chain (<code>:397-400</code>), so a
           directly-constructed test or design-time context that never registered it still builds.</p>
           <h3 id="the-tenant-is-read-live-not-copied-at-context-creation">The tenant is read live, not copied at context creation</h3>
           <p><code>ApplicationDbContext</code> gains <code>internal Func&lt;string?&gt;? TenantIdAccessor</code> and
-          <code>CurrentTenantId =&gt; TenantIdAccessor?.Invoke()</code> (<code>ApplicationDbContext.cs:147</code>, <code>:154</code>). The scoped
+          <code>CurrentTenantId =&gt; TenantIdAccessor?.Invoke()</code> (<code>ApplicationDbContext.cs:235</code>, <code>:242</code>). The scoped
           context factory assigns <code>() =&gt; tenantContext.TenantId</code> when it creates a context, inside
           <code>AttachScopeAccessors</code>
           (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/Factory/DbContextFactory.cs:147-164</code>,
@@ -452,23 +455,23 @@
           (<code>TenantDataSourceTargets.Expand</code>,
           <code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DataSources/TenantDataSourceTargets.cs:52</code>,
           reached through <code>FrameworkTableTargets.Relational</code> (<code>FrameworkTableTargets.cs:44</code>, <code>:63</code>), which
-          <code>OutboxProcessor.GetOutboxTargets</code> (<code>OutboxProcessor.cs:157-158</code>) and
-          <code>OutboxCleanupService.GetRelationalTargets</code> (<code>OutboxCleanupService.cs:196-197</code>) call: one shared target per
+          <code>OutboxProcessor.GetOutboxTargets</code> (<code>OutboxProcessor.cs:160-161</code>) and
+          <code>OutboxCleanupService.GetRelationalTargets</code> (<code>OutboxCleanupService.cs:208-209</code>) call: one shared target per
           source plus one target per tenant that overrides that source) and call <code>ITenantContext.SetTenant</code> inside
           the per-target scope before obtaining the context, through the shared <code>CreateTenantScope</code> helper
           (<code>TenantDataSourceTargets.cs:100-119</code>, which sets the tenant under <code>AmbientOrigin.Suppress</code> at <code>:105</code>;
-          called at <code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/Processing/OutboxProcessor.cs:197</code>
-          and <code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/Administration/OutboxCleanupService.cs:98</code>), so the
-          factory routes to the tenant&#39;s database and the claim-lease update (<code>OutboxProcessor.cs:373-374</code>, the <code>ExecuteUpdateAsync</code>
-          at <code>:373</code> that sets <code>LockedUntil</code> and <code>LockToken</code> at <code>:374</code>) runs against the right rows. The processor
-          also opens a fresh tenant scope per dispatched row through the same helper (<code>OutboxProcessor.cs:558</code>), on
+          called at <code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/Processing/OutboxProcessor.cs:200</code>
+          and <code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/Administration/OutboxCleanupService.cs:99</code>), so the
+          factory routes to the tenant&#39;s database and the claim-lease update (<code>OutboxProcessor.cs:376-377</code>, the <code>ExecuteUpdateAsync</code>
+          at <code>:376</code> that sets <code>LockedUntil</code> and <code>LockToken</code> at <code>:377</code>) runs against the right rows. The processor
+          also opens a fresh tenant scope per dispatched row through the same helper (<code>OutboxProcessor.cs:561</code>), on
           which the row&#39;s stored origin, its tenant included, is restored before dispatch (<code>AmbientOrigin.Restore</code>,
-          <code>:565-572</code>, the tenant passed at <code>:570</code>). Routing does not depend on a tenant
+          <code>:568-575</code>, the tenant passed at <code>:573</code>). Routing does not depend on a tenant
           column, but the row does carry one: <code>OutboxMessage.TenantId</code>
           (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/OutboxMessage.cs:95</code>, assigned from the origin at
           <code>:153</code>) is a nullable string mapped with a 64-character, non-Unicode limit
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/ApplicationDbContext.cs:682</code>,
-          the length from <code>TenantIdMaxLength</code> at <code>:484</code>),
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/ApplicationDbContext.cs:830</code>,
+          inside the <code>OutboxMessage</code> mapping at <code>:811</code>, the length from <code>TenantIdMaxLength</code> at <code>:632</code>),
           and it records the tenant the row was written under so delivery can restore it (see the Revision
           (2026-09-11)).</p>
           <p><code>InitializeDatabaseAsync</code> gains a per-tenant pass: a fresh scope per tenant, <code>SetTenant</code>, then the same
@@ -517,11 +520,15 @@
           <ul>
           <li><strong>Reads are on discipline where writes are on an invariant.</strong> A consumer calling EF&#39;s own parameterless
           <code>IgnoreQueryFilters()</code> on a raw <code>Table</code> surface drops the tenant filter along with soft-delete. Writes
-          remain guarded by <code>TenantSaveChangesInterceptor</code>, and <code>MMCA.Common/Source</code> carries <strong>zero</strong> parameterless
-          <code>IgnoreQueryFilters()</code> call sites today (the only mentions are the doc comments at
-          <code>EFReadRepository.cs:38</code> and <code>TenantSaveChangesInterceptor.cs:32</code> explaining why the named form is used),
-          but no automated gate holds that count: no architecture rule, fitness test, or CI step checks for the
-          parameterless form, so nothing fails a build if a future call site appears. ADR-055&#39;s
+          remain guarded by <code>TenantSaveChangesInterceptor</code>. <code>MMCA.Common/Source</code> carries <strong>one</strong> parameterless
+          <code>IgnoreQueryFilters()</code> call site today, in <code>EFFeatureFlagOverrideStore.SetAsync</code>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/FeatureFlags/EFFeatureFlagOverrideStore.cs:68</code>),
+          and it crosses no tenant only because its entity, <code>FeatureFlagOverride</code>, is not an <code>ITenantEntity</code>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Domain/FeatureFlags/FeatureFlagOverride.cs:24</code>), so the call drops
+          the soft-delete filter alone. The other mentions are the doc comments at <code>EFReadRepository.cs:38</code> and
+          <code>TenantSaveChangesInterceptor.cs:32</code> explaining why the named form is used. No automated gate holds
+          that: no architecture rule, fitness test, or CI step checks for the parameterless form, so nothing
+          fails a build if a call site appears against a tenant entity. ADR-055&#39;s
           <code>ApplicationLayer_DoesNotUseRawQueryableSurfaces</code> is partial cover only: it does not reach Infrastructure.</li>
           <li><strong>The singleton physical factory is tenant-unaware by design.</strong>
           <code>PhysicalDbContextFactory.Create</code> (both overloads,
@@ -782,6 +789,40 @@
           base yet: Helpdesk, the reference tenancy adopter, is the planned first; ADC and Store stay
           single-tenant. Until a host subclasses it, the trade-off holds for that host as originally written.</li>
           </ol>
+          <h2 id="revision-2026-11-23">Revision (2026-11-23)</h2>
+          <p>Re-verified against current source. The isolation model is unchanged: the tenant filter still composes
+          with soft-delete by name, writes are still guarded by <code>TenantSaveChangesInterceptor</code> registered between
+          the audit and domain-event interceptors, and background work still drains per <code>(source, tenant?)</code> target.
+          One count in Trade-offs was wrong, and line numbers moved.</p>
+          <ol>
+          <li><strong>There is one parameterless <code>IgnoreQueryFilters()</code> call site in <code>MMCA.Common/Source</code>, not zero.</strong>
+          <code>EFFeatureFlagOverrideStore.SetAsync</code> calls it
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/FeatureFlags/EFFeatureFlagOverrideStore.cs:68</code>)
+          on <code>FeatureFlagOverride</code>, an <code>AuditableBaseEntity&lt;string&gt;</code> that is not an <code>ITenantEntity</code>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Domain/FeatureFlags/FeatureFlagOverride.cs:24</code>), so it drops only
+          the soft-delete filter and reads across no tenant. The doc comments at <code>EFReadRepository.cs:38</code> and
+          <code>TenantSaveChangesInterceptor.cs:32</code> are still the only other mentions, and still nothing in
+          <code>MMCA.Common/Source/Hosting</code> checks for the parameterless form. The Trade-offs bullet now says so;
+          the Revised 2026-08-23 Status sentence keeps its &quot;zero&quot; as written.</li>
+          <li>Anchors re-verified against current source: <code>ApplySoftDeleteFilters</code> <code>ApplicationDbContext.cs:602</code>,
+          <code>OnModelCreating</code> <code>:530</code> calling it at <code>:554</code> (and <code>ApplyTenantFilters</code> at <code>:555</code>), the named
+          <code>HasQueryFilter</code> at <code>:614</code>, <code>SoftDeleteFilterName</code> at <code>:623</code>, <code>TenantIdMaxLength</code> at <code>:632</code>;
+          <code>OnConfiguring</code> <code>:378</code> with the audit and domain-event interceptors resolved at <code>:385-386</code>, the tenant
+          interceptor&#39;s <code>GetService</code> at <code>:393</code>, the three-interceptor chain at <code>:395</code> and the two-interceptor
+          fallback at <code>:397-400</code>; <code>TenantIdAccessor</code> <code>:235</code> and <code>CurrentTenantId</code> <code>:242</code> (the sole assignment
+          still at <code>DbContextFactory.cs:152</code>); the <code>OutboxMessage.TenantId</code> mapping at <code>:830</code> inside the
+          <code>OutboxMessage</code> block at <code>:811</code> (<code>OutboxMessage.cs:95</code>, assigned at <code>:153</code>);
+          <code>TryAddSingleton&lt;TenantSaveChangesInterceptor&gt;</code> <code>DependencyInjection.cs:71</code>; the design-time
+          registration <code>DesignTimeDbContextHelper.cs:156</code>; Helpdesk&#39;s <code>ResolutionOrder</code> <code>appsettings.json:35</code>;
+          <code>OutboxProcessor.GetOutboxTargets</code> <code>OutboxProcessor.cs:160-161</code>, the per-target <code>CreateTenantScope</code>
+          call at <code>:200</code>, the claim-lease <code>ExecuteUpdateAsync</code> at <code>:376</code> (<code>LockedUntil</code> and <code>LockToken</code> at
+          <code>:377</code>), the per-row scope at <code>:561</code> with <code>AmbientOrigin.Restore</code> at <code>:568-575</code> (the tenant at
+          <code>:573</code>); <code>OutboxCleanupService.GetRelationalTargets</code> <code>OutboxCleanupService.cs:208-209</code> (its
+          <code>CreateTenantScope</code> call at <code>:99</code>). For the dated revisions, which keep their anchors as written:
+          <code>BrokerMessageBus</code> stamps <code>MessageHeaders.TenantId</code> at <code>BrokerMessageBus.cs:93</code>, and the
+          <code>OutboxMessage.TenantId</code> mapping they cite as <code>ApplicationDbContext.cs:652</code>, <code>:681</code>, <code>:682</code> or <code>:684</code>
+          is at <code>:830</code>.</li>
+          </ol>
           
         <div class="doc-foot btn-row">
           <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
@@ -806,6 +847,7 @@
             <li><a href="#revision-2026-10-26">Revision (2026-10-26)</a></li>
             <li><a href="#revision-2026-10-28">Revision (2026-10-28)</a></li>
             <li><a href="#revision-2026-11-07">Revision (2026-11-07)</a></li>
+            <li><a href="#revision-2026-11-23">Revision (2026-11-23)</a></li>
             </ul>
           </nav>
         </aside>

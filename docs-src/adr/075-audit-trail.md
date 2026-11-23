@@ -18,6 +18,7 @@ Revised 2026-10-21: redaction also covers `[Sensitive]` properties, `IAuthUser` 
 Revised 2026-10-26: the key fix-up writes the resolved key to the tracked trail row after each `UPDATE` and syncs its snapshot so that write is not saved again, and the reader and interceptor anchors are refreshed.
 Revised 2026-10-28: anchors refreshed after later ADC and Store `infra/main.bicep` changes moved the SQL-auditing anchors, and ADC's `User` `[IdValueGenerated]` anchor moved one line.
 Revised 2026-11-12: the framework ships an opt-in viewer (the `AuditHistoryControllerBase` endpoint, the `audit:view` permission and the `AuditHistoryPanel`), the read DTO moved to Shared as `AuditHistoryEntryDTO`, and the earlier "no controller and no UI" position is recorded under Alternatives rejected as revisited.
+Revised 2026-11-23: redaction also covers every column of an owned value object behind a `[Pii]` navigation and the `ITwoFactorUserState` credentials (with `IsTwoFactorEnabled` kept readable), ADC's audited `Ticket` also takes the store-generated-key `UPDATE`, and anchors are refreshed after the later Common, Store and ADC releases.
 ## Context
 The framework already answers "who touched this row last". Every `AuditableBaseEntity` carries
 `CreatedOn/By` and `LastModifiedOn/By`, stamped by `AuditSaveChangesInterceptor` on the way into
@@ -48,11 +49,11 @@ Several questions had no recorded answer:
 ### A fourth `SaveChangesInterceptor`, resolved optionally, running last
 `AuditTrailSaveChangesInterceptor` (Infrastructure `Persistence/AuditTrail/`) joins the interceptors
 `ApplicationDbContext.OnConfiguring` already passes to `optionsBuilder.AddInterceptors`
-(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/ApplicationDbContext.cs:297-322`,
+(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/ApplicationDbContext.cs:385-409`,
 where `AuditSaveChangesInterceptor` and `DomainEventSaveChangesInterceptor` are resolved with
-`GetRequiredService` (`:297-298`) and the tenant and audit-trail interceptors with `GetService` (`:305`,
-`:319`)). The new one is resolved with `GetService`, not `GetRequiredService` (`:319`, added on its own at
-`:321`): a host that never calls `AddAuditTrail`
+`GetRequiredService` (`:385-386`) and the tenant and audit-trail interceptors with `GetService` (`:393`,
+`:407`)). The new one is resolved with `GetService`, not `GetRequiredService` (`:407`, added on its own at
+`:409`): a host that never calls `AddAuditTrail`
 resolves null, nothing is added to the pipeline, and the feature costs nothing.
 
 **Registration order is execution order and it is load-bearing.** After the wave the sequence is
@@ -61,11 +62,11 @@ resolves null, nothing is added to the pipeline, and the feature costs nothing.
 (writes the outbox rows), then `AuditTrailSaveChangesInterceptor` last, so the diff it captures sees the
 final stamped values rather than a half-populated entity. The audit-trail rows it adds are themselves
 never audited. `DesignTimeDbContextHelper` registers all four
-(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/Design/DesignTimeDbContextHelper.cs:148-149`,
-`:155`, `:167`). Only the two `GetRequiredService` interceptors are hard requirements for `dotnet ef`; the
-context resolves the tenant and audit-trail ones with `GetService` (`.../ApplicationDbContext.cs:305`,
-`:319`), so omitting either would still work (the helper's own comment says so for the audit-trail one,
-`DesignTimeDbContextHelper.cs:162-164`).
+(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/Design/DesignTimeDbContextHelper.cs:149-150`,
+`:156`, `:168`). Only the two `GetRequiredService` interceptors are hard requirements for `dotnet ef`; the
+context resolves the tenant and audit-trail ones with `GetService` (`.../ApplicationDbContext.cs:393`,
+`:407`), so omitting either would still work (the helper's own comment says so for the audit-trail one,
+`DesignTimeDbContextHelper.cs:163-165`).
 
 ### `AuditTrailEntry` is deliberately not an auditable entity
 The entity (Infrastructure `Persistence/AuditTrail/AuditTrailEntry.cs`) does **not** implement
@@ -76,29 +77,29 @@ soft-delete query filter. Its columns are `Id` (Guid), `EntityType`, `EntityKey`
 
 ### Capture is a change-tracker diff committed in the caller's transaction
 `SavingChangesAsync` walks `ChangeTracker.Entries()` and keeps the entities carrying the marker
-(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/AuditTrail/AuditTrailSaveChangesInterceptor.cs:201`,
-`:221`, `:250-253`). For a `Modified` entity it compares `OriginalValue` against `CurrentValue` for each
+(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/AuditTrail/AuditTrailSaveChangesInterceptor.cs:210`,
+`:230`, `:259-262`). For a `Modified` entity it compares `OriginalValue` against `CurrentValue` for each
 modified property and adds one row per property whose value actually changed, skipping concurrency tokens
-and properties flagged modified but holding an equal value (`:326-355`, skips at `:328` and `:335`); a
+and properties flagged modified but holding an equal value (`:335-364`, skips at `:337` and `:344`); a
 changed owned value object is captured as `navigation.property` rows, including on an owner left
-`Unchanged` (`:259`, `:280-283`, `:418`). Clearing an optional owned reference to null leaves no owned
-entry and is not recorded (`:366-367`). An `Added` or `Deleted` entity writes a single summary row with a
-null `PropertyName` (`:287-296`; `.../AuditTrail/AuditTrailEntry.cs:18-22`). Every row goes through
-`context.Set<AuditTrailEntry>().Add(...)` (`:470`) into the same `SaveChanges` call as the data, so it
+`Unchanged` (`:268`, `:289-293`, `:440`). Clearing an optional owned reference to null leaves no owned
+entry and is not recorded (`:375-376`). An `Added` or `Deleted` entity writes a single summary row with a
+null `PropertyName` (`:296-305`; `.../AuditTrail/AuditTrailEntry.cs:18-22`). Every row goes through
+`context.Set<AuditTrailEntry>().Add(...)` (`:492`) into the same `SaveChanges` call as the data, so it
 commits or rolls back with it: the outbox mechanic of ADR-003, applied to a different payload. One
 exception: an inserted entity with a store-generated key has only a temporary key at capture, so after
-the save the interceptor rewrites that row's `EntityKey` (`:302-304`): it loops over the pending rows and
+the save the interceptor rewrites that row's `EntityKey` (`:311-313`): it loops over the pending rows and
 issues one `UPDATE` per row, filtered by that row's `Id`, as `ExecuteUpdateAsync` on the async save path
-(`:523-538`, `:532-535`) and `ExecuteUpdate` on the sync one (`:566-568`). A row whose resolved key
-already equals the captured one is skipped (`:525-529`, `:559-563`), so an audited save inserting N such
+(`:544-559`, `:553-556`) and `ExecuteUpdate` on the sync one (`:587-589`). A row whose resolved key
+already equals the captured one is skipped (`:546-550`, `:580-584`), so an audited save inserting N such
 entities adds at most N `UPDATE` statements. Each of those statements joins the ambient transaction
 when one is open;
 without one it commits after the data save, so a crash in that window leaves the row holding the
 temporary key. After each `UPDATE` the interceptor writes the resolved key to the tracked
 `AuditTrailEntry`, so the in-memory instance matches the stored row, and sets that property's original
 value and clears its modified flag, so the in-memory write is not itself saved again by a later save on
-the same context (`SyncTrackedKey`, called at `:537` and `:570`, method `:580`, the write and snapshot
-at `:583-585`).
+the same context (`SyncTrackedKey`, called at `:558` and `:591`, method `:602`, the write and snapshot
+at `:605-607`).
 
 Two mechanics are copied verbatim from `DomainEventSaveChangesInterceptor`:
 
@@ -111,13 +112,16 @@ Two mechanics are copied verbatim from `DomainEventSaveChangesInterceptor`:
 ### PII is redacted at capture, never at read
 A redacted property records `PiiRedactor.RedactedToken`
 (`MMCA.Common/Source/Core/MMCA.Common.Domain/Privacy/PiiRedactor.cs:27`, the class at `:24`) for both the
-old and the new value. Four things are redacted (`AuditTrailSaveChangesInterceptor.cs:637-640`, the same
-check on the scalar and the owned path, `:340` and `:412`): a property carrying `[Pii]`, a property
-carrying `[Sensitive]`, the credential members of an entity implementing `IAuthUser`, found through the
-interface map with no marker needed (`:669-692`), and any column mapped through
-`EncryptedStringConverter`, which reaches the interceptor as decrypted plaintext and is redacted with
-no attribute needed (`:640`; class doc
-`:49-59`). The trail stores the fact that a personal or secret field changed, and never its contents.
+old and the new value. Four things are redacted (`AuditTrailSaveChangesInterceptor.cs:659-662`, the same
+check on the scalar and the owned path, `:349` and `:434`): a property carrying `[Pii]`, a property
+carrying `[Sensitive]`, the credential members of an entity implementing `IAuthUser` or
+`ITwoFactorUserState`, found through the interface map with no marker needed (`:138`, `:697-724`,
+except `IsTwoFactorEnabled`, which stays readable as account state, `:731-732`), and any column mapped
+through `EncryptedStringConverter`, which reaches the interceptor as decrypted plaintext and is redacted
+with no attribute needed (`:662`; class doc `:49-61`). On the owned path a fifth condition applies:
+when the owner's navigation itself carries `[Pii]`, every value column of the owned entry is redacted
+whether or not the owned type marks its own members (`:434`, `:405-409`; class doc `:43-47`). The trail
+stores the fact that a personal or secret field changed, and never its contents.
 Redacting on the way out instead would leave clear-text personal data at rest in a store that by
 construction survives the erasure of the row it describes.
 
@@ -136,18 +140,18 @@ carries no validation attribute (`:46`). `AddAuditTrail(configuration)`
 interceptor and the settings together, plus `IAuditTrailReader` (`:119`) and `AuditTrailCleanupJob` (`:124`).
 
 ### The table lives in every relational source that adopts it
-`ApplicationDbContext.OnModelCreating` (`.../ApplicationDbContext.cs:417`) calls
-`ConfigureAuditTrail(modelBuilder)` (`:436`, the method itself at `:854`), gated on the settings flag
-resolved from the root provider the way the interceptors are (`:332`, checked at `:856`), creating a
-`dbo.AuditTrailEntries` table (`:863`) with two indexes: `IX_AuditTrailEntries_Entity` on
-`(EntityType, EntityKey, ChangedOn)` for the read path (`:874-875`) and `IX_AuditTrailEntries_ChangedOn`
-for the retention sweep (`:880-881`). A same-transaction write requires the table in the same database as
+`ApplicationDbContext.OnModelCreating` (`.../ApplicationDbContext.cs:530`) calls
+`ConfigureAuditTrail(modelBuilder)` (`:571`, the method itself at `:1003`), gated on the settings flag
+resolved from the root provider the way the interceptors are (`:420`, checked at `:1005`), creating a
+`dbo.AuditTrailEntries` table (`:1012`) with two indexes: `IX_AuditTrailEntries_Entity` on
+`(EntityType, EntityKey, ChangedOn)` for the read path (`:1023-1024`) and `IX_AuditTrailEntries_ChangedOn`
+for the retention sweep (`:1029-1030`). A same-transaction write requires the table in the same database as
 the data, which is the outbox precedent (ADR-006) and the reason the trail is not one central store.
 Cosmos skips it: the `CosmosDbContext` `OnModelCreating` override
 (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/CosmosDbContext.cs:119`) does
 not call the base, so it never reaches `ConfigureAuditTrail`, and the audit trail is among the
 relational-only tables it leaves out (`:139-140`). The interceptor's model check then makes capture a
-no-op there too (`AuditTrailSaveChangesInterceptor.cs:206-209`).
+no-op there too (`AuditTrailSaveChangesInterceptor.cs:215-218`).
 
 ### Retention is the framework's first scheduled job
 `AuditTrailCleanupJob` ships as the first `IScheduledJob` (ADR-074), purging rows older than
@@ -166,8 +170,8 @@ The DTO lives in Shared (`MMCA.Common/Source/Core/MMCA.Common.Shared/Auditing/Au
 `:12`), the same type the UI panel renders
 (`MMCA.Common/Source/Presentation/MMCA.Common.UI/Components/Auditing/AuditHistoryPanel.razor.cs:5`, `:24`),
 and carries the trail row's columns except `TenantId` (`AuditHistoryEntryDTO.cs:15-48`). It replaces
-`MMCA.Common.Application.Auditing.AuditTrailEntryDTO`, a Breaking entry (`MMCA.Common/CHANGELOG.md:11`)
-with its mechanical fix in `MMCA.Common/UPGRADING.md:68-78`.
+`MMCA.Common.Application.Auditing.AuditTrailEntryDTO`, a Breaking entry (`MMCA.Common/CHANGELOG.md:515`, under 1.289.0)
+with its mechanical fix in `MMCA.Common/UPGRADING.md:293-303`.
 
 Exposure is opt-in in three further pieces, each of which a host can leave out:
 
@@ -193,9 +197,9 @@ Exposure is opt-in in three further pieces, each of which a host can leave out:
   required `FetchPage` delegate, 20 rows a page with "Load more" (`:11-20`, `:40-45`). It checks no
   permission itself: its contract is that the page places it inside an authorization check on the audit
   permission (`:12-13`). `AddAuditHistoryUI()` registers its client, `IAuditHistoryUIService`
-  (`MMCA.Common/Source/Presentation/MMCA.Common.UI/DependencyInjection.cs:388-390`;
+  (`MMCA.Common/Source/Presentation/MMCA.Common.UI/DependencyInjection.cs:397-399`;
   `MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/Auditing/IAuditHistoryUIService.cs:11`, `:24`),
-  and nothing else in the framework calls it (`DependencyInjection.cs:383-384`).
+  and nothing else in the framework calls it (`DependencyInjection.cs:392-393`).
 
 A host that adopts none of the three exposes no audit endpoint and renders no history; the reader stays
 an injectable read a consumer may wrap in its own query instead (`IAuditTrailReader.cs:11-14`).
@@ -220,9 +224,9 @@ The viewer is adopted in all three consumers:
   pinned, Admin yes and Customer no, by
   `MMCA.Store/Tests/Architecture/MMCA.Store.Architecture.Tests/Api/AuditHistoryPermissionTests.cs:30`,
   `:35`) and renders the panel on the product and order detail pages behind a permission-claim check
-  (`MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.UI/Pages/Products/ProductDetail.razor:217`, check
+  (`MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.UI/Pages/Products/ProductDetail.razor:209`, check
   `ProductDetail.razor.cs:129`;
-  `MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.UI/Pages/Orders/OrderDetail.razor:100`, check
+  `MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.UI/Pages/Orders/OrderDetail.razor:122`, check
   `OrderDetail.razor.cs:142`).
 - **ADC** mounts one per service: Identity serves `User`
   (`MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.API/Controllers/AuditHistory/AuditHistoryController.cs:17`,
@@ -286,7 +290,8 @@ The viewer is adopted in all three consumers:
 - **Values are strings, so a reader gets a rendering rather than a value.** A decimal, an enum and a date
   all arrive as text formatted at capture time, and a large column is stored at whatever length it had.
 - **Redact-at-capture is irreversible, which is the point and also a limit.** A redacted field's old
-  value (`[Pii]`, `[Sensitive]`, an `IAuthUser` credential or an encrypted column) is gone from the trail
+  value (`[Pii]`, `[Sensitive]`, an `IAuthUser` or `ITwoFactorUserState` credential or an encrypted
+  column) is gone from the trail
   forever, so the trail can never answer "what was this email address before it changed".
 - **The marker is per entity, not per property.** Opting an entity in captures every changed property it
   has except its concurrency token, including the ones nobody wanted a history of; a redacted property
@@ -538,6 +543,54 @@ current bicep ones.
    revision's `:33` moved down one line); `Event.cs:23`, `CheckIn.cs:27` and `PointsEntry.cs:30` are
    unchanged. The anchors in the dated revisions above, including the 2026-09-07 Store
    `Governance/PiiConventionTests.cs` ones superseded by the 2026-10-21 revision, are left as recorded.
+
+## Revision (2026-11-23): fuller redaction rule, Ticket's key fix-up, and current anchors
+Re-verified against current source. The interceptor ordering, the same-transaction capture, the row
+shape, the per-row key fix-up and its skip rule, the tracked key sync, the opt-in gates, the Cosmos skip,
+the opt-in viewer and both apps' SQL-auditing content are unchanged. What moved is the redaction
+description, one omitted adopter of the key fix-up, and the anchors.
+
+1. **Redaction has a fifth condition and a second credential interface.** On the owned path, a `[Pii]`
+   navigation on the owner redacts every value column of the owned entry
+   (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/AuditTrail/AuditTrailSaveChangesInterceptor.cs:434`,
+   remark `:405-409`, class doc `:43-47`). The credential set is resolved through both `IAuthUser` and
+   `ITwoFactorUserState` (`:138`, `:697-724`), with `IsTwoFactorEnabled` deliberately kept readable as
+   account state (`:731-732`), and `[Sensitive]` properties are folded into the same set (`:719-721`).
+   The Decision and the irreversibility Trade-off now say so.
+2. **ADC's `Ticket` also takes the key fix-up.** `Ticket` is audited and carries `[IdValueGenerated]`
+   (`MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Domain/Tickets/Ticket.cs:29-30`) and is
+   served by Engagement's audit-history endpoint
+   (`MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.API/Controllers/AuditHistoryController.cs:22`),
+   so ADC's trail-table `UPDATE` action fires on its inserts as well as on those of `User`, `Event`,
+   `CheckIn` and `PointsEntry`, which the 2026-10-06 revision lists.
+3. Anchors re-verified against current source: `ApplicationDbContext.cs` interceptor block `:385-409`
+   (`GetRequiredService` `:385-386`, tenant `GetService` `:393` with `AddInterceptors` `:395` and `:399`,
+   audit-trail `GetService` `:407`, `AddInterceptors` `:409`), flag `:420`, `OnModelCreating` `:530`,
+   `ConfigureAuditTrail` call `:571` and method `:1003`, flag checked `:1005`, `ToTable` `:1012`,
+   `IX_AuditTrailEntries_Entity` `:1023-1024`, `IX_AuditTrailEntries_ChangedOn` `:1029-1030`;
+   `DesignTimeDbContextHelper.cs` registrations `:149-150`, `:156`, `:168`, omission comment
+   `:163-165`; `AuditTrailSaveChangesInterceptor.cs` `CaptureChanges` `:210`, model gate `:215-218`,
+   `DiscardAbandonedCapture` call `:220` (method `:502`), filter `:230` with `ShouldAudit` `:259-262`,
+   `Unchanged` owner `:268` routed at `:289-293`, summary row `:296-305`, pending key `:311-313`,
+   modified loop `:335-364` (skips `:337`, `:344`), owned-null remark `:375-376`, `navigation.property`
+   name `:440`, `Add` `:492`, async fix-up loop `:544-559` (skip `:546-550`, `ExecuteUpdateAsync`
+   `:553-556`, `SyncTrackedKey` call `:558`), sync loop `:578-592` (skip `:580-584`, `ExecuteUpdate`
+   `:587-589`, call `:591`), `SyncTrackedKey` `:602-608` (write and snapshot `:605-607`), `IsRedacted`
+   `:659-662` (called `:349` scalar, `:434` owned; converter check `:662`), class doc `:49-61`;
+   `MMCA.Common/Source/Presentation/MMCA.Common.UI/DependencyInjection.cs` `AddAuditHistoryUI` `:397-399`,
+   nothing-else note `:392-393`; `MMCA.Common/CHANGELOG.md:515` (1.289.0) and
+   `MMCA.Common/UPGRADING.md:293-303`; Store `ProductDetail.razor:209` (guard `:206`, check
+   `ProductDetail.razor.cs:129`) and `OrderDetail.razor:122` (guard `:119`, check `OrderDetail.razor.cs:142`
+   and `:176`); Store `MMCA.Store/infra/main.bicep`: `sqlAuditingSettings` `:1174`,
+   `BATCH_COMPLETED_GROUP` `:1184`, the two authentication groups `:1185-1186`, inline comment
+   `:1180-1182`, `sqlAuditDiagnostics` `:1160` (category `:1167`), rationale `:1124-1154` with the cost
+   note at `:1148-1154`, and `MMCA.Store/infra/foundation.bicep:57` (`dailyQuotaGb: 3`) unchanged; ADC
+   `MMCA.ADC/infra/main.bicep`: `sqlServerAuditing` `:1227`, groups `:1233-1241` (no statement group),
+   server volume rationale `:1218-1226`, trail-DML rationale `:1339-1364` (the "one UPDATE per row" note
+   `:1356`), `auditTrailDatabaseNames` `:1365` (`:1366-1368`), `auditTrailDiagnostics` `:1371` (category
+   `:1379`), `auditTrailDmlAuditing` `:1387`, `UPDATE` and `DELETE` actions `:1395-1396`; ADC
+   `[IdValueGenerated]` on `User.cs:37`, with `Event.cs:23`, `CheckIn.cs:27` and `PointsEntry.cs:30`
+   unchanged. The anchors in the dated revisions above are left as recorded.
 
 ## Related
 [ADR-003](003-outbox-dual-dispatch.md) (the same-transaction write this copies wholesale, including the

@@ -274,7 +274,12 @@
           Revised 2026-10-28: the 2026-08-18 statement that register is <code>[Idempotent]</code> is recorded as
           superseded since 2026-10-01 (every POST on <code>AuthControllerBase</code> and <code>OAuthControllerBase</code> is
           <code>[NonIdempotent]</code>; the shared auth <code>[Idempotent]</code> actions live in the password-reset and
-          email-confirmation bases, so &quot;both ways&quot; holds across the shared auth bases rather than within one).</p>
+          email-confirmation bases, so &quot;both ways&quot; holds across the shared auth bases rather than within one).
+          Revised 2026-11-23: the shared admin lock, unlock and view-as POSTs are now declared
+          <code>[NonIdempotent]</code> by <code>UsersAdminControllerBase</code> itself and inherited by both consumers, which no longer
+          override them (the 2026-10-07 statement that each consumer override declares them is recorded as
+          superseded); the auth POST inventory adds <code>revoke/current</code> and <code>view-as/end</code>, and anchors are
+          refreshed.</p>
           <h2 id="context">Context</h2>
           <p>Write endpoints (POST / PUT / PATCH) are exposed to <strong>client retries and double-submits</strong>: a flaky
           network, an impatient user double-clicking, or a resilience pipeline re-issuing a request can cause the
@@ -576,6 +581,43 @@
           and the anonymous subject at <code>:541-542</code>; <code>idempotency.degraded</code> is at <code>IdempotencyMetrics.cs:46-47</code>
           and the record&#39;s <code>ETag</code> at <code>IdempotencyRecord.cs:26</code>.</li>
           </ol>
+          <h2 id="revision-2026-11-23">Revision (2026-11-23)</h2>
+          <p>Re-verified against current source. The Decision, Rationale and Trade-offs are unchanged, and every
+          POST on <code>AuthControllerBase</code> and <code>OAuthControllerBase</code> is still <code>[NonIdempotent]</code>. What moved is the
+          user-admin declaration: <code>UsersAdminControllerBase</code> now declares its own POSTs, so the Revision
+          (2026-10-07) item 2 and the Revision (2026-10-21) consumer-override reading no longer hold, and the
+          Revision (2026-10-28) statement that the 2026-10-21 anchors still hold is stale. The earlier sections
+          are left as written.</p>
+          <ol>
+          <li><strong>The shared user-admin base declares its POSTs; consumers inherit them.</strong>
+          <code>UsersAdminControllerBase</code> marks all three of its POSTs <code>[NonIdempotent]</code> with a justification:
+          view-as
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/Administration/UsersAdminControllerBase.cs:159</code>,
+          <code>:161</code>), lock (<code>:213-214</code>) and unlock (<code>:245-246</code>). Neither consumer overrides them: the ADC
+          <code>UsersAdminController</code> is a sealed subclass whose remarks say the base declares the intent and
+          nothing is overridden
+          (<code>MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.API/Controllers/UsersAdminController.cs:19-21</code>,
+          <code>:27</code>), and the Store <code>AdminUsersController</code>
+          (<code>MMCA.Store/Source/Modules/Identity/MMCA.Store.Identity.API/Controllers/AdminUsersController.cs:35</code>)
+          carries no <code>[HttpPost]</code> or <code>[NonIdempotent]</code> of its own. A new consumer of that base that does
+          not override these actions passes without supplying a declaration: the gate reflects the
+          derived type&#39;s public instance methods
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Rules/Cqrs/ArchitectureRules.Idempotency.cs:69</code>),
+          which for an inherited action is the base&#39;s own method carrying the marker (<code>:31-33</code>); the
+          <code>inherit: true</code> lookup (<code>:81</code>) matters only when a consumer overrides one.</li>
+          <li><strong><code>AuthControllerBase</code> has seven POSTs, not five.</strong> Besides login, register, refresh, revoke and
+          the per-session revoke, <code>revoke/current</code>
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/AuthControllerBase.cs:219-220</code>) and
+          <code>view-as/end</code> (<code>:370</code>, <code>[NonIdempotent]</code> at <code>:372</code>) are POSTs, and both are <code>[NonIdempotent]</code>, so
+          &quot;every POST on <code>AuthControllerBase</code> is <code>[NonIdempotent]</code>&quot; still holds.</li>
+          <li>Anchors re-verified against current source: in <code>AuthControllerBase.cs</code>, login <code>:75-76</code>, register
+          <code>:100-101</code>, refresh <code>:164-165</code>, revoke <code>:189-190</code> and the per-session revoke <code>:423-424</code>; the OAuth
+          exchange (still the only <code>[HttpPost]</code> on <code>OAuthControllerBase</code>) is at
+          <code>.../Controllers/OAuthControllerBase.cs:289-290</code>, with <code>complete</code> the <code>[HttpGet]</code> at <code>:204</code> and the
+          other <code>[HttpGet]</code> verbs at <code>:115</code>, <code>:125</code>, <code>:138</code>, <code>:154</code> and <code>:174</code>; the entity create POST is
+          still at <code>.../Controllers/AggregateRootEntityControllerBase.cs:75-76</code>, and the entity update PUT is
+          at <code>.../Controllers/CrudEntityControllerBase.cs:89-90</code>.</li>
+          </ol>
           <h2 id="related">Related</h2>
           <p>ADR-003 (handler idempotency for outbox/event consumers, a distinct concern), ADR-013 (Result is the
           response the filter caches/replays), ADR-014 (the filter keeps the handler thin), ADR-009 (the resilience
@@ -608,6 +650,7 @@
             <li><a href="#revision-2026-10-07">Revision (2026-10-07)</a></li>
             <li><a href="#revision-2026-10-21">Revision (2026-10-21)</a></li>
             <li><a href="#revision-2026-10-28">Revision (2026-10-28)</a></li>
+            <li><a href="#revision-2026-11-23">Revision (2026-11-23)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

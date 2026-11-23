@@ -20,6 +20,7 @@ Revised 2026-10-25: a Google Cloud Storage implementation ships in MMCA.Common.G
 Revised 2026-10-25 (image processing): `IImageProcessor` and its SkiaSharp implementation are ADC's Identity module's, not framework types; MMCA.Common keeps `IFileStorageService` and the dependency-free upload guards, `ImageContentSniffer` among them; see Revision (2026-10-25, image processing moves to ADC).
 Revised 2026-10-26: anchors refreshed after MMCA.Common v1.261.0 (the GCS delete posture, the Consequences CHANGELOG cite and the revision-section anchors moved; no behavior changed); see Revision (2026-10-26).
 Revised 2026-10-28: the three adapters answer a transport failure with no service response as a `FileStorage.UploadFailed` / `FileStorage.DeleteFailed` Result rather than an exception (MMCA.Common v1.261.0), and the anchors are refreshed after v1.265.1; see Revision (2026-10-28).
+Revised 2026-11-23: the avatar contract records the fourth path that schedules a blob delete (the orphaned new upload after a failed save), the Consequences say the framework's two audit suppressions are net11.0 false positives rather than an empty list, and the anchors are refreshed after MMCA.Common v1.315.0; see Revision (2026-11-23).
 ## Context
 The MAUI capability program (ADR-042) brought MediaPicker/camera within reach, and ADC amended
 BR-116 to include user avatar photos. That needs binary blob storage (the databases store
@@ -43,13 +44,13 @@ directly against the Azure SDK inside a module, unusable by the next consumer an
     production path, or `ConnectionString` for local Azurite.
   - `AddS3FileStorage(configuration)` (MMCA.Common.Aws) when `Bucket`
     (`MMCA.Common/Source/Hosting/MMCA.Common.Aws/Storage/S3FileStorageSettings.cs:19`) is present
-    (`MMCA.Common/Source/Hosting/MMCA.Common.Aws/AwsServiceCollectionExtensions.cs:58`), for Amazon
+    (`MMCA.Common/Source/Hosting/MMCA.Common.Aws/AwsServiceCollectionExtensions.cs:59`), for Amazon
     S3, Cloudflare R2, MinIO and the GCS XML API.
   - `AddGoogleCloudStorage(configuration)` (MMCA.Common.Gcp,
-    `MMCA.Common/Source/Hosting/MMCA.Common.Gcp/GcpServiceCollectionExtensions.cs:48`) when `GcsBucket`
-    (`.../MMCA.Common.Gcp/Storage/GcsFileStorageSettings.cs:18`) is present (`:56`), over
-    Application Default Credentials with no HMAC keys (`:37-38`). A section carrying only the S3
-    `Bucket` or the Azure `ContainerName` leaves it a no-op (`:38-40`). Its delete answers success
+    `MMCA.Common/Source/Hosting/MMCA.Common.Gcp/GcpServiceCollectionExtensions.cs:49`) when `GcsBucket`
+    (`.../MMCA.Common.Gcp/Storage/GcsFileStorageSettings.cs:18`) is present (`:57`), over
+    Application Default Credentials with no HMAC keys (`:38-39`). A section carrying only the S3
+    `Bucket` or the Azure `ContainerName` leaves it a no-op (`:39-41`). Its delete answers success
     for any HTTP 404 (`.../Storage/GcsFileStorageService.cs:94-99`); the filter does not tell a
     missing object from a missing bucket, so a delete against a missing bucket also reads as success.
 
@@ -62,14 +63,14 @@ directly against the Azure SDK inside a module, unusable by the next consumer an
   `.../MMCA.Common.Aws/Storage/S3FileStorageService.cs:147-149`).
 
   The container or bucket is provisioned by infrastructure, never created by the app (the GCS
-  identity needs only object create and delete, `GcpServiceCollectionExtensions.cs:42-44`).
+  identity needs only object create and delete, `GcpServiceCollectionExtensions.cs:43-45`).
 - **`IImageProcessor`** is ADC's, not the framework's: the interface is declared in the Identity
   application layer
   (`MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Application/Users/IImageProcessor.cs:11`,
   `NormalizeToSquareJpegAsync` at `:18`) and implemented by `SkiaSharpImageProcessor`
   (`MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Infrastructure/Services/Users/SkiaSharpImageProcessor.cs:16`),
   registered as a singleton by `AddModuleIdentityInfrastructure`
-  (`MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Infrastructure/DependencyInjection.cs:22-24`).
+  (`MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Infrastructure/DependencyInjection.cs:25`).
   It reads the header and refuses an oversize image before any frame is allocated
   (`SkiaSharpImageProcessor.cs:81-90`); accepts JPEG, PNG, WebP and GIF only, checked first by magic
   bytes before any decoder parses the upload and then on the codec Skia picked (`:145-172`,
@@ -80,7 +81,7 @@ directly against the Azure SDK inside a module, unusable by the next consumer an
   file are discarded (`:11-14`). Full re-encode is the security boundary. Undecodable content,
   including any format outside the allowlist (Skia also decodes BMP, ICO, HEIF, AVIF and RAW,
   `:146-148`), is the `Image.Undecodable` validation failure (`:338`), not an exception. SkiaSharp
-  is MIT-licensed and an ADC dependency (`MMCA.ADC/Directory.Packages.props:41-43`), not a framework
+  is MIT-licensed and an ADC dependency (`MMCA.ADC/Directory.Packages.props:88-90`), not a framework
   one.
 - **Dependency-free upload guards** (MMCA.Common): `ImageContentSniffer`
   (`MMCA.Common/Source/Core/MMCA.Common.Application/Interfaces/Infrastructure/Storage/ImageContentSniffer.cs:9`),
@@ -98,7 +99,8 @@ directly against the Azure SDK inside a module, unusable by the next consumer an
   up to 2 MB; server re-encodes to 256x256 JPEG via `IImageProcessor` (client-declared content
   types are advisory only); blob name `{userId}-{random8}.jpg` in the infrastructure-provisioned
   public-read `avatars` container (so the URL path reads `avatars/{userId}-{random8}.jpg`);
-  replacing, removing or erasing an avatar schedules a durable `DeleteAvatarBlobInternalCommand`
+  replacing, removing or erasing an avatar, and a failed save that leaves a freshly uploaded blob
+  with no row pointing at it, schedules a durable `DeleteAvatarBlobInternalCommand`
   ([ADR-114](114-internal-commands-durable-job-queue.md)) rather than deleting the blob inline; the
   URL lives on the user entity as `[Pii]`, nulled on anonymize with the blob delete scheduled in
   the same transaction; exported in the GDPR data export.
@@ -115,14 +117,16 @@ directly against the Azure SDK inside a module, unusable by the next consumer an
   (Storage Blob Data Contributor) for the app identity - a bicep-level grant, not a secret.
 - Image decoding is an application dependency, not a framework one: `AddInfrastructure` registers
   no image processor and MMCA.Common.Infrastructure takes no image library
-  (`MMCA.Common/CHANGELOG.md:92`), and the framework's accepted-advisory list is empty
-  (`MMCA.Common/Directory.Build.props:33`). ADC confines SkiaSharp's native libraries to the
+  (`MMCA.Common/CHANGELOG.md:1029`), and the framework accepts no advisory risk: its only
+  `NuGetAuditSuppress` entries are two net11.0 System.Security.Cryptography.Pkcs false positives
+  (`MMCA.Common/Directory.Build.props:85-86`, described as "a false positive rather than an
+  accepted risk" at `:71`), none of them an image library. ADC confines SkiaSharp's native libraries to the
   projects that run it: `MMCA.ADC.Identity.Infrastructure` takes the managed assembly only
   (`MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Infrastructure/MMCA.ADC.Identity.Infrastructure.csproj:10`),
   and the native packages are referenced by the Identity host
-  (`MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/MMCA.ADC.Identity.Service.csproj:22-29`) and
+  (`MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/MMCA.ADC.Identity.Service.csproj:27-28`) and
   the processor's tests
-  (`MMCA.ADC/Tests/Modules/Identity/MMCA.ADC.Identity.Infrastructure.Tests/MMCA.ADC.Identity.Infrastructure.Tests.csproj:12-14`).
+  (`MMCA.ADC/Tests/Modules/Identity/MMCA.ADC.Identity.Infrastructure.Tests/MMCA.ADC.Identity.Infrastructure.Tests.csproj:13-14`).
 
 ## Revision (2026-09-07)
 The 2 MB compressed upload cap bounds the bytes on the wire; it does not bound what those bytes
@@ -444,3 +448,69 @@ adapter behavior the 2026-10-26 revision missed is added to the Decision, and th
      at `:128`, the v1.256.0 removal of the `FileStorage` startup check at `:144-150`, the S3
      adapter entry at `:159` and `aws-integration` at `:164`. The `MMCA.Common/UPGRADING.md` cites of
      2026-10-26 (`:46`, `:67`, `:78`, `:85`) still hold.
+
+## Revision (2026-11-23)
+Re-verified against current source. The storage abstraction, the three adapters and the keys they
+read, the GCS delete posture, the transport-failure Results, the image processor's ownership and
+the durable blob deletion are unchanged; one avatar path the earlier revisions missed is added to
+the Decision, the Consequences audit-posture sentence is corrected, and the releases up to
+MMCA.Common v1.315.0 moved the anchors. The dated sections above keep their anchors.
+
+1. **The orphaned new upload is a fourth delete path.** `SetUserAvatarHandler` uploads the new blob
+   before the row is saved, so a save that fails or throws after the upload leaves a blob with no
+   row pointing at it
+   (`MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Application/Users/UseCases/SetUserAvatar/SetUserAvatarHandler.cs:71-89`).
+   The handler then schedules `DeleteAvatarBlobInternalCommand` for that new blob from a fresh DI
+   scope with `CancellationToken.None`, so neither the failed request context nor a cancelled
+   request token blocks the cleanup, and a failed or throwing schedule is logged without replacing
+   the original outcome (`:180-200`). `OnMutatedAsync` clears the candidate once the row points at
+   the new blob (`:148`). Replace (`:156-165`) and remove
+   (`.../Users/UseCases/RemoveUserAvatar/RemoveUserAvatarHandler.cs:75`, logged at `:80`) are
+   unchanged. The 2026-10-01 statement "Every path that retires an avatar" is left as recorded and
+   is completed by this item.
+2. **The framework audit list is not empty.** `MMCA.Common/Directory.Build.props:85-86` carries two
+   `NuGetAuditSuppress` entries (GHSA-846f-f764-76mx and GHSA-2fmv-rv2c-59x7), both
+   System.Security.Cryptography.Pkcs advisories that are net11.0 false positives "rather than an
+   accepted risk" (`:71`), and the header says they are the only entries (`:68-69`). None concerns
+   an image library, so the point the Consequences make (image decoding is not a framework
+   dependency) holds; the sentence now says what the list holds instead of calling it empty. The
+   2026-10-25 "reads none" statement is left as recorded.
+3. Anchors re-verified against current source:
+   - `AddAzureBlobFileStorage` is at
+     `MMCA.Common/Source/Hosting/MMCA.Common.Azure/AzureServiceCollectionExtensions.cs:44`, with the
+     `ContainerName` gate at `:52-55`, the absolute `ServiceUri` or `ConnectionString` gate at
+     `:58-62`, and `DefaultAzureCredential` at `:67` inside the `TryAddSingleton` at `:64-70`.
+   - `AddS3FileStorage` is at
+     `MMCA.Common/Source/Hosting/MMCA.Common.Aws/AwsServiceCollectionExtensions.cs:51`, with its
+     `Bucket` gate at `:59` (re-pointed in the Decision).
+   - `AddGoogleCloudStorage` is at
+     `MMCA.Common/Source/Hosting/MMCA.Common.Gcp/GcpServiceCollectionExtensions.cs:49`, its
+     `GcsBucket` gate at `:57`, Application Default Credentials with no HMAC keys at `:38-39`, the
+     no-op rule at `:39-41` and the IAM needs at `:43-45` (these five re-pointed in the Decision).
+     The pre-registered `StorageClient` is at `:41-43` and the optional keys at `:35-37`.
+   - `IImageProcessor` is registered with
+     `TryAddSingleton<IImageProcessor, SkiaSharpImageProcessor>()` at
+     `MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Infrastructure/DependencyInjection.cs:25`.
+     `SkiaSharp`, `SkiaSharp.NativeAssets.Linux.NoDependencies` and `SkiaSharp.NativeAssets.Win32`
+     are pinned at `MMCA.ADC/Directory.Packages.props:88-90`. The Identity host references the
+     native packages at
+     `MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/MMCA.ADC.Identity.Service.csproj:27-28`;
+     the tests csproj (`:13-14`) and the Infrastructure csproj `ExcludeAssets="native"` (`:10`)
+     are unchanged.
+   - The erasure path schedules the blob delete inside the transaction through
+     `ScheduleAvatarBlobDeletionAsync`
+     (`MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Application/Users/UseCases/DeleteUser/DeleteUserHandler.cs:87`,
+     called at `:81`, `ScheduleAsync` at `:90`), and a failed schedule fails the erasure (`:96`).
+   - The `attempts_exhausted` dead-letter is at
+     `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/InternalCommands/Processing/InternalCommandProcessor.cs:515`
+     (the `MaxAttempts` check at `:513`).
+   - The no-tripwire rationale is at
+     `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Configuration/CloudAdapterTripwire.cs:24-28`.
+   - The `aws-integration` job is at `MMCA.Common/.github/workflows/ci.yml:1197` and the
+     `gcp-integration` job at `:1257`; each says it is not a required check (`:1208`, `:1276`).
+   - Release cites: the v1.259.0 removal is at `MMCA.Common/CHANGELOG.md:1029` (heading `:1025`;
+     the Consequences cite is re-pointed in place) and the v1.258.0 SkiaSharp swap at `:1035`
+     (heading `:1031`). In `MMCA.Common/UPGRADING.md` the v1.259.0 section is at `:824`
+     (`ImageContentSniffer` unchanged at `:845`) and the v1.258.0 section at `:848`
+     (`ImageSharpPackageIds` at `:856` and `:863`); the 2026-10-28 statement that the 2026-10-26
+     UPGRADING cites still hold no longer does.

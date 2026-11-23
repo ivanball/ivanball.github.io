@@ -9,6 +9,8 @@ re-encrypt), the audit trail redacts encrypted properties, and a re-encryption t
 audit-trail test harness also wire the converter (v1.247.0); production adoption stays zero.
 Revised 2026-10-26: anchors refreshed after the v1.261.0 release.
 Revised 2026-10-28: anchors refreshed after MMCA.Common #615 and the 2026-10-28 ADR-005 revision.
+Revised 2026-11-23: anchors refreshed after the audit-trail interceptor, `PublicAPI.Shipped.txt` and
+the changelog moved in later releases.
 
 ## Context
 Transparent database encryption (TDE) protects the data files as a whole, but it decrypts
@@ -115,8 +117,8 @@ rest with authenticated encryption, applied per property in an entity configurat
    environment variables, never hardcoded (`EncryptedStringConverter.cs:35`, `:36`). One other
    Infrastructure type does recognize the converter: the audit-trail interceptor records its redaction
    token, never the value, for any property whose value converter is an `EncryptedStringConverter`
-   (`Source/Core/MMCA.Common.Infrastructure/Persistence/AuditTrail/AuditTrailSaveChangesInterceptor.cs:638`
-   through `:641`, documented at `:56` through `:58`), because the change tracker hands it the decrypted
+   (`Source/Core/MMCA.Common.Infrastructure/Persistence/AuditTrail/AuditTrailSaveChangesInterceptor.cs:659`
+   through `:662`, documented at `:58` through `:60`), because the change tracker hands it the decrypted
    plaintext and recording that would put in clear text exactly what the column encrypts. That needs no
    marker on the property.
 
@@ -421,3 +423,21 @@ the 2026-10-26 revision) is a point-in-time record and is left as recorded.
    `MarkForReEncryption` is now listed at
    `Source/Core/MMCA.Common.Infrastructure/PublicAPI.Shipped.txt:1011`; the "Field encryption" bullet
    still sits at `SECURITY.md:40`.
+
+## Revision (2026-11-23)
+Re-verified against current source. Anchor-only refresh; no decision, rationale, trade-off or adoption
+fact changed. The audit trail still redacts any property mapped through the converter,
+`MarkForReEncryption` is still shipped public API, and production adoption is still zero. Every anchor
+inside a dated revision above (including the changelog, `PublicAPI.Shipped.txt` and
+`AuditTrailSaveChangesInterceptor.cs` anchors in the 2026-10-21, 2026-10-26 and 2026-10-28 revisions)
+is a point-in-time record and is left as recorded.
+1. Anchors re-verified against current source: the audit-trail redaction check `IsRedacted` now runs
+   `Source/Core/MMCA.Common.Infrastructure/Persistence/AuditTrail/AuditTrailSaveChangesInterceptor.cs:659`
+   through `:662` (the `EncryptedStringConverter` clause at `:662`, its XML summary at `:653` through
+   `:658`), with the class-level remark at `:58` through `:60`, and Decision item 8 now cites those lines;
+   `MarkForReEncryption` is listed at
+   `Source/Core/MMCA.Common.Infrastructure/PublicAPI.Shipped.txt:1085`, with the two constructors at
+   `:616` and `:617`; the `[1.247.0]` changelog heading sits at `MMCA.Common/CHANGELOG.md:1240`, with the
+   `MarkForReEncryption` entry at `:1252` and the audit-trail redaction entry at `:1296`; the `[1.153.0]`
+   heading sits at `MMCA.Common/CHANGELOG.md:4858`, running to `[1.152.0]` at `:4940`.
+   `EncryptedStringConverter.cs:76`, `:143`, `:176`, `:211`, `:233`, `:251` and `:255` still hold.

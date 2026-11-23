@@ -283,7 +283,11 @@
           refreshed; no decision changed. Revised 2026-10-26: anchors refreshed after the CI and deploy workflow
           edits that moved the Common <code>ui-e2e</code> and ADC/Store <code>deploy.yml</code> gate lines; no decision changed.
           Revised 2026-10-28: anchors refreshed for the profile-page base scan and the Common <code>ui-e2e</code>
-          <code>E2E_BROWSER</code> assignment, which the body still cited at stale lines; no decision changed.</p>
+          <code>E2E_BROWSER</code> assignment, which the body still cited at stale lines; no decision changed.
+          Revised 2026-11-23: the gallery is re-measured (twenty-six assertions across twelve classes scanning
+          thirty-eight page states, with the route-only scans consolidated into one sweep theory and the
+          two-factor and sign-in states added), ADC&#39;s suite is re-measured at 52 scans, and the line anchors are
+          refreshed; no decision changed.</p>
           <h2 id="context">Context</h2>
           <p>Accessibility was documented before it was enforced. The narrative guide
           (<a href="../guides/common-ACCESSIBILITY.html">common-ACCESSIBILITY.md</a>, rubric section 21) named WCAG 2.1 AA
@@ -312,24 +316,24 @@
           (<code>:12-15</code>), so the gate fails only on conformance violations, never on advisories.</li>
           <li><strong>A violation is a thrown test failure, not a report.</strong>
           <code>AssertNoAccessibilityViolationsAsync(AxeRunOptions?)</code>
-          (<code>.../Testing.E2E/Infrastructure/PageExtensions.cs:316</code>) runs axe and, on any violation, throws
-          <code>AccessibilityViolationException</code> (<code>:355</code>; the type is
+          (<code>.../Testing.E2E/Infrastructure/PageExtensions.cs:385</code>) runs axe and, on any violation, throws
+          <code>AccessibilityViolationException</code> (<code>:424</code>; the type is
           <code>.../Testing.E2E/Infrastructure/AccessibilityViolationException.cs:7</code>) carrying each rule&#39;s impact,
-          id, help text, and the offending markup compacted to one line per node (<code>:345-353</code>, the per-node
-          <code>CompactHtml</code> line at <code>:351</code>), so a red gate
+          id, help text, and the offending markup compacted to one line per node (<code>:414-422</code>, the per-node
+          <code>CompactHtml</code> line at <code>:420</code>), so a red gate
           points at the element rather than at a dashboard.</li>
           <li><strong>The package&#39;s Identity workflow bases assert it, so a consumer inherits the scan.</strong> Four bases carry
           the assertion, so a subclass gets a login-page, register-page, profile-page, forgot-password-page, and
           reset-password-page a11y test with no test code of its own:
           <code>.../Testing.E2E/Workflows/Identity/UserLoginTestsBase.cs:82</code>,
-          <code>UserRegistrationTestsBase.cs:99</code>, <code>ProfileManagementTestsBase.cs:204</code>, and
+          <code>UserRegistrationTestsBase.cs:106</code>, <code>ProfileManagementTestsBase.cs:203</code>, and
           <code>PasswordResetTestsBase.cs</code> (class at <code>:17</code>, the two scans asserting at <code>:88</code> and <code>:99</code>, added with the
           password-recovery flow of <a href="091-cache-backed-password-reset.html">ADR-091</a>) each call the assert with
           <code>AxeOptions.Wcag21Aa</code>.</li>
           <li><strong>Consumer page scans go through two helpers that make strictness explicit.</strong> On
-          <code>.../Testing.E2E/Infrastructure/E2ETestBase.cs</code>, <code>ScanAsync()</code> (<code>:539</code>) waits for any loading bar to
-          clear and asserts the strict options (<code>:542</code>); <code>ScanGridAsync()</code> (<code>:529</code>) additionally waits for a
-          seeded data row before scanning and asserts with the one recorded exception (<code>:534</code>). Which helper a
+          <code>.../Testing.E2E/Infrastructure/E2ETestBase.cs</code>, <code>ScanAsync()</code> (<code>:659</code>) waits for any loading bar to
+          clear and asserts the strict options (<code>:662</code>); <code>ScanGridAsync()</code> (<code>:649</code>) additionally waits for a
+          seeded data row before scanning and asserts with the one recorded exception (<code>:654</code>). Which helper a
           page uses is the declaration of which rule set applies to it.</li>
           <li><strong>Exactly one recorded exception exists, and it is a value, not a switch.</strong>
           <code>AxeOptions.Wcag21AaExceptMudPagerCombobox</code> (<code>AxeOptions.cs:35</code>) carries the same four WCAG tags
@@ -339,20 +343,20 @@
           <code>MudTablePager</code> exposes no <code>Label</code>/<code>aria-label</code> parameter, so it is not fixable from app markup
           (<code>:26-33</code>). Every other WCAG 2.1 AA rule still runs on those pages.</li>
           <li><strong>Common gates it cross-browser as a required merge check.</strong> The <code>ui-e2e</code> job
-          (<code>MMCA.Common/.github/workflows/ci.yml:223</code>) builds the out-of-slnx gallery plus E2E project and runs
-          the axe scans across a <code>chromium, firefox, webkit</code> matrix (<code>:232</code>), one engine per leg via
-          <code>E2E_BROWSER</code> (<code>:376</code>), with <code>fail-fast: false</code> so each engine reports independently (<code>:230</code>). All
+          (<code>MMCA.Common/.github/workflows/ci.yml:331</code>) builds the out-of-slnx gallery plus E2E project and runs
+          the axe scans across a <code>chromium, firefox, webkit</code> matrix (<code>:340</code>), one engine per leg via
+          <code>E2E_BROWSER</code> (<code>:488</code>), with <code>fail-fast: false</code> so each engine reports independently (<code>:338</code>). All
           three contexts block merges (<code>MMCA.Common/CONTRIBUTING.md:63-64</code>, enumerated in the branch-protection
           payload at <code>:202-204</code>).</li>
           <li><strong>Both deployed apps gate the deploy on it.</strong> The <code>e2e-gate</code> jobs
-          (<code>MMCA.ADC/.github/workflows/deploy.yml:808</code>, <code>MMCA.Store/.github/workflows/deploy.yml:754</code>) call the
-          reusable <code>e2e.yml</code> workflow (ADC <code>:820</code>, Store <code>:765</code>) chromium-only (ADC <code>:822</code>, Store <code>:767</code>) against
-          the full Aspire stack, and the <code>deploy</code> job waits on that gate (ADC <code>:1161</code>, Store <code>:1099</code>). The same
-          <code>deploy</code> needs list also carries the <code>freshness</code> job (ADC <code>:1161</code>, Store <code>:1099</code>), whose
-          <code>cross-browser-freshness</code> step (ADC <code>:925</code>, Store <code>:859</code>) launches no browser: it asserts that the
-          scheduled firefox and webkit <code>e2e.yml</code> legs (Monday firefox, Thursday webkit) each have a recent
-          successful run, so engine coverage beyond chromium gates the deploy by recency rather than per commit
-          (ADC rationale at <code>:909-924</code>, Store at <code>:851-858</code>).</li>
+          (<code>MMCA.ADC/.github/workflows/deploy.yml:1201</code>, <code>MMCA.Store/.github/workflows/deploy.yml:965</code>) call the
+          reusable <code>e2e.yml</code> workflow (ADC <code>:1213</code>, Store <code>:976</code>) chromium-only (ADC <code>:1215</code>, Store <code>:978</code>)
+          against the full Aspire stack, and the <code>deploy</code> job waits on that gate (ADC <code>:1571</code>, Store <code>:1318</code>).
+          The same <code>deploy</code> needs list also carries the <code>freshness</code> job (ADC <code>:1571</code>, Store <code>:1318</code>; the job
+          itself at ADC <code>:1229</code>, Store <code>:991</code>), whose <code>cross-browser-freshness</code> step (ADC <code>:1321</code>, Store
+          <code>:1073</code>) launches no browser: it asserts that the scheduled firefox and webkit <code>e2e.yml</code> legs (Monday
+          firefox, Thursday webkit) each have a recent successful run, so engine coverage beyond chromium gates
+          the deploy by recency rather than per commit (ADC rationale at <code>:1305-1320</code>, Store at <code>:1065-1072</code>).</li>
           <li><strong>The gate already owns design-token decisions.</strong> Contrast values in the shared theme are set to
           what the scan will accept, with the ratio recorded in place: light-palette <code>WarningContrastText</code>
           (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI/Theme/MMCATheme.cs:36</code>, rationale at <code>:28-34</code>,
@@ -362,46 +366,54 @@
           surface ratio (<code>.../MMCA.Common.UI/Theme/BrandColors.cs:26</code>, rationale at <code>:22-24</code>).</li>
           </ul>
           <p>Adoption differs per repo and is uneven on purpose. <strong>MMCA.Common</strong> scans its own backend-less gallery:
-          nineteen assertions across twelve classes over <code>GalleryAxeTestBase</code>
+          twenty-six assertions across twelve classes over <code>GalleryAxeTestBase</code>
           (<code>MMCA.Common/Tests/Presentation/MMCA.Common.UI.E2E.Tests/Infrastructure/GalleryAxeTestBase.cs:14</code>),
           every one of them under the strict <code>AxeOptions.Wcag21Aa</code> (the gallery does not use the pager
-          exception), covering login (<code>LoginPageE2ETests.cs:34</code>), register (<code>RegisterPageE2ETests.cs:36</code>), the
-          primitives showcase (<code>ComponentsPageE2ETests.cs:80</code>), both dark-mode states (<code>DarkModeE2ETests.cs:30,:40</code>),
-          the notification pages, whose five scans cover the history table (<code>NotificationPagesE2ETests.cs:31</code>), the
-          inbox (<code>:43</code>), its two deep-link states (an unknown notification id at <code>:60</code>, a known one at <code>:73</code>), and
-          the compose page (<code>:85</code>), the role administration list and editor of
-          <a href="116-identity-completions-opt-in.html">ADR-116</a> (<code>Administration/RoleAdminPagesE2ETests.cs:31</code> and <code>:43</code>, class at
-          <code>:15</code>), the virtualized grid page, whose windowed markup is scanned under the strict options like every
-          other gallery page (<code>GridPageE2ETests.cs:82</code>, class at <code>:16</code>), and the password-recovery
-          pages added with <a href="091-cache-backed-password-reset.html">ADR-091</a>: forgot-password in both its form state and
-          its confirmation state, which replaces the form and is therefore a distinct rendering
-          (<code>ForgotPasswordPageE2ETests.cs:46</code> and <code>:60</code>), plus reset-password (<code>ResetPasswordPageE2ETests.cs:48</code>).
+          exception). The route-only anonymous scans live in one theory, <code>Accessibility/AxeSweepE2ETests.cs</code>
+          (class at <code>:14</code>): login, register, reset-password, forgot-password in its form state, the primitives
+          showcase, and the two login <code>?reason=</code> states (<code>:25-38</code>, assert at <code>:37</code>); a second theory in the same
+          class scans the signed-in two-factor account page in five URL-reachable states (<code>:44-65</code>, assert at
+          <code>:64</code>). The rest cover the forgot-password confirmation state, which replaces the form and is therefore
+          a distinct rendering (<code>Auth/ForgotPasswordPageE2ETests.cs:51</code>), the interaction-reached two-factor
+          states (<code>Auth/TwoFactorPageE2ETests.cs:51</code>, <code>:65</code>, <code>:83</code>, <code>:148</code>, <code>:161</code>), the sign-in second-factor
+          and unconfirmed-address states (<code>Auth/LoginSecondFactorE2ETests.cs:41</code>, <code>:58</code>, <code>:86</code>, <code>:93</code>), the
+          register pending state (<code>Auth/RegisterPendingE2ETests.cs:39</code>), both dark-mode states
+          (<code>DarkModeE2ETests.cs:30,:40</code>), the notification pages, whose five scans cover the history table
+          (<code>NotificationPagesE2ETests.cs:31</code>), the inbox (<code>:43</code>), its two deep-link states (an unknown
+          notification id at <code>:60</code>, a known one at <code>:73</code>), and the compose page (<code>:85</code>), the role administration
+          list and editor of <a href="116-identity-completions-opt-in.html">ADR-116</a>
+          (<code>Administration/RoleAdminPagesE2ETests.cs:31</code> and <code>:43</code>, class at <code>:15</code>), and the virtualized grid
+          page, whose windowed markup is scanned under the strict options like every other gallery page
+          (<code>GridPageE2ETests.cs:82</code>, class at <code>:16</code>). The password-recovery pages of
+          <a href="091-cache-backed-password-reset.html">ADR-091</a> are covered by the sweep theory plus the confirmation scan.
           Two shell-level classes cover states no page-specific test reaches: <code>Layout/ShellPagesE2ETests.cs:31</code>
           (class at <code>:16</code>) asserts the strict options over the three framework-owned shell routes in one theory
-          (<code>/</code>, <code>/not-found</code>, <code>/forbidden</code>), so the nineteen assertions scan twenty-one page states in total, and
-          <code>Layout/MobileNavKeyboardE2ETests.cs:36</code> (class at <code>:16</code>) scans the home page at a 390x844 phone
-          viewport with the hamburger menu open, the one state the rest of the suite misses because it runs at
-          desktop width.
-          The notification and sessions scans are the signed-in ones: both the notification pages and the shared
-          devices/sessions page (<code>SessionsPageE2ETests.cs:34</code>, class at <code>:13</code>) carry a real <code>[Authorize]</code>, so those
-          tests seed the gallery&#39;s cookie-toggled fake authentication scheme before navigating
-          (<code>NotificationPagesE2ETests.cs:91</code>, <code>SessionsPageE2ETests.cs:39</code>) while the login, register, components,
-          role administration, grid, shell and mobile-nav scans stay deliberately anonymous. The sessions scan covers the populated
-          table, its current-device marker, and the per-device sign-out buttons under the strict options.
+          (<code>/</code>, <code>/not-found</code>, <code>/forbidden</code>), so the twenty-six assertions scan thirty-eight page states in
+          total, and <code>Layout/MobileNavKeyboardE2ETests.cs:36</code> (class at <code>:16</code>) scans the home page at a 390x844
+          phone viewport with the hamburger menu open, the one state the rest of the suite misses because it
+          runs at desktop width.
+          The signed-in scans include the notification pages, the shared devices/sessions page
+          (<code>SessionsPageE2ETests.cs:37</code>, class at <code>:13</code>) and the two-factor account page: those pages carry a real
+          <code>[Authorize]</code>, so their tests seed the gallery&#39;s cookie-toggled fake authentication scheme before
+          navigating (<code>NotificationPagesE2ETests.cs:91</code>, <code>SessionsPageE2ETests.cs:42</code>,
+          <code>AxeSweepE2ETests.cs:52-60</code>) while the anonymous auth-form, components, role administration, grid,
+          shell and mobile-nav scans stay deliberately signed out. The sessions scan covers the populated
+          table, its current-device marker, the per-device sign-out buttons and the Sign-in history region
+          (<code>SessionsPageE2ETests.cs:31</code>) under the strict options.
           <strong>MMCA.Store</strong> subclasses all four Identity bases
-          (<code>Tests/E2E/MMCA.Store.E2E.Tests/Workflows/Identity/UserLoginTests.cs:5</code>,
-          <code>UserRegistrationTests.cs:5</code>, <code>ProfileManagementTests.cs:5</code>, <code>PasswordResetTests.cs:5</code>). <strong>MMCA.ADC</strong>
+          (<code>Tests/E2E/MMCA.Store.E2E.Tests/Workflows/Identity/UserLoginTests.cs:7</code>,
+          <code>UserRegistrationTests.cs:8</code>, <code>ProfileManagementTests.cs:8</code>, <code>PasswordResetTests.cs:7</code>). <strong>MMCA.ADC</strong>
           subclasses three of the four
-          (<code>Tests/E2E/MMCA.ADC.E2E.Tests/Workflows/Identity/UserLoginTests.cs:5</code>,
-          <code>UserRegistrationTests.cs:5</code>, <code>PasswordResetTests.cs:5</code>); its <code>ProfileManagementTests</code> derives
+          (<code>Tests/E2E/MMCA.ADC.E2E.Tests/Workflows/Identity/UserLoginTests.cs:6</code>,
+          <code>UserRegistrationTests.cs:7</code>, <code>PasswordResetTests.cs:6</code>); its <code>ProfileManagementTests</code> derives
           the app&#39;s own <code>AdcE2ETestBase</code> wrapper rather than <code>ProfileManagementTestsBase</code>
           (<code>ProfileManagementTests.cs:8</code>) because the ADC profile page supports only password change and account
           deletion, so it does not inherit the base&#39;s profile scan. Beyond the Identity bases each app carries a
-          dedicated suite: ADC&#39;s <code>Tests/E2E/MMCA.ADC.E2E.Tests/Workflows/AccessibilityTests.cs:29</code> holds 45 page
-          scans (13 through <code>ScanGridAsync</code>, 32 strict) and Store&#39;s
-          <code>Tests/E2E/MMCA.Store.E2E.Tests/Workflows/AccessibilityTests.cs:18</code> holds 32 (9 grid, 23 strict).
+          dedicated suite: ADC&#39;s <code>Tests/E2E/MMCA.ADC.E2E.Tests/Workflows/AccessibilityTests.cs:31</code> holds 52 page
+          scans (13 through <code>ScanGridAsync</code>, 39 strict) and Store&#39;s
+          <code>Tests/E2E/MMCA.Store.E2E.Tests/Workflows/AccessibilityTests.cs:22</code> holds 32 (9 grid, 23 strict).
           <strong>MMCA.Helpdesk adopts none of it</strong>: it pins the package version
-          (<code>MMCA.Helpdesk/Directory.Packages.props:93</code>) but no project references it, and the repo has no E2E
+          (<code>MMCA.Helpdesk/Directory.Packages.props:95</code>) but no project references it, and the repo has no E2E
           test project at all (<code>Tests/</code> holds only <code>Architecture</code> and <code>Modules</code>), so the seed has no browser
           accessibility gate today.</p>
           <h2 id="rationale">Rationale</h2>
@@ -437,7 +449,7 @@
           (<code>AxeOptions.cs:12-15</code>).</li>
           <li><strong>One accepted exception, with real blast radius.</strong> <code>Wcag21AaExceptMudPagerCombobox</code> disables
           <code>aria-input-field-name</code> for the whole page scan, not just for the pager node. A grid page that later
-          gains a genuinely unnamed combobox of its own would pass <code>ScanGridAsync</code> (<code>E2ETestBase.cs:534</code>). The
+          gains a genuinely unnamed combobox of its own would pass <code>ScanGridAsync</code> (<code>E2ETestBase.cs:654</code>). The
           exception is documented as &quot;use only where the sole combobox is a pager&quot; (<code>AxeOptions.cs:33</code>), which is
           a convention the compiler cannot enforce. It is upstream-owned: it stands until MudBlazor labels the
           pager select.</li>
@@ -445,12 +457,12 @@
           not machine-checkable and are covered by the manual screen-reader checklist in
           <a href="../guides/common-ACCESSIBILITY.html">common-ACCESSIBILITY.md</a>, which is a periodic human pass, not a gate.</li>
           <li><strong>The deploy gate is ui-scoped and may legitimately skip.</strong> Both apps gate <code>e2e-gate</code> on a <code>ui</code> change
-          filter (ADC <code>deploy.yml:819</code>, Store <code>deploy.yml:764</code>), and <code>deploy</code> accepts <code>success</code> or <code>skipped</code> for it
-          (ADC <code>:1198</code>, Store <code>:1132</code>), so a backend-only or infra-only deploy ships without a browser scan. That
+          filter (ADC <code>deploy.yml:1212</code>, Store <code>deploy.yml:975</code>), and <code>deploy</code> accepts <code>success</code> or <code>skipped</code> for
+          it (ADC <code>:1608</code>, Store <code>:1351</code>), so a backend-only or infra-only deploy ships without a browser scan. That
           is the intended cost trade (a backend change cannot alter rendered markup) with the post-deploy smoke
           gate as backstop, but it does mean &quot;deployed&quot; does not always mean &quot;axe ran on this commit&quot;.</li>
           <li><strong>Consumer breadth is hand-maintained.</strong> Nothing forces a new page into <code>AccessibilityTests</code>, so
-          coverage grows by discipline: 45 scans in ADC and 32 in Store today, against far larger page inventories.</li>
+          coverage grows by discipline: 52 scans in ADC and 32 in Store today, against far larger page inventories.</li>
           <li><strong>MMCA.Helpdesk has no accessibility gate.</strong> The reference app demonstrates the framework&#39;s layers but
           not this contract, so a reader following the seed sees no worked example of adopting the scan.</li>
           </ul>
@@ -555,6 +567,44 @@
           <code>ui-e2e</code> job at <code>:223</code>, whose <code>fail-fast</code> <code>:230</code> and matrix <code>:232</code> are unchanged; the body cited
           <code>:344</code>).</li>
           </ol>
+          <h2 id="revision-2026-11-23">Revision (2026-11-23)</h2>
+          <p>Re-verified against current source. No decision or rationale changed: the target is still
+          <code>AxeOptions.Wcag21Aa</code>, the four Identity bases still assert it, Common still requires all three
+          engines, and both apps still gate the deploy on a chromium-only <code>e2e-gate</code> that may legitimately skip
+          plus the <code>cross-browser-freshness</code> recency step. What moved is the gallery&#39;s inventory, the ADC suite
+          count, and nearly every line anchor.</p>
+          <ol>
+          <li>The gallery count is re-measured from source: twenty-six assertions across twelve classes (was
+          nineteen across twelve), scanning thirty-eight page states (was twenty-one). The set of classes
+          changed: <code>LoginPageE2ETests</code>, <code>RegisterPageE2ETests</code>, <code>ComponentsPageE2ETests</code> and
+          <code>ResetPasswordPageE2ETests</code> no longer hold an axe call; their route-only scans, plus the
+          forgot-password form state and two login <code>?reason=</code> states, moved into the
+          <code>Accessibility/AxeSweepE2ETests.cs</code> theory (<code>:25-38</code>, assert <code>:37</code>). New scanning classes are
+          <code>AxeSweepE2ETests</code> (a second theory over five signed-in two-factor states, <code>:44-65</code>),
+          <code>Auth/TwoFactorPageE2ETests.cs</code> (five scans), <code>Auth/LoginSecondFactorE2ETests.cs</code> (four) and
+          <code>Auth/RegisterPendingE2ETests.cs</code> (one). Every gallery scan still uses the strict options.</li>
+          <li>The signed-in set now also includes the two-factor account page (<code>AxeSweepE2ETests.cs:52-60</code> sets
+          the gallery auth cookie), and the sessions scan also asserts the Sign-in history region
+          (<code>SessionsPageE2ETests.cs:31</code>).</li>
+          <li>ADC&#39;s <code>AccessibilityTests</code> is re-measured: 52 scans, one per fact (13 <code>ScanGridAsync</code>, 39 strict;
+          was 45, 13 and 32). Store&#39;s 32 (9 grid, 23 strict) is unchanged. The Trade-offs count follows.</li>
+          <li>Anchors re-verified against current source: <code>PageExtensions.cs</code> (method <code>:385</code>, summary <code>:414-422</code>,
+          <code>CompactHtml</code> line <code>:420</code>, throw <code>:424</code>); <code>UserRegistrationTestsBase.cs:106</code>,
+          <code>ProfileManagementTestsBase.cs:203</code>; the <code>E2ETestBase</code> helpers (<code>ScanGridAsync</code> <code>:649</code>/<code>:654</code>,
+          <code>ScanAsync</code> <code>:659</code>/<code>:662</code>); the Common <code>ui-e2e</code> job (<code>ci.yml:331</code>, <code>fail-fast</code> <code>:338</code>, matrix <code>:340</code>,
+          <code>E2E_BROWSER</code> <code>:488</code>); the ADC and Store <code>e2e-gate</code> jobs (<code>MMCA.ADC/.github/workflows/deploy.yml:1201</code>,
+          <code>MMCA.Store/.github/workflows/deploy.yml:965</code>), their <code>ui</code> filter (ADC <code>:1212</code>, Store <code>:975</code>),
+          reusable <code>e2e.yml</code> call (ADC <code>:1213</code>, Store <code>:976</code>) and chromium-only browsers (ADC <code>:1215</code>, Store
+          <code>:978</code>); the <code>deploy</code> needs lists (ADC <code>:1571</code>, Store <code>:1318</code>) and their <code>success</code>-or-<code>skipped</code>
+          acceptance of <code>e2e-gate</code> (ADC <code>:1608</code>, Store <code>:1351</code>); the <code>freshness</code> job (ADC <code>:1229</code>, Store <code>:991</code>),
+          its <code>cross-browser-freshness</code> step (ADC <code>:1321</code>, Store <code>:1073</code>) and rationale comment (ADC
+          <code>:1305-1320</code>, Store <code>:1065-1072</code>); the gallery sessions scan (<code>SessionsPageE2ETests.cs:37</code>, cookie
+          helper <code>:42</code>); the Store Identity subclasses (<code>UserLoginTests.cs:7</code>, <code>UserRegistrationTests.cs:8</code>,
+          <code>ProfileManagementTests.cs:8</code>, <code>PasswordResetTests.cs:7</code>) and the ADC ones (<code>UserLoginTests.cs:6</code>,
+          <code>UserRegistrationTests.cs:7</code>, <code>PasswordResetTests.cs:6</code>); both <code>AccessibilityTests</code> class
+          declarations (ADC <code>:31</code>, Store <code>:22</code>); and the MMCA.Helpdesk pin (<code>Directory.Packages.props:95</code>),
+          still referenced by no project.</li>
+          </ol>
           <h2 id="related">Related</h2>
           <p>ADR-015 (architecture fitness functions: the structural tier this parallels at the browser tier, and the
           same invariant-over-discipline posture), ADR-058 (runtime conformance suites shipped as subclassable
@@ -584,6 +634,7 @@
             <li><a href="#revision-2026-10-21">Revision (2026-10-21)</a></li>
             <li><a href="#revision-2026-10-26">Revision (2026-10-26)</a></li>
             <li><a href="#revision-2026-10-28">Revision (2026-10-28)</a></li>
+            <li><a href="#revision-2026-11-23">Revision (2026-11-23)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

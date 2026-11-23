@@ -10,13 +10,16 @@ Revised 2026-10-21: the opt-in path's test citation names SQL Server, SQLite and
 to where the PostgreSQL predicate is pinned; anchors refreshed.
 Revised 2026-10-28: anchors refreshed after ADR-057 grew its own revisions (its live-marker
 citation moved).
+Revised 2026-11-23: the Trade-offs bullet on Store's sweep migration is scoped to the configurations
+that existed at that sweep (a later Store unique index relies on the convention alone); anchors
+refreshed.
 
 ## Context
 ADR-005 makes deletion **soft**: an `IAuditableEntity` sets `IsDeleted = true`
 (`MMCA.Common/Source/Core/MMCA.Common.Domain/Interfaces/IAuditableEntity.cs:11`) and a named global
 query filter hides the row from every query
-(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/ApplicationDbContext.cs:454-468`,
-the filter name at `:475`). The application therefore behaves as though the row is gone.
+(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/ApplicationDbContext.cs:602-616`,
+the filter name at `:623`). The application therefore behaves as though the row is gone.
 
 The database does not. A unique index still counts the hidden row, so the deleted record keeps
 occupying its unique slot forever: delete a speaker and the email unique index still refuses to
@@ -37,12 +40,12 @@ rows, automatically, in every context of every consumer.
 - **A model-finalizing convention, registered once in the base context.**
   `SoftDeleteUniqueIndexConvention` (`.../Conventions/SoftDeleteUniqueIndexConvention.cs:34`) is added
   by `ApplicationDbContext.ConfigureConventions`
-  (`.../DbContexts/ApplicationDbContext.cs:393`, rationale at `:389-392`). Because ADR-006 keeps one
+  (`.../DbContexts/ApplicationDbContext.cs:506`, rationale at `:502-505`). Because ADR-006 keeps one
   context class per engine over that base, a single registration reaches every module, every database
   and every consumer repo. Nothing opts in per entity.
 - **Scope: unique, non-owned, soft-deletable.** The convention walks entity types assignable to
   `IAuditableEntity` and not owned (`:46-47`, the same predicate the query filter uses at
-  `ApplicationDbContext.cs:457`), then applies the filter to every index that is unique
+  `ApplicationDbContext.cs:605`), then applies the filter to every index that is unique
   (`:49-50`, `:61-64`).
 - **A hand-authored filter is kept and extended, not replaced and not skipped.** An index that
   already declares a predicate keeps it and gains the soft-delete clause appended with `AND` (`:80`),
@@ -53,7 +56,7 @@ rows, automatically, in every context of every consumer.
   a model bothered to hand-author as the only ones a soft-deleted row could keep blocking (`:19-26`):
   the framework's own push-notification dedup index, filtered on `[DedupKey] IS NOT NULL`, was exactly
   that case
-  (`.../Persistence/Configuration/EntityTypeConfiguration/Notifications/PushNotificationConfiguration.cs:69-73`).
+  (`.../Persistence/Configuration/EntityTypeConfiguration/Notifications/PushNotificationConfiguration.cs:79-83`).
   The append is **idempotent**: a filter that already constrains the soft-delete column is recognized
   and left alone (`SoftDeleteUniqueIndexConvention.cs:73-76`), so a second model build cannot produce
   `... AND [IsDeleted] = 0 AND [IsDeleted] = 0`. Recognition (`SoftDeleteFilterSql.ContainsPredicate`)
@@ -88,7 +91,7 @@ rows, automatically, in every context of every consumer.
   convention deliberately skips (a non-unique one), and a unique index that wants to declare the
   combined predicate at its own declaration site uses the same call: the two are joined as
   `{additionalFilter} AND {filter}` (`:62-65`). The framework's own push-notification dedup index does
-  exactly that (`PushNotificationConfiguration.cs:69-73`, quoting `DedupKey` per engine through
+  exactly that (`PushNotificationConfiguration.cs:79-83`, quoting `DedupKey` per engine through
   `SoftDeleteFilterSql.QuoteColumn`, `SoftDeleteFilterSql.cs:70-71`), and since the convention started appending,
   that call is belt and braces rather than the only thing narrowing the index: it produces the same
   SQL in the same order, and the convention recognizes it and stops
@@ -114,7 +117,7 @@ at the moment it is called, so a `HasColumnName` on the soft-delete property has
   SQLite.
 - **Extending a hand-authored filter, rather than replacing or skipping it, is the only option that
   is correct twice.** Overwriting would drop the `[DedupKey] IS NOT NULL` clause the push-notification
-  index depends on (`PushNotificationConfiguration.cs:55-68`); skipping leaves that index enforcing
+  index depends on (`PushNotificationConfiguration.cs:65-78`); skipping leaves that index enforcing
   uniqueness against soft-deleted rows, which is the exact defect the convention exists to remove, and
   it does so only for the indexes someone thought hard enough about to filter
   (`SoftDeleteUniqueIndexConvention.cs:22-24`). Appending is the composition that keeps both
@@ -131,9 +134,9 @@ at the moment it is called, so a `HasColumnName` on the soft-delete property has
   `.../Persistence/Configuration/IndexBuilderExtensionsTests.cs:23-58` and for PostgreSQL in
   `.../Persistence/Configuration/NotificationConfigurationEngineTests.cs:45-46` (the `(UserId, IsRead)`
   index opts in at `UserNotificationConfiguration.cs:44-45`, and the dedup index's combined predicate
-  at `PushNotificationConfiguration.cs:69-71`). The convention's PostgreSQL predicate is pinned in
+  at `PushNotificationConfiguration.cs:79-83`). The convention's PostgreSQL predicate is pinned in
   `.../Persistence/DbContexts/PostgreSQLDbContextModelTests.cs:156`, over a plain unique index
-  (`:251-252`), and the combined predicate in
+  (`:252-253`), and the combined predicate in
   `.../Persistence/Configuration/PushNotificationConfigurationTests.cs:27-30`.
 
 ## Trade-offs
@@ -148,9 +151,15 @@ at the moment it is called, so a `HasColumnName` on the soft-delete property has
   Store's and Helpdesk's migrations of the same sweep carry only the outbox columns
   (`MMCA.Store/Source/Hosting/MMCA.Store.Migrations.SqlServer.Catalog/Migrations/20260720031626_CommonV1120OutboxLeaseAndSoftDeleteIndexFilters.cs:12-27`,
   `MMCA.Helpdesk/Source/Hosting/MMCA.Helpdesk.Migrations.SqlServer.Tickets/Migrations/20260720031655_CommonV1120OutboxLeaseAndSoftDeleteIndexFilters.cs:12-27`),
-  because Store's configurations already opted in by hand and Helpdesk's single module declares no
-  unique index on a soft-deletable entity. So "the framework changed your schema" is true for some
-  consumers and not others, and only the generated migration says which.
+  because the Store configurations that existed at that sweep already opted in by hand and
+  Helpdesk's single module declares no unique index on a soft-deletable entity. Store's later
+  unique indexes do not all opt in: `VerifiedPurchase`'s `(OrderId, ProductId)` index relies on the
+  convention alone
+  (`MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.Infrastructure/Persistence/EntityConfiguration/VerifiedPurchaseConfiguration.cs:31-39`)
+  and was created already filtered
+  (`.../MMCA.Store.Migrations.SqlServer.Catalog/Migrations/20260906030347_AddProductReviews.cs:99-105`).
+  So "the framework changed your schema" is true for some consumers and not others, and only the
+  generated migration says which.
 - **It moves that schema a second time, for the indexes it previously skipped.** Because the
   convention now appends to a hand-authored filter (`SoftDeleteUniqueIndexConvention.cs:80`), every
   pre-filtered unique index on a soft-deletable entity has a new predicate, so the next migration a
@@ -247,6 +256,27 @@ anchor moved.
    is unchanged, and ADR-057's live-marker citation of it is now
    `057-expand-contract-schema-evolution-gate.md:115` (the Related section is re-pointed; the
    2026-10-01 revision's `:90` and the 2026-10-21 revision's `:97` stay as recorded).
+
+## Revision (2026-11-23)
+Re-verified against current source. No decision, behavior or predicate changed: the convention
+registration, the soft-delete query filter and the push-notification dedup index behave as the live
+sections describe. Line numbers moved in `ApplicationDbContext.cs` and in
+`PushNotificationConfiguration.cs` (which gained the native push outcome properties at `:55-63`), and
+one Trade-offs sentence was broader than source supports.
+1. The Trade-offs bullet said Store's sweep migration carried only outbox columns because "Store's
+   configurations already opted in by hand". That holds for the configurations that existed at the
+   2026-07-20 sweep, but not for every Store unique index today: `VerifiedPurchase`'s
+   `(OrderId, ProductId)` unique index declares no filter and relies on the convention
+   (`MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.Infrastructure/Persistence/EntityConfiguration/VerifiedPurchaseConfiguration.cs:31-39`);
+   it first appears, already filtered on `[IsDeleted] = 0`, in a later migration
+   (`MMCA.Store/Source/Hosting/MMCA.Store.Migrations.SqlServer.Catalog/Migrations/20260906030347_AddProductReviews.cs:99-105`).
+   The bullet is scoped to the configurations of that sweep.
+2. Anchors re-verified against current source: `ApplicationDbContext.cs` convention registration
+   `:506`, its rationale comment `:502-505`, `ApplySoftDeleteFilters` `:602-616`, its
+   `IAuditableEntity` and not-owned predicate `:605`, the filter name `:623`;
+   `PushNotificationConfiguration.cs` dedup index with its combined `HasSoftDeleteFilter` predicate
+   `:79-83`, its explanatory comment `:65-78`; `PostgreSQLDbContextModelTests.cs` convention predicate
+   `:156` (unchanged) and its plain unique index `:252-253`.
 
 ## Related
 ADR-005 (decides soft-delete over erasure and owns the query filter that hides the row, but says
