@@ -63,7 +63,9 @@ Revised 2026-11-23: the Redis wrappers, the guarded hybrid helper and `AddOutput
 `NoCache` base are called once by the composed service host (`AddMmcaServiceHost`) rather than by
 each service, the two output-cache adopters opt into the Redis store with `UseRedisOutputCaching`,
 Store Catalog has three public-read policies, ADC Conference bypasses ten of its eleven (one by
-permission too) beside a twelfth `ConferenceCache` policy, and anchors are refreshed.
+permission too) beside a twelfth `ConferenceCache` policy, and anchors are refreshed; the
+eviction handler's 2026-08-18 non-reuse reason is recorded as contradicted by source (the API
+package already calls `BestEffort`).
 
 ## Context
 The framework needs caching in two distinct places. Inside the application pipeline, query results
@@ -1227,7 +1229,17 @@ the policy counts in the two output-cache adopters.
    (`MMCA.Common/Source/Presentation/MMCA.Common.API/Caching/PublicEndpointOutputCachePolicy.cs:92`)
    that no `AddPublicEndpointPolicy` overload exposes. `NowNextCache` (`:202`) is the one without a
    bypass, and `ConferenceCache` (`:143-144`) is the twelfth named policy, not the thirteenth.
-6. **Anchors re-verified against current source:** `AddCaching` call
+6. **The eviction handler's non-reuse reason no longer holds.** The Revision (2026-08-18) says the
+   handler hand-rolls its swallow-log-count shape because the API package cannot reach
+   `BestEffort` without a layer-crossing reference. The handler does still hand-roll it, counting on
+   its own `MMCA.Common.OutputCache` meter
+   (`MMCA.Common/Source/Presentation/MMCA.Common.API/Caching/OutputCacheEvictionHandler.cs:56`,
+   `:60`; `OutputCacheMetrics.cs:19`), but the same package already calls `BestEffort.ExecuteAsync`
+   for the controller-side `TryEvictTagsAsync` helper (`OutputCacheEvictionExtensions.cs:78`,
+   `:86`), on the `MMCA.Common.BestEffort` meter. What keeps the handler apart is its dedicated
+   eviction-failure counter, not a missing reference; [ADR-096](096-best-effort-side-effects.md)
+   records the same finding.
+7. **Anchors re-verified against current source:** `AddCaching` call
    `MMCA.Common.Infrastructure/DependencyInjection.cs:141`; `AddCommonHybridCache`
    `DependencyInjection.Caching.cs:162` (`RemoveAll<ICacheService>` `:188`, multiplexer resolve
    `:193`), the guarded helper `:226` (guard `:232-235`); `CachePrefixGenerations.cs` key builder

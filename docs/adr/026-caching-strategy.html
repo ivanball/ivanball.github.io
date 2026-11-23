@@ -317,7 +317,9 @@
           <code>NoCache</code> base are called once by the composed service host (<code>AddMmcaServiceHost</code>) rather than by
           each service, the two output-cache adopters opt into the Redis store with <code>UseRedisOutputCaching</code>,
           Store Catalog has three public-read policies, ADC Conference bypasses ten of its eleven (one by
-          permission too) beside a twelfth <code>ConferenceCache</code> policy, and anchors are refreshed.</p>
+          permission too) beside a twelfth <code>ConferenceCache</code> policy, and anchors are refreshed; the
+          eviction handler&#39;s 2026-08-18 non-reuse reason is recorded as contradicted by source (the API
+          package already calls <code>BestEffort</code>).</p>
           <h2 id="context">Context</h2>
           <p>The framework needs caching in two distinct places. Inside the application pipeline, query results
           are memoized and invalidated on mutation (the Caching decorators of ADR-014, keyed by
@@ -1465,6 +1467,16 @@
           (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Caching/PublicEndpointOutputCachePolicy.cs:92</code>)
           that no <code>AddPublicEndpointPolicy</code> overload exposes. <code>NowNextCache</code> (<code>:202</code>) is the one without a
           bypass, and <code>ConferenceCache</code> (<code>:143-144</code>) is the twelfth named policy, not the thirteenth.</li>
+          <li><strong>The eviction handler&#39;s non-reuse reason no longer holds.</strong> The Revision (2026-08-18) says the
+          handler hand-rolls its swallow-log-count shape because the API package cannot reach
+          <code>BestEffort</code> without a layer-crossing reference. The handler does still hand-roll it, counting on
+          its own <code>MMCA.Common.OutputCache</code> meter
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Caching/OutputCacheEvictionHandler.cs:56</code>,
+          <code>:60</code>; <code>OutputCacheMetrics.cs:19</code>), but the same package already calls <code>BestEffort.ExecuteAsync</code>
+          for the controller-side <code>TryEvictTagsAsync</code> helper (<code>OutputCacheEvictionExtensions.cs:78</code>,
+          <code>:86</code>), on the <code>MMCA.Common.BestEffort</code> meter. What keeps the handler apart is its dedicated
+          eviction-failure counter, not a missing reference; <a href="096-best-effort-side-effects.html">ADR-096</a>
+          records the same finding.</li>
           <li><strong>Anchors re-verified against current source:</strong> <code>AddCaching</code> call
           <code>MMCA.Common.Infrastructure/DependencyInjection.cs:141</code>; <code>AddCommonHybridCache</code>
           <code>DependencyInjection.Caching.cs:162</code> (<code>RemoveAll&lt;ICacheService&gt;</code> <code>:188</code>, multiplexer resolve
