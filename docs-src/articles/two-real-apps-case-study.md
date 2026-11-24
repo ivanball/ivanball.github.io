@@ -107,8 +107,8 @@ code reaches them.** There is no phased rollout, no opt-in flag, no per-consumer
 
 The release is a lockstep sweep:
 
-1. Tag a new MMCA.Common version (the release version is the git tag itself; MinVer versions every
-   other build). All twenty-six packages publish at that same version.
+1. Tag a new MMCA.Common version (the release version is the git tag itself; every other build
+   carries a `0.0.0-dev` placeholder). All twenty-six packages publish at that same version.
 2. In each consumer, bump every `MMCA.Common.*` entry in `Directory.Packages.props` to the new version
    in one pass. ADC keeps its twenty-one entries and Store its eighteen on the same number.
 3. Build, run the fitness tests and the rest of the suite, deploy.

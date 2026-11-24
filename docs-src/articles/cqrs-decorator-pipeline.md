@@ -90,8 +90,9 @@ Validating -> Timeout -> Concrete Handler
 
 (The framework also ships an optional pair of MiniProfiler decorators, `ProfilingCommandDecorator` and
 `ProfilingQueryDecorator`, registered only by a separate opt-in `AddApplicationProfiling()` call; called
-after `AddApplicationDecorators()`, they wrap both chains from the outside. No consumer host calls it
-today.)
+after `AddApplicationDecorators()`, they wrap both chains from the outside. The composed service host
+`AddMmcaServiceHost` makes that call, with the profiler's services and middleware, only when
+`ApplicationSettings:UseMiniProfiler` is true, which it is not by default.)
 
 Each position is a deliberate cost-and-correctness argument:
 

@@ -94,7 +94,7 @@ exporters throw when they run before `AddServiceDefaults()` regardless of config
 Every call in the table is a real method (anchors in the Notes). Two shapes repeat: the host-level
 calls (configuration source, key ring, telemetry exporter) extend the host builder (`TBuilder`, for
 example `AzureKeyVaultConfigurationExtensions.cs:80`, `AzureDataProtectionExtensions.cs:53`,
-`AwsDataProtectionExtensions.cs:57` and `GoogleCloudDataProtectionExtensions.cs:76`), and the
+`AwsDataProtectionExtensions.cs:70` and `GoogleCloudDataProtectionExtensions.cs:76`), and the
 service-level calls extend `IServiceCollection` (for example `AzureServiceCollectionExtensions.cs:41`).
 Each adapter binds the framework's standard configuration sections and keys (`ADR-134:108-113`), so a
 deployment's environment variables and vault names are the same whichever adapter call reads them.
@@ -179,7 +179,8 @@ service starts. It holds one gate key per host-level adapter call:
 
 - Azure: `APPLICATIONINSIGHTS_CONNECTION_STRING` (`:20`), `KeyVault:Uri` (`:23`) and
   `DataProtection:BlobStorageUri` (`:26`).
-- AWS: `SecretsManager:NamePrefix` (`:29`) and `DataProtection:SsmParameterPrefix` (`:32`).
+- AWS: `SecretsManager:NamePrefix` (`:29`), `DataProtection:S3ObjectUri` (`:32`) and
+  `AwsTelemetry:Region` (`:56`).
 - Google Cloud: `GoogleSecretManager:NamePrefix` (`:40`), `DataProtection:GcsObjectUri` (`:43`) and
   `GoogleCloudTelemetry:ProjectId` (`:46`).
 
@@ -236,7 +237,7 @@ assembly referenced (`:31-33`). The rule bodies match the namespace roots `Azure
 (`ArchitectureRules.CloudVendors.cs:25-41`), plus the matching assembly prefixes (`:48-62`).
 
 One detail in that list is worth copying for its own sake: the namespace roots carry **no trailing dot**,
-because NetArchTest matches whole namespace segments and an entry ending in a dot matches nothing, which
+because the rule engine matches whole namespace segments and an entry ending in a dot matches nothing, which
 would make the type-level rule pass vacuously (`:27-28`). A fitness test that cannot fail is worse than
 no test, because it reads as coverage.
 

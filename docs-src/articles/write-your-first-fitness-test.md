@@ -7,7 +7,7 @@
 > published as `Website/docs-src/onboarding/group-29-testing-infrastructure.md`). No em dashes.
 
 **Subtitle:** Your Clean Architecture diagram is a hope, not a guarantee, until something fails the
-build when it is violated. Here is how to add NetArchTest fitness functions to your own solution in
+build when it is violated. Here is how to add architecture fitness functions to your own solution in
 under an hour, by inheriting a rule library instead of writing one.
 
 ---
@@ -42,12 +42,12 @@ MMCA.Common enforces its layer rules **twice**, on purpose:
 1. **At compile time**, by an MSBuild target (`MMCA.Common.LayerEnforcement.targets`) that inspects
    project references in a pre-build step and fails the build with a descriptive error if a layer
    references a forbidden upstream layer. Fastest possible feedback, catches the most common mistake.
-2. **At runtime**, by NetArchTest fitness functions that assert the same rules against the compiled
+2. **At runtime**, by fitness functions on the package's own metadata-based rule engine that assert the same rules against the compiled
    assemblies, catching the subtler violations a project-reference check cannot see (a type in the
    wrong namespace, a transitive `using`, a missing convention).
 
 A third gate sits alongside those two, and ADR-015 as revised records the enforcement as running in
-three layers. It is neither MSBuild nor NetArchTest: `Microsoft.CodeAnalysis.PublicApiAnalyzers` runs on
+three layers. It is neither MSBuild nor the runtime rule suite: `Microsoft.CodeAnalysis.PublicApiAnalyzers` runs on
 every published package except `MMCA.Common.UI.Maui` (excluded by name, because it builds only on the
 Windows MAUI job outside the main solution) against committed baselines (a `PublicAPI.Shipped.txt` /
 `PublicAPI.Unshipped.txt` pair per gated package, twenty-five pairs), so adding or removing a public
@@ -66,7 +66,7 @@ This article is about adding the second layer to your own code, and optionally t
   test.
 - The package you are about to install: **`MMCA.Common.Testing.Architecture`**, one of the twenty-six
   packages the framework publishes. Its README row describes it exactly: "`IArchitectureMap` + reusable
-  NetArchTest rule library + abstract test bases (consumed by each repo's `*.Architecture.Tests`)."
+  metadata-based architecture rule library + abstract test bases (consumed by each repo's `*.Architecture.Tests`)."
 
 The key design idea: the rule *bodies* ship in the package once. You do not copy them. You supply a tiny
 map of your assemblies and subclass the bases, and you inherit roughly the same suite that runs across
@@ -89,7 +89,8 @@ Add a dedicated architecture-test project (mirroring how the framework keeps
 dotnet add package MMCA.Common.Testing.Architecture
 ```
 
-The package brings the NetArchTest engine (NetArchTest.eNhancedEdition), the `ArchitectureRules` rule
+The package brings its own rule engine (`ArchitectureTypes`, which reads your compiled assemblies
+through `System.Reflection.Metadata` and needs no third-party package), the `ArchitectureRules` rule
 library, the diagnostic helpers, and the 64 abstract `*TestsBase` classes. You will not write rule
 logic; you will point the rules at your assemblies and subclass the bases.
 
@@ -217,7 +218,7 @@ The file holds ten targets of the same `BeforeTargets="ResolveProjectReferences"
 one reference rule; the layer target is the one to copy first. It inspects each project's
 `ProjectReference` set, and fails the build with a descriptive error if a layer references a forbidden
 upstream layer. This is the "two speeds" design from ADR-015: the MSBuild guard catches the common case
-at compile time on the developer's machine; the NetArchTest suite catches the subtler assembly-level
+at compile time on the developer's machine; the runtime rule suite catches the subtler assembly-level
 violations a reference check cannot see. ADR-015 frames that pair as "two speeds"; counting the public
 API surface gate described earlier, enforcement runs in three layers, so what pairs here is the speeds,
 not the layer count. When you change project references or move a type between layers, expect both
@@ -258,7 +259,8 @@ the failures, not just the color.
 
 ## Apply this even without MMCA
 
-If you are not on MMCA.Common, the pattern still ports to any .NET stack with NetArchTest:
+If you are not on MMCA.Common, the pattern still ports to any .NET stack with an architecture-test library
+such as NetArchTest or ArchUnitNET:
 
 1. Write each invariant as a **named test**, one per forbidden edge, so a failure points at the exact
    rule, not "layering is wrong."
