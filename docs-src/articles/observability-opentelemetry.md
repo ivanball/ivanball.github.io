@@ -184,7 +184,8 @@ production workspaces' ingestion over 2026-09-22..28, mostly gauges re-emitted o
 traffic, and no alert reads any of it (`:342-348`), so both production templates set it
 (`MMCA.ADC/infra/main.bicep:327-328`, `MMCA.Store/infra/main.bicep:258-259`). `HttpClient` connection and
 request metrics are on unless `Telemetry:DisableHttpClientMetrics` is set (`Extensions.Telemetry.cs:250`),
-and .NET runtime metrics (`dotnet.gc.*`, `jit.*`, `thread_pool.*`) unless `Telemetry:DisableRuntimeMetrics`
+and .NET runtime metrics (`dotnet.gc.*`, `jit.*`, `thread_pool.*`, published by the runtime itself on its
+`System.Runtime` meter and subscribed with `AddMeter`, `:293`) unless `Telemetry:DisableRuntimeMetrics`
 is set (`:278`). All three keys are read by `IsInstrumentationDisabled` (`Extensions.Telemetry.cs:204`, its
 doc naming the three at `:197-199`), which drops the family only when the value parses as boolean `true`;
 absent, blank, or unparseable keeps the instrumentation, so a typo cannot silently blind a whole metric
@@ -306,7 +307,7 @@ private static void ConfigureMetrics(MeterProviderBuilder metrics, IConfiguratio
                 ? MetricStreamConfiguration.Drop
                 : null);
     else
-        metrics.AddRuntimeInstrumentation();
+        metrics.AddMeter("System.Runtime"); // the runtime's own meter, same dotnet.* names
 
     // Framework meters, subscribed by literal name:
     metrics.AddMeter("MMCA.Common.Outbox")
