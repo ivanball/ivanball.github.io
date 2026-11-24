@@ -264,7 +264,9 @@ types themselves (for example
 and [`TimeoutCommandDecorator<TCommand, TResult>`](group-05-cqrs-pipeline.md#timeoutcommanddecoratortcommand-tresult))
 are documented in the CQRS-pipeline chapter; this chapter owns only the *wiring* of them. An optional
 MiniProfiler pair is registered separately by an opt-in `AddApplicationProfiling()`
-(`MMCA.Common.Application/DependencyInjection.cs:160`), never by `AddApplicationDecorators()`.
+(`MMCA.Common.Application/DependencyInjection.cs:179`), never by `AddApplicationDecorators()`; the composed
+service host makes that call after the sealed pipeline when `ApplicationSettings:UseMiniProfiler` is true
+(`MMCA.Common/Source/Hosting/MMCA.Common.ServiceHost/ServiceHostBuilderExtensions.cs:162-165`).
 `[Rubric §6, CQRS & Event-Driven]` and `[Rubric §1, SOLID]` (open/closed) live here: cross-cutting
 behavior is added by wrapping, not by editing handlers.
 
@@ -687,7 +689,7 @@ contract, with the vendor code outside the core
 
 Several pieces of machinery need a `Type` whose `Assembly` identifies a layer: Scrutor's
 `FromAssemblyOf<T>()` scans, FluentValidation's `AddValidatorsFromAssemblyContaining<T>()`, and
-NetArchTest's per-package anchor. That is what the [`AssemblyReference`](#assemblyreference) /
+the architecture rules' per-package anchor. That is what the [`AssemblyReference`](#assemblyreference) /
 [`ClassReference`](#classreference) pairs are, one per layer (Domain, Application, Infrastructure),
 each a trivial `static class AssemblyReference` holding `Assembly` / `AssemblyName` statics
 (`MMCA.Common/Source/Core/MMCA.Common.Domain/AssemblyReference.cs:8-12`) beside a non-static `class
@@ -850,7 +852,7 @@ files without an adapter is not silent anyway: `NullFileStorageService` fails ev
 [`StartupConfigurationSummaryService`](#startupconfigurationsummaryservice)
 (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Configuration/StartupConfigurationSummaryService.cs:42`)
 is an `IHostedService` that writes one Information line at start naming the posture the host actually
-resolved: the MMCA.Common version MinVer stamped on the assembly (`StartupConfigurationSummaryService.cs:55-58`),
+resolved: the MMCA.Common version stamped on the assembly at build time, the release tag or `0.0.0-dev` (`StartupConfigurationSummaryService.cs:55-58`),
 the configured database engines, the bus provider with its `EnableDelayedRedelivery` value, the cache
 mode and the tenancy mode (`StartupConfigurationSummaryService.cs:61-80`). It logs names and flags
 only, deriving the engines from whether a connection string is set and never from its text
@@ -1729,7 +1731,7 @@ in-process graph with no gRPC clients, which is precisely the reversibility
 
 - **Why it's built this way**: a purpose-built anchor decouples scanning from any business type, and repeating the identical shape in every package keeps each assembly self-describing without cross-layer references.
 
-- **Where it's used**: the Scrutor entity-configuration scan inside [`DependencyInjection`](#dependencyinjection-1)`.AddInfrastructure` uses `FromAssemblyOf<ClassReference>()` (the non-static companion, below); the NetArchTest architecture maps pin this assembly through the same anchor.
+- **Where it's used**: the Scrutor entity-configuration scan inside [`DependencyInjection`](#dependencyinjection-1)`.AddInfrastructure` uses `FromAssemblyOf<ClassReference>()` (the non-static companion, below); the architecture maps pin this assembly through the same anchor.
 
 ---
 
@@ -2780,7 +2782,7 @@ in-process graph with no gRPC clients, which is precisely the reversibility
 - **Concept introduced: log the resolved posture, never the configuration text.** `[Rubric §13, Observability & Operability]` scores whether a running system can be understood from outside. Several of the settings it reports resolve from more than one source (a transport name that may be an adapter's, a cache tier picked by a factory, a tenancy mode implied by per-tenant data sources), so the configured values alone do not say what the host is doing; this line does. `[Rubric §11, Security]`: only names, enum values and flags are logged. Connection strings, keys and every other secret stay out, and the engines are derived from WHETHER a connection string is set, never from its text (`StartupConfigurationSummaryService.cs:21-24`).
 
 - **Walkthrough**:
-  - `FrameworkVersion` (`StartupConfigurationSummaryService.cs:55-58`): the `AssemblyInformationalVersionAttribute` MinVer stamped on the assembly, or `unknown` when it is absent, computed once in a static property.
+  - `FrameworkVersion` (`StartupConfigurationSummaryService.cs:55-58`): the `AssemblyInformationalVersionAttribute` the build stamps on the assembly (the release tag on a release build, `0.0.0-dev` otherwise), or `unknown` when it is absent, computed once in a static property.
   - `StartAsync` (`:61-88`) builds the summary only when Information is enabled (`:65`), so a host that filters Information pays nothing for the engine and cache probes. It names the engines (`none` when there are none, `:67-68`), the cache mode and the tenancy mode, and writes them through the source-generated `LogConfigurationSummary` (`:72-79`, declared at `:136-146`).
   - Independently of the log level gate, when `Provider` is RabbitMQ and `EnableDelayedRedelivery` is `false` it writes `LogRabbitMqDelayedRedeliveryOff` with the configured `RetryLimit` (`:82-85`). The Warning text (`:148-151`) states the consequence (a handler that still fails after the in-process retries is dead-lettered, so an outage longer than the retry window loses the event to the error queue), the fix (install `rabbitmq_delayed_message_exchange` and set `MessageBus:EnableDelayedRedelivery=true`), and that a local Aspire stack is expected to show it because the development container does not ship the plugin.
   - `StopAsync` (`:91`) is a completed task.

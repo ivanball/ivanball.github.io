@@ -207,11 +207,11 @@ A separate, optional call layers MiniProfiler on top: `AddApplicationProfiling()
 (`MMCA.Common/Source/Core/MMCA.Common.Application/UseCases/Decorators/ProfilingCommandDecorator.cs:12`,
 one `MiniProfiler.Current?.Step(...)` around the inner call at `ProfilingCommandDecorator.cs:18`) and
 its read twin [`ProfilingQueryDecorator<TQuery, TResult>`](#profilingquerydecoratortquery-tresult)
-(`.../Decorators/ProfilingQueryDecorator.cs:11`, `:17`). No host in this workspace calls it today: the
-only call sites are the framework's own `DependencyInjectionTests`
-(`MMCA.Common/Tests/Core/MMCA.Common.Application.Tests/DependencyInjectionTests.cs:113`, `:119`),
-which matches [ADR-014](https://ivanball.github.io/docs/adr/014-cqrs-decorator-pipeline.html)'s note
-that the profiling pair is opt-in and unwired.
+(`.../Decorators/ProfilingQueryDecorator.cs:11`, `:17`). The composed service host calls it after the
+sealed pipeline when `ApplicationSettings:UseMiniProfiler` is true, which it is not by default
+(`MMCA.Common/Source/Hosting/MMCA.Common.ServiceHost/ServiceHostBuilderExtensions.cs:162-165`), so
+the profiling pair stays opt-in, switched by configuration
+([ADR-014](https://ivanball.github.io/docs/adr/014-cqrs-decorator-pipeline.html)).
 
 ## Why this exact order, and what each layer guards
 
@@ -1376,7 +1376,7 @@ rules of the pipeline.
 - **Walkthrough**: `HandleAsync` (`ProfilingCommandDecorator.cs:16`) opens `using var step = MiniProfiler.Current?.Step($"CommandHandler: {typeof(TCommand).Name}")` (`ProfilingCommandDecorator.cs:18`) and then awaits the inner handler (`ProfilingCommandDecorator.cs:19`). The null-conditional `?.Step(...)` makes the whole body a no-op when no MiniProfiler is ambient for the current request, so there is no measurable cost when profiling is off; the step name carries the command type name so the profile is readable.
 - **Why it's built this way**: keeping profiling in its own opt-in decorator (rather than folding it into the always-on logging decorator) means the profiler overhead and its ambient-profiler dependency exist only when a host explicitly turns it on. It is also the one extension that may legally be added **after** the pipeline is sealed: `AddApplicationProfiling()` does not call `ThrowIfPipelineSealed`, unlike `AddApplicationDecorators()` (`DependencyInjection.cs:116`, `:565-568`).
 - **Where it's used**: registered by `AddApplicationProfiling()` (`DependencyInjection.cs:162`) to wrap every command handler. Its counterpart middleware is wired in the API layer (see [MiniProfilerExtensions](group-12-api-hosting-mapping.md#miniprofilerextensions)).
-- **Caveats / not-in-source**: no host in this workspace calls `AddApplicationProfiling()` today. A repo-wide search for the method name finds only its declaration (`DependencyInjection.cs:160`) and two test files (`MMCA.Common/Tests/Core/MMCA.Common.Application.Tests/DependencyInjectionTests.cs:109`, `:119`, and `MMCA.Common/Tests/Core/MMCA.Common.Application.Tests/ApplicationPipelineCompositionTests.cs:139`), so this decorator is a tested extension point with no current adopter.
+- **Caveats / not-in-source**: `AddApplicationProfiling()` (`DependencyInjection.cs:179`) is called by `AddMmcaServiceHost` only when `ApplicationSettings:UseMiniProfiler` is true (`MMCA.Common/Source/Hosting/MMCA.Common.ServiceHost/ServiceHostBuilderExtensions.cs:162-165`), and the flag is off by default, so a host carries this decorator only when its configuration turns profiling on.
 
 ---
 
@@ -1387,7 +1387,7 @@ rules of the pipeline.
 - **Depends on**: `StackExchange.Profiling` (NuGet, `ProfilingQueryDecorator.cs:2`); [IQueryHandler<in TQuery, TResult>](#iqueryhandlerin-tquery-tresult).
 - **Concept reinforced**: see [ProfilingCommandDecorator<TCommand, TResult>](#profilingcommanddecoratortcommand-tresult). `[Rubric §13, Observability & Operability]`. Also registered only by the opt-in `AddApplicationProfiling()` (`DependencyInjection.cs:163`), never by the standard `AddApplicationDecorators()`.
 - **Walkthrough**: `HandleAsync` (`ProfilingQueryDecorator.cs:16`) opens `MiniProfiler.Current?.Step($"QueryHandler: {typeof(TQuery).Name}")` (`ProfilingQueryDecorator.cs:18`), a no-op when the profiler is inactive, then awaits the inner query handler (`ProfilingQueryDecorator.cs:19`).
-- **Where it's used**: registered by `AddApplicationProfiling()` to wrap every query handler; like its command twin, no host calls that method today.
+- **Where it's used**: registered by `AddApplicationProfiling()` to wrap every query handler; like its command twin, it reaches a host only through `AddMmcaServiceHost` with `ApplicationSettings:UseMiniProfiler` set.
 
 ---
 

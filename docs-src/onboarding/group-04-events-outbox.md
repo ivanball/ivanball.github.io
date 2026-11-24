@@ -485,7 +485,7 @@ small application, the second is an opt-out of a safety feature.
 
 The selection between transports is a pure DI swap: no application or domain code changes. That is the
 whole point of `[Rubric §7, Microservices Readiness]`: transport choices live at the edges, and the
-NetArchTest transport-boundary rule forbids `Application`/`Domain`/`Shared` from referencing MassTransit
+architecture transport-boundary rule forbids `Application`/`Domain`/`Shared` from referencing MassTransit
 at all (`MMCA.Common/Tests/Architecture/MMCA.Common.Architecture.Tests/Layering/MicroserviceExtractionTests.cs:7`,
 [ADR-007](https://ivanball.github.io/docs/adr/007-grpc-extraction.html) and
 [ADR-008](https://ivanball.github.io/docs/adr/008-service-extraction-topology.html)). Note the deliberate
@@ -2482,7 +2482,7 @@ edge) are the primary references.
   module is extracted and `BrokerMessageBus` is swapped in; only configuration
   (`MessageBus:Provider`,
   [`MessageBusSettings`](group-14-module-system-composition.md#messagebussettings)) changes.
-  `Application`, `Domain`, and `Shared` must never reference MassTransit directly, and the NetArchTest
+  `Application`, `Domain`, and `Shared` must never reference MassTransit directly, and the architecture
   transport-boundary rule enforces exactly that
   (`MMCA.Common/Tests/Architecture/MMCA.Common.Architecture.Tests/Layering/MicroserviceExtractionTests.cs:7`).
   The **MassTransit v8 pin** is a separate constraint enforced by the dependency-version fitness test

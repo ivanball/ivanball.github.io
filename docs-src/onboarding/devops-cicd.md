@@ -122,18 +122,19 @@ runs per the comment (`ci.yml:90-91`), so a hung restore or test host fails the 
 runner for GitHub's 6-hour default. The `coverage` job gets the same treatment at 5 minutes
 (`ci.yml:446-448`).
 
-**Step 1, Checkout with full history** (`ci.yml:94-97`):
+**Step 1, Checkout** (`ci.yml:112-114`):
 
 ```yaml
 - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
   with:
     persist-credentials: false
-    fetch-depth: 0 # MinVer needs full history
 ```
 
-`fetch-depth: 0` fetches all tags and the complete git history. Without it, MinVer (the version-derivation
-tool) cannot walk back to find the nearest `vX.Y.Z` tag and would produce an unstable pre-release version
-string. Shallow clones (the GitHub default of depth 1) silently break reproducible versioning.
+A default shallow checkout is enough: no build derives its version from git history. Every non-release
+build carries the `0.0.0-dev` placeholder from `Directory.Build.props` (`:87-90`), and only the release
+workflow passes a real version, the tag. Full history is fetched only where a step reads it: the
+`changes` path classifier (`ci.yml:54`) and `build-and-test-checks`, whose FACTS gate derives the
+version from the latest reachable tag (`ci.yml:205`).
 
 **Step 2, .NET 10 setup** (`ci.yml:99-113`): `actions/setup-dotnet@v6` pinned to `10.0.x` ensures the
 runner matches the `<TargetFramework>net10.0</TargetFramework>` in every project. It also caches
@@ -267,7 +268,7 @@ run. The solution test suite covers the per-layer projects (`Shared.Tests`, `Dom
 `Application.Tests`, `Infrastructure.Tests`, `API.Tests`, `Grpc.Tests`, `UI.Tests`, `UI.Web.Tests`,
 `Aspire.Tests`, `Aspire.Hosting.Tests`, `Gateway.Tests`, `Testing.Tests`, plus the
 `Infrastructure.Tests.MigrationsFixture` helper project, `MMCA.Common.slnx:33-49`) plus
-`Architecture.Tests` (NetArchTest layer/purity/extraction fitness functions, see
+`Architecture.Tests` (layer/purity/extraction fitness functions on the `ArchitectureTypes` engine, see
 [the doubled architecture-enforcement / fitness functions](00-primer.md#architecture-enforcement-is-doubled-fitness-functions-rubric-34-3)).
 
 [Rubric §14, Testability & Test Strategy] assesses whether tests actually run and cover the system. The
@@ -324,7 +325,7 @@ means the unit/arch job stays fast while accessibility remains enforced.
 
 **Step-by-step:**
 
-1. **Checkout** (`ci.yml:237-240`): `fetch-depth: 0` (the comment notes "MinVer needs full history"), same
+1. **Checkout** (`ci.yml:353-355`): a default shallow checkout with `persist-credentials: false`, same
    as `build-and-test`.
 
 2. **Build the E2E project directly** (`ci.yml:258-262`):
@@ -523,8 +524,9 @@ migration path is exercised end to end, on a real engine, by a real consumer.
 builds bind `ProjectReference`s, so pack breaks (NU5xxx) and package-mode-only restore, analyzer, and
 reference failures stay invisible to them. The comment records that this failure mode shipped **twice**
 before the job existed (`ci.yml:715-724`). So this job packs every slnx package into a local folder feed
-under a CI-only version (`PACK_VERSION` at `ci.yml:730-731`, packed at `ci.yml:759-762`, with
-`MinVerSkip=true` so the consumer can pin the packed version exactly), then scaffolds a throwaway
+under a CI-only version (`PACK_VERSION` at `ci.yml:935`, packed by
+`build/consumer-check/Invoke-ConsumerCheck.ps1 -Stage Pack`, which passes it as `-p:Version` and
+`-p:PackageVersion` at `:147` so the consumer can pin the packed version exactly), then scaffolds a throwaway
 consumer (`ci.yml:764-769`) whose `nuget.config` maps `MMCA.Common.*` to that feed and everything else to
 nuget.org, and builds it (`ci.yml:771-774`).
 
@@ -769,8 +771,9 @@ FACTS drift gate, the vulnerability audit, the Helpdesk consumer canary, the pac
 the same assertion (`release.yml:154-164`), because it publishes from the same tag.
 
 
-**Step 1, Checkout with full history** (`release.yml:23-26`): `fetch-depth: 0` for MinVer, same as CI,
-with `persist-credentials: false` so the checkout token is not left behind in the workspace.
+**Step 1, Checkout with full history** (`release.yml:30-33`): `fetch-depth: 0`, because the next step
+proves the tagged commit is reachable from `main` (the comment at `release.yml:33`), with
+`persist-credentials: false` so the checkout token is not left behind in the workspace.
 
 **Step 2, .NET 10 setup** (`release.yml:48-57`): same as CI, including the NuGet cache keyed on the
 committed lock files plus `Directory.Packages.props`.
@@ -788,14 +791,14 @@ echo "VERSION=${GITHUB_REF_NAME#v}" >> $GITHUB_OUTPUT
 `v`, yielding `1.52.0`. This string is then passed to the build and pack steps as an explicit version
 override.
 
-**Step 5, Build with explicit version** (`release.yml:72-73`):
+**Step 5, Build with explicit version** (`release.yml:83-84`):
 ```bash
-dotnet build MMCA.Common.slnx -c Release --no-restore -p:MinVerSkip=true -p:Version=${{ steps.version.outputs.VERSION }}
+dotnet build MMCA.Common.slnx -c Release --no-restore -p:Version=${{ steps.version.outputs.VERSION }} -p:RunAnalyzers=false
 ```
-`-p:MinVerSkip=true` disables MinVer's git-tag-based version derivation and `-p:Version=...` injects the
-tag-derived version directly. This pattern avoids a subtle race: if MinVer ran here, it would derive the
-version from the tag, which should be the same value, but in edge cases (e.g. detached HEAD, retagged
-commit) the two sources could diverge. Making the version explicit from the start removes the ambiguity.
+`-p:Version=...` is the only source of the release version: no versioning package reads git history,
+and without this property the build would carry the `0.0.0-dev` placeholder from `Directory.Build.props`.
+`-p:RunAnalyzers=false` skips the five analyzers, because a release tag only names a merged `main`
+commit whose tree already passed the analyzer-enforcing `ci.yml` legs (the comment at `release.yml:80-82`).
 
 **Step 5b, Audit dependencies** (`release.yml:75-83`): the same
 `./.github/actions/nuget-vulnerability-audit` composite action that `ci.yml` `build-and-test` runs, with
@@ -812,9 +815,9 @@ Tests run again on the tagged commit, with the same 2000-test floor as `ci.yml` 
 comment (`release.yml:86-87`) states why the floor is repeated here: a discovery or filter regression that
 silently drops thousands of tests must fail the release, not publish behind a near-empty green run.
 
-**Step 7, Pack** (`release.yml:89-90`):
+**Step 7, Pack** (`release.yml:104-105`):
 ```bash
-dotnet pack MMCA.Common.slnx -c Release --no-build -o ./nupkgs -p:MinVerSkip=true -p:PackageVersion=${{ steps.version.outputs.VERSION }}
+dotnet pack MMCA.Common.slnx -c Release --no-build -o ./nupkgs -p:PackageVersion=${{ steps.version.outputs.VERSION }}
 ```
 `dotnet pack` over the entire solution packs every packable project it contains (`Source/**`) in
 one command. `-p:PackageVersion` sets the NuGet package version metadata. `-o ./nupkgs` collects all
@@ -1133,7 +1136,7 @@ version (`dotnet-coverage` 18.11.0 and `dotnet-reportgenerator-globaltool` 5.5.1
 and `:402`; the CycloneDX tool is installed inside the shared SBOM action), so a tool release cannot
 change what a gate measures between two runs of the same commit.
  Covers unit tests
-for all module layers plus `Architecture.Tests` (NetArchTest fitness functions, layer flow, domain purity,
+for all module layers plus `Architecture.Tests` (architecture fitness functions, layer flow, domain purity,
 module isolation).
 
 [Rubric §14, Testability & Test Strategy] is served: architecture tests enforce that the modular
