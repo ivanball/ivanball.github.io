@@ -269,7 +269,8 @@
           Revised 2026-10-26: the consumer call sites name <code>AddAzureKeyVaultConfiguration()</code> and <code>AddAzureDataProtection()</code>, <code>AddAzureMonitorExporter()</code> now sits between <code>AddServiceDefaults()</code> and the registration (so Store&#39;s &quot;only an ADR-069 comment block between them&quot; is retired), and anchors refreshed across both hosts, templates and deploy workflows.
           Revised 2026-10-28: anchors refreshed after the ADC and Store host <code>Program.cs</code> files and both infrastructure templates moved.
           Amended 2026-11-12: <code>AddAzureDataProtection()</code> and its two DataProtection packages now live in <code>MMCA.Common.Azure.Startup</code>, which <code>MMCA.Common.Azure</code> references and type-forwards, so the call and its keys are unchanged; the Decision&#39;s Azure path, package bullet and citations are corrected in place (<a href="134-cloud-neutral-core-vendor-adapters.html">ADR-134</a>).
-          Revised 2026-11-23: Store now adopts the call on three hosts (UI, Identity, Sales), each with its own blob and discriminator, a missing gate-2 key logs one startup Warning outside Development, the gate-2 repository variable reads as set on both repositories, ADC&#39;s per-app identity opt-in and key-ring access alert are recorded, and anchors refreshed across Common, both hosts, both templates and both deploy workflows.</p>
+          Revised 2026-11-23: Store now adopts the call on three hosts (UI, Identity, Sales), each with its own blob and discriminator, a missing gate-2 key logs one startup Warning outside Development, the gate-2 repository variable reads as set on both repositories, ADC&#39;s per-app identity opt-in and key-ring access alert are recorded, and anchors refreshed across Common, both hosts, both templates and both deploy workflows.
+          Amended 2026-11-24 (MMCA.Common 1.318.0): the AWS key ring moves from Systems Manager Parameter Store to one S3 object written by the framework&#39;s own <code>IXmlRepository</code>, gated on <code>DataProtection:S3ObjectUri</code>, with <code>DataProtection:KmsKeyId</code> selecting SSE-KMS; the <code>Amazon.AspNetCore.DataProtection.SSM</code> dependency is gone and the retired <code>DataProtection:SsmParameterPrefix</code> key fails startup. The Decision&#39;s AWS bullet, the one-ring key list and the package bullet are corrected in place. See Amendment (2026-11-24) at the end.</p>
           <h2 id="context">Context</h2>
           <p>ASP.NET Core&#39;s DataProtection default keeps the key ring <strong>in memory, per process</strong>. That is correct
           for a single-process host and wrong for a scaled-out one: every replica generates its own keys, so an
@@ -298,8 +299,8 @@
           (MMCA.Common.Azure.Startup, also reached through MMCA.Common.Azure) persists it to a single Azure blob
           with optional Key Vault protection
           (<code>MMCA.Common/Source/Hosting/MMCA.Common.Azure.Startup/AzureDataProtectionExtensions.cs:54</code>),
-          <code>AddAwsDataProtection</code> (MMCA.Common.Aws) to Systems Manager Parameter Store
-          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Aws/AwsDataProtectionExtensions.cs:57</code>), and
+          <code>AddAwsDataProtection</code> (MMCA.Common.Aws) to one Amazon S3 object with optional SSE-KMS
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Aws/AwsDataProtectionExtensions.cs:70</code>), and
           <code>AddGoogleCloudDataProtection</code> (MMCA.Common.Gcp) to one Cloud Storage object with optional Cloud KMS
           protection (<code>MMCA.Common/Source/Hosting/MMCA.Common.Gcp/GoogleCloudDataProtectionExtensions.cs:77</code>).
           The bullets up to the AWS one describe the Azure adapter, the one both deployed consumers call.</p>
@@ -376,16 +377,27 @@
           data-plane audit explicitly covers reads of <code>dataprotection-keys/keys.xml</code> (comment <code>:1640-1642</code>,
           diagnostic setting at <code>:1648</code>), and an alert fires on a successful request to that container by any
           principal other than the apps, Identity or UI identity, or by account key or SAS (<code>:943-984</code>).</li>
-          <li><strong>AWS: Parameter Store SecureString parameters.</strong> <code>AddAwsDataProtection()</code> is gated on
-          <code>DataProtection:SsmParameterPrefix</code> (<code>AwsDataProtectionExtensions.cs:59</code>, a no-op when blank at
-          <code>:65</code>-<code>:68</code>, marker at <code>:72</code>) and persists through <code>PersistKeysToAWSSystemsManager</code> from
-          <code>Amazon.AspNetCore.DataProtection.SSM</code> (<code>:80</code>; referenced at
-          <code>MMCA.Common/Source/Hosting/MMCA.Common.Aws/MMCA.Common.Aws.csproj:24</code>, pinned at
-          <code>MMCA.Common/Directory.Packages.props:232</code>). Each key is one SecureString parameter under the prefix,
-          so KMS encrypts it at rest with no separate protection step (<code>:27</code>-<code>:29</code>). The optional
-          <code>DataProtection:KmsKeyId</code> names the KMS key, else the account&#39;s <code>aws/ssm</code> key is used (<code>:37</code>-<code>:38</code>,
-          applied at <code>:82</code>-<code>:85</code>), and the discriminator is the same <code>DataProtection:ApplicationName</code> with the
-          host application name as fallback (<code>:74</code>-<code>:75</code>).</li>
+          <li><strong>AWS: one S3 object, written by the framework&#39;s own repository.</strong> <code>AddAwsDataProtection()</code> is
+          gated on <code>DataProtection:S3ObjectUri</code> in <code>s3://bucket/path/keys.xml</code> form
+          (<code>AwsDataProtectionExtensions.cs:23</code>, <code>:35</code>-<code>:39</code>; read at <code>:72</code>, a no-op when blank at <code>:78</code>-<code>:81</code>,
+          parsed at <code>:84</code>, marker at <code>:88</code>) and persists through the internal <code>PersistKeysToAmazonS3</code> step
+          (<code>:95</code>;
+          <code>MMCA.Common/Source/Hosting/MMCA.Common.Aws/DataProtection/AwsDataProtectionBuilderExtensions.cs:32</code>).
+          <code>S3XmlRepository</code> keeps the whole ring as one object, the shape the Azure Blob and Cloud Storage
+          repositories use (<code>MMCA.Common/Source/Hosting/MMCA.Common.Aws/DataProtection/S3XmlRepository.cs:12</code>-<code>:14</code>),
+          and writes it read-modify-write under an S3 conditional write: <code>If-Match</code> on the ETag it read, or
+          <code>If-None-Match: *</code> to create it (<code>:16</code>-<code>:20</code>, <code>:101</code>, <code>:105</code>). A writer that loses the race (412, or 409
+          on overlapping writes) re-reads and retries up to <code>MaxAttempts</code> (10) with a linear 50 ms backoff
+          (<code>:39</code>, <code>:125</code>; <code>AwsDataProtectionBuilderExtensions.cs:18</code>), then fails naming the object
+          (<code>S3XmlRepository.cs:130</code>-<code>:131</code>). The optional <code>DataProtection:KmsKeyId</code> selects SSE-KMS under that
+          key for every write, else the bucket&#39;s default encryption applies (<code>AwsDataProtectionExtensions.cs:24</code>,
+          <code>:40</code>-<code>:42</code>; <code>S3XmlRepository.cs:110</code>). The S3 client is the <code>IAmazonS3</code> the host registered, else
+          one built from the SDK default region and credential chain
+          (<code>AwsDataProtectionBuilderExtensions.cs:37</code>), and the discriminator is the same
+          <code>DataProtection:ApplicationName</code> with the host application name as fallback
+          (<code>AwsDataProtectionExtensions.cs:90</code>-<code>:91</code>). The identity needs <code>s3:GetObject</code> and <code>s3:PutObject</code> on
+          the object and <code>s3:ListBucket</code> on the bucket, plus <code>kms:GenerateDataKey</code> and <code>kms:Decrypt</code> when a key
+          is set (<code>:54</code>-<code>:58</code>).</li>
           <li><strong>Google Cloud: one Cloud Storage object, written by the framework&#39;s own repository.</strong>
           <code>AddGoogleCloudDataProtection()</code> is gated on <code>DataProtection:GcsObjectUri</code> in <code>gs://bucket/path/keys.xml</code>
           form (<code>GoogleCloudDataProtectionExtensions.cs:24</code>, <code>:37</code>-<code>:41</code>; read at <code>:79</code>, a no-op when blank at
@@ -411,8 +423,8 @@
           <code>ValidateOnStart</code>, naming the call
           (<code>MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Integrations/HostIntegrationTripwire.cs:26</code>, <code>:32</code>,
           <code>:43</code>; checks at <code>:101</code>-<code>:105</code>, <code>:111</code>-<code>:115</code>, <code>:121</code>-<code>:125</code>), and setting more than one of
-          <code>DataProtection:BlobStorageUri</code>, <code>DataProtection:SsmParameterPrefix</code> and <code>DataProtection:GcsObjectUri</code>
-          fails startup as well (the key list at <code>:77</code>-<code>:82</code>, the check at <code>:161</code>-<code>:166</code>): whichever
+          <code>DataProtection:BlobStorageUri</code>, <code>DataProtection:S3ObjectUri</code> and <code>DataProtection:GcsObjectUri</code>
+          fails startup as well (the key list at <code>:84</code>-<code>:89</code>, the check at <code>:173</code>-<code>:178</code>): whichever
           registration runs last would own the repository, so services that disagree on the order would mint
           payloads the others cannot decrypt (<code>:158</code>-<code>:160</code>).</li>
           <li><strong>Each cloud&#39;s dependencies live in its own adapter package.</strong>
@@ -428,8 +440,10 @@
           call (<code>MMCA.Common/Source/Hosting/MMCA.Common.Azure/TypeForwards.cs:8</code>), in the same <code>MMCA.Common.Azure</code>
           namespace (<code>AzureDataProtectionExtensions.cs:7</code>), so a host on the full adapter writes the same call.
           A host that needs only start-up plumbing (for example a gateway) references <code>MMCA.Common.Azure.Startup</code>
-          alone. <code>Amazon.AspNetCore.DataProtection.SSM</code> by
-          <code>MMCA.Common.Aws</code> (above), and <code>Google.Cloud.Kms.V1</code> by <code>MMCA.Common.Gcp</code>
+          alone. <code>AWSSDK.S3</code> by <code>MMCA.Common.Aws</code>
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Aws/MMCA.Common.Aws.csproj:17</code>, pinned at
+          <code>MMCA.Common/Directory.Packages.props:186</code>; the AWS key ring needs no DataProtection package of its
+          own), and <code>Google.Cloud.Kms.V1</code> by <code>MMCA.Common.Gcp</code>
           (<code>MMCA.Common/Source/Hosting/MMCA.Common.Gcp/MMCA.Common.Gcp.csproj:23</code>, pinned at
           <code>Directory.Packages.props:260</code>), so a host references only the cloud it runs on.</li>
           </ul>
@@ -853,6 +867,31 @@
           <code>:2548</code>; Store <code>deploy.yml:1406</code>, <code>:1454</code>, <code>:1558-1559</code>. The earlier revisions keep their anchors as
           a historical record.</li>
           </ol>
+          <h2 id="amendment-2026-11-24-the-aws-key-ring-is-one-s3-object">Amendment (2026-11-24): the AWS key ring is one S3 object</h2>
+          <p><strong>Decision.</strong> <code>AddAwsDataProtection()</code> persists the key ring to one S3 object instead of one
+          SecureString parameter per key, through a framework-owned <code>IXmlRepository</code>
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Aws/DataProtection/S3XmlRepository.cs:36</code>), and the
+          <code>Amazon.AspNetCore.DataProtection.SSM</code> dependency leaves MMCA.Common.Aws. The three adapters now share
+          one shape: the whole ring is a single object or blob, written read-modify-write under the store&#39;s own
+          precondition (an Azure ETag, a Cloud Storage generation, an S3 <code>If-Match</code> / <code>If-None-Match</code>), so two
+          replicas creating a key at the same moment cannot lose either key.</p>
+          <p><strong>Why.</strong> It is one of the third-party dependencies MMCA.Common 1.318.0 replaces with framework code
+          (<code>MMCA.Common/CHANGELOG.md</code>, the 1.318.0 breaking entries). The repository follows the one the Google
+          Cloud adapter already hand-writes, and it needs only <code>AWSSDK.S3</code>, which MMCA.Common.Aws already
+          references for file storage.</p>
+          <p><strong>Configuration.</strong> The gate is <code>DataProtection:S3ObjectUri</code> (<code>s3://bucket/path/keys.xml</code>,
+          <code>AwsDataProtectionExtensions.cs:23</code>); <code>DataProtection:KmsKeyId</code> selects SSE-KMS for the object
+          (<code>:24</code>), without it the bucket&#39;s default encryption applies; <code>DataProtection:ApplicationName</code> is
+          unchanged. The startup tripwire requires the call when the new gate is set
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Integrations/HostIntegrationTripwire.cs:32</code>, <code>:118</code>-<code>:122</code>),
+          counts it in the one-ring check (<code>:84</code>-<code>:89</code>), and fails a host that still sets the retired
+          <code>DataProtection:SsmParameterPrefix</code>, naming the new key (<code>:39</code>, <code>:123</code>-<code>:127</code>). Keys already held in
+          Parameter Store are not read: a deployment moves either by letting the ring regenerate (users sign in
+          once more) or by copying the key elements into the object before the switch (<code>MMCA.Common/UPGRADING.md</code>).</p>
+          <p><strong>Corrected in place:</strong> the Decision&#39;s opening paragraph (the AWS target), the AWS bullet, the one-ring
+          key list and the package bullet. The 2026-10-25 revision and the Status lines before this one keep the
+          Parameter Store wording as a historical record. Neither deployed consumer runs on AWS, so no host
+          changes.</p>
           <h2 id="related">Related</h2>
           <p>ADR-022 (the browser session cookies whose decryption this makes replica-independent, together with
           the antiforgery tokens the SSR pages mint), ADR-008 (the multi-host topology that created the problem;
@@ -888,6 +927,7 @@
             <li><a href="#revision-2026-10-26">Revision (2026-10-26)</a></li>
             <li><a href="#revision-2026-10-28">Revision (2026-10-28)</a></li>
             <li><a href="#revision-2026-11-23">Revision (2026-11-23)</a></li>
+            <li><a href="#amendment-2026-11-24-the-aws-key-ring-is-one-s3-object">Amendment (2026-11-24): the AWS key ring is one S3 object</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

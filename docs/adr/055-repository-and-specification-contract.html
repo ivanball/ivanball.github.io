@@ -319,7 +319,10 @@
           keyset paging and the change feed reach <code>IEntityQueryService</code> and an opt-in controller action;
           ADC&#39;s narrowing is seventy-six sites across forty-two files and the consumers compose at twelve
           call lines; the combined allowlist is twelve files, not thirteen; see the Revision (2026-11-23) at
-          the end.</p>
+          the end.
+          Revised 2026-11-24: the raw-queryable rationale names what the testing package now carries (its own IL
+          reader for the call-graph rules, still no Roslyn dependency; MMCA.Common 1.318.0), matching
+          <code>RawQueryableConventionTestsBase.cs:14-17</code>; reworded in place.</p>
           <h2 id="context">Context</h2>
           <p>Every read an application handler performs has to come from somewhere, and the shape of that contract
           decides whether the module can still be lifted into its own service later (ADR-007, ADR-008). The
@@ -556,9 +559,10 @@
           <li><strong>Composability keeps filters additive.</strong> ANDing an authorization scope onto a business filter is a
           single-expression construction (<code>SessionsController.cs:138-140</code>) instead of a second hand-written query path,
           which is what makes &quot;never substitute the public filter&quot; a cheap rule to follow.</li>
-          <li><strong>A textual scan was chosen deliberately over IL analysis.</strong> NetArchTest and reflection cannot see
-          member usage inside method bodies, and the testing package carries no IL or Roslyn dependency on
-          purpose, so the rule is an honest line scan with its limits written down
+          <li><strong>A textual scan was chosen deliberately over IL analysis.</strong> Plain reflection cannot see member
+          usage inside method bodies, the testing package carries no Roslyn dependency on purpose, and this
+          rule does not use the IL reader the call-graph rules use, so it is an honest line scan with its
+          limits written down
           (<code>RawQueryableConventionTestsBase.cs:13-23</code>).</li>
           <li><strong>The ratchet beats a big-bang cleanup.</strong> Recording existing raw-queryable files in <code>AllowedFiles</code>
           makes new code clean immediately while the list shrinks over time (<code>:26-28</code>), the same adoption

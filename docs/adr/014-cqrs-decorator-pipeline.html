@@ -298,7 +298,10 @@
           themselves but reach it through <code>AddMmcaServiceHost</code> in <code>MMCA.Common.ServiceHost</code>, supplying their
           pipeline steps only through its <code>ConfigurePipeline</code> callback, and the Helpdesk order test is recorded as running the
           <code>VerifyDecoratorPipeline</code> coverage fact too; the order-rationale sentence now names the view-as guard
-          as the first short-circuit on commands; anchors refreshed.</p>
+          as the first short-circuit on commands; anchors refreshed.
+          Revised 2026-11-24: the profiling pair is wired by the composed service host behind
+          <code>ApplicationSettings:UseMiniProfiler</code> (MMCA.Common 1.318.0; off by default, <code>/profiler</code> results
+          Development-only); the Decision&#39;s &quot;no consumer host wires it&quot; is corrected in place.</p>
           <h2 id="context">Context</h2>
           <p>Commands and queries share cross-cutting concerns: validation, transactions, cache invalidation,
           logging / timing, and feature gating. Putting that logic inside each handler scatters it, makes the
@@ -323,7 +326,10 @@
           <li><strong>Queries:</strong> FeatureGate -&gt; Authorization -&gt; Logging -&gt; Caching -&gt; Validating -&gt; Timeout -&gt; Handler</li>
           <li>plus an optional pair of <code>Profiling</code> decorators (<code>ProfilingCommandDecorator</code> /
           <code>ProfilingQueryDecorator</code>) registered by a <strong>separate</strong> opt-in <code>AddApplicationProfiling()</code> call,
-          not by <code>AddApplicationDecorators()</code>. No consumer host wires it today.</li>
+          not by <code>AddApplicationDecorators()</code>. <code>AddMmcaServiceHost</code> calls it after the sealed pipeline when
+          <code>ApplicationSettings:UseMiniProfiler</code> is true (off by default), together with the profiler&#39;s services
+          and middleware
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.ServiceHost/ServiceHostBuilderExtensions.cs:151</code>, <code>:162-165</code>).</li>
           </ul>
           </li>
           <li><strong>The order is load-bearing and hard-coded</strong> (not config-driven): validation runs <em>before</em> the

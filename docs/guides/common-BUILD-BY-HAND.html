@@ -426,7 +426,7 @@
           <td>REST controller, the <code>IModule</code>, the module-composition DI</td>
           </tr>
           </tbody></table></div>
-          <p>The layering is enforced twice by the framework (compile-time MSBuild guard + the NetArchTest rules in
+          <p>The layering is enforced twice by the framework (compile-time MSBuild guard + the architecture fitness rules in
           Phase 6), so a forbidden reference fails the build. See
           <a href="../adr/015-architecture-fitness-functions.html">ADR-015</a>.</p>
           <p><strong>Identity is optional and omitted here.</strong> Running issuer-less (a bare auth scheme + an
@@ -1181,8 +1181,8 @@ builder.AddProject&lt;Projects.Contoso_Support_UI_Web&gt;(<span class="hljs-stri
           with a SQL service); they cannot run where no SQL is reachable.</li>
           </ul>
           <h3 id="the-architecture-fitness-map-mandatory">The architecture-fitness map (mandatory)</h3>
-          <p>The framework enforces layering and module isolation by running the <strong>same</strong> NetArchTest rule library
-          (shipped in <code>MMCA.Common.Testing.Architecture</code>) against a per-repo map. You implement one
+          <p>The framework enforces layering and module isolation by running the <strong>same</strong> architecture rule library
+          (shipped in <code>MMCA.Common.Testing.Architecture</code>, on its own metadata-based engine) against a per-repo map. You implement one
           <code>IArchitectureMap</code> by subclassing <code>ArchitectureMapBase</code>: declare a <code>RepoToken</code> and list every layer
           assembly. See <a href="../adr/015-architecture-fitness-functions.html">ADR-015</a>. Pattern source: the
           <code>*.Architecture.Tests</code> project in MMCA.Helpdesk, ADC, or Store.</p>

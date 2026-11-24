@@ -287,7 +287,10 @@
           carry <code>requestId</code>.
           Revised 2026-11-23: an <code>Error</code> carries an optional <code>RetryAfter</code> and <code>HandleFailure</code> answers a 429
           with a <code>Retry-After</code> header from the longest hint (v1.295.0), a value that is not projected into the
-          <code>errors</code> array; anchors refreshed.</p>
+          <code>errors</code> array; anchors refreshed.
+          Revised 2026-11-24: the error-catalog IL scan reads method bodies through the testing package&#39;s own
+          metadata reader rather than Mono.Cecil (MMCA.Common 1.318.0, <a href="015-architecture-fitness-functions.html">ADR-015</a>
+          Amendment (2026-11-24)); the Decision&#39;s wording is corrected in place.</p>
           <h2 id="context">Context</h2>
           <p>Operations at every layer fail in <em>expected</em> ways: input is invalid, a domain invariant is broken, a
           requested entity is missing, a uniqueness conflict occurs, the caller lacks permission. There are two
@@ -562,7 +565,7 @@
           ambiguity only surfaces in production
           (<code>MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Rules/Contracts/ArchitectureRules.ErrorCatalog.cs:32-38</code>).
           The catalog is therefore frozen the way ADR-010 froze integration-event schemas and ADR-015 Section B
-          froze the <code>.proto</code> contracts. A Mono.Cecil IL scan reads the <code>Error</code> factory call sites it
+          froze the <code>.proto</code> contracts. An IL scan (the testing package&#39;s own metadata reader) reads the <code>Error</code> factory call sites it
           recognizes (<code>:170</code>, <code>:206-207</code>, the recognized members at <code>:17-30</code> and <code>:218-223</code>) across a repo&#39;s
           per-module Domain and Application assemblies only (<code>:184-190</code>). The recognized set covers every
           code-first factory, <code>Error.TooManyRequests</code> included (<code>:26</code>, the factory at <code>Error.cs:111-112</code>),

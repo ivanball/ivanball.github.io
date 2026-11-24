@@ -269,7 +269,11 @@
           Revised 2026-10-25: the accept-list is empty again; the five ImageSharp 3.1.12 entries were removed in 1.258.0 when ImageSharp left the dependency graph, and the consumers deleted their mirrored entries in the same sweep (see the Revision below).
           Revised 2026-10-26: the 2026-10-06 record that every <code>uses:</code> remains SHA-pinned is qualified to third-party actions (four <code>uses:</code> lines reference the repository&#39;s own composite actions by local path), and anchors are refreshed after the v1.261.0 release.
           Revised 2026-10-28: the first Trade-offs bullet now states that every released nupkg carries a build-provenance attestation while the SBOM is kept only as an unattested workflow artifact under the repository&#39;s artifact retention, and the CHANGELOG and SQLitePCLRaw anchors are refreshed.
-          Revised 2026-11-23: the accept-list holds two net11.0 <code>System.Security.Cryptography.Pkcs</code> false-positive entries, the SQLitePCLRaw pin is retired, the release gates run in <code>contents: read</code> pack jobs ahead of the publish jobs, the CI and release workflows hold four locked restores, and both consumers pin the five first-party actions by commit SHA instead of <code>@main</code> (see the Revision below).</p>
+          Revised 2026-11-23: the accept-list holds two net11.0 <code>System.Security.Cryptography.Pkcs</code> false-positive entries, the SQLitePCLRaw pin is retired, the release gates run in <code>contents: read</code> pack jobs ahead of the publish jobs, the CI and release workflows hold four locked restores, and both consumers pin the five first-party actions by commit SHA instead of <code>@main</code> (see the Revision below).
+          Revised 2026-11-24: the accept-list is empty again; MMCA.Common 1.318.0 drops the direct
+          <code>System.Security.Cryptography.Pkcs</code> pin and its two net11.0 false-positive entries, because the packages
+          that brought the vulnerable transitive now require patched versions themselves. The Decision&#39;s
+          accept-list sentence is corrected in place.</p>
           <h2 id="context">Context</h2>
           <p>MMCA.Common is a published framework: on every <code>v*</code> tag (release.yml:3-5) it packs its NuGet packages
           and pushes them to both GitHub Packages (release.yml:167-168) and nuget.org through OIDC trusted
@@ -328,17 +332,15 @@
           advisory-URL form (action.yml:82); only the URL form, which NuGet restore honors, satisfies both
           gates (action.yml:76-77). Each entry goes in an ItemGroup in <code>Directory.Build.props</code>, in
           advisory-URL form, with its reachability argument in a comment, for the CI audit action to
-          re-apply (Directory.Build.props:65-69). The list holds two entries today, GHSA-846f-f764-76mx and
-          GHSA-2fmv-rv2c-59x7, both in advisory-URL form (Directory.Build.props:84-87). They are
-          <code>System.Security.Cryptography.Pkcs</code> advisories that NuGet reports on <code>net11.0</code> against an unpruned
-          transitive 9.0.18 that never loads, because the ASP.NET Core 11 shared framework supplies 11.0.0;
-          the comment records them as a false positive rather than an accepted risk, with the removal
-          condition (a Pkcs 11.0.1 that the <code>net11.0</code> framework version moves to) and the reason they are
-          unconditional across target frameworks (Directory.Build.props:71-83). They arrived in 1.286.0
-          (CHANGELOG.md:626). An empty list stays a handled case, not an error: the action reports <code>&lt;none&gt;</code>
+          re-apply (Directory.Build.props:65-69). The list holds no entries today (Directory.Build.props:68-69).
+          The two <code>net11.0</code> <code>System.Security.Cryptography.Pkcs</code> false-positive entries (GHSA-846f-f764-76mx,
+          GHSA-2fmv-rv2c-59x7), added in 1.286.0, left in 1.318.0 together with the direct Pkcs pin, because
+          Microsoft.Data.SqlClient 7.1.2, Aspire.Hosting.SqlServer 17.0.0 and Microsoft.AspNetCore.OpenApi now
+          require patched versions themselves and the restore audit is clean on both framework lines
+          (CHANGELOG.md, 1.318.0). An empty list stays a handled case, not an error: the action reports <code>&lt;none&gt;</code>
           as the accepted set (action.yml:85), skips the filter (action.yml:87-89), and so fails on every
           vulnerable row (action.yml:90-91). The five <code>SixLabors.ImageSharp</code> 3.1.12 entries that preceded
-          them were removed in 1.258.0 when image normalization stopped depending on ImageSharp
+          the Pkcs pair were removed in 1.258.0 when image normalization stopped depending on ImageSharp
           (CHANGELOG.md:1035); see the 2026-10-25 Revision. The earlier SQLite advisory GHSA-2m69-gcr7-jv3q
           (CVE-2025-6965) was suppressed from 2026-06-19 while SQLitePCLRaw shipped no patched build, then
           replaced on 2026-07-20 by a direct <code>SQLitePCLRaw.bundle_e_sqlite3</code> pin. That pin is retired too:

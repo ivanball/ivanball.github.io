@@ -393,7 +393,9 @@
           and <a href="group-05-cqrs-pipeline.html#timeoutcommanddecoratortcommand-tresult"><code>TimeoutCommandDecorator&lt;TCommand, TResult&gt;</code></a>)
           are documented in the CQRS-pipeline chapter; this chapter owns only the <em>wiring</em> of them. An optional
           MiniProfiler pair is registered separately by an opt-in <code>AddApplicationProfiling()</code><span class="cite"><span>
-          (<code>MMCA.Common.Application/DependencyInjection.cs:160</code>)</span></span>, never by <code>AddApplicationDecorators()</code>.
+          (<code>MMCA.Common.Application/DependencyInjection.cs:179</code>)</span></span>, never by <code>AddApplicationDecorators()</code>; the composed
+          service host makes that call after the sealed pipeline when <code>ApplicationSettings:UseMiniProfiler</code> is true<span class="cite"><span>
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.ServiceHost/ServiceHostBuilderExtensions.cs:162-165</code>)</span></span>.
           <code>[Rubric §6, CQRS &amp; Event-Driven]</code> and <code>[Rubric §1, SOLID]</code> (open/closed) live here: cross-cutting
           behavior is added by wrapping, not by editing handlers.</p>
           <p>The <strong>Infrastructure</strong> root<span class="cite"><span>
@@ -794,7 +796,7 @@
           <h2 id="assembly-anchors">Assembly anchors</h2>
           <p>Several pieces of machinery need a <code>Type</code> whose <code>Assembly</code> identifies a layer: Scrutor&#39;s
           <code>FromAssemblyOf&lt;T&gt;()</code> scans, FluentValidation&#39;s <code>AddValidatorsFromAssemblyContaining&lt;T&gt;()</code>, and
-          NetArchTest&#39;s per-package anchor. That is what the <a href="#assemblyreference"><code>AssemblyReference</code></a> /
+          the architecture rules&#39; per-package anchor. That is what the <a href="#assemblyreference"><code>AssemblyReference</code></a> /
           <a href="#classreference"><code>ClassReference</code></a> pairs are, one per layer (Domain, Application, Infrastructure),
           each a trivial <code>static class AssemblyReference</code> holding <code>Assembly</code> / <code>AssemblyName</code> statics<span class="cite"><span>
           (<code>MMCA.Common/Source/Core/MMCA.Common.Domain/AssemblyReference.cs:8-12</code>)</span></span> beside a non-static <code>class ClassReference</code><span class="cite"><span> (<code>AssemblyReference.cs:18</code>)</span></span> for the places a generic constraint forbids a static type.
@@ -950,7 +952,7 @@
           <a href="#startupconfigurationsummaryservice"><code>StartupConfigurationSummaryService</code></a><span class="cite"><span>
           (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Configuration/StartupConfigurationSummaryService.cs:42</code>)</span></span>
           is an <code>IHostedService</code> that writes one Information line at start naming the posture the host actually
-          resolved: the MMCA.Common version MinVer stamped on the assembly<span class="cite"><span> (<code>StartupConfigurationSummaryService.cs:55-58</code>)</span></span>,
+          resolved: the MMCA.Common version stamped on the assembly at build time, the release tag or <code>0.0.0-dev</code><span class="cite"><span> (<code>StartupConfigurationSummaryService.cs:55-58</code>)</span></span>,
           the configured database engines, the bus provider with its <code>EnableDelayedRedelivery</code> value, the cache
           mode and the tenancy mode<span class="cite"><span> (<code>StartupConfigurationSummaryService.cs:61-80</code>)</span></span>. It logs names and flags
           only, deriving the engines from whether a connection string is set and never from its text<span class="cite"><span>
@@ -1891,7 +1893,7 @@
           </li>
           <li><p><strong>Why it&#39;s built this way</strong>: a purpose-built anchor decouples scanning from any business type, and repeating the identical shape in every package keeps each assembly self-describing without cross-layer references.</p>
           </li>
-          <li><p><strong>Where it&#39;s used</strong>: the Scrutor entity-configuration scan inside <a href="#dependencyinjection-1"><code>DependencyInjection</code></a><code>.AddInfrastructure</code> uses <code>FromAssemblyOf&lt;ClassReference&gt;()</code> (the non-static companion, below); the NetArchTest architecture maps pin this assembly through the same anchor.</p>
+          <li><p><strong>Where it&#39;s used</strong>: the Scrutor entity-configuration scan inside <a href="#dependencyinjection-1"><code>DependencyInjection</code></a><code>.AddInfrastructure</code> uses <code>FromAssemblyOf&lt;ClassReference&gt;()</code> (the non-static companion, below); the architecture maps pin this assembly through the same anchor.</p>
           </li>
           </ul>
           <hr>
@@ -3007,7 +3009,7 @@
           </li>
           <li><p><strong>Walkthrough</strong>:</p>
           <ul>
-          <li><code>FrameworkVersion</code><span class="cite"><span> (<code>StartupConfigurationSummaryService.cs:55-58</code>)</span></span>: the <code>AssemblyInformationalVersionAttribute</code> MinVer stamped on the assembly, or <code>unknown</code> when it is absent, computed once in a static property.</li>
+          <li><code>FrameworkVersion</code><span class="cite"><span> (<code>StartupConfigurationSummaryService.cs:55-58</code>)</span></span>: the <code>AssemblyInformationalVersionAttribute</code> the build stamps on the assembly (the release tag on a release build, <code>0.0.0-dev</code> otherwise), or <code>unknown</code> when it is absent, computed once in a static property.</li>
           <li><code>StartAsync</code><span class="cite"><span> (<code>:61-88</code>)</span></span> builds the summary only when Information is enabled<span class="cite"><span> (<code>:65</code>)</span></span>, so a host that filters Information pays nothing for the engine and cache probes. It names the engines (<code>none</code> when there are none, <span class="cite"><span><code>:67-68</code></span></span>), the cache mode and the tenancy mode, and writes them through the source-generated <code>LogConfigurationSummary</code> (<span class="cite"><span><code>:72-79</code></span></span>, declared at <span class="cite"><span><code>:136-146</code></span></span>).</li>
           <li>Independently of the log level gate, when <code>Provider</code> is RabbitMQ and <code>EnableDelayedRedelivery</code> is <code>false</code> it writes <code>LogRabbitMqDelayedRedeliveryOff</code> with the configured <code>RetryLimit</code><span class="cite"><span> (<code>:82-85</code>)</span></span>. The Warning text<span class="cite"><span> (<code>:148-151</code>)</span></span> states the consequence (a handler that still fails after the in-process retries is dead-lettered, so an outage longer than the retry window loses the event to the error queue), the fix (install <code>rabbitmq_delayed_message_exchange</code> and set <code>MessageBus:EnableDelayedRedelivery=true</code>), and that a local Aspire stack is expected to show it because the development container does not ship the plugin.</li>
           <li><code>StopAsync</code><span class="cite"><span> (<code>:91</code>)</span></span> is a completed task.</li>

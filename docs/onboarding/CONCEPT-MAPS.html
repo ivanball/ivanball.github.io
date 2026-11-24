@@ -250,7 +250,7 @@
           compile-time MSBuild layer guard in
           <code>Source/Build/MMCA.Common.LayerEnforcement.targets</code>, which carries a target per guarded project
           (Shared, Domain, Application, Infrastructure, UI, UI.Maui, UI.Web) and fails the build on a
-          forbidden <code>ProjectReference</code>, <strong>and</strong> NetArchTest fitness tests that re-assert the same rules against
+          forbidden <code>ProjectReference</code>, <strong>and</strong> architecture fitness tests (the framework&#39;s own metadata-based rule engine) that re-assert the same rules against
           compiled assemblies (<a href="https://ivanball.github.io/docs/adr/015-architecture-fitness-functions.html" target="_blank" rel="noopener">ADR-015</a>).</p>
           <pre class="mermaid">flowchart TD
     APIL[&quot;API&lt;br/&gt;&lt;i&gt;controllers, middleware, filters, startup&lt;/i&gt;&quot;]
@@ -277,7 +277,7 @@
     CLDL --&gt; INFL
     CLDL --&gt; ASPL
 
-    ENF[&quot;Enforced 2x: compile-time layer guard + NetArchTest fitness (ADR-015)&quot;]
+    ENF[&quot;Enforced 2x: compile-time layer guard + architecture fitness tests (ADR-015)&quot;]
     ENF -.-&gt; APIL
 
     classDef layer fill:#fef7e0,stroke:#f9ab00,color:#111

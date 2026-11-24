@@ -196,14 +196,15 @@
           <strong>fails the build</strong> with a descriptive error if a layer references a forbidden upstream layer. This is
           the fastest possible feedback: you cannot even compile a violation. The wall is checked before the code
           exists.</p>
-          <p><strong>2. Runtime, via NetArchTest.</strong> <code>Tests/Architecture/MMCA.Common.Architecture.Tests</code> (built on
-          NetArchTest.eNhancedEdition) asserts the same rules against the <em>compiled assembly dependencies</em>. This
+          <p><strong>2. Runtime, via the framework&#39;s own rule engine.</strong> <code>Tests/Architecture/MMCA.Common.Architecture.Tests</code>
+          (built on <code>MMCA.Common.Testing.Architecture</code>, whose <code>ArchitectureTypes</code> engine reads each compiled
+          assembly through <code>System.Reflection.Metadata</code> without loading it) asserts the same rules against the <em>compiled assembly dependencies</em>. This
           catches what the project-reference check cannot: a forbidden type reach that arrives transitively
           rather than through a direct <code>ProjectReference</code>. A dependency several packages deep can surface a type
           that no <code>.csproj</code> names directly, so a project-reference scan never sees it, while an assembly-level
           test that walks the compiled dependency graph does.</p>
           <p>Why both? Because they fail at different times and catch different things. The MSBuild guard is
-          instant and stops the obvious direct violation before compilation. The NetArchTest suite is
+          instant and stops the obvious direct violation before compilation. The runtime suite is
           comprehensive and stops the subtle transitive one. The rubric explicitly rewards this: maturity level 4
           means &quot;enforced automatically,&quot; and two complementary gates are about as enforced as a rule gets. The
           guidance in the contributor doc is correspondingly blunt: when you add a new layer rule, add it in
@@ -336,7 +337,7 @@
           ratchet. It also fails closed, because a scan that finds no module directories to read is a failure
           rather than a pass. MMCA.Store&#39;s subclass supplies its map and an empty allowlist.</p>
           <p><strong><code>ClockReadTestsBase</code> (ADR-128).</strong> Domain and Application code takes time as an input and never reads
-          the ambient clock. The rule reads IL through Mono.Cecil, not source, and fails on any call to
+          the ambient clock. The rule reads IL through the package&#39;s own metadata reader, not source, and fails on any call to
           <code>DateTime.UtcNow</code>, <code>DateTime.Now</code>, <code>DateTime.Today</code>, <code>DateTimeOffset.UtcNow</code> or <code>DateTimeOffset.Now</code> in
           the map&#39;s Domain and Application assemblies, lambdas and async state machines included. A business rule
           that reads the clock itself cannot be driven by a test, so every expiry and cutoff it guards is either
@@ -593,7 +594,7 @@ phantom.Should().BeEmpty(
           &quot;blanket update reintroduces known-bad dependency&quot; red flag cannot recur. A fitness-function culture
           must be ruthless that a comment describing a check is not a check.</li>
           <li><strong>Two gates mean two places to update.</strong> Add a layer rule and you maintain both the MSBuild target and
-          the NetArchTest suite. That is the cost of catching both direct and transitive violations, and the
+          the runtime rule suite. That is the cost of catching both direct and transitive violations, and the
           contributor doc calls it out so nobody forgets the second one.</li>
           </ul>
           <p>None of these argue against fitness functions. They argue for treating &quot;is this rule actually enforced,
@@ -615,7 +616,7 @@ phantom.Should().BeEmpty(
           hope is not an architecture.</strong> If a rule matters, make it fail the build.</p>
           <hr>
           <p><strong>What we covered:</strong> why a diagram is not enforcement, how MMCA.Common guards the inward-dependency rule
-          twice (compile-time MSBuild plus runtime NetArchTest), the warnings-as-errors analyzer baseline and CI
+          twice (compile-time MSBuild plus runtime metadata rules), the warnings-as-errors analyzer baseline and CI
           test-count floors beneath both, how the rule bodies live once in
           <code>MMCA.Common.Testing.Architecture</code> and run identically across four repos via <code>IArchitectureMap</code>, the
           three rule families that matter most (<code>LayerDependencyTests</code>, <code>DomainPurityTests</code>,

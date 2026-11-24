@@ -315,7 +315,13 @@
           on each of the <code>net10.0</code> and <code>net11.0</code> legs, replacing the single 2000 floor), the public API gate
           covers 29 projects with 11,665 shipped declarations, the cloud vendor build target names
           <code>MMCA.Common.Azure.Startup</code> as a fifth adapter, and the build layer&#39;s further per-package boundary
-          targets are recorded.</p>
+          targets are recorded.
+          Amended 2026-11-24 (MMCA.Common 1.318.0): the runtime layer no longer runs on NetArchTest. The
+          <code>MMCA.Common.Testing.Architecture</code> package carries its own rule engine over
+          <code>System.Reflection.Metadata</code> (entry point <code>ArchitectureTypes</code>, result <code>ArchitectureRuleResult</code>) with
+          the same verdicts, and the IL-reading rules read method bodies through the same engine instead of
+          Mono.Cecil. &quot;Via NetArchTest&quot; in the Decision and &quot;the NetArchTest suite&quot; in the Rationale are
+          superseded. See Amendment (2026-11-24) at the end.</p>
           <h2 id="context">Context</h2>
           <p>The codebase rests on invariants that are easy to state and easy to erode by accident: clean-
           architecture layer flow (Domain depends on nothing above it), module isolation (no module reaches into
@@ -1227,6 +1233,41 @@
           gates&quot; bullet <code>:4913</code> (PublicApiAnalyzers on <code>:4917</code>). The <code>Promote-PublicApi.ps1</code> roll-over
           sentence is <code>MMCA.Common/AGENTS.md:39</code>.</li>
           </ol>
+          <h2 id="amendment-2026-11-24-the-packages-own-rule-engine">Amendment (2026-11-24): the package&#39;s own rule engine</h2>
+          <p><strong>Decision.</strong> The runtime layer keeps its rules, bases, maps and verdicts, and changes its engine.
+          <code>MMCA.Common.Testing.Architecture</code> no longer depends on NetArchTest.eNhancedEdition or Mono.Cecil; its
+          only package references are AwesomeAssertions and the xUnit extensibility core
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/MMCA.Common.Testing.Architecture.csproj:16-17</code>).</p>
+          <ul>
+          <li><strong>Dependency rules</strong> run on <code>ArchitectureTypes</code>
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/ArchitectureTypes.cs:37</code>), which reads
+          each assembly from its file through <code>System.Reflection.Metadata</code> without loading it (<code>:12-13</code>,
+          <code>InAssembly</code> at <code>:50</code>). It keeps the fluent shape the rules were written in (<code>That</code>, <code>HaveName</code>,
+          <code>HaveNameEndingWith</code>, <code>HaveAttribute</code>, <code>DoNotHaveDependencyOnAny</code>, <code>Should</code> / <code>ShouldNot</code> with
+          <code>HaveDependencyOnAny</code> / <code>HaveDependencyOnAll</code>, <code>GetTypeNames</code>), and a condition returns an
+          <code>ArchitectureRuleResult</code> directly (<code>ArchitectureTypes.cs:162</code>, <code>:171</code>;
+          <code>ArchitectureRuleResult.cs:4</code>), whose <code>FailingTypeNames</code> spell nested types <code>Outer+Inner</code>.
+          <code>ArchitectureAssert.NoViolations(ArchitectureRuleResult, string)</code> reports it (<code>ArchitectureAssert.cs:11</code>).</li>
+          <li><strong>Dependency names match whole dot-separated segments</strong>, as before: <code>Azure</code> covers every namespace
+          under it, <code>MMCA.Common.AI</code> does not match <code>MMCA.Common.API</code>, and an entry ending in a dot matches
+          nothing (<code>ArchitectureTypes.cs:27-31</code>). What counts as a dependency is stated in the engine itself:
+          base type, interfaces, attributes, generic constraints, member signatures, locals, and every type a
+          method body names, lambda, local-function and async or iterator bodies included (<code>:31-34</code>).</li>
+          <li><strong>The IL-reading rules</strong> (the clock-read, hard-delete, cascade soft-delete, domain-throw,
+          substitutability, error-catalog, read-handler repository and domain-event-handler save rules) read method bodies through the same metadata layer
+          (<code>Metadata/MetadataModule.cs:25</code>, <code>Metadata/IlReader.cs:52</code>) instead of Mono.Cecil; the call-graph
+          walk runs over <code>CallGraphIndex</code> built from those modules (<code>CallGraphIndex.cs:20</code>).</li>
+          </ul>
+          <p><strong>Why.</strong> One fewer third-party dependency on a package every consumer&#39;s architecture test project
+          references, with the verdicts unchanged (<code>MMCA.Common/CHANGELOG.md</code>, the 1.318.0 breaking entry). A
+          consumer that only subclasses the <code>*TestsBase</code> classes (ADC, Store, Helpdesk) deletes its
+          <code>global using NetArchTest.Rules;</code> and its NetArchTest reference and changes nothing else; one that wrote
+          its own NetArchTest rules either keeps its own NetArchTest reference or moves them to <code>ArchitectureTypes</code>
+          (<code>MMCA.Common/UPGRADING.md</code>).</p>
+          <p><strong>Superseded here:</strong> &quot;via NetArchTest over the compiled assemblies&quot; in the Decision and &quot;the NetArchTest
+          suite&quot; in Rationale read as &quot;the package&#39;s own metadata engine&quot;. The revisions above keep the
+          NetArchTest wording as recorded; the namespace-segment behavior the 2026-10-25 and 2026-10-26 entries
+          attribute to NetArchTest holds for the engine unchanged.</p>
           <h2 id="related">Related</h2>
           <p>ADR-009 (resilience gate), ADR-010 (event-version gate), ADR-016 (MassTransit pin gate, and the
           lockstep release cadence the public API baseline is pinned to), ADR-006/007/008 (the transport and
@@ -1268,6 +1309,7 @@
             <li><a href="#revision-2026-10-26-the-ai-isolation-pair-in-the-decision-re-counted-baselines-moved-anchors">Revision (2026-10-26): the AI isolation pair in the Decision, re-counted baselines, moved anchors</a></li>
             <li><a href="#revision-2026-10-28-the-roll-over-ran-re-counted-baselines-moved-anchors">Revision (2026-10-28): the roll-over ran, re-counted baselines, moved anchors</a></li>
             <li><a href="#revision-2026-11-23-per-framework-test-floor-29-baseline-pairs-the-fifth-cloud-adapter">Revision (2026-11-23): per-framework test floor, 29 baseline pairs, the fifth cloud adapter</a></li>
+            <li><a href="#amendment-2026-11-24-the-packages-own-rule-engine">Amendment (2026-11-24): the package&#39;s own rule engine</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

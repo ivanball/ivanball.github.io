@@ -275,6 +275,9 @@
           Revised 2026-11-23: <code>MMCA.Common.UI</code> now ships an opt-in two-factor account page at
           <code>/profile/two-factor</code> (adopted by MMCA.Store only), a registered two-factor authenticator reaches
           sign-in without a constructor argument, and anchors are refreshed (see Revision below).
+          Amended (2026-11-24): <code>Otp.NET</code> is replaced by an internal RFC 6238 TOTP and RFC 4648 Base32 in
+          <code>MMCA.Common.Infrastructure</code> (MMCA.Common 1.318.0), with identical codes and window, so Decision 9
+          no longer adds a package. See Amendment (2026-11-24) at the end.
           Layers stored permission grants over
           <a href="020-permission-based-authorization.html">ADR-020</a>&#39;s compiled registry and extends the shared sign-in
           workflow of <a href="050-jwt-refresh-token-rotation.html">ADR-050</a> with optional collaborators.</p>
@@ -908,6 +911,16 @@
           <code>Register.razor:266-268</code>; <code>Login.razor.cs:211</code>. The Context, items 2, 3, 5 and 7 to 14 and the
           Trade-offs now cite these.</li>
           </ol>
+          <h2 id="amendment-2026-11-24-no-third-party-totp-package">Amendment (2026-11-24): no third-party TOTP package</h2>
+          <p><strong>Decision.</strong> Decision 9 is superseded: the two-factor path adds no package. <code>Otp.NET</code> is replaced by
+          two internal types in <code>MMCA.Common.Infrastructure</code>, an RFC 6238 TOTP
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Auth/TwoFactor/Totp.cs:24</code>) and an RFC 4648
+          Base32 codec (<code>.../Auth/TwoFactor/Base32.cs:13</code>), which <code>TotpTwoFactorService</code> calls to mint secrets
+          and recovery codes and to verify a code (<code>.../Auth/TwoFactor/TotpTwoFactorService.cs:39</code>, <code>:70</code>, <code>:87</code>,
+          <code>:107</code>). Codes and the accepted window are identical; one behavior changes: a stored secret that
+          decodes to no key now verifies false instead of throwing (<code>MMCA.Common/CHANGELOG.md</code>, 1.318.0).
+          Application, Domain and Shared remain dependency-free, as Decision 9 intended. The revisions above keep
+          their <code>Otp.NET</code> citations as recorded.</p>
           <h2 id="related">Related</h2>
           <p><a href="020-permission-based-authorization.html">ADR-020</a> (the compiled role-to-permission registry stored
           grants layer over),
@@ -942,6 +955,7 @@
             <li><a href="#revision-2026-11-04">Revision (2026-11-04)</a></li>
             <li><a href="#revision-2026-11-08">Revision (2026-11-08)</a></li>
             <li><a href="#revision-2026-11-23">Revision (2026-11-23)</a></li>
+            <li><a href="#amendment-2026-11-24-no-third-party-totp-package">Amendment (2026-11-24): no third-party TOTP package</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

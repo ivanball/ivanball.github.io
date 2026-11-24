@@ -219,8 +219,9 @@ Validating -&gt; Timeout -&gt; Transactional -&gt; Concrete Handler</code></pre>
 Validating -&gt; Timeout -&gt; Concrete Handler</code></pre>
           <p>(The framework also ships an optional pair of MiniProfiler decorators, <code>ProfilingCommandDecorator</code> and
           <code>ProfilingQueryDecorator</code>, registered only by a separate opt-in <code>AddApplicationProfiling()</code> call; called
-          after <code>AddApplicationDecorators()</code>, they wrap both chains from the outside. No consumer host calls it
-          today.)</p>
+          after <code>AddApplicationDecorators()</code>, they wrap both chains from the outside. The composed service host
+          <code>AddMmcaServiceHost</code> makes that call, with the profiler&#39;s services and middleware, only when
+          <code>ApplicationSettings:UseMiniProfiler</code> is true, which it is not by default.)</p>
           <p>Each position is a deliberate cost-and-correctness argument:</p>
           <ul>
           <li><strong>Feature-gating is outermost</strong> so a disabled feature is rejected with zero downstream work: no
