@@ -182,7 +182,7 @@ accessibility gate today.
   them without the a11y scan. Opting out is visible (it means not subclassing the base), the way ADC's profile page is.
 - **A real engine, not reflection.** Contrast, accessible names, and live-region announcement exist only
   in a rendered accessibility tree. That is why this sits in the E2E package with Playwright and not in
-  the NetArchTest tier (ADR-015) or the booted-host conformance tier (ADR-058).
+  the architecture fitness tier (ADR-015) or the booted-host conformance tier (ADR-058).
 - **Cross-browser where it is cheap, chromium where it is expensive.** The gallery is backend-less, so
   all three engines run there and catch the cross-engine class of defect at low cost. A full Aspire-stack
   E2E leg costs roughly twenty minutes, so the deploy path runs chromium only and leans on the gallery

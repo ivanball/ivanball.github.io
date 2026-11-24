@@ -184,7 +184,7 @@ skip rather than a timeout, and wait for readiness per resource rather than for 
    one theory (`:27`, `:33-34`) that asserts a subset of that rule against the compiled assembly: it
    forbids Domain, Infrastructure, API, UI and `MMCA.Common.Aspire` (`:28-32`), so for those five a
    type arriving by a path no `ProjectReference` declares is caught too. The Aspire entry is written
-   without a trailing dot, because a dotted NetArchTest namespace entry matches nothing and the
+   without a trailing dot, because a dotted namespace entry matches nothing in the rule engine and the
    segment form covers `MMCA.Common.Aspire` and every namespace under it (`:24-26`). It does not
    forbid Application or Grpc (`:9-10`), which the compile-time gate forbids only as declared
    references (`MMCA.Common.LayerEnforcement.targets:260`, `:263`), so a transitive arrival of either

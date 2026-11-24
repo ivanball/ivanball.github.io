@@ -7,6 +7,9 @@ release policy is unchanged, and one package version now carries assets for two 
 Revised 2026-11-23: decision 5 reversed (EF Core and Npgsql now follow the framework, 11.0.0 on
 `net11.0` since v1.315.0), the rollback line's cross-major EF Core gap added to the open items, and
 anchors refreshed.
+Revised 2026-11-24: MMCA.Common 1.318.0 drops `MmcaOpenApiVersion` (Microsoft.OpenApi is no longer
+pinned directly) and its own Pkcs audit-suppression pair; decision 4 and the pruning alternative are
+corrected in place.
 
 ## Context
 .NET 11 shipped on 2026-11-10. The workspace had one target framework, `net10.0`, named once per
@@ -64,7 +67,7 @@ PublicAPI file; none exists.
 
 **4. A package that follows the framework takes its version from a property.**
 `MmcaFrameworkVersion` (10.0.15 / 11.0.0) covers ASP.NET Core and the runtime
-`Microsoft.Extensions.*` packages; `MmcaOpenApiVersion` (2.13.1 / 3.11.1) covers `Microsoft.OpenApi`;
+`Microsoft.Extensions.*` packages;
 `MmcaMauiVersion` (10.0.130 / 11.0.10), `MmcaMauiToolkitVersion` (16.0.0 / 17.0.0) and
 `MmcaAndroidBiometricVersion` (1.1.0.30 / 1.1.0.33) cover the MAUI train. `MmcaEfCoreVersion` and
 `MmcaNpgsqlVersion` (decision 5), `MmcaExtensionsVersion`, `MmcaAspNetOAuthVersion` and
@@ -164,12 +167,11 @@ really differ: two when the policy landed, eleven conditional blocks across both
   PublicAPI file is introduced.
 - **Disabling package pruning to clear the `net11.0` audit finding** (2026-11-10). It works but
   inflates every lock file. A `NuGetAuditSuppress` pair is used instead, for a finding that is
-  `net11.0`-only. MMCA.Common declares the pair unconditionally, because NuGet requires identical
-  suppressions across target frameworks (NU1105) (`MMCA.Common/Directory.Build.props:80-87`);
-  MMCA.ADC, which builds one framework at a time, conditions its copy on `net11.0`
-  (`MMCA.ADC/Directory.Build.props:322-325`). Both are removed when a
-  `System.Security.Cryptography.Pkcs` 11.0.1 exists; the pin still follows `MmcaFrameworkVersion`
-  (`MMCA.Common/Directory.Packages.props:285`).
+  `net11.0`-only. MMCA.ADC, which builds one framework at a time, conditions its copy on `net11.0`
+  (`MMCA.ADC/Directory.Build.props:322-325`). MMCA.Common no longer needs one: 1.318.0 drops the
+  direct `System.Security.Cryptography.Pkcs` pin and its unconditional pair, because the packages that
+  brought the vulnerable transitive now require patched versions themselves
+  (`MMCA.Common/Directory.Build.props:65-69`, no entries).
 
 ## Consequences
 - A consumer adopting `net11.0` needs: the SDK pin, an analyzer pass, the per-framework version

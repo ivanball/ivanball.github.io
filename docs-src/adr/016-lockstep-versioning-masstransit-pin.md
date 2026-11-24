@@ -76,6 +76,10 @@ Amended (2026-11-23): MassTransit leaves the workspace
 history: the gate is replaced by a ban on any `MassTransit*` reference, and the dependabot ignore for
 `MassTransit*` goes with the last pin. The lockstep rule itself is unchanged, and the cutover ships as one
 MMCA.Common release swept into every consumer under it.
+Amended (2026-11-24): MinVer leaves the build (MMCA.Common 1.318.0). The lockstep version is still the
+`vX.Y.Z` tag, now passed to the release build and pack explicitly, and every other build carries the
+`0.0.0-dev` placeholder; the `Microsoft.OpenApi` semver-major dependabot ignore Decision 3 lists is gone
+with the direct reference. See Amendment (2026-11-24) at the end.
 
 ## Context
 MMCA.Common publishes its `MMCA.Common.*` NuGet package set (see `FACTS.md` for the authoritative
@@ -126,8 +130,8 @@ Two related governance questions had no recorded answer:
    below major 4) until v1.258.0, which removed the package, its fitness test and its package-id list
    (`MMCA.Common/CHANGELOG.md:1035`, under the 1.258.0 heading at `:1031`); its dependabot ignore is
    gone too, leaving `MassTransit*` as the only license-motivated package ignore under `ignore:`
-   (`MMCA.Common/.github/dependabot.yml:59-63`). The seven other semver-major ignores there,
-   `Microsoft.VisualStudio.Threading.Analyzers` (`:67-68`), `Microsoft.OpenApi` (`:75-76`),
+   (`MMCA.Common/.github/dependabot.yml:59-63`). The six other semver-major ignores there,
+   `Microsoft.VisualStudio.Threading.Analyzers` (`:67-68`),
    `StackExchange.Redis` (`:78-79`), `Xamarin.Firebase.Messaging` (`:83-84`),
    `Microsoft.EntityFrameworkCore*` (`:94-95`), `Microsoft.Data.Sqlite` (`:96-97`) and `Npgsql*`
    (`:101-102`), hold back breaking, build-constrained, NU1608 or NU1202 majors and have no fitness
@@ -571,6 +575,25 @@ one statement of fact in **Decision** and a set of anchors.
    `DependencyVersionTests.cs:9`, `ArchitectureRules.Governance.cs:42-45` and
    `MMCA.Common/.github/actions/freshness-gate/action.yml:25-26`, `:143-145`. Anchors inside earlier
    revisions are left as recorded.
+
+## Amendment (2026-11-24): the tag is the version, without MinVer
+**Decision.** The lockstep rule is unchanged: one `vX.Y.Z` tag versions every `MMCA.Common.*` package.
+What changes is how the tag reaches the build. MinVer is no longer referenced; `release.yml` passes the
+tag as `-p:Version` to the build and `-p:PackageVersion` to the pack
+(`MMCA.Common/.github/workflows/release.yml:85`, `:105`; the MAUI job the same at `:311`, `:314`),
+and every other build, local or PR CI, carries the `0.0.0-dev` placeholder from
+`MMCA.Common/Directory.Build.props:87-90`, so no build depends on git history
+(`MMCA.Common/AGENTS.md:39`). "MinVer, derived from a single `vX.Y.Z` git tag" in Decision 1 reads as
+"the single `vX.Y.Z` git tag, passed to the release build".
+
+**Dependabot.** With `Microsoft.OpenApi` no longer pinned or referenced directly (MMCA.Common 1.318.0:
+`Microsoft.AspNetCore.OpenApi` requires a patched version itself), its semver-major ignore is gone.
+The remaining semver-major ignores are `Microsoft.VisualStudio.Threading.Analyzers`
+(`MMCA.Common/.github/dependabot.yml:62`), `StackExchange.Redis` (`:65`),
+`Xamarin.Firebase.Messaging` (`:70`), `Microsoft.EntityFrameworkCore*` (`:81`),
+`Microsoft.Data.Sqlite` (`:83`) and `Npgsql*` (`:88`), with `Xamarin.AndroidX.Biometric` held by a
+version range (`:72`); none is license-motivated now that `MassTransit*` is gone. Decision 3 is
+corrected in place to drop `Microsoft.OpenApi`; its other anchors are left as recorded.
 
 ## Related
 ADR-015 (the fitness function that enforces the pins), ADR-003 / ADR-006 (MassTransit is the broker

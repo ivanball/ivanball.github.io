@@ -173,7 +173,7 @@ start, and the evaluation harness ships beside the package.**
    Infrastructure references the governed package at all (`:75`, check at `:83`). The boundary
    assembly is classified by name with the `MMCA.Common.AI.` prefix (`:19`, classification at
    `:99-107`), which is what admits the adapter packages and `MMCA.Common.AI.Testing` to it; the
-   type-level rule matches the undotted namespace root `MMCA.Common.AI` (`:25`), because NetArchTest
+   type-level rule matches the undotted namespace root `MMCA.Common.AI` (`:25`), because the rule engine
    matches whole namespace segments and an entry ending in a dot would match nothing (`:13-14`). A prompt or a
    bound must not become a type Domain or Application depends on.
 
