@@ -17,6 +17,9 @@ Revised 2026-11-23: the default set is 26 contracts (`IPasskeyCapability` and `I
 join), the MAUI package overrides 21 and five stay outside it, both UI packages build on net10.0 and
 net11.0 (ADR-141), and the MAUI release splits into a windows `pack-maui` job and an ubuntu
 `publish-maui` push behind the `release` environment.
+Revised 2026-11-24: the runtime architecture map no longer runs on NetArchTest (MMCA.Common 1.318.0,
+[ADR-015](015-architecture-fitness-functions.md) Amendment (2026-11-24)); the layer-rule bullet is
+reworded in place.
 
 ## Context
 The consumer apps ship the same Blazor component set through three heads: MAUI Blazor Hybrid
@@ -109,7 +112,7 @@ Add a per-capability contract layer to `MMCA.Common.UI` and a dedicated package,
   behind the `release` environment approval (`release.yml:342`, `:348`), so the lockstep release
   stays whole. Layer rule: UI + Shared only
   (`Source/Build/MMCA.Common.LayerEnforcement.targets`, `EnforceUIMauiLayerBoundary`); it is
-  deliberately absent from the ubuntu NetArchTest runtime map because its assemblies cannot load
+  deliberately absent from the ubuntu runtime architecture map because its assemblies cannot load
   there, and the compile-time target is the enforcement.
 
 - **Deep links funnel through one boundary.** Native navigation sources (notification taps, app

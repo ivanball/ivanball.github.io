@@ -57,15 +57,16 @@ deliberate (`MMCA.Common/AGENTS.md`, Architecture section).
 the fastest possible feedback: you cannot even compile a violation. The wall is checked before the code
 exists.
 
-**2. Runtime, via NetArchTest.** `Tests/Architecture/MMCA.Common.Architecture.Tests` (built on
-NetArchTest.eNhancedEdition) asserts the same rules against the *compiled assembly dependencies*. This
+**2. Runtime, via the framework's own rule engine.** `Tests/Architecture/MMCA.Common.Architecture.Tests`
+(built on `MMCA.Common.Testing.Architecture`, whose `ArchitectureTypes` engine reads each compiled
+assembly through `System.Reflection.Metadata` without loading it) asserts the same rules against the *compiled assembly dependencies*. This
 catches what the project-reference check cannot: a forbidden type reach that arrives transitively
 rather than through a direct `ProjectReference`. A dependency several packages deep can surface a type
 that no `.csproj` names directly, so a project-reference scan never sees it, while an assembly-level
 test that walks the compiled dependency graph does.
 
 Why both? Because they fail at different times and catch different things. The MSBuild guard is
-instant and stops the obvious direct violation before compilation. The NetArchTest suite is
+instant and stops the obvious direct violation before compilation. The runtime suite is
 comprehensive and stops the subtle transitive one. The rubric explicitly rewards this: maturity level 4
 means "enforced automatically," and two complementary gates are about as enforced as a rule gets. The
 guidance in the contributor doc is correspondingly blunt: when you add a new layer rule, add it in
@@ -223,7 +224,7 @@ ratchet. It also fails closed, because a scan that finds no module directories t
 rather than a pass. MMCA.Store's subclass supplies its map and an empty allowlist.
 
 **`ClockReadTestsBase` (ADR-128).** Domain and Application code takes time as an input and never reads
-the ambient clock. The rule reads IL through Mono.Cecil, not source, and fails on any call to
+the ambient clock. The rule reads IL through the package's own metadata reader, not source, and fails on any call to
 `DateTime.UtcNow`, `DateTime.Now`, `DateTime.Today`, `DateTimeOffset.UtcNow` or `DateTimeOffset.Now` in
 the map's Domain and Application assemblies, lambdas and async state machines included. A business rule
 that reads the clock itself cannot be driven by a test, so every expiry and cutoff it guards is either
@@ -525,7 +526,7 @@ Fitness functions are not free, and the scorecard does not pretend otherwise.
   "blanket update reintroduces known-bad dependency" red flag cannot recur. A fitness-function culture
   must be ruthless that a comment describing a check is not a check.
 - **Two gates mean two places to update.** Add a layer rule and you maintain both the MSBuild target and
-  the NetArchTest suite. That is the cost of catching both direct and transitive violations, and the
+  the runtime rule suite. That is the cost of catching both direct and transitive violations, and the
   contributor doc calls it out so nobody forgets the second one.
 
 None of these argue against fitness functions. They argue for treating "is this rule actually enforced,
@@ -551,7 +552,7 @@ hope is not an architecture.** If a rule matters, make it fail the build.
 ---
 
 **What we covered:** why a diagram is not enforcement, how MMCA.Common guards the inward-dependency rule
-twice (compile-time MSBuild plus runtime NetArchTest), the warnings-as-errors analyzer baseline and CI
+twice (compile-time MSBuild plus runtime metadata rules), the warnings-as-errors analyzer baseline and CI
 test-count floors beneath both, how the rule bodies live once in
 `MMCA.Common.Testing.Architecture` and run identically across four repos via `IArchitectureMap`, the
 three rule families that matter most (`LayerDependencyTests`, `DomainPurityTests`,

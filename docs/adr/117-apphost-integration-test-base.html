@@ -422,7 +422,7 @@
           one theory (<code>:27</code>, <code>:33-34</code>) that asserts a subset of that rule against the compiled assembly: it
           forbids Domain, Infrastructure, API, UI and <code>MMCA.Common.Aspire</code> (<code>:28-32</code>), so for those five a
           type arriving by a path no <code>ProjectReference</code> declares is caught too. The Aspire entry is written
-          without a trailing dot, because a dotted NetArchTest namespace entry matches nothing and the
+          without a trailing dot, because a dotted namespace entry matches nothing in the rule engine and the
           segment form covers <code>MMCA.Common.Aspire</code> and every namespace under it (<code>:24-26</code>). It does not
           forbid Application or Grpc (<code>:9-10</code>), which the compile-time gate forbids only as declared
           references (<code>MMCA.Common.LayerEnforcement.targets:260</code>, <code>:263</code>), so a transitive arrival of either

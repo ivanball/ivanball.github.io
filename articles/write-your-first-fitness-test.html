@@ -163,7 +163,7 @@
           <p class="article-meta"><time datetime="2026-08-09T12:34:49Z">August 9, 2026</time> <span aria-hidden="true">·</span> Ivan Ball-llovera <span aria-hidden="true">·</span> <a href="https://medium.com/@ivanball76/write-your-first-architecture-fitness-test-d4e25e6a4741" target="_blank" rel="noopener">Also on Medium ↗</a></p>
           <figure class="article-hero"><img src="../assets/img/articles/article-40.webp" srcset="../assets/img/articles/article-40.webp 800w, ../assets/img/articles/article-40-1600.webp 1600w" sizes="(max-width: 900px) 100vw, 900px" alt="" width="800" height="420" decoding="async"></figure>
           <p class="article-subtitle">Your Clean Architecture diagram is a hope, not a guarantee, until something fails the
-          build when it is violated. Here is how to add NetArchTest fitness functions to your own solution in
+          build when it is violated. Here is how to add architecture fitness functions to your own solution in
           under an hour, by inheriting a rule library instead of writing one.</p>
           <hr>
           <p>Every codebase has a layering diagram. Domain depends on nothing above it; Application does not know
@@ -191,12 +191,12 @@
           <li><strong>At compile time</strong>, by an MSBuild target (<code>MMCA.Common.LayerEnforcement.targets</code>) that inspects
           project references in a pre-build step and fails the build with a descriptive error if a layer
           references a forbidden upstream layer. Fastest possible feedback, catches the most common mistake.</li>
-          <li><strong>At runtime</strong>, by NetArchTest fitness functions that assert the same rules against the compiled
+          <li><strong>At runtime</strong>, by fitness functions on the package&#39;s own metadata-based rule engine that assert the same rules against the compiled
           assemblies, catching the subtler violations a project-reference check cannot see (a type in the
           wrong namespace, a transitive <code>using</code>, a missing convention).</li>
           </ol>
           <p>A third gate sits alongside those two, and ADR-015 as revised records the enforcement as running in
-          three layers. It is neither MSBuild nor NetArchTest: <code>Microsoft.CodeAnalysis.PublicApiAnalyzers</code> runs on
+          three layers. It is neither MSBuild nor the runtime rule suite: <code>Microsoft.CodeAnalysis.PublicApiAnalyzers</code> runs on
           every published package except <code>MMCA.Common.UI.Maui</code> (excluded by name, because it builds only on the
           Windows MAUI job outside the main solution) against committed baselines (a <code>PublicAPI.Shipped.txt</code> /
           <code>PublicAPI.Unshipped.txt</code> pair per gated package, twenty-five pairs), so adding or removing a public
@@ -213,7 +213,7 @@
           test.</li>
           <li>The package you are about to install: <strong><code>MMCA.Common.Testing.Architecture</code></strong>, one of the twenty-six
           packages the framework publishes. Its README row describes it exactly: &quot;<code>IArchitectureMap</code> + reusable
-          NetArchTest rule library + abstract test bases (consumed by each repo&#39;s <code>*.Architecture.Tests</code>).&quot;</li>
+          metadata-based architecture rule library + abstract test bases (consumed by each repo&#39;s <code>*.Architecture.Tests</code>).&quot;</li>
           </ul>
           <p>The key design idea: the rule <em>bodies</em> ship in the package once. You do not copy them. You supply a tiny
           map of your assemblies and subclass the bases, and you inherit roughly the same suite that runs across
@@ -231,7 +231,8 @@
           <p>Add a dedicated architecture-test project (mirroring how the framework keeps
           <code>Tests/Architecture/*.Architecture.Tests</code>), and reference the package:</p>
           <pre class="doc-pre" tabindex="0" data-lang="PowerShell"><code class="language-powershell hljs">dotnet add package MMCA.Common.Testing.Architecture</code></pre>
-          <p>The package brings the NetArchTest engine (NetArchTest.eNhancedEdition), the <code>ArchitectureRules</code> rule
+          <p>The package brings its own rule engine (<code>ArchitectureTypes</code>, which reads your compiled assemblies
+          through <code>System.Reflection.Metadata</code> and needs no third-party package), the <code>ArchitectureRules</code> rule
           library, the diagnostic helpers, and the 64 abstract <code>*TestsBase</code> classes. You will not write rule
           logic; you will point the rules at your assemblies and subclass the bases.</p>
           <h2 id="step-2-implement-iarchitecturemap-one-anchor-type-per-layer">Step 2: implement <code>IArchitectureMap</code>, one anchor type per layer</h2>
@@ -334,7 +335,7 @@ dotnet test <span class="hljs-literal">--project</span> Tests/Architecture/MyApp
           one reference rule; the layer target is the one to copy first. It inspects each project&#39;s
           <code>ProjectReference</code> set, and fails the build with a descriptive error if a layer references a forbidden
           upstream layer. This is the &quot;two speeds&quot; design from ADR-015: the MSBuild guard catches the common case
-          at compile time on the developer&#39;s machine; the NetArchTest suite catches the subtler assembly-level
+          at compile time on the developer&#39;s machine; the runtime rule suite catches the subtler assembly-level
           violations a reference check cannot see. ADR-015 frames that pair as &quot;two speeds&quot;; counting the public
           API surface gate described earlier, enforcement runs in three layers, so what pairs here is the speeds,
           not the layer count. When you change project references or move a type between layers, expect both
@@ -371,7 +372,8 @@ dotnet test <span class="hljs-literal">--project</span> Tests/Architecture/MyApp
           <p>None of these undercut the core value. They are the reasons to scope your rules deliberately and read
           the failures, not just the color.</p>
           <h2 id="apply-this-even-without-mmca">Apply this even without MMCA</h2>
-          <p>If you are not on MMCA.Common, the pattern still ports to any .NET stack with NetArchTest:</p>
+          <p>If you are not on MMCA.Common, the pattern still ports to any .NET stack with an architecture-test library
+          such as NetArchTest or ArchUnitNET:</p>
           <ol>
           <li>Write each invariant as a <strong>named test</strong>, one per forbidden edge, so a failure points at the exact
           rule, not &quot;layering is wrong.&quot;</li>

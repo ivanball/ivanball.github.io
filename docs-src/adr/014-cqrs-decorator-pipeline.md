@@ -45,6 +45,9 @@ themselves but reach it through `AddMmcaServiceHost` in `MMCA.Common.ServiceHost
 pipeline steps only through its `ConfigurePipeline` callback, and the Helpdesk order test is recorded as running the
 `VerifyDecoratorPipeline` coverage fact too; the order-rationale sentence now names the view-as guard
 as the first short-circuit on commands; anchors refreshed.
+Revised 2026-11-24: the profiling pair is wired by the composed service host behind
+`ApplicationSettings:UseMiniProfiler` (MMCA.Common 1.318.0; off by default, `/profiler` results
+Development-only); the Decision's "no consumer host wires it" is corrected in place.
 
 ## Context
 Commands and queries share cross-cutting concerns: validation, transactions, cache invalidation,
@@ -71,7 +74,10 @@ Use single-responsibility handlers behind a Scrutor-composed decorator pipeline.
   - **Queries:** FeatureGate -> Authorization -> Logging -> Caching -> Validating -> Timeout -> Handler
   - plus an optional pair of `Profiling` decorators (`ProfilingCommandDecorator` /
     `ProfilingQueryDecorator`) registered by a **separate** opt-in `AddApplicationProfiling()` call,
-    not by `AddApplicationDecorators()`. No consumer host wires it today.
+    not by `AddApplicationDecorators()`. `AddMmcaServiceHost` calls it after the sealed pipeline when
+    `ApplicationSettings:UseMiniProfiler` is true (off by default), together with the profiler's services
+    and middleware
+    (`MMCA.Common/Source/Hosting/MMCA.Common.ServiceHost/ServiceHostBuilderExtensions.cs:151`, `:162-165`).
 - **The order is load-bearing and hard-coded** (not config-driven): validation runs *before* the
   transaction opens (an invalid command never touches the DB), cache invalidation runs *outside* the
   transaction boundary (a rolled-back command does not evict valid cache), logging wraps the whole

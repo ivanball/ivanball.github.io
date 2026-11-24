@@ -447,7 +447,7 @@ Shared            (Result pattern, errors, DTOs, value objects)</code></pre>
           </tr>
           <tr>
           <td>015</td>
-          <td>Architecture fitness functions: compile-time layer guard + shared NetArchTest rule library</td>
+          <td>Architecture fitness functions: compile-time layer guard + shared architecture rule library</td>
           <td><a href="group-29-testing-infrastructure.html">g29</a></td>
           </tr>
           <tr>
@@ -877,7 +877,7 @@ Shared            (Result pattern, errors, DTOs, value objects)</code></pre>
           </tr>
           <tr>
           <td>101</td>
-          <td><code>MMCA.Common</code> metapackage (the Core 6): one <code>PackageReference</code> in place of the six a standard host always takes (Shared, Domain, Application, Infrastructure, API, Aspire), ordered so the bundle reads as the architecture it installs; it ships no assembly (<code>IncludeBuildOutput=false</code>, NU5128 suppressed in that project alone) and is versioned by MinVer off the same tag, so it releases in lockstep to both registries</td>
+          <td><code>MMCA.Common</code> metapackage (the Core 6): one <code>PackageReference</code> in place of the six a standard host always takes (Shared, Domain, Application, Infrastructure, API, Aspire), ordered so the bundle reads as the architecture it installs; it ships no assembly (<code>IncludeBuildOutput=false</code>, NU5128 suppressed in that project alone) and is versioned by the same release tag, so it releases in lockstep to both registries</td>
           <td><a href="devops-cicd.html">devops-cicd</a></td>
           </tr>
           <tr>
@@ -1143,7 +1143,9 @@ Shared            (Result pattern, errors, DTOs, value objects)</code></pre>
           </ul>
           <p><strong>Versioning / build</strong></p>
           <ul>
-          <li><strong>MinVer 8</strong>: derives the package version from the git tag (<code>vX.Y.Z</code>), so releases are tag-driven.</li>
+          <li><strong>No versioning package</strong>: the release workflow passes the git tag (<code>vX.Y.Z</code>) as the build and
+          package version, so releases are tag-driven; every other build is <code>0.0.0-dev</code><span class="cite"><span>
+          (<code>MMCA.Common/Directory.Build.props:87-90</code>)</span></span>.</li>
           </ul>
           <p><strong>Analyzers (all at <em>error</em> severity, see §4)</strong></p>
           <ul>
@@ -1163,8 +1165,9 @@ Shared            (Result pattern, errors, DTOs, value objects)</code></pre>
           tiers beside the fast Sqlite tier, with <strong>Respawn</strong> resetting the database between tests.</li>
           <li><strong>BenchmarkDotNet</strong>: the benchmark suite behind the <code>performance-smoke</code> regression gate
           (<a href="https://ivanball.github.io/docs/adr/060-performance-regression-gate.html" target="_blank" rel="noopener">ADR-060</a>).</li>
-          <li><strong>NetArchTest.eNhancedEdition</strong>: <strong>architecture fitness tests</strong> (assert layer/purity rules against
-          compiled assemblies).</li>
+          <li><strong><code>MMCA.Common.Testing.Architecture</code></strong>: <strong>architecture fitness tests</strong> on the framework&#39;s own rule
+          engine (<code>ArchitectureTypes</code>, reading compiled assemblies through <code>System.Reflection.Metadata</code>, no
+          third-party engine) to assert layer/purity rules.</li>
           <li><strong>Moq 4</strong> (mocking), <strong>AwesomeAssertions 9</strong> (fluent assertions, a FluentAssertions-compatible
           fork), <strong>coverlet</strong> (coverage).</li>
           </ul>
@@ -1217,7 +1220,7 @@ Shared            (Result pattern, errors, DTOs, value objects)</code></pre>
           <code>MMCA.Common.*</code> project under <code>Source/</code><span class="cite"><span> (<code>MMCA.Common/Directory.Build.props:140-142</code>)</span></span>, inspects
           <code>ProjectReference</code>s before build and <strong>fails</strong> with a descriptive error if a layer references a
           forbidden upstream layer.</li>
-          <li><strong>Runtime (test)</strong>, <code>Tests/Architecture/MMCA.Common.Architecture.Tests</code> (NetArchTest) asserts the
+          <li><strong>Runtime (test)</strong>, <code>Tests/Architecture/MMCA.Common.Architecture.Tests</code> (the <code>ArchitectureTypes</code> engine) asserts the
           same rules against compiled assemblies: layer flow, <strong>domain purity</strong>, and <strong>microservice
           extraction</strong> rules (e.g. <em>Application/Domain/Shared must never reference MassTransit directly</em>,
           depend on <code>IMessageBus</code> instead). The rule bodies themselves now live once in the shipped

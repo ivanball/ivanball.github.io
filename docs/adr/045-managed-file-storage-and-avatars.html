@@ -274,7 +274,9 @@
           Revised 2026-10-25 (image processing): <code>IImageProcessor</code> and its SkiaSharp implementation are ADC&#39;s Identity module&#39;s, not framework types; MMCA.Common keeps <code>IFileStorageService</code> and the dependency-free upload guards, <code>ImageContentSniffer</code> among them; see Revision (2026-10-25, image processing moves to ADC).
           Revised 2026-10-26: anchors refreshed after MMCA.Common v1.261.0 (the GCS delete posture, the Consequences CHANGELOG cite and the revision-section anchors moved; no behavior changed); see Revision (2026-10-26).
           Revised 2026-10-28: the three adapters answer a transport failure with no service response as a <code>FileStorage.UploadFailed</code> / <code>FileStorage.DeleteFailed</code> Result rather than an exception (MMCA.Common v1.261.0), and the anchors are refreshed after v1.265.1; see Revision (2026-10-28).
-          Revised 2026-11-23: the avatar contract records the fourth path that schedules a blob delete (the orphaned new upload after a failed save), the Consequences say the framework&#39;s two audit suppressions are net11.0 false positives rather than an empty list, and the anchors are refreshed after MMCA.Common v1.315.0; see Revision (2026-11-23).</p>
+          Revised 2026-11-23: the avatar contract records the fourth path that schedules a blob delete (the orphaned new upload after a failed save), the Consequences say the framework&#39;s two audit suppressions are net11.0 false positives rather than an empty list, and the anchors are refreshed after MMCA.Common v1.315.0; see Revision (2026-11-23).
+          Revised 2026-11-24: the framework carries no audit suppression again (MMCA.Common 1.318.0 drops the
+          Pkcs pin and its two net11.0 entries); the Consequences bullet is corrected in place.</p>
           <h2 id="context">Context</h2>
           <p>The MAUI capability program (ADR-042) brought MediaPicker/camera within reach, and ADC amended
           BR-116 to include user avatar photos. That needs binary blob storage (the databases store
@@ -376,10 +378,8 @@
           (Storage Blob Data Contributor) for the app identity - a bicep-level grant, not a secret.</li>
           <li>Image decoding is an application dependency, not a framework one: <code>AddInfrastructure</code> registers
           no image processor and MMCA.Common.Infrastructure takes no image library
-          (<code>MMCA.Common/CHANGELOG.md:1029</code>), and the framework accepts no advisory risk: its only
-          <code>NuGetAuditSuppress</code> entries are two net11.0 System.Security.Cryptography.Pkcs false positives
-          (<code>MMCA.Common/Directory.Build.props:85-86</code>, described as &quot;a false positive rather than an
-          accepted risk&quot; at <code>:71</code>), none of them an image library. ADC confines SkiaSharp&#39;s native libraries to the
+          (<code>MMCA.Common/CHANGELOG.md:1029</code>), and the framework accepts no advisory risk: it carries no
+          <code>NuGetAuditSuppress</code> entry (<code>MMCA.Common/Directory.Build.props:65-69</code>). ADC confines SkiaSharp&#39;s native libraries to the
           projects that run it: <code>MMCA.ADC.Identity.Infrastructure</code> takes the managed assembly only
           (<code>MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Infrastructure/MMCA.ADC.Identity.Infrastructure.csproj:10</code>),
           and the native packages are referenced by the Identity host

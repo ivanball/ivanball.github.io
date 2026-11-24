@@ -231,7 +231,7 @@ dotnet new mmca<span class="hljs-literal">-app</span> <span class="hljs-literal"
           <li><strong>At compile time</strong>, by an MSBuild target (<code>MMCA.Common.LayerEnforcement.targets</code>) that inspects
           project references and fails the build with a descriptive error if a layer reaches into a layer it
           should not.</li>
-          <li><strong>At runtime</strong>, by NetArchTest fitness functions that assert the same rules against the compiled
+          <li><strong>At runtime</strong>, by fitness functions on the framework&#39;s own metadata-based rule engine that assert the same rules against the compiled
           assemblies.</li>
           </ol>
           <p>Those fitness functions do not live as copy-pasted test code in each repo. They live once, in a

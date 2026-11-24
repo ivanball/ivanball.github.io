@@ -66,6 +66,9 @@ keyset paging and the change feed reach `IEntityQueryService` and an opt-in cont
 ADC's narrowing is seventy-six sites across forty-two files and the consumers compose at twelve
 call lines; the combined allowlist is twelve files, not thirteen; see the Revision (2026-11-23) at
 the end.
+Revised 2026-11-24: the raw-queryable rationale names what the testing package now carries (its own IL
+reader for the call-graph rules, still no Roslyn dependency; MMCA.Common 1.318.0), matching
+`RawQueryableConventionTestsBase.cs:14-17`; reworded in place.
 
 ## Context
 Every read an application handler performs has to come from somewhere, and the shape of that contract
@@ -308,9 +311,10 @@ three consumer applications, sitting on an unchanged registration surface
 - **Composability keeps filters additive.** ANDing an authorization scope onto a business filter is a
   single-expression construction (`SessionsController.cs:138-140`) instead of a second hand-written query path,
   which is what makes "never substitute the public filter" a cheap rule to follow.
-- **A textual scan was chosen deliberately over IL analysis.** NetArchTest and reflection cannot see
-  member usage inside method bodies, and the testing package carries no IL or Roslyn dependency on
-  purpose, so the rule is an honest line scan with its limits written down
+- **A textual scan was chosen deliberately over IL analysis.** Plain reflection cannot see member
+  usage inside method bodies, the testing package carries no Roslyn dependency on purpose, and this
+  rule does not use the IL reader the call-graph rules use, so it is an honest line scan with its
+  limits written down
   (`RawQueryableConventionTestsBase.cs:13-23`).
 - **The ratchet beats a big-bang cleanup.** Recording existing raw-queryable files in `AllowedFiles`
   makes new code clean immediately while the list shrinks over time (`:26-28`), the same adoption

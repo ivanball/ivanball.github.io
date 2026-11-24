@@ -268,7 +268,7 @@
           <p>Every call in the table is a real method (anchors in the Notes). Two shapes repeat: the host-level
           calls (configuration source, key ring, telemetry exporter) extend the host builder (<code>TBuilder</code>, for
           example <code>AzureKeyVaultConfigurationExtensions.cs:80</code>, <code>AzureDataProtectionExtensions.cs:53</code>,
-          <code>AwsDataProtectionExtensions.cs:57</code> and <code>GoogleCloudDataProtectionExtensions.cs:76</code>), and the
+          <code>AwsDataProtectionExtensions.cs:70</code> and <code>GoogleCloudDataProtectionExtensions.cs:76</code>), and the
           service-level calls extend <code>IServiceCollection</code> (for example <code>AzureServiceCollectionExtensions.cs:41</code>).
           Each adapter binds the framework&#39;s standard configuration sections and keys (<code>ADR-134:108-113</code>), so a
           deployment&#39;s environment variables and vault names are the same whichever adapter call reads them.</p>
@@ -336,7 +336,8 @@
           <ul>
           <li>Azure: <code>APPLICATIONINSIGHTS_CONNECTION_STRING</code> (<code>:20</code>), <code>KeyVault:Uri</code> (<code>:23</code>) and
           <code>DataProtection:BlobStorageUri</code> (<code>:26</code>).</li>
-          <li>AWS: <code>SecretsManager:NamePrefix</code> (<code>:29</code>) and <code>DataProtection:SsmParameterPrefix</code> (<code>:32</code>).</li>
+          <li>AWS: <code>SecretsManager:NamePrefix</code> (<code>:29</code>), <code>DataProtection:S3ObjectUri</code> (<code>:32</code>) and
+          <code>AwsTelemetry:Region</code> (<code>:56</code>).</li>
           <li>Google Cloud: <code>GoogleSecretManager:NamePrefix</code> (<code>:40</code>), <code>DataProtection:GcsObjectUri</code> (<code>:43</code>) and
           <code>GoogleCloudTelemetry:ProjectId</code> (<code>:46</code>).</li>
           </ul>
@@ -382,7 +383,7 @@ builder.AddAzureKeyVaultConfiguration() early in Program.cs.</code></pre>
           <code>Amazon</code>, <code>Google</code>, <code>FirebaseAdmin</code> and <code>Grpc.Auth</code>, the two vendor transports and the four adapters
           (<code>ArchitectureRules.CloudVendors.cs:25-41</code>), plus the matching assembly prefixes (<code>:48-62</code>).</p>
           <p>One detail in that list is worth copying for its own sake: the namespace roots carry <strong>no trailing dot</strong>,
-          because NetArchTest matches whole namespace segments and an entry ending in a dot matches nothing, which
+          because the rule engine matches whole namespace segments and an entry ending in a dot matches nothing, which
           would make the type-level rule pass vacuously (<code>:27-28</code>). A fitness test that cannot fail is worse than
           no test, because it reads as coverage.</p>
           <p>The build gate exempts exactly two references, and both are database engines rather than cloud

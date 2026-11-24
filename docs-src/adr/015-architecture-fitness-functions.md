@@ -62,6 +62,12 @@ on each of the `net10.0` and `net11.0` legs, replacing the single 2000 floor), t
 covers 29 projects with 11,665 shipped declarations, the cloud vendor build target names
 `MMCA.Common.Azure.Startup` as a fifth adapter, and the build layer's further per-package boundary
 targets are recorded.
+Amended 2026-11-24 (MMCA.Common 1.318.0): the runtime layer no longer runs on NetArchTest. The
+`MMCA.Common.Testing.Architecture` package carries its own rule engine over
+`System.Reflection.Metadata` (entry point `ArchitectureTypes`, result `ArchitectureRuleResult`) with
+the same verdicts, and the IL-reading rules read method bodies through the same engine instead of
+Mono.Cecil. "Via NetArchTest" in the Decision and "the NetArchTest suite" in the Rationale are
+superseded. See Amendment (2026-11-24) at the end.
 
 ## Context
 The codebase rests on invariants that are easy to state and easy to erode by accident: clean-
@@ -1021,6 +1027,43 @@ cloud adapter list, and most anchors; the build layer also holds more boundaries
    the cloud vendor rule names `:1099`, and the v1.153.0 heading `:4858` with its "Three new build
    gates" bullet `:4913` (PublicApiAnalyzers on `:4917`). The `Promote-PublicApi.ps1` roll-over
    sentence is `MMCA.Common/AGENTS.md:39`.
+
+## Amendment (2026-11-24): the package's own rule engine
+**Decision.** The runtime layer keeps its rules, bases, maps and verdicts, and changes its engine.
+`MMCA.Common.Testing.Architecture` no longer depends on NetArchTest.eNhancedEdition or Mono.Cecil; its
+only package references are AwesomeAssertions and the xUnit extensibility core
+(`MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/MMCA.Common.Testing.Architecture.csproj:16-17`).
+
+- **Dependency rules** run on `ArchitectureTypes`
+  (`MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/ArchitectureTypes.cs:37`), which reads
+  each assembly from its file through `System.Reflection.Metadata` without loading it (`:12-13`,
+  `InAssembly` at `:50`). It keeps the fluent shape the rules were written in (`That`, `HaveName`,
+  `HaveNameEndingWith`, `HaveAttribute`, `DoNotHaveDependencyOnAny`, `Should` / `ShouldNot` with
+  `HaveDependencyOnAny` / `HaveDependencyOnAll`, `GetTypeNames`), and a condition returns an
+  `ArchitectureRuleResult` directly (`ArchitectureTypes.cs:162`, `:171`;
+  `ArchitectureRuleResult.cs:4`), whose `FailingTypeNames` spell nested types `Outer+Inner`.
+  `ArchitectureAssert.NoViolations(ArchitectureRuleResult, string)` reports it (`ArchitectureAssert.cs:11`).
+- **Dependency names match whole dot-separated segments**, as before: `Azure` covers every namespace
+  under it, `MMCA.Common.AI` does not match `MMCA.Common.API`, and an entry ending in a dot matches
+  nothing (`ArchitectureTypes.cs:27-31`). What counts as a dependency is stated in the engine itself:
+  base type, interfaces, attributes, generic constraints, member signatures, locals, and every type a
+  method body names, lambda, local-function and async or iterator bodies included (`:31-34`).
+- **The IL-reading rules** (the clock-read, hard-delete, cascade soft-delete, domain-throw,
+  substitutability, error-catalog, read-handler repository and domain-event-handler save rules) read method bodies through the same metadata layer
+  (`Metadata/MetadataModule.cs:25`, `Metadata/IlReader.cs:52`) instead of Mono.Cecil; the call-graph
+  walk runs over `CallGraphIndex` built from those modules (`CallGraphIndex.cs:20`).
+
+**Why.** One fewer third-party dependency on a package every consumer's architecture test project
+references, with the verdicts unchanged (`MMCA.Common/CHANGELOG.md`, the 1.318.0 breaking entry). A
+consumer that only subclasses the `*TestsBase` classes (ADC, Store, Helpdesk) deletes its
+`global using NetArchTest.Rules;` and its NetArchTest reference and changes nothing else; one that wrote
+its own NetArchTest rules either keeps its own NetArchTest reference or moves them to `ArchitectureTypes`
+(`MMCA.Common/UPGRADING.md`).
+
+**Superseded here:** "via NetArchTest over the compiled assemblies" in the Decision and "the NetArchTest
+suite" in Rationale read as "the package's own metadata engine". The revisions above keep the
+NetArchTest wording as recorded; the namespace-segment behavior the 2026-10-25 and 2026-10-26 entries
+attribute to NetArchTest holds for the engine unchanged.
 
 ## Related
 ADR-009 (resilience gate), ADR-010 (event-version gate), ADR-016 (MassTransit pin gate, and the

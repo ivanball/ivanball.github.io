@@ -113,7 +113,7 @@ vendor SDK may appear
 compile-time MSBuild layer guard in
 `Source/Build/MMCA.Common.LayerEnforcement.targets`, which carries a target per guarded project
 (Shared, Domain, Application, Infrastructure, UI, UI.Maui, UI.Web) and fails the build on a
-forbidden `ProjectReference`, **and** NetArchTest fitness tests that re-assert the same rules against
+forbidden `ProjectReference`, **and** architecture fitness tests (the framework's own metadata-based rule engine) that re-assert the same rules against
 compiled assemblies ([ADR-015](https://ivanball.github.io/docs/adr/015-architecture-fitness-functions.html)).
 
 ```mermaid
@@ -142,7 +142,7 @@ flowchart TD
     CLDL --> INFL
     CLDL --> ASPL
 
-    ENF["Enforced 2x: compile-time layer guard + NetArchTest fitness (ADR-015)"]
+    ENF["Enforced 2x: compile-time layer guard + architecture fitness tests (ADR-015)"]
     ENF -.-> APIL
 
     classDef layer fill:#fef7e0,stroke:#f9ab00,color:#111

@@ -146,10 +146,10 @@
           <li><strong>PATCH</strong>: backward-compatible bug fix.</li>
           </ul>
           <p>A release version is the git tag of the form <code>vMAJOR.MINOR.PATCH</code>
-          (e.g. <code>v1.265.1</code>): <code>release.yml</code> strips the <code>v</code> and passes it as the build and package version with
-          MinVer skipped, and <strong>MinVer</strong> (referenced by the packable projects) versions every other build
-          from git history. There is no hand-edited
-          version property; tag a commit on merged <code>main</code> and the release workflow packs and pushes. It
+          (e.g. <code>v1.265.1</code>): <code>release.yml</code> strips the <code>v</code> and passes it as the build and package version
+          (<code>-p:Version</code>, <code>-p:PackageVersion</code>). Every other build, local or PR CI, carries the <code>0.0.0-dev</code>
+          placeholder from <code>Directory.Build.props</code>, so no build depends on git history. There is no hand-edited
+          release version property; tag a commit on merged <code>main</code> and the release workflow packs and pushes. It
           refuses to publish a tag whose commit is not reachable from <code>origin/main</code>.</p>
           <h2 id="what-counts-as-breaking">What counts as breaking</h2>
           <p>A change is <strong>breaking</strong> if it is any of:</p>

@@ -273,7 +273,10 @@
           after the package-consumption CI job and the Store gateway&#39;s package references moved. Revised
           2026-11-23: the Rationale now says the gateway hosts take <code>MMCA.Common.Azure.Startup</code> rather than
           <code>MMCA.Common.Azure</code> and depend transitively on Shared alone, not on every core layer except API;
-          package-consumption CI and consumer-check anchors refreshed.</p>
+          package-consumption CI and consumer-check anchors refreshed.
+          Revised 2026-11-24: the version is the release tag passed to the pack, with MinVer gone from the build
+          (MMCA.Common 1.318.0, <a href="016-lockstep-versioning-masstransit-pin.html">ADR-016</a> Amendment (2026-11-24));
+          Decision 3 is corrected in place.</p>
           <h2 id="context">Context</h2>
           <p>ADR-053 made the install path credential-free: <code>dotnet add package MMCA.Common.API</code> works for anyone,
           from nuget.org, with no token and no hand-written <code>nuget.config</code>. What it did not shorten is the
@@ -305,8 +308,7 @@
           describes exactly the shape <code>IncludeBuildOutput=false</code> is meant to produce and
           <code>TreatWarningsAsErrors</code> would otherwise turn it into a pack failure (<code>:10-14</code>).</p>
           </li>
-          <li><p><strong>It is an ordinary packable project in every other respect.</strong> Version comes from MinVer off the
-          same tag, packaging metadata from <code>Directory.Build.props</code>, and the repository README is packed
+          <li><p><strong>It is an ordinary packable project in every other respect.</strong> Version is the same release tag, packaging metadata from <code>Directory.Build.props</code>, and the repository README is packed
           with it (<code>:34</code>). It therefore publishes to both registries in the same release run with no
           workflow change (ADR-053).</p>
           </li>

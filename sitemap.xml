@@ -37,7 +37,7 @@
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/adr/index.html</loc>
-    <lastmod>2026-11-23</lastmod>
+    <lastmod>2026-11-24</lastmod>
     <priority>0.8</priority>
   </url>
   <url>
@@ -62,7 +62,7 @@
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/adr/005-soft-delete-vs-erasure.html</loc>
-    <lastmod>2026-11-23</lastmod>
+    <lastmod>2026-11-24</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
@@ -102,17 +102,17 @@
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/adr/013-result-pattern.html</loc>
-    <lastmod>2026-11-23</lastmod>
+    <lastmod>2026-11-24</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/adr/014-cqrs-decorator-pipeline.html</loc>
-    <lastmod>2026-11-23</lastmod>
+    <lastmod>2026-11-24</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/adr/015-architecture-fitness-functions.html</loc>
-    <lastmod>2026-11-23</lastmod>
+    <lastmod>2026-11-24</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
@@ -227,7 +227,7 @@
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/adr/038-supply-chain-provenance.html</loc>
-    <lastmod>2026-11-23</lastmod>
+    <lastmod>2026-11-24</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
@@ -247,7 +247,7 @@
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/adr/042-device-capability-abstraction.html</loc>
-    <lastmod>2026-11-23</lastmod>
+    <lastmod>2026-11-24</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
@@ -262,7 +262,7 @@
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/adr/045-managed-file-storage-and-avatars.html</loc>
-    <lastmod>2026-11-23</lastmod>
+    <lastmod>2026-11-24</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
@@ -312,7 +312,7 @@
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/adr/055-repository-and-specification-contract.html</loc>
-    <lastmod>2026-11-23</lastmod>
+    <lastmod>2026-11-24</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
@@ -352,7 +352,7 @@
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/adr/063-accessibility-conformance-gate.html</loc>
-    <lastmod>2026-11-23</lastmod>
+    <lastmod>2026-11-24</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
@@ -382,7 +382,7 @@
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/adr/069-shared-data-protection-key-ring.html</loc>
-    <lastmod>2026-11-23</lastmod>
+    <lastmod>2026-11-24</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
@@ -542,7 +542,7 @@
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/adr/101-common-metapackage.html</loc>
-    <lastmod>2026-11-23</lastmod>
+    <lastmod>2026-11-24</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
@@ -617,12 +617,12 @@
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/adr/116-identity-completions-opt-in.html</loc>
-    <lastmod>2026-11-23</lastmod>
+    <lastmod>2026-11-24</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/adr/117-apphost-integration-test-base.html</loc>
-    <lastmod>2026-11-23</lastmod>
+    <lastmod>2026-11-24</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
@@ -677,7 +677,7 @@
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/adr/128-time-as-an-input.html</loc>
-    <lastmod>2026-11-23</lastmod>
+    <lastmod>2026-11-24</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
@@ -707,7 +707,7 @@
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/adr/134-cloud-neutral-core-vendor-adapters.html</loc>
-    <lastmod>2026-11-23</lastmod>
+    <lastmod>2026-11-24</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
@@ -742,7 +742,7 @@
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/adr/141-two-framework-lines-from-one-tree.html</loc>
-    <lastmod>2026-11-23</lastmod>
+    <lastmod>2026-11-24</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
@@ -797,7 +797,7 @@
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/onboarding/00-primer.html</loc>
-    <lastmod>2026-10-29</lastmod>
+    <lastmod>2026-11-24</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
@@ -817,12 +817,12 @@
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/onboarding/group-04-events-outbox.html</loc>
-    <lastmod>2026-10-29</lastmod>
+    <lastmod>2026-11-24</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/onboarding/group-05-cqrs-pipeline.html</loc>
-    <lastmod>2026-10-29</lastmod>
+    <lastmod>2026-11-24</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
@@ -837,7 +837,7 @@
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/onboarding/group-08-auth.html</loc>
-    <lastmod>2026-10-29</lastmod>
+    <lastmod>2026-11-24</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
@@ -857,7 +857,7 @@
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/onboarding/group-12-api-hosting-mapping.html</loc>
-    <lastmod>2026-10-29</lastmod>
+    <lastmod>2026-11-24</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
@@ -867,17 +867,17 @@
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/onboarding/group-14-module-system-composition.html</loc>
-    <lastmod>2026-10-29</lastmod>
+    <lastmod>2026-11-24</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/onboarding/group-15-common-ui-framework.html</loc>
-    <lastmod>2026-10-29</lastmod>
+    <lastmod>2026-11-24</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/onboarding/group-16-aspire-orchestration.html</loc>
-    <lastmod>2026-10-29</lastmod>
+    <lastmod>2026-11-24</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
@@ -937,12 +937,12 @@
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/onboarding/group-28-common-cloud-provider-adapters.html</loc>
-    <lastmod>2026-10-29</lastmod>
+    <lastmod>2026-11-24</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/onboarding/group-29-testing-infrastructure.html</loc>
-    <lastmod>2026-10-29</lastmod>
+    <lastmod>2026-11-24</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
@@ -952,7 +952,7 @@
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/onboarding/devops-cicd.html</loc>
-    <lastmod>2026-10-29</lastmod>
+    <lastmod>2026-11-24</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
@@ -967,7 +967,7 @@
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/onboarding/devops-testing.html</loc>
-    <lastmod>2026-10-29</lastmod>
+    <lastmod>2026-11-24</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
@@ -977,7 +977,7 @@
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/onboarding/CONCEPT-MAPS.html</loc>
-    <lastmod>2026-10-29</lastmod>
+    <lastmod>2026-11-24</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
@@ -987,7 +987,7 @@
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/governance/adc-ArchitectureScorecard.html</loc>
-    <lastmod>2026-11-23</lastmod>
+    <lastmod>2026-11-24</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
@@ -1002,17 +1002,17 @@
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/governance/common-ArchitectureScorecard.html</loc>
-    <lastmod>2026-11-23</lastmod>
+    <lastmod>2026-11-24</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/governance/common-RemediationBacklog.html</loc>
-    <lastmod>2026-11-23</lastmod>
+    <lastmod>2026-11-24</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/governance/store-ArchitectureScorecard.html</loc>
-    <lastmod>2026-11-23</lastmod>
+    <lastmod>2026-11-24</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
@@ -1052,12 +1052,12 @@
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/guides/common-BUILD-BY-HAND.html</loc>
-    <lastmod>2026-11-17</lastmod>
+    <lastmod>2026-11-24</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/guides/common-CAPABILITIES.html</loc>
-    <lastmod>2026-11-17</lastmod>
+    <lastmod>2026-11-24</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
@@ -1102,7 +1102,7 @@
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/guides/common-VERSIONING.html</loc>
-    <lastmod>2026-10-28</lastmod>
+    <lastmod>2026-11-24</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
@@ -1122,7 +1122,7 @@
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/guides/store-Specification.html</loc>
-    <lastmod>2026-11-17</lastmod>
+    <lastmod>2026-11-24</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
@@ -1132,7 +1132,7 @@
   </url>
   <url>
     <loc>https://ivanball.github.io/articles/open-sourced-enterprise-dotnet-34-categories.html</loc>
-    <lastmod>2026-10-29</lastmod>
+    <lastmod>2026-11-24</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
@@ -1162,7 +1162,7 @@
   </url>
   <url>
     <loc>https://ivanball.github.io/articles/cqrs-decorator-pipeline.html</loc>
-    <lastmod>2026-10-29</lastmod>
+    <lastmod>2026-11-24</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
@@ -1297,7 +1297,7 @@
   </url>
   <url>
     <loc>https://ivanball.github.io/articles/architecture-fitness-functions.html</loc>
-    <lastmod>2026-10-29</lastmod>
+    <lastmod>2026-11-24</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
@@ -1327,12 +1327,12 @@
   </url>
   <url>
     <loc>https://ivanball.github.io/articles/write-your-first-fitness-test.html</loc>
-    <lastmod>2026-10-29</lastmod>
+    <lastmod>2026-11-24</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
     <loc>https://ivanball.github.io/articles/two-real-apps-case-study.html</loc>
-    <lastmod>2026-10-29</lastmod>
+    <lastmod>2026-11-24</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
@@ -1367,7 +1367,7 @@
   </url>
   <url>
     <loc>https://ivanball.github.io/articles/observability-opentelemetry.html</loc>
-    <lastmod>2026-10-29</lastmod>
+    <lastmod>2026-11-24</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
@@ -1392,7 +1392,7 @@
   </url>
   <url>
     <loc>https://ivanball.github.io/articles/cloud-neutral-vendor-adapters.html</loc>
-    <lastmod>2026-10-29</lastmod>
+    <lastmod>2026-11-24</lastmod>
     <priority>0.6</priority>
   </url>
   <url>

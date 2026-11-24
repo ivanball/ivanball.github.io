@@ -239,14 +239,15 @@
           runs per the comment<span class="cite"><span> (<code>ci.yml:90-91</code>)</span></span>, so a hung restore or test host fails the job instead of holding a
           runner for GitHub&#39;s 6-hour default. The <code>coverage</code> job gets the same treatment at 5 minutes<span class="cite"><span>
           (<code>ci.yml:446-448</code>)</span></span>.</p>
-          <p><strong>Step 1, Checkout with full history</strong><span class="cite"><span> (<code>ci.yml:94-97</code>)</span></span>:</p>
+          <p><strong>Step 1, Checkout</strong><span class="cite"><span> (<code>ci.yml:112-114</code>)</span></span>:</p>
           <pre class="doc-pre" tabindex="0" data-lang="YAML"><code class="language-yaml hljs"><span class="hljs-bullet">-</span> <span class="hljs-attr">uses:</span> <span class="hljs-string">actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1</span> <span class="hljs-comment"># v7</span>
   <span class="hljs-attr">with:</span>
-    <span class="hljs-attr">persist-credentials:</span> <span class="hljs-literal">false</span>
-    <span class="hljs-attr">fetch-depth:</span> <span class="hljs-number">0</span> <span class="hljs-comment"># MinVer needs full history</span></code></pre>
-          <p><code>fetch-depth: 0</code> fetches all tags and the complete git history. Without it, MinVer (the version-derivation
-          tool) cannot walk back to find the nearest <code>vX.Y.Z</code> tag and would produce an unstable pre-release version
-          string. Shallow clones (the GitHub default of depth 1) silently break reproducible versioning.</p>
+    <span class="hljs-attr">persist-credentials:</span> <span class="hljs-literal">false</span></code></pre>
+          <p>A default shallow checkout is enough: no build derives its version from git history. Every non-release
+          build carries the <code>0.0.0-dev</code> placeholder from <code>Directory.Build.props</code><span class="cite"><span> (<code>:87-90</code>)</span></span>, and only the release
+          workflow passes a real version, the tag. Full history is fetched only where a step reads it: the
+          <code>changes</code> path classifier<span class="cite"><span> (<code>ci.yml:54</code>)</span></span> and <code>build-and-test-checks</code>, whose FACTS gate derives the
+          version from the latest reachable tag<span class="cite"><span> (<code>ci.yml:205</code>)</span></span>.</p>
           <p><strong>Step 2, .NET 10 setup</strong><span class="cite"><span> (<code>ci.yml:99-113</code>)</span></span>: <code>actions/setup-dotnet@v6</code> pinned to <code>10.0.x</code> ensures the
           runner matches the <code>&lt;TargetFramework&gt;net10.0&lt;/TargetFramework&gt;</code> in every project. It also caches
           <code>~/.nuget/packages</code>, keyed on the committed lock files <strong>plus</strong> <code>Directory.Packages.props</code>, because
@@ -342,7 +343,7 @@ dotnet-coverage collect -f cobertura -o coverage.unit.cobertura.xml \
           <code>Application.Tests</code>, <code>Infrastructure.Tests</code>, <code>API.Tests</code>, <code>Grpc.Tests</code>, <code>UI.Tests</code>, <code>UI.Web.Tests</code>,
           <code>Aspire.Tests</code>, <code>Aspire.Hosting.Tests</code>, <code>Gateway.Tests</code>, <code>Testing.Tests</code>, plus the
           <code>Infrastructure.Tests.MigrationsFixture</code> helper project, <span class="cite"><span><code>MMCA.Common.slnx:33-49</code></span></span>) plus
-          <code>Architecture.Tests</code> (NetArchTest layer/purity/extraction fitness functions, see
+          <code>Architecture.Tests</code> (layer/purity/extraction fitness functions on the <code>ArchitectureTypes</code> engine, see
           <a href="00-primer.html#architecture-enforcement-is-doubled-fitness-functions-rubric-34-3">the doubled architecture-enforcement / fitness functions</a>).</p>
           <p>[Rubric §14, Testability &amp; Test Strategy] assesses whether tests actually run and cover the system. The
           <code>--minimum-expected-tests</code> floor is a mechanical enforcement of §14: you cannot merge a change that
@@ -387,7 +388,7 @@ dotnet-coverage collect -f cobertura -o coverage.unit.cobertura.xml \
           means the unit/arch job stays fast while accessibility remains enforced.</p>
           <p><strong>Step-by-step:</strong></p>
           <ol>
-          <li><p><strong>Checkout</strong><span class="cite"><span> (<code>ci.yml:237-240</code>)</span></span>: <code>fetch-depth: 0</code> (the comment notes &quot;MinVer needs full history&quot;), same
+          <li><p><strong>Checkout</strong><span class="cite"><span> (<code>ci.yml:353-355</code>)</span></span>: a default shallow checkout with <code>persist-credentials: false</code>, same
           as <code>build-and-test</code>.</p>
           </li>
           <li><p><strong>Build the E2E project directly</strong><span class="cite"><span> (<code>ci.yml:258-262</code>)</span></span>:</p>
@@ -555,8 +556,9 @@ dotnet-coverage collect -f cobertura -o coverage.unit.cobertura.xml \
           builds bind <code>ProjectReference</code>s, so pack breaks (NU5xxx) and package-mode-only restore, analyzer, and
           reference failures stay invisible to them. The comment records that this failure mode shipped <strong>twice</strong>
           before the job existed<span class="cite"><span> (<code>ci.yml:715-724</code>)</span></span>. So this job packs every slnx package into a local folder feed
-          under a CI-only version (<code>PACK_VERSION</code> at <span class="cite"><span><code>ci.yml:730-731</code></span></span>, packed at <span class="cite"><span><code>ci.yml:759-762</code></span></span>, with
-          <code>MinVerSkip=true</code> so the consumer can pin the packed version exactly), then scaffolds a throwaway
+          under a CI-only version (<code>PACK_VERSION</code> at <span class="cite"><span><code>ci.yml:935</code></span></span>, packed by
+          <code>build/consumer-check/Invoke-ConsumerCheck.ps1 -Stage Pack</code>, which passes it as <code>-p:Version</code> and
+          <code>-p:PackageVersion</code> at <span class="cite"><span><code>:147</code></span></span> so the consumer can pin the packed version exactly), then scaffolds a throwaway
           consumer<span class="cite"><span> (<code>ci.yml:764-769</code>)</span></span> whose <code>nuget.config</code> maps <code>MMCA.Common.*</code> to that feed and everything else to
           nuget.org, and builds it<span class="cite"><span> (<code>ci.yml:771-774</code>)</span></span>.</p>
           <p>Every one of those steps is a single line, <code>./build/consumer-check/Invoke-ConsumerCheck.ps1 -Stage &lt;name&gt;</code> under <code>shell: pwsh</code><span class="cite"><span> (<code>ci.yml:762</code>, <code>:769</code>, <code>:774</code>, <code>:784</code>)</span></span>. The script<span class="cite"><span>
@@ -758,8 +760,9 @@ dotnet-coverage collect -f cobertura -o coverage.unit.cobertura.xml \
           FACTS drift gate, the vulnerability audit, the Helpdesk consumer canary, the package-consumption canary,
           <code>ui-e2e</code>, the perf gate) the checks that actually covered the tree being published. <code>publish-maui</code> carries
           the same assertion<span class="cite"><span> (<code>release.yml:154-164</code>)</span></span>, because it publishes from the same tag.</p>
-          <p><strong>Step 1, Checkout with full history</strong><span class="cite"><span> (<code>release.yml:23-26</code>)</span></span>: <code>fetch-depth: 0</code> for MinVer, same as CI,
-          with <code>persist-credentials: false</code> so the checkout token is not left behind in the workspace.</p>
+          <p><strong>Step 1, Checkout with full history</strong><span class="cite"><span> (<code>release.yml:30-33</code>)</span></span>: <code>fetch-depth: 0</code>, because the next step
+          proves the tagged commit is reachable from <code>main</code> (the comment at <span class="cite"><span><code>release.yml:33</code></span></span>), with
+          <code>persist-credentials: false</code> so the checkout token is not left behind in the workspace.</p>
           <p><strong>Step 2, .NET 10 setup</strong><span class="cite"><span> (<code>release.yml:48-57</code>)</span></span>: same as CI, including the NuGet cache keyed on the
           committed lock files plus <code>Directory.Packages.props</code>.</p>
           <p><strong>Step 3, Restore</strong><span class="cite"><span> (<code>release.yml:58-64</code>)</span></span>: <code>dotnet restore MMCA.Common.slnx --locked-mode</code>, so the
@@ -770,12 +773,12 @@ dotnet-coverage collect -f cobertura -o coverage.unit.cobertura.xml \
           <p><code>GITHUB_REF_NAME</code> is the full tag name (e.g. <code>v1.52.0</code>). The <code>#v</code> parameter expansion strips the leading
           <code>v</code>, yielding <code>1.52.0</code>. This string is then passed to the build and pack steps as an explicit version
           override.</p>
-          <p><strong>Step 5, Build with explicit version</strong><span class="cite"><span> (<code>release.yml:72-73</code>)</span></span>:</p>
-          <pre class="doc-pre" tabindex="0" data-lang="Shell"><code class="language-bash hljs">dotnet build MMCA.Common.slnx -c Release --no-restore -p:MinVerSkip=<span class="hljs-literal">true</span> -p:Version=<span class="hljs-variable">${{ steps.version.outputs.VERSION }</span>}</code></pre>
-          <p><code>-p:MinVerSkip=true</code> disables MinVer&#39;s git-tag-based version derivation and <code>-p:Version=...</code> injects the
-          tag-derived version directly. This pattern avoids a subtle race: if MinVer ran here, it would derive the
-          version from the tag, which should be the same value, but in edge cases (e.g. detached HEAD, retagged
-          commit) the two sources could diverge. Making the version explicit from the start removes the ambiguity.</p>
+          <p><strong>Step 5, Build with explicit version</strong><span class="cite"><span> (<code>release.yml:83-84</code>)</span></span>:</p>
+          <pre class="doc-pre" tabindex="0" data-lang="Shell"><code class="language-bash hljs">dotnet build MMCA.Common.slnx -c Release --no-restore -p:Version=<span class="hljs-variable">${{ steps.version.outputs.VERSION }</span>} -p:RunAnalyzers=<span class="hljs-literal">false</span></code></pre>
+          <p><code>-p:Version=...</code> is the only source of the release version: no versioning package reads git history,
+          and without this property the build would carry the <code>0.0.0-dev</code> placeholder from <code>Directory.Build.props</code>.
+          <code>-p:RunAnalyzers=false</code> skips the five analyzers, because a release tag only names a merged <code>main</code>
+          commit whose tree already passed the analyzer-enforcing <code>ci.yml</code> legs (the comment at <span class="cite"><span><code>release.yml:80-82</code></span></span>).</p>
           <p><strong>Step 5b, Audit dependencies</strong><span class="cite"><span> (<code>release.yml:75-83</code>)</span></span>: the same
           <code>./.github/actions/nuget-vulnerability-audit</code> composite action that <code>ci.yml</code> <code>build-and-test</code> runs, with
           the same accept-list (<code>NuGetAuditSuppress</code> in <code>Directory.Build.props</code>) and the same fail-closed
@@ -787,8 +790,8 @@ dotnet-coverage collect -f cobertura -o coverage.unit.cobertura.xml \
           <p>Tests run again on the tagged commit, with the same 2000-test floor as <code>ci.yml</code> <code>build-and-test</code>. The
           comment<span class="cite"><span> (<code>release.yml:86-87</code>)</span></span> states why the floor is repeated here: a discovery or filter regression that
           silently drops thousands of tests must fail the release, not publish behind a near-empty green run.</p>
-          <p><strong>Step 7, Pack</strong><span class="cite"><span> (<code>release.yml:89-90</code>)</span></span>:</p>
-          <pre class="doc-pre" tabindex="0" data-lang="Shell"><code class="language-bash hljs">dotnet pack MMCA.Common.slnx -c Release --no-build -o ./nupkgs -p:MinVerSkip=<span class="hljs-literal">true</span> -p:PackageVersion=<span class="hljs-variable">${{ steps.version.outputs.VERSION }</span>}</code></pre>
+          <p><strong>Step 7, Pack</strong><span class="cite"><span> (<code>release.yml:104-105</code>)</span></span>:</p>
+          <pre class="doc-pre" tabindex="0" data-lang="Shell"><code class="language-bash hljs">dotnet pack MMCA.Common.slnx -c Release --no-build -o ./nupkgs -p:PackageVersion=<span class="hljs-variable">${{ steps.version.outputs.VERSION }</span>}</code></pre>
           <p><code>dotnet pack</code> over the entire solution packs every packable project it contains (<code>Source/**</code>) in
           one command. <code>-p:PackageVersion</code> sets the NuGet package version metadata. <code>-o ./nupkgs</code> collects all
           <code>.nupkg</code> files in one directory for the push step. The packages produced here all share the same
@@ -1046,7 +1049,7 @@ dotnet-coverage collect -f cobertura -o coverage.unit.cobertura.xml \
           and <span class="cite"><span><code>:402</code></span></span>; the CycloneDX tool is installed inside the shared SBOM action), so a tool release cannot
           change what a gate measures between two runs of the same commit.
            Covers unit tests
-          for all module layers plus <code>Architecture.Tests</code> (NetArchTest fitness functions, layer flow, domain purity,
+          for all module layers plus <code>Architecture.Tests</code> (architecture fitness functions, layer flow, domain purity,
           module isolation).</p>
           <p>[Rubric §14, Testability &amp; Test Strategy] is served: architecture tests enforce that the modular
           structure is not accidentally violated by a new project reference (e.g. <code>Domain</code> referencing

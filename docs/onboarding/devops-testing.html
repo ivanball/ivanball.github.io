@@ -161,7 +161,7 @@
           </blockquote>
           <p>This chapter teaches the complete testing architecture of the MMCA workspace: how the solutions are
           sliced, which CI filter sees which tests, how Microsoft Testing Platform differs from VSTest, the
-          shipped testing-infrastructure NuGet packages, the NetArchTest fitness-function suites that act
+          shipped testing-infrastructure NuGet packages, the architecture fitness-function suites that act
           as executable governance, the runtime conformance suites that check a really booted host, the
           integration and E2E strategies, three worked examples, and the CI gates that decide which tier
           blocks which merge or which deploy, including the freshness gates that block on a proof produced
@@ -867,7 +867,7 @@ dotnet <span class="hljs-built_in">test</span> --project Tests/Modules/Identity/
           <li><code>MMCA.Common.Testing.UI</code> (19 types), bUnit component-test base, MudBlazor provider harness, HTTP
           test doubles, an error-summary helper and a markup snapshot helper (this section; see the bUnit
           worked example in section 6).</li>
-          <li><code>MMCA.Common.Testing.Architecture</code> (78 types), the shared NetArchTest fitness-function rule library
+          <li><code>MMCA.Common.Testing.Architecture</code> (78 types), the shared architecture fitness-function rule library (on its own metadata-based engine)
           plus 53 abstract test bases (covered in section 4, where each repo&#39;s <code>*.Architecture.Tests</code> consumes it).</li>
           <li><code>MMCA.Common.Testing.Aspire</code> (10 types), the AppHost boot fixture, its readiness budget, the
           Docker/certificate/environment preconditions and the wiring probes (this section).</li>
@@ -934,7 +934,7 @@ dotnet <span class="hljs-built_in">test</span> --project Tests/Modules/Identity/
           touches.</p>
           <h4 id="the-eight-runtime-conformance-bases-adr-058">The eight runtime conformance bases (ADR-058)</h4>
           <p>The bases above are plumbing. The eight below are the runtime-contract half of the fitness story:
-          NetArchTest can prove a controller lives in the right assembly, it cannot prove a booted host answers
+          the architecture rules can prove a controller lives in the right assembly, they cannot prove a booted host answers
           a bad page number with an RFC 9457 problem document. All but one run against a host that was
           <strong>actually booted</strong>
           (<a href="https://ivanball.github.io/docs/adr/058-runtime-conformance-suites-as-a-package.html" target="_blank" rel="noopener">ADR-058</a>).</p>
@@ -1433,11 +1433,18 @@ dotnet <span class="hljs-built_in">test</span> --project Tests/Modules/Identity/
           tests make the rules real.</p>
           <p>The primer explains (<code>00-primer.md#architecture-enforcement-is-doubled-fitness-functions</code>) that
           layer rules are enforced <strong>twice</strong>: at compile-time (the MSBuild <code>.targets</code> file) and at runtime
-          (NetArchTest). This section covers the runtime half.</p>
-          <h3 id="netarchtestenhancededition-the-mechanism">NetArchTest.eNhancedEdition, the mechanism</h3>
-          <p>NetArchTest works on compiled assemblies, not source. It loads an <code>Assembly</code> and applies
-          <code>Types.InAssembly(assembly).ShouldNot().HaveDependencyOnAny(namespacePrefix).GetResult()</code>.
-          <code>GetResult()</code> returns a <code>TestResult</code> with a <code>IsSuccessful</code> flag and a list of failing type names.
+          (the package&#39;s own rule engine). This section covers the runtime half.</p>
+          <h3 id="architecturetypes-the-mechanism"><code>ArchitectureTypes</code>, the mechanism</h3>
+          <p>The engine works on compiled assemblies, not source, and needs no third-party package.
+          <code>ArchitectureTypes.InAssembly(assembly)</code> reads the assembly from its file through
+          <code>System.Reflection.Metadata</code> without loading it<span class="cite"><span>
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/ArchitectureTypes.cs:50</code>)</span></span>, and a rule
+          reads as <code>ArchitectureTypes.InAssembly(assembly).ShouldNot().HaveDependencyOnAny(namespacePrefix)</code>.
+          The condition returns an <code>ArchitectureRuleResult</code> directly, with an <code>IsSuccessful</code> flag and the
+          <code>FailingTypeNames</code> (nested types spelled <code>Outer+Inner</code>; <span class="cite"><span><code>ArchitectureRuleResult.cs:4</code></span></span>). Dependency
+          names match whole dot-separated segments, so an entry ending in a dot matches nothing<span class="cite"><span>
+          (<code>ArchitectureTypes.cs:27-31</code>)</span></span>, and a type&#39;s dependencies include the types its method bodies name,
+          lambdas and async state machines included<span class="cite"><span> (<code>:31-34</code>)</span></span>.
           The shared <code>ArchitectureAssert.NoViolations(result, reason)</code> method converts a failure
           into an xUnit assertion failure whose message includes the reason string and the offending type
           names, so a developer adding a forbidden reference sees exactly which type broke the rule and why.</p>
@@ -1665,7 +1672,7 @@ dotnet <span class="hljs-built_in">test</span> --project Tests/Modules/Identity/
           <p>The same single transport-isolation fact, applied across all ADC module layers. For Domain,
           Application and Shared of every module, plus the Common Domain/Application layers, none of
           <code>MassTransit</code>, <code>Grpc</code> or <code>Google.Protobuf</code> may appear. Transport belongs only in Infrastructure, the
-          <code>*.Service</code> hosts, and <code>*.Contracts</code> projects. A NetArchTest quirk worth knowing, recorded in the
+          <code>*.Service</code> hosts, and <code>*.Contracts</code> projects. A matching detail worth knowing, recorded in the
           rule itself<span class="cite"><span> (<code>ArchitectureRules.Transport.cs:9</code>)</span></span>: it matches by namespace <em>prefix</em>, so <code>&#39;Grpc&#39;</code>
           catches <code>Grpc.Core</code> / <code>Grpc.Net.*</code> / <code>Grpc.AspNetCore</code> but NOT the project&#39;s own <code>MMCA.Common.Grpc</code>
           (which starts with <code>MMCA</code>), so the rule does not accidentally flag the framework&#39;s own transport
@@ -2607,7 +2614,7 @@ dotnet <span class="hljs-built_in">test</span> --project Tests/Modules/Identity/
           <li><strong>The job keeps <code>ci.yml</code>&#39;s posture.</strong> Read-only <code>contents</code> permission<span class="cite"><span> (<code>load-tests.yml:19-21</code>)</span></span>, a
           non-cancelling concurrency group<span class="cite"><span> (<code>load-tests.yml:26-28</code>)</span></span>, a 20-minute timeout that bounds a hung
           processor or restore against a local run of about 15 seconds plus the build<span class="cite"><span> (<code>load-tests.yml:34-35</code>)</span></span>,
-          full history for MinVer<span class="cite"><span> (<code>load-tests.yml:40</code>)</span></span>, the same lock-file cache key as <code>ci.yml</code><span class="cite"><span>
+          a shallow checkout with <code>persist-credentials: false</code><span class="cite"><span> (<code>load-tests.yml:37-39</code>)</span></span>, the same lock-file cache key as <code>ci.yml</code><span class="cite"><span>
           (<code>load-tests.yml:45-49</code>)</span></span>, a <code>--locked-mode</code> restore<span class="cite"><span> (<code>load-tests.yml:51-52</code>)</span></span> and a build by csproj
           path, like the other out-of-solution tiers<span class="cite"><span> (<code>load-tests.yml:54-56</code>)</span></span>. The run step executes the
           self-hosted test executable directly<span class="cite"><span> (<code>load-tests.yml:61</code>)</span></span> with <code>MMCA_LOAD_RESULTS_DIR</code> pointing at

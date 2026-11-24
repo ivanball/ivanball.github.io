@@ -316,7 +316,7 @@ Each business module is a set of layered projects under `Source/Modules/<Module>
 | `Contoso.Support.Orders.Infrastructure` | `MMCA.Common.Infrastructure`, the Application project | EF entity configurations, the abstract module DbContext, infra DI |
 | `Contoso.Support.Orders.API` | `MMCA.Common.API`, the Application + Infrastructure projects | REST controller, the `IModule`, the module-composition DI |
 
-The layering is enforced twice by the framework (compile-time MSBuild guard + the NetArchTest rules in
+The layering is enforced twice by the framework (compile-time MSBuild guard + the architecture fitness rules in
 Phase 6), so a forbidden reference fails the build. See
 [ADR-015](../adr/015-architecture-fitness-functions.md).
 
@@ -1202,8 +1202,8 @@ Optional addition as the app grows:
 
 ### The architecture-fitness map (mandatory)
 
-The framework enforces layering and module isolation by running the **same** NetArchTest rule library
-(shipped in `MMCA.Common.Testing.Architecture`) against a per-repo map. You implement one
+The framework enforces layering and module isolation by running the **same** architecture rule library
+(shipped in `MMCA.Common.Testing.Architecture`, on its own metadata-based engine) against a per-repo map. You implement one
 `IArchitectureMap` by subclassing `ArchitectureMapBase`: declare a `RepoToken` and list every layer
 assembly. See [ADR-015](../adr/015-architecture-fitness-functions.md). Pattern source: the
 `*.Architecture.Tests` project in MMCA.Helpdesk, ADC, or Store.

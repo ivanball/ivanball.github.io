@@ -270,7 +270,10 @@
           Revised 2026-11-23: the default set is 26 contracts (<code>IPasskeyCapability</code> and <code>IDeviceMetadataReporter</code>
           join), the MAUI package overrides 21 and five stay outside it, both UI packages build on net10.0 and
           net11.0 (ADR-141), and the MAUI release splits into a windows <code>pack-maui</code> job and an ubuntu
-          <code>publish-maui</code> push behind the <code>release</code> environment.</p>
+          <code>publish-maui</code> push behind the <code>release</code> environment.
+          Revised 2026-11-24: the runtime architecture map no longer runs on NetArchTest (MMCA.Common 1.318.0,
+          <a href="015-architecture-fitness-functions.html">ADR-015</a> Amendment (2026-11-24)); the layer-rule bullet is
+          reworded in place.</p>
           <h2 id="context">Context</h2>
           <p>The consumer apps ship the same Blazor component set through three heads: MAUI Blazor Hybrid
           (Android/iOS/MacCatalyst/Windows), Blazor Server SSR, and WebAssembly. Native device capabilities
@@ -360,7 +363,7 @@
           behind the <code>release</code> environment approval (<code>release.yml:342</code>, <code>:348</code>), so the lockstep release
           stays whole. Layer rule: UI + Shared only
           (<code>Source/Build/MMCA.Common.LayerEnforcement.targets</code>, <code>EnforceUIMauiLayerBoundary</code>); it is
-          deliberately absent from the ubuntu NetArchTest runtime map because its assemblies cannot load
+          deliberately absent from the ubuntu runtime architecture map because its assemblies cannot load
           there, and the compile-time target is the enforcement.</p>
           </li>
           <li><p><strong>Deep links funnel through one boundary.</strong> Native navigation sources (notification taps, app

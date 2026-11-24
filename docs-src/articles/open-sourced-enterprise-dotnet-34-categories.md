@@ -100,7 +100,7 @@ The inward-pointing dependency rule (Domain must never reference EF Core or ASP.
 1. **At compile time**, by an MSBuild target (`MMCA.Common.LayerEnforcement.targets`) that inspects
    project references and fails the build with a descriptive error if a layer reaches into a layer it
    should not.
-2. **At runtime**, by NetArchTest fitness functions that assert the same rules against the compiled
+2. **At runtime**, by fitness functions on the framework's own metadata-based rule engine that assert the same rules against the compiled
    assemblies.
 
 Those fitness functions do not live as copy-pasted test code in each repo. They live once, in a

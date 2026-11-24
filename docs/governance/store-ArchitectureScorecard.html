@@ -152,7 +152,7 @@
           </ol>
           <h2 id="top-5-strengths">Top 5 strengths</h2>
           <ol>
-          <li><strong>Clean Architecture + DDD + CQRS depth, fitness-enforced</strong>: §3/§4 (impl 9): inherited framework substance, guarded by the shared NetArchTest suite (62 test classes, <code>StoreArchitectureMap.cs:14-43</code>).</li>
+          <li><strong>Clean Architecture + DDD + CQRS depth, fitness-enforced</strong>: §3/§4 (impl 9): inherited framework substance, guarded by the shared architecture fitness suite (62 test classes, <code>StoreArchitectureMap.cs:14-43</code>).</li>
           <li><strong>Full microservices parity on a race-safe data layer</strong>, §7 (impl 8) / §8 (impl 9): database-per-service + per-service outbox + versioned gRPC + MassTransit broker + RS256/JWKS, extractable modules (<code>infra/main.bicep:1033-1051</code> per-service DBs, <code>:1079</code> Service Bus), with the oversell race closed by an atomic conditional UPDATE under deterministic lock ordering plus a schema CHECK backstop (<code>InventoryAllocationService.cs:71-73</code>, <code>InventoryItemConfiguration.cs:57-59</code>) and destructive migrations blocked at the merge gate (<code>deploy.yml:431-483</code>).</li>
           <li><strong>Observability and test strategy, gate-backed</strong>: §13 (impl 9) / §14 (impl 9): <code>ObservabilityConventionTests.cs:7</code> pairs every SLO alert with an <code>infra/OPERATIONS.md</code> section and fails below four specs (<code>:13</code>), and the required <code>build-and-test</code> check holds a self-filtered line floor of 51.6 and an Application-layer branch floor of 72.8 (<code>deploy.yml:374</code>, <code>:407</code>) over a real-SQL integration tier.</li>
           <li><strong>Reference front-end security</strong>, §26 (impl 9): in-memory access token + HttpOnly refresh cookie (no localStorage), hardened origin-pinned CSP, runtime-config fetch (<code>ServerTokenStorageService.cs:9-12</code>, <code>BlazorCspPolicyProvider.cs:105</code>).</li>
@@ -196,7 +196,7 @@
           <td>4</td>
           <td>9</td>
           <td>12/27</td>
-          <td>NetArchTest-enforced layer rules; domain framework-pure. (The compile-time layer-guard MSBuild target is MMCA.Common-internal; it is not a Store-side gate.) Evidence: <code>StoreArchitectureMap.cs:14-43</code> + <code>LayerDependencyTests</code>/<code>DomainPurityTests</code>; <code>Order.cs:1-13</code> (imports only Common.Domain/Shared)</td>
+          <td>Fitness-test-enforced layer rules; domain framework-pure. (The compile-time layer-guard MSBuild target is MMCA.Common-internal; it is not a Store-side gate.) Evidence: <code>StoreArchitectureMap.cs:14-43</code> + <code>LayerDependencyTests</code>/<code>DomainPurityTests</code>; <code>Order.cs:1-13</code> (imports only Common.Domain/Shared)</td>
           </tr>
           <tr>
           <td>4</td>

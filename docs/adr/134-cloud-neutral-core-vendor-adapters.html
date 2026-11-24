@@ -285,7 +285,14 @@
           hook and managed-identity sign-in for the Service Bus transport, the host tripwire checks four
           boolean gates (adding RDS IAM, Cloud SQL IAM and Azure Redis Entra), the infrastructure tripwire
           also checks passkeys and machine clients, the <code>aws-integration</code> floor is 13 tests, and anchors
-          refreshed after v1.315.0.</p>
+          refreshed after v1.315.0.
+          Amended 2026-11-24 (MMCA.Common 1.318.0): the AWS key ring is one S3 object gated on
+          <code>DataProtection:S3ObjectUri</code> instead of Parameter Store (the <code>Amazon.AspNetCore.DataProtection.SSM</code>
+          dependency is gone, <a href="069-shared-data-protection-key-ring.html">ADR-069</a> Amendment (2026-11-24)), native
+          push reaches Azure Notification Hubs through an own REST client instead of the
+          <code>Microsoft.Azure.NotificationHubs</code> SDK (same <code>NativePush</code> configuration), the composed service host
+          no longer references MinVer, and the vendor-rule note names the package&#39;s own rule engine. The
+          Decision&#39;s AWS bullet, the tripwire key list and the service-host bullet are corrected in place.</p>
           <h2 id="context">Context</h2>
           <p>Before v1.255.0 the core packages carried the Azure SDKs themselves: MMCA.Common.Infrastructure,
           MMCA.Common.Aspire, MMCA.Common.API and MMCA.Common.Testing each referenced Azure packages, and
@@ -379,10 +386,11 @@
           Secrets Manager as a configuration source, <code>AddAwsSecretsManagerConfiguration()</code>, reading the
           <code>SecretsManager</code> section
           (<code>MMCA.Common/Source/Hosting/MMCA.Common.Aws/AwsSecretsManagerConfigurationExtensions.cs:25</code>,
-          <code>:82</code>); the Systems Manager Parameter Store key ring, <code>AddAwsDataProtection()</code>, gated on
-          <code>DataProtection:SsmParameterPrefix</code> with an optional <code>DataProtection:KmsKeyId</code>
-          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Aws/AwsDataProtectionExtensions.cs:57</code>, <code>:59</code>, <code>:76</code>;
-          <code>Amazon.AspNetCore.DataProtection.SSM</code> at <code>MMCA.Common/Directory.Packages.props:232</code>); SNS mobile
+          <code>:82</code>); the S3 key ring, <code>AddAwsDataProtection()</code>, one object written by the framework&#39;s own repository,
+          gated on <code>DataProtection:S3ObjectUri</code> with an optional <code>DataProtection:KmsKeyId</code> selecting SSE-KMS
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Aws/AwsDataProtectionExtensions.cs:70</code>, <code>:23</code>, <code>:24</code>;
+          no DataProtection package, only <code>AWSSDK.S3</code>; <a href="069-shared-data-protection-key-ring.html">ADR-069</a>
+          Amendment (2026-11-24)); SNS mobile
           push with a DynamoDB installation registry, <code>AddAmazonSnsPush(configuration)</code>
           (<code>AwsServiceCollectionExtensions.cs:174</code>; <code>MMCA.Common/CHANGELOG.md:1056</code>); and RDS / Aurora IAM
           authentication for PostgreSQL, <code>AddAwsRdsIamAuthentication(configuration)</code> (<code>AwsServiceCollectionExtensions.cs:108</code>), gated on the
@@ -527,7 +535,7 @@
           registered by <code>AddServiceDefaults()</code> at <code>MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Extensions.cs:50-52</code>)
           checks one gate key per host-level adapter call: <code>APPLICATIONINSIGHTS_CONNECTION_STRING</code>,
           <code>KeyVault:Uri</code> and <code>DataProtection:BlobStorageUri</code> (<code>:20</code>, <code>:23</code>, <code>:26</code>), <code>SecretsManager:NamePrefix</code>,
-          <code>DataProtection:SsmParameterPrefix</code> and <code>AwsTelemetry:Region</code> (<code>:29</code>, <code>:32</code>, <code>:49</code>), and
+          <code>DataProtection:S3ObjectUri</code> and <code>AwsTelemetry:Region</code> (<code>:29</code>, <code>:32</code>, <code>:56</code>), and
           <code>GoogleSecretManager:NamePrefix</code>, <code>DataProtection:GcsObjectUri</code> and <code>GoogleCloudTelemetry:ProjectId</code>
           (<code>:40</code>, <code>:43</code>, <code>:46</code>; the checks at <code>:91-135</code>), against the <code>HostIntegrationMarker</code> each adapter call
           registers
@@ -568,7 +576,7 @@
           and the matching assembly-name prefixes (<code>:51-62</code>). The <code>MMCA.Common.Azure</code> entries (<code>:38</code>, <code>:59</code>)
           also cover MMCA.Common.Azure.Startup, whose types keep that namespace
           (<code>MMCA.Common.Azure.Startup.csproj:7</code>) and whose assembly name starts with that prefix. The roots
-          carry no trailing dot because NetArchTest matches whole namespace segments and an entry ending in a
+          carry no trailing dot because the rule engine matches whole namespace segments and an entry ending in a
           dot matches nothing (<code>ArchitectureRules.CloudVendors.cs:28-29</code>); each cloud adapter test project (Azure, Aws, Gcp) pins that with a <code>CloudVendorRulesTests</code> case naming its own
           SDK
           (<code>MMCA.Common/Tests/Hosting/MMCA.Common.Azure.Tests/CloudVendorRulesTests.cs:22</code>,
@@ -587,8 +595,8 @@
           <code>CloudVendorIsolationTestsBase.cs:21-26</code>). Neither the Google Cloud additions nor
           MMCA.Common.Azure.Startup added an exemption.</li>
           <li><strong>The composed service host takes vendor calls only as callbacks.</strong> MMCA.Common.ServiceHost
-          references API, Aspire and Grpc, and its one package reference is MinVer
-          (<code>MMCA.Common/Source/Hosting/MMCA.Common.ServiceHost/MMCA.Common.ServiceHost.csproj:12</code>, <code>:22-24</code>);
+          references API, Aspire and Grpc and takes no package reference of its own
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.ServiceHost/MMCA.Common.ServiceHost.csproj:10-12</code>, <code>:18-20</code>);
           <code>EnforceCloudVendorBoundary</code> covers it like any core project (<code>MMCA.Common.LayerEnforcement.targets:274-275</code>).
           A host passes its vendor registrations into <code>AddMmcaServiceHost</code> through <code>MmcaServiceHostOptions</code>
           (<code>MMCA.Common/Source/Hosting/MMCA.Common.ServiceHost/MmcaServiceHostOptions.cs:12</code>, <code>:16</code>):

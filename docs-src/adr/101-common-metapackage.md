@@ -20,6 +20,9 @@ after the package-consumption CI job and the Store gateway's package references 
 2026-11-23: the Rationale now says the gateway hosts take `MMCA.Common.Azure.Startup` rather than
 `MMCA.Common.Azure` and depend transitively on Shared alone, not on every core layer except API;
 package-consumption CI and consumer-check anchors refreshed.
+Revised 2026-11-24: the version is the release tag passed to the pack, with MinVer gone from the build
+(MMCA.Common 1.318.0, [ADR-016](016-lockstep-versioning-masstransit-pin.md) Amendment (2026-11-24));
+Decision 3 is corrected in place.
 
 ## Context
 ADR-053 made the install path credential-free: `dotnet add package MMCA.Common.API` works for anyone,
@@ -55,8 +58,7 @@ Publish a metapackage named `MMCA.Common` that carries dependencies and no code.
    describes exactly the shape `IncludeBuildOutput=false` is meant to produce and
    `TreatWarningsAsErrors` would otherwise turn it into a pack failure (`:10-14`).
 
-3. **It is an ordinary packable project in every other respect.** Version comes from MinVer off the
-   same tag, packaging metadata from `Directory.Build.props`, and the repository README is packed
+3. **It is an ordinary packable project in every other respect.** Version is the same release tag, packaging metadata from `Directory.Build.props`, and the repository README is packed
    with it (`:34`). It therefore publishes to both registries in the same release run with no
    workflow change (ADR-053).
 

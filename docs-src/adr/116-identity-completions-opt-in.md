@@ -21,6 +21,9 @@ shape (see Revision below).
 Revised 2026-11-23: `MMCA.Common.UI` now ships an opt-in two-factor account page at
 `/profile/two-factor` (adopted by MMCA.Store only), a registered two-factor authenticator reaches
 sign-in without a constructor argument, and anchors are refreshed (see Revision below).
+Amended (2026-11-24): `Otp.NET` is replaced by an internal RFC 6238 TOTP and RFC 4648 Base32 in
+`MMCA.Common.Infrastructure` (MMCA.Common 1.318.0), with identical codes and window, so Decision 9
+no longer adds a package. See Amendment (2026-11-24) at the end.
 Layers stored permission grants over
 [ADR-020](020-permission-based-authorization.md)'s compiled registry and extends the shared sign-in
 workflow of [ADR-050](050-jwt-refresh-token-rotation.md) with optional collaborators.
@@ -654,6 +657,17 @@ additions, and the anchors moved with the releases since v1.281.0.
    `:293`; `IAuthenticationService.cs:174`, `:179-180`; `SignInSettings.cs:23`, `:37`;
    `Register.razor:266-268`; `Login.razor.cs:211`. The Context, items 2, 3, 5 and 7 to 14 and the
    Trade-offs now cite these.
+
+## Amendment (2026-11-24): no third-party TOTP package
+**Decision.** Decision 9 is superseded: the two-factor path adds no package. `Otp.NET` is replaced by
+two internal types in `MMCA.Common.Infrastructure`, an RFC 6238 TOTP
+(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Auth/TwoFactor/Totp.cs:24`) and an RFC 4648
+Base32 codec (`.../Auth/TwoFactor/Base32.cs:13`), which `TotpTwoFactorService` calls to mint secrets
+and recovery codes and to verify a code (`.../Auth/TwoFactor/TotpTwoFactorService.cs:39`, `:70`, `:87`,
+`:107`). Codes and the accepted window are identical; one behavior changes: a stored secret that
+decodes to no key now verifies false instead of throwing (`MMCA.Common/CHANGELOG.md`, 1.318.0).
+Application, Domain and Shared remain dependency-free, as Decision 9 intended. The revisions above keep
+their `Otp.NET` citations as recorded.
 
 ## Related
 [ADR-020](020-permission-based-authorization.md) (the compiled role-to-permission registry stored

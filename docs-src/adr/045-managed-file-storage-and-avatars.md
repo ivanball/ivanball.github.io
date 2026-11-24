@@ -21,6 +21,8 @@ Revised 2026-10-25 (image processing): `IImageProcessor` and its SkiaSharp imple
 Revised 2026-10-26: anchors refreshed after MMCA.Common v1.261.0 (the GCS delete posture, the Consequences CHANGELOG cite and the revision-section anchors moved; no behavior changed); see Revision (2026-10-26).
 Revised 2026-10-28: the three adapters answer a transport failure with no service response as a `FileStorage.UploadFailed` / `FileStorage.DeleteFailed` Result rather than an exception (MMCA.Common v1.261.0), and the anchors are refreshed after v1.265.1; see Revision (2026-10-28).
 Revised 2026-11-23: the avatar contract records the fourth path that schedules a blob delete (the orphaned new upload after a failed save), the Consequences say the framework's two audit suppressions are net11.0 false positives rather than an empty list, and the anchors are refreshed after MMCA.Common v1.315.0; see Revision (2026-11-23).
+Revised 2026-11-24: the framework carries no audit suppression again (MMCA.Common 1.318.0 drops the
+Pkcs pin and its two net11.0 entries); the Consequences bullet is corrected in place.
 ## Context
 The MAUI capability program (ADR-042) brought MediaPicker/camera within reach, and ADC amended
 BR-116 to include user avatar photos. That needs binary blob storage (the databases store
@@ -117,10 +119,8 @@ directly against the Azure SDK inside a module, unusable by the next consumer an
   (Storage Blob Data Contributor) for the app identity - a bicep-level grant, not a secret.
 - Image decoding is an application dependency, not a framework one: `AddInfrastructure` registers
   no image processor and MMCA.Common.Infrastructure takes no image library
-  (`MMCA.Common/CHANGELOG.md:1029`), and the framework accepts no advisory risk: its only
-  `NuGetAuditSuppress` entries are two net11.0 System.Security.Cryptography.Pkcs false positives
-  (`MMCA.Common/Directory.Build.props:85-86`, described as "a false positive rather than an
-  accepted risk" at `:71`), none of them an image library. ADC confines SkiaSharp's native libraries to the
+  (`MMCA.Common/CHANGELOG.md:1029`), and the framework accepts no advisory risk: it carries no
+  `NuGetAuditSuppress` entry (`MMCA.Common/Directory.Build.props:65-69`). ADC confines SkiaSharp's native libraries to the
   projects that run it: `MMCA.ADC.Identity.Infrastructure` takes the managed assembly only
   (`MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Infrastructure/MMCA.ADC.Identity.Infrastructure.csproj:10`),
   and the native packages are referenced by the Identity host

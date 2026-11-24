@@ -7394,71 +7394,75 @@
           </ul>
           <h3 id="totptwofactorservice">TotpTwoFactorService</h3>
           <blockquote>
-          <p>MMCA.Common.Infrastructure · <code>MMCA.Common.Infrastructure.Auth.TwoFactor</code> · <span class="cite"><span><code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Auth/TwoFactor/TotpTwoFactorService.cs:35</code></span></span> · Level 2 · class</p>
+          <p>MMCA.Common.Infrastructure · <code>MMCA.Common.Infrastructure.Auth.TwoFactor</code> · <span class="cite"><span><code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Auth/TwoFactor/TotpTwoFactorService.cs:33</code></span></span> · Level 2 · class</p>
           </blockquote>
           <ul>
           <li><strong>What it is</strong>: the RFC 6238 TOTP implementation of <code>ITwoFactorService</code>: secret generation,
           provisioning-URI construction, code verification, and recovery-code generation/hashing/matching<span class="cite"><span>
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Auth/TwoFactor/TotpTwoFactorService.cs:35-159</code>)</span></span>.</li>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Auth/TwoFactor/TotpTwoFactorService.cs:33-164</code>)</span></span>.</li>
           <li><strong>Depends on</strong>: <a href="group-08-auth.html#itwofactorservice"><code>ITwoFactorService</code></a> (the contract it implements);
           <code>TwoFactorSettings</code> (<code>MMCA.Common.Shared</code>) injected as <code>IOptions&lt;TwoFactorSettings&gt;</code>; <code>RecoveryCodeSet</code>
-          (<code>MMCA.Common.Shared</code>) as its return shape; <code>OtpDotNet</code> (<code>Base32Encoding</code>, <code>KeyGeneration</code>, <code>Totp</code>,
-          <code>VerificationWindow</code>, <code>OtpHashMode</code>, NuGet); <code>System.Security.Cryptography</code>
+          (<code>MMCA.Common.Shared</code>) as its return shape; the internal <code>Totp</code> (RFC 6238 over HMAC-SHA1,
+          <span class="cite"><span><code>.../Auth/TwoFactor/Totp.cs:24</code></span></span>) and <code>Base32</code> (RFC 4648, <span class="cite"><span><code>.../Auth/TwoFactor/Base32.cs:13</code></span></span>) in the
+          same folder, no third-party package; <code>System.Security.Cryptography</code>
           (<code>RandomNumberGenerator</code>, <code>SHA256</code>, <code>CryptographicOperations.FixedTimeEquals</code>).</li>
           <li><strong>Concept introduced, constant-time comparison for a secret the caller does not control the timing
           of.</strong> <code>[Rubric §11, Security]</code> assesses whether the codebase avoids timing side channels around secret
           comparison. <code>TryMatchRecoveryCode</code> never exits its scan early on a match: the loop &quot;runs to the end so
           the answer takes the same time whichever code in the list was presented&quot;<span class="cite"><span>
-          (<code>TotpTwoFactorService.cs:140-141</code>)</span></span>, and each comparison itself goes through
-          <code>CryptographicOperations.FixedTimeEquals</code> rather than <code>==</code> or <code>SequenceEqual</code><span class="cite"><span> (<code>:142</code>)</span></span>. A byte-for-byte
+          (<code>TotpTwoFactorService.cs:145-146</code>)</span></span>, and each comparison itself goes through
+          <code>CryptographicOperations.FixedTimeEquals</code> rather than <code>==</code> or <code>SequenceEqual</code><span class="cite"><span> (<code>:147</code>)</span></span>. A byte-for-byte
           comparison that stops at the first differing byte leaks how many leading bytes an attacker guessed
           correctly across repeated attempts; a fixed-time comparison over a full linear scan removes that
           channel entirely.</li>
           <li><strong>Walkthrough</strong>: <code>internal sealed class</code> with a primary constructor taking
-          <code>IOptions&lt;TwoFactorSettings&gt; settings</code><span class="cite"><span> (<code>:35</code>)</span></span>, caching <code>.Value</code> once<span class="cite"><span> (<code>:37</code>)</span></span>.<ul>
+          <code>IOptions&lt;TwoFactorSettings&gt; settings</code><span class="cite"><span> (<code>:33</code>)</span></span>, caching <code>.Value</code> once<span class="cite"><span> (<code>:35</code>)</span></span>.<ul>
           <li><code>GenerateSecret()</code> returns a Base32-encoded random key sized by <code>_settings.SecretByteLength</code><span class="cite"><span>
-          (<code>:40-41</code>)</span></span>.</li>
+          (<code>:38-39</code>)</span></span>.</li>
           <li><code>BuildProvisioningUri</code> rejects a blank secret or account name, URL-escapes the issuer and account
           name, and formats the standard <code>otpauth://</code> URI a QR code encodes: the algorithm is fixed at <code>SHA1</code>,
-          while digit count and period are read from settings<span class="cite"><span> (<code>:44-55</code>)</span></span>.</li>
+          while digit count and period are read from settings<span class="cite"><span> (<code>:42-53</code>)</span></span>.</li>
           <li><code>VerifyCode</code> comes in two overloads. The two-argument form is a one-line forward to the
-          three-argument form, discarding the step<span class="cite"><span> (<code>:58</code>)</span></span>. The three-argument form reports the matched TOTP
+          three-argument form, discarding the step<span class="cite"><span> (<code>:56</code>)</span></span>. The three-argument form reports the matched TOTP
           time step through <code>out long matchedStep</code>, initialized to <code>0</code> so every early <code>false</code> leaves it
-          defined<span class="cite"><span> (<code>:61-63</code>)</span></span>. It returns <code>false</code> for a blank secret or code<span class="cite"><span> (<code>:64-67</code>)</span></span>, then decodes the
+          defined<span class="cite"><span> (<code>:59-61</code>)</span></span>. It returns <code>false</code> for a blank secret or code<span class="cite"><span> (<code>:62-65</code>)</span></span>, then decodes the
           stored Base32 secret, catching <code>ArgumentException</code> and returning <code>false</code> rather than throwing when
           the stored value is not valid Base32: &quot;a stored secret that is not Base32 can never mint a code, so
-          it verifies nothing. That is a data fault, not a caller fault&quot;<span class="cite"><span> (<code>:74-80</code>)</span></span>. It then builds a <code>Totp</code>
-          with the configured period, SHA-1 hash mode, and digit count<span class="cite"><span> (<code>:82</code>)</span></span>, and checks the normalized code
+          it verifies nothing. That is a data fault, not a caller fault&quot;<span class="cite"><span> (<code>:67-78</code>)</span></span>. A secret that decodes to
+          no key (padding alone, or fewer than eight bits) verifies false for the same reason<span class="cite"><span> (<code>:80-85</code>)</span></span>. It
+          then calls <code>Totp.Verify</code> with the configured period and digit count, checking the normalized code
           against a verification window of <code>_settings.VerificationWindowSteps</code> steps on each side of now,
-          writing the step the code matched into <code>matchedStep</code><span class="cite"><span> (<code>:83-87</code>)</span></span>. The window tolerates clock drift
+          with every candidate step compared in fixed time, and writing the step the code matched into
+          <code>matchedStep</code><span class="cite"><span> (<code>:87-94</code>)</span></span>. The window tolerates clock drift
           between the server and the user&#39;s authenticator app; the reported step is what lets
           <a href="#twofactorauthenticator"><code>TwoFactorAuthenticator</code></a> refuse a replay of the same code inside that
           window.</li>
           <li><code>GenerateRecoveryCodes</code> produces <code>_settings.RecoveryCodeCount</code> codes, each a Base32-encoded random
           byte string of <code>_settings.RecoveryCodeByteLength</code> bytes with the <code>=</code> padding trimmed, alongside
-          their SHA-256 hashes computed by <code>HashRecoveryCode</code><span class="cite"><span> (<code>:91-109</code>)</span></span>. Base32 rather than Base64: &quot;the
+          their SHA-256 hashes computed by <code>HashRecoveryCode</code><span class="cite"><span> (<code>:98-114</code>)</span></span>. Base32 rather than Base64: &quot;the
           alphabet has no case ambiguity and no characters a user has to guess at while copying a code off
-          paper&quot;<span class="cite"><span> (<code>:98-99</code>)</span></span>. Only the hashes and the caller-facing codes are returned as a <code>RecoveryCodeSet</code><span class="cite"><span>
-          (<code>:108</code>)</span></span>; nothing persists the plaintext codes here.</li>
+          paper&quot;<span class="cite"><span> (<code>:105-106</code>)</span></span>. Only the hashes and the caller-facing codes are returned as a <code>RecoveryCodeSet</code><span class="cite"><span>
+          (<code>:113</code>)</span></span>; nothing persists the plaintext codes here.</li>
           <li><code>HashRecoveryCode</code> normalizes the code (keeps letters and digits, upper-cases) then SHA-256-hashes
-          it to an upper-case hex string<span class="cite"><span> (<code>:112-117</code>)</span></span>.</li>
+          it to an upper-case hex string<span class="cite"><span> (<code>:117-122</code>)</span></span>.</li>
           <li><code>TryMatchRecoveryCode</code> normalizes and hashes the presented code once, skips <code>null</code> stored entries,
           then fixed-time-compares it against every stored hash, returning the matched hash (not the code)
-          through an <code>out</code> parameter<span class="cite"><span> (<code>:120-149</code>)</span></span>.</li>
+          through an <code>out</code> parameter<span class="cite"><span> (<code>:125-154</code>)</span></span>.</li>
           <li><code>NormalizeCode</code> is the shared helper both verification paths route through: it strips whitespace and
           separators a user types or a password manager inserts and upper-cases what remains, &quot;so a code is
-          matched the way it was generated&quot;<span class="cite"><span> (<code>:151-158</code>)</span></span>.</li>
+          matched the way it was generated&quot;<span class="cite"><span> (<code>:156-163</code>)</span></span>.</li>
           </ul>
           </li>
           <li><strong>Why it&#39;s built this way</strong>: two-factor authentication is opt-in
           (<a href="https://ivanball.github.io/docs/adr/116-identity-completions-opt-in.html" target="_blank" rel="noopener">ADR-116</a>), registered by
-          <code>AddTwoFactorAuthentication(config)</code>; <code>MMCA.Common/CLAUDE.md</code> notes Otp.NET is scoped to
-          Infrastructure only, which is why this type, rather than anything in Application, is what actually
-          calls into the library.</li>
+          <code>AddTwoFactorAuthentication(config)</code>. The one-time-password algorithm and the Base32 codec are
+          internal Infrastructure types rather than a package, so Application, Domain and Shared take no
+          dependency for them, and this type, rather than anything in Application, is what computes and
+          verifies codes.</li>
           <li><strong>Where it&#39;s used</strong>: registered in DI
-          (<span class="cite"><span><code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.Auth.cs:48</code></span></span>, a
+          (<span class="cite"><span><code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.Auth.cs:55</code></span></span>, a
           <code>TryAddSingleton</code>) as the <code>ITwoFactorService</code> implementation behind <code>AddTwoFactorAuthentication(config)</code><span class="cite"><span>
-          (<code>DependencyInjection.Auth.cs:40</code>)</span></span>, and consumed by
+          (<code>DependencyInjection.Auth.cs:47</code>)</span></span>, and consumed by
           <a href="#twofactorauthenticator"><code>TwoFactorAuthenticator</code></a> for both TOTP and recovery-code verification.</li>
           <li><strong>Caveats / not-in-source</strong>: <code>internal sealed</code>, so it is reached only through the <code>ITwoFactorService</code>
           abstraction; a consumer cannot construct or type-check against this class directly.</li>

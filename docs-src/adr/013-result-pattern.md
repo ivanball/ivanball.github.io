@@ -34,6 +34,9 @@ carry `requestId`.
 Revised 2026-11-23: an `Error` carries an optional `RetryAfter` and `HandleFailure` answers a 429
 with a `Retry-After` header from the longest hint (v1.295.0), a value that is not projected into the
 `errors` array; anchors refreshed.
+Revised 2026-11-24: the error-catalog IL scan reads method bodies through the testing package's own
+metadata reader rather than Mono.Cecil (MMCA.Common 1.318.0, [ADR-015](015-architecture-fitness-functions.md)
+Amendment (2026-11-24)); the Decision's wording is corrected in place.
 
 ## Context
 Operations at every layer fail in *expected* ways: input is invalid, a domain invariant is broken, a
@@ -306,7 +309,7 @@ quotes it. Two modules that both ship `Item.Invalid` make that vocabulary ambigu
 ambiguity only surfaces in production
 (`MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Rules/Contracts/ArchitectureRules.ErrorCatalog.cs:32-38`).
 The catalog is therefore frozen the way ADR-010 froze integration-event schemas and ADR-015 Section B
-froze the `.proto` contracts. A Mono.Cecil IL scan reads the `Error` factory call sites it
+froze the `.proto` contracts. An IL scan (the testing package's own metadata reader) reads the `Error` factory call sites it
 recognizes (`:170`, `:206-207`, the recognized members at `:17-30` and `:218-223`) across a repo's
 per-module Domain and Application assemblies only (`:184-190`). The recognized set covers every
 code-first factory, `Error.TooManyRequests` included (`:26`, the factory at `Error.cs:111-112`),

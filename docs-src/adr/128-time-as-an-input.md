@@ -1,7 +1,7 @@
 # ADR-128: Time as an Input (No Ambient Clock Reads in Domain and Application)
 
 ## Status
-Accepted (2026-10-01). Revised 2026-10-06: async-lambda clock reads are attributed to, and exempted with, their source member. Revised 2026-10-07: anchors refreshed after the v1.233.0 release. Revised 2026-11-23: all four repos now adopt the rule and none overrides `AllowedClockReaders` (Store's backfill member entry went with the deleted member and Helpdesk subclasses the base).
+Accepted (2026-10-01). Revised 2026-10-06: async-lambda clock reads are attributed to, and exempted with, their source member. Revised 2026-10-07: anchors refreshed after the v1.233.0 release. Revised 2026-11-23: all four repos now adopt the rule and none overrides `AllowedClockReaders` (Store's backfill member entry went with the deleted member and Helpdesk subclasses the base). Amended 2026-11-24: the scan reads IL through the testing package's own `System.Reflection.Metadata` reader instead of Mono.Cecil (MMCA.Common 1.318.0); the rule, its scope and its verdicts are unchanged. See Amendment (2026-11-24) at the end.
 
 ## Context
 Expiry windows, payment deadlines, discount windows, overdue checks and cutoffs are business rules,
@@ -178,6 +178,18 @@ moved: all four repos now subclass the base, and none overrides `AllowedClockRea
    `MMCA.ADC/Tests/Architecture/MMCA.ADC.Architecture.Tests/Domain/ClockReadTests.cs:8`, `:10`;
    `ClockReadTestsBase.cs:24`, `:26-28`; the Store and Helpdesk anchors above. The anchors inside the
    2026-10-06 and 2026-10-07 revisions stay as written.
+
+## Amendment (2026-11-24): the IL reader is the package's own
+**Decision.** The rule still reads IL, not source, and its scope, exemptions and attribution are
+unchanged. The reader changes: `MMCA.Common.Testing.Architecture` no longer carries NetArchTest or its
+Mono.Cecil, so each Domain and Application assembly is opened with the package's own
+`MetadataModule` over `System.Reflection.Metadata`
+(`MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Rules/Domain/ArchitectureRules.ClockReads.cs:81`;
+`.../Metadata/MetadataModule.cs:25`) and every method body is walked through its IL reader
+(`ArchitectureRules.ClockReads.cs:124`; `.../Metadata/IlReader.cs:52`). "Opened with Mono.Cecil" in the
+Decision and "at the cost of a dependency NetArchTest already carries" in the Rationale are superseded:
+the IL view now costs no package at all ([ADR-015](015-architecture-fitness-functions.md),
+Amendment (2026-11-24)).
 
 ## Related
 [ADR-015](015-architecture-fitness-functions.md) (the fitness-function style and the shared

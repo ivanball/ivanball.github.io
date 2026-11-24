@@ -255,7 +255,7 @@
           <p class="eyebrow doc-kicker">Architecture Decision Record</p>
           <h1 id="adr-128-time-as-an-input-no-ambient-clock-reads-in-domain-and-application">ADR-128: Time as an Input (No Ambient Clock Reads in Domain and Application)</h1>
           <h2 id="status">Status</h2>
-          <p>Accepted (2026-10-01). Revised 2026-10-06: async-lambda clock reads are attributed to, and exempted with, their source member. Revised 2026-10-07: anchors refreshed after the v1.233.0 release. Revised 2026-11-23: all four repos now adopt the rule and none overrides <code>AllowedClockReaders</code> (Store&#39;s backfill member entry went with the deleted member and Helpdesk subclasses the base).</p>
+          <p>Accepted (2026-10-01). Revised 2026-10-06: async-lambda clock reads are attributed to, and exempted with, their source member. Revised 2026-10-07: anchors refreshed after the v1.233.0 release. Revised 2026-11-23: all four repos now adopt the rule and none overrides <code>AllowedClockReaders</code> (Store&#39;s backfill member entry went with the deleted member and Helpdesk subclasses the base). Amended 2026-11-24: the scan reads IL through the testing package&#39;s own <code>System.Reflection.Metadata</code> reader instead of Mono.Cecil (MMCA.Common 1.318.0); the rule, its scope and its verdicts are unchanged. See Amendment (2026-11-24) at the end.</p>
           <h2 id="context">Context</h2>
           <p>Expiry windows, payment deadlines, discount windows, overdue checks and cutoffs are business rules,
           and every one of them branches on &quot;now&quot;. When the rule reads <code>DateTime.UtcNow</code> itself, a test cannot
@@ -432,6 +432,17 @@
           <code>ClockReadTestsBase.cs:24</code>, <code>:26-28</code>; the Store and Helpdesk anchors above. The anchors inside the
           2026-10-06 and 2026-10-07 revisions stay as written.</li>
           </ol>
+          <h2 id="amendment-2026-11-24-the-il-reader-is-the-packages-own">Amendment (2026-11-24): the IL reader is the package&#39;s own</h2>
+          <p><strong>Decision.</strong> The rule still reads IL, not source, and its scope, exemptions and attribution are
+          unchanged. The reader changes: <code>MMCA.Common.Testing.Architecture</code> no longer carries NetArchTest or its
+          Mono.Cecil, so each Domain and Application assembly is opened with the package&#39;s own
+          <code>MetadataModule</code> over <code>System.Reflection.Metadata</code>
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Rules/Domain/ArchitectureRules.ClockReads.cs:81</code>;
+          <code>.../Metadata/MetadataModule.cs:25</code>) and every method body is walked through its IL reader
+          (<code>ArchitectureRules.ClockReads.cs:124</code>; <code>.../Metadata/IlReader.cs:52</code>). &quot;Opened with Mono.Cecil&quot; in the
+          Decision and &quot;at the cost of a dependency NetArchTest already carries&quot; in the Rationale are superseded:
+          the IL view now costs no package at all (<a href="015-architecture-fitness-functions.html">ADR-015</a>,
+          Amendment (2026-11-24)).</p>
           <h2 id="related">Related</h2>
           <p><a href="015-architecture-fitness-functions.html">ADR-015</a> (the fitness-function style and the shared
           <code>*TestsBase</code> package this rule is shipped in),
@@ -456,6 +467,7 @@
             <li><a href="#revision-2026-10-06">Revision (2026-10-06)</a></li>
             <li><a href="#revision-2026-10-07">Revision (2026-10-07)</a></li>
             <li><a href="#revision-2026-11-23">Revision (2026-11-23)</a></li>
+            <li><a href="#amendment-2026-11-24-the-il-reader-is-the-packages-own">Amendment (2026-11-24): the IL reader is the package&#39;s own</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

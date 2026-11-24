@@ -249,7 +249,7 @@ the full set, for orientation:
 | 012 | gRPC host transport: both consumers now default to `Http2`-only h2c (Profile A); `Http1AndHttp2` survives on the WebSocket hosts only (ADC Notification, which adds a dedicated `Http2` gRPC endpoint beside it, and Store Sales) | [g16](group-16-aspire-orchestration.md)/[g20](group-20-conference-api-grpc.md) |
 | 013 | Expected failures are `Result`/`ErrorType` values; only the edge maps to HTTP/gRPC | [g01](group-01-result-error-handling.md) |
 | 014 | CQRS decorator chain: FeatureGate -> Authorization -> Logging -> Caching -> Validating -> Timeout -> Transactional -> Handler (queries: the same without Transactional) | [g05](group-05-cqrs-pipeline.md) |
-| 015 | Architecture fitness functions: compile-time layer guard + shared NetArchTest rule library | [g29](group-29-testing-infrastructure.md) |
+| 015 | Architecture fitness functions: compile-time layer guard + shared architecture rule library | [g29](group-29-testing-infrastructure.md) |
 | 016 | Lockstep versioning of every package (one tag, one version, no phased rollout); MassTransit pinned to v8 (build-gated) | [devops-cicd](devops-cicd.md) |
 | 017 | `[Idempotent]` action filter dedups client retries via an `Idempotency-Key` header (24h replay) | [g12](group-12-api-hosting-mapping.md) |
 | 018 | Polyglot persistence: four engines (SQL Server / PostgreSQL / Cosmos / SQLite) behind one entity model, engine via `[UseDataSource]` | [g07](group-07-persistence-ef-core.md)/[g03](group-03-querying-specifications.md) |
@@ -335,7 +335,7 @@ the full set, for orientation:
 | 098 | Aspire for orchestration, not for testing or production dashboards: each AppHost composes the local stack and every host calls `AddServiceDefaults`/`MapDefaultEndpoints`, but integration testing stays `WebApplicationFactory` + Testcontainers (`SqlServerIntegrationTestFixtureBase<TEntryPoint>` per service, `CrossServiceFixtureBase` for the three-host tier) and `DistributedApplicationTestingBuilder` stays out; production observability is Application Insights, not the Aspire dashboard | [devops-testing](devops-testing.md)/[g29](group-29-testing-infrastructure.md)/[devops-aspire](devops-aspire.md) |
 | 099 | Generic write-side entity commands (the half 034 left at create and delete): the module writes one `IEntityUpdateApplier<TEntity, TUpdateRequest, TIdentifierType>.ApplyAsync` that calls the aggregate's own guarded methods, so invariants and events keep exactly one home; `UpdateEntityCommand` carries id, request and `RowVersion` and reuses the existing concurrency/idempotency markers, `MutateEntityHandlerCore` hosts the shared load-apply-save sequence, and `CrudEntityControllerBase` exposes it over HTTP | [g05](group-05-cqrs-pipeline.md)/[g12](group-12-api-hosting-mapping.md) |
 | 100 | Outbox resolved from the messaging mode (amends 003, on the rule 021 set for the inbox): `MessageBus:EnableOutbox` is `bool?`, `IsOutboxEnabled` resolves unset as `Provider != InProcess`, an explicit value wins in both directions; on the disabled path `AddInfrastructure` registers neither `OutboxProcessor` nor `OutboxCleanupService` and adds `OutboxDisabledNoticeService` instead, the schema is kept, and the one combination that cannot work (a broker with the outbox off) is refused at startup | [g04](group-04-events-outbox.md)/[g14](group-14-module-system-composition.md) |
-| 101 | `MMCA.Common` metapackage (the Core 6): one `PackageReference` in place of the six a standard host always takes (Shared, Domain, Application, Infrastructure, API, Aspire), ordered so the bundle reads as the architecture it installs; it ships no assembly (`IncludeBuildOutput=false`, NU5128 suppressed in that project alone) and is versioned by MinVer off the same tag, so it releases in lockstep to both registries | [devops-cicd](devops-cicd.md) |
+| 101 | `MMCA.Common` metapackage (the Core 6): one `PackageReference` in place of the six a standard host always takes (Shared, Domain, Application, Infrastructure, API, Aspire), ordered so the bundle reads as the architecture it installs; it ships no assembly (`IncludeBuildOutput=false`, NU5128 suppressed in that project alone) and is versioned by the same release tag, so it releases in lockstep to both registries | [devops-cicd](devops-cicd.md) |
 | 102 | ~~PBKDF2-only password hashing (supersedes 032): one `PasswordHasher`, PBKDF2-HMAC-SHA512 at a fixed 600,000 iterations, no legacy branch~~ **superseded by [ADR-133](https://ivanball.github.io/docs/adr/133-versioned-password-hash-work-factor.html)** (versioned hash that records its own work factor) | [g08](group-08-auth.md) |
 | 103 | bUnit component-test tier as a package: `MMCA.Common.Testing.UI` ships `BunitComponentTestBase`, which fixes once the choices every consumer UI test tree would otherwise re-derive (bUnit v2 on the xUnit v3 / Microsoft Testing Platform line, `BunitContext` and `Render<T>` isolated behind `RenderUnderTest`/`RenderAs`, the MudBlazor service set and the JS-interop stubs), so a move off that bUnit line changes one file | [g29](group-29-testing-infrastructure.md) |
 | 104 | Plain enums by default, `Enumeration<T>` opt-in: a bounded set is a plain C# enum unless a member must carry data or behavior; the shipped smart-enum base discovers `public static readonly` members once by `DeclaredOnly` reflection, freezes per-type value and case-insensitive name lookups, returns `Result` from `FromValue`/`FromName` (013), uses type-guarded equality that deliberately declines `IEquatable<T>`, and does not derive from `ValueObject` | [g02](group-02-domain-building-blocks.md) |
@@ -451,7 +451,9 @@ Management, see §4). What each is and why it's here:
   cross-service token validation ([ADR-004](https://ivanball.github.io/docs/adr/004-authentication-dual-fetch.html) "authentication dual-fetch").
 
 **Versioning / build**
-- **MinVer 8**: derives the package version from the git tag (`vX.Y.Z`), so releases are tag-driven.
+- **No versioning package**: the release workflow passes the git tag (`vX.Y.Z`) as the build and
+  package version, so releases are tag-driven; every other build is `0.0.0-dev`
+  (`MMCA.Common/Directory.Build.props:87-90`).
 
 **Analyzers (all at *error* severity, see §4)**
 - **Meziantou.Analyzer**, **SonarAnalyzer.CSharp**, **StyleCop.Analyzers**, **Roslynator.Analyzers**,
@@ -469,8 +471,9 @@ Management, see §4). What each is and why it's here:
   tiers beside the fast Sqlite tier, with **Respawn** resetting the database between tests.
 - **BenchmarkDotNet**: the benchmark suite behind the `performance-smoke` regression gate
   ([ADR-060](https://ivanball.github.io/docs/adr/060-performance-regression-gate.html)).
-- **NetArchTest.eNhancedEdition**: **architecture fitness tests** (assert layer/purity rules against
-  compiled assemblies).
+- **`MMCA.Common.Testing.Architecture`**: **architecture fitness tests** on the framework's own rule
+  engine (`ArchitectureTypes`, reading compiled assemblies through `System.Reflection.Metadata`, no
+  third-party engine) to assert layer/purity rules.
 - **Moq 4** (mocking), **AwesomeAssertions 9** (fluent assertions, a FluentAssertions-compatible
   fork), **coverlet** (coverage).
 
@@ -531,7 +534,7 @@ The layer rules are not just convention, they are enforced **twice**:
    `MMCA.Common.*` project under `Source/` (`MMCA.Common/Directory.Build.props:140-142`), inspects
    `ProjectReference`s before build and **fails** with a descriptive error if a layer references a
    forbidden upstream layer.
-2. **Runtime (test)**, `Tests/Architecture/MMCA.Common.Architecture.Tests` (NetArchTest) asserts the
+2. **Runtime (test)**, `Tests/Architecture/MMCA.Common.Architecture.Tests` (the `ArchitectureTypes` engine) asserts the
    same rules against compiled assemblies: layer flow, **domain purity**, and **microservice
    extraction** rules (e.g. *Application/Domain/Shared must never reference MassTransit directly*,
    depend on `IMessageBus` instead). The rule bodies themselves now live once in the shipped

@@ -308,7 +308,8 @@
           traffic, and no alert reads any of it (<code>:342-348</code>), so both production templates set it
           (<code>MMCA.ADC/infra/main.bicep:327-328</code>, <code>MMCA.Store/infra/main.bicep:258-259</code>). <code>HttpClient</code> connection and
           request metrics are on unless <code>Telemetry:DisableHttpClientMetrics</code> is set (<code>Extensions.Telemetry.cs:250</code>),
-          and .NET runtime metrics (<code>dotnet.gc.*</code>, <code>jit.*</code>, <code>thread_pool.*</code>) unless <code>Telemetry:DisableRuntimeMetrics</code>
+          and .NET runtime metrics (<code>dotnet.gc.*</code>, <code>jit.*</code>, <code>thread_pool.*</code>, published by the runtime itself on its
+          <code>System.Runtime</code> meter and subscribed with <code>AddMeter</code>, <code>:293</code>) unless <code>Telemetry:DisableRuntimeMetrics</code>
           is set (<code>:278</code>). All three keys are read by <code>IsInstrumentationDisabled</code> (<code>Extensions.Telemetry.cs:204</code>, its
           doc naming the three at <code>:197-199</code>), which drops the family only when the value parses as boolean <code>true</code>;
           absent, blank, or unparseable keeps the instrumentation, so a typo cannot silently blind a whole metric
@@ -425,7 +426,7 @@
                 ? MetricStreamConfiguration.Drop
                 : <span class="hljs-literal">null</span>);
     <span class="hljs-keyword">else</span>
-        metrics.AddRuntimeInstrumentation();
+        metrics.AddMeter(<span class="hljs-string">&quot;System.Runtime&quot;</span>); <span class="hljs-comment">// the runtime&#x27;s own meter, same dotnet.* names</span>
 
     <span class="hljs-comment">// Framework meters, subscribed by literal name:</span>
     metrics.AddMeter(<span class="hljs-string">&quot;MMCA.Common.Outbox&quot;</span>)

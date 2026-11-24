@@ -23,10 +23,10 @@ Versions follow [SemVer 2.0](https://semver.org/): `MAJOR.MINOR.PATCH`:
 - **PATCH**: backward-compatible bug fix.
 
 A release version is the git tag of the form `vMAJOR.MINOR.PATCH`
-(e.g. `v1.265.1`): `release.yml` strips the `v` and passes it as the build and package version with
-MinVer skipped, and **MinVer** (referenced by the packable projects) versions every other build
-from git history. There is no hand-edited
-version property; tag a commit on merged `main` and the release workflow packs and pushes. It
+(e.g. `v1.265.1`): `release.yml` strips the `v` and passes it as the build and package version
+(`-p:Version`, `-p:PackageVersion`). Every other build, local or PR CI, carries the `0.0.0-dev`
+placeholder from `Directory.Build.props`, so no build depends on git history. There is no hand-edited
+release version property; tag a commit on merged `main` and the release workflow packs and pushes. It
 refuses to publish a tag whose commit is not reachable from `origin/main`.
 
 ## What counts as breaking
