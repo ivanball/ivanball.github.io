@@ -310,6 +310,9 @@
           <code>ProcessedOn</code>
           (<code>MMCA.Common/Source/Hosting/MMCA.Common.Testing.Aspire/Outages/DependencyOutageTestBase.cs:134-143</code>,
           <code>:162-165</code>, <code>:351-369</code>; the SQL Server count, overridable per engine, at <code>:310-342</code>).
+          Amended (2026-11-23): a row now also stores the request&#39;s W3C trace flags, so the processor&#39;s span keeps
+          the request&#39;s sampling decision instead of always marking its rebuilt parent recorded, and the
+          administration API gains a republish window for processed rows. See <strong>Amendment (2026-11-23)</strong> at the end.
           Revised 2026-11-23: a publish the open broker circuit rejects no longer spends a retry; the row is
           re-leased for the break plus jitter and counted on its own metric, so a long outage dead-letters
           only rows whose real publishes or half-open probes fail (MMCA.Common v1.282.0), and anchors are
@@ -1040,6 +1043,23 @@
           chosen by the condition at <code>:376</code> with the call at <code>:377</code>; <code>:98-100</code>, <code>:110-113</code>, <code>:20-23</code>,
           <code>:387</code> and <code>OutboxFinalizer.cs:67</code> unchanged.</li>
           </ol>
+          <h2 id="amendment-2026-11-23">Amendment (2026-11-23)</h2>
+          <ol>
+          <li><strong>The row keeps the request&#39;s sampling decision.</strong> <code>OutboxMessage</code> and <code>InternalCommandMessage</code>
+          gain a nullable <code>TraceFlags</code> column, captured from the ambient activity beside <code>TraceId</code> and
+          <code>SpanId</code>. The processors rebuild the parent context with the stored flags instead of a hardcoded
+          recorded flag, so an outbox or internal-command span is exported only when the request that raised
+          it was sampled. Before this, at a 25 percent sampling rate both applications exported processor spans
+          whose parent the sampler had dropped: orphan traces that cost ingestion and joined nothing. A row
+          written before the column existed reads as not sampled. Each consumer adds one migration per
+          database.</li>
+          <li><strong>Processed rows can be published again for a window.</strong>
+          <code>IOutboxAdministration.RepublishProcessedAsync(fromUtc, toUtc)</code> resets the integration-event rows
+          processed inside the window in one set-based update per data source, so the processor publishes
+          them again. It exists for a broker-side loss (and for the MassTransit cutover,
+          <a href="118-message-transport-library-policy.html">ADR-118</a>); the consumer inbox
+          (<a href="021-consumer-inbox-idempotency.html">ADR-021</a>) makes the duplicates harmless.</li>
+          </ol>
           
         <div class="doc-foot btn-row">
           <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
@@ -1070,6 +1090,7 @@
             <li><a href="#revision-2026-10-28">Revision (2026-10-28)</a></li>
             <li><a href="#revision-2026-11-18">Revision (2026-11-18)</a></li>
             <li><a href="#revision-2026-11-23">Revision (2026-11-23)</a></li>
+            <li><a href="#amendment-2026-11-23">Amendment (2026-11-23)</a></li>
             </ul>
           </nav>
         </aside>

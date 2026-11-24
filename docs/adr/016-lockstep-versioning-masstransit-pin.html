@@ -323,7 +323,13 @@
           with its entry; anchors refreshed after v1.265.1.
           Revised 2026-11-23: Decision 3 now lists seven other semver-major dependabot ignores (<code>MessagePack</code>
           is no longer ignored; Firebase.Messaging, EF Core, Data.Sqlite and Npgsql are), with <code>MassTransit*</code>
-          still the only license-motivated one; anchors refreshed after the consumers moved to 1.315.0.</p>
+          still the only license-motivated one; anchors refreshed after the consumers moved to 1.315.0.
+          Amended (2026-11-23): MassTransit leaves the workspace
+          (<a href="118-message-transport-library-policy.html">ADR-118</a>, Amendment 2026-11-23), so the MassTransit pin, its
+          <code>MassTransit_MustNotExceed_MajorVersion8</code> gate and the <strong>Transport exit options</strong> section become
+          history: the gate is replaced by a ban on any <code>MassTransit*</code> reference, and the dependabot ignore for
+          <code>MassTransit*</code> goes with the last pin. The lockstep rule itself is unchanged, and the cutover ships as one
+          MMCA.Common release swept into every consumer under it.</p>
           <h2 id="context">Context</h2>
           <p>MMCA.Common publishes its <code>MMCA.Common.*</code> NuGet package set (see <code>FACTS.md</code> for the authoritative
           list and count) consumed by three downstream repos: the two

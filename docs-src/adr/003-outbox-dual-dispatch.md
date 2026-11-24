@@ -56,6 +56,9 @@ is back, polls `AssertOutboxDrainedAsync`, which the base carries, until no outb
 `ProcessedOn`
 (`MMCA.Common/Source/Hosting/MMCA.Common.Testing.Aspire/Outages/DependencyOutageTestBase.cs:134-143`,
 `:162-165`, `:351-369`; the SQL Server count, overridable per engine, at `:310-342`).
+Amended (2026-11-23): a row now also stores the request's W3C trace flags, so the processor's span keeps
+the request's sampling decision instead of always marking its rebuilt parent recorded, and the
+administration API gains a republish window for processed rows. See **Amendment (2026-11-23)** at the end.
 Revised 2026-11-23: a publish the open broker circuit rejects no longer spends a retry; the row is
 re-leased for the break plus jitter and counted on its own metric, so a long outage dead-letters
 only rows whose real publishes or half-open probes fail (MMCA.Common v1.282.0), and anchors are
@@ -792,3 +795,19 @@ written.
    `DispatchUnbackedAsync` `:419-434` (catch `:428-432`, message `:475`, isolation `:410-418`),
    chosen by the condition at `:376` with the call at `:377`; `:98-100`, `:110-113`, `:20-23`,
    `:387` and `OutboxFinalizer.cs:67` unchanged.
+
+## Amendment (2026-11-23)
+1. **The row keeps the request's sampling decision.** `OutboxMessage` and `InternalCommandMessage`
+   gain a nullable `TraceFlags` column, captured from the ambient activity beside `TraceId` and
+   `SpanId`. The processors rebuild the parent context with the stored flags instead of a hardcoded
+   recorded flag, so an outbox or internal-command span is exported only when the request that raised
+   it was sampled. Before this, at a 25 percent sampling rate both applications exported processor spans
+   whose parent the sampler had dropped: orphan traces that cost ingestion and joined nothing. A row
+   written before the column existed reads as not sampled. Each consumer adds one migration per
+   database.
+2. **Processed rows can be published again for a window.**
+   `IOutboxAdministration.RepublishProcessedAsync(fromUtc, toUtc)` resets the integration-event rows
+   processed inside the window in one set-based update per data source, so the processor publishes
+   them again. It exists for a broker-side loss (and for the MassTransit cutover,
+   [ADR-118](118-message-transport-library-policy.md)); the consumer inbox
+   ([ADR-021](021-consumer-inbox-idempotency.md)) makes the duplicates harmless.
