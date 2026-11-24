@@ -467,10 +467,12 @@
           (<code>InspectStreamedUpdateAsync</code>, a default interface member that allows so an implementation written
           earlier keeps compiling, <code>:57-60</code>; the per-update loop at <code>GuardrailChatClient.cs:99-116</code>), with
           the first block throwing <code>ChatGuardrailException</code>. <code>Ai:RequireGuardrail</code> defaults to true
-          (<code>AiSettings.cs:119</code>), and an enabled host that registered neither a guardrail nor a redactor is
-          refused at registration with the one-line fix in the message
-          (<code>DependencyInjection.cs:210-219</code>, both refusals in <code>RefuseAnUngovernedHost</code> at <code>:204</code>). The
-          framework ships two content policies that answer that refusal on their own. The first,
+          (<code>AiSettings.cs:122</code>), and an enabled host that registered no prompt-injection defense, an
+          <code>IChatGuardrail</code> or <code>IChatRequestRedactor</code> whose implementation type implements the marker
+          <code>IPromptInjectionGuardrail</code> (<code>Guardrails/IPromptInjectionGuardrail.cs:21</code>), is refused at
+          registration with the one-line fix in the message (<code>DependencyInjection.cs:144-146</code>, the
+          descriptor test at <code>:253</code>, both refusals in <code>RefuseAnUngovernedHost</code> at <code>:210</code>). The framework
+          ships two content policies. The first,
           <code>PiiRedactionGuardrail</code> (<code>Guardrails/PiiRedactionGuardrail.cs:40</code>), removes email addresses and
           North American phone numbers from every outgoing message, including reasoning text, tool results
           and the arguments of tool calls (<code>:71-81</code>, <code>:123-157</code>, <code>RedactText</code> at <code>:192</code>), whether those
@@ -515,8 +517,13 @@
           startup rather than on a user&#39;s request (<code>ContentPolicySettings.cs:83</code>, <code>ValidateOnStart</code> at
           <code>Guardrails/GuardrailServiceCollectionExtensions.cs:67-70</code>), and
           <code>AddContentPolicyGuardrail(IConfiguration)</code> (<code>GuardrailServiceCollectionExtensions.cs:62</code>)
-          registers one singleton under both interfaces (<code>:72-76</code>), so registering it satisfies
-          <code>Ai:RequireGuardrail</code> exactly as the PII policy does. <code>PiiRedactionGuardrail</code> ships from
+          registers one singleton under both interfaces (<code>:72-76</code>). It is the <code>IPromptInjectionGuardrail</code>
+          the framework ships (<code>ContentPolicyGuardrail.cs:65</code>), so registering it is what satisfies
+          <code>Ai:RequireGuardrail</code>; the PII policy alone does not, because it strips contact details and lets
+          injected instructions through. <code>BlockedResponsePatterns</code> is empty by default
+          (<code>ContentPolicySettings.cs:75</code>) by design: which responses to refuse is a domain judgement, so the
+          framework ships the mechanism and each host supplies its patterns or its own response gate (the
+          reason is on the type and the property, <code>:16</code>, <code>:61</code>). <code>PiiRedactionGuardrail</code> ships from
           MMCA.Common v1.207.0 and <code>ContentPolicyGuardrail</code> from v1.208.0 (<code>MMCA.Common/CHANGELOG.md:2310-2312</code>,
           <code>:2265-2266</code>).</p>
           </li>
@@ -556,7 +563,10 @@
           (<code>GoldenReplayTestsBase.cs:24</code>), which replays every case through the subclass&#39;s real code path
           with a fresh client per case (<code>:88</code>), collects failures rather than stopping at the first
           (<code>:64-70</code>) and fails an EMPTY corpus, because an evaluation that evaluates nothing passes forever
-          (<code>:57-62</code>); and <code>PromptContractPinTestsBase</code> (<code>PromptContractPinTestsBase.cs:25</code>), whose two
+          (<code>:104-113</code>); every <code>GoldenReplayCase</code> records the hash of the prompt contract it was recorded
+          against (<code>GoldenReplayCase.cs:19</code>), and the base fails, naming each stale case, when that hash
+          differs from the <code>CurrentContract</code> the subclass supplies (<code>GoldenReplayTestsBase.cs:40</code>, the fact
+          at <code>:56</code>), so a prompt change cannot pass against recordings of the old prompt; and <code>PromptContractPinTestsBase</code> (<code>PromptContractPinTestsBase.cs:25</code>), whose two
           facts fail a contract with no recorded hash (<code>:39</code>) and a recorded hash that no longer matches
           (<code>:60</code>), against a pin file the subclass names (<code>:36</code>). The package takes the governed package
           and no vendor SDK (<code>MMCA.Common.AI.Testing.csproj:35</code>, reason at <code>:25-33</code>). The framework then
@@ -889,6 +899,14 @@
           Conference <code>DependencyInjection.cs</code> client registration at <code>:41-55</code>, guardrails at <code>:90</code>, <code>:100</code>,
           <code>:101</code>, <code>:104</code>). The earlier revisions keep their anchors as written.</li>
           </ol>
+          <h2 id="revision-2026-11-24">Revision (2026-11-24)</h2>
+          <p>MMCA.Common v1.317.0 narrows <code>Ai:RequireGuardrail</code> to a prompt-injection defense: only a guardrail or
+          redactor whose implementation type implements <code>IPromptInjectionGuardrail</code> satisfies it, so a host whose
+          only guardrail is the PII redactor is refused at startup. <code>ContentPolicyGuardrail</code> implements the marker.
+          The empty default of <code>BlockedResponsePatterns</code> is kept and its reason is written on the settings type.
+          <code>GoldenReplayCase</code> gains the prompt-contract hash it was recorded against, and <code>GoldenReplayTestsBase</code>
+          gains the <code>CurrentContract</code> member and a fact that fails a recording made against a different contract.
+          Consumer changes are in <code>MMCA.Common/UPGRADING.md</code> under 1.317.0.</p>
           <h2 id="related">Related</h2>
           <p><a href="111-ai-session-scoring-governance.html">ADR-111</a> (the record this one extends: every scoring-specific
           rule, the prompt-change protocol, the golden and live evaluation tiers, the input and output
@@ -928,6 +946,7 @@
             <li><a href="#revision-2026-10-26">Revision (2026-10-26)</a></li>
             <li><a href="#revision-2026-10-28">Revision (2026-10-28)</a></li>
             <li><a href="#revision-2026-11-23">Revision (2026-11-23)</a></li>
+            <li><a href="#revision-2026-11-24">Revision (2026-11-24)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>
