@@ -228,10 +228,12 @@ start, and the evaluation harness ships beside the package.**
    (`InspectStreamedUpdateAsync`, a default interface member that allows so an implementation written
    earlier keeps compiling, `:57-60`; the per-update loop at `GuardrailChatClient.cs:99-116`), with
    the first block throwing `ChatGuardrailException`. `Ai:RequireGuardrail` defaults to true
-   (`AiSettings.cs:119`), and an enabled host that registered neither a guardrail nor a redactor is
-   refused at registration with the one-line fix in the message
-   (`DependencyInjection.cs:210-219`, both refusals in `RefuseAnUngovernedHost` at `:204`). The
-   framework ships two content policies that answer that refusal on their own. The first,
+   (`AiSettings.cs:122`), and an enabled host that registered no prompt-injection defense, an
+   `IChatGuardrail` or `IChatRequestRedactor` whose implementation type implements the marker
+   `IPromptInjectionGuardrail` (`Guardrails/IPromptInjectionGuardrail.cs:21`), is refused at
+   registration with the one-line fix in the message (`DependencyInjection.cs:144-146`, the
+   descriptor test at `:253`, both refusals in `RefuseAnUngovernedHost` at `:210`). The framework
+   ships two content policies. The first,
    `PiiRedactionGuardrail` (`Guardrails/PiiRedactionGuardrail.cs:40`), removes email addresses and
    North American phone numbers from every outgoing message, including reasoning text, tool results
    and the arguments of tool calls (`:71-81`, `:123-157`, `RedactText` at `:192`), whether those
@@ -277,8 +279,13 @@ start, and the evaluation harness ships beside the package.**
    startup rather than on a user's request (`ContentPolicySettings.cs:83`, `ValidateOnStart` at
    `Guardrails/GuardrailServiceCollectionExtensions.cs:67-70`), and
    `AddContentPolicyGuardrail(IConfiguration)` (`GuardrailServiceCollectionExtensions.cs:62`)
-   registers one singleton under both interfaces (`:72-76`), so registering it satisfies
-   `Ai:RequireGuardrail` exactly as the PII policy does. `PiiRedactionGuardrail` ships from
+   registers one singleton under both interfaces (`:72-76`). It is the `IPromptInjectionGuardrail`
+   the framework ships (`ContentPolicyGuardrail.cs:65`), so registering it is what satisfies
+   `Ai:RequireGuardrail`; the PII policy alone does not, because it strips contact details and lets
+   injected instructions through. `BlockedResponsePatterns` is empty by default
+   (`ContentPolicySettings.cs:75`) by design: which responses to refuse is a domain judgement, so the
+   framework ships the mechanism and each host supplies its patterns or its own response gate (the
+   reason is on the type and the property, `:16`, `:61`). `PiiRedactionGuardrail` ships from
    MMCA.Common v1.207.0 and `ContentPolicyGuardrail` from v1.208.0 (`MMCA.Common/CHANGELOG.md:2310-2312`,
    `:2265-2266`).
 
@@ -318,7 +325,10 @@ start, and the evaluation harness ships beside the package.**
     (`GoldenReplayTestsBase.cs:24`), which replays every case through the subclass's real code path
     with a fresh client per case (`:88`), collects failures rather than stopping at the first
     (`:64-70`) and fails an EMPTY corpus, because an evaluation that evaluates nothing passes forever
-    (`:57-62`); and `PromptContractPinTestsBase` (`PromptContractPinTestsBase.cs:25`), whose two
+    (`:104-113`); every `GoldenReplayCase` records the hash of the prompt contract it was recorded
+    against (`GoldenReplayCase.cs:19`), and the base fails, naming each stale case, when that hash
+    differs from the `CurrentContract` the subclass supplies (`GoldenReplayTestsBase.cs:40`, the fact
+    at `:56`), so a prompt change cannot pass against recordings of the old prompt; and `PromptContractPinTestsBase` (`PromptContractPinTestsBase.cs:25`), whose two
     facts fail a contract with no recorded hash (`:39`) and a recorded hash that no longer matches
     (`:60`), against a pin file the subclass names (`:36`). The package takes the governed package
     and no vendor SDK (`MMCA.Common.AI.Testing.csproj:35`, reason at `:25-33`). The framework then
@@ -646,6 +656,16 @@ anchors moved.
    `:252`, `:254`, meter and source at `:273-274`; `MMCA.ADC.Conference.Service.csproj:33`; the
    Conference `DependencyInjection.cs` client registration at `:41-55`, guardrails at `:90`, `:100`,
    `:101`, `:104`). The earlier revisions keep their anchors as written.
+
+## Revision (2026-11-24)
+
+MMCA.Common v1.317.0 narrows `Ai:RequireGuardrail` to a prompt-injection defense: only a guardrail or
+redactor whose implementation type implements `IPromptInjectionGuardrail` satisfies it, so a host whose
+only guardrail is the PII redactor is refused at startup. `ContentPolicyGuardrail` implements the marker.
+The empty default of `BlockedResponsePatterns` is kept and its reason is written on the settings type.
+`GoldenReplayCase` gains the prompt-contract hash it was recorded against, and `GoldenReplayTestsBase`
+gains the `CurrentContract` member and a fact that fails a recording made against a different contract.
+Consumer changes are in `MMCA.Common/UPGRADING.md` under 1.317.0.
 
 ## Related
 [ADR-111](111-ai-session-scoring-governance.md) (the record this one extends: every scoring-specific
