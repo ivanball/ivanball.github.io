@@ -97,8 +97,8 @@ touches another service's database; no service races for another service's outbo
 legacy single `AtlDevCon` database is deliberately not provisioned here, and it is gone in Azure too.
 It was exported to a bacpac blob and dropped on 2026-09-02, so the template no longer declares it,
 and the bacpac itself was deleted on 2026-10-03, so there is no restore path; the template points at
-`infra/POST-CUTOVER-atldevcon-downgrade.md` for the history (`MMCA.ADC/infra/main.bicep:1114-1120`). These four databases are the entire application
-data estate (main.bicep:1127-1139). Database-per-service is the topology everywhere, not a
+`infra/POST-CUTOVER-atldevcon-downgrade.md` for the history (`MMCA.ADC/infra/main.bicep:1328-1334`). These four databases are the entire application
+data estate (main.bicep:1341-1353). Database-per-service is the topology everywhere, not a
 local-development shortcut.
 
 **Redis** is also persistent (Program.cs:44-45), used by service hosts for distributed output caching
@@ -256,8 +256,8 @@ With no top-level connection string present, the one database a host declares th
 check all resolve from it, and the logical name collapses onto Default: one `SQLServerDbContext`
 instance, one EF change tracker, one migrations set per service. The Azure side matches exactly: the
 Bicep hands Identity only `DataSources__Identity__SQLServerConnectionString`
-(`MMCA.ADC/infra/main.bicep:1920`) plus its migrations assembly (main.bicep:1921) and
-`Outbox__DatabaseName` (main.bicep:1922), with no top-level `ConnectionStrings__SQLServerConnectionString`
+(`MMCA.ADC/infra/main.bicep:2377`) plus its migrations assembly (main.bicep:2378) and
+`Outbox__DatabaseName` (main.bicep:2379), with no top-level `ConnectionStrings__SQLServerConnectionString`
 anywhere. The `WaitFor(database)` (Extensions.cs:492) ensures the service process does not start until
 SQL Server is healthy.
 
@@ -295,13 +295,19 @@ builder.AddProject<Projects.MMCA_ADC_{Module}_Service>("{name}", launchProfileNa
 registers both HTTP and HTTPS endpoints for service discovery (Program.cs:117-119 comment).
 `WithSelectedBroker(withBroker)` resolves to one of the two `WithBroker` overloads. The RabbitMQ one
 chains `.WithReference(broker).WaitFor(broker).WithEnvironment("MessageBus__Provider", "RabbitMq")`
-(Common.Aspire.Hosting/Extensions.cs:258-261). The emulator one sets
+(Common.Aspire.Hosting/Extensions.cs:318-321). The emulator one sets
 `MessageBus__Provider=AzureServiceBus` plus two more variables:
-`MessageBus__ConnectionString` (which ends in `UseDevelopmentEmulator=true`, the marker
-`AddBrokerMessaging` keys its emulator branch off) and `MessageBus__EmulatorAdminEndpoint`, the
-management-plane address MassTransit v8 needs for its second administration client
-(Extensions.cs:286-291, connection-string shape at
-`ServiceBusEmulatorResource.cs:66-68`, admin address at 80-82). Either way each service waits for the
+`MessageBus__ConnectionString` (which ends in `UseDevelopmentEmulator=true`, the marker the framework's
+own Azure Service Bus transport keys its emulator branch off,
+`MMCA.Common.Azure/Messaging/AzureServiceBusTransport.cs:142-153`) and
+`MessageBus__EmulatorAdminEndpoint`, the management-plane address that transport needs to build its
+`ServiceBusAdministrationClient` (`AzureServiceBusEndpoint.cs:65-66`) (Extensions.cs:350-352,
+connection-string shape at `ServiceBusEmulatorResource.cs:66-68`, admin address at 81-83). That branch
+only exists in a service that registered the transport: each ADC service passes
+`RegisterBrokerTransports = services => services.AddAzureServiceBusTransport()`
+(`MMCA.ADC.Conference.Service/Program.cs:325`, the same line in the other three hosts), and
+`AddBrokerMessaging` throws, naming the package and the call, when the selected provider has no
+registered transport (`DependencyInjection.Messaging.cs:211-230`). Either way each service waits for the
 broker to be healthy and gets the environment variable that makes `AddBrokerMessaging()` select the
 transport. When that variable is absent (integration tests running via `WebApplicationFactory`),
 `AddBrokerMessaging` short-circuits to in-process mode so existing tests continue to work without a real
@@ -453,7 +459,7 @@ The issuer Identity stamps into every token it signs has to be the same URL its 
 or every cross-service call fails validation on the issuer claim. The `appsettings` default hardcodes
 the pinned dev port for a standalone F5 run, so deriving the value from the gateway resource means an
 Aspire run cannot mint wrong-issuer tokens if that port ever moves (Program.cs:368-374). Production sets
-the equivalent from the gateway's ACA FQDN as `Jwt__Issuer` (`MMCA.ADC/infra/main.bicep:1952`).
+the equivalent from the gateway's ACA FQDN as `Jwt__Issuer` (`MMCA.ADC/infra/main.bicep:2410`).
 
 [Rubric §11, Security] assesses how credentials and tokens flow through the system. No symmetric
 JWT secret is shared between services; each non-Identity service fetches the RSA public key dynamically.
@@ -486,7 +492,7 @@ Three environment-derived values are then pushed back onto other resources, all 
 AppHost knows:
 
 - `Api__ApiEndpoint` and `Api__WasmApiEndpoint` on the UI (Program.cs:450-451). These are both halves of
-  the split `infra/main.bicep:2802` and `2804` make in production, derived from the gateway resource
+  the split `infra/main.bicep:3313` and `3315` make in production, derived from the gateway resource
   instead of hardcoded. The WASM one is what `/client-config` hands the **browser** (and what the Blazor
   CSP pins `connect-src` to), so it must be an externally reachable URL: a browser cannot resolve an
   Aspire service-discovery name. The server-side one is overridden here because exactly one consumer is
@@ -554,7 +560,7 @@ configuration differs.
   hosts ever reached Application Insights, while the Gateway (which never called `UseSerilog`) did show
   up. `builder.Logging.AddSerilog(Log.Logger, dispose: true)` (line 55) adds Serilog as one provider
   alongside the others. Production then caps what ships to Azure Monitor with
-  `Logging__OpenTelemetry__LogLevel__Default=Warning` (`MMCA.ADC/infra/main.bicep:285-294`); Serilog
+  `Logging__OpenTelemetry__LogLevel__Default=Warning` (`MMCA.ADC/infra/main.bicep:314-323`); Serilog
   keeps writing Information to stdout, so container logs stay complete while only warnings and above
   bill against the workspace.
 - **`ConfigureEndpointsWithHealthProbe(protocols, redeclareCleartextEndpoint, cleartextPort)`**
@@ -573,41 +579,51 @@ configuration differs.
   owns. A non-integer probe port throws at startup rather than silently producing no listener, since
   the platform would then probe a closed port and the revision would never come up
   (KestrelEndpointExtensions.cs:72-76). In Azure the key is `8081` on Identity, Conference and
-  Engagement (main.bicep:1916, 2169, 2311) and `8082` on Notification (main.bicep:2465), because the
-  [ADR-012](https://ivanball.github.io/docs/adr/012-grpc-host-transport.html) mixed profile already owns 8080 for ingress and 8081 for gRPC there (main.bicep:2415, 2423-2429).
+  Engagement (main.bicep:2373, 2649, 2799) and `8082` on Notification (main.bicep:2969), because the
+  [ADR-012](https://ivanball.github.io/docs/adr/012-grpc-host-transport.html) mixed profile already owns 8080 for ingress and 8081 for gRPC there (main.bicep:2917, 2925-2931).
   Locally the key is absent on every host, which is exactly why the AppHost has to use the h2c probe
   instead.
 - **`AddAzureKeyVaultConfiguration()`**
-  (`MMCA.Common/Source/Hosting/MMCA.Common.Azure/AzureKeyVaultConfigurationExtensions.cs:80`) layers an Azure Key
+  (`MMCA.Common/Source/Hosting/MMCA.Common.Azure.Startup/AzureKeyVaultConfigurationExtensions.cs:80`) layers an Azure Key
   Vault over the host configuration, so a secret in the vault reads back through `IConfiguration` like
-  any other setting and overrides the sources added before it. It lives in the `MMCA.Common.Azure` adapter
-  package, not in `MMCA.Common.Aspire`, so the core packages reference no Azure SDK. The gate is
+  any other setting and overrides the sources added before it. It lives in the `MMCA.Common.Azure.Startup`
+  adapter package (`MMCA.Common.Azure.Startup.csproj:3-4`), not in `MMCA.Common.Aspire`, so the core packages
+  reference no Azure SDK; `MMCA.Common.Azure` references that package and type-forwards the three start-up
+  extension classes (`MMCA.Common.Azure/MMCA.Common.Azure.csproj:39`, `MMCA.Common.Azure/TypeForwards.cs:6-8`),
+  so a host on either package resolves the same call. The gate is
   `KeyVault:Uri`: absent or whitespace and the method returns without adding a source
-  (AzureKeyVaultConfigurationExtensions.cs:86-94), which is why local dev, CI and the integration tier take
-  no Azure dependency at startup. Before the gate it registers a marker (AzureKeyVaultConfigurationExtensions.cs:82-84)
-  that the core startup tripwire checks, so a host with `KeyVault:Uri` set but no call fails at startup
+  (AzureKeyVaultConfigurationExtensions.cs:82, 89-92), which is why local dev, CI and the integration tier take
+  no Azure dependency at startup. Only past the gate does it register the marker the core startup tripwire
+  checks (AzureKeyVaultConfigurationExtensions.cs:113-115), so a host with `KeyVault:Uri` set but no call fails at startup
   naming the missing call (`MMCA.Common.Aspire/Integrations/HostIntegrationTripwire.cs:68-72`) instead of
-  running with every vault secret absent. Two details worth knowing. It is called **early**, before
+  running with every vault secret absent; registering nothing on the absent path means a URI that only
+  appears in a source added after the call still trips that check (comment at 84-88). An optional
+  `KeyVault:ReloadIntervalMinutes` re-reads the vault on that interval, and a value that is not a positive
+  whole number throws at startup rather than silently falling back to "never reload"
+  (AzureKeyVaultConfigurationExtensions.cs:96-111); left unset, the vault is read once and a rotated secret
+  reaches the host only on its next restart (lines 39-41). Two details worth knowing. It is called **early**, before
   `AddServiceDefaults()` and anything else that binds settings, because `ConfigurationManager` builds and
   loads each source as it is added (`MMCA.ADC.Notification.Service/Program.cs:99`, with the comment at
   90-98 saying exactly that); and a secret name cannot contain a colon, so the provider maps `--` onto the
   configuration separator, meaning `Jwt--SigningKey` arrives as `Jwt:SigningKey`
-  (AzureKeyVaultConfigurationExtensions.cs:45-48). Authentication is `DefaultAzureCredential` (line 115), so a
+  (AzureKeyVaultConfigurationExtensions.cs:45-48). Authentication is `DefaultAzureCredential` (line 117), so a
   deployed host uses its managed identity. All four ADC services call it, as do the Gateway and the UI
   (`MMCA.ADC.Gateway/Program.cs:68`, `MMCA.ADC.UI.Web/Program.cs:63`).
-- **`AddAzureDataProtection()`** (`MMCA.Common/Source/Hosting/MMCA.Common.Azure/AzureDataProtectionExtensions.cs:53`)
+- **`AddAzureDataProtection()`** (`MMCA.Common/Source/Hosting/MMCA.Common.Azure.Startup/AzureDataProtectionExtensions.cs:54`)
   persists the ASP.NET Core DataProtection key ring to a single Azure blob so every replica of a
   scaled-out host shares one key ring. The default key ring is per-process and in memory, which is
   correct for one process and wrong for two: a cookie or antiforgery token minted by replica A cannot be
   decrypted by replica B, and the user sees sign-outs that follow the load balancer rather than any
-  pattern. The gate is `DataProtection:BlobStorageUri` (AzureDataProtectionExtensions.cs:59-67), and like the
-  vault call it first registers the tripwire marker (AzureDataProtectionExtensions.cs:55-57), so the URI set
+  pattern. The gate is `DataProtection:BlobStorageUri` (AzureDataProtectionExtensions.cs:56-67), and like the
+  vault call it registers the tripwire marker only once past that gate (AzureDataProtectionExtensions.cs:69-71), so the URI set
   without the call fails startup instead of leaving every replica on its own key ring. A second,
   deliberately **separate** gate, `DataProtection:KeyVaultKeyUri`, encrypts that key ring at rest
-  (AzureDataProtectionExtensions.cs:86-90, rationale at 79-85): the two are not folded together because blob persistence is what
+  (AzureDataProtectionExtensions.cs:90-94, rationale at 83-89): the two are not folded together because blob persistence is what
   fixes cross-replica decryption and has to work on its own, since the Key Vault Crypto User role is
   granted out of band and can lag a deployment, so coupling them would turn a missing role assignment
-  into a total auth outage. The two ADC hosts that do cookie cryptography call it: Identity
+  into a total auth outage. Leaving that key unset is therefore not a failure, but outside Development
+  it registers a hosted service that logs one startup Warning naming the key
+  (AzureDataProtectionExtensions.cs:95-99), so the hardening gap is visible rather than silent. The two ADC hosts that do cookie cryptography call it: Identity
   (`MMCA.ADC.Identity.Service/Program.cs:127`) and the UI (`MMCA.ADC.UI.Web/Program.cs:72`).
 - **`AddRedisCaching()` / `AddRedisOutputCaching()`**
   (`MMCA.Common.Aspire/Caching/RedisCachingExtensions.cs:57-66` and `91` onward) register the Aspire
@@ -850,21 +866,21 @@ MMCA.Common-specific additions stand out:
    dependency traces already report, while the `resilience.polly.strategy.events` counter (retries,
    circuit opens and closes, timeouts) is never dropped, because it is the signal the meter exists for
    (Extensions.Telemetry.cs:325-332). ADC's production Bicep sets four of the first five explicitly:
-   `Telemetry__TracesSampleRatio=0.25` (`MMCA.ADC/infra/main.bicep:280-283`, rationale at 276-279),
-   `Telemetry__DisableHttpClientMetrics=true` (main.bicep:313-316)
-   and `Telemetry__DisableRuntimeMetrics=true` (main.bicep:317-320), those two measured at roughly 65% of
-   AppMetrics ingestion, about 290 MB of a 500 MB daily stream (main.bicep:306-312), and
-   `Telemetry__DisableAspNetCoreMetrics=true` (main.bicep:326-329), whose family was 73% of workspace
+   `Telemetry__TracesSampleRatio=0.25` (`MMCA.ADC/infra/main.bicep:309-312`, rationale at 305-308),
+   `Telemetry__DisableHttpClientMetrics=true` (main.bicep:342-345)
+   and `Telemetry__DisableRuntimeMetrics=true` (main.bicep:346-349), those two measured at roughly 65% of
+   AppMetrics ingestion, about 290 MB of a 500 MB daily stream (main.bicep:335-341), and
+   `Telemetry__DisableAspNetCoreMetrics=true` (main.bicep:355-358), whose family was 73% of workspace
    ingestion over 2026-09-22..28 with no alert reading it, since request latency and failures alert off
-   `AppRequests` (main.bicep:322-325). Alongside them it sets the distro's own
-   `AzureMonitor__EnableLiveMetrics=false` (main.bicep:336-339): Live Metrics is on by default and keeps
+   `AppRequests` (main.bicep:351-354). Alongside them it sets the distro's own
+   `AzureMonitor__EnableLiveMetrics=false` (main.bicep:365-368): Live Metrics is on by default and keeps
    every replica talking to the Live Metrics service with nobody watching, which held every app just
    above the Container Apps idle line so that 64% of vCPU-seconds billed at the active rate
-   (main.bicep:331-335). All six container apps carry that entry (for example main.bicep:1910 on
-   Identity and 2617 on the gateway). It also stretches the OTel export cadence with the
-   standard `OTEL_METRIC_EXPORT_INTERVAL=300000` (main.bicep:347-350): the exporter ships cumulative
+   (main.bicep:360-364). All six container apps carry that entry (for example main.bicep:2367 on
+   Identity and 3159 on the gateway). It also stretches the OTel export cadence with the
+   standard `OTEL_METRIC_EXPORT_INTERVAL=300000` (main.bicep:376-379): the exporter ships cumulative
    aggregates, so a 5x longer interval drops roughly 80% of the remaining datapoints while five-minute
-   alert windows keep the same signal (main.bicep:341-346). The Bicep sets no
+   alert windows keep the same signal (main.bicep:370-375). The Bicep sets no
    `Telemetry__EnablePollyDurationMetrics`, so production keeps the Polly histograms dropped. An unset
    host keeps every other metric family, samples every trace and exports on the SDK's 60 second default.
 
@@ -934,11 +950,11 @@ on **OTLP** when `OTEL_EXPORTER_OTLP_ENDPOINT` is present (Extensions.Telemetry.
 dashboard sets this automatically; standalone deployments must supply it.
 
 **Azure Monitor** is an adapter call each host makes itself: `AddAzureMonitorExporter()`
-(`MMCA.Common/Source/Hosting/MMCA.Common.Azure/AzureMonitorExporterExtensions.cs:42-66`) calls
+(`MMCA.Common/Source/Hosting/MMCA.Common.Azure.Startup/AzureMonitorExporterExtensions.cs:42-68`) calls
 `UseAzureMonitor()` only when `APPLICATIONINSIGHTS_CONNECTION_STRING` is present
-(AzureMonitorExporterExtensions.cs:58-63), injected by the Bicep deployment so logs, metrics, and traces flow
-to the workspace-based Application Insights resource (`MMCA.ADC/infra/main.bicep:250-266`, env entry at
-271-274). Keeping the vendor SDK in an adapter package is what lets the core packages stay cloud-neutral, and
+(AzureMonitorExporterExtensions.cs:56-59, 65), injected by the Bicep deployment so logs, metrics, and traces flow
+to the workspace-based Application Insights resource (`MMCA.ADC/infra/main.bicep:279-295`, env entry at
+300-303). Keeping the vendor SDK in an adapter package is what lets the core packages stay cloud-neutral, and
 two guards keep the split from failing silently:
 
 - **Ordering.** The call throws unless `AddServiceDefaults()` (or `ConfigureOpenTelemetry()`) has already
@@ -947,9 +963,10 @@ two guards keep the split from failing silently:
   or not the connection string is set, so a misordered host fails on a developer machine rather than only in
   Azure. All six ADC hosts call it right after `AddServiceDefaults()` (for example
   `MMCA.ADC.Notification.Service/Program.cs:101-106`, reason in the comment at 103-105).
-- **Omission.** The call registers a marker whether or not it exports (AzureMonitorExporterExtensions.cs:54-56),
-  and the core startup tripwire fails a host that has `APPLICATIONINSIGHTS_CONNECTION_STRING` set without
-  that marker, naming the missing call (`MMCA.Common.Aspire/Integrations/HostIntegrationTripwire.cs:63-67`),
+- **Omission.** The call registers a marker only when it exports (AzureMonitorExporterExtensions.cs:61-63);
+  with no connection string at call time it registers nothing, so a connection string that only appears in a
+  source added later still trips the check (comment at 54-55). The core startup tripwire fails a host that
+  has `APPLICATIONINSIGHTS_CONNECTION_STRING` set without that marker, naming the missing call (`MMCA.Common.Aspire/Integrations/HostIntegrationTripwire.cs:63-67`),
   instead of letting it start with no telemetry export.
 
 Both can be active simultaneously; each exports an independent copy.
@@ -995,7 +1012,7 @@ that does not take the persistence stack (OutboxPollFilterProcessor.cs:19-25).
 
 [Rubric §31, Cost and FinOps] assesses whether observability costs are controlled. Suppressing poll
 spans on a 300 s polling interval in production (`Outbox__PollingIntervalSeconds=300` on all four ADC
-container apps, `MMCA.ADC/infra/main.bicep:1927, 2176, 2318, 2474`) eliminates the majority of
+container apps, `MMCA.ADC/infra/main.bicep:2385, 2656, 2806, 2978`) eliminates the majority of
 idle-process telemetry ingestion. The framework makes this the default for every consumer; individual
 services do not need to configure it.
 
@@ -1112,29 +1129,32 @@ with stock Aspire `WithReference`, as shown above.
 - **`AddMessageBroker(name = "rabbitmq")`** (Extensions.cs:160-165). Wraps
   `builder.AddRabbitMQ(name).WithManagementPlugin()`. The management plugin is always enabled for local
   debug.
-- **`AddServiceBusEmulatorBroker(sqlServer, name = "servicebus")`** (Extensions.cs:201-238). The official
+- **`AddServiceBusEmulatorBroker(sqlServer, name = "servicebus")`** (Extensions.cs:261-298). The official
   Azure Service Bus emulator container. Both planes are published because the emulator serves two: AMQP
   on container port 5672 carries every publish and consume, and the HTTP management plane on 5300 is what
-  MassTransit provisions topology through (`ServiceBusEmulatorResource.cs:34-44`). The image tag floor is
-  2.x for that exact reason: the admin plane shipped in 2.0.0, and MassTransit provisions its whole
-  topology at bus start, so a silent downgrade to a 1.x image would leave the broker unusable rather than
-  merely older (Extensions.cs:101-107). Host ports are left dynamic because nothing outside the stack
-  dials these (Extensions.cs:186-189), and `ACCEPT_EULA=Y` is set explicitly because the emulator refuses
-  to start without it (Extensions.cs:224-227). No health check is declared, so a `WaitFor` gates on the
+  the framework's Azure Service Bus transport provisions topology through
+  (`ServiceBusEmulatorResource.cs:34-44`). The image tag floor is 2.x for that exact reason: the admin
+  plane shipped in 2.0.0, and the transport provisions its whole topology when its receiver starts, so a
+  silent downgrade to a 1.x image would leave the broker unusable rather than merely older
+  (Extensions.cs:143-150, tag `2.0.1`). Host ports are left dynamic because nothing outside the stack
+  dials these (Extensions.cs:247-248), and `ACCEPT_EULA=Y` is set explicitly because the emulator refuses
+  to start without it (Extensions.cs:284-287). No health check is declared, so a `WaitFor` gates on the
   container running rather than on warm-up finishing; the consuming service absorbs the remainder because
-  MassTransit starts its bus in the background and reconnects
-  (ServiceBusEmulatorResource.cs:25-30). See
+  the transport's receiver provisions and connects in the background, retrying, rather than failing host
+  startup (ServiceBusEmulatorResource.cs:25-30). See
   [`ServiceBusEmulatorResource`](group-16-aspire-orchestration.md#servicebusemulatorresource).
 
 ### `WithBroker<TResource>`, two overloads
 
-Extensions.cs:252-262 (RabbitMQ) and 280-292 (emulator). Each chains
+Extensions.cs:312-322 (RabbitMQ) and 341-353 (emulator). Each chains
 `WithReference(broker).WaitFor(broker)` plus the provider environment variable, so a single call is the
 complete wiring for a broker-aware service: service discovery, health-based wait, and the variable that
 `AddBrokerMessaging()` reads to select the transport. The emulator overload adds the connection string
 and the management-plane address. The `UseDevelopmentEmulator=true` suffix on that connection string is
-the marker `AddBrokerMessaging` keys its emulator branch off, and a real Azure Service Bus connection
-string never carries it, so the emulator path cannot be entered by accident (Extensions.cs:271-276).
+the marker the Azure Service Bus transport (`AddAzureServiceBusTransport()` from `MMCA.Common.Azure`,
+`AzureServiceCollectionExtensions.cs:154`, which the service must register) keys its emulator branch off,
+and a real Azure Service Bus connection string never carries it, so the emulator path cannot be entered
+by accident (Extensions.cs:332-336).
 
 ### `WithJwksDiscovery<TResource>`
 
@@ -1208,105 +1228,137 @@ warming up (H2cHealthCheckExtensions.cs:13-21). See
 ## The six Dockerfiles
 
 All six Dockerfiles share the same multi-stage structure (`base`, `build`, `publish`, `final`) and
-the same base images. None build the AppHost: it is a local-only orchestration artifact, never deployed.
+the same digest-pinned base images, and each builds either of the two framework lines the repo carries.
+None build the AppHost: it is a local-only orchestration artifact, never deployed.
 
 ### Common structure
 
-**Stage `base`** (first `FROM` in all six): `mcr.microsoft.com/dotnet/aspnet:10.0` **pinned by digest**
-(`@sha256:2d58...746f`, Gateway.Dockerfile:4), with `WORKDIR /app` and `EXPOSE 8080` / `EXPOSE 8081`
-(Gateway.Dockerfile:5-7). This is the runtime-only image; it has no SDK tools, minimizing the attack
-surface of the final image. The digest is the point of that `FROM` line: the tag still names the channel,
-but the digest is what resolves, so a re-tagged `:10.0` cannot silently change the runtime under a
-rebuild (Gateway.Dockerfile:1-3). The human-readable version (10.0.11 for aspnet, 10.0.400 for the SDK)
-lives in the comment directly above, because a Dockerfile comment has to sit on its own line, and it is
-bumped together with the digest.
+**The framework line is a build argument.** Each file declares `ARG MMCA_NET=net11.0`
+(Gateway.Dockerfile:5): `net11.0` is production and `net10.0` the permanent second line, selected with
+`--build-arg MMCA_NET=net10.0`, which `deploy.yml` passes from its `runtime` input
+(Gateway.Dockerfile:1-4, deploy.yml:1472-1478). That one argument picks the runtime base image and,
+through the `MmcaNet` environment variable in the build stage, the target framework and the lock-file set.
 
-**Stage `build`**: `mcr.microsoft.com/dotnet/sdk:10.0`, digest-pinned for the same reason
-(Gateway.Dockerfile:9-10), restoring the `MMCA.Common.*` packages from GitHub Packages. The token is a
-**BuildKit secret**, never a build argument: each restore step is
+**Stage `base`**: one runtime stage per line, `base-net11.0` on
+`mcr.microsoft.com/dotnet/aspnet:11.0-resolute-chiseled-extra` and `base-net10.0` on
+`aspnet:10.0-noble-chiseled-extra`, each **pinned by digest** (Gateway.Dockerfile:16, 18), with
+`FROM base-${MMCA_NET} AS base` choosing between them (Gateway.Dockerfile:20), then `WORKDIR /app` and
+`EXPOSE 8080` / `EXPOSE 8081` (Gateway.Dockerfile:21-23). BuildKit builds only the stage the final image
+descends from, so the other line's base image is never pulled (Gateway.Dockerfile:7-11). The digest is
+the point of each `FROM`: the tag still names the channel, but the digest is what resolves, so a
+re-tagged tag cannot silently change the runtime under a rebuild. The images are **chiseled**: no shell,
+package manager or coreutils in the runtime image, and non-root by default; the `-extra` variant keeps
+ICU and tzdata, which the `es` culture and the event time zones need, and SkiaSharp's
+`NativeAssets.Linux.NoDependencies` removes any fontconfig requirement (Gateway.Dockerfile:12-14). The
+human-readable versions (11.0.0 and 10.0.15 for aspnet, 11.0.100 for the SDK) live in the comment
+directly above each `FROM`, because a Dockerfile comment has to sit on its own line, and each is bumped
+together with its digest (Gateway.Dockerfile:15, 17, 25).
+
+**Stage `build`**: a single `mcr.microsoft.com/dotnet/sdk:11.0` image, digest-pinned for the same reason,
+because the .NET 11 SDK builds both framework lines (Gateway.Dockerfile:25-27). It re-declares
+`ARG MMCA_NET` (an `ARG` before the first `FROM` is visible to `FROM` lines only) and promotes it to
+`ENV MmcaNet`, which MSBuild reads as the `MmcaNet` property, so restore and publish need no `-p:` flag
+(Gateway.Dockerfile:29-32). The stage restores the `MMCA.Common.*` packages from GitHub Packages, and the
+token is a **BuildKit secret**, never a build argument: each restore step is
 `RUN --mount=type=secret,id=github_token` and reads `/run/secrets/github_token` into `GITHUB_TOKEN` for
-that one command (Gateway.Dockerfile:30-32). The header comment says why: an `ARG` promoted to `ENV`
-lands in image layers, the build cache, and `docker history` (Gateway.Dockerfile:12-14). The build call is
-therefore `--secret id=github_token,env=GITHUB_TOKEN`, not `--build-arg`.
+that one command (Gateway.Dockerfile:54-56). The header comment says why: an `ARG` promoted to `ENV`
+lands in image layers, the build cache, and `docker history` (Gateway.Dockerfile:33-35). CI therefore
+hands it over as a `github_token` secret (deploy.yml:1494-1495), not a `--build-arg`.
 
-**Restore runs in locked mode wherever a lock file exists.** The gateway copies
-`packages.lock.json` alongside its `.csproj` precisely so the restore can pass `--locked-mode`
-(Gateway.Dockerfile:25-27, 32), and the four service images do the same against their own project
-(`MMCA.ADC.Identity.Service/Dockerfile:30-32`). That turns the image build into a reproducible restore:
-a transitive version that moved since the lock was written fails the build instead of quietly shipping.
-The UI image is the documented exception: `MMCA.ADC.UI.Web` and `MMCA.ADC.UI.Web.Client` set
-`RestorePackagesWithLockFile=false` (TD-01, NETSDK1124), so neither project has a lock file to lock
-against and its restore is plain (UI.Web.Dockerfile:36-38, 41). The **publish** restore is never locked
-in any of the six, and the comment is explicit about why: publish is RID-specific (`linux-x64`, inferred
-for ReadyToRun) while the committed lock files are RID-agnostic, so locked mode fails there with NU1004
-(Gateway.Dockerfile:51-55). The restore step above it is the locked gate.
+**Restore runs in locked mode wherever a lock file exists.** The gateway copies **both** lock files
+alongside its `.csproj`: `packages.lock.json` belongs to the `net11.0` line, and on `net10.0`
+`Directory.Build.props` points `NuGetLockFilePath` at `packages.net10.0.lock.json` instead
+(Gateway.Dockerfile:48-51). Both travel because `--locked-mode` with the selected lock file absent does
+not fail: it restores unlocked and writes a fresh one (Gateway.Dockerfile:49-50). With them in place the
+restore passes `--locked-mode` (Gateway.Dockerfile:56), and the four service images do the same against
+their own project (`MMCA.ADC.Identity.Service/Dockerfile:59-61`). That turns the image build into a
+reproducible restore: a transitive version that moved since the lock was written fails the build instead
+of quietly shipping. The UI image is the documented exception: `MMCA.ADC.UI.Web` and
+`MMCA.ADC.UI.Web.Client` set `RestorePackagesWithLockFile=false` (TD-01, NETSDK1124), so neither project
+has a lock file to lock against and its restore is plain (UI.Web.Dockerfile:57-62). The **publish**
+restore is never locked in any of the six, and the comment is explicit about why: publish is RID-specific
+(`linux-x64`, inferred for ReadyToRun) while the committed lock files are RID-agnostic, so locked mode
+fails there with NU1004 (Gateway.Dockerfile:81-85). The restore step above it is the locked gate.
 
 There is deliberately **no `dotnet build` step** in any of the six. The comment records the measurement
-(CI run 30115729720, 2026-07-24, Gateway.Dockerfile:39-44): a build stage emitted
-`bin/Release/net10.0/` while the ReadyToRun publish emits `bin/Release/net10.0/linux-x64/`, so publish
-never reused the build output and every image compiled twice, about 75 s of waste per image. Publish does
-its own restore and build, and the analyzer gating (`TreatWarningsAsErrors`, `AnalysisMode=All`) still
-runs inside it.
+(CI run 30115729720, 2026-07-24, Gateway.Dockerfile:63-67): a build stage emitted `bin/Release/<tfm>/`
+while the ReadyToRun publish emits `bin/Release/<tfm>/linux-x64/`, so publish never reused the build
+output and every image compiled twice, about 75 s of waste per image. Publish does its own restore and
+build.
 
 **Stage `publish`**: runs `dotnet publish ... -o /app/publish /p:UseAppHost=false` against the same
 project, with the same secret mount because publish performs its own restore pass
-(Gateway.Dockerfile:56-58). The four services and the Gateway add `/p:PublishReadyToRun=true` so cold
-starts on fractional-vCPU containers skip first-request JIT (Gateway.Dockerfile:48-50, 58;
-`MMCA.ADC.Identity.Service/Dockerfile:51-53`); the UI image does **not**, and its comment notes that
+(Gateway.Dockerfile:86-88). The four services and the Gateway add `/p:PublishReadyToRun=true` so cold
+starts on fractional-vCPU containers skip first-request JIT (Gateway.Dockerfile:78-79, 88;
+`MMCA.ADC.Identity.Service/Dockerfile:82-83, 92`); the UI image does **not**, and its comment notes that
 without R2R the publish reuses the same `obj/` path a build step would have produced
-(UI.Web.Dockerfile:46-48, 55).
+(UI.Web.Dockerfile:67-69, 79-81). Every publish also passes `-p:RunAnalyzers=$RUN_ANALYZERS`, an
+argument declared in the publish stage only, so its value never invalidates the build stage's restore
+layer, and defaulting to `true` (Gateway.Dockerfile:73-77, 88). `deploy.yml` passes `false` on `main`
+and `true` from any other ref (deploy.yml:1474-1479), because a squash merge onto an up-to-date branch
+means the PR jobs already ran the analyzers at error severity on this exact tree; source generators run
+either way (Gateway.Dockerfile:68-69, 73-76). The analyzer gate (`TreatWarningsAsErrors`,
+`AnalysisMode=All`) therefore lives in the PR jobs, and the image build on `main` does not pay for it a
+second time.
 
 **Stage `final`**: `COPY --from=publish /app/publish .` into the `base` layer
-(Gateway.Dockerfile:60-62), sets `ASPNETCORE_ENVIRONMENT=Production` (line 63), and then **drops
-privileges** with `USER $APP_UID` (Gateway.Dockerfile:73, UI.Web.Dockerfile:69,
-`MMCA.ADC.Identity.Service/Dockerfile:67`). `APP_UID` (1654) and its matching non-root `app` user come
+(Gateway.Dockerfile:90-92), sets `ASPNETCORE_ENVIRONMENT=Production` (line 93), and then **drops
+privileges** with `USER $APP_UID` (Gateway.Dockerfile:103, UI.Web.Dockerfile:95,
+`MMCA.ADC.Identity.Service/Dockerfile:106`). `APP_UID` (1654) and its matching non-root `app` user come
 from the aspnet base image. Nothing in these images writes to the container filesystem at runtime: the
 Gateway, for one, registers no Serilog file sink at all, because unlike the service hosts it never
 calls `AddCommonSerilog` and logs through the default console and OpenTelemetry providers
-(Gateway.Dockerfile:65-67), and the DataProtection key
-ring, where configured, lives in blob storage, so read and execute on the root-owned `/app` payload is
-all the runtime needs. Every port the hosts bind is 8080 or higher, outside the privileged range a
-non-root user cannot bind. The line is kept **last** in the final stage on purpose: the build and publish
-stages still need write access to `/src` and the NuGet folder (Gateway.Dockerfile:64-72). The
-`ENTRYPOINT` form of the `dotnet` invocation closes each file.
+(Gateway.Dockerfile:94-99); the UI's Serilog rolling file sink is skipped in Production
+(UI.Web.Dockerfile:87-91); and the DataProtection key ring, where configured, lives in blob storage. Read
+and execute on the root-owned `/app` payload is all the runtime needs. Every port the hosts bind is 8080
+or higher, outside the privileged range a non-root user cannot bind. The line is kept **last** in the
+final stage on purpose: the build and publish stages still need write access to `/src` and the NuGet
+folder (Gateway.Dockerfile:100-102). The `ENTRYPOINT` form of the `dotnet` invocation closes each file.
 
 ### Gateway Dockerfile
 
 `MMCA.ADC/Source/Hosts/MMCA.ADC.Gateway/Dockerfile`
 
-The build stage copies only the gateway's `.csproj` and its `packages.lock.json` before restoring
-(Gateway.Dockerfile:27), then copies the full `Source/` tree before publishing
-(Gateway.Dockerfile:37). The comment at lines 34-36 explains why the full tree is needed:
+The build stage copies only the gateway's `.csproj` and its two lock files before restoring
+(Gateway.Dockerfile:51), then copies the full `Source/` tree before publishing
+(Gateway.Dockerfile:61). The comment at lines 58-60 explains why the full tree is needed:
 `Directory.Build.props` links `GlobalUsings.IdentifierType.cs` from each module's `Shared` project, so
 the source tree must be present even though the gateway itself references no module projects. The
-gateway has minimal NuGet dependencies (`MMCA.Common.Aspire` and YARP); the partial restore approach is
-feasible, and the lock file travelling with the project file is what lets that restore run
-`--locked-mode` (Gateway.Dockerfile:25-26).
+gateway has minimal NuGet dependencies (`MMCA.Common.Aspire`, Azure.Startup, Gateway and YARP, per the
+comment at Gateway.Dockerfile:45); the partial restore approach is feasible, and the lock files
+travelling with the project file are what let that restore run `--locked-mode`
+(Gateway.Dockerfile:46-47, 56).
 
-Entrypoint: `dotnet MMCA.ADC.Gateway.dll` (Gateway.Dockerfile:74).
+Entrypoint: `dotnet MMCA.ADC.Gateway.dll` (Gateway.Dockerfile:104).
 
 ### UI (Blazor Web) Dockerfile
 
 `MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Dockerfile`
 
-The build stage copies the solution file (UI.Web.Dockerfile:21) and then eight `.csproj` files
-individually before restoring (UI.Web.Dockerfile:26-33): three `*.Shared` projects, three `*.UI`
+The build stage copies the solution file (UI.Web.Dockerfile:42) and then eight `.csproj` files
+individually before restoring (UI.Web.Dockerfile:47-54): three `*.Shared` projects, three `*.UI`
 projects, and the two web host projects (`MMCA.ADC.UI.Web` + `MMCA.ADC.UI.Web.Client`). This is a
 layer-caching optimization: a change in a source file does not invalidate the restore cache. After
-restoring, the full `Source/` tree is copied (UI.Web.Dockerfile:44) and the publish stage builds it.
+restoring, the full `Source/` tree is copied (UI.Web.Dockerfile:65) and the publish stage builds it.
 
-Entrypoint: `dotnet MMCA.ADC.UI.Web.dll` (UI.Web.Dockerfile:70).
+Entrypoint: `dotnet MMCA.ADC.UI.Web.dll` (UI.Web.Dockerfile:96).
 
 ### Four service Dockerfiles
 
 `MMCA.ADC/Source/Services/MMCA.ADC.{Identity,Conference,Engagement,Notification}.Service/Dockerfile`
 
-All four are identical in structure, down to the line numbers. The build stage copies the full `Source/`
-tree (line 27) before restoring, and the comment above it says why (lines 24-26): services have deep
-project-reference chains through Migrations to all module Infrastructure assemblies, so copying the full
-`Source/` tree is simplest. Each service's Dockerfile then restores its own `.Service.csproj` in locked
-mode (lines 30-32) and publishes it with ReadyToRun (lines 51-53) independently; all four drop to
-`USER $APP_UID` on line 67 and carry their entrypoint on line 68:
+All four are identical in structure, down to the line numbers. Each opens with a pinned BuildKit
+frontend, `# syntax=docker/dockerfile:1.29.0@sha256:...` (line 1), pinned by tag and digest for the
+`COPY --parents` the restore layer relies on, rather than whatever frontend the daemon happens to bundle;
+a parser directive must be the first line, so its version note sits below it (lines 2-4). The restore
+layer copies only what restore reads: every project file under `Source/` and both lock files beside each
+one, with `--parents` keeping each file at its path (line 56). Services reach most of the tree through
+project references (each Migrations project to its own module Infrastructure), so the set is wide, but a
+change to source files alone leaves that layer and the restore below it cached; only a project, lock or
+build-configuration change busts it (lines 49-55). Each service then restores its own `.Service.csproj`
+in locked mode (lines 59-61), copies the full `Source/` tree for publish because `Directory.Build.props`
+links each module's `GlobalUsings.IdentifierType.cs` (lines 62-65), and publishes with ReadyToRun
+(lines 90-92); all four drop to `USER $APP_UID` on line 106 and carry their entrypoint on line 107:
 
 - `dotnet MMCA.ADC.Identity.Service.dll`
 - `dotnet MMCA.ADC.Conference.Service.dll`
@@ -1315,41 +1367,57 @@ mode (lines 30-32) and publishes it with ReadyToRun (lines 51-53) independently;
 
 [Rubric §17, DevOps and Deployment] continues: having one Dockerfile per deployable means each image
 is independently versioned and deployed. CI declares all six as a six-way parallel matrix
-(`.github/workflows/deploy.yml:1029-1048`), gated as a whole on the `changes` job classifying the diff as
-code (`deploy.yml:1018`), and each leg additionally carries a `changed` column from that job's per-image
-dirty map (`deploy.yml:1033, 1036, 1039, 1042, 1045, 1048`). A leg whose image is clean skips the build and
-push (`deploy.yml:1069`) and re-tags the last `:latest` to this sha instead
-(`deploy.yml:1102-1115`), a registry-side `az acr import` manifest copy that pulls and pushes no layer
-(deploy.yml:1098-1099), so it still concludes **success**: the comment above the job
-(deploy.yml:1009-1013) records why that matters, since `deploy` gates on the job-level
-`needs.build-images.result == 'success'` equality (`deploy.yml:1197`) and a skipped leg would turn the
+(`.github/workflows/deploy.yml:1427-1446`), gated as a whole on the `changes` job classifying the diff as
+code (`deploy.yml:1416`), and each leg additionally carries a `changed` column from that job's per-image
+dirty map (`deploy.yml:1431, 1434, 1437, 1440, 1443, 1446`). A leg whose image is clean skips the build and
+push (`deploy.yml:1467`) and re-tags the last `:latest` to this sha instead
+(`deploy.yml:1515-1528`), a registry-side `az acr import` manifest copy that pulls and pushes no layer
+(deploy.yml:1511-1512), so it still concludes **success**: the comment above the job
+(deploy.yml:1407-1411) records why that matters, since `deploy` gates on the job-level
+`needs.build-images.result == 'success'` equality (`deploy.yml:1610`) and a skipped leg would turn the
 whole job `skipped` and silently cancel the deploy. The `UseAppHost=false` publish flag strips the native
 executable wrapper; the Docker entrypoint invokes the DLL directly via the already-present runtime in the
 base image.
 
-The same clean leg then copies the fresh sha tag back onto `:latest` (deploy.yml:1124-1128). That
+A dirty leg builds with `docker/build-push-action` on a Buildx builder, because the default docker
+driver cannot import or export a layer cache and every leg starts on a fresh runner with an empty local
+cache (deploy.yml:1460-1468). The cache lives in the ACR the job already authenticates to, `mode=max`,
+one ref per image and framework line (deploy.yml:1504-1505). The comment gives the reasons: the GitHub
+Actions cache has a hard 10 GB per-repo quota with LRU eviction that six multi-stage SDK images would
+thrash; `max` is required because the expensive restore and publish layers sit in the build stage, which
+`min` does not cache; and the per-line ref keeps a rollback build from reading or overwriting the
+production line's layers (deploy.yml:1496-1503). The leg always pushes the sha tag and pushes `:latest`
+only on a `net11.0` build, so a `net10.0` rollback build never moves the tag a later clean leg copies
+from (deploy.yml:1481-1488).
+
+The same clean leg then copies the fresh sha tag back onto `:latest` (deploy.yml:1537-1541). That
 second copy exists because of the registry's own housekeeping: the daily ACR purge task keeps only the
 three most recently updated tags per repository and deletes anything older than three days, and minting
 a sha tag never touches `:latest`, so after a few deploys that leave an image clean the very tag the
 re-tag reads from would age out, get purged, and fail the next clean leg, which blocks the whole deploy
-through the same `success` equality (deploy.yml:1116-1123). Copying the identical digest moves only the
-tag's timestamp; the build-and-push leg already pushes `:latest` on every build, so both legs keep it
-alive.
+through the same `success` equality (deploy.yml:1529-1536). Copying the identical digest moves only the
+tag's timestamp; the build-and-push leg already pushes `:latest` on every `net11.0` build, so both legs
+keep it alive.
 
 Each leg ends with a **container-image CVE scan** of the exact tag this deploy will roll out: Trivy
-against `{acr}/{image}:{sha}`, table format, `CRITICAL,HIGH`, `ignore-unfixed: true`, `exit-code: 1`
-(deploy.yml:1148-1157). It exists because the supply-chain job's CycloneDX SBOM and
-`dotnet list --vulnerable` cover the managed NuGet graph only, so nothing else inspects the OS layer (openssl, zlib, the ICU tail) of
-any of the six images (deploy.yml:1130-1132). It runs on every leg, the re-tagged clean images included: their content has not changed but the vulnerability database has, so re-scanning is what catches a CVE disclosed after the image was built (deploy.yml:1134-1136). It is **non-gating** (`continue-on-error: true`,
-deploy.yml:1149): findings are printed in the step log rather than reddening every deploy. The comment states the
-reason for that choice plainly: the aspnet and sdk bases are digest-pinned in all six Dockerfiles
-(Gateway.Dockerfile:4), so a CVE disclosed against the pinned digest would red every deploy until the
-digest is bumped, and `continue-on-error` also absorbs the action itself failing (an ACR pull that cannot
-authenticate, a vulnerability-database download that times out), which must not block a rollout either
-(deploy.yml:1138-1145). `exit-code: '1'` still marks the step failed, so a CRITICAL/HIGH finding is
-visible on the run rather than buried in a passing log, and the stated condition for flipping
-`continue-on-error` to `false` is a clean baseline, or the residue captured in a `.trivyignore` with a
-written justification (deploy.yml:1146-1147).
+against `{acr}/{image}:{sha}`, table format, `CRITICAL,HIGH`, `ignore-unfixed: true`, `exit-code: '1'`
+(deploy.yml:1562-1569). It exists because the supply-chain job's CycloneDX SBOM and
+`dotnet list --vulnerable` cover the managed NuGet graph only, so nothing else inspects the OS layer
+(openssl, zlib, the ICU tail) of any of the six images (deploy.yml:1543-1545). It runs on every leg, the
+re-tagged clean images included: their content has not changed but the vulnerability database has, so
+re-scanning is what catches a CVE disclosed after the image was built (deploy.yml:1547-1549). It is a
+**deploy gate** (ADR-093): the step carries no `continue-on-error`, so a fixable CRITICAL/HIGH finding
+fails the leg, and because `deploy` needs `build-images`, nothing rolls out (deploy.yml:1551-1552). The
+gate was switched on only after the baseline was observed clean: all six chiseled images scanned 0 OS
+and 0 dotnet-core CRITICAL/HIGH findings on the v1.277.0 deploy (deploy.yml:1552-1553). Because the
+bases are digest-pinned (Gateway.Dockerfile:16, 18, 27), a CVE disclosed against a pinned digest reds
+every deploy until the digest is bumped, and the comment states that this is the intent, with two
+deliberate exits: bump the base-image digest to a patched one (the normal fix), or accept a specific CVE
+in a repo-root `.trivyignore`, one line per id with a written justification and a review date above it
+(deploy.yml:1554-1558). A failure of the action itself (an ACR pull, a vulnerability-database download)
+also fails the leg, and the instruction is to re-run the failed job rather than bypass the gate;
+`ignore-unfixed: true` stays because a CVE with no fixed package version is not actionable inside a
+deploy (deploy.yml:1559-1561).
 
 [Rubric §32, Dependency and Supply-Chain] assesses whether what ships is known, pinned and checked. The
 digest-pinned bases, the `--locked-mode` restores in five of the six images, the BuildKit-secret token
@@ -1366,18 +1434,18 @@ table below cross-references the local resource with its Azure equivalent:
 
 | Local (AppHost) | Azure (Bicep) |
 |---|---|
-| SQL Server container (persistent) | Azure SQL Server; the same four databases (`ADC_Identity`, `ADC_Conference`, `ADC_Engagement`, `ADC_Notification`, main.bicep:1134-1139), each Basic 5 DTU / 2 GB (main.bicep:1151-1157) outside conference mode, with `conferenceMode` lifting the attendee hot-path pair `ADC_Conference` and `ADC_Engagement` to S2 for the day (main.bicep:193-196, 1149-1152), and carrying a `service` tag equal to the owning container app's, so one tag-grouped cost report splits compute and storage per service (main.bicep:198-202, 1145-1147), with weekly/monthly/yearly long-term retention on top of Basic-tier PITR (main.bicep:1161-1175). The three databases that hold an audit-trail table (`ADC_Identity`, `ADC_Conference`, `ADC_Engagement`; Notification has no audited entities) also get a database-level audit policy recording every `UPDATE` or `DELETE` on `dbo.AuditTrailEntries` outside the database (main.bicep:1208-1212, 1230-1247), because the services connect with the server admin login and could otherwise rewrite the [ADR-075](https://ivanball.github.io/docs/adr/075-audit-trail.html) trail without a record (main.bicep:1182-1190). The legacy `AtlDevCon` database is declared in neither place (main.bicep:1114-1120), and with its bacpac deleted on 2026-10-03 it has no rollback source (main.bicep:1164-1165) |
-| Redis container (persistent) | Azure Managed Redis (`Microsoft.Cache/redisEnterprise`, Balanced B0, no HA, main.bicep:1617-1628), OSS-cluster policy and volatile-LRU eviction (main.bicep:1636, 1639), injected as `ConnectionStrings__redis` from Key Vault (main.bicep:1942) |
-| RabbitMQ container (persistent, management plugin), or the Service Bus emulator container under `ADC_BROKER=servicebus` | Azure Service Bus (Standard tier, main.bicep:1269-1280; Basic lacks the topics MassTransit needs, main.bicep:1264-1265), with one per-service SAS rule rather than one credential for the whole fleet (main.bicep:1313, 1325, 1337, 1349) |
-| MailDev container (fixed ports 1080/1025) | Not provisioned; a real SMTP relay via `Smtp__Host` / `Smtp__Port` / `Smtp__From` (main.bicep:2002 for Identity, 2473 for Notification) |
-| `MessageBus__Provider=RabbitMq` (AppHost default) | `MessageBus__Provider=AzureServiceBus` (Bicep env var on all four services, main.bicep:1980, 2205, 2349, 2502) |
-| Aspire dashboard (OTLP) | Application Insights workspace-based resource (`APPLICATIONINSIGHTS_CONNECTION_STRING`, main.bicep:271-274) |
-| `WithSQLServerDataSource` injects one connection-string env var | Bicep injects the same one plus `DataSources__{Module}__SQLServerMigrationsAssembly` and `Outbox__DatabaseName` (main.bicep:1920-1922) |
-| h2c health probe from the AppHost (`WithH2cHealthCheck`) | Dedicated HTTP/1.1 probe listener via `HealthProbe__Port`, 8081 on the three h2c services (main.bicep:1916, 2169, 2311) and 8082 on Notification (main.bicep:2465), because the ACA platform probes speak HTTP/1.1 |
-| `WaitFor` gates on `/alive`; only the UI gates on `/health/ready` | The ACA probe block splits the same two paths by job: startup and liveness on `/alive`, readiness on `/health/ready`, all three against the probe port (main.bicep:2075-2100). Readiness polls every 30 s rather than 10 s, because the DB-aware check issues a `SELECT 1` per probe and neither the probe request nor its dependency row is sampled (main.bicep:2069-2074) |
-| Outbox poll interval: framework default 2 s | `Outbox__PollingIntervalSeconds=300` on every service (main.bicep:1927, 2176, 2318, 2474); Identity, Conference and Engagement, the three hosts that call `AddScheduledJobs`, also slow the runner's idle wake to `Scheduler__PollingIntervalSeconds=300` (main.bicep:1938, 2184, 2321). Internal commands (ADR-114) deliberately poll faster at `InternalCommands__PollingIntervalSeconds=60` (main.bicep:1933), because a row is signalled when it is written or, when enrolled in a transaction, once that transaction commits, so the interval mainly bounds the retry of a row that failed, and 60 s keeps such a retry from waiting five minutes (comment at main.bicep:1928-1932) |
-| Telemetry knobs at their defaults (sample everything, all metric families on, probe traces filtered) | `Telemetry__TracesSampleRatio=0.25`, `Telemetry__DisableHttpClientMetrics=true`, `Telemetry__DisableRuntimeMetrics=true`, `Telemetry__DisableAspNetCoreMetrics=true`, `OTEL_METRIC_EXPORT_INTERVAL=300000`, plus the distro switch `AzureMonitor__EnableLiveMetrics=false` (main.bicep:280-283, 313-320, 326-329, 336-339, 347-350). `Telemetry__FilterProbeTelemetry` is set nowhere, because its default is already the production behavior |
-| Gateway: YARP request-routing lines at `Information` (Gateway/appsettings.json:6) | `Logging__LogLevel__Yarp=Warning` on the gateway container and no other (main.bicep:295-304, 2644), because YARP's two lines per proxied request duplicated `AppRequests` and `AppDependencies` in the console-log stream; `Warning` keeps the forwarder's error lines |
+| SQL Server container (persistent) | Azure SQL Server; the same four databases (`ADC_Identity`, `ADC_Conference`, `ADC_Engagement`, `ADC_Notification`, main.bicep:1348-1353), each Basic 5 DTU / 2 GB (main.bicep:1365-1371) outside conference mode, with `conferenceMode` lifting the attendee hot-path pair `ADC_Conference` and `ADC_Engagement` to S2 for the day (main.bicep:215-218, 1363-1366), and carrying a `service` tag equal to the owning container app's, so one tag-grouped cost report splits compute and storage per service (main.bicep:220-224, 1359-1361), with weekly/monthly/yearly long-term retention on top of Basic-tier PITR (main.bicep:1375-1389). The three databases that hold an audit-trail table (`ADC_Identity`, `ADC_Conference`, `ADC_Engagement`; Notification has no audited entities) also get a database-level audit policy recording every `UPDATE` or `DELETE` on `dbo.AuditTrailEntries` outside the database (main.bicep:1422-1426, 1444-1461), because the services connect with the server admin login and could otherwise rewrite the [ADR-075](https://ivanball.github.io/docs/adr/075-audit-trail.html) trail without a record (main.bicep:1396-1404). The legacy `AtlDevCon` database is declared in neither place (main.bicep:1328-1334), and with its bacpac deleted on 2026-10-03 it has no rollback source (main.bicep:1378-1379) |
+| Redis container (persistent) | Azure Managed Redis (`Microsoft.Cache/redisEnterprise`, Balanced B0, no HA, main.bicep:1972-1983), OSS-cluster policy and volatile-LRU eviction (main.bicep:2003, 2006), injected as `ConnectionStrings__redis` from Key Vault (main.bicep:2400) |
+| RabbitMQ container (persistent, management plugin), or the Service Bus emulator container under `ADC_BROKER=servicebus` | Azure Service Bus (Standard tier, main.bicep:1490-1497; Basic only supports queues, while the transport publishes each event on its own topic and binds each consuming host with a subscription that forwards into that host's queue, main.bicep:1484-1486). The template declares that topology itself: one queue per consuming host, one topic per event, and the forwarding subscriptions (main.bicep:1466-1482, 1588, 1609, 1627), with one per-service SAS rule rather than one credential for the whole fleet (main.bicep:1672, 1683, 1694, 1705) |
+| MailDev container (fixed ports 1080/1025) | Not provisioned; a real SMTP relay via `Smtp__Host` / `Smtp__Port` / `Smtp__From` (main.bicep:2465 for Identity, 3015 for Notification) |
+| `MessageBus__Provider=RabbitMq` (AppHost default) | `MessageBus__Provider=AzureServiceBus` (Bicep env var on all four services, main.bicep:2439, 2686, 2846, 3006) |
+| Aspire dashboard (OTLP) | Application Insights workspace-based resource (`APPLICATIONINSIGHTS_CONNECTION_STRING`, main.bicep:300-303) |
+| `WithSQLServerDataSource` injects one connection-string env var | Bicep injects the same one plus `DataSources__{Module}__SQLServerMigrationsAssembly` and `Outbox__DatabaseName` (main.bicep:2377-2379) |
+| h2c health probe from the AppHost (`WithH2cHealthCheck`) | Dedicated HTTP/1.1 probe listener via `HealthProbe__Port`, 8081 on the three h2c services (main.bicep:2373, 2649, 2799) and 8082 on Notification (main.bicep:2969), because the ACA platform probes speak HTTP/1.1 |
+| `WaitFor` gates on `/alive`; only the UI gates on `/health/ready` | The ACA probe block splits the same two paths by job: startup and liveness on `/alive`, readiness on `/health/ready`, all three against the probe port (main.bicep:2554-2579). Readiness polls every 30 s rather than 10 s, because the DB-aware check issues a `SELECT 1` per probe and neither the probe request nor its dependency row is sampled (main.bicep:2548-2553) |
+| Outbox poll interval: framework default 2 s | `Outbox__PollingIntervalSeconds=300` on every service (main.bicep:2385, 2656, 2806, 2978); Identity, Conference and Engagement, the three hosts that call `AddScheduledJobs`, also slow the runner's idle wake to `Scheduler__PollingIntervalSeconds=300` (main.bicep:2396, 2664, 2809). Internal commands (ADR-114) deliberately poll faster at `InternalCommands__PollingIntervalSeconds=60` (main.bicep:2391), because a row is signalled when it is written or, when enrolled in a transaction, once that transaction commits, so the interval mainly bounds the retry of a row that failed, and 60 s keeps such a retry from waiting five minutes (comment at main.bicep:2386-2390) |
+| Telemetry knobs at their defaults (sample everything, all metric families on, probe traces filtered) | `Telemetry__TracesSampleRatio=0.25`, `Telemetry__DisableHttpClientMetrics=true`, `Telemetry__DisableRuntimeMetrics=true`, `Telemetry__DisableAspNetCoreMetrics=true`, `OTEL_METRIC_EXPORT_INTERVAL=300000`, plus the distro switch `AzureMonitor__EnableLiveMetrics=false` (main.bicep:309-312, 342-349, 355-358, 365-368, 376-379). `Telemetry__FilterProbeTelemetry` is set nowhere, because its default is already the production behavior |
+| Gateway: YARP request-routing lines at `Information` (Gateway/appsettings.json:6) | `Logging__LogLevel__Yarp=Warning` on the gateway container and no other (main.bicep:324-333, 3155), because YARP's two lines per proxied request duplicated `AppRequests` and `AppDependencies` in the console-log stream; `Warning` keeps the forwarder's error lines |
 
 The transport switch (`RabbitMq` to `AzureServiceBus`) is entirely environment-driven. No code path
 changes between local and production: the same `AddBrokerMessaging(configuration)` call in each
@@ -1387,12 +1455,19 @@ in-process dispatch + background processor) combined with the infrastructure fle
 
 Be honest about what that buys and what it does not. Environment-driven transport selection means no
 `#if` and no second code path, but the **default** local run still uses a different broker than
-production: RabbitMQ exercises the MassTransit RabbitMQ transport, not the Service Bus topic topology,
-its quotas, or its admin-plane behavior. ADC now closes that gap on two fronts rather than one. The
-`ADC_BROKER=servicebus` opt-in (AppHost Program.cs:91-95) runs the whole inner-loop stack against the
-official emulator, so a developer chasing a transport bug can reproduce it locally; and
-`Tests/Integration/MMCA.ADC.ServiceBusEmulator.IntegrationTests` smokes MassTransit against the same
-emulator on the weekday nightly, `continue-on-error` and never deploy-gating. The residual gap is what
+production: RabbitMQ exercises the framework's built-in RabbitMQ transport
+(`MMCA.Common.Infrastructure/Messaging/Transports/RabbitMq/RabbitMqBrokerTransport.cs:24`), not the
+Service Bus topic topology, its quotas, or its admin-plane behavior. ADC now closes that gap on two fronts
+rather than one. The `ADC_BROKER=servicebus` opt-in (AppHost Program.cs:91-95) runs the whole inner-loop
+stack against the official emulator, so a developer chasing a transport bug can reproduce it locally; and
+`Tests/Integration/MMCA.ADC.ServiceBusEmulator.IntegrationTests` runs MMCA.Common's native Azure Service
+Bus transport (`AzureServiceBusTransport.cs:37`) with ADC's real integration-event contracts and the
+production entity names against the same emulator, proving admin-plane topology provisioning and the
+AMQP round-trip (`ServiceBusRoundTripSmokeTests.cs:9-18`). It runs as the `servicebus-emulator-smoke`
+job on the weekday nightly (`.github/workflows/cross-service-tests.yml:28-31`), and it is
+deploy-gating: the `cross-service-freshness` gate in `deploy.yml` requires both it and the RabbitMQ
+`cross-service` job to have succeeded in the same qualifying run, so a red here is fixed rather than
+waved through (cross-service-tests.yml:122-133). The residual gap is what
 the emulator itself does not model (real quotas, real throttling, the real admin plane), which is
 narrower than the gap a RabbitMQ-only inner loop leaves.
 
@@ -1598,8 +1673,8 @@ outage pulls the gateway out of the load balancer without ever failing liveness,
 gateway fixes nothing about a downstream being down (Gateway/Program.cs:76-79).
 
 Production does not point the platform's readiness probe at that aggregate. The gateway container app
-probes `/alive` for startup, liveness **and** readiness, all on port 8080 (`MMCA.ADC/infra/main.bicep:2693-2725`),
-and the comment on the readiness entry records why (main.bicep:2709-2715). `/health/ready` fans out to
+probes `/alive` for startup, liveness **and** readiness, all on port 8080 (`MMCA.ADC/infra/main.bicep:3204-3236`),
+and the comment on the readiness entry records why (main.bicep:3220-3226). `/health/ready` fans out to
 every downstream's `/alive`, so a 30 second probe there was an HTTP request on every service every 30
 seconds, which alone keeps an idle replica off the Container Apps idle rate; and one failed downstream
 marked the **only** gateway replica unready and took the whole site down, healthy routes included. The
@@ -1621,7 +1696,7 @@ attempts, the per-request `System.Net.Http.HttpClient` logs for the `gateway-dow
 the YARP health monitor, `Yarp.ReverseProxy.Health`) write a line per probe for traffic no user made, so
 they sit at `Warning` while YARP's own request-routing lines stay at `Information` (appsettings.json:6,
 13). Production goes one step further and caps YARP too: the Bicep sets `Logging__LogLevel__Yarp=Warning`
-on the gateway container and no other host (main.bicep:295-304, 2644), because at `Information` YARP writes two lines per
+on the gateway container and no other host (main.bicep:324-333, 3155), because at `Information` YARP writes two lines per
 proxied request that Container Apps ships to Log Analytics, measured at about 177k lines and 77 MB a week,
 the largest console-log stream in the workspace and all of it already recorded as `AppRequests` and
 `AppDependencies`. `Warning` keeps the forwarder's error lines, so a failed proxy hop still logs.
@@ -1689,11 +1764,11 @@ injected is invisible to `dotnet build` and to every in-process test tier, becau
 directly through `WebApplicationFactory` and bypass the orchestration. Two places run the orchestration
 for real. The framework owns the test base: MMCA.Common's `apphost-testing` job boots a sample AppHost
 through `Aspire.Hosting.Testing` and is blocking in Common's CI, though not a required merge check
-(`MMCA.Common/.github/workflows/ci.yml:1021-1037`; the base is
+(`MMCA.Common/.github/workflows/ci.yml:1437-1457`; the base is
 [ADR-117](https://ivanball.github.io/docs/adr/117-apphost-integration-test-base.html)). And ADC's
-`e2e.yml` starts this AppHost for every Playwright run (`MMCA.ADC/.github/workflows/e2e.yml:242`), so a
+`e2e.yml` starts this AppHost for every Playwright run (`MMCA.ADC/.github/workflows/e2e.yml:281`; the step sets `ASPIRE_SUPPRESS_CLI_RUN_HOOK=true` so Aspire 17's run hook does not turn that `dotnet run -c Release --no-build` into an `aspire run` that drops `-c Release` and starts a never-built `bin/Debug`, e2e.yml:289-293), so a
 wiring break surfaces as a failed stack start or a red browser suite: on the deploy path through the
-chromium `e2e-gate` on a UI diff (`MMCA.ADC/.github/workflows/deploy.yml:808`), and on the scheduled
+chromium `e2e-gate` on a UI diff (`MMCA.ADC/.github/workflows/deploy.yml:1203, 1214`), and on the scheduled
 firefox and webkit legs. ADC carries no AppHost test project of its own.
 
 [Rubric §14, Testability and Test Strategy] assesses whether the test suite covers the risks the system
@@ -1708,14 +1783,14 @@ composition is proven by the suite that has to boot it anyway.
 | Category | Where primarily embodied |
 |---|---|
 | §7 Microservices Architecture | `WithReference` declared only for real call edges, so the gRPC topology reads as code (AppHost Program.cs:268-292); the gateway as the only component that knows the service topology on behalf of clients; identical extraction boundaries (gRPC contracts, broker interfaces, JWKS discovery) locally and in Azure |
-| §11 Security | The GitHub Packages token as a BuildKit secret in all six Dockerfiles (Gateway.Dockerfile:12-14, 30-32), and the non-root `USER $APP_UID` final stage (Gateway.Dockerfile:73); JWKS discovery with no shared symmetric secret, routed through the gateway and issuer-pinned from the same resource (Program.cs:364-375); `AddCommonKeyVaultConfiguration` and `AddCommonDataProtection` as single framework calls gated on configuration keys absent locally; the hardened default CSP baseline (SecurityHeaders.cs:53-55) |
+| §11 Security | The GitHub Packages token as a BuildKit secret in all six Dockerfiles (Gateway.Dockerfile:33-35, 54-56), and the non-root `USER $APP_UID` final stage (Gateway.Dockerfile:103); JWKS discovery with no shared symmetric secret, routed through the gateway and issuer-pinned from the same resource (Program.cs:364-375); `AddCommonKeyVaultConfiguration` and `AddCommonDataProtection` as single framework calls gated on configuration keys absent locally; the hardened default CSP baseline (SecurityHeaders.cs:53-55) |
 | §12 Performance & Scalability | The ACA-tuned `SocketsHttpHandler` (`MMCA.Common.Aspire/Extensions.cs:78-86`) and the OIDC metadata warm-up task, both aimed at Consumption-plan cold starts and idle-replica penalties; ReadyToRun publish on the five non-UI images |
 | §13 Observability & Operability | Dual OTLP / Azure Monitor export from one binary (Extensions.Telemetry.cs:160-177); nine MMCA.Common meters registered by literal name (Extensions.Telemetry.cs:308-316); probe-trace filtering that raises the signal ratio of `AppRequests` rather than only cutting volume |
-| §14 Testability & Test Strategy | `AppHostBicepParityTests` reads the AppHost `Program.cs` and `infra/main.bicep` as text, without booting the stack, and fails when a `WithReference` edge has no matching `services__` entry in Bicep or a Bicep entry has no matching edge (AppHostBicepParityTests.cs:53, AppHostBicepParityTests.cs:73), which pins the one failure surface no compiler covers; the booted composition is exercised by `e2e.yml`, and ADC carries no AppHost test project of its own |
-| §17 DevOps & Deployment | Persistent container lifetimes shared by the inner loop and the Aspire-driven E2E CI run; one Dockerfile per deployable behind the six-way `build-images` matrix with per-image dirty gating (`deploy.yml:1029-1048`); the parity table's environment-driven local-to-cloud mapping |
+| §14 Testability & Test Strategy | `AppHostBicepParityTests` (`MMCA.ADC/Tests/Hosts/MMCA.ADC.Gateway.Tests/AppHostBicepParityTests.cs:11`) subclasses MMCA.Common's `AppHostBicepParityTestsBase`, which reads the AppHost `Program.cs` and `infra/main.bicep` as text, without booting the stack, and fails when a `WithReference` edge has no matching `services__` entry in Bicep or a Bicep entry has no matching edge (`MMCA.Common/Source/Hosting/MMCA.Common.Testing/Conformance/ServiceDiscovery/AppHostBicepParityTestsBase.cs:74`, AppHostBicepParityTestsBase.cs:98); ADC exempts only the five UI edges, each with a stated reason (AppHostBicepParityTests.cs:26-34), and a blank reason fails the test (AppHostBicepParityTestsBase.cs:88-89), which pins the one failure surface no compiler covers; the booted composition is exercised by `e2e.yml`, and ADC carries no AppHost test project of its own |
+| §17 DevOps & Deployment | Persistent container lifetimes shared by the inner loop and the Aspire-driven E2E CI run; one Dockerfile per deployable behind the six-way `build-images` matrix with per-image dirty gating (`deploy.yml:1427-1446`); the parity table's environment-driven local-to-cloud mapping |
 | §29 Resilience & Business Continuity | The liveness-versus-readiness split on every startup gate (Program.cs:324-343), including the gateway's `/alive` gate that avoids the readiness-aggregate wedge; `WithReference` without `WaitFor` on the four cycle-closing edges, absorbed by the gRPC resilience pipeline; `"optional"`-tagged dependency checks that keep a degradation partial |
-| §31 Cost / FinOps | The five telemetry knobs, the Live Metrics switch (main.bicep:331-339) and the metric export interval; `OutboxPollFilterProcessor` and `ProbeTelemetryFilterProcessor` suppressing the two highest-volume classes of span nobody asked for; the gateway's probe-log trim (Gateway/appsettings.json:2-16) and its production-only YARP log floor (main.bicep:295-304, 2644); the 30 s readiness cadence in the ACA probe block (main.bicep:2069-2074); the gateway's YARP active probe switched off (Gateway/appsettings.json:52-60) and its readiness probe on `/alive` rather than the downstream fan-out (main.bicep:2709-2724) |
-| §32 Dependency & Supply-Chain | Digest-pinned `aspnet` and `sdk` base images in all six Dockerfiles (Gateway.Dockerfile:4, 10); `--locked-mode` restore in five of the six (Gateway.Dockerfile:32, the UI's documented exception at UI.Web.Dockerfile:36-38); the per-image Trivy scan of the exact tag being rolled out, non-gating today (`deploy.yml:1148-1157`) |
+| §31 Cost / FinOps | The five telemetry knobs, the Live Metrics switch (main.bicep:360-368) and the metric export interval; `OutboxPollFilterProcessor` and `ProbeTelemetryFilterProcessor` suppressing the two highest-volume classes of span nobody asked for; the gateway's probe-log trim (Gateway/appsettings.json:2-16) and its production-only YARP log floor (main.bicep:324-333, 3155); the 30 s readiness cadence in the ACA probe block (main.bicep:2548-2553); the gateway's YARP active probe switched off (Gateway/appsettings.json:52-60) and its readiness probe on `/alive` rather than the downstream fan-out (main.bicep:3220-3235) |
+| §32 Dependency & Supply-Chain | Digest-pinned `aspnet` and `sdk` base images in all six Dockerfiles (Gateway.Dockerfile:16, 18, 27); `--locked-mode` restore in five of the six (Gateway.Dockerfile:56, the UI's documented exception at UI.Web.Dockerfile:57-59); the per-image Trivy scan of the exact tag being rolled out, a deploy gate on any fixable CRITICAL/HIGH finding (`deploy.yml:1551-1569`) |
 | §33 Developer Experience | One command brings up six processes and four containers with no Compose file and no hand-set environment variables; the `ADC_BROKER=servicebus` parity opt-in that is paid for only when needed |
 
 ---
@@ -1735,9 +1810,9 @@ composition is proven by the suite that has to boot it anyway.
 - Every ingestion figure quoted in the cost sections (roughly 65% of AppMetrics, about 290 MB of a
   500 MB daily stream, 100% of `AppRequests` rows from probes, the ASP.NET Core meter family at 73% of
   ingestion, Live Metrics holding 64% of vCPU-seconds on the active rate, the YARP forwarder's roughly 177k console lines a week) comes from the inline comment that records the measurement, not from a workspace query this
-  chapter ran: `MMCA.ADC/infra/main.bicep:295-300`, `305-311`, `321-324` and `330-334`,
+  chapter ran: `MMCA.ADC/infra/main.bicep:324-329`, `334-340`, `350-353` and `359-363`,
   and `MMCA.Common.Aspire/Telemetry/ProbeTelemetryFilter.cs:8-11`.
 - That the `AtlDevCon` database is actually gone from the Azure SQL server is asserted by the template's
-  comment (main.bicep:1114-1120), which is explicit that Incremental-mode Bicep never deleted it and an
+  comment (main.bicep:1328-1334), which is explicit that Incremental-mode Bicep never deleted it and an
   operator did, after the template stopped declaring it. The template can only prove the declaration is
   absent, not the server's current state.

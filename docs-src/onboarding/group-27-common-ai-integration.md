@@ -1,8 +1,9 @@
 # 27. Common AI Integration
 
-**What this chapter covers.** This group is the framework's *language-model boundary*: the optional
-`MMCA.Common.AI` package that turns a call to an LLM provider into an ordinary, governed external
-dependency. Four questions shape every type in it. *What is this call allowed to do?* (a pinned
+**What this chapter covers.** This group is the framework's *language-model boundary*, in both
+directions: the optional `MMCA.Common.AI` package that turns a call to an LLM provider into an
+ordinary, governed external dependency, and the opt-in `MMCA.Common.Mcp` package that lets a model
+client call a module's queries as tools. Four questions shape every type on the chat side. *What is this call allowed to do?* (a pinned
 model, a clamped output ceiling, a wall-clock budget, a policy-gated tool list, an optional input
 ceiling). *What may it say, and what may it answer?* (redactors that rewrite a request before
 anything reads it, and guardrails that can refuse the request, the response or a single streamed
@@ -10,16 +11,20 @@ fragment). *What did it cost, how long did it take, and which prompt spent it?* 
 plus a latency histogram on one framework-wide meter, all tagged by prompt name, version and
 provider, with the same prompt identity stamped on the trace). *Which exact prompt produced this
 answer?* (a versioned contract whose SHA-256 hash is what an evaluation gate records against). The
-33 types answering those questions ship in four packages. The core `MMCA.Common.AI` holds the
+46 types answering those questions ship in five packages. The core `MMCA.Common.AI` holds the
 settings, the composition entry point, four delegating clients (bounds, guardrails, metering, prompt
-tagging), the guardrail, redactor and tool-policy contracts with the two content policies the
-framework does ship (and the internal helper they share), the provider-factory contract and its startup validator, a meter and the prompt
-contract. Two adapter packages, `MMCA.Common.AI.Anthropic` and `MMCA.Common.AI.OpenAI`, each add one
-provider factory and one registration method. `MMCA.Common.AI.Testing` is the offline evaluation
-harness a consumer's test project subclasses. The decision record is
+tagging), the guardrail, redactor and tool-policy contracts, the prompt-injection marker interface,
+the two content policies the framework does ship (and the internal helper they share), the
+provider-factory contract and its startup validator, a meter and the prompt contract. Two adapter
+packages, `MMCA.Common.AI.Anthropic` and `MMCA.Common.AI.OpenAI`, each add one provider factory and
+one registration method. `MMCA.Common.AI.Testing` is the offline evaluation harness a consumer's test
+project subclasses. `MMCA.Common.Mcp` carries the other direction: its 12 types register a Model
+Context Protocol endpoint, govern each tool call on it and inspect what a model will read before the
+endpoint starts. The decision record for the chat side is
 [ADR-120](https://ivanball.github.io/docs/adr/120-governed-chat-client-boundary.html), which extends
 the feature-level record
-[ADR-111](https://ivanball.github.io/docs/adr/111-ai-session-scoring-governance.html).
+[ADR-111](https://ivanball.github.io/docs/adr/111-ai-session-scoring-governance.html); the endpoint
+is [ADR-138](https://ivanball.github.io/docs/adr/138-mcp-endpoint-over-module-queries.html).
 
 If you have not yet met the `extension(T)` DI convention or the fail-fast options pattern, skim
 [primer section 4](00-primer.md#c-extensiont-types--read-this-once) first: this chapter composes both
@@ -36,38 +41,50 @@ evaluation is [GoldenReplayTestsBase](#goldenreplaytestsbase) and
 configured bounds are [BoundedChatClient](#boundedchatclient) with
 [IChatToolPolicy](#ichattoolpolicy) deciding which tools survive them, and the content rules on top
 are [IChatRequestRedactor](#ichatrequestredactor) and [IChatGuardrail](#ichatguardrail) run by
-[GuardrailChatClient](#guardrailchatclient). `[Rubric section 2, Design Patterns]` also applies
+[GuardrailChatClient](#guardrailchatclient). The MCP endpoint answers the same section from the
+other side, where the model is the caller: [McpToolGovernance](#mcptoolgovernance) decides which
+tools a caller may see and call, and [ToolDescriptionInspector](#tooldescriptioninspector) refuses
+to serve a description that hides text. `[Rubric section 2, Design Patterns]` also applies
 throughout, because the mechanism is the decorator: every layer is a `DelegatingChatClient` wrapping
 the next, and the provider is a strategy selected by name.
 
 ## The configuration surface is the contract
 
-[AiSettings](#aisettings) (`MMCA.Common/Source/Core/MMCA.Common.AI/AiSettings.cs:22`) binds from the
-`Ai` section (`AiSettings.cs:25`) and holds every knob the package has: `Enabled` (`:39`), `Provider`
-(`:48`), `Model` (`:58`), `ApiKey` (`:69`), the optional `Endpoint` (`:76`), `MaxOutputTokens`
-(`:83`, defaulting to 1024 at `:28` and range-checked 1 to 1,000,000 at `:82`), `Timeout` (`:89`,
-defaulting to 30 seconds at `:31`), `AllowTools` (`:96`), `RequireGuardrail` (`:110`, defaulting to
-true), `EnableCache` (`:116`) and the optional `PerCallInputTokenBudget` (`:124`, range 1 to
-`int.MaxValue` at `:123`). Every one of those is a bound rather than a suggestion: the settings doc
-comment says so outright (`AiSettings.cs:7-14`), and the runtime enforcement lives one layer out in
+[AiSettings](#aisettings) (`MMCA.Common/Source/Core/MMCA.Common.AI/AiSettings.cs:23`) binds from the
+`Ai` section (`AiSettings.cs:26`) and holds every knob the package has: `Enabled` (`:47`), `Provider`
+(`:56`), `Model` (`:66`), `ApiKey` (`:78`), the optional `Endpoint` (`:85`), `MaxOutputTokens`
+(`:92`, defaulting to 1024 at `:29` and range-checked 1 to 1,000,000 at `:91`), `Timeout` (`:98`,
+defaulting to 30 seconds at `:32`), `AllowTools` (`:105`), `RequireGuardrail` (`:122`, defaulting to
+true), `EnableCache` (`:128`) and the optional `PerCallInputTokenBudget` (`:136`, range 1 to
+`int.MaxValue` at `:135`). Every one of those is a bound rather than a suggestion: the settings doc
+comment says so outright (`AiSettings.cs:8-15`), and the runtime enforcement lives one layer out in
 [BoundedChatClient](#boundedchatclient), so a caller cannot opt out by passing different
 `ChatOptions`. Nothing in the section names a vendor: `Provider` is a plain string matched against the
-names of whatever provider factories the host registered (`AiSettings.cs:15-20`, `:41-47`), and
+names of whatever provider factories the host registered (`AiSettings.cs:16-21`, `:49-55`), and
 `Endpoint` is what routes any adapter through an AI gateway, a regional endpoint or an
-OpenAI-compatible server (`:71-75`).
+OpenAI-compatible server (`:80-84`).
 
 Validation is conditional, which is what lets the `Ai` section ship in every appsettings file.
-`AiSettings` implements `IValidatableObject` (`AiSettings.cs:22`) and its `Validate` yields nothing
-at all when `Enabled` is false (`:135-138`); once the dependency is switched on it requires
-`Provider` (`:140-146`), `Model` (`:148-153`) and `ApiKey` (`:155-161`), rejects a relative
-`Endpoint` (`:163-168`) and rejects a non-positive `Timeout` (`:170-175`). The registration chains
-that onto `ValidateDataAnnotations().ValidateOnStart()`
-(`MMCA.Common/Source/Core/MMCA.Common.AI/DependencyInjection.cs:123-126`), so a misconfigured host
+`AiSettings` implements `IValidatableObject` (`AiSettings.cs:23`) and its `Validate` yields nothing
+at all when `Enabled` is false (`:158-161`); once the dependency is switched on it requires
+`Provider` (`:163-169`), `Model` (`:171-176`) and `ApiKey` (`:178-184`), checks `Endpoint`
+(`:186-189`) and rejects a non-positive `Timeout` (`:191-196`) as well as one above `MaxTimeout`
+(`:198-203`). That ceiling is one hour (`:39`) for a reason recorded beside it: a bare number in
+configuration binds as days, and a value above roughly 49.7 days makes every call throw where the
+timeout is armed (`:34-38`). The endpoint rules live in `ValidateEndpoint` (`:212-232`): a relative
+URI is rejected (`:214-219`), and so is any scheme other than https outside Development, because
+every call carries `ApiKey` in its request headers (`:221-229`, rationale at `:206-208`). Whether the
+host is Development comes from the validation context's `IHostEnvironment` when it carries one and
+otherwise from the internal `IsDevelopmentHost` flag (`:239-242`, property at `:143`), and an
+environment it cannot see reads as not Development. The registration stamps that flag in a
+`PostConfigure` from the registered environment and chains `ValidateDataAnnotations().ValidateOnStart()`
+(`MMCA.Common/Source/Core/MMCA.Common.AI/DependencyInjection.cs:124-129`), so a misconfigured host
 fails at startup rather than on the first user request: the same fail-fast configuration contract the
 rest of the framework follows
 ([ADR-070](https://ivanball.github.io/docs/adr/070-fail-fast-configuration-contract.html)).
 `[Rubric section 11, Security]` is in play at `ApiKey`: the property is documented as binding from Key
-Vault in production and from user secrets locally (`AiSettings.cs:69-74`), so the package itself never
+Vault in production (through `AddAzureKeyVaultConfiguration` in `MMCA.Common.Azure.Startup`) and from
+user secrets or an environment variable locally (`AiSettings.cs:68-77`), so the package itself never
 decides where the secret comes from.
 
 ## The provider is a registered factory, not a type the package names
@@ -111,33 +128,36 @@ data annotations already report a blank name and one failure should be reported 
 ## One entry point, one pipeline, outermost first
 
 [AiServiceCollectionExtensions](#aiservicecollectionextensions)
-(`MMCA.Common/Source/Core/MMCA.Common.AI/DependencyInjection.cs:77`) is the only composition surface.
+(`MMCA.Common/Source/Core/MMCA.Common.AI/DependencyInjection.cs:78`) is the only composition surface.
 It exposes two `AddMmcaChatClient` overloads inside an `extension(IServiceCollection services)` block
-(`DependencyInjection.cs:79`), the framework's standard public DI shape
+(`DependencyInjection.cs:80`), the framework's standard public DI shape
 ([ADR-106](https://ivanball.github.io/docs/adr/106-extension-members-as-public-di-surface.html)): the
-configuration form (`:88`) registers [AiProviderValidator](#aiprovidervalidator) (`:94`) and then
-delegates to the factory form (`:113-115`) with `CreateProviderChatClient` as the innermost client
-(`:96`). That method resolves every registered [IAiProviderFactory](#iaiproviderfactory), picks the
-one whose name matches `Ai:Provider` and calls its `Create` (`:239-248`); its own throw is only a belt
-for a host that bypassed the options pipeline (`:235-238`). The provider path is therefore nothing more
+configuration form (`:89`) registers [AiProviderValidator](#aiprovidervalidator) (`:95`) and then
+delegates to the factory form (`:114`) with `CreateProviderChatClient` as the innermost client
+(`:97`). That method resolves every registered [IAiProviderFactory](#iaiproviderfactory), picks the
+one whose name matches `Ai:Provider` through the validator's own `Match` and calls its `Create`
+(`:282-291`); its throw, worded by the validator's `DescribeMismatch` (`:287-288`), is only a belt for
+a host that bypassed the options pipeline (`:278-281`). The provider path is therefore nothing more
 than the general path with its innermost client supplied. On the factory form `Ai:Provider` is still
-required, but it is only the metrics fallback and is matched against nothing (`:109-111`).
+required, but it is only the metrics fallback and is matched against nothing (`:111-112`).
 
-The registration reads top to bottom as a policy. Bind and validate (`:121-126`). Then, if the section
-is disabled, **return having registered no client at all** (`:128-132`). That absence is the API: a
-consumer gates on `GetService<IChatClient>()` returning null rather than on reading a flag
-(`DependencyInjection.cs:66-70`), so a feature whose key is missing in a given environment is off by
-construction. When enabled, the registration first scans the descriptors for an `IChatGuardrail` and
-an `IChatRequestRedactor` (`:139-140`) and hands the answers to `RefuseAnUngovernedHost` (`:142`, body
-at `:202-227`), which makes two refusals at registration time rather than on the tenth user's request.
-With `RequireGuardrail` true (its default) and neither extension point registered it throws, naming
-`AddPiiRedactionGuardrail()` as the one-line fix and the `RequireGuardrail` switch as the reviewable
-opt-out (`:208-217`); with `AllowTools` true and no `IChatToolPolicy` registered it throws too, because
-every tool would otherwise be silently stripped (`:219-226`). Then the meter is registered
-(`AddMetrics` plus `TryAddSingleton<AiUsageMeter>()`, `:144-145`) and the client is built with
-`AddChatClient` followed by `Use` calls, first-registered being outermost because `ChatClientBuilder`
-applies its factories in reverse (`:147-184`). The resulting order, outermost first, is
-[BoundedChatClient](#boundedchatclient), then the optional
+The registration reads top to bottom as a policy. Bind, stamp the environment and validate
+(`:122-129`). Then, if the section is disabled, **return having registered no client at all**
+(`:131-135`). That absence is the API: a consumer gates on `GetService<IChatClient>()` returning null
+rather than on reading a flag (`DependencyInjection.cs:66-72`), so a feature whose key is missing in a
+given environment is off by construction. When enabled, the registration first scans the descriptors
+for an `IChatGuardrail`, an `IChatRequestRedactor` and a prompt-injection defense (`:142-144`) and
+hands the last answer to `RefuseAnUngovernedHost` (`:146`, body at `:210-238`), which makes two
+refusals at registration time rather than on the tenth user's request. With `RequireGuardrail` true
+(its default) and no prompt-injection defense registered it throws, naming
+`AddContentPolicyGuardrail(configuration)` as the one-line fix, stating that
+`AddPiiRedactionGuardrail()` alone does not satisfy it, and naming the `RequireGuardrail` switch as
+the reviewable opt-out (`:215-228`); with `AllowTools` true and no `IChatToolPolicy` registered it
+throws too, because every tool would otherwise be silently stripped (`:230-237`). Then the meter is
+registered (`AddMetrics` plus `TryAddSingleton<AiUsageMeter>()`, `:148-149`) and the client is built
+with `AddChatClient` followed by `Use` calls, first-registered being outermost because
+`ChatClientBuilder` applies its factories in reverse (`:151-188`). The resulting order, outermost
+first, is [BoundedChatClient](#boundedchatclient), then the optional
 [GuardrailChatClient](#guardrailchatclient), then
 [UsageRecordingChatClient](#usagerecordingchatclient), then optional distributed caching, then
 OpenTelemetry, then [PromptTaggingChatClient](#prompttaggingchatclient), then logging, then the
@@ -148,20 +168,35 @@ cost to record; a cache hit still records "what this call would have cost"; and 
 just inside the OpenTelemetry layer so the activity it decorates is that layer's own span
 (`:33-40`).
 
+What counts as a prompt-injection defense is decided by a type, not by the mere presence of a
+guardrail. [IPromptInjectionGuardrail](#ipromptinjectionguardrail)
+(`MMCA.Common/Source/Core/MMCA.Common.AI/Guardrails/IPromptInjectionGuardrail.cs:21`) is a marker
+interface with no members: the type carrying it is still registered as an `IChatGuardrail` or an
+`IChatRequestRedactor`, and the requirement is about the threat rather than about having something in
+the layer, since a PII redactor lets "ignore previous instructions" straight through
+(`IPromptInjectionGuardrail.cs:7-13`). `IsPromptInjectionGuardrail` (`DependencyInjection.cs:253-267`)
+reads it off the descriptor without resolving anything: an unkeyed registration of either contract
+whose implementation type, taken from the descriptor's type, its instance or the return type of a
+typed factory (`:262-264`, `:269-270`), is assignable to the marker. A factory typed only as the
+contract cannot be recognized and does not count (`:247-252`), which is why an application writing its
+own defense registers it with a concrete implementation type, an instance or a typed factory
+(`IPromptInjectionGuardrail.cs:15-20`). [ContentPolicyGuardrail](#contentpolicyguardrail) is the
+implementation the framework ships.
+
 The guardrail layer is the one conditional wrapper, and how it is decided matters. The registration
 adds it only when the collection already carries an `IChatGuardrail` or an `IChatRequestRedactor`
-descriptor (`:156-162`), and the check is a descriptor scan rather than a resolve, because building
+descriptor (`:160-166`), and the check is a descriptor scan rather than a resolve, because building
 the layer unconditionally would change the concrete type the container hands back for every
-application that adopts neither (`:134-138`, restated in the type's own remarks at `:43-48`). An app
+application that adopts neither (`:137-141`, restated in the type's own remarks at `:43-50`). An app
 that registers none, and has deliberately set `RequireGuardrail` false, therefore keeps exactly the
 chain it had.
 
 Two details in that block are worth reading closely. Caching needs *both* halves, the `EnableCache`
 switch and an actually-registered `IDistributedCache`, because a cache the host never registered would
-turn every call into a resolve-time throw (`:170-175`). And `EnableSensitiveData` on the OpenTelemetry
-layer is driven by `IsDevelopmentHost` (`:177-182`, implementation at `:262-266`), which fails closed:
+turn every call into a resolve-time throw (`:174-179`). And `EnableSensitiveData` on the OpenTelemetry
+layer is driven by `IsDevelopmentHost` (`:181-186`, implementation at `:305-309`), which fails closed:
 an environment it cannot positively identify as Development reads as not-Development, so prompt and
-completion text never reach telemetry by accident (`:256-260`). That is the same dev-only-relaxation
+completion text never reach telemetry by accident (`:299-304`). That is the same dev-only-relaxation
 rule recorded in
 [ADR-122](https://ivanball.github.io/docs/adr/122-dev-only-relaxations-fail-closed.html), and it is
 `[Rubric section 11, Security]` and `[Rubric section 13, Observability and Operability]` pulling in
@@ -204,8 +239,9 @@ reading versus writing: a lookup can be offered on a policy decided once, while 
 moves money or deletes is a decision a human makes per request (`:18-22`). The marker reader fails
 closed too: only a definite false (a `bool`, a parseable string or a JSON `false`) reads as harmless,
 and a marker in any shape it does not recognise reads as consequential (`IsConsequential`,
-`:51-70`). The confirmation reader accepts a single string, a string sequence, or the `JsonElement`
-string or array that options bound from JSON carry (`ReadConfirmedTools`, `:78-108`), so a tool
+`:51-70`). The confirmation reader accepts a single string, a string sequence, the `JsonElement`
+string or array that options bound from JSON carry, and a non-generic sequence such as a JSON array
+bound as `object[]` (`ReadConfirmedTools`, `:78-111`, the last arm at `:102-108`), so a tool
 confirmed over the wire is not silently stripped as unconfirmed (`:91-93`).
 `[Rubric section 11, Security]` and `[Rubric section 16]`.
 
@@ -296,26 +332,28 @@ catches this one type (`ChatGuardrailException.cs:7-11`).
 ## The two content policies the framework does ship
 
 [PiiRedactionGuardrail](#piiredactionguardrail)
-(`MMCA.Common/Source/Core/MMCA.Common.AI/Guardrails/PiiRedactionGuardrail.cs:40`) is the stated
+(`MMCA.Common/Source/Core/MMCA.Common.AI/Guardrails/PiiRedactionGuardrail.cs:42`) is one stated
 exception to "extension points and no policy": an email address or a phone number is never evidence
 for anything a model is asked, so sending one is pure exposure and the judgement does not vary between
-applications or jurisdictions (`:11-17`). It implements both contracts. As a redactor it rewrites the
+applications or jurisdictions (`:13-17`). It implements both contracts. As a redactor it rewrites the
 text every message carries, replacing matches of a source-generated email pattern and a deliberately
-narrow North American phone pattern (each with a one-second match timeout, `:71-81`) with
-`[redacted-email]` and `[redacted-phone]` (`:42-43`). That text is message text, reasoning text, a
+narrow North American phone pattern (each with a one-second match timeout, `:73-84`) with
+`[redacted-email]` and `[redacted-phone]` (`:44-45`). That text is message text, reasoning text, a
 tool result and a tool call's arguments, whether they arrive as CLR strings or as `JsonElement`
-values (`RedactContent`, `:123-157`, rationale at `:103-107`), because a tool's output is exactly
+values (`RedactContent`, `:125-159`, rationale at `:105-109`), because a tool's output is exactly
 where contact details turn up. JSON is rebuilt value by value so property names and numbers are
-copied verbatim and a ten-digit timestamp never becomes a phone placeholder (`:195-244`). An item with
+copied verbatim and a ten-digit timestamp never becomes a phone placeholder (`:197-246`). An item with
 nothing to redact passes through by reference; a rebuilt one keeps its metadata through
 [ContentMetadata](#contentmetadata) but deliberately drops `RawRepresentation`, which still holds the
-unredacted text and which the OpenAI adapters would send verbatim (`:108-116`). A reasoning block
+unredacted text and which the OpenAI adapters would send verbatim (`:110-118`). A reasoning block
 carrying `ProtectedData` is never rebuilt, because an edited signed block is rejected when the
-conversation is sent back (`:117-121`, `:125`), and images and provider-specific content pass
-through untouched (`:152-156`). As a guardrail it allows everything (`:59-69`), which is exactly
-enough to satisfy `RequireGuardrail` without pretending to be a content policy (`:19-24`). Names are
-not redacted and `ChatOptions.Instructions` is left alone, because a speaker's name is the published
-record and the instructions are the application's own text (`:29-30`, `:34-38`).
+conversation is sent back (`:119-123`, `:127`), and images and provider-specific content pass
+through untouched (`:154-158`). As a guardrail it allows everything (`:61-72`), so it never pretends
+to be a content policy it is not, and for the same reason it is **not** an
+[IPromptInjectionGuardrail](#ipromptinjectionguardrail): registering it alone does not satisfy
+`RequireGuardrail` (`:19-25`). Names are not redacted and `ChatOptions.Instructions` is left alone,
+because a speaker's name is the published record and the instructions are the application's own text
+(`:31-32`, `:37-39`).
 
 [ContentMetadata](#contentmetadata)
 (`MMCA.Common/Source/Core/MMCA.Common.AI/Guardrails/ContentMetadata.cs:9`) is the one internal helper
@@ -325,41 +363,56 @@ copy (`:25-26`) and pointedly does not copy `RawRepresentation` (`:13-16`): carr
 original object across would let the adapter undo the redaction it was just given.
 
 [ContentPolicyGuardrail](#contentpolicyguardrail)
-(`MMCA.Common/Source/Core/MMCA.Common.AI/Guardrails/ContentPolicyGuardrail.cs:64`) is the configurable
-one, and it too implements both halves. On the request side it looks for prompt-injection markers in
-**user-role** content only, since system and assistant messages are the application's own text and
-the model's own turns (`:34-38`). The eight built-in markers (`:77-87`) are each anchored on an
-imperative verb aimed at the model rather than a noun a person might use, which makes the list a floor
-rather than a detector (`:54-61`). What happens on a match is the
+(`MMCA.Common/Source/Core/MMCA.Common.AI/Guardrails/ContentPolicyGuardrail.cs:65`) is the configurable
+one, and it implements three contracts: `IChatGuardrail`, `IChatRequestRedactor` and
+[IPromptInjectionGuardrail](#ipromptinjectionguardrail), which makes it the prompt-injection defense
+whose registration satisfies `RequireGuardrail` (`:19-23`). On the request side it looks for
+prompt-injection markers in **user-role** content only, since system and assistant messages are the
+application's own text and the model's own turns (`:34-39`). The eight built-in markers (`:78-88`) are
+each anchored on an imperative verb aimed at the model rather than a noun a person might use, which
+makes the list a floor rather than a detector (`:54-63`). They are compiled case-insensitively and
+culture-invariantly with explicit capture, while a configured pattern gets the same options without
+explicit capture, so its backreferences keep their meaning, and the same one-second match timeout
+(`:68`, `:71`, `:73-76`). What happens on a match is the
 [ContentPolicyInjectionMode](#contentpolicyinjectionmode)
 (`MMCA.Common/Source/Core/MMCA.Common.AI/Guardrails/ContentPolicyInjectionMode.cs:16`): `Redact`, the
 default (`:23`), `Block` (`:29`) or `Off` (`:35`). The two active modes are one behavior split across
-the pipeline's fixed order (`ContentPolicyGuardrail.cs:25-32`): `Redact` rewrites the marker away
+the pipeline's fixed order (`ContentPolicyGuardrail.cs:26-33`): `Redact` rewrites the marker away
 before any guardrail runs, so the request inspection allows; `Block` makes the redactor a pass-through
-(`:122-127`) so the inspection sees what the caller actually supplied and refuses naming the marker's
-label (`:153-163`). A rewritten user message is a new instance, a content item with no marker is the
+(`:123-128`) so the inspection sees what the caller actually supplied and refuses naming the marker's
+label (`:154-164`). A rewritten user message is a new instance, a content item with no marker is the
 same instance it came in as, and a rebuilt text item keeps its metadata through
-[ContentMetadata](#contentmetadata) exactly as the PII policy does (`:111-116`, `:339-341`). On the
-response side a configured pattern blocks the buffered answer (`:167-175`) and each streamed fragment
-(`:184-192`), with the reason naming the pattern's index and never the text it matched (`:281-286`);
+[ContentMetadata](#contentmetadata) exactly as the PII policy does (`:111-118`, `:337-342`). The
+placeholder goes in through a match evaluator rather than a replacement string, because as a
+replacement pattern `$&` or `$0` would put the matched marker straight back (`:364-370`). On the
+response side a configured pattern blocks the buffered answer (`:168-176`) and each streamed fragment
+(`:185-193`), with the reason naming the pattern's index and never the text it matched (`:282-287`);
 a pattern spanning two updates is missed on the streaming path, so a host that needs whole-answer
-certainty uses the buffered one (`:180-182`).
+certainty uses the buffered one (`:179-184`).
 [ContentPolicySettings](#contentpolicysettings)
-(`MMCA.Common/Source/Core/MMCA.Common.AI/Guardrails/ContentPolicySettings.cs:23`) binds from its own
-`Ai:ContentPolicy` section (`:26`) so a host that never adopts the policy has nothing to configure
-(`:11-14`): `InjectionMode` (`:35`), `AdditionalRequestPatterns` (`:45`), `BlockedResponsePatterns`
-(`:57`) and `RedactionPlaceholder` (`:69`, defaulting to `[redacted-instruction]` at `:29`). The
-built-in markers stay code, not configuration (`:17-21`).
+(`MMCA.Common/Source/Core/MMCA.Common.AI/Guardrails/ContentPolicySettings.cs:33`) binds from its own
+`Ai:ContentPolicy` section (`:36`) so a host that never adopts the policy has nothing to configure
+(`:11-13`): `InjectionMode` (`:45`), `AdditionalRequestPatterns` (`:55`), `BlockedResponsePatterns`
+(`:75`) and the required `RedactionPlaceholder` (`:87-88`, defaulting to `[redacted-instruction]` at
+`:39`, inserted as literal text per `:78-80`). The built-in markers stay code, not configuration
+(`:17-21`), and `BlockedResponsePatterns` ships empty by design: what an answer must never say is a
+fact about the application, so the framework ships the mechanism and each host supplies its own
+patterns or its own response guardrail (`:22-31`, `:66-73`). The settings validate themselves: a
+blank pattern or one that does not compile with the guardrail's own options and timeout is reported by
+section, list and index (`Validate`, `:101-112`; `:121-151`).
 
 [GuardrailServiceCollectionExtensions](#guardrailservicecollectionextensions)
 (`MMCA.Common/Source/Core/MMCA.Common.AI/Guardrails/GuardrailServiceCollectionExtensions.cs:17`)
-registers both: `AddPiiRedactionGuardrail()` (`:33`) and `AddContentPolicyGuardrail(configuration)`
-(`:62`), which also binds `ContentPolicySettings` with `ValidateDataAnnotations().ValidateOnStart()`
-(`:67-70`) so a pattern that does not compile fails the deployment rather than a user's request
-(`:56-57`). Each registers one singleton resolved under both `IChatGuardrail` and
-`IChatRequestRedactor` rather than two instances, because the redactor and the guardrail are two
-faces of one decision (`:37-41`, `:72-76`, rationale at `:28-31`), and each must run before
-`AddMmcaChatClient`, which reads the descriptors (`:30-31`).
+registers both: `AddPiiRedactionGuardrail()` (`:34`), whose doc comment states that it alone does not
+satisfy `RequireGuardrail` (`:22-25`), and `AddContentPolicyGuardrail(configuration)` (`:64`), which
+does (`:52-53`) and also binds `ContentPolicySettings` with
+`ValidateDataAnnotations().ValidateOnStart()` (`:69-72`) so a pattern that does not compile fails the
+deployment rather than a user's request (`:58-59`). Each registers one singleton resolved under both
+`IChatGuardrail` and `IChatRequestRedactor` rather than two instances, because the redactor and the
+guardrail are two faces of one decision (`:38-42`, `:74-78`, rationale at `:29-31`). Those are typed
+factory registrations, so the descriptor's factory return type is the concrete guardrail and the
+registration-time marker check can see it. Each must run before `AddMmcaChatClient`, which reads the
+descriptors (`:31-32`, `:60-62`).
 
 ## The inner layer: what the call actually cost
 
@@ -376,7 +429,7 @@ on a final update. The split of responsibility with the outer layer is stated in
 `ChatClientMetadata.ProviderName` every Microsoft.Extensions.AI adapter publishes (`:72`) and falls
 back to the configured `Ai:Provider`, lower-cased, only when the client reports none (`:78-80`), so a
 foreign client supplied through the factory overload is metered as what it is (`:18-22`). The
-registration hands it that configured fallback (`DependencyInjection.cs:165-168`).
+registration hands it that configured fallback (`DependencyInjection.cs:168-172`).
 
 It also measures the call. A `Stopwatch` timestamp is taken on entry to both paths
 (`UsageRecordingChatClient.cs:89`, `:125`) and the elapsed time is reported to the meter's latency
@@ -394,7 +447,7 @@ latency distribution then come off one series (`:30-35`).
 instruments: the counters `mmca.ai.input_tokens` (`:29`) and `mmca.ai.output_tokens` (`:32`), and the
 histogram `mmca.ai.call.duration` in seconds (`:45`, created at `:85-88`). They are published under
 the meter name `MMCA.Common.AI` (`:26`), which is the same name the pipeline's OpenTelemetry layer
-uses as its activity source (`DependencyInjection.cs:181`), so one name enables both traces and
+uses as its activity source (`DependencyInjection.cs:185`), so one name enables both traces and
 metrics. Every adopting app reports to that same meter, which is what makes one dashboard query cover
 every service (`AiUsageMeter.cs:12-17`). `Record` (`:101-124`) and `RecordDuration` (`:137-149`) share
 one tag builder, so the cost series and the latency series join on the same dimensions: `model`,
@@ -414,7 +467,7 @@ factory-owned meter would kill the instrument for every other holder of the name
 attribution the counters have. It copies the three prompt-identity keys a
 [PromptContract](#promptcontract) stamped on the options onto `Activity.Current` (`:63-69`), on both
 paths before calling through (`:36`, `:46`). It is composed just inside the OpenTelemetry layer
-(`DependencyInjection.cs:183`), so when that layer has a listener the current activity is its own
+(`DependencyInjection.cs:187`), so when that layer has a listener the current activity is its own
 `gen_ai` span, and it tags only an activity whose source is the `MMCA.Common.AI` name
 (`PromptTaggingChatClient.cs:56-57`), so a host with no listener for that source gets no stray tags on
 its HTTP request span and a request with no contract writes nothing (`:14-18`).
@@ -443,35 +496,129 @@ gate, `SessionScoringPromptContractPinTests : PromptContractPinTestsBase`
 (`MMCA.ADC/Tests/Modules/Conference/MMCA.ADC.Conference.Scoring.Evaluation.Tests/PromptContractTests.cs:180`).
 `[Rubric section 16]` again, and this is the part of it most systems skip.
 
+## The other direction: a model client calling the application
+
+Everything above governs the application calling a model. `MMCA.Common.Mcp` governs a model client
+calling the application, through a Model Context Protocol endpoint over the module's existing
+queries (ADR-138). Unlike the AI packages it does reference the framework, because the governance it
+applies is the framework's own: it reads the rate-limit policy from `MMCA.Common.API.Startup` and the
+permission policy from `MMCA.Common.API.Authorization`
+(`MMCA.Common/Source/Presentation/MMCA.Common.Mcp/McpHostingExtensions.cs:9`,
+`McpToolGovernance.cs:7`).
+
+[McpHostingExtensions](#mcphostingextensions) (`McpHostingExtensions.cs:38`) is the whole consumer
+surface: two calls, both inert unless `Mcp:Enabled` is true (`:15-19`). `AddCommonMcpServer` (`:52`),
+on an `extension(IHostApplicationBuilder)` block, always binds [McpSettings](#mcpsettings) and
+validates on start that every configured per-tool limit is at least 1 (`:57-63`), then returns having
+registered nothing else when the endpoint is off (`:65-68`). Switched on, it runs the caller's
+[CommonMcpOptions](#commonmcpoptions) callback (`:70-71`), registers the HTTP context accessor, the
+[McpToolRateLimiter](#mcptoolratelimiter) and the [McpEnabledMarker](#mcpenabledmarker) singletons
+(`:73-75`), and adds the SDK's MCP server with a stateless HTTP transport (`:77-78`), the list and
+call filters from [McpToolGovernance](#mcptoolgovernance) (`:79-83`), the selected tool types through
+the `IEnumerable<Type>` overload named explicitly so the list is not bound as a tool target
+(`:85-87`), and every selected assembly (`:89-92`). The tool shape it expects is a static
+`[McpServerToolType]` class in the module's API project whose read-only methods inject the same query
+handler the HTTP endpoint injects, so the decorator pipeline (authorization, caching, validation)
+applies to a tool call exactly as to a request (`:22-25`). `MapCommonMcp` (`:114`) maps the endpoint at
+`/mcp` by default (`:41`). It first asks for the marker: absent, it throws when configuration says the
+endpoint is enabled (a host that forgot `AddCommonMcpServer`, `:119-125`) and otherwise maps nothing,
+so the path answers 404 (`:127`). Present, it runs both startup inspections (`:130-132`) and maps the
+endpoint anonymous at the HTTP layer with the `mcp` rate-limit policy (`:134-136`), because a public
+tool needs no token and a permissioned tool checks its caller itself (`:28-31`).
+[McpEnabledMarker](#mcpenabledmarker) (`McpHostingExtensions.cs:143`) is the private, member-less
+class that lets the second call tell whether the first one registered anything.
+
+[CommonMcpOptions](#commonmcpoptions) (`CommonMcpOptions.cs:9`) selects what is exposed: the
+assemblies scanned for `[McpServerToolType]` classes (`ToolAssemblies`, `:12`) and individual tool
+classes for a host that does not want a whole assembly scanned (`ToolTypes`, `:15`).
+[McpSettings](#mcpsettings) (`McpSettings.cs:19`) binds from the `Mcp` section (`:22`); `Enabled`
+(`:25`) is off by default, and `Tools` (`:31`) holds per-tool settings keyed case-insensitively by tool
+name, where a tool with no entry is enabled and limited only by the endpoint-wide policy (`:27-29`).
+Each entry is a [McpToolSettings](#mcptoolsettings) (`McpToolSettings.cs:4`): `Enabled` defaulting to
+true (`:10`) and an optional `PermitsPerMinute` (`:17`), counted per caller (user id, else client IP)
+and in memory per instance (`:12-16`).
+
+Access is declared on each tool method, and declaring it is mandatory.
+[McpToolPermissionAttribute](#mcptoolpermissionattribute) (`McpToolPermissionAttribute.cs:12`) carries
+the `Permission` (`:15`) a caller must hold, checked through the same `perm:` authorization policy
+`[HasPermission]` uses (`:3-9`). [McpToolPublicAttribute](#mcptoolpublicattribute)
+(`McpToolPublicAttribute.cs:12`) records that a tool needing no token was made public on purpose, so
+it must expose only data an anonymous HTTP endpoint already serves (`:3-10`). A tool carrying neither
+stops the endpoint from starting: `ThrowIfAccessUndeclared` (`McpToolGovernance.cs:95-111`) names every
+undeclared tool in one message.
+
+[McpToolGovernance](#mcptoolgovernance) (`McpToolGovernance.cs:20`) is the internal static class
+behind the two SDK request filters (`:14-19`). The `tools/list` filter (`ListTools`, `:25`) keeps only
+the tools that are enabled and that the caller is permitted to call (`:34-42`) and marks the result
+`CacheScope.Private`, because the list now depends on who asked (`:46-47`). The `tools/call` filter
+(`CallTool`, `:54`) refuses a disabled tool (`:63-66`), a tool whose permission the caller lacks
+(`:68-74`) and a call over the tool's per-minute limit (`:76-83`), each as an error result carrying a
+code (`Mcp.ToolUnavailable`, `Mcp.Forbidden`, `Mcp.RateLimited`) built by `Refused` (`:154-158`),
+so the model reads the refusal and stops instead of retrying blindly (`:152-153`). The permission check
+(`IsPermittedAsync`, `:130-145`) admits any caller to a tool with no permission, refuses an
+unauthenticated caller otherwise, and then asks `IAuthorizationService` for
+`PermissionPolicy.NameFor(permission)` (`:142-143`), so a role grant or a direct permission claim
+admits the caller exactly as it would on the module's HTTP endpoint (`:128-129`). The rate-limit caller
+key is the user id, else the remote IP, else `anonymous` (`:147-150`).
+[McpToolRateLimiter](#mcptoolratelimiter) (`McpToolRateLimiter.cs:11`) is the internal per-tool limit
+underneath the endpoint-wide `mcp` policy (`:6-10`): a `PartitionedRateLimiter` of one-minute fixed
+windows with no queue (`:16-25`), partitioned by tool, permit count and caller so idle partitions are
+dropped and a configuration reload that changes a limit starts a fresh window (`:13-15`). `TryAcquire`
+(`:32-36`) takes one permit, and [ToolCall](#toolcall) (`:41`) is the private
+`readonly record struct` of tool, caller and permit count the limiter partitions on.
+`[Rubric section 11, Security]` and `[Rubric section 16]`.
+
+The last two types answer a threat specific to this direction: text a model reads but a reviewer does
+not see (R023). [McpHiddenText](#mcphiddentext) (`McpHiddenText.cs:14`) is the public check. `Find`
+(`:21-52`) reports every tag character (U+E0000 to U+E007F, `:83`), every Unicode format character
+(category Cf, zero-width characters and bidi controls, `:36-39`) and every HTML comment opener
+(`:44-49`), each with its UTF-16 position. `Strip` (`:63-78`) removes the tag and format characters
+and leaves a comment opener in place, since in a result it is visible text; dropping the zero-width
+joiner splits a joined emoji into its parts, the stated price of never forwarding a character a
+reviewer cannot see (`:54-60`). A tool returning third-party text runs `Strip` over it (`:9-12`), as
+ADC's Conference tools do
+(`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Mcp/ConferenceMcpResults.cs:33`).
+[ToolDescriptionInspector](#tooldescriptioninspector) (`ToolDescriptionInspector.cs:11`) runs `Find`
+at startup: `ThrowIfHiddenText` (`:25-59`) inspects the server instructions, title and description
+(`:31-36`) and every tool's name, title, annotation title, description and input and output schema
+(`:38-50`), walking every property name and string value of a schema because a parameter's
+`[Description]` lands there (`:70-93`), so a poisoned description fails startup instead of reaching a
+client (`:6-10`).
+
 ## Where it runs today, and how it is tested
 
 Exactly one feature in the workspace calls a model: ADC's organizer-facing session scoring. The
 Conference service host reads one secret, `Ai:ApiKey`, and derives `Ai:Enabled` from its presence
-(`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:137-142`); the infrastructure
+(`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:107-112`); the infrastructure
 template writes the Key Vault secret into the container app under that same key and local
-development keeps it in user secrets (`Program.cs:131-133`), so a host with no key starts with
+development keeps it in user secrets (`Program.cs:99-106`), so a host with no key starts with
 scoring unavailable rather than failing validation. It then registers the Anthropic adapter with
-`AddAnthropicAiProvider()` (`Program.cs:147`), its guardrails with `AddConferenceAiGuardrails`
-(`Program.cs:158`) and the governed client with `AddMmcaChatClient(builder.Configuration)`
-(`Program.cs:160`), in that order because the last call reads the guardrail descriptors, and
-subscribes the framework meter and activity source by literal name (`Program.cs:179-180`).
+`AddAnthropicAiProvider()` (`Program.cs:241`), its guardrails with `AddConferenceAiGuardrails`
+(`Program.cs:253`) and the governed client with `AddMmcaChatClient(configuration)`
+(`Program.cs:255`), in that order because the last call reads the guardrail descriptors, and
+subscribes the framework meter and activity source by literal name (`Program.cs:274-275`).
 `AddConferenceAiGuardrails`
-(`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Infrastructure/DependencyInjection.cs:85`)
+(`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Infrastructure/DependencyInjection.cs:90`)
 composes both framework policies, `AddPiiRedactionGuardrail()` and `AddContentPolicyGuardrail`
-(`:95-96`), with the module's own response guardrail (`:99`), so in the deployed workspace the
-guardrail layer is present on every call. On the module side,
+(`:100-101`), with the module's own response guardrail (`:104`); the content policy is the
+registration that satisfies `RequireGuardrail`, and in the deployed workspace the guardrail layer is
+present on every call. On the module side,
 [SessionScoringService](group-19-conference-infrastructure.md#sessionscoringservice)
 (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Infrastructure/Sessions/Scoring/SessionScoringService.cs:47`)
 consumes the injected `IChatClient` and `PromptContract`, and Conference's Infrastructure registration
 resolves the client with `GetService` rather than `GetRequiredService` precisely because the disabled
 host registers none
-(`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Infrastructure/DependencyInjection.cs:42-48`).
+(`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Infrastructure/DependencyInjection.cs:46-54`).
 `[Rubric section 3, Clean Architecture]`: an ADC architecture fitness test asserts that Infrastructure
 is the only layer naming a language-model SDK type or the package
 (`MMCA.ADC/Tests/Architecture/MMCA.ADC.Architecture.Tests/Layering/AiDependencyIsolationTests.cs:14`).
+The same host also adopts the MCP endpoint: `AddCommonMcpServer` exposes the read-only public schedule
+tools of `ConferenceMcpTools` (`Program.cs:368`,
+`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Mcp/ConferenceMcpTools.cs:22`) and
+`MapCommonMcp` maps `/mcp` (`Program.cs:379`).
 
 `[Rubric section 14, Testability]` is served first by the factory overload. Because the innermost
-client is just a `Func<IServiceProvider, IChatClient>` (`DependencyInjection.cs:113-115`), the whole
+client is just a `Func<IServiceProvider, IChatClient>` (`DependencyInjection.cs:114-116`), the whole
 governance pipeline can be exercised with no network at all, which is what the package's own suite
 under `MMCA.Common/Tests/Core/MMCA.Common.AI.Tests` does, from `AiServiceCollectionExtensionsTests` and
 `BoundedChatClientTests` through `Providers/AdapterFactoryTests`, `Guardrails/ContentPolicyGuardrailTests`,
@@ -486,12 +633,16 @@ request as well as the answer (`:7-15`). [RecordedResponses](#recordedresponses)
 (`RecordedResponses.cs:20`) reads and writes those recordings in the abstraction's `ChatResponse`
 shape through `AIJsonUtilities.DefaultOptions`, never a vendor wire format, so a provider swap does
 not invalidate a corpus or lose its regression history (`:10-18`). A
-[GoldenReplayCase](#goldenreplaycase) (`GoldenReplayCase.cs:13`) is an id, a one-line description and
-a response path resolved relative to the test assembly (`:9-12`), and
-[GoldenReplayTestsBase](#goldenreplaytestsbase) (`GoldenReplayTestsBase.cs:24`) replays every case
-through the real code under test on a fresh client, collects every failure rather than stopping at the
-first, and fails an empty corpus because an evaluation that evaluates nothing passes forever
-(`:11-21`). [PromptContractPinTestsBase](#promptcontractpintestsbase)
+[GoldenReplayCase](#goldenreplaycase) (`GoldenReplayCase.cs:19`) is an id, a one-line description, a
+response path resolved relative to the test assembly, and the `PromptContractHash` the response was
+recorded against (`:7-18`). [GoldenReplayTestsBase](#goldenreplaytestsbase)
+(`GoldenReplayTestsBase.cs:31`) replays every case through the real code under test on a fresh client,
+collects every failure rather than stopping at the first, and fails an empty corpus because an
+evaluation that evaluates nothing passes forever (`:11-22`). A subclass also supplies the
+`CurrentContract` it ships (`:40`), and `EveryGoldenCase_WasRecordedAgainstTheCurrentContract`
+(`:56`) fails, naming the cases, whenever a recorded hash differs from it, because replaying an answer
+recorded under another prompt, model or system text still passes while proving nothing (`:23-29`).
+[PromptContractPinTestsBase](#promptcontractpintestsbase)
 (`PromptContractPinTestsBase.cs:25`) is the prompt-change protocol as a gate: a JSON pin file maps
 `<Name>@<Version>` to the contract hash (`:20-22`), and a contract with no pin or a pin that no longer
 matches fails (`:12-18`). ADC subclasses both, in
@@ -501,80 +652,104 @@ and `PromptContractTests.cs:180`.
 Read the per-type sections next in level order: the Level 0 contracts and values
 ([AiSettings](#aisettings), [PromptContract](#promptcontract), [GuardrailVerdict](#guardrailverdict),
 [IAiTokenEstimator](#iaitokenestimator), [IChatRequestRedactor](#ichatrequestredactor),
-[ToolAuthorization](#toolauthorization), [ChatToolPolicy](#chattoolpolicy),
-[ContentMetadata](#contentmetadata), [ContentPolicyInjectionMode](#contentpolicyinjectionmode), [AiUsageMeter](#aiusagemeter) and the
-three replay types) first, then the Level 1 types ([IChatGuardrail](#ichatguardrail),
-[IChatToolPolicy](#ichattoolpolicy), [IAiProviderFactory](#iaiproviderfactory),
-[ChatGuardrailException](#chatguardrailexception),
-[UsageRecordingChatClient](#usagerecordingchatclient) and the two test bases), then the Level 2
-clients, policies, validator and provider factories, then the Level 3 registrations, and finally
-[PromptTaggingChatClient](#prompttaggingchatclient) and the
-[AiServiceCollectionExtensions](#aiservicecollectionextensions) entry point that assembles them.
+[IPromptInjectionGuardrail](#ipromptinjectionguardrail), [ToolAuthorization](#toolauthorization),
+[ChatToolPolicy](#chattoolpolicy), [ContentMetadata](#contentmetadata),
+[ContentPolicyInjectionMode](#contentpolicyinjectionmode), [AiUsageMeter](#aiusagemeter), the three
+replay types, and the MCP options, settings, attributes, [McpHiddenText](#mcphiddentext),
+[McpEnabledMarker](#mcpenabledmarker) and [ToolCall](#toolcall)) first, then the Level 1 types
+([IChatGuardrail](#ichatguardrail), [IChatToolPolicy](#ichattoolpolicy),
+[IAiProviderFactory](#iaiproviderfactory), [ChatGuardrailException](#chatguardrailexception),
+[UsageRecordingChatClient](#usagerecordingchatclient),
+[PromptTaggingChatClient](#prompttaggingchatclient), the two test bases, [McpSettings](#mcpsettings),
+[McpToolRateLimiter](#mcptoolratelimiter) and [ToolDescriptionInspector](#tooldescriptioninspector)),
+then the Level 2 clients, policies, validator, provider factories and
+[McpToolGovernance](#mcptoolgovernance), then the Level 3 registrations and
+[PiiRedactionGuardrail](#piiredactionguardrail) with the
+[AiServiceCollectionExtensions](#aiservicecollectionextensions) entry point that assembles them, then
+[GuardrailServiceCollectionExtensions](#guardrailservicecollectionextensions) at Level 4, and finally
+[McpHostingExtensions](#mcphostingextensions) at Level 6.
 
 ### AiSettings
-> MMCA.Common.AI · `MMCA.Common.AI` · `MMCA.Common/Source/Core/MMCA.Common.AI/AiSettings.cs:22` · Level 0 · class
+> MMCA.Common.AI · `MMCA.Common.AI` · `MMCA.Common/Source/Core/MMCA.Common.AI/AiSettings.cs:23` · Level 0 · class
 
 - **What it is**: the bound, validated `Ai` configuration section (`SectionName = "Ai"`,
-  `AiSettings.cs:25`) that gates and configures the entire AI integration: whether it is on at all
-  (`Enabled`, `AiSettings.cs:46`), which provider and model to call
-  (`Provider`/`Model`, `AiSettings.cs:55,65`), the API key, an optional endpoint override, the
+  `AiSettings.cs:26`) that gates and configures the entire AI integration: whether it is on at all
+  (`Enabled`, `AiSettings.cs:47`), which provider and model to call
+  (`Provider`/`Model`, `AiSettings.cs:56,66`), the API key, an optional endpoint override, the
   output-token ceiling, the per-call timeout (capped by `MaxTimeout`), and opt-ins (`AllowTools`,
   `RequireGuardrail`, `EnableCache`) plus an optional input-token pre-flight budget.
-- **Depends on**: `System.ComponentModel.DataAnnotations` (`IValidatableObject`, `[Range]`); no
-  first-party dependency of its own, though its doc comments name `AddCommonKeyVaultConfiguration` as
-  the sibling convention elsewhere in Common that supplies `ApiKey` in production (`AiSettings.cs:67-76`).
+- **Depends on**: `System.ComponentModel.DataAnnotations` (`IValidatableObject`, `[Range]`) and
+  `Microsoft.Extensions.Hosting.IHostEnvironment` (read during validation to decide whether a non-https
+  `Endpoint` is allowed); no first-party dependency of its own, though its doc comments name
+  `AddAzureKeyVaultConfiguration` in `MMCA.Common.Azure.Startup` as the sibling convention elsewhere in
+  Common that supplies `ApiKey` in production (`AiSettings.cs:68-78`).
 - **Concept introduced, an off-by-default dependency with conditional validation.**
   `[Rubric §16, AI-Native Application Architecture]` (assesses whether an LLM dependency is safe to ship
   in every environment): `Enabled` defaults to `false`, and when it is false `AddMmcaChatClient`
   registers no `IChatClient` at all, so resolving one yields `null` and a consumer gates on the service
-  being present rather than reading a flag itself (`AiSettings.cs:40-46`). `Provider` is a string, not a
+  being present rather than reading a flag itself (`AiSettings.cs:41-47`). `Provider` is a string, not a
   closed enum: it is matched case-insensitively against the registered
   [`IAiProviderFactory`](#iaiproviderfactory)`.Name` of whatever provider packages the host
   referenced (`MMCA.Common.AI.Anthropic` and `MMCA.Common.AI.OpenAI` each ship one), so the provider
   switch lives in the host's package references and its configuration value, not in this framework's
-  source (`AiSettings.cs:15-19`, `AiSettings.cs:48-55`). `[Rubric §11, Security]` (assesses secret
+  source (`AiSettings.cs:16-20`, `AiSettings.cs:49-56`). `[Rubric §11, Security]` (assesses secret
   handling): `ApiKey` is required only when `Enabled`, and its doc comment records that production binds
-  it from Key Vault via `AddCommonKeyVaultConfiguration`, never from a checked-in settings file
-  (`AiSettings.cs:67-76`).
-- **Walkthrough**: two defaults, `DefaultMaxOutputTokens = 1024` (`AiSettings.cs:28`) and
-  `DefaultTimeout = TimeSpan.FromSeconds(30)` (`AiSettings.cs:31`), back the two settings that ship with
+  it from Key Vault via `AddAzureKeyVaultConfiguration` (in `MMCA.Common.Azure.Startup`), never from a
+  checked-in settings file (`AiSettings.cs:68-78`). Because every call carries that key in its request
+  headers, a non-https `Endpoint` is refused outside Development (`AiSettings.cs:221-229`).
+- **Walkthrough**: two defaults, `DefaultMaxOutputTokens = 1024` (`AiSettings.cs:29`) and
+  `DefaultTimeout = TimeSpan.FromSeconds(30)` (`AiSettings.cs:32`), back the two settings that ship with
   a value even when the section is silent; a third static, `MaxTimeout = TimeSpan.FromHours(1)`
-  (`AiSettings.cs:33-38`), is the largest per-call timeout validation accepts. `Provider`
-  (`AiSettings.cs:55`) is required when `Enabled` and names a registered provider by string, e.g.
+  (`AiSettings.cs:34-39`), is the largest per-call timeout validation accepts. `Provider`
+  (`AiSettings.cs:56`) is required when `Enabled` and names a registered provider by string, e.g.
   `Anthropic` or `OpenAI`; an unknown name fails at startup naming the registered ones. `Model`
-  (`AiSettings.cs:57-65`) is required when `Enabled` because it is part of the prompt contract, hashed
+  (`AiSettings.cs:58-66`) is required when `Enabled` because it is part of the prompt contract, hashed
   into `PromptContract.Hash`, so an implicit provider default would silently change evaluated behavior on
   the provider's own schedule rather than on a reviewed version bump, and it is also a bound:
   [`BoundedChatClient`](#boundedchatclient) refuses a request that names a different model.
-  `Endpoint` (`AiSettings.cs:78-83`) is an optional absolute URI to route through an AI gateway, a
+  `Endpoint` (`AiSettings.cs:80-85`) is an optional absolute URI to route through an AI gateway, a
   regional endpoint or an OpenAI-compatible server; each adapter passes it to its SDK's base-address
-  option. `MaxOutputTokens` (`[Range(1, 1_000_000)]`, `AiSettings.cs:89-90`) is the hard ceiling
-  `BoundedChatClient.Bound` clamps every call down to. `Timeout` (`AiSettings.cs:92-96`) is enforced with
+  option, and outside Development it must be https. `MaxOutputTokens` (`[Range(1, 1_000_000)]`, `AiSettings.cs:91-92`) is the hard ceiling
+  `BoundedChatClient.Bound` clamps every call down to. `Timeout` (`AiSettings.cs:94-98`) is enforced with
   a token linked to the caller's own, so a caller cancelling early still wins. `AllowTools`
-  (`AiSettings.cs:98-103`) is `false` by default, and while it is false any tools on a request are
-  stripped before the call. `RequireGuardrail` (`AiSettings.cs:105-117`) defaults to `true`: an enabled
-  host that registers no guardrail fails at startup rather than shipping an uninspected model call, and
-  the message names the one-line fix (`AddPiiRedactionGuardrail()`); a host that deliberately wants none
-  sets it `false`, which is a reviewable line rather than an absence nobody can see. `EnableCache`
-  (`AiSettings.cs:119-123`) is off by default and stays off when no `IDistributedCache` is registered.
-  `PerCallInputTokenBudget` (`[Range(1, int.MaxValue)]`, `AiSettings.cs:130-131`) is `null` by default,
-  leaving input unbounded, and is an ESTIMATE never a billing figure. `Validate`
-  (`AiSettings.cs:140-190`) is the conditional half: it `yield break`s immediately when `!Enabled`
-  (`AiSettings.cs:142-145`), so a host that leaves AI off is valid with nothing else set, which is what
-  lets the section ship in every `appsettings` file; when enabled it requires `Provider`, `Model`,
-  `ApiKey`, an absolute `Endpoint` when one is set, a positive `Timeout`, and a `Timeout` no greater than
-  `MaxTimeout` (`AiSettings.cs:147-189`). That last check exists because a bare number in configuration
-  binds as DAYS, and a value above roughly 49.7 days makes every call throw where the timeout is armed;
-  the one-hour cap rejects every bare-number value while leaving any plausible per-call budget alone,
-  and its message points at the `00:00:30` form (`AiSettings.cs:184-189`).
+  (`AiSettings.cs:100-105`) is `false` by default, and while it is false any tools on a request are
+  stripped before the call. `RequireGuardrail` (`AiSettings.cs:107-122`) defaults to `true`: an enabled
+  host that registers no prompt-injection guardrail fails at startup rather than shipping a model call
+  nothing defends against injected instructions, and the message names the one-line fix
+  (`AddContentPolicyGuardrail(configuration)`). Only a guardrail or redactor whose implementation type is
+  marked [`IPromptInjectionGuardrail`](#ipromptinjectionguardrail) satisfies it: a
+  [`PiiRedactionGuardrail`](#piiredactionguardrail) on its own strips contact details but not injected
+  instructions, so it does not. A host that deliberately wants none sets it `false`, which is a
+  reviewable line rather than an absence nobody can see. `EnableCache`
+  (`AiSettings.cs:124-128`) is off by default and stays off when no `IDistributedCache` is registered.
+  `PerCallInputTokenBudget` (`[Range(1, int.MaxValue)]`, `AiSettings.cs:135-136`) is `null` by default,
+  leaving input unbounded, and is an ESTIMATE never a billing figure. The `internal`
+  `IsDevelopmentHost` (`AiSettings.cs:138-143`) is not bound from configuration: `AddMmcaChatClient`
+  stamps it from the registered `IHostEnvironment` before options validation runs, and it reads `false`
+  (production) when no environment is registered. `Validate` (`AiSettings.cs:156-204`) is the
+  conditional half: it `yield break`s immediately when `!Enabled` (`AiSettings.cs:158-161`), so a host
+  that leaves AI off is valid with nothing else set, which is what lets the section ship in every
+  `appsettings` file; when enabled it requires `Provider`, `Model`, `ApiKey`, an acceptable `Endpoint`
+  when one is set, a positive `Timeout`, and a `Timeout` no greater than `MaxTimeout`
+  (`AiSettings.cs:163-203`). The endpoint rules live in the private `ValidateEndpoint`
+  (`AiSettings.cs:212-232`): the URI must be absolute, and its scheme must be https unless the host is
+  Development, because every call carries `ApiKey` in its request headers. The private `IsDevelopment`
+  (`AiSettings.cs:239-242`) asks the validation context for an `IHostEnvironment` first and falls back to
+  the stamped `IsDevelopmentHost`, so it fails closed: an environment that cannot be seen reads as not
+  Development. The `MaxTimeout` check exists because a bare number in configuration binds as DAYS, and a
+  value above roughly 49.7 days makes every call throw where the timeout is armed; the one-hour cap
+  rejects every bare-number value while leaving any plausible per-call budget alone, and its message
+  points at the `00:00:30` form (`AiSettings.cs:198-203`).
 - **Why it's built this way**: `IValidatableObject.Validate` runs through
   `.ValidateDataAnnotations().ValidateOnStart()` in `AiServiceCollectionExtensions.AddMmcaChatClient`
-  (`MMCA.Common/Source/Core/MMCA.Common.AI/DependencyInjection.cs:123-126`), so a misconfigured `Ai`
+  (`MMCA.Common/Source/Core/MMCA.Common.AI/DependencyInjection.cs:124-129`), so a misconfigured `Ai`
   section, including a `Timeout` mistyped as a bare number, fails at host startup, not on the first call.
   `Provider` is a string, not an enum, so a new vendor is a new adapter package registering a factory,
-  never a change to this framework's source. See
-  [`ADR-120`](https://ivanball.github.io/docs/adr/120-governed-chat-client-boundary.html) and
-  [`ADR-070`](https://ivanball.github.io/docs/adr/070-fail-fast-configuration-contract.html).
+  never a change to this framework's source. The https rule relaxes only in a positively identified
+  Development host, so a missing environment can never loosen it. See
+  [`ADR-120`](https://ivanball.github.io/docs/adr/120-governed-chat-client-boundary.html),
+  [`ADR-070`](https://ivanball.github.io/docs/adr/070-fail-fast-configuration-contract.html) and
+  [`ADR-122`](https://ivanball.github.io/docs/adr/122-dev-only-relaxations-fail-closed.html).
 - **Where it's used**: bound and consumed by [`AiServiceCollectionExtensions`](#aiservicecollectionextensions),
   enforced by [`BoundedChatClient`](#boundedchatclient), and its `Provider` value is threaded into
   [`UsageRecordingChatClient`](#usagerecordingchatclient) as the fallback tag when the resolved client
@@ -795,7 +970,7 @@ clients, policies, validator and provider factories, then the Level 3 registrati
 - **Where it's used**: registered last (innermost of the two governance wrappers, so it sees the actual
   provider response) by
   [`AiServiceCollectionExtensions.AddMmcaChatClient`](#aiservicecollectionextensions)
-  (`DependencyInjection.cs:164-168`); ADC's `AnthropicScoringService`
+  (`DependencyInjection.cs:168-172`); ADC's `AnthropicScoringService`
   (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Infrastructure/Sessions/Scoring/AnthropicScoringService.cs`)
   and `MMCA.ADC.Conference.Service/Program.cs` are downstream of the registered pipeline.
 
@@ -867,7 +1042,7 @@ clients, policies, validator and provider factories, then the Level 3 registrati
 - **Where it's used**: registered first (outermost is applied last by `ChatClientBuilder`, so it ends up
   wrapping everything but `UsageRecordingChatClient`) by
   [`AiServiceCollectionExtensions.AddMmcaChatClient`](#aiservicecollectionextensions)
-  (`DependencyInjection.cs:149-154`).
+  (`DependencyInjection.cs:153-158`).
 
 ---
 
@@ -942,12 +1117,12 @@ clients, policies, validator and provider factories, then the Level 3 registrati
   own trace source, so it never writes tags onto an unrelated caller's span.
 - **Where it's used**: registered last among the governance decorators, immediately before `.UseLogging()`,
   by [`AiServiceCollectionExtensions.AddMmcaChatClient`](#aiservicecollectionextensions)
-  (`DependencyInjection.cs:183`).
+  (`DependencyInjection.cs:187`).
 
 ---
 
 ### AiServiceCollectionExtensions
-> MMCA.Common.AI · `MMCA.Common.AI` · `MMCA.Common/Source/Core/MMCA.Common.AI/DependencyInjection.cs:77` · Level 10 · class
+> MMCA.Common.AI · `MMCA.Common.AI` · `MMCA.Common/Source/Core/MMCA.Common.AI/DependencyInjection.cs:78` · Level 3 · class
 
 - **What it is**: the DI entry point for the whole AI integration: two `extension(IServiceCollection)`
   members, `AddMmcaChatClient(IConfiguration)` and the factory overload
@@ -956,7 +1131,8 @@ clients, policies, validator and provider factories, then the Level 3 registrati
 - **Depends on**: [`AiSettings`](#aisettings), [`AiUsageMeter`](#aiusagemeter),
   [`BoundedChatClient`](#boundedchatclient), [`GuardrailChatClient`](#guardrailchatclient),
   [`PromptTaggingChatClient`](#prompttaggingchatclient), [`IChatGuardrail`](#ichatguardrail),
-  `IChatRequestRedactor`, `IChatToolPolicy`, [`UsageRecordingChatClient`](#usagerecordingchatclient),
+  `IChatRequestRedactor`, `IChatToolPolicy`, [`IPromptInjectionGuardrail`](#ipromptinjectionguardrail)
+  (the marker the guardrail requirement looks for), [`UsageRecordingChatClient`](#usagerecordingchatclient),
   `IAiProviderFactory` (resolved by name, one per adapter package),
   `AiProviderValidator` (both as an `IValidateOptions<AiSettings>` and for its static `Match`/
   `DescribeMismatch` helpers), `Microsoft.Extensions.AI.ChatClientBuilder` (`AddChatClient`, `.Use`,
@@ -972,42 +1148,54 @@ clients, policies, validator and provider factories, then the Level 3 registrati
   layer, then OpenTelemetry, then [`PromptTaggingChatClient`](#prompttaggingchatclient), then logging.
   `[Rubric §16, AI-Native Application Architecture]`: this is the single composition point that turns raw
   provider access into the framework's governed AI dependency, and the point that now refuses to build an
-  ungoverned one: an enabled host with `RequireGuardrail` true and no guardrail or redactor, or with
+  ungoverned one: an enabled host with `RequireGuardrail` true and no prompt-injection guardrail, or with
   `AllowTools` true and no `IChatToolPolicy`, throws at registration rather than at the first call.
-- **Walkthrough**: `AddMmcaChatClient(IConfiguration)` (`DependencyInjection.cs:88-97`) registers
+- **Walkthrough**: `AddMmcaChatClient(IConfiguration)` (`DependencyInjection.cs:89-98`) registers
   `AiProviderValidator` as an `IValidateOptions<AiSettings>` via `TryAddEnumerable` BEFORE delegating to
   the factory overload with `CreateProviderChatClient`, so an unknown or unregistered provider name is a
   boot failure validated alongside the data annotations, not a first-call one. The factory overload
-  (`DependencyInjection.cs:99-186`) is the extension point a test uses to exercise the pipeline without a
+  (`DependencyInjection.cs:100-191`) is the extension point a test uses to exercise the pipeline without a
   network, and the one a host with its own credential story plugs into: it binds and validates
-  `AiSettings` (`.Bind(section).ValidateDataAnnotations().ValidateOnStart()`,
-  `DependencyInjection.cs:123-126`), reads the settings once with `section.Get<AiSettings>() ?? new
-  AiSettings()` (`DependencyInjection.cs:128`), and returns early, registering nothing, when
-  `!settings.Enabled` (`DependencyInjection.cs:129-132`). When enabled it checks by service descriptor
-  (not resolve) whether the host registered any `IChatGuardrail` or `IChatRequestRedactor`
-  (`DependencyInjection.cs:139-140`) and calls the private `RefuseAnUngovernedHost`
-  (`DependencyInjection.cs:142,202-227`), which throws when `RequireGuardrail` is true and neither is
-  registered, and separately when `AllowTools` is true and no `IChatToolPolicy` is registered; both
-  messages name the one-line fix. It then registers `AddMetrics()` and a singleton
-  `AiUsageMeter` (`DependencyInjection.cs:144-145`), then builds the chain via `AddChatClient` +
+  `AiSettings` (`.Bind(section)`, then a `PostConfigure<IServiceProvider>` that stamps
+  `AiSettings.IsDevelopmentHost` from the registered `IHostEnvironment`, then
+  `.ValidateDataAnnotations().ValidateOnStart()`, `DependencyInjection.cs:124-129`), so the endpoint
+  https rule in [`AiSettings`](#aisettings) knows whether it may relax. It reads the settings once with
+  `section.Get<AiSettings>() ?? new AiSettings()` (`DependencyInjection.cs:131`), and returns early,
+  registering nothing, when `!settings.Enabled` (`DependencyInjection.cs:132-135`). When enabled it checks
+  by service descriptor (not resolve) whether the host registered any `IChatGuardrail` or
+  `IChatRequestRedactor`, and separately whether any of those registrations is a prompt-injection defense
+  (`DependencyInjection.cs:142-144`), and passes only that last answer to the private
+  `RefuseAnUngovernedHost` (`DependencyInjection.cs:146,210-238`). It throws when `RequireGuardrail` is
+  true and no prompt-injection guardrail is registered, with a message naming
+  `AddContentPolicyGuardrail(configuration)` (see [`ContentPolicyGuardrail`](#contentpolicyguardrail)) and
+  stating that `AddPiiRedactionGuardrail()` alone does not satisfy it, because it strips contact details,
+  not injected instructions (`DependencyInjection.cs:215-228`); and separately when `AllowTools` is true
+  and no `IChatToolPolicy` is registered (`DependencyInjection.cs:230-237`). The private
+  `IsPromptInjectionGuardrail` (`DependencyInjection.cs:253-267`) reads a descriptor rather than resolving
+  it: an unkeyed `IChatGuardrail` or `IChatRequestRedactor` registration counts only when its
+  implementation type, taken from `ImplementationType`, the instance, or the generic return type of a
+  typed factory (`FactoryReturnType`, `DependencyInjection.cs:269-270`), is assignable to
+  [`IPromptInjectionGuardrail`](#ipromptinjectionguardrail); a factory typed only as the contract cannot
+  be recognized and does not count. It then registers `AddMetrics()` and a singleton
+  `AiUsageMeter` (`DependencyInjection.cs:148-149`), then builds the chain via `AddChatClient` +
   `.Use(...)` for [`BoundedChatClient`](#boundedchatclient), now also handing it every resolved
-  `IChatToolPolicy` (`DependencyInjection.cs:149-154`). Using the descriptor check from above, it adds
+  `IChatToolPolicy` (`DependencyInjection.cs:153-158`). Using the descriptor check from above, it adds
   [`GuardrailChatClient`](#guardrailchatclient) to the chain only when a guardrail or a redactor was found,
-  resolving both groups at build time (`DependencyInjection.cs:156-162`). It then adds
+  resolving both groups at build time (`DependencyInjection.cs:160-166`). It then adds
   [`UsageRecordingChatClient`](#usagerecordingchatclient), passing the bound `AiSettings.Provider` as its
-  fallback provider name (`DependencyInjection.cs:164-168`). It adds a
+  fallback provider name (`DependencyInjection.cs:168-172`). It adds a
   distributed-cache layer only when `EnableCache` is set AND an `IDistributedCache` is actually
-  registered (`DependencyInjection.cs:170-175`), because a cache the host never registered would make
+  registered (`DependencyInjection.cs:174-179`), because a cache the host never registered would make
   every call throw at resolve time, so the opt-in needs both halves: the switch AND a store to write to.
   It then applies OpenTelemetry with `EnableSensitiveData` gated by `IsDevelopmentHost`, then
   [`PromptTaggingChatClient`](#prompttaggingchatclient), then logging last
-  (`DependencyInjection.cs:177-184`). The private `CreateProviderChatClient`
-  (`DependencyInjection.cs:239-248`) resolves every registered `IAiProviderFactory`, matches one by name
+  (`DependencyInjection.cs:181-188`). The private `CreateProviderChatClient`
+  (`DependencyInjection.cs:282-291`) resolves every registered `IAiProviderFactory`, matches one by name
   against `AiSettings.Provider` through `AiProviderValidator.Match`, and calls `factory.Create(settings,
   serviceProvider)`; a name with no matching factory throws `InvalidOperationException` built from
   `AiProviderValidator.DescribeMismatch`, which is a belt for the case where the options pipeline was
   bypassed, since `AiProviderValidator` has already refused an unmatched name at startup. The private
-  `IsDevelopmentHost` (`DependencyInjection.cs:262-266`) fails CLOSED: an environment it cannot
+  `IsDevelopmentHost` (`DependencyInjection.cs:305-309`) fails CLOSED: an environment it cannot
   positively identify as `Development` (by scanning already-registered `IHostEnvironment` instances)
   reads as not-Development, so prompt and completion text never reach telemetry by accident, mirroring
   the same gate on `Persistence:EnableSensitiveDataLogging` elsewhere in the framework.
@@ -1016,7 +1204,9 @@ clients, policies, validator and provider factories, then the Level 3 registrati
   `section.Get<AiSettings>()` (rather than resolving `IOptions<AiSettings>` before the container is
   built) lets the method branch on `Enabled` synchronously during registration.
   `RefuseAnUngovernedHost` runs at registration, with the fix named in the message both times, so a bound
-  nobody reaches is not a bound: the deployment fails instead of the tenth user. Resolving the provider by
+  nobody reaches is not a bound: the deployment fails instead of the tenth user. The guardrail requirement
+  asks for a defense against prompt injection specifically, because that is the threat every model call
+  shares; a PII redactor alone leaves it open (`DependencyInjection.cs:204-209`). Resolving the provider by
   name against registered `IAiProviderFactory` instances, rather than switching on a closed enum, means a
   new vendor is a new adapter package, never a change to this class. See
   [`ADR-120`](https://ivanball.github.io/docs/adr/120-governed-chat-client-boundary.html).
@@ -1042,7 +1232,7 @@ clients, policies, validator and provider factories, then the Level 3 registrati
   the deliberate suppression).
 - **Walkthrough**: `MeterName = "MMCA.Common.AI"` (`AiUsageMeter.cs:26`) is shared with the
   `ActivitySource` name the pipeline's OpenTelemetry layer publishes under
-  (`AiUsageMeter.MeterName` reused at `MMCA.Common/Source/Core/MMCA.Common.AI/DependencyInjection.cs:181`),
+  (`AiUsageMeter.MeterName` reused at `MMCA.Common/Source/Core/MMCA.Common.AI/DependencyInjection.cs:185`),
   so a host enables traces and metrics
   for the AI dependency with one name. `InputTokensCounterName`/`OutputTokensCounterName`
   (`AiUsageMeter.cs:29,32`, `mmca.ai.input_tokens`/`mmca.ai.output_tokens`) name the two counters, and
@@ -1073,7 +1263,7 @@ clients, policies, validator and provider factories, then the Level 3 registrati
   meter's place in the governed pipeline.
 - **Where it's used**: registered as a singleton and resolved by
   [`AiServiceCollectionExtensions`](#aiservicecollectionextensions)
-  (`MMCA.Common/Source/Core/MMCA.Common.AI/DependencyInjection.cs:145,167`);
+  (`MMCA.Common/Source/Core/MMCA.Common.AI/DependencyInjection.cs:149,171`);
   `Record` and `RecordDuration` are called exclusively from
   [`UsageRecordingChatClient`](#usagerecordingchatclient), which stops the clock in a `try`/`finally` so
   every outcome, including a cancellation or an exception, is recorded.
@@ -1107,11 +1297,12 @@ clients, policies, validator and provider factories, then the Level 3 registrati
   must not read as harmless because of that); a `JsonElement` of kind `False` is `false`, a
   `JsonElement` of kind `String` goes through the same `ParsedOrConsequential` (a JSON-bound bag
   hands values over as `JsonElement`); and a marker present in any other shape reads as `true`
-  (`ChatToolPolicy.cs:62-69`). `ReadConfirmedTools` (`ChatToolPolicy.cs:78-109`) reads the confirmed names off
+  (`ChatToolPolicy.cs:62-69`). `ReadConfirmedTools` (`ChatToolPolicy.cs:78-111`) reads the confirmed names off
   `ChatOptions.AdditionalProperties`, accepting a single `string`, an `IEnumerable<string>`, a
   `JsonElement` of kind `String` (one name) or of kind `Array` (its string items, non-string items
-  and empty names dropped) (`ChatToolPolicy.cs:94-99`), or a non-generic `IEnumerable` (a JSON array
-  bound as `object[]`), converting each element with `Convert.ToString` and dropping empties;
+  and empty names dropped) (`ChatToolPolicy.cs:94-100`), or a non-generic `IEnumerable` (a JSON array
+  bound as `object[]`), converting each element with `Convert.ToString` and dropping empties
+  (`ChatToolPolicy.cs:103-108`);
   anything else returns none. The two `JsonElement` arms exist because options carried over the wire
   bind their bag values as `JsonElement`, a struct that is neither a string nor a sequence, so without
   them a confirmed tool would read as unconfirmed and be stripped (`ChatToolPolicy.cs:91-93`).
@@ -1146,9 +1337,9 @@ clients, policies, validator and provider factories, then the Level 3 registrati
 - **Why it's built this way**: one helper instead of two private copies keeps the redaction
   guarantee identical across both guardrails. See
   [`ADR-120`](https://ivanball.github.io/docs/adr/120-governed-chat-client-boundary.html).
-- **Where it's used**: `PiiRedactionGuardrail.RedactContent` (`PiiRedactionGuardrail.cs:127-150`,
+- **Where it's used**: `PiiRedactionGuardrail.RedactContent` (`PiiRedactionGuardrail.cs:129-152`,
   text, reasoning, tool-result and tool-call arms) and `ContentPolicyGuardrail.RedactMessage`
-  (`ContentPolicyGuardrail.cs:341`, rebuilt text items).
+  (`ContentPolicyGuardrail.cs:342`, rebuilt text items).
 
 ---
 
@@ -1174,19 +1365,6 @@ clients, policies, validator and provider factories, then the Level 3 registrati
 
 ---
 
-### GoldenReplayCase
-> MMCA.Common.AI.Testing · `MMCA.Common.AI.Testing` · `MMCA.Common/Source/Hosting/MMCA.Common.AI.Testing/GoldenReplayCase.cs:13` · Level 0 · record
-
-- **What it is**: one entry in a golden-replay corpus: an `Id`, a `Description`, and a `ResponsePath`
-  naming the recorded response file to replay for that case (`GoldenReplayCase.cs:13-17`).
-- **Depends on**: none first-party; consumed by [`GoldenReplayTestsBase`](#goldenreplaytestsbase).
-- **Walkthrough**: a `sealed record` with three positional properties; `ToString()` returns `Id`
-  (`GoldenReplayCase.cs:15-16`), which is what an xUnit theory display name shows.
-- **Where it's used**: [`GoldenReplayTestsBase.Cases`](#goldenreplaytestsbase); ADC's
-  `MMCA.ADC.Conference.Scoring.Evaluation.Tests` declares its own corpus of these.
-
----
-
 ### IChatRequestRedactor
 > MMCA.Common.AI.Guardrails · `MMCA.Common.AI.Guardrails` · `MMCA.Common/Source/Core/MMCA.Common.AI/Guardrails/IChatRequestRedactor.cs:25` · Level 0 · interface
 
@@ -1209,6 +1387,302 @@ clients, policies, validator and provider factories, then the Level 3 registrati
   [`PiiRedactionGuardrail`](#piiredactionguardrail); consumed by
   [`GuardrailChatClient`](#guardrailchatclient) and by `DependencyInjection`'s
   `AiSettings.RequireGuardrail` check.
+
+---
+
+### IPromptInjectionGuardrail
+> MMCA.Common.AI.Guardrails · `MMCA.Common.AI.Guardrails` · `MMCA.Common/Source/Core/MMCA.Common.AI/Guardrails/IPromptInjectionGuardrail.cs:21` · Level 0 · interface
+
+- **What it is**: a member-less marker interface (`public interface IPromptInjectionGuardrail;`,
+  `IPromptInjectionGuardrail.cs:21`) flagging a guardrail or redactor that defends against prompt
+  injection in user content, which is what [`AiSettings.RequireGuardrail`](#aisettings) asks an
+  enabled host to register (`IPromptInjectionGuardrail.cs:3-5`).
+- **Depends on**: nothing; it declares no members.
+- **Concept introduced, a requirement keyed to the threat, not to the layer.** `[Rubric §11,
+  Security]` (prompt-injection defense as a startup-enforced requirement): the type carrying the
+  marker is still registered as an [`IChatGuardrail`](#ichatguardrail) or an
+  [`IChatRequestRedactor`](#ichatrequestredactor); the marker only lets the registration-time check
+  tell an injection defense apart from any other guardrail. Having SOMETHING in the guardrail layer
+  is not enough: a PII redactor strips contact details but lets "ignore previous instructions"
+  straight through, so on its own it does not satisfy the requirement
+  (`IPromptInjectionGuardrail.cs:6-13`). `[Rubric §16, AI-Native Application Architecture]`.
+- **Walkthrough**: `AddMmcaChatClient` reads the registered descriptors rather than resolving them.
+  `IsPromptInjectionGuardrail` (`MMCA.Common/Source/Core/MMCA.Common.AI/DependencyInjection.cs:253-267`)
+  counts an unkeyed `IChatGuardrail` or `IChatRequestRedactor` descriptor whose implementation type
+  (from `ImplementationType`, the instance's type, or a typed factory's return type) is assignable to
+  this interface; a factory typed only as the contract cannot be recognized and does not count
+  (`DependencyInjection.cs:247-252`). `RefuseAnUngovernedHost`
+  (`DependencyInjection.cs:210-228`) throws `InvalidOperationException` at registration when
+  `RequireGuardrail` is true and no such descriptor exists, naming the fix in the message: call
+  `AddContentPolicyGuardrail(configuration)`, mark your own defense with this interface, or set
+  `Ai:RequireGuardrail` to false as a reviewable line. An application writing its own defense
+  implements the interface on that type and registers it with a concrete implementation type, an
+  instance, or a typed factory, so the check can see it (`IPromptInjectionGuardrail.cs:15-20`).
+- **Why it's built this way**: a marker keeps the check a pure registration-time read (the same
+  fail-fast idea as the rest of `AddMmcaChatClient`) without adding members every guardrail would have
+  to implement. See
+  [`ADR-120`](https://ivanball.github.io/docs/adr/120-governed-chat-client-boundary.html).
+- **Where it's used**: implemented by [`ContentPolicyGuardrail`](#contentpolicyguardrail), the one
+  implementation the framework ships (registered by
+  [`GuardrailServiceCollectionExtensions.AddContentPolicyGuardrail`](#guardrailservicecollectionextensions));
+  read by `DependencyInjection`'s registration-time check; covered by `GuardrailRegistrationTests`.
+  [`PiiRedactionGuardrail`](#piiredactionguardrail) deliberately does not carry it.
+
+---
+
+### ToolAuthorization
+> MMCA.Common.AI.Guardrails · `MMCA.Common.AI.Guardrails` · `MMCA.Common/Source/Core/MMCA.Common.AI/Guardrails/ToolAuthorization.cs:10` · Level 0 · enum
+
+- **What it is**: the two-value outcome an [`IChatToolPolicy`](#ichattoolpolicy) returns for one tool
+  on one request: `Denied` (`ToolAuthorization.cs:12`, not offered to the model) or `Allowed`
+  (`ToolAuthorization.cs:14`, may be offered unless another policy or the confirmation rule refuses it).
+- **Where it's used**: return type of `IChatToolPolicy.Authorize`; read by
+  [`BoundedChatClient`](#boundedchatclient) when filtering tools.
+
+---
+
+### IChatToolPolicy
+> MMCA.Common.AI.Guardrails · `MMCA.Common.AI.Guardrails` · `MMCA.Common/Source/Core/MMCA.Common.AI/Guardrails/IChatToolPolicy.cs:23` · Level 1 · interface
+
+- **What it is**: the contract letting a host decide whether ONE tool may be offered on ONE request.
+- **Depends on**: `Microsoft.Extensions.AI` (`AITool`, `ChatOptions`), [`ToolAuthorization`](#toolauthorization).
+- **Concept introduced, pluggable per-tool authorization.** `[Rubric §11, Security]` (assesses whether a
+  tool-calling boundary can restrict what a model can act on): tool authorization is a registered,
+  per-request extension point rather than a static allow-list, so a host can vary which tools are
+  offered by caller identity, role, or the request's content.
+- **Walkthrough**: one method, `Authorize(AITool tool, ChatOptions options)`
+  (`IChatToolPolicy.cs:29`), returning `ToolAuthorization.Allowed` to offer the tool, otherwise it is
+  stripped from the request.
+- **Where it's used**: every registered `IChatToolPolicy` is consulted by
+  [`BoundedChatClient`](#boundedchatclient) (a consequential tool, per
+  [`ChatToolPolicy.IsConsequential`](#chattoolpolicy), additionally needs the request's confirmed-tools
+  stamp); `DependencyInjection` registers implementations; `StubToolPolicy` in tests.
+
+---
+
+### ContentPolicyGuardrail
+> MMCA.Common.AI.Guardrails · `MMCA.Common.AI.Guardrails` · `MMCA.Common/Source/Core/MMCA.Common.AI/Guardrails/ContentPolicyGuardrail.cs:65` · Level 2 · class
+
+- **What it is**: the sealed partial class implementing `IChatGuardrail`,
+  [`IChatRequestRedactor`](#ichatrequestredactor) and the
+  [`IPromptInjectionGuardrail`](#ipromptinjectionguardrail) marker (`ContentPolicyGuardrail.cs:65`)
+  for prompt-injection and answer-content policy: it
+  redacts or blocks user content matching a marker (eight built-in patterns plus any configured
+  `AdditionalRequestPatterns`), and refuses an answer matching a configured `BlockedResponsePatterns`
+  entry. The marker is what makes registering it satisfy `AiSettings.RequireGuardrail`.
+- **Depends on**: [`ContentPolicySettings`](#contentpolicysettings) (bound options),
+  [`ContentPolicyInjectionMode`](#contentpolicyinjectionmode), [`IChatGuardrail`](#ichatguardrail)/
+  [`IChatRequestRedactor`](#ichatrequestredactor)/[`IPromptInjectionGuardrail`](#ipromptinjectionguardrail)/`GuardrailVerdict`,
+  [`ContentMetadata`](#contentmetadata), `System.Text.RegularExpressions` (`[GeneratedRegex]` source
+  generator).
+- **Concept introduced, one type composing redaction AND blocking.** `[Rubric §11, Security]`
+  (prompt-injection defense: explains what it protects and where it stops): only
+  `ChatRole.User` content is inspected or rewritten, and the streaming inspection path
+  (`InspectStreamedUpdateAsync`) checks each fragment rather than the whole answer, so a pattern that
+  spans two streamed updates is missed by design; a host that needs whole-answer certainty uses the
+  buffered path. `[Rubric §16, AI-Native Application Architecture]`.
+- **Walkthrough**: `ConfiguredPatternOptions` (`ContentPolicyGuardrail.cs:68`,
+  `IgnoreCase | CultureInvariant`) is what every CONFIGURED pattern compiles with; `MatchTimeout`
+  (`ContentPolicyGuardrail.cs:71`, 1 second) bounds a single match so a pathological pattern cannot
+  hang a request; `BuiltInPatternOptions` adds `ExplicitCapture` on the BUILT-INS ONLY
+  (`ContentPolicyGuardrail.cs:73-76`), because turning that off under a host would silently change
+  what a configured pattern's own backreferences mean. `BuiltInMarkers`
+  (`ContentPolicyGuardrail.cs:78-88`) pairs eight labeled `[GeneratedRegex]` patterns
+  (ignore-previous-instructions, disregard-system-prompt, role-reassignment, new-instructions,
+  reveal-system-prompt, act-as-unrestricted, developer-mode, do-anything-now), each with a 1-second
+  generated-regex timeout. The constructor (`ContentPolicyGuardrail.cs:101-108`) compiles every
+  configured pattern ONCE, at resolve time; a pattern that does not compile has already failed
+  `ContentPolicySettings.Validate` at startup, so this constructor is not where a typo is discovered.
+  `Redact` (`ContentPolicyGuardrail.cs:119-139`) rewrites only when `InjectionMode` is `Redact`: Block
+  mode must inspect what the caller supplied, so rewriting there would hide the marker from the check
+  that is supposed to refuse it; Off mode does neither. Non-user messages pass through as the same
+  instance, and a rewritten user message is a NEW instance, so a caller holding its own conversation
+  history still holds exactly what it built (`ContentPolicyGuardrail.cs:111-118` remark).
+  `InspectRequestAsync`
+  (`ContentPolicyGuardrail.cs:147-165`) allows in every mode except `Block`, because in `Redact` mode
+  the redactor has already run and there is nothing left to refuse. `InspectResponseAsync`/
+  `InspectStreamedUpdateAsync` (`ContentPolicyGuardrail.cs:168-193`) both funnel through
+  `InspectAnswerText`, which matches against `BlockedResponsePatterns` and returns a block reason
+  naming the pattern's INDEX, never the matched text: the reason reaches the caller, and the point of
+  the rule was that the text should not. `RedactMessage`/`RedactText`
+  (`ContentPolicyGuardrail.cs:332-374`) rewrite only `TextContent`, passing images, function calls,
+  and provider-specific content through untouched: a guardrail that silently dropped content it does
+  not understand would be a far worse failure than leaving it alone. Inside a rewritten message, a
+  text item with no marker is kept as the same instance, and a rebuilt text item keeps its
+  `AdditionalProperties` and `Annotations` through the shared
+  [`ContentMetadata.WithMetadataOf`](#contentmetadata) (`ContentPolicyGuardrail.cs:339-342`), the
+  same helper [`PiiRedactionGuardrail`](#piiredactionguardrail) uses; the rebuilt message keeps
+  `AuthorName`, `MessageId`, `CreatedAt` and `AdditionalProperties`
+  (`ContentPolicyGuardrail.cs:353-359`). `RedactText`
+  (`ContentPolicyGuardrail.cs:362`) replaces each marker with a `MatchEvaluator` that returns the
+  placeholder, not the replacement-string overload: the placeholder is literal text, and as a
+  replacement pattern `$&` or `$0` would put the matched marker straight back.
+- **Why it's built this way**: matches the ADR-120 governed pipeline's split between redaction (silent,
+  changes the request shape) and blocking (visible, a refusal). See
+  [`ADR-120`](https://ivanball.github.io/docs/adr/120-governed-chat-client-boundary.html).
+- **Where it's used**: registered by
+  [`GuardrailServiceCollectionExtensions.AddContentPolicyGuardrail`](#guardrailservicecollectionextensions)
+  as both `IChatGuardrail` and `IChatRequestRedactor` from one singleton, where its
+  `IPromptInjectionGuardrail` implementation type satisfies the `RequireGuardrail` check in
+  `DependencyInjection` (`MMCA.Common/Source/Core/MMCA.Common.AI/DependencyInjection.cs:253-267`);
+  ADC's `SessionScoreResponseGuardrail` composes it.
+
+---
+
+### ContentPolicySettings
+> MMCA.Common.AI.Guardrails · `MMCA.Common.AI.Guardrails` · `MMCA.Common/Source/Core/MMCA.Common.AI/Guardrails/ContentPolicySettings.cs:33` · Level 2 · class
+
+- **What it is**: the `IValidatableObject`-bound `Ai:ContentPolicy` options:
+  [`InjectionMode`](#contentpolicyinjectionmode), `AdditionalRequestPatterns`,
+  `BlockedResponsePatterns`, `RedactionPlaceholder`.
+- **Depends on**: [`ContentPolicyInjectionMode`](#contentpolicyinjectionmode),
+  [`ContentPolicyGuardrail`](#contentpolicyguardrail) (reuses its pattern-compile options and timeout in
+  `Validate`), `System.ComponentModel.DataAnnotations`.
+- **Concept introduced, options validation as a startup gate.** `[Rubric §17, DevOps]` (fail-fast
+  configuration: a bad setting fails the deployment, not the first request it affects): `Validate`
+  compiles every configured pattern and reports every failure at once, so the person deploying a typo'd
+  pattern, not the first user who trips it, is the one who sees it.
+- **Walkthrough**: `SectionName = "Ai:ContentPolicy"` (`ContentPolicySettings.cs:36`);
+  `DefaultRedactionPlaceholder = "[redacted-instruction]"` (`ContentPolicySettings.cs:39`), a VISIBLE
+  placeholder on purpose (`ContentPolicySettings.cs:82-86` remark) so the model can tell something
+  was removed and a trace reviewer can tell a redaction from a sentence the user never wrote.
+  `InjectionMode` defaults `Redact` (`ContentPolicySettings.cs:45`).
+  `AdditionalRequestPatterns`/`BlockedResponsePatterns` (`ContentPolicySettings.cs:55,75`) default
+  to empty; an empty `BlockedResponsePatterns` switches the response half of the policy off entirely,
+  because a model that has already said the thing cannot unsay it, so the only available response-side
+  answer is a refusal. That emptiness is by design, not omission (`ContentPolicySettings.cs:22-31`,
+  `66-73`): what an answer must never say is a fact about the application (an internal code name, a
+  customer identifier format, a price the model must not quote), so no pattern the framework could
+  ship is right for every host, and a guessed default would refuse legitimate answers in one
+  application while protecting nothing in another. The framework ships the mechanism (buffered and
+  streamed response inspection, the index-only block reason, startup validation); each host supplies
+  its own patterns, or registers its own response `IChatGuardrail` when a regular expression is the
+  wrong tool. The prompt-injection half does not depend on this list and runs either way.
+  `RedactionPlaceholder` is `[Required]` (`ContentPolicySettings.cs:87-88`) and is inserted as literal text, so a `$` sequence in it is not a regex substitution (`ContentPolicySettings.cs:77-80`).
+  `Validate` (`ContentPolicySettings.cs:101-112`) runs `ValidatePatterns` over both lists, which calls
+  `DescribeFailure` (`ContentPolicySettings.cs:135-151`) per pattern: an empty-or-whitespace pattern
+  is rejected outright (it would match everything, "never what a policy meant"), otherwise the pattern
+  is compiled with `ContentPolicyGuardrail.ConfiguredPatternOptions`/`MatchTimeout` and any
+  `ArgumentException` message is surfaced against `SectionName:memberName[index]`.
+- **Why it's built this way**: see
+  [`ADR-120`](https://ivanball.github.io/docs/adr/120-governed-chat-client-boundary.html).
+- **Where it's used**: bound and validated by
+  [`GuardrailServiceCollectionExtensions.AddContentPolicyGuardrail`](#guardrailservicecollectionextensions);
+  read by [`ContentPolicyGuardrail`](#contentpolicyguardrail).
+
+---
+
+### PiiRedactionGuardrail
+> MMCA.Common.AI.Guardrails · `MMCA.Common.AI.Guardrails` · `MMCA.Common/Source/Core/MMCA.Common.AI/Guardrails/PiiRedactionGuardrail.cs:42` · Level 3 · class
+
+- **What it is**: the sealed partial class implementing
+  [`IChatRequestRedactor`](#ichatrequestredactor) and `IChatGuardrail` that strips emails and phone
+  numbers from the text carried by outgoing messages, tool calls and tool results included. The guardrail half is a pass-through (always `Allow`): this type
+  only redacts, it never blocks.
+- **Depends on**: [`IChatRequestRedactor`](#ichatrequestredactor)/`IChatGuardrail`/`GuardrailVerdict`,
+  [`ContentMetadata`](#contentmetadata), `System.Text.RegularExpressions`, `System.Text.Json`.
+- **Concept introduced, configuration-free, unconditional redaction.** Contrasts with
+  [`ContentPolicyGuardrail`](#contentpolicyguardrail): `PiiRedactionGuardrail` has no configurable
+  options and applies to every outgoing message unconditionally.
+- **Walkthrough**: `EmailPattern`/`PhonePattern` (`PiiRedactionGuardrail.cs:73-83`) are
+  `[GeneratedRegex]` source-generated matchers with a 1-second timeout (email: a standard
+  local-part@domain shape; phone: an optional leading country code plus a 10-digit US-shaped number,
+  guarded by negative lookaround so it does not clip a longer digit run). `Redact`
+  (`PiiRedactionGuardrail.cs:48-59`) rewrites EVERY message, not only `ChatRole.User` (unlike
+  `ContentPolicyGuardrail`), via the private `RedactMessage`
+  (`PiiRedactionGuardrail.cs:85-102`), which rebuilds each message (keeping role, `AuthorName`,
+  `MessageId`, `CreatedAt` and `AdditionalProperties`, `PiiRedactionGuardrail.cs:95-101`) and hands every content item to `RedactContent`
+  (`PiiRedactionGuardrail.cs:125-159`). That switch rebuilds an item only when it actually holds
+  contact details: non-empty `TextContent` and `TextReasoningContent`, a `FunctionResultContent`
+  whose result is a `JsonElement` or a `string`, and a `FunctionCallContent` with an argument value
+  that is a `string` or a `JsonElement` (routed through `RedactArgument`,
+  `PiiRedactionGuardrail.cs:161-166`; other argument values kept as-is). The "holds contact
+  details" test is `HasContactDetails`/`ArgumentHasContactDetails`/`JsonHasContactDetails`
+  (`PiiRedactionGuardrail.cs:168-192`), which compares `RedactText` output with the input; an item
+  with nothing to redact passes through by reference. A rebuilt item keeps its metadata through
+  the shared [`ContentMetadata.WithMetadataOf`](#contentmetadata) (`AdditionalProperties` and
+  `Annotations`), plus a tool call's `InformationalOnly` and `Exception` and a tool result's
+  `Exception`, set in the rebuilding arms themselves (`PiiRedactionGuardrail.cs:135-152`), but NOT
+  `RawRepresentation`: the provider's original object still holds the unredacted text, and the
+  OpenAI adapters send a raw representation verbatim in place of the item, which would undo the
+  redaction (`PiiRedactionGuardrail.cs:104-124`). A `TextReasoningContent` carrying `ProtectedData`
+  is never rebuilt (`PiiRedactionGuardrail.cs:127`): that data is the provider's signature over
+  the text (Anthropic's thinking signature), and an edited signed block is rejected when the
+  conversation is sent back.
+  Both shapes matter because Microsoft.Extensions.AI's function-invoking client marshals a tool's
+  return value and the model's arguments into `JsonElement`, and a tool's output is exactly where
+  contact details turn up (a customer lookup, a directory search). Plain text goes through
+  `RedactText` (`PiiRedactionGuardrail.cs:194-195`), which replaces email matches then phone
+  matches. A `JsonElement` goes through `RedactJson` (`PiiRedactionGuardrail.cs:202-212`) and the
+  recursive `WriteRedacted` (`PiiRedactionGuardrail.cs:214-246`), which rebuilds the document with
+  a `Utf8JsonWriter`, redacting only string VALUES and copying property names, numbers, booleans and
+  nulls verbatim: running the patterns over the raw JSON text would turn a bare 10-digit number (a
+  Unix timestamp) into a phone placeholder and break the document. Binary and other non-text
+  content (images, results and arguments that are neither a string nor a `JsonElement`,
+  provider-specific items) passes through untouched for the same reason `ContentPolicyGuardrail` gives
+  (a guardrail that silently dropped content it does not understand would be worse than leaving it
+  alone). `InspectRequestAsync`/`InspectResponseAsync`
+  (`PiiRedactionGuardrail.cs:62-71`) both unconditionally return `GuardrailVerdict.Allow`.
+- **Why it's built this way**: unconditional redaction with zero configuration lets the guardrail
+  satisfy `AiSettings.RequireGuardrail` with no setup. See
+  [`ADR-120`](https://ivanball.github.io/docs/adr/120-governed-chat-client-boundary.html) and
+  [`ADR-111`](https://ivanball.github.io/docs/adr/111-ai-session-scoring-governance.html).
+- **Where it's used**: registered by
+  [`GuardrailServiceCollectionExtensions.AddPiiRedactionGuardrail`](#guardrailservicecollectionextensions)
+  (both contracts from one singleton); ADC's `SessionScoreResponseGuardrail` and
+  `SessionScoringService` compose it.
+
+---
+
+### GuardrailServiceCollectionExtensions
+> MMCA.Common.AI.Guardrails · `MMCA.Common.AI.Guardrails` · `MMCA.Common/Source/Core/MMCA.Common.AI/Guardrails/GuardrailServiceCollectionExtensions.cs:17` · Level 4 · class
+
+- **What it is**: the extension block (C# `extension(IServiceCollection services)`) registering the two
+  shipped guardrails: `AddPiiRedactionGuardrail()` and `AddContentPolicyGuardrail(configuration)`.
+- **Depends on**: [`PiiRedactionGuardrail`](#piiredactionguardrail),
+  [`ContentPolicyGuardrail`](#contentpolicyguardrail), [`ContentPolicySettings`](#contentpolicysettings),
+  `IChatGuardrail`/[`IChatRequestRedactor`](#ichatrequestredactor),
+  `Microsoft.Extensions.DependencyInjection`.
+- **Concept introduced, one singleton under two contracts.** `[Rubric §1, SOLID]` (interface
+  segregation without instance duplication): each guardrail implements both `IChatGuardrail` and
+  `IChatRequestRedactor`, and both are registered from the SAME singleton via
+  `TryAddEnumerable(... => serviceProvider.GetRequiredService<T>())`, never two independent instances;
+  a host that later gives the type state would otherwise get two copies of it. Registration uses C#
+  extension members as the idiom, not static extension methods.
+- **Walkthrough**: `AddPiiRedactionGuardrail`
+  (`GuardrailServiceCollectionExtensions.cs:34-45`) registers `PiiRedactionGuardrail` once via
+  `TryAddSingleton`, then `TryAddEnumerable`-registers it under both `IChatGuardrail` and
+  `IChatRequestRedactor`. `AddContentPolicyGuardrail`
+  (`GuardrailServiceCollectionExtensions.cs:64-81`) additionally binds `ContentPolicySettings` from
+  `Ai:ContentPolicy` with `.ValidateDataAnnotations().ValidateOnStart()` (so a bad pattern fails the
+  deployment, not a user's request) before registering `ContentPolicyGuardrail` the same two-contract
+  way. Both methods' doc remarks state they must be called BEFORE `AddMmcaChatClient`, which reads the
+  registered descriptors to decide whether to compose the guardrail layer at all. Only the second
+  call satisfies `AiSettings.RequireGuardrail`: `ContentPolicyGuardrail` is an
+  [`IPromptInjectionGuardrail`](#ipromptinjectionguardrail) (`GuardrailServiceCollectionExtensions.cs:47-54`),
+  while `AddPiiRedactionGuardrail` on its own does NOT, because the requirement asks for a
+  prompt-injection defense and a PII redactor is not one (`GuardrailServiceCollectionExtensions.cs:21-26`).
+- **Why it's built this way**: see
+  [`ADR-120`](https://ivanball.github.io/docs/adr/120-governed-chat-client-boundary.html).
+- **Where it's used**: called by a consuming host before `AddMmcaChatClient`; ADC's
+  `Conference.Infrastructure` `DependencyInjection` is the one usage site outside this file's own
+  registration tests.
+
+### GoldenReplayCase
+> MMCA.Common.AI.Testing · `MMCA.Common.AI.Testing` · `MMCA.Common/Source/Hosting/MMCA.Common.AI.Testing/GoldenReplayCase.cs:19` · Level 0 · record
+
+- **What it is**: one entry in a golden-replay corpus: an `Id`, a `Description`, a `ResponsePath`
+  naming the recorded response file to replay for that case, and the `PromptContractHash` of the
+  [`PromptContract`](#promptcontract) the response was recorded against (`GoldenReplayCase.cs:19`).
+- **Depends on**: none first-party (the hash is a plain string; its doc comment points at
+  `PromptContract.Hash`); consumed by [`GoldenReplayTestsBase`](#goldenreplaytestsbase).
+- **Walkthrough**: a `sealed record` with four positional properties (`GoldenReplayCase.cs:19`).
+  `ResponsePath` is resolved relative to `AppContext.BaseDirectory`, so a corpus is data copied next
+  to the test assembly. `PromptContractHash` exists so the base class can fail a case whose recording
+  was made under a different prompt, model or system text than the one that ships. `ToString()`
+  returns `Id` (`GoldenReplayCase.cs:22`), which is what an xUnit theory display name shows.
+- **Where it's used**: [`GoldenReplayTestsBase.Cases`](#goldenreplaytestsbase); ADC's
+  `MMCA.ADC.Conference.Scoring.Evaluation.Tests` declares its own corpus of these.
 
 ---
 
@@ -1263,38 +1737,38 @@ clients, policies, validator and provider factories, then the Level 3 registrati
 
 ---
 
-### ToolAuthorization
-> MMCA.Common.AI.Guardrails · `MMCA.Common.AI.Guardrails` · `MMCA.Common/Source/Core/MMCA.Common.AI/Guardrails/ToolAuthorization.cs:10` · Level 0 · enum
-
-- **What it is**: the two-value outcome an [`IChatToolPolicy`](#ichattoolpolicy) returns for one tool
-  on one request: `Denied` (`ToolAuthorization.cs:12`, not offered to the model) or `Allowed`
-  (`ToolAuthorization.cs:14`, may be offered unless another policy or the confirmation rule refuses it).
-- **Where it's used**: return type of `IChatToolPolicy.Authorize`; read by
-  [`BoundedChatClient`](#boundedchatclient) when filtering tools.
-
----
-
 ### GoldenReplayTestsBase
-> MMCA.Common.AI.Testing · `MMCA.Common.AI.Testing` · `MMCA.Common/Source/Hosting/MMCA.Common.AI.Testing/GoldenReplayTestsBase.cs:24` · Level 1 · class
+> MMCA.Common.AI.Testing · `MMCA.Common.AI.Testing` · `MMCA.Common/Source/Hosting/MMCA.Common.AI.Testing/GoldenReplayTestsBase.cs:31` · Level 1 · class
 
 - **What it is**: the abstract xUnit base that drives a golden-replay corpus: for every
   [`GoldenReplayCase`](#goldenreplaycase) it reads the recorded response, wraps it in a
-  [`ReplayChatClient`](#replaychatclient), and hands both to the derived class's assertion.
-- **Depends on**: [`GoldenReplayCase`](#goldenreplaycase), [`RecordedResponses`](#recordedresponses),
-  [`ReplayChatClient`](#replaychatclient), xUnit `[Fact]`.
+  [`ReplayChatClient`](#replaychatclient), and hands both to the derived class's assertion; a second
+  gate fails every case recorded against a different [`PromptContract`](#promptcontract) than the one
+  the code under test ships.
+- **Depends on**: [`GoldenReplayCase`](#goldenreplaycase), [`PromptContract`](#promptcontract),
+  [`RecordedResponses`](#recordedresponses), [`ReplayChatClient`](#replaychatclient), xUnit `[Fact]`.
 - **Concept introduced, aggregated-failure regression gate.** `[Rubric §14, Testability]`: rather than
-  stopping at the first failing case, the single `[Fact]` runs every case and reports the complete
-  failure set in one message, so a full corpus run always shows every regression from one CI attempt.
-- **Walkthrough**: `Cases` and `AssertCaseAsync` (`GoldenReplayTestsBase.cs:27,34-38`) are the two
-  hooks a derived test class implements: the corpus, and how one case's outcome is asserted (throwing,
-  an assertion failure or anything else, fails that case and is reported against its id).
-  `EveryGoldenCase_ReplaysAsRecorded` (`GoldenReplayTestsBase.cs:41-59`) copies `Cases` defensively,
-  throws `InvalidOperationException` if the corpus is empty (an empty gate would pass without
-  evaluating anything), runs every case through `RunCaseAsync`, and throws one exception listing every
-  failure when `failures.Count > 0`. `RunCaseAsync` (`GoldenReplayTestsBase.cs:61-86`) resolves the
-  response path under `AppContext.BaseDirectory`, reads it via `RecordedResponses.Read`, builds a
+  stopping at the first failing case, each `[Fact]` checks every case and reports the complete
+  failure set in one message, so a full corpus run always shows every regression (and every stale
+  recording) from one CI attempt.
+- **Walkthrough**: `Cases`, `CurrentContract` and `AssertCaseAsync` (`GoldenReplayTestsBase.cs:34,40,50-53`)
+  are the three hooks a derived test class implements: the corpus, the prompt contract the code under
+  test sends today (the same instance, so the compared hash is the production hash), and how one
+  case's outcome is asserted (throwing, an assertion failure or anything else, fails that case and is
+  reported against its id). Both facts load the corpus through `LoadCases`
+  (`GoldenReplayTestsBase.cs:104-116`), which copies `Cases` defensively and throws
+  `InvalidOperationException` if it is empty (an empty gate would pass without evaluating anything).
+  `EveryGoldenCase_WasRecordedAgainstTheCurrentContract` (`GoldenReplayTestsBase.cs:55-78`) throws if
+  `CurrentContract` is null, collects every non-null case whose `PromptContractHash` differs ordinally
+  from `CurrentContract.Hash`, and throws one exception naming the contract's `Name@Version`, its hash
+  and each stale case id, telling the author to re-record those cases: a replayed old answer would
+  still pass while proving nothing about the prompt that ships.
+  `EveryGoldenCase_ReplaysAsRecorded` (`GoldenReplayTestsBase.cs:80-102`) runs every case through
+  `RunCaseAsync` and throws one exception listing every failure when `failures.Count > 0`.
+  `RunCaseAsync` (`GoldenReplayTestsBase.cs:118-143`) reports a null entry as its own failure, resolves
+  the response path under `AppContext.BaseDirectory`, reads it via `RecordedResponses.Read`, builds a
   `ReplayChatClient`, and calls `AssertCaseAsync`; every exception is caught
-  (`CA1031`/`S2221` suppressed at `GoldenReplayTestsBase.cs:70` with a comment that a failing case must
+  (`CA1031`/`S2221` suppressed at `GoldenReplayTestsBase.cs:127` with a comment that a failing case must
   be reported, not end the run) and turned into one line naming the case's id and description.
 - **Why it's built this way**: see
   [`ADR-120`](https://ivanball.github.io/docs/adr/120-governed-chat-client-boundary.html) and
@@ -1303,25 +1777,6 @@ clients, policies, validator and provider factories, then the Level 3 registrati
 - **Where it's used**: ADC's `GoldenReplayTests` (Conference.Scoring.Evaluation.Tests) and this repo's
   own `ReferenceGoldenReplayTests`/`ReplayChatClientTests` subclass it, exercising the gate itself in
   this repo's CI.
-
----
-
-### IChatToolPolicy
-> MMCA.Common.AI.Guardrails · `MMCA.Common.AI.Guardrails` · `MMCA.Common/Source/Core/MMCA.Common.AI/Guardrails/IChatToolPolicy.cs:23` · Level 1 · interface
-
-- **What it is**: the contract letting a host decide whether ONE tool may be offered on ONE request.
-- **Depends on**: `Microsoft.Extensions.AI` (`AITool`, `ChatOptions`), [`ToolAuthorization`](#toolauthorization).
-- **Concept introduced, pluggable per-tool authorization.** `[Rubric §11, Security]` (assesses whether a
-  tool-calling boundary can restrict what a model can act on): tool authorization is a registered,
-  per-request extension point rather than a static allow-list, so a host can vary which tools are
-  offered by caller identity, role, or the request's content.
-- **Walkthrough**: one method, `Authorize(AITool tool, ChatOptions options)`
-  (`IChatToolPolicy.cs:29`), returning `ToolAuthorization.Allowed` to offer the tool, otherwise it is
-  stripped from the request.
-- **Where it's used**: every registered `IChatToolPolicy` is consulted by
-  [`BoundedChatClient`](#boundedchatclient) (a consequential tool, per
-  [`ChatToolPolicy.IsConsequential`](#chattoolpolicy), additionally needs the request's confirmed-tools
-  stamp); `DependencyInjection` registers implementations; `StubToolPolicy` in tests.
 
 ---
 
@@ -1357,197 +1812,197 @@ clients, policies, validator and provider factories, then the Level 3 registrati
 
 ---
 
-### ContentPolicyGuardrail
-> MMCA.Common.AI.Guardrails · `MMCA.Common.AI.Guardrails` · `MMCA.Common/Source/Core/MMCA.Common.AI/Guardrails/ContentPolicyGuardrail.cs:64` · Level 2 · class
+### AnthropicAiServiceCollectionExtensions, OpenAiServiceCollectionExtensions
+<a id="anthropicaiservicecollectionextensions"></a><a id="openaiservicecollectionextensions"></a>
+> MMCA.Common.AI.Anthropic + MMCA.Common.AI.OpenAI · `MMCA.Common.AI.Anthropic` / `MMCA.Common.AI.OpenAI` · `MMCA.Common/Source/Core/MMCA.Common.AI.Anthropic/DependencyInjection.cs:17` · Level 3 · class (static) + class (static)
 
-- **What it is**: the sealed partial class implementing both `IChatGuardrail` and
-  [`IChatRequestRedactor`](#ichatrequestredactor) for prompt-injection and answer-content policy: it
-  redacts or blocks user content matching a marker (eight built-in patterns plus any configured
-  `AdditionalRequestPatterns`), and refuses an answer matching a configured `BlockedResponsePatterns`
-  entry.
-- **Depends on**: [`ContentPolicySettings`](#contentpolicysettings) (bound options),
-  [`ContentPolicyInjectionMode`](#contentpolicyinjectionmode), `IChatGuardrail`/
-  [`IChatRequestRedactor`](#ichatrequestredactor)/`GuardrailVerdict`,
-  [`ContentMetadata`](#contentmetadata), `System.Text.RegularExpressions` (`[GeneratedRegex]` source
-  generator).
-- **Concept introduced, one type composing redaction AND blocking.** `[Rubric §11, Security]`
-  (prompt-injection defense: explains what it protects and where it stops): only
-  `ChatRole.User` content is inspected or rewritten, and the streaming inspection path
-  (`InspectStreamedUpdateAsync`) checks each fragment rather than the whole answer, so a pattern that
-  spans two streamed updates is missed by design; a host that needs whole-answer certainty uses the
-  buffered path. `[Rubric §16, AI-Native Application Architecture]`.
-- **Walkthrough**: `ConfiguredPatternOptions` (`ContentPolicyGuardrail.cs:67`,
-  `IgnoreCase | CultureInvariant`) is what every CONFIGURED pattern compiles with; `MatchTimeout`
-  (`ContentPolicyGuardrail.cs:70`, 1 second) bounds a single match so a pathological pattern cannot
-  hang a request; `BuiltInPatternOptions` adds `ExplicitCapture` on the BUILT-INS ONLY
-  (`ContentPolicyGuardrail.cs:72-75`), because turning that off under a host would silently change
-  what a configured pattern's own backreferences mean. `BuiltInMarkers`
-  (`ContentPolicyGuardrail.cs:77-87`) pairs eight labeled `[GeneratedRegex]` patterns
-  (ignore-previous-instructions, disregard-system-prompt, role-reassignment, new-instructions,
-  reveal-system-prompt, act-as-unrestricted, developer-mode, do-anything-now), each with a 1-second
-  generated-regex timeout. The constructor (`ContentPolicyGuardrail.cs:100-107`) compiles every
-  configured pattern ONCE, at resolve time; a pattern that does not compile has already failed
-  `ContentPolicySettings.Validate` at startup, so this constructor is not where a typo is discovered.
-  `Redact` (`ContentPolicyGuardrail.cs:118-138`) rewrites only when `InjectionMode` is `Redact`: Block
-  mode must inspect what the caller supplied, so rewriting there would hide the marker from the check
-  that is supposed to refuse it; Off mode does neither. Non-user messages pass through as the same
-  instance, and a rewritten user message is a NEW instance, so a caller holding its own conversation
-  history still holds exactly what it built (`ContentPolicyGuardrail.cs:110-117` remark).
-  `InspectRequestAsync`
-  (`ContentPolicyGuardrail.cs:146-164`) allows in every mode except `Block`, because in `Redact` mode
-  the redactor has already run and there is nothing left to refuse. `InspectResponseAsync`/
-  `InspectStreamedUpdateAsync` (`ContentPolicyGuardrail.cs:167-192`) both funnel through
-  `InspectAnswerText`, which matches against `BlockedResponsePatterns` and returns a block reason
-  naming the pattern's INDEX, never the matched text: the reason reaches the caller, and the point of
-  the rule was that the text should not. `RedactMessage`/`RedactText`
-  (`ContentPolicyGuardrail.cs:331-373`) rewrite only `TextContent`, passing images, function calls,
-  and provider-specific content through untouched: a guardrail that silently dropped content it does
-  not understand would be a far worse failure than leaving it alone. Inside a rewritten message, a
-  text item with no marker is kept as the same instance, and a rebuilt text item keeps its
-  `AdditionalProperties` and `Annotations` through the shared
-  [`ContentMetadata.WithMetadataOf`](#contentmetadata) (`ContentPolicyGuardrail.cs:338-341`), the
-  same helper [`PiiRedactionGuardrail`](#piiredactionguardrail) uses; the rebuilt message keeps
-  `AuthorName`, `MessageId`, `CreatedAt` and `AdditionalProperties`
-  (`ContentPolicyGuardrail.cs:352-358`). `RedactText`
-  (`ContentPolicyGuardrail.cs:361`) replaces each marker with a `MatchEvaluator` that returns the
-  placeholder, not the replacement-string overload: the placeholder is literal text, and as a
-  replacement pattern `$&` or `$0` would put the matched marker straight back.
-- **Why it's built this way**: matches the ADR-120 governed pipeline's split between redaction (silent,
-  changes the request shape) and blocking (visible, a refusal). See
-  [`ADR-120`](https://ivanball.github.io/docs/adr/120-governed-chat-client-boundary.html).
-- **Where it's used**: registered by
-  [`GuardrailServiceCollectionExtensions.AddContentPolicyGuardrail`](#guardrailservicecollectionextensions)
-  as both `IChatGuardrail` and `IChatRequestRedactor` from one singleton; ADC's
-  `SessionScoreResponseGuardrail` composes it.
+- **What it is**: the per-adapter-package DI registration extensions. Each adds its
+  package's provider factory to the set [`AddMmcaChatClient`](#aiservicecollectionextensions) chooses from.
 
----
+| Type | File:Line | Notes (what differs) |
+|------|-----------|----------------------|
+| `AnthropicAiServiceCollectionExtensions` | `MMCA.Common/Source/Core/MMCA.Common.AI.Anthropic/DependencyInjection.cs:17` | exposes `AddAnthropicAiProvider()` (`DependencyInjection.cs:250`), registers [`AnthropicAiProviderFactory`](#anthropicaiproviderfactory) |
+| `OpenAiServiceCollectionExtensions` | `MMCA.Common/Source/Core/MMCA.Common.AI.OpenAI/DependencyInjection.cs:17` | exposes `AddOpenAiProvider()` (`DependencyInjection.cs:288`), registers [`OpenAiProviderFactory`](#openaiproviderfactory) |
 
-### ContentPolicySettings
-> MMCA.Common.AI.Guardrails · `MMCA.Common.AI.Guardrails` · `MMCA.Common/Source/Core/MMCA.Common.AI/Guardrails/ContentPolicySettings.cs:23` · Level 2 · class
+- **Depends on**: `Microsoft.Extensions.DependencyInjection.IServiceCollection` (external) and each
+  package's own factory ([`AnthropicAiProviderFactory`](#anthropicaiproviderfactory) or [`OpenAiProviderFactory`](#openaiproviderfactory)).
+- **Concept**: both use the `extension(IServiceCollection services)` C# member-extension form (primer:
+  [`extension(T)` types](00-primer.md#c-extensiont-types--read-this-once)) rather than a classic static
+  `this IServiceCollection` method. `[Rubric §1, SOLID]` (open/closed): each adapter package ships the
+  one line that opts it into provider selection, so adding a new vendor never touches
+  `MMCA.Common.AI`'s own registration code.
+- **Walkthrough**: identical shape in both files: null-check `services`
+  (`DependencyInjection.cs:252` / `:290`), call
+  `services.TryAddEnumerable(ServiceDescriptor.Singleton<`[`IAiProviderFactory`](#iaiproviderfactory)`, {Factory}>())`
+  (`DependencyInjection.cs:254` / `:292`), and return `services` for chaining
+  (`DependencyInjection.cs:256` / `:294`). `TryAddEnumerable` is what makes registering both packages in
+  the same host additive rather than a last-one-wins replace: both factories end up in the
+  `IEnumerable<`[`IAiProviderFactory`](#iaiproviderfactory)`>` [`AiProviderValidator`](#aiprovidervalidator) and `AddMmcaChatClient` enumerate.
+- **Why it's built this way**: singleton lifetime matches the factories' own statelessness (both hold no
+  mutable fields); `TryAddEnumerable` over plain `AddSingleton` is what lets a host reference both
+  adapter packages without one factory silently dropping the other.
+- **Where it's used**: `MMCA.ADC.Conference.Service/Program.cs` calls `AddAnthropicAiProvider()`. No
+  call site for `AddOpenAiProvider()` is visible in `MMCA.ADC/Source` today; it is exercised only from
+  `MMCA.Common.AI.OpenAI`'s own tests.
 
-- **What it is**: the `IValidatableObject`-bound `Ai:ContentPolicy` options:
-  [`InjectionMode`](#contentpolicyinjectionmode), `AdditionalRequestPatterns`,
-  `BlockedResponsePatterns`, `RedactionPlaceholder`.
-- **Depends on**: [`ContentPolicyInjectionMode`](#contentpolicyinjectionmode),
-  [`ContentPolicyGuardrail`](#contentpolicyguardrail) (reuses its pattern-compile options and timeout in
-  `Validate`), `System.ComponentModel.DataAnnotations`.
-- **Concept introduced, options validation as a startup gate.** `[Rubric §17, DevOps]` (fail-fast
-  configuration: a bad setting fails the deployment, not the first request it affects): `Validate`
-  compiles every configured pattern and reports every failure at once, so the person deploying a typo'd
-  pattern, not the first user who trips it, is the one who sees it.
-- **Walkthrough**: `SectionName = "Ai:ContentPolicy"` (`ContentPolicySettings.cs:26`);
-  `DefaultRedactionPlaceholder = "[redacted-instruction]"` (`ContentPolicySettings.cs:29`), a VISIBLE
-  placeholder on purpose (`ContentPolicySettings.cs:64-68` remark) so the model can tell something
-  was removed and a trace reviewer can tell a redaction from a sentence the user never wrote.
-  `InjectionMode` defaults `Redact` (`ContentPolicySettings.cs:35`).
-  `AdditionalRequestPatterns`/`BlockedResponsePatterns` (`ContentPolicySettings.cs:45,57`) default
-  to empty; an empty `BlockedResponsePatterns` switches the response half of the policy off entirely,
-  because a model that has already said the thing cannot unsay it, so the only available response-side
-  answer is a refusal. `RedactionPlaceholder` is `[Required]` (`ContentPolicySettings.cs:69-70`) and is inserted as literal text, so a `$` sequence in it is not a regex substitution (`ContentPolicySettings.cs:59-62`).
-  `Validate` (`ContentPolicySettings.cs:83-94`) runs `ValidatePatterns` over both lists, which calls
-  `DescribeFailure` (`ContentPolicySettings.cs:117-133`) per pattern: an empty-or-whitespace pattern
-  is rejected outright (it would match everything, "never what a policy meant"), otherwise the pattern
-  is compiled with `ContentPolicyGuardrail.ConfiguredPatternOptions`/`MatchTimeout` and any
-  `ArgumentException` message is surfaced against `SectionName:memberName[index]`.
-- **Why it's built this way**: see
-  [`ADR-120`](https://ivanball.github.io/docs/adr/120-governed-chat-client-boundary.html).
-- **Where it's used**: bound and validated by
-  [`GuardrailServiceCollectionExtensions.AddContentPolicyGuardrail`](#guardrailservicecollectionextensions);
-  read by [`ContentPolicyGuardrail`](#contentpolicyguardrail).
+### CommonMcpOptions
+> MMCA.Common.Mcp · `MMCA.Common.Mcp` · `MMCA.Common/Source/Presentation/MMCA.Common.Mcp/CommonMcpOptions.cs:9` · Level 0 · class
 
----
+- **What it is**: the tool-selection bag a host fills inside the `AddCommonMcpServer` callback: which
+  `[McpServerToolType]` classes the MCP endpoint exposes (`CommonMcpOptions.cs:5-8`).
+- **Depends on**: nothing first-party; `System.Reflection.Assembly` (external, `CommonMcpOptions.cs:1`).
+- **Concept**: the options-callback shape of a C# `extension(T)` registration method (see
+  [C# `extension(T)` types, read this once](00-primer.md#c-extensiont-types--read-this-once)); the MCP
+  endpoint itself is introduced on [`McpHostingExtensions`](#mcphostingextensions).
+- **Walkthrough**: two get-only, collection-initialized lists. `ToolAssemblies` (`CommonMcpOptions.cs:12`)
+  names assemblies whose tool classes are all scanned; `ToolTypes` (`CommonMcpOptions.cs:15`) names
+  individual tool classes for a host that does not want a whole assembly scanned.
+- **Why it's built this way**: get-only lists mean a host can only add to them, never replace them, and
+  the instance is built only after `Mcp:Enabled` is confirmed true
+  (`MMCA.Common/Source/Presentation/MMCA.Common.Mcp/McpHostingExtensions.cs:65-71`), so a disabled
+  endpoint never runs the callback. Recorded in
+  [ADR-138](https://ivanball.github.io/docs/adr/138-mcp-endpoint-over-module-queries.html).
+- **Where it's used**: consumed by `AddCommonMcpServer` (`McpHostingExtensions.cs:87,89-92`); the ADC
+  Conference service adds one type,
+  `builder.AddCommonMcpServer(options => options.ToolTypes.Add(typeof(ConferenceMcpTools)))`
+  (`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:368`, see
+  [`ConferenceMcpTools`](group-20-conference-api-grpc.md#conferencemcptools)).
 
-### PiiRedactionGuardrail
-> MMCA.Common.AI.Guardrails · `MMCA.Common.AI.Guardrails` · `MMCA.Common/Source/Core/MMCA.Common.AI/Guardrails/PiiRedactionGuardrail.cs:40` · Level 3 · class
+### McpEnabledMarker
+> MMCA.Common.Mcp · `MMCA.Common.Mcp` · `MMCA.Common/Source/Presentation/MMCA.Common.Mcp/McpHostingExtensions.cs:143` · Level 0 · class (private, nested)
 
-- **What it is**: the sealed partial class implementing
-  [`IChatRequestRedactor`](#ichatrequestredactor) and `IChatGuardrail` that strips emails and phone
-  numbers from the text carried by outgoing messages, tool calls and tool results included. The guardrail half is a pass-through (always `Allow`): this type
-  only redacts, it never blocks.
-- **Depends on**: [`IChatRequestRedactor`](#ichatrequestredactor)/`IChatGuardrail`/`GuardrailVerdict`,
-  [`ContentMetadata`](#contentmetadata), `System.Text.RegularExpressions`, `System.Text.Json`.
-- **Concept introduced, configuration-free, unconditional redaction.** Contrasts with
-  [`ContentPolicyGuardrail`](#contentpolicyguardrail): `PiiRedactionGuardrail` has no configurable
-  options and applies to every outgoing message unconditionally.
-- **Walkthrough**: `EmailPattern`/`PhonePattern` (`PiiRedactionGuardrail.cs:71-81`) are
-  `[GeneratedRegex]` source-generated matchers with a 1-second timeout (email: a standard
-  local-part@domain shape; phone: an optional leading country code plus a 10-digit US-shaped number,
-  guarded by negative lookaround so it does not clip a longer digit run). `Redact`
-  (`PiiRedactionGuardrail.cs:46-57`) rewrites EVERY message, not only `ChatRole.User` (unlike
-  `ContentPolicyGuardrail`), via the private `RedactMessage`
-  (`PiiRedactionGuardrail.cs:83-100`), which rebuilds each message (keeping role, `AuthorName`,
-  `MessageId`, `CreatedAt` and `AdditionalProperties`, `PiiRedactionGuardrail.cs:93-99`) and hands every content item to `RedactContent`
-  (`PiiRedactionGuardrail.cs:123-157`). That switch rebuilds an item only when it actually holds
-  contact details: non-empty `TextContent` and `TextReasoningContent`, a `FunctionResultContent`
-  whose result is a `JsonElement` or a `string`, and a `FunctionCallContent` with an argument value
-  that is a `string` or a `JsonElement` (routed through `RedactArgument`,
-  `PiiRedactionGuardrail.cs:159-164`; other argument values kept as-is). The "holds contact
-  details" test is `HasContactDetails`/`ArgumentHasContactDetails`/`JsonHasContactDetails`
-  (`PiiRedactionGuardrail.cs:166-190`), which compares `RedactText` output with the input; an item
-  with nothing to redact passes through by reference. A rebuilt item keeps its metadata through
-  the shared [`ContentMetadata.WithMetadataOf`](#contentmetadata) (`AdditionalProperties` and
-  `Annotations`), plus a tool call's `InformationalOnly` and `Exception` and a tool result's
-  `Exception`, set in the rebuilding arms themselves (`PiiRedactionGuardrail.cs:133-150`), but NOT
-  `RawRepresentation`: the provider's original object still holds the unredacted text, and the
-  OpenAI adapters send a raw representation verbatim in place of the item, which would undo the
-  redaction (`PiiRedactionGuardrail.cs:102-122`). A `TextReasoningContent` carrying `ProtectedData`
-  is never rebuilt (`PiiRedactionGuardrail.cs:125`): that data is the provider's signature over
-  the text (Anthropic's thinking signature), and an edited signed block is rejected when the
-  conversation is sent back.
-  Both shapes matter because Microsoft.Extensions.AI's function-invoking client marshals a tool's
-  return value and the model's arguments into `JsonElement`, and a tool's output is exactly where
-  contact details turn up (a customer lookup, a directory search). Plain text goes through
-  `RedactText` (`PiiRedactionGuardrail.cs:192-193`), which replaces email matches then phone
-  matches. A `JsonElement` goes through `RedactJson` (`PiiRedactionGuardrail.cs:200-210`) and the
-  recursive `WriteRedacted` (`PiiRedactionGuardrail.cs:212-244`), which rebuilds the document with
-  a `Utf8JsonWriter`, redacting only string VALUES and copying property names, numbers, booleans and
-  nulls verbatim: running the patterns over the raw JSON text would turn a bare 10-digit number (a
-  Unix timestamp) into a phone placeholder and break the document. Binary and other non-text
-  content (images, results and arguments that are neither a string nor a `JsonElement`,
-  provider-specific items) passes through untouched for the same reason `ContentPolicyGuardrail` gives
-  (a guardrail that silently dropped content it does not understand would be worse than leaving it
-  alone). `InspectRequestAsync`/`InspectResponseAsync`
-  (`PiiRedactionGuardrail.cs:60-69`) both unconditionally return `GuardrailVerdict.Allow`.
-- **Why it's built this way**: unconditional redaction with zero configuration lets the guardrail
-  satisfy `AiSettings.RequireGuardrail` with no setup. See
-  [`ADR-120`](https://ivanball.github.io/docs/adr/120-governed-chat-client-boundary.html) and
-  [`ADR-111`](https://ivanball.github.io/docs/adr/111-ai-session-scoring-governance.html).
-- **Where it's used**: registered by
-  [`GuardrailServiceCollectionExtensions.AddPiiRedactionGuardrail`](#guardrailservicecollectionextensions)
-  (both contracts from one singleton); ADC's `SessionScoreResponseGuardrail` and
-  `SessionScoringService` compose it.
+- **What it is**: an empty private nested class whose only job is to exist in the container when MCP was
+  registered, so `MapCommonMcp` can tell whether `AddCommonMcpServer` ran with the endpoint enabled
+  (`McpHostingExtensions.cs:142-143`).
+- **Depends on**: nothing.
+- **Concept**: a DI marker registration, a type registered for its presence rather than its behavior.
+- **Walkthrough**: `TryAddSingleton<McpEnabledMarker>()` runs only on the enabled path of
+  `AddCommonMcpServer` (`McpHostingExtensions.cs:75`); `MapCommonMcp` probes
+  `GetService<McpEnabledMarker>()` (`McpHostingExtensions.cs:119`) and, when it is absent but
+  `Mcp:Enabled` reads true, throws because the registration call was forgotten
+  (`McpHostingExtensions.cs:121-124`); otherwise it maps nothing.
+- **Why it's built this way**: being `private` (`McpHostingExtensions.cs:143`) means no other code can
+  register it, so its presence is proof that this class's own enabled path ran, which a check against an
+  SDK service type could not guarantee.
+- **Where it's used**: only inside [`McpHostingExtensions`](#mcphostingextensions).
 
----
+### McpHiddenText
+> MMCA.Common.Mcp · `MMCA.Common.Mcp` · `MMCA.Common/Source/Presentation/MMCA.Common.Mcp/McpHiddenText.cs:14` · Level 0 · class (static)
 
-### GuardrailServiceCollectionExtensions
-> MMCA.Common.AI.Guardrails · `MMCA.Common.AI.Guardrails` · `MMCA.Common/Source/Core/MMCA.Common.AI/Guardrails/GuardrailServiceCollectionExtensions.cs:17` · Level 3 · class
+- **What it is**: the detector and stripper for text a model reads but a human reviewer does not see:
+  Unicode format characters (category Cf, such as zero-width and bidi controls), tag characters
+  (U+E0000 to U+E007F) and HTML comment openers (`McpHiddenText.cs:6-13`).
+- **Depends on**: nothing first-party; `System.Text.Rune`, `System.Globalization.UnicodeCategory` and
+  `StringBuilder` (external, `McpHiddenText.cs:1-2`).
+- **Concept introduced, hidden-text poisoning of model-visible text.** `[Rubric §16, AI-Native Application
+  Architecture]` (assesses whether LLM-facing surfaces are governed rather than trusted): a tool
+  description or a tool result is read verbatim by the model, so an invisible instruction riding in it is
+  a prompt-injection vector a code reviewer cannot spot. `[Rubric §11, Security]` (assesses whether
+  untrusted input is neutralized at a defined boundary): the same check is applied at two boundaries,
+  descriptions at startup and third-party text in results at call time (`McpHiddenText.cs:9-12`).
+- **Walkthrough**: `Find` (`McpHiddenText.cs:21`) returns empty for null or empty input, then walks the
+  text by `Rune` (so a surrogate pair is one code point), reporting a tag character
+  (`McpHiddenText.cs:32`, test at `McpHiddenText.cs:83`) or a Cf character (`McpHiddenText.cs:36`) with
+  its UTF-16 position, then scans ordinally for every `"<!--"` (`McpHiddenText.cs:16,44-48`). `Strip`
+  (`McpHiddenText.cs:63`) returns the input unchanged when nothing is invisible; otherwise it rebuilds
+  the string without any rune that `IsInvisible` (`McpHiddenText.cs:80-81`) flags.
+- **Why it's built this way**: `Strip` deliberately leaves an HTML comment opener in place, because in
+  a result it is visible text rather than hidden text, and it accepts that dropping the zero-width joiner
+  splits joined emoji sequences: the documented price of never forwarding a character a reviewer cannot
+  see (`McpHiddenText.cs:54-60`). Recorded in
+  [ADR-138](https://ivanball.github.io/docs/adr/138-mcp-endpoint-over-module-queries.html).
+- **Where it's used**: [`ToolDescriptionInspector`](#tooldescriptioninspector) delegates its startup
+  check to `Find` (`MMCA.Common/Source/Presentation/MMCA.Common.Mcp/ToolDescriptionInspector.cs:16`);
+  the ADC Conference tools run `Strip` over third-party text before returning it
+  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Mcp/ConferenceMcpResults.cs:33`);
+  covered by `MMCA.Common/Tests/Presentation/MMCA.Common.Mcp.Tests/McpHiddenTextTests.cs`.
 
-- **What it is**: the extension block (C# `extension(IServiceCollection services)`) registering the two
-  shipped guardrails: `AddPiiRedactionGuardrail()` and `AddContentPolicyGuardrail(configuration)`.
-- **Depends on**: [`PiiRedactionGuardrail`](#piiredactionguardrail),
-  [`ContentPolicyGuardrail`](#contentpolicyguardrail), [`ContentPolicySettings`](#contentpolicysettings),
-  `IChatGuardrail`/[`IChatRequestRedactor`](#ichatrequestredactor),
-  `Microsoft.Extensions.DependencyInjection`.
-- **Concept introduced, one singleton under two contracts.** `[Rubric §1, SOLID]` (interface
-  segregation without instance duplication): each guardrail implements both `IChatGuardrail` and
-  `IChatRequestRedactor`, and both are registered from the SAME singleton via
-  `TryAddEnumerable(... => serviceProvider.GetRequiredService<T>())`, never two independent instances;
-  a host that later gives the type state would otherwise get two copies of it. Registration uses C#
-  extension members as the idiom, not static extension methods.
-- **Walkthrough**: `AddPiiRedactionGuardrail`
-  (`GuardrailServiceCollectionExtensions.cs:33-44`) registers `PiiRedactionGuardrail` once via
-  `TryAddSingleton`, then `TryAddEnumerable`-registers it under both `IChatGuardrail` and
-  `IChatRequestRedactor`. `AddContentPolicyGuardrail`
-  (`GuardrailServiceCollectionExtensions.cs:62-79`) additionally binds `ContentPolicySettings` from
-  `Ai:ContentPolicy` with `.ValidateDataAnnotations().ValidateOnStart()` (so a bad pattern fails the
-  deployment, not a user's request) before registering `ContentPolicyGuardrail` the same two-contract
-  way. Both methods' doc remarks state they must be called BEFORE `AddMmcaChatClient`, which reads the
-  registered descriptors to decide whether to compose the guardrail layer at all.
-- **Why it's built this way**: see
-  [`ADR-120`](https://ivanball.github.io/docs/adr/120-governed-chat-client-boundary.html).
-- **Where it's used**: called by a consuming host before `AddMmcaChatClient`; ADC's
-  `Conference.Infrastructure` `DependencyInjection` is the one usage site outside this file's own
-  registration tests.
+### McpToolPermissionAttribute
+> MMCA.Common.Mcp · `MMCA.Common.Mcp` · `MMCA.Common/Source/Presentation/MMCA.Common.Mcp/McpToolPermissionAttribute.cs:12` · Level 0 · class (attribute)
+
+- **What it is**: a method attribute that restricts one MCP tool to callers holding a named permission;
+  a caller without it neither sees the tool in `tools/list` nor can call it
+  (`McpToolPermissionAttribute.cs:3-9`).
+- **Depends on**: nothing first-party at compile time; at run time the check resolves the same
+  [`PermissionPolicy`](group-08-auth.md#permissionpolicy) name that
+  [`HasPermissionAttribute`](group-08-auth.md#haspermissionattribute) uses
+  (`MMCA.Common/Source/Presentation/MMCA.Common.Mcp/McpToolGovernance.cs:143`).
+- **Concept**: per-tool authorization on an endpoint that is anonymous at the HTTP layer.
+  `[Rubric §11, Security]` (assesses whether authorization is declarative and consistent across entry
+  points): a tool reuses the module's existing `perm:` policy, so a role grant admits a caller to the
+  tool exactly as to the HTTP endpoint it mirrors (`McpToolGovernance.cs:128-129`).
+- **Walkthrough**: a primary-constructor attribute exposing one get-only `Permission`
+  (`McpToolPermissionAttribute.cs:12,15`), restricted to methods, single-use, not inherited
+  (`McpToolPermissionAttribute.cs:11`).
+- **Why it's built this way**: the permission is a plain string so the attribute has no reference to the
+  API authorization assembly; the governance filter reads it back from the tool's metadata
+  (`McpToolGovernance.cs:125`). A tool without it is public, which is why
+  [`McpToolPublicAttribute`](#mcptoolpublicattribute) exists to record that choice.
+- **Where it's used**: read by [`McpToolGovernance`](#mcptoolgovernance) for filtering and for the
+  startup access check (`McpToolGovernance.cs:100-101`); the permission-coverage fitness rule resolves
+  its `Permission` value
+  (`MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Rules/Api/ArchitectureRules.PermissionCoverage.cs:10,121`).
+- **Caveats / not-in-source**: no tool in `MMCA.ADC/Source` carries this attribute today; every ADC
+  Conference tool is `[McpToolPublic]`
+  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Mcp/ConferenceMcpTools.cs:33`).
+
+### McpToolPublicAttribute
+> MMCA.Common.Mcp · `MMCA.Common.Mcp` · `MMCA.Common/Source/Presentation/MMCA.Common.Mcp/McpToolPublicAttribute.cs:12` · Level 0 · class (attribute)
+
+- **What it is**: a marker attribute declaring that an MCP tool is intentionally public, so it needs no
+  token and may expose only data an anonymous HTTP endpoint already serves
+  (`McpToolPublicAttribute.cs:3-10`).
+- **Depends on**: nothing.
+- **Concept**: an explicit access declaration, the counterpart of
+  [`McpToolPermissionAttribute`](#mcptoolpermissionattribute). `[Rubric §34, Architecture Governance &
+  Documentation]` (assesses whether rules are enforced rather than remembered): the choice is checked
+  twice, at startup by `MapCommonMcp` and in a fitness test that requires exactly one of the two
+  attributes on every `[McpServerTool]` method (`McpToolPublicAttribute.cs:6-9`).
+- **Walkthrough**: a one-line `sealed` attribute with no members (`McpToolPublicAttribute.cs:12`),
+  method-only, single-use, not inherited (`McpToolPublicAttribute.cs:11`).
+- **Why it's built this way**: public is the behavioral default (no permission attribute means no
+  check), so without a marker an omission and a decision would look the same; this attribute turns the
+  omission into a startup failure.
+- **Where it's used**: [`McpToolGovernance`](#mcptoolgovernance)`.ThrowIfAccessUndeclared`
+  (`MMCA.Common/Source/Presentation/MMCA.Common.Mcp/McpToolGovernance.cs:100-101`); the fitness rule
+  matches it by full name
+  (`MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Rules/Api/ArchitectureRules.McpToolAccess.cs:8,26-27`),
+  run by [`McpToolAccessDeclarationTestsBase`](group-29-testing-infrastructure.md#per-project-test-rollup);
+  every ADC Conference tool carries it
+  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Mcp/ConferenceMcpTools.cs:33,52,72,90,109,127`).
+
+### McpToolSettings
+> MMCA.Common.Mcp · `MMCA.Common.Mcp` · `MMCA.Common/Source/Presentation/MMCA.Common.Mcp/McpToolSettings.cs:4` · Level 0 · class
+
+- **What it is**: the settings for one MCP tool, bound from `Mcp:Tools:<name>` (`McpToolSettings.cs:3`).
+- **Depends on**: nothing.
+- **Concept**: per-tool operational switches; the endpoint-level configuration is on
+  [`McpSettings`](#mcpsettings).
+- **Walkthrough**: `Enabled` (`McpToolSettings.cs:10`) defaults to `true`; a disabled tool is absent
+  from `tools/list` and a call returns an error result. `PermitsPerMinute` (`McpToolSettings.cs:17`) is
+  a nullable per-caller, per-instance limit; `null` sets none.
+- **Why it's built this way**: defaults that change nothing (enabled, unlimited) mean a tool needs an
+  entry only when an operator wants to switch it off or bound it. A set `PermitsPerMinute` must be 1 or
+  more, enforced at startup by `ValidateOnStart`
+  (`MMCA.Common/Source/Presentation/MMCA.Common.Mcp/McpHostingExtensions.cs:60-63`).
+- **Where it's used**: the value type of [`McpSettings`](#mcpsettings)`.Tools`
+  (`MMCA.Common/Source/Presentation/MMCA.Common.Mcp/McpSettings.cs:31`), read by
+  [`McpToolGovernance`](#mcptoolgovernance).
+
+### ToolCall
+> MMCA.Common.Mcp · `MMCA.Common.Mcp` · `MMCA.Common/Source/Presentation/MMCA.Common.Mcp/McpToolRateLimiter.cs:41` · Level 0 · record struct (private, nested)
+
+- **What it is**: the partition input of [`McpToolRateLimiter`](#mcptoolratelimiter): tool name, caller
+  key and the tool's configured permit count (`McpToolRateLimiter.cs:41`).
+- **Depends on**: nothing.
+- **Concept**: see [`McpToolRateLimiter`](#mcptoolratelimiter).
+- **Walkthrough**: a `private readonly record struct` with three positional members; `TryAcquire`
+  builds one per call (`McpToolRateLimiter.cs:34`) and the partition factory turns it into the key
+  `"{Tool}\n{PermitsPerMinute}\n{Caller}"` (`McpToolRateLimiter.cs:16-18`).
+- **Why it's built this way**: a value type avoids an allocation per call, and carrying the permit count
+  in it lets the partition key include the count, so a configuration reload that changes the limit
+  starts a fresh window (`McpToolRateLimiter.cs:13-15`).
+- **Where it's used**: only inside [`McpToolRateLimiter`](#mcptoolratelimiter).
 
 ### IAiProviderFactory
 > MMCA.Common.AI · `MMCA.Common.AI.Providers` · `MMCA.Common/Source/Core/MMCA.Common.AI/Providers/IAiProviderFactory.cs:20` · Level 1 · interface
@@ -1582,6 +2037,87 @@ clients, policies, validator and provider factories, then the Level 3 registrati
 - **Caveats / not-in-source**: the interface itself carries no lifetime attribute; the registration
   call sites (`AnthropicAiServiceCollectionExtensions.AddAnthropicAiProvider`,
   `OpenAiServiceCollectionExtensions.AddOpenAiProvider`) are what fix it to singleton, not this type.
+
+### McpSettings
+> MMCA.Common.Mcp · `MMCA.Common.Mcp` · `MMCA.Common/Source/Presentation/MMCA.Common.Mcp/McpSettings.cs:19` · Level 1 · class
+
+- **What it is**: the configuration for the MCP endpoint, bound from the `Mcp` section; the endpoint is
+  off unless `Enabled` is `true` (`McpSettings.cs:3-7`).
+- **Depends on**: [`McpToolSettings`](#mcptoolsettings) (the per-tool entries).
+- **Concept**: an off-by-default feature switch with fail-fast validation. `[Rubric §13, Observability &
+  Operability]` (assesses whether operators can change behavior safely through configuration): an
+  operator enables the endpoint, disables a single tool or caps it per minute without a redeploy, and a
+  bad limit fails startup rather than the first call (fail-fast contract,
+  [ADR-070](https://ivanball.github.io/docs/adr/070-fail-fast-configuration-contract.html)).
+- **Walkthrough**: `SectionName = "Mcp"` (`McpSettings.cs:22`); `Enabled` (`McpSettings.cs:25`) has no
+  initializer, so it defaults to `false`; `Tools` (`McpSettings.cs:31`) is a get-only dictionary keyed
+  by the `[McpServerTool]` name with `StringComparer.OrdinalIgnoreCase`. A tool with no entry is enabled
+  and bounded only by the endpoint-wide `mcp` rate-limit policy (`McpSettings.cs:27-30`). The doc
+  comment carries a sample section (`McpSettings.cs:8-18`).
+- **Why it's built this way**: with `Enabled` false, `AddCommonMcpServer` registers only these options
+  and no MCP service, and `MapCommonMcp` maps no route, so `/mcp` answers 404 (`McpSettings.cs:4-6`):
+  an off endpoint has no attack surface at all. Recorded in
+  [ADR-138](https://ivanball.github.io/docs/adr/138-mcp-endpoint-over-module-queries.html).
+- **Where it's used**: bound and validated by `AddCommonMcpServer`
+  (`MMCA.Common/Source/Presentation/MMCA.Common.Mcp/McpHostingExtensions.cs:57-63`); read live through
+  `IOptionsMonitor<McpSettings>` by [`McpToolGovernance`](#mcptoolgovernance)
+  (`MMCA.Common/Source/Presentation/MMCA.Common.Mcp/McpToolGovernance.cs:32,61`).
+
+### McpToolRateLimiter
+> MMCA.Common.Mcp · `MMCA.Common.Mcp` · `MMCA.Common/Source/Presentation/MMCA.Common.Mcp/McpToolRateLimiter.cs:11` · Level 1 · class (internal)
+
+- **What it is**: the per-tool rate limit behind `Mcp:Tools:<name>:PermitsPerMinute`: a one-minute
+  fixed window per tool and caller, held in memory per instance (`McpToolRateLimiter.cs:6-10`).
+- **Depends on**: [`ToolCall`](#toolcall) (its partition input); `System.Threading.RateLimiting`'s
+  `PartitionedRateLimiter` and `FixedWindowRateLimiterOptions` (external, `McpToolRateLimiter.cs:2`).
+- **Concept**: a second, narrower rate limit under the endpoint-wide one. `[Rubric §12, Performance &
+  Scalability]` (assesses whether expensive work is bounded per caller): the `mcp` policy from
+  `AddCommonRateLimiting` bounds a caller's total requests
+  ([ADR-019](https://ivanball.github.io/docs/adr/019-rate-limiting.html)), while this limiter bounds one
+  expensive tool on its own (`McpToolRateLimiter.cs:8-9`).
+- **Walkthrough**: `_limiter` (`McpToolRateLimiter.cs:16`) is a `PartitionedRateLimiter` that gives each
+  key a fixed-window limiter with `PermitLimit` from the call, a one-minute `Window`, `QueueLimit = 0`
+  (no waiting) and auto-replenishment (`McpToolRateLimiter.cs:17-25`). `TryAcquire`
+  (`McpToolRateLimiter.cs:32`) takes one permit via `AttemptAcquire` and returns whether the lease was
+  acquired, disposing the lease immediately (`McpToolRateLimiter.cs:34-35`). `Dispose`
+  (`McpToolRateLimiter.cs:39`) disposes the limiter.
+- **Why it's built this way**: the partitioned limiter drops idle partitions, so a stream of distinct
+  callers does not grow memory without bound, and the permit count is part of the key so a reload that
+  changes it starts a fresh window (`McpToolRateLimiter.cs:13-15`). `QueueLimit = 0` makes an over-limit
+  call fail at once, which the governance filter turns into a readable error result.
+- **Where it's used**: registered as a singleton by `AddCommonMcpServer`
+  (`MMCA.Common/Source/Presentation/MMCA.Common.Mcp/McpHostingExtensions.cs:74`) and called from
+  [`McpToolGovernance`](#mcptoolgovernance)`.CallTool`
+  (`MMCA.Common/Source/Presentation/MMCA.Common.Mcp/McpToolGovernance.cs:78`).
+- **Caveats / not-in-source**: the count is per instance (`McpToolRateLimiter.cs:7-8`), so with several
+  replicas a caller's effective limit is the configured value times the replica count.
+
+### ToolDescriptionInspector
+> MMCA.Common.Mcp · `MMCA.Common.Mcp` · `MMCA.Common/Source/Presentation/MMCA.Common.Mcp/ToolDescriptionInspector.cs:11` · Level 1 · class (internal static)
+
+- **What it is**: the startup check that refuses to map the MCP endpoint when any tool, parameter or
+  server description hides text (`ToolDescriptionInspector.cs:6-10`).
+- **Depends on**: [`McpHiddenText`](#mcphiddentext) (the detector); the MCP SDK's `McpServerOptions`
+  and `System.Text.Json.JsonElement` (external, `ToolDescriptionInspector.cs:1-2`).
+- **Concept**: the startup half of the hidden-text defence introduced on
+  [`McpHiddenText`](#mcphiddentext). `[Rubric §16, AI-Native Application Architecture]`: a poisoned
+  description fails startup instead of reaching a client (`ToolDescriptionInspector.cs:8-9`).
+- **Walkthrough**: `FindHiddenText` (`ToolDescriptionInspector.cs:16`) forwards to
+  `McpHiddenText.Find`. `ThrowIfHiddenText` (`ToolDescriptionInspector.cs:25`) collects findings from the
+  server instructions, server title and description, then for each tool its name, title, annotation
+  title, description, input schema and (when present) output schema, and throws one
+  `InvalidOperationException` listing every location (`ToolDescriptionInspector.cs:54`). `Collect`
+  (`ToolDescriptionInspector.cs:61`) formats one location; `CollectSchema`
+  (`ToolDescriptionInspector.cs:72`) recurses through strings, object property names and values
+  (`ToolDescriptionInspector.cs:80`) and array items.
+- **Why it's built this way**: a parameter's `[Description]` lands in the generated JSON schema, so every
+  property name and string value there is model-visible and is inspected, not only `description` keys
+  (`ToolDescriptionInspector.cs:70-71`). Reporting every problem in one exception lets a developer fix
+  them all in one pass. Recorded in
+  [ADR-138](https://ivanball.github.io/docs/adr/138-mcp-endpoint-over-module-queries.html).
+- **Where it's used**: called by `MapCommonMcp` before mapping
+  (`MMCA.Common/Source/Presentation/MMCA.Common.Mcp/McpHostingExtensions.cs:131`); covered by
+  `MMCA.Common/Tests/Presentation/MMCA.Common.Mcp.Tests/ToolDescriptionInspectionTests.cs`.
 
 ### AiProviderValidator
 > MMCA.Common.AI · `MMCA.Common.AI.Providers` · `MMCA.Common/Source/Core/MMCA.Common.AI/Providers/AiProviderValidator.cs:16` · Level 2 · class
@@ -1645,6 +2181,102 @@ clients, policies, validator and provider factories, then the Level 3 registrati
 - **Where it's used**: registered by [`AnthropicAiServiceCollectionExtensions`](#anthropicaiservicecollectionextensions-openaiservicecollectionextensions).`AddAnthropicAiProvider()`; exercised by
   `MMCA.Common/Tests/Core/MMCA.Common.AI.Tests/Providers/AdapterFactoryTests.cs`.
 
+### McpToolGovernance
+> MMCA.Common.Mcp · `MMCA.Common.Mcp` · `MMCA.Common/Source/Presentation/MMCA.Common.Mcp/McpToolGovernance.cs:20` · Level 2 · class (internal static)
+
+- **What it is**: the per-tool governance applied through the MCP SDK's request filters: `tools/list`
+  drops every tool the caller could not call, and `tools/call` refuses a disabled tool, a tool whose
+  permission the caller lacks, and a call over the tool's per-minute limit, each as an error result
+  rather than an exception (`McpToolGovernance.cs:14-19`).
+- **Depends on**: [`McpSettings`](#mcpsettings), [`McpToolSettings`](#mcptoolsettings),
+  [`McpToolPermissionAttribute`](#mcptoolpermissionattribute),
+  [`McpToolPublicAttribute`](#mcptoolpublicattribute), [`McpToolRateLimiter`](#mcptoolratelimiter),
+  [`PermissionPolicy`](group-08-auth.md#permissionpolicy) and the `FindUserIdValue` claim helper from
+  `MMCA.Common.Shared.Auth` ([`ClaimsPrincipalExtensions`](group-08-auth.md#claimsprincipalextensions));
+  externally `IAuthorizationService`, `IHttpContextAccessor`, `IOptionsMonitor<T>` and the SDK's
+  `McpRequestHandler<TParams, TResult>` (`McpToolGovernance.cs:1-10`).
+- **Concept introduced, per-tool governance on an anonymous endpoint.** `[Rubric §11, Security]`
+  (assesses whether authorization is enforced at every entry point, not only the obvious one): the
+  endpoint is anonymous at the HTTP layer, so the filter is where a permissioned tool is hidden and
+  refused, using the same `perm:` policy the module's HTTP endpoints use (`McpToolGovernance.cs:128-129`).
+  `[Rubric §16, AI-Native Application Architecture]` (assesses whether model-facing failures are shaped
+  for a model): a refusal is a tool error result carrying a code, so the model reads it and stops
+  instead of retrying blindly (`McpToolGovernance.cs:152-158`).
+- **Walkthrough**: `ListTools` (`McpToolGovernance.cs:25`) runs the SDK handler first, reads the current
+  [`McpSettings`](#mcpsettings) (`McpToolGovernance.cs:32`), keeps each tool that is enabled and whose
+  permission the caller satisfies, and marks the result `CacheScope.Private` because the list now
+  depends on who asked (`McpToolGovernance.cs:46-47`). `CallTool` (`McpToolGovernance.cs:54`) checks in
+  order: enabled, else `Mcp.ToolUnavailable` (`McpToolGovernance.cs:65`); permitted, else
+  `Mcp.Forbidden` (`McpToolGovernance.cs:71`); within `PermitsPerMinute` when set, else `Mcp.RateLimited`
+  (`McpToolGovernance.cs:76-80`); then calls the SDK handler. `ThrowIfAccessUndeclared`
+  (`McpToolGovernance.cs:95`) lists, sorted ordinally, every registered tool carrying neither access
+  attribute and throws (`McpToolGovernance.cs:108`). Helpers: `IsEnabled` treats a missing entry as
+  enabled (`McpToolGovernance.cs:114`); `FindPermission` uses the matched primitive or looks the tool up
+  by name (`McpToolGovernance.cs:117-125`); `IsPermittedAsync` admits anyone when there is no permission,
+  refuses an unauthenticated caller, otherwise authorizes against `PermissionPolicy.NameFor(permission)`
+  (`McpToolGovernance.cs:130-143`); `CallerKey` uses the user id, else the client IP, else `"anonymous"`
+  (`McpToolGovernance.cs:147-150`).
+- **Why it's built this way**: settings are read through `IOptionsMonitor` per request, so disabling a
+  tool or changing its limit takes effect on reload without a restart. Filtering the list and refusing
+  the call share `IsEnabled` and `IsPermittedAsync`, so a tool a caller cannot see is also one the
+  caller cannot call. Recorded in
+  [ADR-138](https://ivanball.github.io/docs/adr/138-mcp-endpoint-over-module-queries.html).
+- **Where it's used**: wired by `AddCommonMcpServer` as the list and call filters
+  (`MMCA.Common/Source/Presentation/MMCA.Common.Mcp/McpHostingExtensions.cs:81-82`), and
+  `ThrowIfAccessUndeclared` runs in `MapCommonMcp` (`McpHostingExtensions.cs:132`); covered by
+  `MMCA.Common/Tests/Presentation/MMCA.Common.Mcp.Tests/McpGovernanceTests.cs`.
+- **Caveats / not-in-source**: an anonymous caller of a rate-limited tool behind a proxy that hides the
+  client IP falls into the shared `"anonymous"` partition (`McpToolGovernance.cs:150`); whether a host's
+  forwarded-headers setup prevents that is not determinable from this file.
+
+### McpHostingExtensions
+> MMCA.Common.Mcp · `MMCA.Common.Mcp` · `MMCA.Common/Source/Presentation/MMCA.Common.Mcp/McpHostingExtensions.cs:38` · Level 6 · class (static, `extension(T)` blocks)
+
+- **What it is**: the two consumer calls that opt a host into the Model Context Protocol (MCP) endpoint,
+  `builder.AddCommonMcpServer(...)` and `app.MapCommonMcp()`; both do nothing unless `Mcp:Enabled` is
+  true (`McpHostingExtensions.cs:15-19`).
+- **Depends on**: [`CommonMcpOptions`](#commonmcpoptions), [`McpSettings`](#mcpsettings),
+  [`McpToolRateLimiter`](#mcptoolratelimiter), [`McpEnabledMarker`](#mcpenabledmarker),
+  [`McpToolGovernance`](#mcptoolgovernance), [`ToolDescriptionInspector`](#tooldescriptioninspector),
+  [`WebApplicationBuilderExtensions`](group-12-api-hosting-mapping.md#webapplicationbuilderextensions)
+  (for the `mcp` rate-limit policy name); externally the `ModelContextProtocol.AspNetCore` SDK
+  (`McpHostingExtensions.cs:10-11`).
+- **Concept introduced, an MCP endpoint over module queries.** `[Rubric §16, AI-Native Application
+  Architecture]` (assesses whether the system exposes governed, model-consumable capabilities): tools are
+  static `[McpServerToolType]` classes in a module's API project that inject the same query handler the
+  HTTP endpoint injects, so the decorator pipeline applies to a tool call exactly as to a request
+  (`McpHostingExtensions.cs:21-26`). `[Rubric §13, Observability & Operability]`: misconfiguration fails
+  at startup, not on the first call. Registration uses `extension(T)` blocks (see
+  [C# `extension(T)` types, read this once](00-primer.md#c-extensiont-types--read-this-once)). Recorded in
+  [ADR-138](https://ivanball.github.io/docs/adr/138-mcp-endpoint-over-module-queries.html).
+- **Walkthrough**: `DefaultPath = "/mcp"` (`McpHostingExtensions.cs:41`). `AddCommonMcpServer`
+  (`McpHostingExtensions.cs:52`) always binds [`McpSettings`](#mcpsettings) with a `ValidateOnStart` rule
+  that a set `PermitsPerMinute` is 1 or more (`McpHostingExtensions.cs:57-63`); if `Enabled` is false it
+  returns there. Otherwise it runs the host's callback (`McpHostingExtensions.cs:71`), registers the
+  HTTP context accessor, the rate limiter and the marker (`McpHostingExtensions.cs:73-75`), and adds the
+  MCP server with stateless streamable HTTP, the two governance filters and the selected tools
+  (`McpHostingExtensions.cs:77-92`). `MapCommonMcp` (`McpHostingExtensions.cs:114`) returns without
+  mapping when the marker is absent, unless `Mcp:Enabled` is true, in which case it throws because
+  registration was skipped (`McpHostingExtensions.cs:119-124`). It then runs the hidden-text and
+  access-declaration checks (`McpHostingExtensions.cs:131-132`) and maps the endpoint with
+  `AllowAnonymous()` and the `mcp` rate-limit policy (`McpHostingExtensions.cs:134-136`;
+  `RateLimitPolicyMcp = "mcp"` at
+  `MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/WebApplicationBuilderExtensions.RateLimiting.cs:57`).
+- **Why it's built this way**: the tool types are passed as `(IEnumerable<Type>)` explicitly, because
+  passing the `IList<Type>` straight through binds the SDK's `WithTools<TTarget>(target)` overload and
+  registers the list itself as a tool target (`McpHostingExtensions.cs:85-87`). The endpoint is anonymous
+  at the HTTP layer so a public tool needs no token, and the host's `UseAuthentication` must run first so
+  permissioned tools see the signed-in caller (`McpHostingExtensions.cs:28-31`). Stateless sessions
+  (`McpHostingExtensions.cs:78`) keep no per-session server state, so any replica can serve any request.
+  The rate-limit layering follows [ADR-019](https://ivanball.github.io/docs/adr/019-rate-limiting.html)
+  and the startup validation [ADR-070](https://ivanball.github.io/docs/adr/070-fail-fast-configuration-contract.html).
+- **Where it's used**: the ADC Conference service registers
+  [`ConferenceMcpTools`](group-20-conference-api-grpc.md#conferencemcptools) and maps the endpoint
+  (`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:368,379`); exercised by
+  `MMCA.Common/Tests/Presentation/MMCA.Common.Mcp.Tests/McpTestHost.cs` and `McpGovernanceTests.cs`.
+- **Caveats / not-in-source**: whether `Mcp:Enabled` is true in any deployed ADC environment is
+  configuration, not determinable from source.
+
 ### OpenAiProviderFactory
 > MMCA.Common.AI.OpenAI · `MMCA.Common.AI.OpenAI` · `MMCA.Common/Source/Core/MMCA.Common.AI.OpenAI/OpenAiProviderFactory.cs:18` · Level 2 · class
 
@@ -1672,39 +2304,6 @@ clients, policies, validator and provider factories, then the Level 3 registrati
   inside the SDK. Recorded in [ADR-120](https://ivanball.github.io/docs/adr/120-governed-chat-client-boundary.html).
 - **Where it's used**: registered by [`OpenAiServiceCollectionExtensions`](#anthropicaiservicecollectionextensions-openaiservicecollectionextensions).`AddOpenAiProvider()`; exercised by
   `MMCA.Common/Tests/Core/MMCA.Common.AI.Tests/Providers/AdapterFactoryTests.cs`.
-
-### AnthropicAiServiceCollectionExtensions, OpenAiServiceCollectionExtensions
-<a id="anthropicaiservicecollectionextensions"></a><a id="openaiservicecollectionextensions"></a>
-> MMCA.Common.AI.Anthropic + MMCA.Common.AI.OpenAI · `MMCA.Common.AI.Anthropic` / `MMCA.Common.AI.OpenAI` · `MMCA.Common/Source/Core/MMCA.Common.AI.Anthropic/DependencyInjection.cs:17` · Level 3 · class (static) + class (static)
-
-- **What it is**: the per-adapter-package DI registration extensions. Each adds its
-  package's provider factory to the set [`AddMmcaChatClient`](#aiservicecollectionextensions) chooses from.
-
-| Type | File:Line | Notes (what differs) |
-|------|-----------|----------------------|
-| `AnthropicAiServiceCollectionExtensions` | `MMCA.Common/Source/Core/MMCA.Common.AI.Anthropic/DependencyInjection.cs:17` | exposes `AddAnthropicAiProvider()` (`DependencyInjection.cs:250`), registers [`AnthropicAiProviderFactory`](#anthropicaiproviderfactory) |
-| `OpenAiServiceCollectionExtensions` | `MMCA.Common/Source/Core/MMCA.Common.AI.OpenAI/DependencyInjection.cs:17` | exposes `AddOpenAiProvider()` (`DependencyInjection.cs:288`), registers [`OpenAiProviderFactory`](#openaiproviderfactory) |
-
-- **Depends on**: `Microsoft.Extensions.DependencyInjection.IServiceCollection` (external) and each
-  package's own factory ([`AnthropicAiProviderFactory`](#anthropicaiproviderfactory) or [`OpenAiProviderFactory`](#openaiproviderfactory)).
-- **Concept**: both use the `extension(IServiceCollection services)` C# member-extension form (primer:
-  [`extension(T)` types](00-primer.md#c-extensiont-types--read-this-once)) rather than a classic static
-  `this IServiceCollection` method. `[Rubric §1, SOLID]` (open/closed): each adapter package ships the
-  one line that opts it into provider selection, so adding a new vendor never touches
-  `MMCA.Common.AI`'s own registration code.
-- **Walkthrough**: identical shape in both files: null-check `services`
-  (`DependencyInjection.cs:252` / `:290`), call
-  `services.TryAddEnumerable(ServiceDescriptor.Singleton<`[`IAiProviderFactory`](#iaiproviderfactory)`, {Factory}>())`
-  (`DependencyInjection.cs:254` / `:292`), and return `services` for chaining
-  (`DependencyInjection.cs:256` / `:294`). `TryAddEnumerable` is what makes registering both packages in
-  the same host additive rather than a last-one-wins replace: both factories end up in the
-  `IEnumerable<`[`IAiProviderFactory`](#iaiproviderfactory)`>` [`AiProviderValidator`](#aiprovidervalidator) and `AddMmcaChatClient` enumerate.
-- **Why it's built this way**: singleton lifetime matches the factories' own statelessness (both hold no
-  mutable fields); `TryAddEnumerable` over plain `AddSingleton` is what lets a host reference both
-  adapter packages without one factory silently dropping the other.
-- **Where it's used**: `MMCA.ADC.Conference.Service/Program.cs` calls `AddAnthropicAiProvider()`. No
-  call site for `AddOpenAiProvider()` is visible in `MMCA.ADC/Source` today; it is exercised only from
-  `MMCA.Common.AI.OpenAI`'s own tests.
 
 
 ---

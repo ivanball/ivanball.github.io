@@ -76,7 +76,7 @@ the one-line bridge: a C# `extension(ValidationResult)` block
 failure into `Error.Validation(f.ErrorCode, f.ErrorMessage, source, f.PropertyName)`
 (`ValidationFailureExtensions.cs:19-21`), which stamps
 [`ErrorType.Validation`](group-01-result-error-handling.md#errortype)
-(`MMCA.Common/Source/Core/MMCA.Common.Shared/Abstractions/Error.cs:37-38`). Each decorator passes the
+(`MMCA.Common/Source/Core/MMCA.Common.Shared/Abstractions/Error.cs:45-46`). Each decorator passes the
 use-case type name as the `source` (`ValidatingCommandDecorator.cs:83`,
 `ValidatingQueryDecorator.cs:86`), so a downstream consumer can see which command or query produced
 the failures, and the failing property name travels as the error's `target`. `ErrorType.Validation`
@@ -95,7 +95,7 @@ failure contract for every endpoint).
 `AbstractValidator<T>` generic over the *parent* type, taking an `Expression<Func<T, ...>>` selector
 in its constructor and declaring its rules in an expression-bodied constructor. Because they are
 generic-plus-selector, the same [`EmailRules<T>`](#requiredstringrulest-optionalstringrulest-emailrulest-positiveintrulest-positivedecimalrulest-nonnegativeintrulest-requiredidrulest-tid-optionalpositiveidrulest-tid-passwordrulest-strongpasswordrulest)
-(`CommonValidationRules.cs:65`) validates a value object, a request DTO, or a command; a module
+(`CommonValidationRules.cs:64`) validates a value object, a request DTO, or a command; a module
 composes it with FluentValidation's `Include(...)` instead of rewriting "non-empty, valid format, max
 length" each time. The bounds are parameters, never literals in the rule: ADC's registration
 validator passes `UserInvariants.EmailMaxLength` into `EmailRules<RegisterRequest>` and pairs it with
@@ -103,9 +103,9 @@ validator passes `UserInvariants.EmailMaxLength` into `EmailRules<RegisterReques
 [`RequiredStringRules<T>`](#requiredstringrulest-optionalstringrulest-emailrulest-positiveintrulest-positivedecimalrulest-nonnegativeintrulest-requiredidrulest-tid-optionalpositiveidrulest-tid-passwordrulest-strongpasswordrulest)
 (`MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Application/Users/Validation/RegisterRequestValidator.cs:16-19`).
 The two password rules are the one place a literal bound is intentional: both pin 8 and 128
-characters (`CommonValidationRules.cs:180-181`, `:193-194`), and
+characters (`CommonValidationRules.cs:179-180`, `:193-194`), and
 [`StrongPasswordRules<T>`](#requiredstringrulest-optionalstringrulest-emailrulest-positiveintrulest-positivedecimalrulest-nonnegativeintrulest-requiredidrulest-tid-optionalpositiveidrulest-tid-passwordrulest-strongpasswordrulest) adds four complexity `Matches` rules for uppercase,
-lowercase, digit, and non-alphanumeric (`CommonValidationRules.cs:195-198`). That pair is
+lowercase, digit, and non-alphanumeric (`CommonValidationRules.cs:194-197`). That pair is
 `[Rubric §11, Security]` territory: the framework offers a weak-by-default floor and a strong
 variant, and the module picks, so a consumer cannot accidentally ship a two-character password field.
 `[Rubric §1, SOLID]` (one rule set, one responsibility; the composite assembles rather than
@@ -114,11 +114,11 @@ are what the whole file is optimizing for.
 
 **One field, one error code.** Every rule class takes an optional trailing `errorCode`, and
 [`OptionalErrorCodeExtensions.WithOptionalErrorCode`](#optionalerrorcodeextensions)
-(`CommonValidationRules.cs:20`, the method at `:30-32`) is the internal helper that applies it:
+(`CommonValidationRules.cs:19`, the method at `:30-32`) is the internal helper that applies it:
 it returns the rule unchanged when the code is `null`, so every existing call site that omits it
 behaves exactly as before, and calls FluentValidation's `WithErrorCode` when one is supplied. The
 code is applied to **every** rule the class declares for that field, so one field answers under one
-code (`CommonValidationRules.cs:12-19`); a field whose separate bounds must answer under distinct
+code (`CommonValidationRules.cs:12-18`); a field whose separate bounds must answer under distinct
 codes still writes its own rules. This is what lets modules subclass a framework rule instead of
 bypassing it: ADC's `SessionEventIdRules<T>` derives from
 [`RequiredIdRules<T, TId>`](#requiredstringrulest-optionalstringrulest-emailrulest-positiveintrulest-positivedecimalrulest-nonnegativeintrulest-requiredidrulest-tid-optionalpositiveidrulest-tid-passwordrulest-strongpasswordrulest) and passes `"Session.EventId.Required"`
@@ -129,17 +129,17 @@ and Store's `ProductCategoryIdRules<T>` derives from
 (`MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.Application/Products/Validation/ProductValidationRules.cs:47-51`).
 The two id rules also encode a deliberate difference in what "missing" means:
 [`RequiredIdRules<T, TId>`](#requiredstringrulest-optionalstringrulest-emailrulest-positiveintrulest-positivedecimalrulest-nonnegativeintrulest-requiredidrulest-tid-optionalpositiveidrulest-tid-passwordrulest-strongpasswordrulest) uses `NotEmpty`, which rejects both `0` for an
-integer key and `Guid.Empty` for a GUID key (`CommonValidationRules.cs:134-140`,
+integer key and `Guid.Empty` for a GUID key (`CommonValidationRules.cs:133-139`,
 `:147`), while [`OptionalPositiveIdRules<T, TId>`](#requiredstringrulest-optionalstringrulest-emailrulest-positiveintrulest-positivedecimalrulest-nonnegativeintrulest-requiredidrulest-tid-optionalpositiveidrulest-tid-passwordrulest-strongpasswordrulest) uses
 `GreaterThan(default(TId))` on a nullable and relies on FluentValidation skipping a comparison rule
 when the property is `null`, so "positive when provided" needs no `When` clause and no per-pass
-recompiled selector (`CommonValidationRules.cs:155-159`, `:166`).
+recompiled selector (`CommonValidationRules.cs:154-158`, `:166`).
 
 **One rule that shares its check with the domain.** [`AbsoluteUrlRules<T>`](#absoluteurlrulest)
-(`CommonValidationRules.cs:86`) is the exception to "rule sets are self-contained": besides the
-length bound it calls `Must(BeAnAbsoluteHttpUrl)` (`CommonValidationRules.cs:91`), and that predicate
+(`CommonValidationRules.cs:85`) is the exception to "rule sets are self-contained": besides the
+length bound it calls `Must(BeAnAbsoluteHttpUrl)` (`CommonValidationRules.cs:90`), and that predicate
 delegates to [`CommonInvariants.EnsureUrlIsWellFormed`](group-02-domain-building-blocks.md#commoninvariants)
-(`CommonValidationRules.cs:93-94`, the invariant at
+(`CommonValidationRules.cs:92-93`, the invariant at
 `MMCA.Common/Source/Core/MMCA.Common.Domain/Invariants/CommonInvariants.cs:293-297`) and keeps only
 its `IsSuccess`. The validator and the domain invariant therefore answer identically, by construction
 rather than by convention. What it buys is concrete: a plain bounded-string treatment accepts
@@ -150,7 +150,7 @@ fields are optional (`CommonInvariants.cs:295`). ADC applies it to every stored 
 sponsor logo, website, and LinkedIn URLs
 (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Sponsors/Validation/SponsorValidationRules.cs:35`,
 `:64`, `:82`), speaker LinkedIn and GitHub URLs
-(`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Speakers/Validation/SpeakerValidationRules.cs:65`,
+(`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Speakers/Validation/SpeakerValidationRules.cs:66`,
 `:84`), and the event sponsorship-packet and ticketing URLs
 (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Events/Validation/EventValidationRules.cs:143`,
 `:105`). `[Rubric §11, Security]` assesses whether untrusted input is constrained at the boundary
@@ -195,7 +195,7 @@ so a UI's state picker and the server validator accept exactly the same codes
 (`UsPostalRegions.cs:6-11`): the 50 states, DC, five territories and three military regions, matched
 case-insensitively with surrounding spaces ignored (`UsPostalRegions.cs:34-35`, `:43`), and a ZIP of
 5 digits or ZIP+4 through a generated, culture-invariant regex with a 100 ms match timeout
-(`UsPostalRegions.cs:66-70`). The country is not checked: the caller decides which addresses are US
+(`UsPostalRegions.cs:66-71`). The country is not checked: the caller decides which addresses are US
 ones, and the plain [`AddressValidator`](#addressvalidator) is left unchanged
 (`UsAddressValidationRules.cs:12-13`). Unlike `AddressValidator`, it has no consumer in ADC, Store, or
 Helpdesk today; a module opts in by attaching it with `SetValidator(new UsAddressValidator())`
@@ -218,7 +218,7 @@ FluentValidation's `AddValidatorsFromAssembly` to pick up every hand-written val
 registers it as `IValidator<TCommand>` with **`TryAddTransient`**, so an explicitly authored command
 validator always wins (`DependencyInjection.ModuleScanning.cs:118-133`). Common's own validators are registered
 separately in `AddApplication` via `AddValidatorsFromAssemblyContaining<ClassReference>()`, because
-the per-module scan only sees the module's own assembly (`MMCA.Common/Source/Core/MMCA.Common.Application/DependencyInjection.cs:45-48`); that call
+the per-module scan only sees the module's own assembly (`MMCA.Common/Source/Core/MMCA.Common.Application/DependencyInjection.cs:56-59`); that call
 is what puts [`AddressValidator`](#addressvalidator) in the container. For a command the reflective
 scan cannot see, for example a closed generic constructed at registration time,
 `AddCommandRequestValidator<TCommand, TRequest>()` (`MMCA.Common/Source/Core/MMCA.Common.Application/DependencyInjection.Crud.cs:220-226`) is the explicit
@@ -244,7 +244,7 @@ and `"Points.Forbidden"` in the two points handlers, for example
 Adopting it moved those codes out of the modules and into framework arguments, which is visible in
 governance: ADC's error-catalog fitness test lowered its scanned-code floor to 57 to account for
 codes the scanner can no longer see as module literals
-(`MMCA.ADC/Tests/Architecture/MMCA.ADC.Architecture.Tests/Contracts/ErrorCatalogTests.cs:89-107`). That is
+(`MMCA.ADC/Tests/Architecture/MMCA.ADC.Architecture.Tests/Contracts/ErrorCatalogTests.cs:90-108`). That is
 `[Rubric §34, Architecture Governance and Documentation]` at work: a shared abstraction is not
 adopted until the tests that measure the codebase are updated to match.
 
@@ -270,7 +270,7 @@ contract the gate emits, and by the architecture fitness tests that keep the lay
 
 ### OptionalErrorCodeExtensions
 
-> MMCA.Common.Application · `MMCA.Common.Application.Validation` · `MMCA.Common/Source/Core/MMCA.Common.Application/Validation/CommonValidationRules.cs:20` · Level 0 · class (internal static)
+> MMCA.Common.Application · `MMCA.Common.Application.Validation` · `MMCA.Common/Source/Core/MMCA.Common.Application/Validation/CommonValidationRules.cs:19` · Level 0 · class (internal static)
 
 - **What it is**: a one-method internal helper that lets every reusable rule fragment in
   `CommonValidationRules.cs` accept an *optional* machine-readable error code without any of them
@@ -288,7 +288,7 @@ contract the gate emits, and by the architecture fitness tests that keep the lay
   an `ErrorCode` meant for a program. Left alone, FluentValidation fills the code with the *validator's*
   name (`"NotEmptyValidator"`, `"MaximumLengthValidator"`), which is useless to a caller that wants to
   branch on "the question text was missing" rather than "some non-empty rule failed somewhere". The
-  class remarks (`CommonValidationRules.cs:12-19`) record the failure mode this helper exists to close:
+  class remarks (`CommonValidationRules.cs:12-18`) record the failure mode this helper exists to close:
   module validators used to skip the shared bases entirely and hand-write the rule chain for the single
   reason that the bases set a message but no code, so a validator needing a stable code had nothing to
   compose with. `[Rubric §9, API & Contract Design]` assesses whether the contract a client codes
@@ -330,16 +330,16 @@ contract the gate emits, and by the architecture fitness tests that keep the lay
 
   | Type | File:Line | Rule chain (all with `.WithOptionalErrorCode(errorCode)` per rule) |
   |------|-----------|-------------------------------------------------------------------|
-  | `RequiredStringRules<T>` | `CommonValidationRules.cs:42` | `NotEmpty()` + `MaximumLength(maxLength)` |
-  | `OptionalStringRules<T>` | `CommonValidationRules.cs:54` | `MaximumLength(maxLength)` only (nullable selector, null passes) |
-  | `EmailRules<T>` | `CommonValidationRules.cs:65` | `NotEmpty()` + `EmailAddress()` + `MaximumLength(maxLength)` |
-  | `PositiveIntRules<T>` | `CommonValidationRules.cs:101` | `GreaterThan(0)` over `int` |
-  | `PositiveDecimalRules<T>` | `CommonValidationRules.cs:112` | `GreaterThan(0)` over `decimal` |
-  | `NonNegativeIntRules<T>` | `CommonValidationRules.cs:123` | `GreaterThanOrEqualTo(0)` over `int` |
-  | `RequiredIdRules<T, TId>` | `CommonValidationRules.cs:143` | `NotEmpty()` over `TId : notnull` (rejects `0` and `Guid.Empty`) |
-  | `OptionalPositiveIdRules<T, TId>` | `CommonValidationRules.cs:162` | `GreaterThan(default(TId))` over `TId?` (null passes) |
-  | `PasswordRules<T>` | `CommonValidationRules.cs:175` | `NotEmpty()` + `MinimumLength(8)` + `MaximumLength(128)` |
-  | `StrongPasswordRules<T>` | `CommonValidationRules.cs:191` | the same 8 to 128 band, read from `PasswordComplexity`, plus four `Matches(...)` over its generated regexes |
+  | `RequiredStringRules<T>` | `CommonValidationRules.cs:41` | `NotEmpty()` + `MaximumLength(maxLength)` |
+  | `OptionalStringRules<T>` | `CommonValidationRules.cs:53` | `MaximumLength(maxLength)` only (nullable selector, null passes) |
+  | `EmailRules<T>` | `CommonValidationRules.cs:64` | `NotEmpty()` + `EmailAddress()` + `MaximumLength(maxLength)` |
+  | `PositiveIntRules<T>` | `CommonValidationRules.cs:100` | `GreaterThan(0)` over `int` |
+  | `PositiveDecimalRules<T>` | `CommonValidationRules.cs:111` | `GreaterThan(0)` over `decimal` |
+  | `NonNegativeIntRules<T>` | `CommonValidationRules.cs:122` | `GreaterThanOrEqualTo(0)` over `int` |
+  | `RequiredIdRules<T, TId>` | `CommonValidationRules.cs:142` | `NotEmpty()` over `TId : notnull` (rejects `0` and `Guid.Empty`) |
+  | `OptionalPositiveIdRules<T, TId>` | `CommonValidationRules.cs:161` | `GreaterThan(default(TId))` over `TId?` (null passes) |
+  | `PasswordRules<T>` | `CommonValidationRules.cs:174` | `NotEmpty()` + `MinimumLength(8)` + `MaximumLength(128)` |
+  | `StrongPasswordRules<T>` | `CommonValidationRules.cs:190` | the same 8 to 128 band, read from `PasswordComplexity`, plus four `Matches(...)` over its generated regexes |
 
   The eleventh class in the file, [`AbsoluteUrlRules<T>`](#absoluteurlrulest), is a Level 6 sibling
   (it reaches into a domain invariant) and is covered separately.
@@ -429,7 +429,7 @@ contract the gate emits, and by the architecture fitness tests that keep the lay
 
 - **Where it's used**: modules consume them two ways. **By subclassing**, to bind a domain's invariant
   constant and error code once: `SpeakerFirstNameRules<T> : RequiredStringRules<T>`
-  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Speakers/Validation/SpeakerValidationRules.cs:12-17`),
+  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Speakers/Validation/SpeakerValidationRules.cs:13-18`),
   `SponsorEventIdRules<T> : RequiredIdRules<T, EventIdentifierType>`
   (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Sponsors/Validation/SponsorValidationRules.cs:116-121`),
   `ProductCategoryIdRules<T> : OptionalPositiveIdRules<T, CategoryIdentifierType>`
@@ -446,7 +446,7 @@ contract the gate emits, and by the architecture fitness tests that keep the lay
   before the handler runs. Behavior is pinned by `CommonValidationRulesTests` in
   [group-27](group-29-testing-infrastructure.md#per-project-test-rollup), which exercises both the
   message and the optional-code path for each fragment
-  (`MMCA.Common/Tests/Core/MMCA.Common.Application.Tests/Validation/CommonValidationRulesTests.cs:468-566`).
+  (`MMCA.Common/Tests/Core/MMCA.Common.Application.Tests/Validation/CommonValidationRulesTests.cs:389-478`).
 
 ### UsCityRules<T>
 
@@ -608,7 +608,7 @@ contract the gate emits, and by the architecture fitness tests that keep the lay
   `Must(UsPostalRegions.IsValidZipCode)` with "Zip Code must be 5 digits or ZIP+4 (12345-6789)"
   (`:57`). `IsValidZipCode` trims the value and matches it against a `[GeneratedRegex]`
   `^\d{5}(-\d{4})?$` declared `CultureInvariant | ExplicitCapture` with a 100 ms match timeout
-  (`UsPostalRegions.cs:66-70`). No `errorCode` parameter.
+  (`UsPostalRegions.cs:66-71`). No `errorCode` parameter.
 
 - **Why it's built this way**: the pattern lives beside the region codes in Shared rather than inline
   in the rule, so the format check is one definition any layer can call.
@@ -765,7 +765,7 @@ contract the gate emits, and by the architecture fitness tests that keep the lay
   `Address` property (`AddressValidationRules.cs:17-19`, `:22`). They are covered directly by
   `AddressValidationRulesTests` in
   [group-27](group-29-testing-infrastructure.md#per-project-test-rollup)
-  (`MMCA.Common/Tests/Core/MMCA.Common.Application.Tests/Validation/AddressValidationRulesTests.cs:19`,
+  (`MMCA.Common/Tests/Core/MMCA.Common.Application.Tests/Validation/AddressValidationRulesTests.cs:20`,
   `:55`, `:82`, `:130`).
 
 - **Caveats / not-in-source**: an earlier edition of this guide described these fragments as derived
@@ -801,7 +801,7 @@ contract the gate emits, and by the architecture fitness tests that keep the lay
   fragment over a throwaway model, which is what
   [`AddressValidationRulesTests`](group-29-testing-infrastructure.md#per-project-test-rollup) does
   before also exercising the assembled composite
-  (`MMCA.Common/Tests/Core/MMCA.Common.Application.Tests/Validation/AddressValidationRulesTests.cs:10`
+  (`MMCA.Common/Tests/Core/MMCA.Common.Application.Tests/Validation/AddressValidationRulesTests.cs:11`
   holds the shared `AddressValidator` instance; `:144` is the all-fields-valid case).
 - **Walkthrough**: the constructor (`AddressValidationRules.cs:15-23`) runs six statements in property
   order: `Include(new AddressLine1Rules<Address>(p => p.AddressLine1))` (`:17`), then
@@ -842,7 +842,7 @@ contract the gate emits, and by the architecture fitness tests that keep the lay
   behaviour of this validator.
 
 ### AbsoluteUrlRules<T>
-> MMCA.Common.Application · `MMCA.Common.Application.Validation` · `MMCA.Common/Source/Core/MMCA.Common.Application/Validation/CommonValidationRules.cs:86` · Level 6 · class
+> MMCA.Common.Application · `MMCA.Common.Application.Validation` · `MMCA.Common/Source/Core/MMCA.Common.Application/Validation/CommonValidationRules.cs:85` · Level 6 · class
 
 - **What it is**: a reusable fragment for an **optional URL** field. It applies two rules: a maximum
   length, and a check that any supplied value is an absolute `http` or `https` URI. A `null` or empty
@@ -855,7 +855,7 @@ contract the gate emits, and by the architecture fitness tests that keep the lay
   what puts this fragment at Level 6 while its file-mates sit at Level 0.
 - **Concept introduced, delegating a validator predicate to the domain invariant.**
   `[Rubric §11, Security]` assesses whether untrusted input is constrained before it reaches a sink.
-  The rule's own doc comment states the threat plainly (`CommonValidationRules.cs:78-84`): a
+  The rule's own doc comment states the threat plainly (`CommonValidationRules.cs:77-83`): a
   length-only bound accepts `javascript:` and `data:` values, and those become executable the moment a
   link `href` or an image `src` renders them. The scheme check is therefore not cosmetic URL hygiene,
   it is the boundary control for stored script injection through a user-supplied link.
@@ -867,13 +867,13 @@ contract the gate emits, and by the architecture fitness tests that keep the lay
   implementation of the scheme test, it calls the domain invariant, so the request-level answer and the
   entity-level answer cannot diverge.
 - **Walkthrough**:
-  - The constructor (`CommonValidationRules.cs:88-91`) takes
+  - The constructor (`CommonValidationRules.cs:87-90`) takes
     `(Expression<Func<T, string?>> selector, string fieldName, int maxLength, string? errorCode = null)`
     and builds a single chain: `MaximumLength(maxLength)` with the interpolated
     "{fieldName} cannot be longer than {maxLength} characters" message, then `.Must(BeAnAbsoluteHttpUrl)`
     with "{fieldName} must be an absolute http or https URL". Each rule ends in
     `.WithOptionalErrorCode(errorCode)` (`:89`, `:90`), which returns the rule untouched when the code
-    is `null` (`CommonValidationRules.cs:31-33`), so every existing caller that omits it keeps
+    is `null` (`CommonValidationRules.cs:30-32`), so every existing caller that omits it keeps
     FluentValidation's default per-rule code.
   - The length message uses `string.Create(CultureInfo.InvariantCulture, ...)` while the scheme message
     is a plain interpolation: the first embeds a number and so pins the culture, the second embeds only
@@ -916,7 +916,7 @@ contract the gate emits, and by the architecture fitness tests that keep the lay
   [`SponsorWebsiteUrlRules<T>`](group-18-conference-application.md#sponsorwebsiteurlrulest) (`:64`),
   the sponsor LinkedIn rule (`:82`),
   [`SpeakerLinkedInUrlRules<T>`](group-18-conference-application.md#speakerlinkedinurlrulest)
-  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Speakers/Validation/SpeakerValidationRules.cs:65`),
+  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Speakers/Validation/SpeakerValidationRules.cs:66`),
   [`SpeakerGitHubUrlRules<T>`](group-18-conference-application.md#speakergithuburlrulest) (`:84`) and
   the speaker website rule (`:103`),
   [`ActivityVenueUrlRules<T>`](group-18-conference-application.md#activityvenueurlrulest)
@@ -925,7 +925,7 @@ contract the gate emits, and by the architecture fitness tests that keep the lay
   (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Events/Validation/EventValidationRules.cs:143`).
   Each wrapper supplies its own module max-length constant. Direct coverage lives in
   [`CommonValidationRulesTests`](group-29-testing-infrastructure.md#per-project-test-rollup)
-  (`MMCA.Common/Tests/Core/MMCA.Common.Application.Tests/Validation/CommonValidationRulesTests.cs:593`
+  (`MMCA.Common/Tests/Core/MMCA.Common.Application.Tests/Validation/CommonValidationRulesTests.cs:486`
   for the passing shapes, `:580` for rejected schemes, `:592` for the length bound, and `:604` for the
   supplied-error-code path).
 - **Caveats / not-in-source**: the rule constrains the scheme only. It does not check that the host
@@ -963,7 +963,7 @@ contract the gate emits, and by the architecture fitness tests that keep the lay
   (`MMCA.Common/Source/Core/MMCA.Common.Shared/ValueObjects/Contact/UsPostalRegions.cs:35`, `:43`)
   over the 50 states, DC, five territories and three military regions (`UsPostalRegions.cs:6-9`); the
   ZIP check is the source-generated pattern `^\d{5}(-\d{4})?$` with a 100 ms match timeout
-  (`UsPostalRegions.cs:66-70`), applied to the trimmed value.
+  (`UsPostalRegions.cs:66-71`), applied to the trimmed value.
 - **Why it's built this way**: `UsPostalRegions` lives in Shared so that a UI state picker and this
   server-side validator accept exactly the same codes (`UsPostalRegions.cs:9-10`). Keeping the general
   validator lenient and making the US one a separate opt-in leaves city, state and ZIP optional for
@@ -1014,7 +1014,7 @@ contract the gate emits, and by the architecture fitness tests that keep the lay
   the `message`, the caller-supplied `source` becomes the `source`, and its `PropertyName` becomes the
   `target`. `Error.Validation` is declared
   `Validation(string code, string message, string? source = null, string? target = null)` in
-  `MMCA.Common/Source/Core/MMCA.Common.Shared/Abstractions/Error.cs:37`, so `PropertyName` lands in the
+  `MMCA.Common/Source/Core/MMCA.Common.Shared/Abstractions/Error.cs:45`, so `PropertyName` lands in the
   `target` slot, identifying *which* field failed while `source` identifies *what operation* was being
   validated. The method returns `IEnumerable<Error>` lazily; the caller materializes it.
 
@@ -1108,7 +1108,7 @@ contract the gate emits, and by the architecture fitness tests that keep the lay
   [`Error`](group-01-result-error-handling.md#error) record directly rather than through a factory, because
   the classification is a caller-supplied parameter here and the factories
   (`Error.Forbidden`, `Error.Unauthorized` at
-  `MMCA.Common/Source/Core/MMCA.Common.Shared/Abstractions/Error.cs:82` and `:73`) each hard-code one
+  `MMCA.Common/Source/Core/MMCA.Common.Shared/Abstractions/Error.cs:90` and `:73`) each hard-code one
   `ErrorType`. `Result.Failure<T>(Error)` wraps the single error into the result's error list
   (`MMCA.Common/Source/Core/MMCA.Common.Shared/Abstractions/Result.cs:101`).
 
@@ -1119,7 +1119,7 @@ contract the gate emits, and by the architecture fitness tests that keep the lay
   `"Points.Forbidden"` out of module-side `Error` factory calls and into arguments of this framework
   member made them invisible to the IL literal scan that counts ADC's error codes, which is part of why
   `ErrorCatalogTests.MinimumErrorCodes` sits at 57
-  (`MMCA.ADC/Tests/Architecture/MMCA.ADC.Architecture.Tests/Contracts/ErrorCatalogTests.cs:96-107`). The codes ship
+  (`MMCA.ADC/Tests/Architecture/MMCA.ADC.Architecture.Tests/Contracts/ErrorCatalogTests.cs:97-108`). The codes ship
   unchanged; only the scanner's visibility of them changed.
 
 - **Where it's used**: six ADC Engagement handlers call it as their first statement after the null guard,

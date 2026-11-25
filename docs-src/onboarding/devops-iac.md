@@ -539,17 +539,17 @@ per-service `OTEL_SERVICE_NAME` (e.g. `'identity'`, `'conference'`). The `OTEL_S
 var is what Azure Monitor maps to the Cloud Role Name, without it, all services appear as
 `"unknown_service"` in the Application Map.
 
-`MMCA.Common.Azure`'s `AddAzureMonitorExporter`, which every host calls after
+`MMCA.Common.Azure.Startup`'s `AddAzureMonitorExporter`, which every host calls after
 `AddServiceDefaults`, exports to Azure Monitor whenever `APPLICATIONINSIGHTS_CONNECTION_STRING` is
 present (`main.bicep:250-255` comment;
-`MMCA.Common/Source/Hosting/MMCA.Common.Azure/AzureMonitorExporterExtensions.cs:42`), so
+`MMCA.Common/Source/Hosting/MMCA.Common.Azure.Startup/AzureMonitorExporterExtensions.cs:42`), so
 OpenTelemetry spans, logs, and metrics reach Azure Monitor in production with one registration call
 per host. The ordering is enforced rather than advised: called before `AddServiceDefaults`, the
 method throws, because the outbox-poll and probe filter processors that service defaults register
 must run before the exporter's batch processor, or the spans they drop are exported anyway
 (`AzureMonitorExporterExtensions.cs:44-52`). The call also registers the marker the core startup
 tripwire checks, so a host that receives the connection string without making the call fails at
-startup instead of running with no telemetry export (`AzureMonitorExporterExtensions.cs:54-56`).
+startup instead of running with no telemetry export (`AzureMonitorExporterExtensions.cs:61-63`).
 
 Seven more shared env entries ride along with the connection string on every app, and all of them
 are cost controls, six on the pay-per-GB workspace and one on the Container Apps compute bill:
@@ -591,7 +591,7 @@ are cost controls, six on the pay-per-GB workspace and one on the Container Apps
   inbound against 1,000), so 64% of vCPU-seconds billed at the active rate, eight times the idle
   rate. The key lives under `AzureMonitor`, not `Telemetry`, because the distro binds its own
   `AzureMonitor` configuration section, and MMCA.Common pins that the key actually reaches it
-  (`MMCA.Common/Tests/Hosting/MMCA.Common.Azure.Tests/Telemetry/LiveMetricsConfigurationTests.cs:21`),
+  (`MMCA.Common/Tests/Hosting/MMCA.Common.Azure.Startup.Tests/Telemetry/LiveMetricsConfigurationTests.cs:28-30`),
   so a distro change that stopped honoring it fails a test instead of silently restoring the chatter.
 - `OTEL_METRIC_EXPORT_INTERVAL: '300000'` (`main.bicep:318-321`) is the second stage of the
   AppMetrics cost control, and it works on cadence rather than on instrument selection. AppMetrics remained
@@ -751,49 +751,47 @@ duplicated here. Note the coverage boundary, which the runbook itself spells out
 and the availability alert below are provisioned but ungated, and their triage deliberately sits
 under `####` headings so the parser does not read them as SLO runbook sections.
 
-### Operational and availability alerts (`main.bicep:574-726`, `:838-918`)
+### Operational and availability alerts (`main.bicep:606-873`, `:1058-1133`)
 
-Beyond the six SLOs, `main.bicep` provisions **eight** more scheduled query rules from
-`scheduledQueryAlertSpecs` (`main.bicep:624-673`, materialized at `:675-707`), all severity 2 on a
-15-minute evaluation over a 15-minute window (`main.bicep:682-686`), each a `Count` of its query's
-rows compared against the spec's `threshold` (`main.bicep:691-694`):
+Beyond the six SLOs, `main.bicep` provisions **nine** more scheduled query rules from
+`scheduledQueryAlertSpecs` (`main.bicep:663-721`, materialized at `:723-755`), all severity 2 on a
+15-minute evaluation over a 15-minute window (`main.bicep:730-734`), each a `Count` of its query's
+rows compared against the spec's `threshold` (`main.bicep:740-742`). The comment block above them
+(`main.bicep:609-662`) records one rule every query follows: a log call that passes an exception is
+exported as an `AppExceptions` row, never an `AppTraces` row, so a rule over a log that can carry an
+exception reads both tables.
 
-- `outbox-dead-letter` (`main.bicep:625-630`, comment at `:580-584`) fires on **any** hit
-  (`threshold: 0`) of an `AppTraces` row at Error or above whose message contains `dead-lettered`.
-  An outbox message that exhausted its retries means an integration event was permanently lost. It
-  fires only once a message has used every retry, so a processor that is slow or stuck never trips
-  it: `outbox-backlog-age` below covers that case.
-- `sql-dependency-failures` (`main.bicep:631-636`) fires above 10 failed SQL dependency calls. Every
+- `outbox-dead-letter` (`main.bicep:664-672`, comment at `:614-619`) fires on **any** hit
+  (`threshold: 0`) of an `AppTraces` or `AppExceptions` row at Error or above containing
+  `dead-lettered`. The retries-exhausted line passes the last exception, so it lands in
+  `AppExceptions`; the type-unresolvable line does not, so it lands in `AppTraces`. An outbox
+  message that exhausted its retries means an integration event was permanently lost. The query
+  excludes rows starting `Integration event` (`main.bicep:667-670`), the broker receive pipeline's
+  own dead-letter line, because the broker dead-letter metric alert below owns that signal and one
+  consumer failure should raise one alert, not two. It fires only once a message has used every
+  retry, so a processor that is slow or stuck never trips it: `outbox-backlog-age` below covers that
+  case.
+- `sql-dependency-failures` (`main.bicep:673-678`) fires above 10 failed SQL dependency calls. Every
   service owns exactly one database, so a burst here means a service cannot reach its own DB, which
   also stalls its outbox drain.
-- `revision-activation-failed` (`main.bicep:637-642`) is the most instructive of the four, because it exists to catch a failure the rest of the alerting stack is blind to. It
-  queries `ContainerAppSystemLogs_CL` for `Reason_s startswith "Deployment Progress Deadline
-  Exceeded"` and fires on any hit. When a revision's readiness probe never goes green, Container
-  Apps keeps the **previous** revision serving: nothing outside-in degrades, every SLO stays quiet,
-  and the deploy looks fine while the newly built code never takes traffic. The comment names the
-  incident that motivated it (`main.bicep:514-519`): the 2026-08-29 Redis readiness regression,
-  where an untagged infrastructure health check failed `/health/ready` on every backend and the
-  older revision kept 100% of the traffic for days. The rule works at all only because the
-  environment's `appLogsConfiguration` sends platform system logs to the same workspace.
-- `signalr-backplane-errors` (`main.bicep:643-648`, comment at `:595-602`) is the newest, added with
-  the conference-day multi-replica work. It fires on any `AppTraces` row at Warning or above
-  (`SeverityLevel >= 2`) whose `Properties.CategoryName` starts with
-  `Microsoft.AspNetCore.SignalR.StackExchangeRedis`. The failure it catches is silent by design: when
-  the Notification backplane loses Redis, each replica keeps serving its own connections, so a push
-  issued on one replica stops reaching clients held by another, and readiness stays green on purpose,
-  because making Redis a readiness dependency would take the whole hub down during a blip. The
-  comment also states why the query can see the signal at all: `otelLogLevelEnv` exports Warning and
-  above, and Notification sets no category override below that.
-- `broker-error-queue` (`main.bicep:649-654`, comment at `:603-609`) is the consumer-side twin of
-  `outbox-dead-letter`. When a MassTransit consumer exhausts its in-process retries **and** the
-  delayed redeliveries, the message moves to its endpoint's `_error` queue and `MMCA.Common`'s
-  `FaultIntegrationEventConsumer` logs at Error that it "was moved to the error queue". The rule fires
-  on any `AppTraces` row at Error or above containing that static part of the log template, so it
-  holds whatever the event type or reason. The two rules split the delivery path between them: the
-  outbox rule means an event never left the producer, this one means an event reached the consuming
-  service and was never applied. The triage and replay procedure is in the runbook's "Error queue"
-  section (`OPERATIONS.md:232`).
-- `outbox-backlog-age` (`main.bicep:655-660`, comment at `:610-616`) reads `AppMetrics` rather than
+- `revision-activation-failed` (`main.bicep:679-684`) exists to catch a failure the rest of the
+  alerting stack is blind to. It queries `ContainerAppSystemLogs_CL` for `Reason_s startswith
+  "Deployment Progress Deadline Exceeded"` and fires on any hit. When a revision's readiness probe
+  never goes green, Container Apps keeps the **previous** revision serving: nothing outside-in
+  degrades, every SLO stays quiet, and the deploy looks fine while the newly built code never takes
+  traffic. The comment names the incident that motivated it (`main.bicep:624-629`): the 2026-08-29
+  Redis readiness regression. The rule works at all only because the environment's
+  `appLogsConfiguration` sends platform system logs to the same workspace.
+- `signalr-backplane-errors` (`main.bicep:685-690`, comment at `:630-638`) fires on any
+  `AppTraces` or `AppExceptions` row at Warning or above (`SeverityLevel >= 2`) whose
+  `Properties.CategoryName` starts with `Microsoft.AspNetCore.SignalR.StackExchangeRedis`; the
+  connection-failure line carries its exception, so it lands in `AppExceptions`. The failure it
+  catches is silent by design: when the Notification backplane loses Redis, each replica keeps
+  serving its own connections, so a push issued on one replica stops reaching clients held by
+  another, and readiness stays green on purpose, because making Redis a readiness dependency would
+  take the whole hub down during a blip. `otelLogLevelEnv` exports Warning and above, and
+  Notification sets no category override below that.
+- `outbox-backlog-age` (`main.bicep:691-696`, comment at `:641-647`) reads `AppMetrics` rather than
   `AppTraces`: it fires when `MMCA.Common`'s `outbox.oldest_pending.age` gauge, the age in seconds
   of the oldest deliverable row per data source, reports a `Max` above 900. Delivery normally takes
   seconds and the 300-second fallback poll bounds an idle source, so a row older than 15 minutes
@@ -802,57 +800,82 @@ rows compared against the spec's `threshold` (`main.bicep:691-694`):
   also names its blind spot: the gauge is sampled at the start of each processing cycle, so a
   processor that stops cycling freezes it at its last value, and a dead host is left to the
   availability and SQL rules.
-- `outbox-broker-circuit-open` (`main.bicep:661-666`, comment at `:617-620`) fires when the
+- `outbox-broker-circuit-open` (`main.bicep:697-702`, comment at `:648-651`) fires when the
   `broker.circuit.open.count` metric has a `Sum` above zero. The outbox's own broker circuit breaker
   is built without Polly telemetry, so the resilience-circuit-open SLO rule cannot see it; any
   opening means publishes to Service Bus are failing fast and every service's outbox is backing up
   behind it.
-- `live-broadcast-dropped` (`main.bicep:667-672`, comment at `:621-623`) fires on any `AppTraces`
+- `live-broadcast-dropped` (`main.bicep:703-708`, comment at `:652-654`) fires on any `AppTraces`
   row at Warning or above containing "Live channel broadcast dropped under backpressure", the line
   Engagement's `LiveChannelPublishQueue` logs each time it drops a live broadcast (poll results,
   question updates). Attendees see a stale live view while nothing fails outright, so that drop line
   is the only signal.
+- `native-push-failed` (`main.bicep:709-714`, comment at `:655-658`) fires on any `AppExceptions`
+  row at Warning or above whose template contains "native (OS-level) delivery failed", the line
+  MMCA.Common's `SendPushNotificationHandler` logs with the send exception. The Notification Hubs
+  sender attempts every chunk on both platforms before rethrowing, so one hit means some recipients
+  missed the OS notification while the inbox and SignalR legs still delivered.
+- `internal-command-backlog-age` (`main.bicep:715-720`, comment at `:659-662`) is the
+  internal-command twin of `outbox-backlog-age`: MMCA.Common's `internal_commands.oldest_due.age`
+  gauge reporting a `Max` above 900 seconds. Production polls every 60 seconds, so a row 15 minutes
+  overdue means the processor is wedged or a handler keeps failing short of its last attempt.
 
-Every one of the eight has a `####` triage section in the runbook (`OPERATIONS.md:189`, `:232`,
-`:279`, `:305`, `:335`, `:364`, `:385`, `:400`), and so do the ingestion-cap rule below
-(`OPERATIONS.md:418`) and the two security rules (`OPERATIONS.md:454`, `:496`). They sit under `####` headings inside "Operational
-alert runbooks" (`OPERATIONS.md:174`) precisely so the SLO parser does not read them as SLO sections,
-which is the ungated coverage boundary described above.
+**The consumer-side twin of `outbox-dead-letter` is a metric alert, not a log query**
+(`brokerDeadLetterAlert`, `main.bicep:757-821`). The native transport delivers every event a host
+consumes to that host's one queue, and its receive pipeline dead-letters a message it gives up on
+(every retry and scheduled redelivery spent, a body that does not deserialize, an event the host has
+no subscription for) into that queue's native dead-letter sub-queue, where Service Bus also puts a
+message past the queue's max delivery count (`main.bicep:760-767`). The comment explains why the
+signal is the namespace metric (`main.bicep:769-777`): `DeadletteredMessages`, split by
+`EntityName`, counts what is sitting in each dead-letter sub-queue, so it catches every one of those
+causes, while the pipeline's own log covers only the first at Error (the poison and unknown-event
+cases log at Warning and the broker's max-delivery dead letters log nothing). The rule is severity 2,
+`Maximum > 0` over a `PT15M` window, filtered to the three host queues (`main.bicep:798-811`), so it
+fires while anything waits in any of them and resolves once an operator has replayed or discarded
+it. The two rules split the delivery path: the outbox rule means an event never left the producer,
+this one means an event reached the consuming service and was never applied.
 
-**A standalone rule watches the detector itself** (`main.bicep:695-726`, added 2026-09-07 as
-SEC-ADC-47). `logIngestionCapAlert` is named `${prefix}-alert-log-ingestion-cap-reached`, fires at
-severity 2 on any hit, and queries `_LogOperation` for an `Ingestion` / `Data collection Status`
-record whose `Detail` contains `OverQuota` **or** `ApproachingQuota` (`main.bicep:711`). The second
-term is the early warning, the one Store's equivalent rule already reads (`main.bicep:693-694`): it
-gives an operator the chance to raise the cap or stop the source before ingestion goes dark, rather
-than learning about the blind detector after the fact. Three decisions in it are worth
-reading:
+Every one of the nine log rules and the broker dead-letter rule has a `####` triage section in the
+runbook (`MMCA.ADC/infra/OPERATIONS.md:198`, `:249`, `:360`, `:386`, `:416`, `:446`, `:467`, `:487`,
+`:505`, `:524`), and so do the ingestion-cap rule below (`OPERATIONS.md:543`), the three security
+rules (`OPERATIONS.md:580`, `:640`, `:663`) and the availability alert (`OPERATIONS.md:693`). They
+sit under `####` headings inside "Operational alert runbooks" (`OPERATIONS.md:177`) precisely so the
+SLO parser does not read them as SLO sections, which is the ungated coverage boundary described
+above.
 
-- **Why it exists at all** (`main.bicep:578-583`). Every other rule on this page queries the Log
+**A standalone rule watches the detector itself** (`main.bicep:822-873`, SEC-ADC-47).
+`logIngestionCapAlert` is named `${prefix}-alert-log-ingestion-cap-reached`, fires at severity 2 on
+any hit, and queries `_LogOperation` for an `Ingestion` / `Data collection Status` record whose
+`Detail` contains `OverQuota` **or** `ApproachingQuota` (`main.bicep:858`). The second term is the
+early warning, the one Store's equivalent rule already reads (`main.bicep:840-841`): it gives an
+operator the chance to raise the cap or stop the source before ingestion goes dark, rather than
+learning about the blind detector after the fact. Three decisions in it are worth reading:
+
+- **Why it exists at all** (`main.bicep:825-830`). Every other rule on this page queries the Log
   Analytics workspace, and the workspace has a daily ingestion cap (`foundation.bicep:53-55`). Once
   that cap is reached, ingestion stops for the rest of the UTC day and all of those rules evaluate
   empty data: the failure mode is not a missed alert, it is a blind detector that keeps reporting
   healthy. That also makes tripping the cap a viable first move for an attacker, which is why the
   cap itself pages.
-- **Why `_LogOperation`** (`main.bicep:585-588`). That table is **cap-exempt**: it keeps recording
+- **Why `_LogOperation`** (`main.bicep:832-835`). That table is **cap-exempt**: it keeps recording
   after ingestion stops, which is the only reason a rule can fire at the moment it matters.
   Application tables (`AppRequests`, `AppTraces`, and the rest) cannot be exempted individually, so
   alerting on the cap event is the available control rather than table-level carve-outs.
-- **Why `windowSize: 'PT1H'` against `evaluationFrequency: 'PT15M'`** (`main.bicep:590-592`,
-  `:603-604`). The cap-reached record is written **once**. Overlapping windows are what stop an
+- **Why `windowSize: 'PT1H'` against `evaluationFrequency: 'PT15M'`** (`main.bicep:837-839`,
+  `:852-853`). The cap-reached record is written **once**. Overlapping windows are what stop an
   ingestion-latency skew from dropping that single row between two non-overlapping 15-minute
   buckets.
 
 An outside-in availability signal sits alongside them: a standard URL-ping web test
-(`main.bicep:632-664`) probes the public Gateway `/health` every **900 seconds** from three Azure
+(`main.bicep:1071-1102`) probes the public Gateway `/health` every **900 seconds** from three Azure
 locations (East US, North Central US, South Central US), bound to the App Insights component via a
-`hidden-link` tag. The cadence was 300 seconds until 2026-09-02, and the template records the
-trade (`main.bicep:626-631`): standard web tests bill per location-execution, three locations every
-five minutes came to $13.39/month on this subscription, and the **locations are unchanged**, so the
-2-of-3 confirmation that keeps a single-location blip from paging is intact and only detection
-latency moves, from about 5 minutes to about 15.
+`hidden-link` tag. The template records the cadence trade (`main.bicep:1065-1070`): standard web
+tests bill per location-execution, three locations every five minutes came to $13.39/month on this
+subscription, and the **locations are unchanged**, so the 2-of-3 confirmation that keeps a
+single-location blip from paging is intact and only detection latency moves, from about 5 minutes
+to about 15.
 
-Its severity **1** alert (`main.bicep:665-703`) fires on a `failedLocationCount` of 2, and its
+Its severity **1** alert (`main.bicep:1104-1133`) fires on a `failedLocationCount` of 2, and its
 window had to move with the probe: `evaluationFrequency: 'PT15M'` over `windowSize: 'PT15M'`. The
 reason is worth reading, because it is the failure mode a naive cadence change would have
 introduced: at `Frequency: 900` each location reports once
@@ -873,36 +896,57 @@ islands, and total entry-point outage. The 2026-09-02
 cadence changes are the honest counterweight: this stack now trades roughly ten minutes of detection
 latency for a materially smaller monitoring bill, and the deploy-time gates carry the fast path.
 
-### Security signals: auth-failure spike and 403 burst (`main.bicep:727-833`)
+### Security signals: auth-failure spike, 403 burst and key-ring access (`main.bicep:875-1056`)
 
-Two standalone scheduled-query rules watch the same request traffic from the **security** side,
-ported from Store's SEC-Store-54 (`main.bicep:729`). The template states why they exist
-(`main.bicep:728-762`): every other request-based rule is an availability signal, and
+Standalone scheduled-query rules watch the same request traffic from the **security** side, the
+first two ported from Store's SEC-Store-54 (`main.bicep:876`). The template states why they exist
+(`main.bicep:884-888`): every other request-based rule is an availability signal, and
 `failed-requests` deliberately excludes 401 (with 404, 429 and 499). That exclusion is SLO noise
 reduction and stays as it is, but its side effect is that a credential-stuffing run against the login
 route produces nothing but filtered-out 401s and pages nobody. Watching the traffic separately keeps
 the SLO query untouched.
 
-- `${prefix}-alert-auth-failure-spike` (`main.bicep:763-794`) counts `AppRequests` answering 401
-  **or** 429 whose `Url` or `Name` contains `/Auth` (`main.bicep:779`) and fires at severity 2 above
-  **50** (`main.bicep:782`). It counts 429 as well because ADR-029 account lockout and the gateway's
-  auth-tight limiter both answer 429, so a burst here can mean an attacker locking real users out as
-  much as one guessing passwords. The threshold is reasoned against the hop count: the path is
-  recorded at both the Gateway and the Identity service, so 50 rows is roughly 25 real failed
-  sign-ins, far above expired-token noise and far below what one IP can produce under auth-tight
-  (30/min/IP, up to 450 per window), so a distributed low-and-slow campaign still trips it.
-- `${prefix}-alert-forbidden-burst` (`main.bicep:802-833`) fires on more than **20** `403` rows
-  (`main.bicep:821`) at severity **3** (`main.bicep:809`). A 403 means the caller authenticated and
-  was then denied by permission policy, which in normal operation is close to zero because the UI does
-  not offer actions a user lacks the permission for; a burst means a replayed token probing resources
-  it does not own, or a permission regression shipped by a deploy (`main.bicep:796-801`). Severity 3
-  marks it as an investigate signal, not a page-at-night one.
+Both request rules measure a **value**, not a row count (`main.bicep:898-909`). Every host samples
+traces at 25%, so one `AppRequests` row may stand for several real requests; request rows are
+therefore weighted by their `ItemCount` column and still halved for the two hops (Gateway and
+service), and failed password sign-ins come from the `mmca.auth.signin` counter, a metric that head
+sampling never touches.
+
+- `${prefix}-alert-auth-failure-spike` (`main.bicep:925-957`) sums two parts (`main.bicep:941`):
+  failed password sign-ins from `mmca.auth.signin` with outcome `invalid_credentials` or
+  `locked_out` (ADR-029 lockout), counted once at Identity, plus every **other** 401 or 429 on an
+  `/Auth` route, `ItemCount`-weighted and halved, with `/Auth/login` left out because its failures
+  are already the counter half. It fires at severity 2 above **25** (`main.bicep:945`), the
+  real-failure level the rule always meant (`main.bicep:918-924`). The gateway's own auth-tight 429s
+  on `/Auth/login` never reach Identity, so a single-IP flood there is the request-rejections rule's
+  to page; a distributed low-and-slow campaign, each failure of which reaches Identity, is what this
+  rule is for.
+- `${prefix}-alert-forbidden-burst` (`main.bicep:966-998`) fires on more than **20**
+  `ItemCount`-weighted `403` rows (`main.bicep:982-986`), roughly 10 real denials after the hop
+  double count, at severity **3** (`main.bicep:973`). A 403 means the caller authenticated and was
+  then denied by permission policy, which in normal operation is close to zero because the UI does
+  not offer actions a user lacks the permission for; a burst means a replayed token probing
+  resources it does not own, or a permission regression shipped by a deploy
+  (`main.bicep:959-965`). Severity 3 marks it as an investigate signal, not a page-at-night one.
+- `${prefix}-alert-key-ring-access` (`main.bicep:1025-1056`) watches the private
+  `dataprotection-keys` container, whose `keys.xml` protects every session cookie and antiforgery
+  token (`main.bicep:1000-1011`). It reuses the blob audit stream the storage account already sends
+  to `StorageBlobLogs`, so it adds no ingestion, and fires at severity 2 on any **successful**
+  request there that is not OAuth from one of the three expected identities (the shared apps
+  identity kept as the rollback identity, and the identity and UI app identities), which covers the
+  account key and a SAS (`main.bicep:1041`). Two query details were measured against the workspace
+  (`main.bicep:1013-1018`): `StatusCode` is a string column, so it is cast with `toint()` (a numeric
+  comparison is a semantic error that fails the whole deployment at apply time), and `TrustedAccess`
+  is excluded with `Anonymous` because it is the storage resource provider acting for a template
+  deployment, which would otherwise fire the rule on every deploy. The audit-trail DELETE half is
+  deliberately left out until the services sign in with their own SQL identities
+  (`main.bicep:1020-1024`).
 
 Three choices are worth noticing. They are standalone resources rather than
 `scheduledQueryAlertSpecs` entries because that loop pins severity 2 and the 403 burst is severity 3,
 and they are declared outside the `sloAlertSpecs`..`sloAlerts` parse window so the fitness test does
-not demand an SLO runbook section for them; their triage sits under `####` headings instead
-(`OPERATIONS.md:399`, `:441`). There is no dedicated 429 rule, because `request-rejections` already
+not demand an SLO runbook section for them (`main.bicep:878-882`); their triage sits under `####`
+headings instead (`MMCA.ADC/infra/OPERATIONS.md:580`, `:640`, `:663`). There is no dedicated 429 rule, because `request-rejections` already
 pages on a sustained 404/429 volume, and the template accepts that a lockout storm on `/Auth` can page
 both rules, since the two runbooks read it differently. Both use `PT15M` over `PT15M`
 (`main.bicep:773`, `:812`), well inside the P2D window cap: a longer ISO 8601 value compiles but
@@ -1260,78 +1304,113 @@ drilled restore procedure ([ADR-009](https://ivanball.github.io/docs/adr/009-res
 and `OPERATIONS.md:155-157` records the measured drill result (about 2.6 minutes against a 2 hour
 RTO target) plus the `dr-freshness` gate that keeps the proof current.
 
-### Azure Service Bus (`main.bicep:1003-1129`)
+### Azure Service Bus (`main.bicep:1463-1737`)
 
 ```
-sku: Standard   // Basic rejected: MassTransit requires topics, Basic supports queues only
+sku: Standard   // Basic rejected: one topic per event, Basic supports queues only
 minimumTlsVersion: '1.2'
 ```
 
-The Standard tier comment at `main.bicep:1011-1015` is the explanation of a constraint that has
-bitten the project before: MassTransit's `UsingAzureServiceBus` auto-provisions
-one topic per message type and one subscription per consumer, Basic tier has no topics, only
-queues, so it silently fails at MassTransit startup. Standard tier costs a flat ~$10/month base for
-the namespace plus per-million-operations, and the link/unlink flows are far below 1k messages a
-month even at conference scale.
+The namespace (`main.bicep:1490-1509`) carries the cross-service integration events over
+MMCA.Common's native Azure Service Bus transport. The Standard tier comment
+(`main.bicep:1484-1486`) explains the constraint: the transport publishes each event on its own
+topic and binds each consuming host to it with a subscription that forwards into the host's queue,
+and Basic tier has no topics, only queues. Standard costs a flat ~$10/month base for the namespace
+plus per-million-operations, and the link/unlink flows are far below 1k messages a month even at
+conference scale (`main.bicep:1488-1489`). `disableLocalAuth` is written only once the services
+sign in with their identity (`useEntraServiceBus`), so with identity sign-in off (the default) the
+PUT carries exactly the properties it always has (`main.bicep:1498-1508`).
+
+**The topology is declared in Bicep, not created at runtime** (`main.bicep:1521-1647`). Every
+service shares `Application:Namespace` `adc` (for example
+`MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/appsettings.json:48`), so each event has one
+topic named `adc-<event name>`, and each consuming host receives on one queue pinned by
+`MessageBus:QueueName` (`appsettings.json:67` in Identity), restated in Bicep as the
+`*BrokerQueueName` variables (`main.bicep:1516-1519`) so the app env var and the dead-letter alert
+name the same entity. Three tables then describe the whole broker:
+
+- `brokerTopicNames` (`main.bicep:1547-1563`): one topic per published event, ten in all, consumed
+  or not, because a publish to a missing topic fails and nothing would create it.
+- `brokerQueueNames` (`main.bicep:1566-1570`): one queue per consuming host, three in all.
+  Notification consumes nothing, so it has none.
+- `brokerSubscriptions` (`main.bicep:1573-1586`): one subscription per (topic, consuming host),
+  twelve rows, each named after the host's queue and forwarding into it (`forwardTo`,
+  `main.bicep:1632`), with a `dependsOn` on the queues because a subscription cannot forward to a
+  queue that does not exist yet (`main.bicep:1642-1645`).
+
+Every property is stated with the value the transport created the live entities with, read back
+from the production namespace before the declaration, so the first deploy rewrote nothing: ARM
+replaces an entity's whole property set on each PUT, and `requiresSession`,
+`requiresDuplicateDetection` and `enablePartitioning` cannot change on an existing entity
+(`main.bicep:1536-1543`). Duplicate detection stays off on the queues because a scheduled
+redelivery deliberately reuses the original message id. The comment also names the gate that keeps
+the tables honest (`main.bicep:1531-1534`): `BrokerTopologyBicepTests` computes the same topology
+from the code (each host's `{Module}BrokerConsumers.Register` and every `IIntegrationEvent` type)
+and fails on anything missing or extra here, so a new consumer or a new published event lands with
+its rows in these tables or the build is red.
 
 **There is no namespace-wide shared credential any more.** The single `app-clients` SAS rule was
 replaced (SEC-ADC-26) by **four** per-service authorization rules, one per app that talks to the
-bus: `identity-service` (`main.bicep:1060-1070`), `conference-service` (`:1072-1082`),
-`engagement-service` (`:1084-1094`) and `notification-service` (`:1096-1106`). Each service's
-connection string is composed from its own rule's `listKeys()` result (`main.bicep:204-207`) and
-written into its own Key Vault secret, so a key is independently revocable and rotatable, a leak is
-attributable to one service, and re-keying a compromised container no longer means re-keying all
-six apps (`main.bicep:1029-1031`).
+bus: `identity-service` (`main.bicep:1672-1681`), `conference-service` (`:1683-1692`),
+`engagement-service` (`:1694-1703`) and `notification-service` (`:1705-1714`). Each service's
+connection string is composed from its own rule's `listKeys()` result (`main.bicep:260-263`) and
+written into its own Key Vault secret (`main.bicep:2216-2235`), so a key is independently revocable
+and rotatable, a leak is attributable to one service, and re-keying a compromised container no
+longer means re-keying all six apps (`main.bicep:1649-1651`).
 
-**All four rules still carry `Send + Listen + Manage`, and the template is explicit that this is the
-uncomfortable half of the change** (`main.bicep:1033-1045`). MassTransit provisions its own topology
-through the management plane at **bus start, every start**, not once: Identity, Conference and
-Engagement register integration-event consumers (Engagement consumes `AttendeeCheckedIn`,
-`SessionFeedbackSubmitted`, `EventFeedbackSubmitted` and `UserDeleted`, including a self-consumption
-round trip) so they create queues plus topic subscriptions, and Notification is publisher-only but
-still creates the message-type topic on first publish. Every one of those is a `Manage` operation,
-so dropping the right from any rule breaks that service's startup. Pre-declaring the entities in
-Bicep is not the escape: it would hard-code MassTransit's entity-name convention, force an
-infrastructure redeploy for every new event type, and still fail at startup on any name mismatch
-because the bus goes on attempting the create. Entity-scoped SAS rules are not a third option
-either, since they cannot be declared before entities that MassTransit creates at runtime
-(`main.bicep:1058-1059`).
+**Each rule carries `Send` and `Listen` only, never `Manage`** (`main.bicep:1653-1658`). Because the
+topology is declared, every service app runs with `MessageBus__ProvisionTopology=false`
+(Identity `main.bicep:2444`, Conference `:2691`, Engagement `:2851`, Notification `:3011`), so no
+service creates, inspects or changes an entity. A compromised container can still publish on any
+topic and receive from any queue of the namespace (the rules stay namespace-wide, because
+entity-scoped rules on this many entities would multiply the secrets), but it can no longer rewrite
+the topology or the forwarding. `BrokerTopologyBicepTests` fails the build if any of the four rules
+regains `Manage`.
 
-The residual risk is recorded rather than closed (`main.bicep:1047-1057`): a compromised container
-still holds namespace-wide `Send + Listen + Manage`, so it can forge an integration event on any
-topic, drain any subscription, or rewrite the topology. What the split buys is credential separation
-and revocability, not privilege reduction. Closing the privilege gap needs either MMCA.Common
-configuring MassTransit to stop deploying topology (so the runtime credential can drop to
-`Send`/`Listen`) plus Bicep-declared topics and subscriptions, or Entra RBAC with Data Sender /
-Data Receiver on a **per-service** identity, which needs role-assignment writes the deploy identity
-does not have ([ADR-061](https://ivanball.github.io/docs/adr/061-runtime-secret-management.html)),
-one identity per service (the six apps share `adc-prod-apps-identity` today), and an MMCA.Common
-change because `ResolveBrokerConnectionString` takes a connection string rather than a
-fully-qualified namespace plus `TokenCredential`. The runbook restates the tier and rights
-constraint as a triage step (`OPERATIONS.md:86-88`): a tier downgrade or a rights reduction looks
-like a publish failure on every service at once.
+The template carries one rollback caution worth reading before touching a revision
+(`main.bicep:1660-1664`): a container app revision from before the declared topology runs with
+`ProvisionTopology` on (the default), and against these rules its receiver retries provisioning
+forever and never consumes, while its publisher fails on any topic it has not yet seen. Such a
+revision is rolled back in only together with `Manage` restored on its rule (the runbook's one-time
+cutover section, `MMCA.ADC/infra/OPERATIONS.md:717`).
 
-A namespace diagnostic setting (`main.bicep:1117-1129`) forwards `OperationalLogs` to the workspace,
-which records entity create/update/delete and authorization-rule changes: exactly the trail that was
-missing while one shared `Manage` credential could rewrite the topology. It is deliberately narrow
-(`main.bicep:1111-1116`): `AllMetrics` is off (no security signal, pure ingestion) and
-`RuntimeAuditLogs` is left as a follow-up because its tier support varies and an unsupported
-category is rejected at deploy time, not at build time. Volume is low, because topology changes
-happen at service startup, not per message.
+The Entra path sits beside the SAS rules (`main.bicep:1666-1671`). MMCA.Common 1.313.0 signs the
+transport in with a managed identity, `useEntraServiceBus` (`main.bicep:51`, default `false`)
+switches the four services to it, writing `MessageBus__AzureServiceBus__FullyQualifiedNamespace` and
+`MessageBus__AzureServiceBus__ManagedIdentityClientId` per app (`main.bicep:2099-2100`, `:2109-2110`,
+`:2119-2120`, `:2129-2130`) and blanking `MessageBus__ConnectionString` (`main.bicep:2440`), and
+`disableServiceBusLocalAuth` (`main.bicep:54`) then turns SAS off, but only when identity sign-in is
+also on (`serviceBusLocalAuthOff`, `main.bicep:259`). The operator grants Azure Service Bus Data
+Sender and Data Receiver per identity out of band (`scripts/security/bootstrap-identities.ps1`), the
+RBAC equivalent of Send and Listen, and the SAS rules stay declared so the rollback path keeps
+working.
 
-Current integration event flows wired over Service Bus (documented at `main.bicep:1006-1009`):
-- Identity publishes `UserRegistered` → Conference `UserRegisteredHandler` auto-links a speaker
-  by email match (BR-207).
-- Conference publishes `SpeakerLinkedToUser` / `SpeakerUnlinkedFromUser` → Identity updates
-  `User.LinkedSpeakerId` (BR-209/BR-70).
+A namespace diagnostic setting (`main.bicep:1725-1737`) forwards `OperationalLogs` to the workspace,
+which records entity create/update/delete and authorization-rule changes, the management trail for
+the namespace. It is deliberately narrow (`main.bicep:1719-1724`): `AllMetrics` is off (no security
+signal, pure ingestion) and `RuntimeAuditLogs` is left as a follow-up because its tier support
+varies and an unsupported category is rejected at deploy time, not at build time.
 
-These events cross service boundaries asynchronously via the outbox + MassTransit; the Service Bus
-namespace is the transport that carries them in production (RabbitMQ fills the same role locally).
-All four services receive `MessageBus__Provider` and `MessageBus__ConnectionString`, but only
-Identity and Conference call `AddBrokerMessaging` today: the Engagement and Notification entries are
-pre-provisioned forward-compatible wiring, and the template shows it in each app's env block
-(`main.bicep:2060-2061`, `:2209-2210`), so adding a consumer later is a `Program.cs` change with no
-infra redeploy.
+Integration event flows over Service Bus (documented at `main.bicep:1466-1482`):
+- Identity publishes `UserRegistered` (to Conference for the BR-207 speaker auto-link and to
+  Engagement for the BR-272 ticket link), `UserEmailVerified` (to Engagement) and `UserDeleted` (to
+  Conference and Engagement for erasure), one subscription per consuming service so each gets its
+  own copy.
+- Conference publishes `SpeakerLinkedToUser` / `SpeakerUnlinkedFromUser` (to Identity, which sets or
+  clears `User.LinkedSpeakerId`, BR-209/BR-70) and `SessionFeedbackSubmitted` /
+  `EventFeedbackSubmitted` (to Engagement for points).
+- Engagement publishes `AttendeeCheckedIn` (consumed by Engagement itself) and
+  `TicketHolderInvited` (to Identity, BR-271 invitation email).
+- Engagement and Conference both publish the framework's `OutputCacheEvictionRequested` (to
+  Conference, for bookmark-count and speaker cache eviction).
+
+These events cross service boundaries asynchronously via the outbox and the native broker
+transport; the Service Bus namespace carries them in production (RabbitMQ fills the same role
+locally). All four services receive `MessageBus__Provider`, `MessageBus__ConnectionString` and
+`MessageBus__QueueName` (Identity `main.bicep:2439-2441`, Conference `:2686-2688`, Engagement
+`:2846-2848`, Notification `:3006-3008`). Unlike the topology, adding a consumer is **not** a
+code-only change: the subscription row (and, for a new event, its topic) lands in `main.bicep` in
+the same change, or `BrokerTopologyBicepTests` fails.
 
 ### Azure Notification Hub (`main.bicep:1135-1159`), referenced, never deployed
 
@@ -1451,8 +1530,9 @@ step. The comment states the reason blob persistence deliberately works without 
 delayed crypto grant would otherwise be able to break authentication outright, so at-rest
 encryption is kept as independent hardening rather than a prerequisite. The framework side is built the same way, with the key-vault
 step behind its own gate on `DataProtection:KeyVaultKeyUri`
-(`MMCA.Common/Source/Hosting/MMCA.Common.Azure/AzureDataProtectionExtensions.cs:79-90`),
-so the infrastructure gap and the code path agree.
+(`MMCA.Common/Source/Hosting/MMCA.Common.Azure.Startup/AzureDataProtectionExtensions.cs:83-94`),
+so the infrastructure gap and the code path agree. When that key is absent outside Development the
+method logs one startup Warning naming it rather than failing (`AzureDataProtectionExtensions.cs:95-99`).
 
 ### Azure Managed Redis (`main.bicep:1364-1395`)
 
@@ -1659,8 +1739,8 @@ cannot report that a grant is missing.
 `keyVaultUrl` secret references above, all six apps receive `KeyVault__Uri`
 (`main.bicep:1724` Identity, `:1918` Conference, `:2058` Engagement, `:2212` Notification, `:2353`
 Gateway, `:2483` UI), which turns the vault into an ASP.NET Core **configuration source**:
-`MMCA.Common.Azure`'s `AddAzureKeyVaultConfiguration`
-(`MMCA.Common/Source/Hosting/MMCA.Common.Azure/AzureKeyVaultConfigurationExtensions.cs:80`) is a
+`MMCA.Common.Azure.Startup`'s `AddAzureKeyVaultConfiguration`
+(`MMCA.Common/Source/Hosting/MMCA.Common.Azure.Startup/AzureKeyVaultConfigurationExtensions.cs:80`) is a
 no-op without the key, and with it the host reads the vault
 synchronously at startup through `DefaultAzureCredential`. The Gateway is in that list as well, and
 the template comment names all six deployables (`main.bicep:1436-1438`). The two paths differ in
@@ -1807,9 +1887,9 @@ All six apps (`main.bicep:1152-2027`) share:
   idle sleep, and the 30-second default woke every runner twice a minute per database for nothing.
   Notification does not get the key because it runs no scheduler: `Scheduler:Enabled` is `true` in
   exactly the three services that do
-  (`MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/appsettings.json:63-64`,
-  `MMCA.ADC.Conference.Service/appsettings.json:60-61`,
-  `MMCA.ADC.Engagement.Service/appsettings.json:81-82`), and the Notification service declares no
+  (`MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/appsettings.json:69-70`,
+  `MMCA.ADC.Conference.Service/appsettings.json:84-85`,
+  `MMCA.ADC.Engagement.Service/appsettings.json:96-97`), and the Notification service declares no
   `Scheduler` section at all. The template's own note says the same
   (`main.bicep:1671-1674`): the audit-trail cleanup job runs daily, which is what the interval
   paces.
@@ -1823,9 +1903,11 @@ All six apps (`main.bicep:1152-2027`) share:
 - `ConnectionStrings__redis` from Key Vault on all four services (`main.bicep:1679`, `:1897`,
   `:2030`, `:2180`), which is the single key that turns on the distributed cache, cross-replica
   idempotency, and the SignalR backplane.
-- `MessageBus__Provider: 'AzureServiceBus'` + `MessageBus__ConnectionString` from Key Vault,
-  selects MassTransit's Azure Service Bus transport at startup (locally the AppHost injects
-  `WithBroker(rabbit)` for RabbitMQ instead).
+- `MessageBus__Provider: 'AzureServiceBus'` + `MessageBus__ConnectionString` from Key Vault (blank
+  when `useEntraServiceBus` is on), plus `MessageBus__QueueName` and
+  `MessageBus__ProvisionTopology: 'false'`, select MMCA.Common's native Azure Service Bus transport
+  at startup against the Bicep-declared topology (Identity `main.bicep:2439-2444`; see the Service
+  Bus section). Locally the AppHost injects `WithBroker(rabbit)` for RabbitMQ instead.
 - `HealthProbe__Port`, a dedicated HTTP/1.1 listener that `Program.cs` adds when the key is set, and
   the target of all three probes on the four services (see below).
 
@@ -1999,14 +2081,14 @@ Identity is one of the two apps that persist the **DataProtection key ring**
 value on the UI, which is what makes the two apps share one ring rather than two). The comment
 above them (`main.bicep:1800-1803`) states the failure mode: Identity does OAuth cookie
 cryptography across up to `conferenceScaledMaxReplicas` replicas with no session affinity, so with
-the default per-replica in-memory ring a login started on one replica fails on another. `MMCA.Common.Azure`'s
+the default per-replica in-memory ring a login started on one replica fails on another. `MMCA.Common.Azure.Startup`'s
 `AddAzureDataProtection` reads both keys, and `DataProtection:BlobStorageUri` is the gate: absent,
 the method does nothing and the host keeps the in-memory default, which is what local development
 and the tests want
-(`MMCA.Common/Source/Hosting/MMCA.Common.Azure/AzureDataProtectionExtensions.cs:59-67`). The call
+(`MMCA.Common/Source/Hosting/MMCA.Common.Azure.Startup/AzureDataProtectionExtensions.cs:56-67`). The call
 also registers the marker the core startup tripwire checks, so a host given
 `DataProtection:BlobStorageUri` without calling it fails at startup rather than running every
-replica on its own key ring (`AzureDataProtectionExtensions.cs:55-57`).
+replica on its own key ring (`AzureDataProtectionExtensions.cs:69-71`).
 
 Identity is also the app that sends the account emails, so it receives the SMTP block
 (`main.bicep:1277-1281`: `Smtp__Host`, `Smtp__Port`, `Smtp__Username`, `Smtp__EnableSsl: 'true'`,

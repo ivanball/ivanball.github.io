@@ -11,9 +11,9 @@ Diagrams are grounded in:
 
 ---
 
-## 1. System context, two codebases + the 26 packages
+## 1. System context, two codebases + the 30 packages
 
-`MMCA.Common` is a framework published as twenty-six NuGet packages in lockstep, to nuget.org **and**
+`MMCA.Common` is a framework published as thirty NuGet packages in lockstep, to nuget.org **and**
 GitHub Packages from one tag ([ADR-053](https://ivanball.github.io/docs/adr/053-dual-registry-package-publishing.html));
 `MMCA.ADC` and `MMCA.Store` consume them. `MMCA.Common/FACTS.md` owns the count and the list (link
 there, do not recount). The framework depends on neither consumer (that one-way arrow is why the
@@ -26,10 +26,17 @@ first-party project reference at all
 ([ADR-088](https://ivanball.github.io/docs/adr/088-gateway-edge-responsibilities.html)). `UI.Maui`
 is the one MAUI-TFM package: it lives outside `MMCA.Common.slnx` and is built and packed by
 dedicated windows CI jobs
-([ADR-042](https://ivanball.github.io/docs/adr/042-device-capability-abstraction.html)). Three more
-families stand apart from the layer chain. The three cloud adapter packages, `MMCA.Common.Aws`,
-`MMCA.Common.Azure` and `MMCA.Common.Gcp`, carry every vendor SDK so the core packages reference
-none; each references `MMCA.Common.Infrastructure` and `MMCA.Common.Aspire`, and
+([ADR-042](https://ivanball.github.io/docs/adr/042-device-capability-abstraction.html)). Three
+opt-in packages sit on the layer chain without being layers of their own: `MMCA.Common.Passkeys`
+(WebAuthn sign-in over `Application`,
+[ADR-139](https://ivanball.github.io/docs/adr/139-passkeys-webauthn-opt-in-sign-in.html)),
+`MMCA.Common.Mcp` (the MCP endpoint over `API`) and `MMCA.Common.ServiceHost` (the composed
+service-host start-up over `API`, `Grpc` and `Aspire`). Three more families stand apart from the
+layer chain. The three cloud adapter packages, `MMCA.Common.Aws`, `MMCA.Common.Azure` and
+`MMCA.Common.Gcp`, carry every vendor SDK so the core packages reference none; each references
+`MMCA.Common.Infrastructure` and `MMCA.Common.Aspire`, `MMCA.Common.Azure.Startup` is the Azure
+adapter's start-up slice (Key Vault, the Azure Monitor exporter and the DataProtection key ring,
+referencing only `Aspire`, which `MMCA.Common.Azure` references and type-forwards), and
 `MMCA.Common.Testing.Azure` is their test-side companion
 ([ADR-134](https://ivanball.github.io/docs/adr/134-cloud-neutral-core-vendor-adapters.html), taught as
 its own chapter group). The four AI packages form the governed language-model
@@ -42,25 +49,28 @@ MMCA.Common project reference. `MMCA.Common.Testing.Aspire` ships the AppHost in
 
 ```mermaid
 flowchart TD
-    subgraph COMMON["MMCA.Common: framework, 26 NuGet packages (lockstep versioned)"]
+    subgraph COMMON["MMCA.Common: framework, 30 NuGet packages (lockstep versioned)"]
         direction TB
-        subgraph CORE["Core (4)"]
+        subgraph CORE["Core (5)"]
             SH["Shared"]
             DOM["Domain"]
             APP["Application"]
             INF["Infrastructure"]
+            PK["Passkeys<br/>(opt-in WebAuthn, ADR-139)"]
         end
-        subgraph PRES["Presentation / transport (5)"]
+        subgraph PRES["Presentation / transport (6)"]
             API["API"]
             GRPC["Grpc"]
+            MCP["Mcp<br/>(opt-in MCP endpoint)"]
             UI["UI"]
             UIW["UI.Web"]
             UIM["UI.Maui<br/>(outside the slnx)"]
         end
-        subgraph HOSTPK["Hosting / edge (3)"]
+        subgraph HOSTPK["Hosting / edge (4)"]
             ASPIRE["Aspire"]
             ASPH["Aspire.Hosting"]
             GWPK["Gateway<br/>(YARP edge kit, ADR-088)"]
+            SHOST["ServiceHost<br/>(composed service-host start-up)"]
         end
         subgraph TEST["Testing (6)"]
             T1["Testing"]
@@ -70,9 +80,10 @@ flowchart TD
             T5["Testing.Aspire<br/>(AppHost test base, ADR-117)"]
             T6["Testing.Azure<br/>(Azure test fixtures, ADR-134)"]
         end
-        subgraph CLOUD["Cloud adapters (3), ADR-134"]
+        subgraph CLOUD["Cloud adapters (3) + Azure start-up slice, ADR-134"]
             AWS["Aws"]
             AZ["Azure"]
+            AZS["Azure.Startup<br/>(Key Vault, exporter, key ring)"]
             GCP["Gcp"]
         end
         subgraph AIFAM["AI boundary (4), ADR-120"]
@@ -92,7 +103,7 @@ flowchart TD
 
     classDef fw fill:#e8f0fe,stroke:#4285f4,color:#111
     classDef con fill:#e6f4ea,stroke:#34a853,color:#111
-    class SH,DOM,APP,INF,API,GRPC,UI,UIW,UIM,ASPIRE,ASPH,GWPK,T1,T2,T3,T4,T5,T6,AWS,AZ,GCP,AIPK,AIA,AIO,AIT,META fw
+    class SH,DOM,APP,INF,PK,API,GRPC,MCP,UI,UIW,UIM,ASPIRE,ASPH,GWPK,SHOST,T1,T2,T3,T4,T5,T6,AWS,AZ,AZS,GCP,AIPK,AIA,AIO,AIT,META fw
     class ADC,STORE con
 ```
 
@@ -389,8 +400,13 @@ Domain events are captured into an `OutboxMessage` row **in the same transaction
 in-process by the interceptor right after the save (deferred until after commit inside a
 Transactional command) and their outbox rows marked processed, while **integration events** are
 never dispatched locally: their rows stay unprocessed until the background `OutboxProcessor`
-publishes them through `IMessageBus`, so the registered transport (in-process for a monolith, a
-MassTransit broker for extracted services) decides delivery. The processor is also the safety net
+publishes them through `IMessageBus`, so the registered transport (in-process for a monolith, or
+`BrokerMessageBus` over a framework-owned `IBrokerTransport` for extracted services: RabbitMQ and
+PostgreSQL built in, Azure Service Bus and Amazon SQS from the cloud adapters, selected by
+`MessageBus:Provider`,
+[ADR-066](https://ivanball.github.io/docs/adr/066-broker-transport-selection.html) /
+[118](https://ivanball.github.io/docs/adr/118-message-transport-library-policy.html)) decides
+delivery. The processor is also the safety net
 for a local dispatch that failed. A handler that publishes an integration event itself calls
 `IEventBus.PublishAsync`, which writes outbox rows rather than sending inline (the removed
 `IIntegrationEventPublisher` is not a caller-facing option any more). Every integration event carries
@@ -413,7 +429,7 @@ flowchart TD
     end
     DISP["IDomainEventDispatcher: in-process handlers<br/>(deferred until after commit)"]
     PROC["OutboxProcessor: background, smart-wait poll,<br/>leased rows for replica scale-out,<br/>opt-in per-key ordered delivery via IHasOrderingKey,<br/>broker publish behind a circuit breaker (ADR-087),<br/>dead-letter on retry exhaustion, with list/replay<br/>through IOutboxAdministration"]
-    BUS["IMessageBus: InProcessMessageBus or BrokerMessageBus<br/>→ MassTransit v8 (RabbitMQ / Azure Service Bus)"]
+    BUS["IMessageBus: InProcessMessageBus or BrokerMessageBus<br/>over a native IBrokerTransport: RabbitMQ / PostgreSQL built in,<br/>Azure Service Bus / Amazon SQS from the cloud adapters (ADR-066/118)"]
     CONSUMER["IntegrationEventConsumer in another module/service"]
     INBOX[("Opt-in inbox: dedup by MessageId (ADR-021)")]
     HANDLER["IIntegrationEventHandler"]
@@ -577,7 +593,7 @@ flowchart TD
         OWN["OwnerOrAdminFilter / OwnershipHelper<br/>row-scope a single resource (ADR-033)"]
     end
 
-    RL["Global rate limiter: authenticated-only,<br/>infra/anon exempt (ADR-019)"]
+    RL["Global rate limiter: authenticated-only,<br/>infra/anon exempt (ADR-019, taught in G12)"]
 
     JWT --> CU
     JWKS --> JWT
@@ -787,7 +803,7 @@ mindmap
       087 Broker poison-message handling
       083 CRUD lifecycle event taxonomy
       054 Saga compensation and reconciliation
-      086 Process manager deferred
+      086 Orchestrated process manager deferred, 143 covers one-aggregate flows
       052 Background job execution superseded by 121
       074 Recurring job scheduler
     Notifications and real time

@@ -452,7 +452,7 @@ Shared            (Result pattern, errors, DTOs, value objects)</code></pre>
           </tr>
           <tr>
           <td>016</td>
-          <td>Lockstep versioning of every package (one tag, one version, no phased rollout); MassTransit pinned to v8 (build-gated)</td>
+          <td>Lockstep versioning of every package (one tag, one version, no phased rollout); its MassTransit v8 pin is superseded by ADR-118&#39;s 2026-11-23 amendment, which bans MassTransit outright</td>
           <td><a href="devops-cicd.html">devops-cicd</a></td>
           </tr>
           <tr>
@@ -962,7 +962,7 @@ Shared            (Result pattern, errors, DTOs, value objects)</code></pre>
           </tr>
           <tr>
           <td>118</td>
-          <td>Message transport library policy: MassTransit stays pinned at v8 behind <code>IMessageBus</code> (<code>DependencyVersionTestsBase</code> gates the major), the outbox and inbox stay custom precisely because that keeps a transport swap cheap, and the exit triggers and replacement order are recorded so the pin is a dated decision</td>
+          <td>Message transport library policy (amended 2026-11-23, exit executed): MassTransit is banned (<code>DependencyVersionTestsBase</code> fails the build on any <code>MassTransit*</code> pin) and the framework runs its own transports over the broker SDKs behind <code>IMessageBus</code>; the outbox and inbox stay custom, which is what kept the swap to one release</td>
           <td><a href="group-04-events-outbox.html">g04</a>/<a href="group-29-testing-infrastructure.html">g29</a></td>
           </tr>
           <tr>
@@ -1055,6 +1055,61 @@ Shared            (Result pattern, errors, DTOs, value objects)</code></pre>
           <td>Installable web app through a framework service worker that never caches a page: <code>app.MapCommonServiceWorker()</code> serves a version-stamped <code>/service-worker.js</code> that handles GET navigations only, network first with navigation preload, and falls back to a precached script-free offline page; the framework ships the mechanism and each host supplies its own app identity</td>
           <td><a href="group-15-common-ui-framework.html">g15</a></td>
           </tr>
+          <tr>
+          <td>137</td>
+          <td>Read-only view-as support access, off by default (<code>ViewAs:Enabled</code>): <code>POST {userId}/view-as</code> needs <code>users:view-as</code> on top of <code>users:manage</code> plus a 10 to 500 character reason, mints an at most 15-minute, never-renewed token carrying <code>act_sub</code> that reads only (enforced at the HTTP method and at the command), and records each grant as a row the viewed user sees in their sign-in history</td>
+          <td><a href="group-08-auth.html">g08</a>/<a href="group-24-identity-module.html">g24</a>/<a href="group-15-common-ui-framework.html">g15</a></td>
+          </tr>
+          <tr>
+          <td>138</td>
+          <td>MCP endpoint over module queries: the opt-in <code>MMCA.Common.Mcp</code> package is the only reference to the official MCP C# SDK; <code>AddCommonMcpServer</code> plus <code>MapCommonMcp</code> (and <code>Mcp:Enabled</code>) expose read-only tools over the existing query handlers, each governed by configuration, permission and rate limit, and startup is refused when a description hides text or a tool leaves its access (<code>[McpToolPublic]</code> or <code>[McpToolPermission]</code>) undeclared</td>
+          <td><a href="group-27-common-ai-integration.html">g27</a>/<a href="group-20-conference-api-grpc.html">g20</a></td>
+          </tr>
+          <tr>
+          <td>139</td>
+          <td>Passkeys (WebAuthn) as an opt-in sign-in and second factor: <code>MMCA.Common.Passkeys</code> is the only reference to Fido2NetLib, behind the core <code>IPasskeyCeremony</code> (held there by <code>EnforcePasskeysBoundary</code> at build time and <code>PasskeysIsolationTests</code> at test time); credentials live in a gated framework table, a passkey sign-in mints the normal token pair with <code>mfa=passkey</code>, and registering one needs an interactive sign-in under ten minutes old (the <code>auth_time</code> claim); web heads only</td>
+          <td><a href="group-08-auth.html">g08</a>/<a href="group-24-identity-module.html">g24</a>/<a href="group-26-device-capability-layer.html">g26</a></td>
+          </tr>
+          <tr>
+          <td>140</td>
+          <td>Machine clients through the OAuth 2.0 client credentials grant, off by default (<code>MachineClients:Enabled</code>): each client is backed one to one by its own service-account user created through a consumer-supplied <code>IServiceAccountProvisioner</code>, receives a short-lived token whose permissions come from that user&#39;s role, never signs in interactively, is revoked by writing the soft-deleted marker, and can never be backed by a role that could escalate</td>
+          <td><a href="group-08-auth.html">g08</a>/<a href="group-24-identity-module.html">g24</a></td>
+          </tr>
+          <tr>
+          <td>141</td>
+          <td>Two .NET framework lines from one tree: libraries multi-target <code>net10.0;net11.0</code> from <code>build/Frameworks.props</code> and every package ships both assets under one version, an application switches with <code>MmcaNet</code> (default <code>net11.0</code>) and never multi-targets, and version-specific code is forward-only (<code>#if NET11_0_OR_GREATER</code> with the existing code as the <code>#else</code>)</td>
+          <td><a href="devops-cicd.html">devops-cicd</a></td>
+          </tr>
+          <tr>
+          <td>142</td>
+          <td>Outbound webhooks, off unless the host calls <code>AddWebhooks</code> and sets <code>Webhooks:Enabled</code>: <code>AddWebhookEvent&lt;TEvent&gt;</code> publishes one integration event contract under one webhook type name (the whole event is the payload), deliveries are HMAC-signed and scheduled as internal commands on a dedicated delivery lane so they never delay other internal commands, and an outbound address policy is enforced at validation time and again at connect time</td>
+          <td><a href="group-04-events-outbox.html">g04</a>/<a href="group-07-persistence-ef-core.html">g07</a></td>
+          </tr>
+          <tr>
+          <td>143</td>
+          <td>Process-manager primitive: a long-running flow whose state fits one aggregate derives <code>ProcessManagerAggregateRoot&lt;TId&gt;</code> (behaviour only, no column, so no table, migration or configuration key), a base handler runs one process step per domain event, and timeouts ride consumer-owned internal commands that the aggregate itself decides through <code>DecideTimeout</code></td>
+          <td><a href="group-04-events-outbox.html">g04</a></td>
+          </tr>
+          <tr>
+          <td>144</td>
+          <td>Offline writes and delta reads, both opt-in: <code>AddOfflineWriteQueue</code> plus one <code>IOfflineWriteHandler</code> per write kind keeps an unsent write in the device&#39;s local store (<code>localStorage</code> in the browser, files on MAUI), scoped per user with a coalesce key and a cap of 200 pending writes, and a change feed on <code>EntityControllerBase</code> (<code>[SupportsChangeFeed]</code>) returns the rows changed since a point in time with soft-deleted rows as tombstones</td>
+          <td><a href="group-15-common-ui-framework.html">g15</a>/<a href="group-03-querying-specifications.html">g03</a>/<a href="group-12-api-hosting-mapping.html">g12</a></td>
+          </tr>
+          <tr>
+          <td>145</td>
+          <td>Opt-in cursor paging: <code>[SupportsCursorPaging]</code> adds <code>GET {controller}/cursor</code> (a keyset read over one sort column validated against the response contract, page size clamped rather than rejected) beside the unchanged offset <code>paged</code> read, which stays the grid&#39;s read because it gives random access and a total</td>
+          <td><a href="group-03-querying-specifications.html">g03</a>/<a href="group-12-api-hosting-mapping.html">g12</a></td>
+          </tr>
+          <tr>
+          <td>146</td>
+          <td>UI page bases own the plumbing, pages own the model and the service call: <code>CancellablePageBase</code> owns the page-scoped <code>PageToken</code> and disposal, <code>CreatePageBase</code> the dirty flag, the kept save result and one fixed submit sequence, and <code>DataGridListPageBase&lt;TDto&gt;</code> gains a before-fetch hook and a phone fetcher for the list shell</td>
+          <td><a href="group-15-common-ui-framework.html">g15</a>/<a href="group-21-conference-ui.html">g21</a></td>
+          </tr>
+          <tr>
+          <td>147</td>
+          <td>Test gaps found by risk ratchets and traceability fitness functions: the shared <code>coverage-ratchet</code> action fails only on NEW risk against committed baselines that only shrink (<code>check: crap</code> fails a new method above CRAP 30 or a baselined one whose CRAP rose), and three fitness bases plus a route recorder apply the same only-shrinks rule to traceability</td>
+          <td><a href="group-29-testing-infrastructure.html">g29</a>/<a href="devops-cicd.html">devops-cicd</a></td>
+          </tr>
           </tbody></table></div>
           <p>The canonical index for the full set can be found at <a href="https://ivanball.github.io/docs/adr/" target="_blank" rel="noopener">https://ivanball.github.io/docs/adr/</a>.</p>
           <hr>
@@ -1095,10 +1150,18 @@ Shared            (Result pattern, errors, DTOs, value objects)</code></pre>
           </ul>
           <p><strong>Messaging</strong></p>
           <ul>
-          <li><strong>MassTransit 8.5.10</strong> (RabbitMQ + Azure Service Bus transports), the broker abstraction behind
-          <code>IMessageBus</code>&#39;s broker implementation. <strong>Pinned to v8 by policy</strong>: v9 requires a commercial license
-          and crashes broker-enabled hosts at startup; a build-time test fails if the major reaches 9
-          (<span class="cite"><span><code>MMCA.Common/Directory.Packages.props:123-130</code></span></span> carries the pin and the warning comment, and see §4).</li>
+          <li><strong>Framework-owned broker transports</strong> (no third-party messaging library): <code>BrokerMessageBus</code><span class="cite"><span>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Messaging/BrokerMessageBus.cs:46</code>)</span></span> is
+          <code>IMessageBus</code>&#39;s broker implementation and publishes through the transport&#39;s <code>IBrokerPublisher</code><span class="cite"><span>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Messaging/Broker/IBrokerPublisher.cs:9</code>)</span></span>. An
+          <code>IBrokerTransport</code> only moves bytes, while the framework&#39;s <code>BrokerReceivePipeline</code> owns origin
+          restore, the inbox, retry, redelivery and the dead-letter decision<span class="cite"><span>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Messaging/Transports/IBrokerTransport.cs:8-14</code>, <code>:22</code>;
+          <code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Messaging/Consumers/BrokerReceivePipeline.cs:26</code>)</span></span>.
+          RabbitMQ and PostgreSQL are built in, Azure Service Bus and Amazon SQS ship in <code>MMCA.Common.Azure</code>
+          and <code>MMCA.Common.Aws</code><span class="cite"><span>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Messaging/Transports/MessageBusProviders.cs:19</code>, <code>:27</code>, <code>:37-38</code>)</span></span>.
+          MassTransit is banned (<a href="https://ivanball.github.io/docs/adr/118-message-transport-library-policy.html" target="_blank" rel="noopener">ADR-118</a>, amended 2026-11-23; see §4).</li>
           <li><strong>Cronos</strong>: cron-expression parsing behind the recurring job scheduler
           (<a href="https://ivanball.github.io/docs/adr/074-recurring-job-scheduler.html" target="_blank" rel="noopener">ADR-074</a>), which is built on the outbox claim-lease idiom rather than on Hangfire or Quartz.</li>
           </ul>
@@ -1181,9 +1244,10 @@ Shared            (Result pattern, errors, DTOs, value objects)</code></pre>
           reference packages by name only. To change a version, edit the props file. <code>[Rubric §15, §32]</code></li>
           <li><strong>NuGet lock files + pinned, audited sources.</strong> <code>MMCA.Common</code> commits lock files and pins
           <code>packageSourceMapping</code> to nuget.org, so it builds/tests with no GitHub token. CI runs
-          <code>dotnet list package --vulnerable</code> and fails on any vulnerable package. The <strong>MassTransit v8 pin</strong>
-          is enforced by a build-time test (<code>DependencyVersionTests</code>), a blanket &quot;update all packages&quot; that
-          reintroduces v9 will fail the build by design. <code>[Rubric §32, Dependency &amp; Supply-Chain]</code></li>
+          <code>dotnet list package --vulnerable</code> and fails on any vulnerable package. <strong>MassTransit is
+          banned</strong> by a build-time test (<code>DependencyVersionTests</code>, over
+          <span class="cite"><span><code>MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Bases/Governance/DependencyVersionTestsBase.cs:13-18</code></span></span>),
+          so any <code>MassTransit*</code> PackageVersion fails the build by design. <code>[Rubric §32, Dependency &amp; Supply-Chain]</code></li>
           <li><strong><code>TreatWarningsAsErrors</code> globally</strong>, and <strong>five analyzers at <em>error</em> severity.</strong> The code must be
           warning-free to compile. <code>[Rubric §15, Best Practices &amp; Code Quality]</code></li>
           <li><strong><code>.editorconfig</code> enforces style at error severity</strong> (<code>MMCA.Common/.editorconfig</code>): file-scoped

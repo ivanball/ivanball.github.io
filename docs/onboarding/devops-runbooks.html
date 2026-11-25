@@ -231,7 +231,7 @@
           </ul>
           <p>Note what is deliberately absent: <code>Microsoft.Authorization/roleAssignments/write</code>. That omission is
           a least-privilege decision with a visible downstream consequence, the avatar-storage grant has to be
-          applied by hand (<span class="cite"><span><code>main.bicep:132-133</code></span></span>, and section 6 of the mobile runbook below).</p>
+          applied by hand (<span class="cite"><span><code>main.bicep:154-155</code></span></span>, and section 6 of the mobile runbook below).</p>
           <p><strong>Federated credentials<span class="cite"><span> (<code>azure-setup.sh:107-138</code>)</span></span>.</strong> Two OIDC federated credentials are created on
           the UAMI through <code>create_or_replace_fic</code>, which skips creation when the credential already exists<span class="cite"><span>
           (<code>azure-setup.sh:116-122</code>)</span></span>:</p>
@@ -251,10 +251,10 @@
           (<code>OAUTH_GITHUB_CLIENT_ID</code>, <code>OAUTH_GITHUB_CLIENT_SECRET</code>, <code>ANTHROPIC_API_KEY</code>, <code>SMTP_PASSWORD</code>) and
           optional variables (<code>SMTP_HOST</code>, <code>SMTP_PORT</code>, <code>SMTP_FROM</code>, <code>SMTP_USERNAME</code>). There is no HS256
           fallback signing key in that list: RS256 is the only signing path, which is why both RSA PEMs are
-          listed as required and <span class="cite"><span><code>deploy.yml:1263-1266</code></span></span> fails the run when either is missing.</p>
+          listed as required and <span class="cite"><span><code>deploy.yml:1687-1693</code></span></span> fails the run when either is missing.</p>
           <p><strong>One gap to know about before your first deploy.</strong> The checklist never mentions <code>ALERT_EMAIL</code>, but
-          <span class="cite"><span><code>main.bicep:122-124</code></span></span> declares <code>alertEmailAddress</code> as a required parameter with <code>@minLength(3)</code> and
-          no default (alerts that notify nobody are silent failures), and <span class="cite"><span><code>deploy.yml:1255-1258</code></span></span> refuses the
+          <span class="cite"><span><code>main.bicep:144-146</code></span></span> declares <code>alertEmailAddress</code> as a required parameter with <code>@minLength(3)</code> and
+          no default (alerts that notify nobody are silent failures), and <span class="cite"><span><code>deploy.yml:1679-1685</code></span></span> refuses the
           run with an actionable error when <code>vars.ALERT_EMAIL</code> is unset. Follow the printed checklist exactly
           and the first deploy stops there. Set <code>ALERT_EMAIL</code> as well.</p>
           <hr>
@@ -267,7 +267,7 @@
           <p><strong>The <a href="https://ivanball.github.io/docs/adr/006-database-per-service.html" target="_blank" rel="noopener">ADR-006</a> decision.</strong> Adopt database-per-service. Each service owns <code>ADC_Identity</code>,
           <code>ADC_Conference</code>, <code>ADC_Engagement</code> or <code>ADC_Notification</code>, locally on the Aspire SQL container and in
           Azure as four Basic-tier databases on the same SQL server, generated from a single
-          <code>serviceDatabaseNames</code> array (<span class="cite"><span><code>main.bicep:1134-1155</code></span></span>, Basic 5 DTU with a 2 GB cap each). Cross-service
+          <code>serviceDatabaseNames</code> array (<span class="cite"><span><code>main.bicep:1341-1373</code></span></span>, Basic 5 DTU with a 2 GB cap each). Cross-service
           references become scalar IDs (no cross-database foreign keys); <code>CrossDataSourceDegradeConvention</code>
           removes FK constraints at the EF level; consistency flows through the outbox and broker
           (<a href="https://ivanball.github.io/docs/adr/003-outbox-dual-dispatch.html" target="_blank" rel="noopener">ADR-003</a>).</p>
@@ -278,7 +278,7 @@
           its own <code>dbo.OutboxMessages</code>, so no service ever sees another&#39;s rows. The template states the
           ownership rule as an invariant rather than a convention: each service is the sole migrator of
           exactly one of these databases, and adding a service means adding its name to that array<span class="cite"><span>
-          (<code>main.bicep:1127-1132</code>)</span></span>.</p>
+          (<code>main.bicep:1341-1347</code>)</span></span>.</p>
           <p><strong>The three-commit rollout, and what remains of it.</strong> The Azure cutover was structured as three
           commits to prevent data loss: commit 1 provisioned the four <code>ADC_*</code> databases empty while the apps
           kept reading <code>AtlDevCon</code>; a one-time manual workflow then migrated and copied the data with
@@ -287,24 +287,24 @@
           <p>All of it landed, and the finished state is what the template now declares:</p>
           <ul>
           <li>Per-service connection strings are built once from a shared base and injected per app<span class="cite"><span>
-          (<code>main.bicep:211-225</code>)</span></span>, reaching each container app as a Key Vault secret reference
-          (<span class="cite"><span><code>main.bicep:1920</code></span></span> is Identity&#39;s <code>DataSources__Identity__SQLServerConnectionString</code>).</li>
-          <li>The comment at <span class="cite"><span><code>main.bicep:211-214</code></span></span> records the invariant plainly: each service connects only to
+          (<code>main.bicep:233-250</code>)</span></span>, reaching each container app as a Key Vault secret reference
+          (<span class="cite"><span><code>main.bicep:2377</code></span></span> is Identity&#39;s <code>DataSources__Identity__SQLServerConnectionString</code>).</li>
+          <li>The comment at <span class="cite"><span><code>main.bicep:233-236</code></span></span> records the invariant plainly: each service connects only to
           its own database, and <code>AtlDevCon</code> is no longer referenced by any app.</li>
           <li>Those four databases are now the whole application data estate, and the template says so in as
-          many words<span class="cite"><span> (<code>main.bicep:1127-1128</code>)</span></span>.</li>
+          many words<span class="cite"><span> (<code>main.bicep:1341-1343</code>)</span></span>.</li>
           </ul>
           <p><strong><code>AtlDevCon</code> itself is gone (2026-09-02).</strong> The archive database that the cutover left behind was
           exported to the bacpac blob <code>sql-archive/AtlDevCon-20260902.bacpac</code> in storage account
           <code>adcprodstpys4way4uzb3g</code>, then dropped by hand, and its <code>sqlDatabase</code> resource was removed from the
-          template. What sits at <span class="cite"><span><code>main.bicep:1114-1123</code></span></span> today is a comment block, not a resource: it records the
-          drop, and then that the bacpac itself was deleted on 2026-10-03, so no restore path remains<span class="cite"><span> (<code>main.bicep:1119-1120</code>)</span></span>. Reading
+          template. What sits at <span class="cite"><span><code>main.bicep:1328-1338</code></span></span> today is a comment block, not a resource: it records the
+          drop, and then that the bacpac itself was deleted on 2026-10-03, so no restore path remains<span class="cite"><span> (<code>main.bicep:1333-1334</code>)</span></span>. Reading
           that block is the fastest way to learn that the &quot;NEVER delete&quot; instruction older documents carry was
           deliberately superseded rather than forgotten. The archive-downgrade section below walks the full
           sequence.</p>
           <p>The same comment block carries a warning worth internalizing before you touch anything in <code>acc-rg</code>:
           an unrelated <strong>SQL server</strong> named <code>atldevcon</code> in westus2 lives in this shared resource group, it
-          predates MMCA, and it has never hosted an ADC database (<span class="cite"><span><code>main.bicep:1121-1123</code></span></span>, repeated at
+          predates MMCA, and it has never hosted an ADC database (<span class="cite"><span><code>main.bicep:1335-1337</code></span></span>, repeated at
           <span class="cite"><span><code>POST-CUTOVER-atldevcon-downgrade.md:123-128</code></span></span>). It is not the archive and must never be referenced,
           scaled or deleted as if it were. ADC&#39;s SQL server is <code>adc-prod-sql-&lt;token&gt;</code>.</p>
           <p><strong>The cutover scripts were deleted on purpose (2026-08-30, commit <code>6323a7b9</code>).</strong> Four artifacts this
@@ -321,7 +321,7 @@
           policy rather than accumulated history. Deleting spent one-time tooling, and then retiring the
           archive database it produced once a bacpac served the same purpose, is that principle applied twice:
           first to <code>scripts/</code>, then to <code>main.bicep</code>. Note the ordering the template records<span class="cite"><span>
-          (<code>main.bicep:1117-1119</code>)</span></span>: Incremental mode never deleted the database when the declaration left the
+          (<code>main.bicep:1331-1333</code>)</span></span>: Incremental mode never deleted the database when the declaration left the
           template, so removing the resource and dropping the database were two separate, deliberate acts.</p>
           <hr>
           <h2 id="infradisaster-recoverymd-dr-runbook">infra/DISASTER-RECOVERY.md, DR runbook</h2>
@@ -347,7 +347,7 @@
           measured restore in the rotation (4.4 min), not the fastest. A second status paragraph is retained
           for the record<span class="cite"><span> (<code>DISASTER-RECOVERY.md:213-221</code>)</span></span>; it closes TD-10 on the strength of the original
           2026-06-20 drill plus the Polly fault-injection tests in MMCA.Common and the Azure Monitor SLO
-          workbook (<span class="cite"><span><code>main.bicep:954</code></span></span>, the <code>sloWorkbook</code> resource embedding
+          workbook (<span class="cite"><span><code>main.bicep:1143</code></span></span>, the <code>sloWorkbook</code> resource embedding
           <code>infra/workbooks/adc-slo-workbook.json</code>). The ledger is filled by hand from the drill&#39;s job summary<span class="cite"><span>
           (<code>DISASTER-RECOVERY.md:171-174</code>)</span></span>, so its newest row can trail the workflow&#39;s run history; the deploy
           gate reads the run history, not the ledger.</p>
@@ -368,54 +368,57 @@
           <p><strong>Alert resource type, count and cadence<span class="cite"><span> (<code>DISASTER-RECOVERY.md:51-53</code>)</span></span>.</strong> The prose says &quot;three
           SLO <strong>metric</strong> alerts scoped to the App Insights component ... evaluated every 5 min over a 15-min
           window&quot;. Three things moved. The live rules are KQL log-search alerts: <code>sloAlertSpecs</code><span class="cite"><span>
-          (<code>main.bicep:408-507</code>)</span></span> materialized as <code>scheduledQueryRules</code> named <code>adc-prod-alert-&lt;key&gt;-v2</code><span class="cite"><span>
-          (<code>main.bicep:509-513</code>)</span></span> and scoped to the Log Analytics workspace<span class="cite"><span> (<code>main.bicep:528</code>)</span></span>, not to the App
-          Insights component. There are five of them, not three: the runbook&#39;s three request-path rules plus
-          <code>resilience-circuit-open</code><span class="cite"><span> (<code>main.bicep:448-456</code>)</span></span> and <code>ai-scoring-token-ceiling</code><span class="cite"><span>
-          (<code>main.bicep:494-506</code>)</span></span>. And the default cadence is 15 minutes, not 5: <code>evaluationFrequency</code> and
-          <code>windowSize</code> both fall back to <code>PT15M</code><span class="cite"><span> (<code>main.bicep:540</code>, <code>:542</code>)</span></span>. The thresholds in the table<span class="cite"><span>
-          (<code>DISASTER-RECOVERY.md:55-59</code>)</span></span> are still correct for the three rules it lists.</p>
+          (<code>main.bicep:439-538</code>)</span></span> materialized as <code>scheduledQueryRules</code> named <code>adc-prod-alert-&lt;key&gt;-v2</code><span class="cite"><span>
+          (<code>main.bicep:540-548</code>)</span></span> and scoped to the Log Analytics workspace<span class="cite"><span> (<code>main.bicep:559</code>)</span></span>, not to the App
+          Insights component. There are six of them, not three: the runbook&#39;s three request-path rules plus
+          <code>request-rejections</code><span class="cite"><span> (<code>main.bicep:449-457</code>)</span></span>, <code>resilience-circuit-open</code><span class="cite"><span> (<code>main.bicep:479-487</code>)</span></span> and
+          <code>ai-scoring-token-ceiling</code><span class="cite"><span> (<code>main.bicep:525-537</code>)</span></span>. And the default cadence is 15 minutes, not 5:
+          <code>evaluationFrequency</code> and <code>windowSize</code> both fall back to <code>PT15M</code><span class="cite"><span> (<code>main.bicep:571</code>, <code>:573</code>)</span></span>. The
+          thresholds in the table<span class="cite"><span> (<code>DISASTER-RECOVERY.md:55-59</code>)</span></span> are still correct for the three rules it lists.</p>
           <p>The cadence change is a deliberate FinOps trade and the template shows its arithmetic<span class="cite"><span>
-          (<code>main.bicep:529-533</code>)</span></span>: a scheduled-query rule is billed per evaluation, and the 5-minute tier costs
+          (<code>main.bicep:560-564</code>)</span></span>: a scheduled-query rule is billed per evaluation, and the 5-minute tier costs
           about $1.47/month per rule against about $0.50 at 15 minutes. Because <code>windowSize</code> was already
           <code>PT15M</code>, each evaluation still looks at the same 15 minutes of data, so no threshold changed; what
           disappeared is the overlap between consecutive evaluations. The cadence fields are overridable per
           entry because one rule genuinely needs a different shape: the AI token ceiling evaluates a two-day
-          window twice a day, both values pinned by ARM-side limits<span class="cite"><span> (<code>main.bicep:481-506</code>, <code>:535-544</code>)</span></span>. The
-          one metric alert that remains is the Sev 1 gateway-availability rule<span class="cite"><span> (<code>main.bicep:915-936</code>)</span></span>, kept
-          deliberately because availability has no status-code confound and never produced a false page<span class="cite"><span>
-          (<code>main.bicep:572-573</code>)</span></span>.</p>
+          window twice a day, both values pinned by ARM-side limits<span class="cite"><span> (<code>main.bicep:512-537</code>, <code>:566-575</code>)</span></span>. Two
+          metric alerts sit beside the log-search rules. The Sev 1 gateway-availability rule<span class="cite"><span>
+          (<code>main.bicep:1104-1133</code>)</span></span> is kept deliberately because availability has no status-code confound and
+          never produced a false page<span class="cite"><span> (<code>main.bicep:603-604</code>)</span></span>. The broker dead-letter rule<span class="cite"><span>
+          (<code>main.bicep:778-821</code>)</span></span> is a metric over the Service Bus namespace rather than a log query because the
+          dead-letter count sees causes that log nothing at Error, or nothing at all<span class="cite"><span> (<code>main.bicep:769-777</code>)</span></span>.</p>
           <p>[Rubric §13, Observability] assesses alerting and monitoring. The six SLO signals and their
-          severities are: failed requests (sev 2, <span class="cite"><span><code>main.bicep:409-417</code></span></span>), request rejections (sev 3,
-          <span class="cite"><span><code>main.bicep:418-426</code></span></span>), average server response time (sev 3, <span class="cite"><span><code>main.bicep:427-435</code></span></span>), dependency
-          failures (sev 2, <span class="cite"><span><code>main.bicep:436-444</code></span></span>), a resilience circuit breaker opening (sev 2,
-          <span class="cite"><span><code>main.bicep:448-456</code></span></span>) and the AI scoring token ceiling (sev 3, <span class="cite"><span><code>main.bicep:494-506</code></span></span>). The
+          severities are: failed requests (sev 2, <span class="cite"><span><code>main.bicep:440-448</code></span></span>), request rejections (sev 3,
+          <span class="cite"><span><code>main.bicep:449-457</code></span></span>), average server response time (sev 3, <span class="cite"><span><code>main.bicep:458-466</code></span></span>), dependency
+          failures (sev 2, <span class="cite"><span><code>main.bicep:467-475</code></span></span>), a resilience circuit breaker opening (sev 2,
+          <span class="cite"><span><code>main.bicep:479-487</code></span></span>) and the AI scoring token ceiling (sev 3, <span class="cite"><span><code>main.bicep:525-537</code></span></span>). The
           request-path queries carry tuning a metric alert could not express: 401 and 499 are excluded from
           the failure counts, 404 and 429 are counted separately as rejection volume with the two crawler
           etiquette paths (<code>/robots.txt</code>, <code>/sitemap.xml</code>) excluded there, SignalR hub connections are excluded
           from the average-duration rule because a hub reports its connection lifetime as request duration,
-          and a window in which a revision was deploying is skipped<span class="cite"><span> (<code>main.bicep:405-456</code>)</span></span>. The template names
-          the exact incidents that forced each exclusion, which is the right level of evidence for a change
-          that loosens an alert. Per-alert triage lives in <code>infra/OPERATIONS.md</code> below.</p>
+          and a window in which a revision was deploying is skipped by both the response-time and the
+          dependency rule<span class="cite"><span> (<code>main.bicep:403-438</code>)</span></span>. The template names the exact incidents that forced each
+          exclusion, which is the right level of evidence for a change that loosens an alert. Per-alert triage
+          lives in <code>infra/OPERATIONS.md</code> below.</p>
           <p><strong><code>ALERT_EMAIL</code> is no longer optional<span class="cite"><span> (<code>DISASTER-RECOVERY.md:61-63</code>)</span></span>.</strong> The runbook says the rules
           are created and visible in Azure Monitor even without the variable, &quot;they just don&#39;t email&quot;. That
           state is no longer reachable: <code>alertEmailAddress</code> is a required parameter with <code>@minLength(3)</code> and
-          no default<span class="cite"><span> (<code>main.bicep:122-124</code>)</span></span>, it feeds the action group<span class="cite"><span> (<code>main.bicep:358</code>)</span></span>, and
-          <span class="cite"><span><code>deploy.yml:1255-1256</code></span></span> fails the deploy when <code>vars.ALERT_EMAIL</code> is unset. An alert that notifies
+          no default<span class="cite"><span> (<code>main.bicep:144-146</code>)</span></span>, it feeds the action group<span class="cite"><span> (<code>main.bicep:387-401</code>)</span></span>, and
+          <span class="cite"><span><code>deploy.yml:1682-1685</code></span></span> fails the deploy when <code>vars.ALERT_EMAIL</code> is unset. An alert that notifies
           nobody is now impossible in a deployed environment by construction, which is the stronger version
           of what the runbook was aiming at.</p>
           <p><strong>Deploy rollback description<span class="cite"><span> (<code>DISASTER-RECOVERY.md:152-154</code>)</span></span>.</strong> The runbook describes the
           post-deploy smoke gate as Gateway <code>/health</code> plus <code>/.well-known/jwks.json</code> plus the UI root. The live
           gate is broader in both dimensions: a revision-activation gate that requires the newest revision of
           every app to report Healthy, Running and 100% traffic weight, followed by six probes that reach
-          every service through the Gateway (<span class="cite"><span><code>deploy.yml:1472-1490</code></span></span> for the reasoning,
-          <span class="cite"><span><code>deploy.yml:1571-1582</code></span></span> for the probes). The activation gate exists because the HTTP probes alone
+          every service through the Gateway (<span class="cite"><span><code>deploy.yml:1955-1976</code></span></span> for the reasoning,
+          <span class="cite"><span><code>deploy.yml:2056-2066</code></span></span> for the probes). The activation gate exists because the HTTP probes alone
           cannot prove the new code is serving: a healthy Gateway keeps answering from the previous backend
           revision when the new one never goes ready, which is exactly how a readiness regression stayed
-          hidden for four days<span class="cite"><span> (<code>deploy.yml:1481</code>)</span></span>. The rollback mechanism the runbook names,
-          <code>az containerapp revision copy</code>, is still what runs<span class="cite"><span> (<code>deploy.yml:1631</code>)</span></span>.
+          hidden for four days<span class="cite"><span> (<code>deploy.yml:1963-1967</code>)</span></span>. The rollback mechanism the runbook names,
+          <code>az containerapp revision copy</code>, is still what runs<span class="cite"><span> (<code>deploy.yml:2115</code>)</span></span>.
           Every failed smoke run ends with one counted summary line (rolled back, skipped because the newest
-          revision is live, no candidate revision, rollback failed; <span class="cite"><span><code>deploy.yml:1602-1606</code></span></span>, <span class="cite"><span><code>:1651</code></span></span>), because a
+          revision is live, no candidate revision, rollback failed; <span class="cite"><span><code>deploy.yml:2087-2090</code></span></span>, <span class="cite"><span><code>:2135</code></span></span>), because a
           probe failure on a fleet whose newest revisions all activated rolls nothing back, and the summary has
           to say so rather than claim a revert.</p>
           <h3 id="recovery-objectives">Recovery objectives</h3>
@@ -453,7 +456,7 @@
           blocks new SQL servers in eastus2. That split is a bicep parameter, not an accident.</p>
           <ul>
           <li>One Azure SQL server, <code>publicNetworkAccess: Enabled</code> with the Azure-services firewall rule<span class="cite"><span>
-          (<code>main.bicep:1016-1027</code>)</span></span>, mitigated by geo-redundant PITR and LTR. This is also where the runbook
+          (<code>main.bicep:1213</code>, <code>:1219-1221</code>)</span></span>, mitigated by geo-redundant PITR and LTR. This is also where the runbook
           records the end of the archive: the <code>AtlDevCon</code> database was exported to a bacpac and dropped on
           2026-09-02, and that bacpac was itself deleted permanently on 2026-10-03, so no pre-cutover
           rollback copy exists<span class="cite"><span> (<code>DISASTER-RECOVERY.md:25-29</code>)</span></span>.</li>
@@ -473,7 +476,7 @@
           <li><strong>PITR</strong>: the Basic tier&#39;s 7 days of point-in-time restore on geo-redundant storage (the Azure
           default). Covers the &quot;undo the last bad change&quot; case with an RPO of minutes.</li>
           <li><strong>LTR</strong>: long-term retention on all four live per-service databases, weekly P4W, monthly P12M and
-          yearly P1Y at week 1, declared as the <code>serviceDatabaseLtr</code> resource<span class="cite"><span> (<code>main.bicep:1166</code>)</span></span>.</li>
+          yearly P1Y at week 1, declared as the <code>serviceDatabaseLtr</code> resource<span class="cite"><span> (<code>main.bicep:1380</code>)</span></span>.</li>
           </ul>
           <p>The <code>AtlDevCon</code> bacpac that used to sit beside both tiers was deleted on 2026-10-03<span class="cite"><span>
           (<code>POST-CUTOVER-atldevcon-downgrade.md:103-110</code>)</span></span>. One sentence in the runbook has not caught up:
@@ -572,7 +575,7 @@
           (<code>DISASTER-RECOVERY.md:193-195</code>)</span></span> records that rows naming <code>AtlDevCon</code> are kept as history now that
           the archive is gone, rather than being edited out.</p>
           <p>The ledger stays honest because it is gated, not remembered: <code>dr-freshness</code> fails a deploy when the
-          newest successful <code>dr-drill.yml</code> run is older than 8 days<span class="cite"><span> (<code>deploy.yml:855</code>,
+          newest successful <code>dr-drill.yml</code> run is older than 8 days<span class="cite"><span> (<code>deploy.yml:1253</code>,
           <code>DISASTER-RECOVERY.md:209-211</code>)</span></span>. The rotation itself is prose here but arithmetic in the workflow,
           which is the source of truth. The next section walks it.</p>
           <hr>
@@ -606,7 +609,7 @@
           with <code>cancel-in-progress: false</code><span class="cite"><span> (<code>dr-drill.yml:42-44</code>)</span></span>. Its comment gives the reason<span class="cite"><span>
           (<code>dr-drill.yml:38-41</code>)</span></span>: the drill creates and deletes a database on the production SQL server, and
           <code>deploy.yml</code> declares that every workflow mutating production Azure state joins that same group<span class="cite"><span>
-          (<code>deploy.yml:41-46</code>)</span></span>, so a drill and a deploy (which migrates those very databases) never run at the
+          (<code>deploy.yml:54-62</code>)</span></span>, so a drill and a deploy (which migrates those very databases) never run at the
           same time. Never cancelling an in-flight drill matches the deploy side, for the reason the cleanup
           sweep below exists: a drill killed mid-restore never reaches the script&#39;s own cleanup. The cost is
           queueing. A push to <code>main</code> that lands during a drill waits behind it, for at most the drill&#39;s
@@ -717,30 +720,32 @@
           <h3 id="what-it-does-not-do-and-the-gate-that-makes-it-matter">What it does not do, and the gate that makes it matter</h3>
           <p>The drill never touches a live database and it does not gate production directly. The link to
           production is the age of its newest successful run, checked by the <code>dr-freshness</code> step of
-          <code>deploy.yml</code>&#39;s single <code>freshness</code> job<span class="cite"><span> (<code>deploy.yml:826-858</code>)</span></span>. That job holds the four recency gates
-          as four steps whose <code>name</code> and <code>id</code> are the gate names, and every step after the first runs unless
-          the job was cancelled, so one stale proof never hides the state of the others<span class="cite"><span>
-          (<code>deploy.yml:828-831</code>)</span></span>. The <code>dr-freshness</code> step calls the shared MMCA.Common composite action
-          <code>ivanball/MMCA.Common/.github/actions/freshness-gate@main</code><span class="cite"><span> (<code>deploy.yml:851</code>)</span></span> with
-          <code>workflow: dr-drill.yml</code> and <code>window-days: &#39;8&#39;</code><span class="cite"><span> (<code>deploy.yml:854-855</code>)</span></span>. It names no
+          <code>deploy.yml</code>&#39;s single <code>freshness</code> job<span class="cite"><span> (<code>deploy.yml:1231-1257</code>)</span></span>. That job holds the four recency gates
+          as four steps whose <code>name</code> and <code>id</code> are the gate names, and every step after the first carries
+          <code>if: ${{ !cancelled() }}</code><span class="cite"><span> (<code>deploy.yml:1265</code>, <code>:1286</code>, <code>:1325</code>)</span></span>, so one stale proof never hides the
+          state of the others<span class="cite"><span> (<code>deploy.yml:1223-1230</code>)</span></span>. The <code>dr-freshness</code> step calls the shared MMCA.Common
+          composite action <code>ivanball/MMCA.Common/.github/actions/freshness-gate</code><span class="cite"><span> (<code>deploy.yml:1249</code>)</span></span> with
+          <code>workflow: dr-drill.yml</code> and <code>window-days: &#39;8&#39;</code><span class="cite"><span> (<code>deploy.yml:1252-1253</code>)</span></span>. It names no
           <code>required-jobs</code>, so the action runs in its success mode: the newest run that completed with
           <code>success</code>, failing the deploy when that run is older than the window<span class="cite"><span>
           (<code>MMCA.Common/.github/actions/freshness-gate/action.yml:16-26</code>)</span></span>. The comment at
-          <span class="cite"><span><code>deploy.yml:848-850</code></span></span> records why the gate can trust that run at face value: <code>dr-drill.yml</code> has no
+          <span class="cite"><span><code>deploy.yml:1246-1248</code></span></span> records why the gate can trust that run at face value: <code>dr-drill.yml</code> has no
           skip-if-unchanged guard, so every successful run really performed a PITR restore. The job itself
-          asks for only <code>actions: read</code> plus <code>contents: read</code><span class="cite"><span> (<code>deploy.yml:838-840</code>)</span></span> and runs on a 5-minute
-          timeout<span class="cite"><span> (<code>deploy.yml:837</code>)</span></span>, because it is a handful of API reads and no restore cost per deploy.</p>
+          asks for only <code>actions: read</code> plus <code>contents: read</code><span class="cite"><span> (<code>deploy.yml:1236-1238</code>)</span></span> and runs on a 5-minute
+          timeout<span class="cite"><span> (<code>deploy.yml:1235</code>)</span></span>, because it is a handful of API reads and no restore cost per deploy.</p>
           <p>Why a shared action rather than inline bash: the DR, load, cross-service and cross-browser steps all
-          call the same action<span class="cite"><span> (<code>deploy.yml:851</code>, <code>:870</code>, <code>:893</code>, <code>:933</code>)</span></span>, and so does MMCA.Store&#39;s deploy<span class="cite"><span>
+          call the same action<span class="cite"><span> (<code>deploy.yml:1249</code>, <code>:1268</code>, <code>:1291</code>, <code>:1331</code>)</span></span>, and so does MMCA.Store&#39;s deploy<span class="cite"><span>
           (<code>action.yml:8-9</code>)</span></span>, so the staleness arithmetic and the break-glass rules live in one place and a fix
-          lands for every gate at once instead of in several drifting copies. The reference is the MMCA.Common
-          <code>main</code> branch rather than a SHA pin like the drill&#39;s third-party actions: it is first-party code,
-          and that branch only moves through a PR.</p>
-          <p><code>freshness</code> sits in <code>deploy.needs</code><span class="cite"><span> (<code>deploy.yml:1161</code>)</span></span>, and the deploy&#39;s condition requires it to
-          have concluded <code>success</code><span class="cite"><span> (<code>deploy.yml:1195</code>)</span></span>, which means all four steps passed. Break-glass exists
+          lands for every gate at once instead of in several drifting copies. All four steps pin that action to
+          a full MMCA.Common commit SHA with the release named in a trailing comment (<code># v1.313.0</code>,
+          <span class="cite"><span><code>deploy.yml:1249</code></span></span>), the same treatment the drill gives its third-party actions: a change to the
+          shared gate reaches this deploy only through a deliberate bump of the pin, never through a push to
+          MMCA.Common&#39;s <code>main</code>.</p>
+          <p><code>freshness</code> sits in <code>deploy.needs</code><span class="cite"><span> (<code>deploy.yml:1574</code>)</span></span>, and the deploy&#39;s condition requires it to
+          have concluded <code>success</code><span class="cite"><span> (<code>deploy.yml:1608</code>)</span></span>, which means all four steps passed. Break-glass exists
           but is deliberately expensive to use: the step forwards the <code>skip_freshness_gates</code> and
           <code>skip_justification</code> dispatch inputs<span class="cite"><span> (<code>deploy.yml:13</code>, <code>:17</code>)</span></span> to the action<span class="cite"><span>
-          (<code>deploy.yml:857-858</code>)</span></span>, which skips only with a non-empty justification and writes that
+          (<code>deploy.yml:1255-1256</code>)</span></span>, which skips only with a non-empty justification and writes that
           justification loudly to the step summary and as a workflow warning<span class="cite"><span> (<code>action.yml:6-8</code>, <code>:99</code>)</span></span>.</p>
           <p>The operational consequence for an on-call reader: <strong>a red or skipped weekly drill blocks the next
           production deploy.</strong> If a deploy fails on <code>dr-freshness</code>, the fix is to re-run <code>dr-drill.yml</code> (and
@@ -749,14 +754,20 @@
           is <a href="https://ivanball.github.io/docs/adr/064-deploy-recency-gates.html" target="_blank" rel="noopener">ADR-064</a>.</p>
           <hr>
           <h2 id="infraoperationsmd-day-2-alert-triage-runbook">infra/OPERATIONS.md, day-2 alert triage runbook</h2>
-          <p><strong>File:</strong> <code>MMCA.ADC/infra/OPERATIONS.md</code> (652 lines)</p>
+          <p><strong>File:</strong> <code>MMCA.ADC/infra/OPERATIONS.md</code> (993 lines)</p>
           <p><strong>What it is.</strong> The alert-to-action companion to the provisioned observability: what to do when each
           alert fires, how to read the SLO workbook, how to run conference day, the standard recovery moves,
           and why production has no Aspire dashboard. It explicitly defers restore procedure, RTO/RPO and
-          accepted SPOFs to <code>DISASTER-RECOVERY.md</code> and covers day-2 triage only<span class="cite"><span> (<code>OPERATIONS.md:3-6</code>)</span></span>.</p>
+          accepted SPOFs to <code>DISASTER-RECOVERY.md</code> and covers day-2 triage only<span class="cite"><span> (<code>OPERATIONS.md:3-6</code>)</span></span>. Two
+          procedures that are not alert triage also live here and are not walked in this chapter: the one-time
+          entity list for the cutover from MassTransit to MMCA.Common&#39;s native Service Bus transport<span class="cite"><span>
+          (<code>OPERATIONS.md:717</code>)</span></span>, a historical record of the single-release exit that
+          <a href="https://ivanball.github.io/docs/adr/118-message-transport-library-policy.html" target="_blank" rel="noopener">ADR-118</a> records as
+          executed<span class="cite"><span> (<code>118-message-transport-library-policy.md:22-26</code>)</span></span>, and JWKS signing-key rotation<span class="cite"><span>
+          (<code>OPERATIONS.md:919</code>)</span></span>.</p>
           <p><strong>When to consult.</strong> When an alert email arrives from the <code>adc-prod-alerts-*</code> action group<span class="cite"><span>
-          (<code>main.bicep:358</code>)</span></span>, whose only receiver is the address in the <code>ALERT_EMAIL</code> repository variable<span class="cite"><span>
-          (<code>OPERATIONS.md:11-13</code>)</span></span>, and about a week before a conference<span class="cite"><span> (<code>OPERATIONS.md:542-583</code>)</span></span>.</p>
+          (<code>main.bicep:387</code>)</span></span>, whose only receiver is the address in the <code>ALERT_EMAIL</code> repository variable<span class="cite"><span>
+          (<code>OPERATIONS.md:11-13</code>)</span></span>, and about a week before a conference<span class="cite"><span> (<code>OPERATIONS.md:821-889</code>)</span></span>.</p>
           <p>[Rubric §13, Observability &amp; Operability] assesses whether alerts lead anywhere. A threshold with no
           runbook is a page nobody knows how to answer, which is exactly what this file, and the build gate
           below, exist to prevent.</p>
@@ -774,7 +785,7 @@
           (<code>ObservabilityConventionTestsBase.cs:39</code>)</span></span>. ADC overrides it to six, the number of specs it
           declares<span class="cite"><span> (<code>MMCA.ADC/Tests/Architecture/MMCA.ADC.Architecture.Tests/Governance/ObservabilityConventionTests.cs:14</code>)</span></span>,
           so a parse drift that discovered fewer would fail rather than pass vacuously<span class="cite"><span>
-          (<code>OPERATIONS.md:611-614</code>)</span></span>.</li>
+          (<code>OPERATIONS.md:952-955</code>)</span></span>.</li>
           <li><strong>Forward direction</strong>: every discovered alert key must have a <code>### ...-alert-&lt;key&gt;</code> heading in
           <code>OPERATIONS.md</code>, and that heading must carry the alert&#39;s current severity as the literal text
           <code>(sev N)</code><span class="cite"><span> (<code>ObservabilityConventionTestsBase.cs:108-112</code>)</span></span>. Re-tiering an alert in bicep without
@@ -783,237 +794,286 @@
           alert bicep no longer provisions is an orphan and also fails the build.</li>
           </ol>
           <p>The parse window is the text between <code>var sloAlertSpecs</code> and <code>resource sloAlerts</code><span class="cite"><span>
-          (<code>ObservabilityConventionTestsBase.cs:137-138</code>)</span></span>, which in ADC&#39;s bicep is <span class="cite"><span><code>main.bicep:408</code></span></span> through
-          <span class="cite"><span><code>main.bicep:509</code></span></span>. It holds six keys and six severities, so the gate discovers six specs.</p>
+          (<code>ObservabilityConventionTestsBase.cs:137-138</code>)</span></span>, which in ADC&#39;s bicep is <span class="cite"><span><code>main.bicep:439</code></span></span> through
+          <span class="cite"><span><code>main.bicep:540</code></span></span>. It holds six keys and six severities, so the gate discovers six specs.</p>
           <p>ADC&#39;s six <code>###</code> sections are <code>adc-prod-alert-failed-requests-v2</code> (sev 2, <span class="cite"><span><code>OPERATIONS.md:17</code></span></span>),
           <code>adc-prod-alert-request-rejections-v2</code> (sev 3, <span class="cite"><span><code>OPERATIONS.md:33</code></span></span>),
           <code>adc-prod-alert-server-response-time-v2</code> (sev 3, <span class="cite"><span><code>OPERATIONS.md:50</code></span></span>),
           <code>adc-prod-alert-dependency-failures-v2</code> (sev 2, <span class="cite"><span><code>OPERATIONS.md:71</code></span></span>),
-          <code>adc-prod-alert-resilience-circuit-open-v2</code> (sev 2, <span class="cite"><span><code>OPERATIONS.md:88</code></span></span>) and
-          <code>adc-prod-alert-ai-scoring-token-ceiling-v2</code> (sev 3, <span class="cite"><span><code>OPERATIONS.md:136</code></span></span>). The headings carry the
-          same <code>-v2</code> suffix the provisioned rules use<span class="cite"><span> (<code>main.bicep:513</code>)</span></span>, and that suffix is itself
-          load-bearing: <span class="cite"><span><code>main.bicep:511-512</code></span></span> warns that <code>-v2</code> is part of the rule&#39;s identity in Azure, so
+          <code>adc-prod-alert-resilience-circuit-open-v2</code> (sev 2, <span class="cite"><span><code>OPERATIONS.md:91</code></span></span>) and
+          <code>adc-prod-alert-ai-scoring-token-ceiling-v2</code> (sev 3, <span class="cite"><span><code>OPERATIONS.md:139</code></span></span>). The headings carry the
+          same <code>-v2</code> suffix the provisioned rules use<span class="cite"><span> (<code>main.bicep:544</code>)</span></span>, and that suffix is itself
+          load-bearing: <span class="cite"><span><code>main.bicep:542-543</code></span></span> warns that <code>-v2</code> is part of the rule&#39;s identity in Azure, so
           renaming it would create a second rule beside the live one instead of updating it. The gate matches
           on the <code>-alert-&lt;key&gt;</code> infix<span class="cite"><span> (<code>ObservabilityConventionTestsBase.cs:32</code>)</span></span>, so the suffix does not affect
           the pairing either way.</p>
-          <p>The request-path specs are tuned so each rule pages on one kind of trouble. <code>failed-requests</code> now
-          excludes 404 and 429 alongside 401 and 499<span class="cite"><span> (<code>main.bicep:409-417</code>)</span></span>, because scanner probes and
-          rate-limiter answers are volume, not failure; that volume moved to its own sev 3 spec,
+          <p>The request-path specs are tuned so each rule pages on one kind of trouble. <code>failed-requests</code>
+          excludes 404 and 429 alongside 401 and 499<span class="cite"><span> (<code>main.bicep:440-448</code>)</span></span>, because scanner probes and
+          rate-limiter answers are volume, not failure; that volume has its own sev 3 spec,
           <code>request-rejections</code>, which pages above 50 rows answered 404 or 429 in 15 minutes, crawler probes
-          for <code>/robots.txt</code> and <code>/sitemap.xml</code> excluded<span class="cite"><span> (<code>main.bicep:418-426</code>)</span></span>. Its runbook reads the paths to
+          for <code>/robots.txt</code> and <code>/sitemap.xml</code> excluded<span class="cite"><span> (<code>main.bicep:449-457</code>)</span></span>. Its runbook reads the paths to
           tell a scanner (nothing to fix) from a real route answering 404 after a deploy (a regression) or
           429s on many distinct callers (real attendees being throttled), and notes that the conference-day
-          load test pages it by design<span class="cite"><span> (<code>OPERATIONS.md:35-48</code>)</span></span>. <code>server-response-time</code> skips any window in
-          which a Container Apps revision was created or took traffic, so a deploy&#39;s cold starts do not page<span class="cite"><span>
-          (<code>main.bicep:427-435</code>)</span></span>, and <code>dependency-failures</code> drops calls made inside an operation whose request
-          answered 499, because a caller that disconnected cancels its own downstream calls<span class="cite"><span>
-          (<code>main.bicep:436-444</code>)</span></span>.</p>
+          load test pages it by design<span class="cite"><span> (<code>OPERATIONS.md:35-48</code>)</span></span>. <code>server-response-time</code> and
+          <code>dependency-failures</code> both skip any window in which a Container Apps revision was created or took
+          traffic, so a deploy&#39;s cold starts and a rollout&#39;s own transient peer failures do not page<span class="cite"><span>
+          (<code>main.bicep:431-434</code>, <code>:458-475</code>)</span></span>, and <code>dependency-failures</code> also drops calls made inside an
+          operation whose request answered 499, because a caller that disconnected cancels its own downstream
+          calls<span class="cite"><span> (<code>main.bicep:423-430</code>)</span></span>.</p>
           <p>Two of the six need a sentence each, because their remedy is not &quot;fix the service&quot;. The
           circuit-open alert fires on the first breaker opening, and the breaker closes itself once a probe
           call succeeds, so the alert can auto-mitigate while the dependency is still sick: the runbook says
-          to treat it as &quot;a dependency is down&quot;, not as &quot;something needs restarting&quot;<span class="cite"><span> (<code>OPERATIONS.md:90-95</code>)</span></span>,
+          to treat it as &quot;a dependency is down&quot;, not as &quot;something needs restarting&quot;<span class="cite"><span> (<code>OPERATIONS.md:93-98</code>)</span></span>,
           and not to restart the reporting service, which would send full traffic back at the sick dependency<span class="cite"><span>
-          (<code>OPERATIONS.md:116-117</code>)</span></span>. The AI token ceiling sums the <code>MMCA.Common.AI</code> meter&#39;s input and output
-          tokens over a rolling two-day window against <code>aiScoringTokenCeiling</code> (2,000,000 by default), and it
-          is the only cost alert in the deployment<span class="cite"><span> (<code>OPERATIONS.md:138-143</code>)</span></span>. It is the one spec with its own
-          cadence, a <code>P2D</code> window evaluated every 12 hours<span class="cite"><span> (<code>main.bicep:494-506</code>)</span></span>, which the loop allows
-          because the three cadence fields are per-entry overridable<span class="cite"><span> (<code>main.bicep:535-544</code>)</span></span>. It used to sit
-          outside the gated block; it moved into <code>sloAlertSpecs</code>, so its runbook moved up into the gated
-          section with it<span class="cite"><span> (<code>OPERATIONS.md:187-188</code>)</span></span>.</p>
+          (<code>OPERATIONS.md:119-120</code>)</span></span>. The AI token ceiling sums the <code>MMCA.Common.AI</code> meter&#39;s input and output
+          tokens over a rolling two-day window against <code>aiScoringTokenCeiling</code> (2,000,000 by default,
+          <span class="cite"><span><code>main.bicep:100</code></span></span>), and it is the only cost alert in the deployment<span class="cite"><span> (<code>OPERATIONS.md:141-146</code>)</span></span>. It is
+          the one spec with its own cadence, a <code>P2D</code> window evaluated every 12 hours<span class="cite"><span> (<code>main.bicep:525-537</code>)</span></span>,
+          which the loop allows because the three cadence fields are per-entry overridable<span class="cite"><span>
+          (<code>main.bicep:566-575</code>)</span></span>. It used to sit outside the gated block; it moved into <code>sloAlertSpecs</code>, so its
+          runbook moved up into the gated section with it<span class="cite"><span> (<code>OPERATIONS.md:195-196</code>)</span></span>.</p>
           <p>[Rubric §31, Cost / FinOps] assesses whether cost is actively managed. Putting a token budget behind
           the same pairing gate as the availability SLOs means an AI spend alert cannot ship without a written
           answer for who reacts to it.</p>
           <h3 id="the-operational-alerts-and-why-their-headings-use-four-hashes">The operational alerts, and why their headings use four hashes</h3>
-          <p>Twelve further alerts are provisioned outside the gated window<span class="cite"><span> (<code>OPERATIONS.md:176-188</code>)</span></span>: the eight
-          entries of <code>scheduledQueryAlertSpecs</code><span class="cite"><span> (<code>main.bicep:624-673</code>)</span></span>, materialized at severity 2 with a
-          15-minute evaluation over a 15-minute window<span class="cite"><span> (<code>main.bicep:675-687</code>)</span></span>; three standalone scheduled
-          query rules, for the log-ingestion cap<span class="cite"><span> (<code>main.bicep:729</code>)</span></span>, the auth-failure spike<span class="cite"><span>
-          (<code>main.bicep:797</code>)</span></span> and the 403 burst<span class="cite"><span> (<code>main.bicep:836</code>)</span></span>; and the Sev 1 gateway-availability metric
-          alert<span class="cite"><span> (<code>main.bicep:915</code>)</span></span>. The section preamble explains the heading depth, and it is worth
-          understanding rather than copying: the gate&#39;s heading regex<span class="cite"><span> (<code>ObservabilityConventionTestsBase.cs:197</code>)</span></span>
-          matches only a line that starts with exactly three hashes followed by whitespace, so a <code>####</code>
-          heading does not match it at all. That makes these sections invisible to both directions of the
-          gate. Promoting one to <code>###</code> would break the build immediately, because the reverse-direction fact
-          would see a runbook section for an alert <code>sloAlertSpecs</code> does not provision and call it an orphan.</p>
+          <p>Fifteen further alerts are provisioned outside the gated window<span class="cite"><span> (<code>OPERATIONS.md:177-189</code>)</span></span>: the nine
+          entries of <code>scheduledQueryAlertSpecs</code><span class="cite"><span> (<code>main.bicep:663-721</code>)</span></span>, materialized at severity 2 with a
+          15-minute evaluation over a 15-minute window<span class="cite"><span> (<code>main.bicep:723-755</code>)</span></span>; four standalone scheduled query
+          rules, for the log-ingestion cap<span class="cite"><span> (<code>main.bicep:842</code>)</span></span>, the auth-failure spike<span class="cite"><span> (<code>main.bicep:925</code>)</span></span>, the
+          403 burst<span class="cite"><span> (<code>main.bicep:966</code>)</span></span> and key-ring access<span class="cite"><span> (<code>main.bicep:1025</code>)</span></span>; and two metric alerts, the
+          broker dead-letter rule over the Service Bus namespace<span class="cite"><span> (<code>main.bicep:778</code>)</span></span> and the Sev 1
+          gateway-availability rule<span class="cite"><span> (<code>main.bicep:1104</code>)</span></span>. The section preamble explains the heading depth, and
+          it is worth understanding rather than copying: the gate&#39;s heading regex<span class="cite"><span>
+          (<code>ObservabilityConventionTestsBase.cs:197</code>)</span></span> matches only a line that starts with exactly three hashes
+          followed by whitespace, so a <code>####</code> heading does not match it at all. That makes these sections
+          invisible to both directions of the gate. Promoting one to <code>###</code> would break the build immediately,
+          because the reverse-direction fact would see a runbook section for an alert <code>sloAlertSpecs</code> does not
+          provision and call it an orphan. The bicep records the same reasoning from its side, and the reason
+          the security rules are standalone resources rather than loop entries: the loop pins severity 2, and
+          the 403 burst is severity 3<span class="cite"><span> (<code>main.bicep:878-882</code>)</span></span>.</p>
+          <p>One reading rule spans the whole group<span class="cite"><span> (<code>OPERATIONS.md:191-194</code>, <code>main.bicep:609-612</code>)</span></span>: a log call
+          that passes an exception is exported to <code>AppExceptions</code>, never to <code>AppTraces</code>, so the dead-letter and
+          backplane rules read both tables, the native-push rule reads <code>AppExceptions</code> only, and a triage query
+          that names one table misses the other half.</p>
           <ul>
-          <li><strong><code>adc-prod-alert-outbox-dead-letter</code></strong> (sev 2, <span class="cite"><span><code>OPERATIONS.md:189-231</code></span></span>) fires on any <code>AppTraces</code>
-          row at Error or above matching <code>dead-lettered</code><span class="cite"><span> (<code>main.bicep:625-630</code>)</span></span>. The threshold is 0, meaning
+          <li><strong><code>adc-prod-alert-outbox-dead-letter</code></strong> (sev 2, <span class="cite"><span><code>OPERATIONS.md:198-248</code></span></span>) fires on any row at Error
+          or above matching the outbox&#39;s dead-letter line<span class="cite"><span> (<code>main.bicep:664-672</code>)</span></span>. The threshold is 0, meaning
           first hit rather than a rate, because every hit is an integration event permanently lost from a
-          service&#39;s outbox. It is the loss alarm only<span class="cite"><span> (<code>OPERATIONS.md:191-194</code>, <code>main.bicep:580-584</code>)</span></span>: a slow
-          or stuck outbox never dead-letters until its retries run out, so <code>outbox-backlog-age</code> below fires
-          on row age first. The triage walks type-resolution
-          failures, broker rejection and consumer-side handler failure, and warns that replay is manual;
-          production&#39;s 300-second outbox poll<span class="cite"><span> (<code>main.bicep:1927</code>)</span></span> means waiting five minutes before
-          concluding a reset did not take<span class="cite"><span> (<code>OPERATIONS.md:221-222</code>)</span></span>.</li>
-          <li><strong><code>adc-prod-alert-broker-error-queue</code></strong> (sev 2, <span class="cite"><span><code>OPERATIONS.md:232-278</code></span></span>) is the consumer-side twin
-          of the dead-letter alert: any Error-or-above <code>AppTraces</code> line containing &quot;moved to the error
-          queue&quot;, threshold 0<span class="cite"><span> (<code>main.bicep:649-654</code>)</span></span>. The outbox delivered the event, but the consuming
-          service failed it through every in-process retry (<code>MessageBus:RetryLimit</code>, default 5) and every
-          delayed redelivery (default 1 minute, 10 minutes, 1 hour), so MassTransit moved it to the receive
-          endpoint&#39;s <code>_error</code> queue and MMCA.Common&#39;s <code>FaultIntegrationEventConsumer</code> logged the line<span class="cite"><span>
-          (<code>OPERATIONS.md:234-240</code>)</span></span>. The query matches the static fragment of that log template, so it holds
-          whatever the event type or reason<span class="cite"><span> (<code>main.bicep:603-609</code>)</span></span>. The runbook names the real queue (every
-          ADC service sets <code>MessageBus:PreserveDefaultEndpointNames</code>, so the error queue is the event type&#39;s
-          endpoint name plus <code>_error</code>, <span class="cite"><span><code>OPERATIONS.md:245-247</code></span></span>) and walks inspecting, replaying or
-          discarding the message. Without it a delivered-but-never-applied event would leave no signal at
-          all, because the outbox side reports success.</li>
-          <li><strong><code>adc-prod-alert-sql-dependency-failures</code></strong> (sev 2, <span class="cite"><span><code>OPERATIONS.md:279-304</code></span></span>), threshold 10 failed
-          SQL dependency calls over 15 minutes<span class="cite"><span> (<code>main.bicep:631-636</code>)</span></span>. Its value over the general
+          service&#39;s outbox. It reads both tables because the retries-exhausted line carries the last exception
+          and the type-unresolvable variant does not<span class="cite"><span> (<code>main.bicep:613-618</code>)</span></span>. It is the loss alarm only: a slow
+          or stuck outbox never dead-letters until its retries run out, so <code>outbox-backlog-age</code> below fires on
+          row age first. The triage warns against hand-editing an outbox row and says to allow up to five
+          minutes, production&#39;s 300-second fallback poll<span class="cite"><span> (<code>main.bicep:2385</code>)</span></span>, before concluding a reset did
+          not take<span class="cite"><span> (<code>OPERATIONS.md:238-240</code>)</span></span>.</li>
+          <li><strong><code>adc-prod-alert-broker-dead-letter</code></strong> (sev 2, <span class="cite"><span><code>OPERATIONS.md:249-359</code></span></span>) is the consumer-side twin
+          of the outbox dead-letter alert: the outbox delivered the event, but the consumer gave up on it.
+          MMCA.Common&#39;s native transport gives every consuming host one queue that each of its topic
+          subscriptions forwards into, and its receive pipeline<span class="cite"><span> (<code>BrokerReceivePipeline.cs:26</code>)</span></span> retries a
+          failing message in process (<code>MessageBus:RetryLimit</code>, default 5, <span class="cite"><span><code>MessageBusSettings.cs:94</code></span></span>), then
+          schedules redeliveries on the same queue (default 60 s, 600 s, 3600 s,
+          <span class="cite"><span><code>MessageBusSettings.cs:190</code></span></span>; <span class="cite"><span><code>BrokerReceivePipeline.cs:165-166</code></span></span>), and only then dead-letters it
+          into that queue&#39;s native dead-letter sub-queue<span class="cite"><span> (<code>BrokerReceivePipeline.cs:170-176</code>)</span></span>, so a handler
+          fault surfaces roughly an hour after its first failed attempt<span class="cite"><span> (<code>OPERATIONS.md:253-258</code>,
+          <code>main.bicep:760-767</code>)</span></span>. The rule is a namespace metric rather than a log query on purpose<span class="cite"><span>
+          (<code>main.bicep:769-777</code>)</span></span>: <code>DeadletteredMessages</code> split by <code>EntityName</code> counts what is sitting in each
+          dead-letter sub-queue, so it also catches the poison-body and unknown-event dead letters that log
+          only at Warning and the broker&#39;s max-delivery-count dead letters that log nothing. It is filtered to
+          the three host queues (Notification consumes nothing, so it has none), which keeps the old
+          MassTransit entities left in the namespace during the cutover from firing it, and it resolves once
+          an operator has replayed or discarded the message. Without it a delivered-but-never-applied event
+          would leave no signal at all, because the outbox side reports success.</li>
+          <li><strong><code>adc-prod-alert-sql-dependency-failures</code></strong> (sev 2, <span class="cite"><span><code>OPERATIONS.md:360-385</code></span></span>), threshold 10 failed
+          SQL dependency calls over 15 minutes<span class="cite"><span> (<code>main.bicep:673-678</code>)</span></span>. Its value over the general
           dependency-failures SLO is attribution: every service owns exactly one database, so a burst names a
-          service and a database instead of &quot;some dependency&quot;<span class="cite"><span> (<code>main.bicep:585-588</code>)</span></span>. The last step<span class="cite"><span>
-          (<code>OPERATIONS.md:301-303</code>)</span></span> is the one that saves an incident: do not restart the service, because
-          production sets <code>DatabaseInitStrategy=Migrate</code> and each service is the sole migrator of its own
-          database, so a restart re-runs startup migrations against the same unreachable server and turns a
-          read outage into a failed revision.</li>
-          <li><strong><code>adc-prod-alert-revision-activation-failed</code></strong> (sev 2, <span class="cite"><span><code>OPERATIONS.md:305-334</code></span></span>) fires on the first
+          service and a database instead of &quot;some dependency&quot;<span class="cite"><span> (<code>main.bicep:619-622</code>)</span></span>. The runbook&#39;s closing
+          step is the one that saves an incident: do not restart the service, because production sets
+          <code>DatabaseInitStrategy=Migrate</code> and each service is the sole migrator of its own database<span class="cite"><span>
+          (<code>main.bicep:1341-1347</code>)</span></span>, so a restart re-runs startup migrations against the same unreachable
+          server and turns a read outage into a failed revision.</li>
+          <li><strong><code>adc-prod-alert-revision-activation-failed</code></strong> (sev 2, <span class="cite"><span><code>OPERATIONS.md:386-415</code></span></span>) fires on the first
           <code>ContainerAppSystemLogs_CL</code> row whose <code>Reason_s</code> starts with &quot;Deployment Progress Deadline
-          Exceeded&quot;<span class="cite"><span> (<code>main.bicep:637-642</code>)</span></span>, the platform&#39;s report that a revision&#39;s readiness probe never
+          Exceeded&quot;<span class="cite"><span> (<code>main.bicep:679-684</code>)</span></span>, the platform&#39;s report that a revision&#39;s readiness probe never
           went green. It exists because that failure mode is silent from outside: the platform keeps the
           previous revision serving, so the Gateway availability probe stays green while production runs
           older code, which is how the 2026-08-29 Redis readiness regression ran unnoticed<span class="cite"><span>
-          (<code>OPERATIONS.md:307-313</code>, <code>main.bicep:589-594</code>)</span></span>. Its deploy-side twin is the activation gate in
-          <span class="cite"><span><code>deploy.yml:1472-1484</code></span></span> and <span class="cite"><span><code>:1540-1569</code></span></span>, described in the <a href="devops-cicd.html">CI/CD chapter</a>.</li>
-          <li><strong><code>adc-prod-alert-signalr-backplane-errors</code></strong> (sev 2, <span class="cite"><span><code>OPERATIONS.md:335-363</code></span></span>) fires on any
-          Warning-or-above <code>AppTraces</code> line whose logger category starts with
-          <code>Microsoft.AspNetCore.SignalR.StackExchangeRedis</code>, threshold 0<span class="cite"><span> (<code>main.bicep:643-648</code>)</span></span>. It exists
+          (<code>main.bicep:623-628</code>)</span></span>. Its deploy-side twin is the activation gate in <span class="cite"><span><code>deploy.yml:1955-1967</code></span></span> and
+          <span class="cite"><span><code>:2009-2016</code></span></span>, described in the <a href="devops-cicd.html">CI/CD chapter</a>.</li>
+          <li><strong><code>adc-prod-alert-signalr-backplane-errors</code></strong> (sev 2, <span class="cite"><span><code>OPERATIONS.md:416-445</code></span></span>) fires on any
+          Warning-or-above line whose logger category starts with
+          <code>Microsoft.AspNetCore.SignalR.StackExchangeRedis</code>, threshold 0<span class="cite"><span> (<code>main.bicep:685-690</code>)</span></span>. It exists
           because a backplane failure is silent by design. When the backplane loses Redis, each Notification
           replica keeps serving its own connections, so a push issued on one replica silently stops reaching
           clients held by the other, and readiness stays green on purpose, because making Redis a readiness
-          dependency would take the whole hub down during a blip<span class="cite"><span> (<code>main.bicep:595-598</code>,
-          <code>OPERATIONS.md:337-342</code>)</span></span>.</li>
-          <li><strong><code>adc-prod-alert-outbox-backlog-age</code></strong> (sev 2, <span class="cite"><span><code>OPERATIONS.md:364-383</code></span></span>) reads MMCA.Common&#39;s
+          dependency would take the whole hub down during a blip<span class="cite"><span> (<code>main.bicep:629-638</code>)</span></span>.</li>
+          <li><strong><code>adc-prod-alert-outbox-backlog-age</code></strong> (sev 2, <span class="cite"><span><code>OPERATIONS.md:446-466</code></span></span>) reads MMCA.Common&#39;s
           <code>outbox.oldest_pending.age</code> gauge from <code>AppMetrics</code> and fires on any sample above 900 seconds<span class="cite"><span>
-          (<code>main.bicep:655-660</code>)</span></span>. It exists because the dead-letter rule cannot see a slow or stuck outbox:
+          (<code>main.bicep:691-696</code>)</span></span>. It exists because the dead-letter rule cannot see a slow or stuck outbox:
           delivery normally takes seconds and the 300-second fallback poll bounds an idle source, so a
           15-minute-old row means the broker is refusing publishes or the drain cannot keep up, and neither
-          dead-letters until every retry is spent<span class="cite"><span> (<code>main.bicep:610-616</code>)</span></span>. The runbook reads the gauge per
-          <code>AppRoleName</code> and <code>data_source</code> (one service aging alone points at that service, all four together
-          at Service Bus) and checks the broker-breaker and SQL rules for the same window before anything else<span class="cite"><span>
-          (<code>OPERATIONS.md:372-378</code>)</span></span>. Its blind spot is written down rather than hidden: the gauge is sampled
-          at the start of each processing cycle, so a processor that stops cycling freezes it, and a dead host
-          is left to the availability and SQL rules<span class="cite"><span> (<code>OPERATIONS.md:382-383</code>)</span></span>.</li>
-          <li><strong><code>adc-prod-alert-outbox-broker-circuit-open</code></strong> (sev 2, <span class="cite"><span><code>OPERATIONS.md:385-398</code></span></span>) fires on the first
-          opening counted on <code>broker.circuit.open.count</code><span class="cite"><span> (<code>main.bicep:661-666</code>)</span></span>. The outbox publishes through
-          its own broker circuit breaker, built without Polly telemetry, so the <code>resilience-circuit-open</code> SLO
-          rule cannot see it<span class="cite"><span> (<code>main.bicep:617-620</code>)</span></span>. The runbook reads it as the cause and backlog age as the
-          effect: nothing is lost while the breaker is open, because the rows redeliver once it closes, so
-          recovery is confirmed by watching backlog age clear rather than by replaying anything<span class="cite"><span>
-          (<code>OPERATIONS.md:387-391</code>, <code>:397-398</code>)</span></span>.</li>
-          <li><strong><code>adc-prod-alert-live-broadcast-dropped</code></strong> (sev 2, <span class="cite"><span><code>OPERATIONS.md:400-416</code></span></span>) fires on any
+          dead-letters until every retry is spent. Its blind spot is written down rather than hidden: the
+          gauge is sampled at the start of each processing cycle, so a processor that stops cycling freezes
+          it, and a dead host is left to the availability and SQL rules<span class="cite"><span> (<code>main.bicep:641-647</code>)</span></span>.</li>
+          <li><strong><code>adc-prod-alert-outbox-broker-circuit-open</code></strong> (sev 2, <span class="cite"><span><code>OPERATIONS.md:467-486</code></span></span>) fires on the first
+          opening counted on <code>broker.circuit.open.count</code><span class="cite"><span> (<code>main.bicep:697-702</code>)</span></span>. The outbox publishes to
+          Service Bus through its own broker circuit breaker, built without Polly telemetry, so the
+          <code>resilience-circuit-open</code> SLO rule cannot see it<span class="cite"><span> (<code>main.bicep:648-651</code>)</span></span>. Read it as the cause and
+          backlog age as the effect: an opening means publishes are failing fast and every service&#39;s outbox is
+          backing up behind it.</li>
+          <li><strong><code>adc-prod-alert-live-broadcast-dropped</code></strong> (sev 2, <span class="cite"><span><code>OPERATIONS.md:487-504</code></span></span>) fires on any
           Warning-or-above <code>AppTraces</code> line containing &quot;Live channel broadcast dropped under backpressure&quot;<span class="cite"><span>
-          (<code>main.bicep:667-672</code>)</span></span>. Engagement queues live-channel broadcasts (poll results, question updates)
-          for a background drain to Notification over gRPC, and drops the oldest one when the queue is full<span class="cite"><span>
-          (<code>OPERATIONS.md:402-406</code>)</span></span>. Every request still succeeds while attendees see a stale live view, so
-          the drop line is the only signal<span class="cite"><span> (<code>main.bicep:621-623</code>)</span></span>. A dropped broadcast is not replayed, which
-          is why the remedy is keeping the drain ahead (Engagement CPU and replicas, the Notification gRPC
-          path) rather than recovering the drops<span class="cite"><span> (<code>OPERATIONS.md:411-416</code>)</span></span>.</li>
-          <li><strong><code>adc-prod-alert-log-ingestion-cap-reached</code></strong> (sev 2, <span class="cite"><span><code>OPERATIONS.md:418-453</code></span></span>) is the alert that
-          keeps the rest honest. The workspace carries a daily ingestion cap (5 GB/day against a ~0.4 GB/day
-          baseline), and when the cap is reached Log Analytics stops ingesting every table until the next UTC
-          midnight, so every other log-based alert silently evaluates empty data<span class="cite"><span> (<code>OPERATIONS.md:420-424</code>)</span></span>.
-          The template records why that is a security concern and not just an outage: tripping the cap is a
-          viable first move for an attacker (drive an error loop, then act unobserved)<span class="cite"><span>
-          (<code>main.bicep:712-717</code>)</span></span>. The rule queries <code>_LogOperation</code> because that table is cap-exempt and keeps
-          recording after ingestion stops<span class="cite"><span> (<code>main.bicep:719-722</code>)</span></span>, and it uses a 1-hour window against a
-          15-minute cadence so ingestion-latency skew cannot drop the once-written cap record between two
-          buckets<span class="cite"><span> (<code>main.bicep:724-726</code>, <code>:739-740</code>)</span></span>. It also matches <code>ApproachingQuota</code>, not only
-          <code>OverQuota</code>, so it pages early enough to raise the cap or stop the source before ingestion goes
-          dark<span class="cite"><span> (<code>main.bicep:727-728</code>, <code>:745</code>)</span></span>.</li>
-          <li><strong><code>adc-prod-alert-auth-failure-spike</code></strong> (sev 2, <span class="cite"><span><code>OPERATIONS.md:454-495</code></span></span>) counts 401 or 429
-          responses on the <code>/Auth</code> route, more than 50 in 15 minutes<span class="cite"><span> (<code>main.bicep:797-816</code>)</span></span>. It exists
-          because <code>failed-requests</code> deliberately excludes 401 (and 429, which <code>request-rejections</code> counts as
-          volume), so credential stuffing against the login route produced only filtered-out responses and
-          paged nobody<span class="cite"><span> (<code>OPERATIONS.md:456-460</code>)</span></span>. It counts 429 as well as 401 because ADR-029 lockout and the
-          Gateway&#39;s <code>auth-tight</code> limiter both answer 429, so a burst can mean &quot;an attacker is locking real
-          users out&quot; as much as &quot;an attacker is guessing passwords&quot;<span class="cite"><span> (<code>main.bicep:785-789</code>)</span></span>. The threshold is
-          read as half its value: the same failed sign-in is recorded at both the Gateway and Identity hops,
-          so 50 rows is about 25 real failures, far above expired-token noise and far below what one IP could
-          produce under <code>auth-tight</code><span class="cite"><span> (<code>main.bicep:790-794</code>, <code>OPERATIONS.md:462-464</code>)</span></span>. The overlap with
-          <code>request-rejections</code> on a lockout storm is accepted; the two runbooks read it differently<span class="cite"><span>
-          (<code>main.bicep:777-779</code>)</span></span>.</li>
-          <li><strong><code>adc-prod-alert-forbidden-burst</code></strong> (sev 3, <span class="cite"><span><code>OPERATIONS.md:496-517</code></span></span>) counts 403 responses, more
-          than 20 in 15 minutes<span class="cite"><span> (<code>main.bicep:836-855</code>)</span></span>. A 403 means the caller authenticated and was then
-          denied by permission policy, which is close to zero in normal operation because the UI does not
-          offer actions a user lacks the permission for<span class="cite"><span> (<code>OPERATIONS.md:498-502</code>)</span></span>. Sev 3 because the two
-          causes, a replayed token probing resources it does not own or a permission regression from the last
-          deploy, are neither of them a middle-of-the-night page. Both rules keep a <code>PT15M</code> window, well
-          inside the <code>P2D</code> cap, because a longer value compiles but fails the whole deployment at apply time,
-          after the container apps have already moved<span class="cite"><span> (<code>main.bicep:781-783</code>)</span></span>.</li>
-          <li><strong><code>adc-prod-alert-gateway-availability</code></strong> (sev 1, <span class="cite"><span><code>main.bicep:915-936</code></span></span>, <span class="cite"><span><code>OPERATIONS.md:518-541</code></span></span>) is
-          driven by the standard web test that pings the public Gateway <code>/health</code> from three Azure locations<span class="cite"><span>
-          (<code>main.bicep:882-898</code>)</span></span> with a 2-of-3 failed-location threshold<span class="cite"><span> (<code>main.bicep:936</code>)</span></span>. It is the only
-          outside-in signal in the deployment, which is exactly why it is Sev 1: every other alert is
-          reported by the app and therefore goes quiet when the app is down<span class="cite"><span> (<code>OPERATIONS.md:520-521</code>)</span></span>. The
-          triage carries two facts a first responder will otherwise get wrong: <code>/health</code> is the Gateway&#39;s
-          readiness endpoint and aggregates one downstream check per service, so a healthy Gateway can still
-          fail the probe because a backend is unhealthy; and Identity, Conference and Engagement serve
-          HTTP/2 cleartext only, so probing them without <code>--http2-prior-knowledge</code> reports a failure that is
-          not there<span class="cite"><span> (<code>OPERATIONS.md:532-538</code>)</span></span>.</li>
+          (<code>main.bicep:703-708</code>)</span></span>. Engagement&#39;s <code>LiveChannelPublishQueue</code> drops a live broadcast (poll results,
+          question updates) under backpressure, and every request still succeeds while attendees see a stale
+          live view, so the drop line is the only signal<span class="cite"><span> (<code>main.bicep:652-654</code>)</span></span>.</li>
+          <li><strong><code>adc-prod-alert-native-push-failed</code></strong> (sev 2, <span class="cite"><span><code>OPERATIONS.md:505-523</code></span></span>) fires on the first
+          <code>AppExceptions</code> row at Warning or above whose template text has &quot;native (OS-level) delivery failed&quot;<span class="cite"><span>
+          (<code>main.bicep:709-714</code>)</span></span>. MMCA.Common&#39;s push send handler delivers on three legs, the in-app inbox,
+          SignalR and the native OS notification through Azure Notification Hubs, and logs that line with the
+          send exception when the native leg fails<span class="cite"><span> (<code>OPERATIONS.md:507-509</code>)</span></span>. The sender attempts every chunk
+          on both platforms before rethrowing, so one hit means some recipients missed the OS notification<span class="cite"><span>
+          (<code>main.bicep:655-658</code>)</span></span>. It exists because the other two legs still deliver, so nothing else in the
+          deployment fails when only the OS notification is lost.</li>
+          <li><strong><code>adc-prod-alert-internal-command-backlog-age</code></strong> (sev 2, <span class="cite"><span><code>OPERATIONS.md:524-542</code></span></span>) is the
+          internal-command twin of <code>outbox-backlog-age</code>: it reads MMCA.Common&#39;s
+          <code>internal_commands.oldest_due.age</code> gauge and fires on any sample above 900 seconds<span class="cite"><span>
+          (<code>main.bicep:715-720</code>)</span></span>. Production polls every 60 seconds, so a due row 15 minutes late means the
+          processor is wedged or a handler keeps failing short of its last attempt<span class="cite"><span> (<code>main.bicep:659-662</code>)</span></span>.</li>
+          <li><strong><code>adc-prod-alert-log-ingestion-cap-reached</code></strong> (sev 2, <span class="cite"><span><code>OPERATIONS.md:543-579</code></span></span>) is the alert that
+          keeps the rest honest. The workspace carries a daily ingestion cap (<code>dailyQuotaGb</code> in
+          <code>infra/foundation.bicep</code>), and when the cap is reached Log Analytics stops ingesting for the rest of
+          the UTC day, so every other log-based alert silently evaluates empty data. The template records why
+          that is a security concern and not just an outage: tripping the cap is a viable first move for an
+          attacker (drive an error loop, then act unobserved)<span class="cite"><span> (<code>main.bicep:825-830</code>)</span></span>. The rule queries
+          <code>_LogOperation</code> because that table is cap-exempt and keeps recording after ingestion stops<span class="cite"><span>
+          (<code>main.bicep:832-835</code>)</span></span>, and it uses a 1-hour window against a 15-minute cadence so ingestion-latency
+          skew cannot drop the once-written cap record between two buckets<span class="cite"><span> (<code>main.bicep:837-839</code>, <code>:852-853</code>)</span></span>.
+          It also matches <code>ApproachingQuota</code>, not only <code>OverQuota</code>, so it pages early enough to raise the cap
+          or stop the source before ingestion goes dark<span class="cite"><span> (<code>main.bicep:840-841</code>, <code>:858</code>)</span></span>.</li>
+          <li><strong><code>adc-prod-alert-auth-failure-spike</code></strong> (sev 2, <span class="cite"><span><code>OPERATIONS.md:580-639</code></span></span>) pages above 25 real failed
+          sign-in events in 15 minutes<span class="cite"><span> (<code>main.bicep:945</code>)</span></span>. It exists because <code>failed-requests</code> deliberately
+          excludes 401 (and 429, which <code>request-rejections</code> counts as volume), so credential stuffing against
+          the login route produced only filtered-out responses and paged nobody<span class="cite"><span> (<code>main.bicep:884-888</code>,
+          <code>OPERATIONS.md:582-586</code>)</span></span>. The value is the sum of two parts<span class="cite"><span> (<code>main.bicep:911-917</code>)</span></span>: failed password
+          sign-ins from the <code>mmca.auth.signin</code> counter with outcome <code>invalid_credentials</code> or <code>locked_out</code>
+          (ADR-029 lockout), counted once at Identity; and every other 401 or 429 on an <code>/Auth</code> route
+          (refresh-token replay, registration throttling, the sign-in link and token endpoints), weighted by
+          <code>ItemCount</code> and halved because each request is recorded at both the Gateway and the service hop.
+          Both halves exist because of sampling<span class="cite"><span> (<code>main.bicep:898-909</code>)</span></span>: every host keeps 25% of traces, so an
+          <code>AppRequests</code> row can stand for several requests, and counting rows meant the old 50-row threshold
+          needed about 100 real failures rather than the 25 it was meant to represent. A counter is never
+          sampled, and <code>ItemCount</code> restores the weight of a sampled row; the comment names the KQL to re-check
+          that weight after any release touching telemetry. The Gateway&#39;s own <code>auth-tight</code> 429s on
+          <code>/Auth/login</code> never reach Identity, so a single-IP flood there is the request-rejections rule&#39;s to
+          page, and this rule is for the distributed low-and-slow campaign whose failures each reach Identity<span class="cite"><span>
+          (<code>main.bicep:918-923</code>)</span></span>. The overlap with <code>request-rejections</code> on a lockout storm is accepted; the two
+          runbooks read it differently<span class="cite"><span> (<code>main.bicep:890-892</code>)</span></span>.</li>
+          <li><strong><code>adc-prod-alert-forbidden-burst</code></strong> (sev 3, <span class="cite"><span><code>OPERATIONS.md:640-662</code></span></span>) pages above 20
+          <code>ItemCount</code>-weighted 403 rows in 15 minutes, which, still double-counted across the two hops, is
+          roughly 10 real denials<span class="cite"><span> (<code>main.bicep:959-965</code>, <code>:986</code>)</span></span>. A 403 means the caller authenticated and was
+          then denied by permission policy, which is close to zero in normal operation because the UI does not
+          offer actions a user lacks the permission for. Sev 3 because the two causes, a replayed token probing
+          resources it does not own or a permission regression from the last deploy, are neither of them a
+          middle-of-the-night page. Both security rules keep a <code>PT15M</code> window, well inside the <code>P2D</code> cap,
+          because a longer value compiles but fails the whole deployment at apply time, after the container
+          apps have already moved<span class="cite"><span> (<code>main.bicep:894-896</code>)</span></span>.</li>
+          <li><strong><code>adc-prod-alert-key-ring-access</code></strong> (sev 2, <span class="cite"><span><code>OPERATIONS.md:663-692</code></span></span>) watches
+          <code>dataprotection-keys/keys.xml</code>, the Data Protection key ring behind every session cookie and
+          antiforgery token: whoever reads it can mint a valid session for any user, organizers included<span class="cite"><span>
+          (<code>OPERATIONS.md:665-667</code>)</span></span>. It reads the blob audit stream the storage account already sends to
+          <code>StorageBlobLogs</code> and fires on any successful request on that container by a principal other than
+          the identity and UI apps&#39; identities, or authorized with the account key or a SAS<span class="cite"><span>
+          (<code>main.bicep:1000-1011</code>, <code>:1025-1036</code>)</span></span>. Anonymous and failed requests are left out as scanner noise,
+          <code>TrustedAccess</code> is left out because it is the storage resource provider acting for every template
+          deployment, and <code>StatusCode</code> is cast with <code>toint()</code> because it is a string column and comparing it
+          with a number fails the whole deployment at apply time<span class="cite"><span> (<code>main.bicep:1013-1018</code>)</span></span>. It adds no data
+          source, so no ingestion cost. The comment also records what it deliberately does not watch yet:
+          audit-trail DELETEs cannot be told apart from the daily retention purge while the services connect
+          as the SQL administrator<span class="cite"><span> (<code>main.bicep:1020-1024</code>)</span></span>.</li>
+          <li><strong><code>adc-prod-alert-gateway-availability</code></strong> (sev 1, <span class="cite"><span><code>main.bicep:1104-1133</code></span></span>, <span class="cite"><span><code>OPERATIONS.md:693-716</code></span></span>)
+          is driven by the standard web test that pings the public Gateway <code>/health</code> from three Azure
+          locations (<span class="cite"><span><code>main.bicep:1071-1102</code></span></span>, locations at <span class="cite"><span><code>:1087-1091</code></span></span>) with a 2-of-3 failed-location
+          threshold<span class="cite"><span> (<code>main.bicep:1125</code>)</span></span>. It is the only outside-in signal in the deployment, which is exactly
+          why it is Sev 1: every other alert is reported by the app and therefore goes quiet when the app is
+          down<span class="cite"><span> (<code>OPERATIONS.md:695-696</code>)</span></span>. The triage carries two facts a first responder will otherwise get
+          wrong: <code>/health</code> is the Gateway&#39;s readiness endpoint and aggregates one downstream check per
+          service, so a healthy Gateway can still fail the probe because a backend is unhealthy; and Identity,
+          Conference and Engagement serve HTTP/2 cleartext only, so probing them without
+          <code>--http2-prior-knowledge</code> reports a failure that is not there<span class="cite"><span> (<code>OPERATIONS.md:693-716</code>)</span></span>.</li>
           </ul>
-          <p><strong>One number in that last section has drifted.</strong> <span class="cite"><span><code>OPERATIONS.md:522</code></span></span> still describes the synthetic
+          <p><strong>One number in that last section has drifted.</strong> <span class="cite"><span><code>OPERATIONS.md:697</code></span></span> still describes the synthetic
           probe as running at a &quot;5-minute frequency&quot;. The web test is declared with <code>Frequency: 900</code><span class="cite"><span>
-          (<code>main.bicep:894</code>)</span></span>, so each location probes every 15 minutes, and the alert&#39;s window is <code>PT15M</code> to
-          match<span class="cite"><span> (<code>main.bicep:929-930</code>)</span></span>. The template explains the window separately from the cadence, and the
+          (<code>main.bicep:1083</code>)</span></span>, so each location probes every 15 minutes, and the alert&#39;s window is <code>PT15M</code> to
+          match<span class="cite"><span> (<code>main.bicep:1118-1119</code>)</span></span>. The template explains the window separately from the cadence, and the
           window change is correctness, not cost: at <code>Frequency: 900</code> a <code>PT5M</code> window would usually be empty,
           so the rule would evaluate nothing at all, while <code>PT15M</code> restores exactly one result per location
-          per window, which is what <code>failedLocationCount</code> counts<span class="cite"><span> (<code>main.bicep:924-928</code>)</span></span>. The locations and the
+          per window, which is what <code>failedLocationCount</code> counts<span class="cite"><span> (<code>main.bicep:1113-1117</code>)</span></span>. The locations and the
           2-of-3 threshold are unchanged; what moved is detection latency, from about 5 minutes to about 15.
           Read the runbook&#39;s &quot;5-minute&quot; as the old cadence and the bicep as current.</p>
           <p>[Rubric §31, Cost / FinOps] assesses whether cost is actively managed. The cadence changes on the SLO
-          rules (dated 2026-09-02 at <span class="cite"><span><code>main.bicep:529-533</code></span></span>) and on the web test<span class="cite"><span> (<code>main.bicep:876-881</code>)</span></span> are cost
+          rules (dated 2026-09-02 at <span class="cite"><span><code>main.bicep:560-564</code></span></span>) and on the web test<span class="cite"><span> (<code>main.bicep:1065-1070</code>)</span></span> are cost
           decisions taken with the billing model written down beside them, and neither moved a threshold or a
           location. That is the distinction that keeps a cost change from quietly becoming an alerting change.</p>
           <p>[Rubric §11, Security] assesses whether attacks on the system are detected, not only prevented. The
           auth-failure spike and the 403 burst watch the same request traffic the SLO rules filter out, from
           the attacker&#39;s side, so excluding 401 and 403 from the availability signal never means nobody is
-          looking at them.</p>
+          looking at them; the key-ring rule watches the one storage read that would let an attacker forge a
+          session without touching the request path at all.</p>
           <h3 id="the-one-gap-the-gate-cannot-see">The one gap the gate cannot see</h3>
           <p>The pairing gate covers the six SLO specs, not the alert surface as a whole, and the governance note
-          says so: the twelve operational alerts sit outside <code>sloAlertSpecs</code> by design (ADR-062) and are &quot;on the
-          honour system: keep them in step by hand&quot;<span class="cite"><span> (<code>OPERATIONS.md:609-616</code>)</span></span>. Today all twelve carry triage<span class="cite"><span>
-          (<code>OPERATIONS.md:616</code>)</span></span>, including <code>signalr-backplane-errors</code>, whose section<span class="cite"><span> (<code>OPERATIONS.md:335-363</code>)</span></span>
-          closed the last runbook gap, and the six alerts added since (<code>broker-error-queue</code>,
-          <code>auth-failure-spike</code>, <code>forbidden-burst</code>, and the three outbox and live-channel rules), which arrived with their sections. That is the honour
-          system working, but only by hand: nothing failed the build while any of them lacked a section, and
-          nothing would fail it if one were added without one.</p>
-          <p>The file shows what the honour system costs. Its own operational preamble still opens with &quot;Twelve
-          signals outside the five shared SLO specs&quot;<span class="cite"><span> (<code>OPERATIONS.md:176</code>)</span></span>, while its governance section, the
-          test override and the bicep all say six<span class="cite"><span> (<code>OPERATIONS.md:613-614</code>, <code>main.bicep:408-509</code>)</span></span>. The count
-          moved when <code>request-rejections</code> joined the gated block and one sentence was updated by hand while
-          the other was not; the edit that raised the preamble&#39;s own count from nine to twelve left that clause untouched. Read the governance section and the bicep as current.</p>
+          says so: the fifteen operational alerts sit outside <code>sloAlertSpecs</code> by design (ADR-062) and are &quot;on
+          the honour system: keep them in step by hand&quot;<span class="cite"><span> (<code>OPERATIONS.md:952-957</code>)</span></span>. Today all fifteen carry
+          triage<span class="cite"><span> (<code>OPERATIONS.md:189</code>, <code>:957</code>)</span></span>, and the preamble that names them<span class="cite"><span> (<code>OPERATIONS.md:179-189</code>)</span></span>
+          agrees with the governance section on both counts, six gated and fifteen operational. That is the
+          honour system working, but only by hand: nothing failed the build while any of them lacked a section,
+          and nothing would fail it if a sixteenth were added without one. Count from the bicep, not the prose:
+          nine <code>scheduledQueryAlertSpecs</code> entries<span class="cite"><span> (<code>main.bicep:663-721</code>)</span></span>, four standalone scheduled-query rules<span class="cite"><span>
+          (<code>main.bicep:842</code>, <code>:925</code>, <code>:966</code>, <code>:1025</code>)</span></span> and two metric alerts<span class="cite"><span> (<code>main.bicep:778</code>, <code>:1104</code>)</span></span>.</p>
           <h3 id="conference-day">Conference day</h3>
-          <p><span class="cite"><span><code>OPERATIONS.md:542-583</code></span></span> turns the conference-day surge from a set of <code>az</code> commands into one switch.
-          The surge is declared in <code>main.bicep</code> as <code>conferenceMode</code> (<span class="cite"><span><code>main.bicep:157</code></span></span>, default <code>false</code>) and
+          <p><span class="cite"><span><code>OPERATIONS.md:821-889</code></span></span> turns the conference-day surge from a set of <code>az</code> commands into one switch.
+          The surge is declared in <code>main.bicep</code> as <code>conferenceMode</code> (<span class="cite"><span><code>main.bicep:179</code></span></span>, default <code>false</code>) and
           driven by ONE repository variable, <code>CONFERENCE_MODE_UNTIL</code> (<code>yyyy-MM-dd</code>, UTC)<span class="cite"><span>
-          (<code>OPERATIONS.md:544-547</code>)</span></span>. The deploy reads it on every run: it rejects a malformed value<span class="cite"><span>
-          (<code>deploy.yml:1437-1439</code>)</span></span> and turns the mode on while today&#39;s UTC date is not past the variable<span class="cite"><span>
-          (<code>deploy.yml:1442-1443</code>)</span></span>, so the first deploy after the date reverts the surge with no one
+          (<code>OPERATIONS.md:823-826</code>)</span></span>. The deploy reads it on every run: it rejects a malformed value<span class="cite"><span>
+          (<code>deploy.yml:1920-1923</code>)</span></span> and turns the mode on while today&#39;s UTC date is not past the variable<span class="cite"><span>
+          (<code>deploy.yml:1925-1926</code>)</span></span>, so the first deploy after the date reverts the surge with no one
           remembering to. The runbook forbids scaling by hand with <code>az</code>, because <code>cost-guard.yml</code> treats an
-          out-of-band surge as drift and blocks deploys<span class="cite"><span> (<code>OPERATIONS.md:547</code>)</span></span>; <code>cost-guard</code> is a deploy
-          prerequisite<span class="cite"><span> (<code>deploy.yml:785-795</code>, <code>:1195</code>)</span></span>.</p>
+          out-of-band surge as drift and blocks deploys<span class="cite"><span> (<code>OPERATIONS.md:826</code>)</span></span>; <code>cost-guard</code> is a deploy
+          prerequisite<span class="cite"><span> (<code>deploy.yml:1175-1194</code>, <code>:1607</code>)</span></span>. As the deploy gate it is called with
+          <code>deploy_gate: true</code>, under which a surge left over from an expired window does not block, because
+          this deploy is the one that reverts it<span class="cite"><span> (<code>deploy.yml:1184-1187</code>)</span></span>.</p>
           <p>What the mode changes, sized by the 2026-10-02 capacity review for about 400 concurrent attendees
-          against a 2026 peak of about 67<span class="cite"><span> (<code>OPERATIONS.md:549-563</code>)</span></span>:</p>
+          against a 2026 peak of about 67<span class="cite"><span> (<code>OPERATIONS.md:828-842</code>)</span></span>:</p>
           <ul>
           <li><strong>Per-client-IP limits</strong>, because a whole venue Wi-Fi is one NAT address: the gateway edge window,
           the gateway <code>auth-tight</code> policy, Identity&#39;s <code>auth-ip</code> limit, registrations per IP per hour and the
-          UI host window all rise by an order of magnitude or more<span class="cite"><span> (<code>OPERATIONS.md:552-556</code>)</span></span>.</li>
+          UI host window all rise by an order of magnitude or more<span class="cite"><span> (<code>OPERATIONS.md:831-835</code>)</span></span>.</li>
           <li><strong>Compute</strong>: Identity at 1 vCPU / 2 GiB, because every sign-in is a 600,000-iteration
           PBKDF2-SHA512 hash and the 2026-10-03 rehearsal saturated four 0.5 vCPU replicas at about five
           sign-ins a second; the other attendee-facing apps at 0.5 vCPU / 1 GiB, all five scaling to four
-          replicas. Identity, Conference and Engagement keep a minimum of 1 because each is the sole startup
-          migrator and seeder of its database<span class="cite"><span> (<code>OPERATIONS.md:557-562</code>)</span></span>.</li>
+          replicas, with the gateway and UI keeping two always on. Identity, Conference and Engagement keep a
+          minimum of 1 because each is the sole startup migrator and seeder of its database<span class="cite"><span>
+          (<code>OPERATIONS.md:836-841</code>)</span></span>.</li>
           <li><strong>Databases</strong>: <code>ADC_Conference</code> and <code>ADC_Engagement</code> move online from Basic (5 DTU) to S2 (50 DTU)<span class="cite"><span>
-          (<code>OPERATIONS.md:563</code>)</span></span>.</li>
+          (<code>OPERATIONS.md:842</code>)</span></span>, through the <code>conferenceMode</code> branch of the per-service database SKU<span class="cite"><span>
+          (<code>main.bicep:1363-1367</code>)</span></span>.</li>
           </ul>
-          <p>The steps<span class="cite"><span> (<code>OPERATIONS.md:565-583</code>)</span></span>: set the variable about a week before and run the deploy; run
-          the dress rehearsal, <code>conference-day-load-test.yml</code> (manual only, and it writes to production),
-          first in <code>mode=seed</code> to register 400 synthetic accounts on the reserved <code>loadtest.adc.invalid</code>
-          domain (no confirmation email, never broadcast recipients), then in <code>mode=attendees</code>, which must
-          pass including <code>signed_in &gt; 99%</code>; and after the conference, deploy once more to revert and delete
-          the variable. Until that reverting deploy runs, the scheduled <code>cost-guard.yml</code> fails as the
-          reminder, and it now runs daily at 07:00 UTC<span class="cite"><span> (<code>cost-guard.yml:13-14</code>)</span></span>, so an expired window or an
-          out-of-band scale-up is reported within a day rather than on the next Monday<span class="cite"><span>
-          (<code>OPERATIONS.md:581-583</code>)</span></span>. The rehearsal with the mode OFF is expected to fail on 429s; that is the
+          <p>One change since that review matters on the day<span class="cite"><span> (<code>OPERATIONS.md:844-850</code>)</span></span>: since MMCA.Common v1.313.0
+          the gateway counts the calls the server-rendered UI host makes for a visitor in that visitor&#39;s own
+          per-IP window (<code>GatewayRateLimiting:TrustedCallerMode</code>, default <code>PerVisitor</code>), so venue traffic that
+          reaches the gateway through the UI host draws on the same NAT window as direct calls. The k6
+          rehearsal calls the gateway directly and cannot exercise that path, so the runbook adds a manual
+          check at the rehearsal&#39;s peak (two or three browsers on one network, then a KQL count of gateway 429s
+          by client address) and a day-of fallback, <code>GatewayRateLimiting__TrustedCallerMode=Exempt</code> set on the
+          gateway with <code>az</code>, which the next deploy removes again because <code>main.bicep</code> does not declare it<span class="cite"><span>
+          (<code>OPERATIONS.md:869-884</code>)</span></span>.</p>
+          <p>The steps<span class="cite"><span> (<code>OPERATIONS.md:853-889</code>)</span></span>: set the variable about a week before and run the deploy; run
+          the dress rehearsal, <code>conference-day-load-test.yml</code> (manual only, a <code>workflow_dispatch</code> whose <code>mode</code>
+          input is <code>attendees</code> or <code>seed</code>, <span class="cite"><span><code>conference-day-load-test.yml:19-26</code></span></span>, and it writes to production
+          under the <code>production</code> environment, <span class="cite"><span><code>:50-51</code></span></span>), first in <code>mode=seed</code> to register 400 synthetic
+          accounts on the reserved <code>loadtest.adc.invalid</code> domain (no confirmation email, never broadcast
+          recipients), then in <code>mode=attendees</code>, which must pass including <code>signed_in &gt; 99%</code>; and after the
+          conference, deploy once more to revert and delete the variable. Until that reverting deploy runs, the
+          scheduled <code>cost-guard.yml</code> fails as the reminder, and it runs daily at 07:00 UTC<span class="cite"><span>
+          (<code>cost-guard.yml:13-14</code>)</span></span>, so an expired window or an out-of-band scale-up is reported within a day<span class="cite"><span>
+          (<code>OPERATIONS.md:886-889</code>)</span></span>. The rehearsal with the mode OFF is expected to fail on 429s; that is the
           baseline it proves.</p>
           <p>[Rubric §31, Cost / FinOps] assesses whether capacity tracks need. A date-bounded switch makes the
           expensive footprint expire by construction instead of by memory, and the scheduled cost guard
@@ -1021,41 +1081,45 @@
           the same switch: it is what keeps a second front-door replica alive during the one week a replica
           loss would matter.</p>
           <h3 id="recovery-moves">Recovery moves</h3>
-          <p><span class="cite"><span><code>OPERATIONS.md:585-607</code></span></span> is the fast reference: roll a bad revision back with <code>az containerapp revision list</code> and <code>revision copy</code>, follow <code>DISASTER-RECOVERY.md</code> for a database restore, re-run the
+          <p><span class="cite"><span><code>OPERATIONS.md:891-918</code></span></span> is the fast reference: roll a bad revision back with <code>az containerapp revision list</code> and <code>revision copy</code>, follow <code>DISASTER-RECOVERY.md</code> for a database restore, re-run the
           referenced workflow when a freshness gate blocks a deploy, and revert a surge. Its freshness
-          quick-reference<span class="cite"><span> (<code>OPERATIONS.md:592-595</code>)</span></span> names three windows, and each one matches the step that
-          enforces it: <code>dr-freshness</code> 8 days<span class="cite"><span> (<code>deploy.yml:855</code>)</span></span>, <code>load-freshness</code> 35 days<span class="cite"><span>
-          (<code>deploy.yml:874</code>)</span></span>, <code>cross-service-freshness</code> 5 days<span class="cite"><span> (<code>deploy.yml:899</code>)</span></span>. Those numbers live in two
+          quick-reference<span class="cite"><span> (<code>OPERATIONS.md:899-902</code>)</span></span> names three windows, and each one matches the step that
+          enforces it: <code>dr-freshness</code> 8 days<span class="cite"><span> (<code>deploy.yml:1253</code>)</span></span>, <code>load-freshness</code> 35 days<span class="cite"><span>
+          (<code>deploy.yml:1272</code>)</span></span>, <code>cross-service-freshness</code> 5 days<span class="cite"><span> (<code>deploy.yml:1297</code>)</span></span>. Those numbers live in two
           places, so treat the workflow as the source of truth and re-check the runbook line whenever a window
           moves: <code>deploy.yml</code> enforces a fourth window the quick reference does not name,
-          <code>cross-browser-freshness</code> at 10 days<span class="cite"><span> (<code>deploy.yml:938</code>)</span></span>, which is the drift this pairing produces
+          <code>cross-browser-freshness</code> at 10 days<span class="cite"><span> (<code>deploy.yml:1336</code>)</span></span>, which is the drift this pairing produces
           whenever a gate is added and the prose is updated separately.</p>
           <p>The two surge entries are worth reading as a pair. The routine revert is the conference-day step:
-          deploy once <code>CONFERENCE_MODE_UNTIL</code> has passed, then delete the variable<span class="cite"><span> (<code>OPERATIONS.md:596-597</code>)</span></span>.
-          The other is a deadlock breaker<span class="cite"><span> (<code>OPERATIONS.md:598-607</code>)</span></span>: if someone surged by hand with <code>az</code> and
+          deploy once <code>CONFERENCE_MODE_UNTIL</code> has passed, then delete the variable<span class="cite"><span> (<code>OPERATIONS.md:903-904</code>)</span></span>.
+          The other is a deadlock breaker<span class="cite"><span> (<code>OPERATIONS.md:905-913</code>)</span></span>: if someone surged by hand with <code>az</code> and
           the variable is unset, <code>cost-guard</code> blocks every deploy and a plain re-run cannot clear it, because
           the deploy job needs <code>cost-guard</code> to pass. The way out is to set the variable to yesterday, because
           an expired window is the one state in which the gate lets a surged footprint through, and the deploy
           it allows applies <code>main.bicep</code> at baseline; then delete the variable and re-run <code>cost-guard.yml</code> to
           confirm.</p>
+          <p>The last entry answers the first instinct of anyone used to VMs<span class="cite"><span> (<code>OPERATIONS.md:914-917</code>)</span></span>: the
+          runbook names the runtime images as <code>aspnet:10.0-noble-chiseled-extra</code>, with no shell, package
+          manager, <code>curl</code> or <code>dotnet-dump</code> inside a running replica, so <code>az containerapp exec</code> has nothing to
+          run and diagnosis goes through App Insights and the console log stream instead.</p>
           <h3 id="why-there-is-no-aspire-dashboard-in-production">Why there is no Aspire dashboard in production</h3>
-          <p><span class="cite"><span><code>OPERATIONS.md:621-652</code></span></span> closes the file by answering the question every new operator asks. The
+          <p><span class="cite"><span><code>OPERATIONS.md:962-993</code></span></span> closes the file by answering the question every new operator asks. The
           absence is a decision (<a href="https://ivanball.github.io/docs/adr/098-aspire-orchestration-not-testing-or-dashboards.html" target="_blank" rel="noopener">ADR-098</a>), not an omission, and it rests on three facts.</p>
           <p>The production telemetry stream is deliberately thinned, so a full-fidelity dashboard would have
-          nothing extra to show: <code>main.bicep</code> sets <code>Telemetry__TracesSampleRatio=0.25</code><span class="cite"><span> (<code>main.bicep:281</code>)</span></span>, an
-          OpenTelemetry log floor of <code>Warning</code> so Information still reaches container stdout without billing
+          nothing extra to show: <code>main.bicep</code> sets <code>Telemetry__TracesSampleRatio=0.25</code><span class="cite"><span> (<code>main.bicep:305-312</code>)</span></span>,
+          an OpenTelemetry log floor of <code>Warning</code> so Information still reaches container stdout without billing
           against the workspace, <code>Telemetry__DisableHttpClientMetrics</code> and <code>Telemetry__DisableRuntimeMetrics</code>
-          (<span class="cite"><span><code>main.bicep:318</code></span></span>; together about 65% of AppMetrics ingestion per <span class="cite"><span><code>OPERATIONS.md:631-632</code></span></span>), and
-          <code>OTEL_METRIC_EXPORT_INTERVAL=300000</code> against a 60-second default<span class="cite"><span> (<code>main.bicep:348</code>)</span></span>. The runbook&#39;s
-          own pointer, <span class="cite"><span><code>infra/main.bicep:223-263</code></span></span><span class="cite"><span> (<code>OPERATIONS.md:628</code>)</span></span>, predates later template growth; the
-          settings now sit around <span class="cite"><span><code>main.bicep:281-348</code></span></span>. The dashboard&#39;s value is live, unsampled, per-request
-          detail, which is exactly the data production does not carry.</p>
-          <p>The durable operational surface is the workspace, not a dashboard<span class="cite"><span> (<code>OPERATIONS.md:638-641</code>)</span></span>: the
-          alert rules and their action group, the SLO workbook, and KQL over <code>ContainerAppConsoleLogs_CL</code>,
+          (<span class="cite"><span><code>main.bicep:342-349</code></span></span>; together about 65% of AppMetrics ingestion when measured, <span class="cite"><span><code>main.bicep:336-337</code></span></span>),
+          and <code>OTEL_METRIC_EXPORT_INTERVAL=300000</code> against a 60-second default<span class="cite"><span> (<code>main.bicep:370-380</code>)</span></span>. The
+          runbook&#39;s own pointer, <span class="cite"><span><code>infra/main.bicep:223-263</code></span></span><span class="cite"><span> (<code>OPERATIONS.md:969</code>)</span></span>, predates later template
+          growth; the settings now sit at <span class="cite"><span><code>main.bicep:305-380</code></span></span>. The dashboard&#39;s value is live, unsampled,
+          per-request detail, which is exactly the data production does not carry.</p>
+          <p>The durable operational surface is the workspace, not a dashboard<span class="cite"><span> (<code>OPERATIONS.md:978</code>)</span></span>: the alert
+          rules and their action group, the SLO workbook, and KQL over <code>ContainerAppConsoleLogs_CL</code>,
           <code>AppRequests</code> and <code>AppDependencies</code> all survive a revision restart and stay queryable weeks later.
           And the ACA dashboard component is ephemeral and full-fidelity, which is the wrong pair for
-          production<span class="cite"><span> (<code>OPERATIONS.md:643-647</code>)</span></span>: it holds its data in the running container&#39;s memory, so a
-          restart discards it, while ingesting at exactly the fidelity the settings above were tuned to avoid.</p>
+          production<span class="cite"><span> (<code>OPERATIONS.md:984</code>)</span></span>: it holds its data in the running container&#39;s memory, so a restart
+          discards it, while ingesting at exactly the fidelity the settings above were tuned to avoid.</p>
           <p>[Rubric §31, Cost / FinOps] meets §13 here: the observability posture is shaped by ingestion cost,
           and the runbook records that trade-off where an operator will actually hit it rather than leaving it
           implicit in the bicep.</p>
@@ -1071,8 +1135,8 @@
           <p>[Rubric §11, Security] assesses credential hardening. <strong>All three stages have been run in ADC
           production.</strong> The template default is still <code>false</code><span class="cite"><span> (<code>main.bicep:36</code>)</span></span>, because that is what makes a
           fresh environment start on password auth and each stage independently deployable, but the deployed
-          value comes from a repository variable, not the default: <span class="cite"><span><code>deploy.yml:1247</code></span></span> reads
-          <code>vars.USE_MANAGED_IDENTITY_SQL</code> and <span class="cite"><span><code>deploy.yml:1414-1419</code></span></span> rewrites the parameter to a literal JSON
+          value comes from a repository variable, not the default: <span class="cite"><span><code>deploy.yml:1663</code></span></span> reads
+          <code>vars.USE_MANAGED_IDENTITY_SQL</code> and <span class="cite"><span><code>deploy.yml:1855-1861</code></span></span> rewrites the parameter to a literal JSON
           <code>true</code> when it is set. All three variables are set in <code>ivanball/ADC</code> (<code>USE_MANAGED_IDENTITY_SQL</code>,
           <code>SQL_AAD_ADMIN_LOGIN</code> and <code>SQL_AAD_ADMIN_OID</code>, all dated 2026-06-28), so the deployed apps use
           passwordless <code>Active Directory Managed Identity</code> connection strings. The ADC scorecard records the
@@ -1094,15 +1158,15 @@
           is independently deployable and reversible.</p>
           <ol>
           <li><strong>Stage 1, add the Entra admin</strong><span class="cite"><span> (<code>SQL-MANAGED-IDENTITY.md:50-54</code>)</span></span>. Set the <code>SQL_AAD_ADMIN_LOGIN</code>
-          and <code>SQL_AAD_ADMIN_OID</code> repository variables; <span class="cite"><span><code>deploy.yml:1406-1413</code></span></span> folds them into the bicep
-          parameter file, and <span class="cite"><span><code>main.bicep:1030-1038</code></span></span> provisions the AAD admin only when the object id is
+          and <code>SQL_AAD_ADMIN_OID</code> repository variables; <span class="cite"><span><code>deploy.yml:1847-1854</code></span></span> folds them into the bicep
+          parameter file, and <span class="cite"><span><code>main.bicep:1234</code></span></span> provisions the AAD admin only when the object id is
           non-empty. Additive, zero app impact.</li>
           <li><strong>Stage 2, grant the identity in each database</strong><span class="cite"><span> (<code>SQL-MANAGED-IDENTITY.md:56-68</code>)</span></span>. Connect to
           each of the four <code>ADC_*</code> databases as the Entra admin and run <code>CREATE USER [adc-prod-apps-identity] FROM EXTERNAL PROVIDER</code> plus <code>ALTER ROLE db_owner ADD MEMBER</code>.
           <code>db_owner</code> because each service is its own sole migrator and applies DDL at startup
           (<span class="cite"><span><code>SQL-MANAGED-IDENTITY.md:66-68</code></span></span>, which also names the tighter alternative).</li>
           <li><strong>Stage 3, flip the apps</strong><span class="cite"><span> (<code>SQL-MANAGED-IDENTITY.md:70-75</code>)</span></span>. Set <code>USE_MANAGED_IDENTITY_SQL=true</code>
-          and deploy; <span class="cite"><span><code>main.bicep:218-220</code></span></span> swaps the auth segment of every connection string to
+          and deploy; <span class="cite"><span><code>main.bicep:245-250</code></span></span> swaps the auth segment of every connection string to
           <code>Authentication=Active Directory Managed Identity</code> with the UAMI&#39;s client id and no password. No
           app-code or package change is needed: <code>Microsoft.Data.SqlClient</code> honours the keyword and
           <code>Azure.Identity</code> is already present transitively.</li>
@@ -1111,7 +1175,7 @@
           password path is never removed in this wave, and the per-database users are inert when unused.</p>
           <p><strong>Accepted risk<span class="cite"><span> (<code>SQL-MANAGED-IDENTITY.md:81-100</code>)</span></span>.</strong> The SQL server keeps <code>publicNetworkAccess: Enabled</code> and the <code>AllowAzureServices</code> rule, because there is no VNet and moving to a private endpoint
           would require recreating the Container Apps environment (and therefore every container app). The
-          compensating controls are a TLS 1.2 minimum<span class="cite"><span> (<code>main.bicep:1016</code>)</span></span>, Key Vault secrets reached through the
+          compensating controls are a TLS 1.2 minimum<span class="cite"><span> (<code>main.bicep:1212</code>)</span></span>, Key Vault secrets reached through the
           managed identity, and, with stages 1 to 3 complete, no shared SQL password in the data path at all,
           so network reachability no longer implies credential exposure.</p>
           <hr>
@@ -1307,27 +1371,28 @@
           worth reading against the template rather than the prose:</p>
           <ul>
           <li>Native push is <strong>wired and enabled by default</strong>: <code>nativePushEnabled</code> defaults to <code>true</code><span class="cite"><span>
-          (<code>main.bicep:126-127</code>)</span></span> and <code>deployNotificationHub</code> defaults to <code>true</code><span class="cite"><span> (<code>main.bicep:129-130</code>)</span></span>. What
-          the second flag gates is only the <em>wiring</em>, the Key Vault connection-string secret plus the
-          notification app&#39;s secret and env refs<span class="cite"><span> (<code>main.bicep:1792-1795</code>, <code>:2438</code>, <code>:2515-2520</code>)</span></span>. The
-          namespace, hub and auth rule are never deployed by this template: they are declared <code>existing</code><span class="cite"><span>
-          (<code>main.bicep:1395-1410</code>)</span></span> because ARM PUTs on this namespace never reach a terminal state, which hit
-          twice on 2026-08-24 at two API versions<span class="cite"><span> (<code>main.bicep:1387-1394</code>)</span></span>. They have to be
-          provisioned out of band through section 5 of the runbook before the flag can be true. Read that
-          section from the bottom up: the opening paragraph<span class="cite"><span> (<code>MobileReleaseRunbook.md:94-99</code>)</span></span> still says the
-          hub is not provisioned and describes the guard as <code>deployNotificationHub=false</code>, but the progress
-          note that follows<span class="cite"><span> (<code>MobileReleaseRunbook.md:101-105</code>)</span></span> records the current defaults, and the
+          (<code>main.bicep:148-149</code>)</span></span> and <code>deployNotificationHub</code> defaults to <code>true</code><span class="cite"><span> (<code>main.bicep:151-152</code>)</span></span>. What
+          the second flag gates is only the <em>wiring</em>, the Key Vault connection-string secret plus the secret
+          and env refs on the Identity and Notification apps that read it<span class="cite"><span> (<code>main.bicep:2236</code>, <code>:2344</code>,
+          <code>:2497</code>, <code>:2941</code>, <code>:3029</code>)</span></span>. The namespace, hub and auth rule are never deployed by this template:
+          they are declared <code>existing</code><span class="cite"><span> (<code>main.bicep:1750-1762</code>)</span></span> because ARM PUTs on this namespace never reach
+          a terminal state, which hit twice on 2026-08-24 at two API versions<span class="cite"><span> (<code>main.bicep:1742-1749</code>)</span></span>. They
+          have to be provisioned out of band through section 5 of the runbook before the flag can be true.
+          Read that section from the bottom up: the opening paragraph<span class="cite"><span> (<code>MobileReleaseRunbook.md:94-99</code>)</span></span> still
+          says the hub is not provisioned and describes the guard as <code>deployNotificationHub=false</code>, but the
+          progress note that follows<span class="cite"><span> (<code>MobileReleaseRunbook.md:101-105</code>)</span></span> records the current defaults, and the
           remaining manual work is the out-of-band hub creation, the FCM v1 service-account credential and
           the APNs key<span class="cite"><span> (<code>MobileReleaseRunbook.md:107-121</code>)</span></span>. Registration works on the connection string
-          alone; only sends need those credentials.</li>
+          alone; only sends need those credentials, and a failed native send now pages through
+          <code>adc-prod-alert-native-push-failed</code><span class="cite"><span> (<code>main.bicep:709-714</code>)</span></span>.</li>
           <li>Avatar storage still needs a one-time manual role grant, because the deploy identity deliberately
-          lacks <code>Microsoft.Authorization/roleAssignments/write</code> (<span class="cite"><span><code>main.bicep:132-133</code></span></span>,
-          <code>grantAvatarStorageRole</code> default <code>false</code>, the guarded resource at <span class="cite"><span><code>main.bicep:1548-1550</code></span></span>). Until the
+          lacks <code>Microsoft.Authorization/roleAssignments/write</code> (<span class="cite"><span><code>main.bicep:154-155</code></span></span>,
+          <code>grantAvatarStorageRole</code> default <code>false</code>, the guarded resource at <span class="cite"><span><code>main.bicep:1903-1905</code></span></span>). Until the
           grant is applied, avatar uploads fail cleanly with <code>FileStorage.UploadFailed</code> and nothing else
           breaks (<span class="cite"><span><code>MobileReleaseRunbook.md:123-146</code></span></span>, which includes the <code>az rest</code> form because
           <code>az role assignment create</code> misreports on this tenant). One detail the template adds and the
           runbook does not: the grant is scoped to the storage <strong>account</strong>, so the same assignment also
-          covers the Data Protection key-ring container<span class="cite"><span> (<code>main.bicep:1539-1541</code>)</span></span>.</li>
+          covers the Data Protection key-ring container<span class="cite"><span> (<code>main.bicep:1894-1896</code>)</span></span>.</li>
           </ul>
           <p><strong>Play target API level<span class="cite"><span> (<code>MobileReleaseRunbook.md:155-205</code>)</span></span>.</strong> A recurring annual deadline: from
           2026-08-31 an update must target API 36 (Android 16) or higher. The level is pinned in the csproj
@@ -1386,18 +1451,19 @@
           <p>The <code>AtlDevCon</code> database is the thread that runs through the database half of that table, and that
           thread now ends: it was the source of data truth during the copy, then the rollback path after the
           flip, then a Basic-tier archive, from 2026-09-02 a bacpac blob, and since 2026-10-03 nothing at all<span class="cite"><span>
-          (<code>main.bicep:1114-1120</code>, <code>POST-CUTOVER-atldevcon-downgrade.md:79-121</code>)</span></span>. Three practical consequences
+          (<code>main.bicep:1328-1334</code>, <code>POST-CUTOVER-atldevcon-downgrade.md:79-121</code>)</span></span>. Three practical consequences
           follow for an operator. The four live <code>ADC_*</code> databases are the entire estate covered by PITR and LTR<span class="cite"><span>
-          (<code>main.bicep:1161-1166</code>)</span></span>. The weekly drill rotates over exactly those four and cannot target anything
+          (<code>main.bicep:1375-1380</code>)</span></span>. The weekly drill rotates over exactly those four and cannot target anything
           else<span class="cite"><span> (<code>dr-drill.yml:21-25</code>, <code>:79-82</code>)</span></span>. And pre-cutover data has no separate recovery path any more:
           the bacpac is gone, and the live databases already hold that data, copied in at cutover.</p>
           <p>Cross-links:</p>
           <ul>
           <li><a href="devops-iac.html">IaC chapter</a>: <code>infra/main.bicep</code> provisions the four <code>ADC_*</code> databases, the LTR
-          policies, the SLO alerts and workbook, and the Service Bus namespace.</li>
+          policies, the SLO alerts and workbook, and the Service Bus namespace with its broker queues, topics and
+          subscriptions<span class="cite"><span> (<code>main.bicep:1490</code>, <code>:1588</code>, <code>:1609</code>, <code>:1627</code>)</span></span>.</li>
           <li><a href="devops-cicd.html">CI/CD chapter</a>: <code>deploy.yml</code> carries the revision-activation and smoke gates, the
           rollback, and the four recency gates (<code>dr-freshness</code>, <code>load-freshness</code>,
-          <code>cross-service-freshness</code>, <code>cross-browser-freshness</code>, <span class="cite"><span><code>deploy.yml:828-829</code></span></span>).</li>
+          <code>cross-service-freshness</code>, <code>cross-browser-freshness</code>, <span class="cite"><span><code>deploy.yml:1226-1227</code></span></span>).</li>
           <li><a href="https://ivanball.github.io/docs/adr/006-database-per-service.html" target="_blank" rel="noopener">ADR-006</a>, the decision to adopt database-per-service, its trade-offs, and the
           <code>CrossDataSourceDegradeConvention</code> that removes cross-database FKs.</li>
           <li><a href="https://ivanball.github.io/docs/adr/009-resilience-and-recovery-objectives.html" target="_blank" rel="noopener">ADR-009</a>, the resilience and recovery objectives framework, including the requirement
@@ -1446,7 +1512,7 @@
           </tr>
           <tr>
           <td>§31 Cost/FinOps</td>
-          <td><code>POST-CUTOVER-atldevcon-downgrade.md</code> (S0 to Basic, then archive-and-drop on a measured 0 DTU); the 2026-09-02 alert-cadence changes (<code>main.bicep:529-533</code>, <code>:876-881</code>); the thinned telemetry stream documented in <code>OPERATIONS.md:621-652</code>; the <code>dr-drill.yml</code> <code>always()</code> sweep of leftover <code>-drill</code> copies (<code>dr-drill.yml:104-120</code>), so a drill cancelled at its timeout cannot leave a billed database behind</td>
+          <td><code>POST-CUTOVER-atldevcon-downgrade.md</code> (S0 to Basic, then archive-and-drop on a measured 0 DTU); the 2026-09-02 alert-cadence changes (<code>main.bicep:560-564</code>, <code>:1065-1070</code>); the thinned telemetry stream documented in <code>OPERATIONS.md:621-652</code>; the <code>dr-drill.yml</code> <code>always()</code> sweep of leftover <code>-drill</code> copies (<code>dr-drill.yml:104-120</code>), so a drill cancelled at its timeout cannot leave a billed database behind</td>
           </tr>
           <tr>
           <td>§32 Dependency &amp; Supply-Chain</td>
@@ -1464,24 +1530,24 @@
           (<code>DISASTER-RECOVERY.md:210-217</code>)</span></span>, but <code>dr-drill.yml</code> runs every Monday and a run reaches the ledger
           only when an operator pastes the printed row back into <code>DISASTER-RECOVERY.md</code>. Any drill newer than
           the last ledger row exists only in the Actions history, which is exactly what <code>dr-freshness</code> queries
-          (<span class="cite"><span><code>deploy.yml:846-858</code></span></span>, which reads <span class="cite"><span><code>MMCA.Common/.github/actions/freshness-gate/action.yml:184-187</code></span></span>); it cannot be read from the repository.</li>
+          (<span class="cite"><span><code>deploy.yml:1240-1256</code></span></span>, which reads <span class="cite"><span><code>MMCA.Common/.github/actions/freshness-gate/action.yml:184-187</code></span></span>); it cannot be read from the repository.</li>
           <li><strong>The live values of the three SQL managed-identity repository variables</strong>: <span class="cite"><span><code>main.bicep:36</code></span></span> shows
-          the safe default (<code>false</code>) and <span class="cite"><span><code>deploy.yml:1247</code></span></span> shows that the deployed value comes from
+          the safe default (<code>false</code>) and <span class="cite"><span><code>deploy.yml:1663</code></span></span> shows that the deployed value comes from
           <code>vars.USE_MANAGED_IDENTITY_SQL</code>. The variable&#39;s current value is repository configuration, not
           source. Check Settings, then Secrets and variables, then Actions.</li>
           <li><strong>That the archive bacpac is really gone</strong>: the template and the post-cutover runbook record its
-          deletion on 2026-10-03<span class="cite"><span> (<code>main.bicep:1119-1120</code>, <code>POST-CUTOVER-atldevcon-downgrade.md:103-110</code>)</span></span>, but
+          deletion on 2026-10-03<span class="cite"><span> (<code>main.bicep:1333-1334</code>, <code>POST-CUTOVER-atldevcon-downgrade.md:103-110</code>)</span></span>, but
           nothing in the repository can attest to the storage container&#39;s current state. An
           <code>az storage blob list</code> against that container is the only confirmation, and the answer should be
           empty: there is no pre-cutover copy to rely on.</li>
-          <li><strong>Whether the Notification Hub namespace actually exists in Azure</strong>: <span class="cite"><span><code>main.bicep:1395-1410</code></span></span> declares
+          <li><strong>Whether the Notification Hub namespace actually exists in Azure</strong>: <span class="cite"><span><code>main.bicep:1750-1762</code></span></span> declares
           the namespace, hub and auth rule as <code>existing</code>, so the template asserts nothing about their
-          presence. With <code>deployNotificationHub</code> defaulting to <code>true</code><span class="cite"><span> (<code>main.bicep:130</code>)</span></span>, a deploy fails to
+          presence. With <code>deployNotificationHub</code> defaulting to <code>true</code><span class="cite"><span> (<code>main.bicep:152</code>)</span></span>, a deploy fails to
           resolve <code>listKeys()</code> if they were never provisioned out of band. Only an <code>az</code> query against the
           subscription can settle it.</li>
-          <li><strong>Azure list prices</strong>: the DTU counts and the cadences are in source (<span class="cite"><span><code>main.bicep:1149-1153</code></span></span> sets
+          <li><strong>Azure list prices</strong>: the DTU counts and the cadences are in source (<span class="cite"><span><code>main.bicep:1365-1367</code></span></span> sets
           Basic capacity 5 for each per-service database), and the template quotes measured monthly figures
-          for the alert rules and the web test<span class="cite"><span> (<code>main.bicep:529-533</code>, <code>:876-881</code>)</span></span>. Those figures are
+          for the alert rules and the web test<span class="cite"><span> (<code>main.bicep:560-564</code>, <code>:1065-1070</code>)</span></span>. Those figures are
           point-in-time measurements on this subscription, not a price list. Check Azure pricing before
           quoting a saving.</li>
           </ul>
