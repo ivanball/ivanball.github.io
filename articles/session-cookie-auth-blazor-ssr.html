@@ -95,7 +95,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 54 articles</summary>
+        <summary>All 57 articles</summary>
         <nav class="doc-nav" aria-label="The MMCA.Common series">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -152,7 +152,10 @@
         <li><a href="durable-internal-commands.html">51 · Four ways to do work later</a></li>
         <li><a href="identity-completions.html">52 · Finishing identity</a></li>
         <li><a href="cloud-neutral-vendor-adapters.html">53 · One framework, three clouds</a></li>
-        <li><a href="series-index.html">54 · The series index</a></li>
+        <li><a href="borrowed-and-machine-identities.html">54 · Borrowed and machine identities</a></li>
+        <li><a href="app-as-mcp-server.html">55 · Your app as an MCP server</a></li>
+        <li><a href="outbound-webhooks.html">56 · Sending webhooks without opening a door</a></li>
+        <li><a href="series-index.html">57 · The series index</a></li>
           </ol>
         </nav>
       </details>
@@ -201,7 +204,9 @@
           script can read either one. On a host that runs the same-origin proxy (both apps do), the UI host writes
           the cookies itself: a sign-in from the WebAssembly client passes through the proxy, which moves the issued
           pair into the cookies, and the Blazor Server circuit hands its tokens over as short-lived, data-protected
-          handoffs. The script-facing <code>POST /auth/session-cookie</code> therefore answers 204 without writing anything on
+          handoffs. The proxy treats five gateway paths as token-issuing by default (<code>auth/login</code>, <code>auth/register</code>,
+          <code>auth/oauth/exchange</code>, <code>auth/sign-in-link/redeem</code> and <code>auth/passkeys/signin</code>, the passkey sign-in of
+          ADR-139), so a passkey sign-in opens the cookie session the same way a password sign-in does. The script-facing <code>POST /auth/session-cookie</code> therefore answers 204 without writing anything on
           those hosts, and logout DELETEs the cookies.</p>
           <p><strong>An SSR-time scheme reads the access cookie, and deliberately does not validate its signature.</strong>
           <code>SessionCookieAuthenticationHandler</code> (scheme <code>&quot;SessionCookie&quot;</code>) reads <code>mmca_auth_access</code> during prerender,
@@ -254,6 +259,8 @@ endpoints.MapPost(<span class="hljs-string">&quot;/auth/session/token&quot;</spa
     {
         <span class="hljs-keyword">return</span> Results.StatusCode(StatusCodes.Status403Forbidden);
     }
+
+    <span class="hljs-comment">// (elided: a live view-as overlay cookie, ADR-137, is answered here before the session is read)</span>
 
     <span class="hljs-keyword">var</span> result = <span class="hljs-keyword">await</span> refresher.GetOrRefreshAsync(httpContext, cancellationToken).ConfigureAwait(<span class="hljs-literal">false</span>);
     <span class="hljs-keyword">if</span> (result <span class="hljs-keyword">is</span> <span class="hljs-literal">null</span>)
@@ -312,7 +319,8 @@ endpoints.MapPost(<span class="hljs-string">&quot;/auth/session/token&quot;</spa
           its own keys and a payload minted by replica A cannot be decrypted by replica B. The symptom follows the
           load balancer rather than the user: random sign-outs and &quot;The antiforgery token could not be decrypted&quot;
           errors that fit no pattern.</p>
-          <p><code>builder.AddAzureDataProtection()</code> (ADR-069, in <code>MMCA.Common.Azure</code>) is the one-call answer on Azure;
+          <p><code>builder.AddAzureDataProtection()</code> (ADR-069, in <code>MMCA.Common.Azure.Startup</code>, which <code>MMCA.Common.Azure</code>
+          references and type-forwards) is the one-call answer on Azure;
           <code>AddAwsDataProtection()</code> and <code>AddGoogleCloudDataProtection()</code> are its peers in the other
           <a href="cloud-neutral-vendor-adapters.html">vendor adapter packages</a>, and a host keeps exactly one ring. Given a
           <code>DataProtection:BlobStorageUri</code> it
@@ -326,18 +334,19 @@ endpoints.MapPost(<span class="hljs-string">&quot;/auth/session/token&quot;</spa
           parameter is not readable from the repositories, so the record states what ships rather than what is
           switched on: on default parameters the ring is protected by a private container and a narrow account grant
           instead of by a Key Vault key. ADR-069 keeps that as a named trade-off rather than hiding it.</p>
-          <p>Absent configuration is a <strong>no-op for DataProtection</strong>: the method always registers a
-          <code>HostIntegrationMarker</code> (the receipt the startup tripwire checks), and with no blob URI it returns there and
-          registers no DataProtection services at all. A developer machine, a test host and the Helpdesk seed all run
+          <p>Absent configuration is a <strong>no-op</strong>: with no blob URI the method returns before it registers anything,
+          not even the <code>HostIntegrationMarker</code> (the receipt the startup tripwire checks), so a URI that only arrives
+          from a configuration source added after the call still trips the startup check. A developer machine, a test host and the Helpdesk seed all run
           single-process, keep the in-memory default, and take no Azure dependency at startup.</p>
           <p>Adoption is per host, and the shape of it is worth saying plainly. MMCA.ADC calls it on exactly the two
-          hosts that mint those payloads, its Identity service and its Web UI host. MMCA.Store&#39;s Web UI host calls it as well, on a storage
+          hosts that mint those payloads, its Identity service and its Web UI host. MMCA.Store calls it on three:
+          its Web UI host, its Identity service and its Sales service, each persisting to its own blob in a storage
           account provisioned for this and nothing else, with one extra catch on the infrastructure side: the blob
           URI is injected only when a <code>dataProtectionStorageReady</code> parameter is true (it defaults to false), because
           <code>AddAzureDataProtection</code> gates on the <em>presence</em> of the URI and never on its reachability, so wiring the
           URI before the blob role assignment exists would fail the first protect call rather than degrade. That flag
-          is true in production today. Store&#39;s Identity service still makes no call, and its container app scales
-          to two replicas (minimum one, maximum two).</p>
+          is true in production today, and each of those three container apps scales to two replicas (minimum one,
+          maximum two).</p>
           <h2 id="trade-offs-honestly">Trade-offs, honestly</h2>
           <p>The pattern fixes a real gap, and the §26 review names what it costs.</p>
           <ul>

@@ -95,7 +95,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 54 articles</summary>
+        <summary>All 57 articles</summary>
         <nav class="doc-nav" aria-label="The MMCA.Common series">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -152,7 +152,10 @@
         <li><a href="durable-internal-commands.html">51 · Four ways to do work later</a></li>
         <li><a href="identity-completions.html">52 · Finishing identity</a></li>
         <li><a href="cloud-neutral-vendor-adapters.html">53 · One framework, three clouds</a></li>
-        <li><a href="series-index.html">54 · The series index</a></li>
+        <li><a href="borrowed-and-machine-identities.html">54 · Borrowed and machine identities</a></li>
+        <li><a href="app-as-mcp-server.html">55 · Your app as an MCP server</a></li>
+        <li><a href="outbound-webhooks.html">56 · Sending webhooks without opening a door</a></li>
+        <li><a href="series-index.html">57 · The series index</a></li>
           </ol>
         </nav>
       </details>
@@ -219,6 +222,12 @@
           one-week maximum, validated at startup). A first-call <code>201 Created</code> replays as a <code>201</code> that still points at
           the created resource, not as a generic <code>200</code>, because the record captures the original status code and its
           <code>Location</code> header as well as the body.</p>
+          <p>The same key is what makes an offline write safe to resend. The opt-in client write queue of ADR-144 stores
+          every queued write with an idempotency key (the caller&#39;s, or a GUID the queue mints), and its handler resends
+          the write with that same key on every replay, so a write that reached the server before the connection
+          dropped still runs once, while the queue&#39;s own age limit defaults to the same 24 hours as the replay window
+          (the connectivity service that triggers those replays is covered in
+          <a href="device-capability-abstraction.html">One Blazor UI, two hosts: a device-capability layer that stays resolvable everywhere</a>).</p>
           <p>Binding the body to the key is why the filter runs at two pipeline stages rather than one. It is an
           <code>IAsyncResourceFilter</code> as well as an <code>IAsyncActionFilter</code>: the resource stage runs before model binding,
           which is the last point at which the request body can still be made re-readable, so that is where it calls
@@ -338,9 +347,11 @@
           <code>MessageBus:EnableInbox=false</code> gets the no-op store plus one startup warning recording the opt-out,
           while <code>true</code> on an in-process host registers nothing.</li>
           </ul>
-          <p>The retry half is wired too: every receive endpoint gets an exponential-backoff <code>UseMessageRetry</code> policy
-          (<code>MessageBusSettings.RetryLimit</code>), and the consumer rethrows on handler failure so MassTransit applies it
-          before dead-lettering. So the honest framing is: the HTTP write path is idempotent-by-attribute (the
+          <p>The retry half is wired too: the framework&#39;s own receive pipeline, shared by every broker transport, runs
+          the consumer again after a failure, each attempt in a fresh DI scope with an exponentially growing delay,
+          up to <code>MessageBusSettings.RetryLimit</code> retries (default 5), then asks the transport for a second-level
+          redelivery and dead-letters the message only once those are spent too. The consumer rethrows on handler
+          failure so that pipeline sees it. So the honest framing is: the HTTP write path is idempotent-by-attribute (the
           scorecard credits the filter under §9 and §10, where the §10 row, scored Implementation 8, lists the
           filter taking a distributed lock with the stripe as fallback among its evidence, while §29 covers the Polly
           handlers and the outbox&#39;s graceful degradation), and the broker consumer path dedups by <code>MessageId</code> by

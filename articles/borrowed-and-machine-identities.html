@@ -1,0 +1,503 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#0e151f" media="(prefers-color-scheme: dark)">
+  <title>Borrowed and Machine Identities: Read-Only View-As and OAuth Client Credentials · MMCA · Ivan Ball-llovera</title>
+  <meta name="description" content="A read-only, time-boxed support view of another account and OAuth client-credentials tokens for programs, each an ordinary token limited by one claim, and each refusing the other.">
+  <link rel="canonical" href="https://ivanball.github.io/articles/borrowed-and-machine-identities.html">
+  <link rel="icon" href="../assets/img/favicon.svg" type="image/svg+xml">
+  <link rel="alternate" type="application/rss+xml" title="Ivan Ball-llovera: deep dives on enterprise .NET" href="https://ivanball.github.io/feed.xml">
+  <meta property="og:type" content="article">
+  <meta property="og:site_name" content="Ivan Ball-llovera">
+  <meta property="og:title" content="Borrowed and Machine Identities: Read-Only View-As and OAuth Client Credentials">
+  <meta property="og:description" content="A read-only, time-boxed support view of another account and OAuth client-credentials tokens for programs, each an ordinary token limited by one claim, and each refusing the other.">
+  <meta property="og:url" content="https://ivanball.github.io/articles/borrowed-and-machine-identities.html">
+  <meta property="og:image" content="https://ivanball.github.io/assets/img/og-image.png">
+  <meta property="og:image:alt" content="Ivan Ball-llovera, Principal Software Architect">
+  <meta property="og:locale" content="en_US">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Borrowed and Machine Identities: Read-Only View-As and OAuth Client Credentials">
+  <meta name="twitter:description" content="A read-only, time-boxed support view of another account and OAuth client-credentials tokens for programs, each an ordinary token limited by one claim, and each refusing the other.">
+  <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"TechArticle","headline":"Borrowed and Machine Identities: Read-Only View-As and OAuth Client Credentials","description":"A read-only, time-boxed support view of another account and OAuth client-credentials tokens for programs, each an ordinary token limited by one claim, and each refusing the other.","url":"https://ivanball.github.io/articles/borrowed-and-machine-identities.html","mainEntityOfPage":"https://ivanball.github.io/articles/borrowed-and-machine-identities.html","datePublished":"2026-11-25T12:00:00Z","author":{"@type":"Person","name":"Ivan Ball-llovera","url":"https://ivanball.github.io"},"isPartOf":{"@type":"CreativeWorkSeries","name":"The MMCA.Common series","url":"https://ivanball.github.io/articles/index.html"},"position":54}</script>
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Writing","item":"https://ivanball.github.io/writing.html"},{"@type":"ListItem","position":2,"name":"The MMCA.Common series","item":"https://ivanball.github.io/articles/index.html"},{"@type":"ListItem","position":3,"name":"54 · Borrowed and machine identities","item":"https://ivanball.github.io/articles/borrowed-and-machine-identities.html"}]}</script>
+  <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);if(localStorage.getItem('mmca-rail')==='hidden')document.documentElement.setAttribute('data-rail','hidden');if(localStorage.getItem('mmca-cites')==='shown')document.documentElement.setAttribute('data-cites','shown');}catch(e){}})();</script>
+  <link rel="preload" href="../assets/fonts/inter-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="../assets/fonts/jetbrains-mono-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="../assets/css/styles.css">
+  <link rel="stylesheet" href="../assets/css/docs.css">
+  <script defer src="../assets/js/main.js"></script>
+  <script defer src="../assets/js/search.js"></script>
+  <script defer src="../assets/js/analytics.js"></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+
+  <header class="site-header">
+    <div class="container nav">
+      <a class="brand" href="../index.html">
+        <span class="brand-mark" aria-hidden="true">IB</span>
+        <span>Ivan Ball-llovera</span>
+      </a>
+      <nav aria-label="Primary">
+        <ul class="nav-links" id="nav-links">
+          <li><a href="../index.html">Home</a></li>
+          <li><a href="../resume.html">Résumé</a></li>
+          <li><a href="../platform.html">Platform</a></li>
+          <li><a href="../docs/index.html">Reference</a></li>
+          <li><a href="../writing.html" aria-current="page">Writing</a></li>
+          <li><a href="../speaking.html">Speaking</a></li>
+          <li><a href="../contact.html">Contact</a></li>
+        </ul>
+      </nav>
+      <div class="nav-tools">
+        <button class="icon-btn search-open" type="button" aria-label="Search the site" data-search-open>
+          <span aria-hidden="true">⌕</span>
+        </button>
+        <button class="icon-btn theme-toggle" type="button" aria-label="Switch color theme">
+          <span class="sun" aria-hidden="true">☀</span><span class="moon" aria-hidden="true">☾</span>
+        </button>
+        <button class="icon-btn nav-toggle" type="button" aria-label="Toggle navigation menu" aria-expanded="false" aria-controls="nav-links">☰</button>
+      </div>
+    </div>
+  </header>
+  <dialog class="search-dialog" id="site-search" aria-label="Search this site">
+    <form class="search-box" method="dialog" role="search">
+      <span class="search-icon" aria-hidden="true">⌕</span>
+      <input class="search-input" type="search" id="site-search-input" placeholder="Search ADRs, guides, chapters, articles…"
+             autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
+             aria-controls="site-search-results" aria-describedby="site-search-status">
+      <button class="btn btn--ghost search-close" type="button" data-search-close>Esc</button>
+    </form>
+    <p class="search-status" id="site-search-status" role="status" aria-live="polite"></p>
+    <ul class="search-results" id="site-search-results"></ul>
+    <p class="search-foot">
+      <span><kbd>↑</kbd><kbd>↓</kbd> to navigate</span>
+      <span><kbd>Enter</kbd> to open</span>
+      <span><kbd>"…"</kbd> all these words</span>
+      <span><kbd>AND</kbd><kbd>OR</kbd> to combine</span>
+    </p>
+  </dialog>
+
+  <main id="main">
+    <div class="container doc-container">
+      <nav class="doc-breadcrumb" aria-label="Breadcrumb">
+        <a href="../writing.html">Writing</a>
+        <span aria-hidden="true">/</span>
+        <a href="../articles/index.html">The MMCA.Common series</a>
+        <span aria-hidden="true">/</span>
+        <span class="current">54 · Borrowed and machine identities</span>
+        <button class="rail-toggle" type="button" data-rail-toggle aria-expanded="true" aria-controls="doc-rail">On this page</button>
+      </nav>
+      <div class="doc-layout doc-layout--toc">
+      <aside class="doc-sidebar">
+      <details class="doc-sidebar-details" open>
+        <summary>All 57 articles</summary>
+        <nav class="doc-nav" aria-label="The MMCA.Common series">
+          <ol>
+        <li><a href="index.html">Overview</a></li>
+        <li><a href="open-sourced-enterprise-dotnet-34-categories.html">01 · Open-sourced and graded against 34 categories</a></li>
+        <li><a href="modular-monolith-to-microservices.html">02 · Modular monolith to microservices</a></li>
+        <li><a href="34-category-architecture-rubric.html">03 · The 34-category architecture rubric</a></li>
+        <li><a href="result-railway-csharp.html">04 · The Result railway in C#</a></li>
+        <li><a href="kill-anemic-domain-model.html">05 · Kill the anemic domain model</a></li>
+        <li><a href="specification-pattern.html">06 · Specifications over LINQ spaghetti</a></li>
+        <li><a href="cqrs-decorator-pipeline.html">07 · The CQRS decorator pipeline</a></li>
+        <li><a href="validation-kit.html">08 · Compose validators, don&#39;t copy them</a></li>
+        <li><a href="transactional-outbox-dotnet.html">09 · The transactional outbox</a></li>
+        <li><a href="database-per-service.html">10 · Database-per-service inside a monolith</a></li>
+        <li><a href="polyglot-persistence.html">11 · Polyglot persistence: one model, four engines</a></li>
+        <li><a href="navigation-populators.html">12 · Navigation populators</a></li>
+        <li><a href="optimistic-concurrency-rowversion.html">13 · Optimistic concurrency: RowVersion round-trips</a></li>
+        <li><a href="self-ordering-modules.html">14 · Self-ordering modules</a></li>
+        <li><a href="event-schema-versioning.html">15 · Event-schema versioning</a></li>
+        <li><a href="jwks-cross-service-auth.html">16 · JWKS cross-service auth</a></li>
+        <li><a href="password-hashing.html">17 · Password hashing done right</a></li>
+        <li><a href="idempotency-attribute.html">18 · Idempotency in one attribute</a></li>
+        <li><a href="self-invalidating-cache.html">19 · The self-invalidating cache</a></li>
+        <li><a href="problem-details-http-grpc.html">20 · Problem Details across HTTP and gRPC</a></li>
+        <li><a href="notifications-vertical-slice.html">21 · Notifications as a vertical slice</a></li>
+        <li><a href="live-channel-push.html">22 · Live channels over one SignalR hub</a></li>
+        <li><a href="manual-dto-mapping.html">23 · Delete AutoMapper: manual DTO mapping</a></li>
+        <li><a href="permission-based-authorization.html">24 · Permission-based authorization over roles</a></li>
+        <li><a href="session-cookie-auth-blazor-ssr.html">25 · Browser session-cookie auth for Blazor SSR</a></li>
+        <li><a href="external-oauth-login.html">26 · External OAuth login behind your own JWTs</a></li>
+        <li><a href="jwt-refresh-token-rotation.html">27 · Refresh tokens that rotate per device</a></li>
+        <li><a href="generic-entity-controllers.html">28 · Generic entity controllers</a></li>
+        <li><a href="resource-ownership-authorization.html">29 · Resource-ownership authorization</a></li>
+        <li><a href="rate-limiting-brute-force-protection.html">30 · Rate limiting and brute-force protection</a></li>
+        <li><a href="aspire-one-command.html">31 · Aspire: one command</a></li>
+        <li><a href="extract-module-to-grpc-service.html">32 · Extracting a module to a gRPC service</a></li>
+        <li><a href="resilience-recovery-objectives.html">33 · Resilience and recovery objectives</a></li>
+        <li><a href="architecture-fitness-functions.html">34 · Architecture fitness functions</a></li>
+        <li><a href="test-pyramid.html">35 · The test pyramid</a></li>
+        <li><a href="soft-delete-vs-erasure.html">36 · Soft-delete vs the right to erasure</a></li>
+        <li><a href="reusable-blazor-ui-framework.html">37 · A reusable Blazor UI framework</a></li>
+        <li><a href="i18n-and-theming.html">38 · i18n and theming on one preference pipeline</a></li>
+        <li><a href="build-your-first-module.html">39 · Build your first module</a></li>
+        <li><a href="write-your-first-fitness-test.html">40 · Write your first fitness test</a></li>
+        <li><a href="two-real-apps-case-study.html">41 · Two real apps on one framework</a></li>
+        <li><a href="device-capability-abstraction.html">42 · One Blazor UI, two hosts</a></li>
+        <li><a href="managed-file-storage-avatars.html">43 · Managed file storage: uploads you don&#39;t have to trust</a></li>
+        <li><a href="http-api-versioning.html">44 · HTTP API versioning, proven not just claimed</a></li>
+        <li><a href="feature-flags-cqrs-pipeline.html">45 · Feature flags in the CQRS pipeline</a></li>
+        <li><a href="field-level-encryption-ef-core.html">46 · Field-level encryption in EF Core</a></li>
+        <li><a href="security-headers-csp-blazor.html">47 · Security headers and CSP for Blazor</a></li>
+        <li><a href="observability-opentelemetry.html">48 · Observability by default</a></li>
+        <li><a href="saga-compensation-reconciliation.html">49 · Saga compensation and the reconciliation backstop</a></li>
+        <li><a href="governed-llm-boundary.html">50 · The governed LLM boundary</a></li>
+        <li><a href="durable-internal-commands.html">51 · Four ways to do work later</a></li>
+        <li><a href="identity-completions.html">52 · Finishing identity</a></li>
+        <li><a href="cloud-neutral-vendor-adapters.html">53 · One framework, three clouds</a></li>
+        <li><a href="borrowed-and-machine-identities.html" aria-current="page">54 · Borrowed and machine identities</a></li>
+        <li><a href="app-as-mcp-server.html">55 · Your app as an MCP server</a></li>
+        <li><a href="outbound-webhooks.html">56 · Sending webhooks without opening a door</a></li>
+        <li><a href="series-index.html">57 · The series index</a></li>
+          </ol>
+        </nav>
+      </details>
+    </aside>
+        <article class="doc-content">
+          <p class="eyebrow doc-kicker">Auth &amp; the edge · No. 54</p>
+          <h1 id="borrowed-and-machine-identities-read-only-view-as-and-oauth-client-credentials">Borrowed and Machine Identities: Read-Only View-As and OAuth Client Credentials</h1>
+          <p class="article-meta"><time datetime="2026-11-25T12:00:00Z">November 25, 2026</time> <span aria-hidden="true">·</span> Ivan Ball-llovera</p>
+          <p class="article-subtitle">Every token in a framework built around interactive sign-in names a person who just
+          proved who they are. Two callers do not fit that shape: a support user who needs to see one
+          account&#39;s screen, and a program that needs to call an API with nobody at the keyboard. Here is how
+          MMCA.Common mints both as ordinary tokens, bounds what each can do with a claim, a middleware step and
+          a decorator, and makes each one refuse the other.</p>
+          <hr>
+          <p>A user writes in: &quot;my schedule page is empty.&quot; The support engineer opens the same page and it is
+          full. The two of them spend twenty minutes on screenshots, because the engineer cannot see what the
+          user sees without the user&#39;s password, and the user should never send it.</p>
+          <p>A month later a partner asks for a nightly export. Every token-issuing path in the framework is an
+          interactive sign-in, and access tokens last 15 minutes, so the fastest available answer is to paste a
+          person&#39;s token into a cron job. It works until the next morning.</p>
+          <p>Both requests end in the same place if you are careless: a token that says &quot;this is user 4182&quot; when
+          it is not. The support view writes a preference change in the user&#39;s name, and the audit trail
+          records the user doing something they never did. The program&#39;s token carries an administrator&#39;s role
+          because that was the account somebody had to hand, and it can do anything an administrator can, at
+          3 a.m., from a server nobody watches.</p>
+          <p>This article is about the two identities MMCA.Common mints outside interactive sign-in. <strong>ADR-137</strong>
+          is the borrowed one: a read-only, reasoned, 15-minute view of another account that the account
+          holder can see. <strong>ADR-140</strong> is the machine one: the OAuth 2.0 client credentials grant, backed by a
+          service-account user whose role is the whole of its authority. They share a design rule. Each
+          produces a token every service already knows how to validate, and each carries a claim that the rest
+          of the system reads to narrow what the token may do.</p>
+          <p>The series has covered the pieces both plug into. <a href="jwks-cross-service-auth.html">Article 16</a> covers how
+          every service validates the same tokens through JWKS, and the service tokens services attach to each
+          other&#39;s calls. <a href="identity-completions.html">Article 52</a> covers the user and role administration
+          controllers the view-as grant action lives on, and the <code>mfa</code> claim whose absence matters below.</p>
+          <h2 id="why-it-matters">Why it matters</h2>
+          <p>Rubric §11 (Security) asks that authentication be centralized, that authorization be enforced at the
+          right layer rather than in the UI, and that permissions follow least privilege. Both callers in this
+          article are the usual places those properties break. Support access is where teams ship a &quot;log in as&quot;
+          button that writes, and machine access is where they ship a long-lived API key with an administrator
+          behind it. A framework that owns sign-in for several apps has to answer both, or each app answers
+          them alone.</p>
+          <h2 id="the-mmca-answer-part-one-view-as-is-a-token-that-cannot-write">The MMCA answer, part one: view-as is a token that cannot write</h2>
+          <p><strong>The grant is a permission, a reason and a row.</strong> <code>POST {userId}/view-as</code> on
+          <code>UsersAdminControllerBase</code> requires <code>users:view-as</code> (<code>AdministrationPermissions.ViewAsUsers</code>) on top of
+          the class-level <code>users:manage</code>, and takes a reason of 10 to 500 characters
+          (<code>ViewAsGrant.ReasonMinLength</code> and <code>ReasonMaxLength</code>). <code>ViewAsService.StartAsync</code> validates the reason
+          and refuses the caller&#39;s own account before any lookup, then refuses a missing or deleted account, a
+          machine client&#39;s service account, a locked account, and any account whose role itself holds
+          <code>users:view-as</code>, so staff cannot view each other. A host that enabled view-as but registered no
+          <code>IViewAsSubjectResolver</code> refuses every grant with <code>ViewAs.NotConfigured</code>.</p>
+          <p>The <code>ViewAsGrant</code> row is written <strong>before</strong> the token is minted, so no token exists without its audit
+          record, and each new grant sweeps rows older than <code>ViewAs:RetentionDays</code> (default 90, <code>[Range(1, 3650)]</code>) instead of running a hosted service in every process.</p>
+          <p><strong>The token is minted by the raw signer.</strong> <code>ViewAsService</code> calls
+          <code>ITokenService.GenerateShortLivedAccessToken</code> directly, not the session-stamping wrapper the sign-in
+          workflow uses, so the token carries no <code>sid</code> and no <code>mfa</code> claim and opens no refresh session. It
+          carries the viewed account&#39;s standard claims plus two more: <code>act_sub</code>, the staff user, and <code>vag</code>, the
+          grant id (<code>AuthClaimTypes.ViewAsActor</code> and <code>AuthClaimTypes.ViewAsGrant</code>). Its lifetime is the smaller
+          of 15 minutes (<code>ViewAsGrant.MaxLifetime</code>) and the configured access-token lifetime. Nothing renews it.</p>
+          <p><strong>Presence of <code>act_sub</code> makes the request read-only, enforced twice.</strong> The two layers exist because
+          the writes live in two places. Several writes never pass through a command handler at all (sign-in,
+          refresh, password and preference changes, device registration), so a check in the CQRS pipeline
+          alone would leave them open; and a command can be reached from a GET handler or a hub method, so a
+          check on the HTTP method alone would leave those open.</p>
+          <p>The HTTP layer is <code>ViewAsGuardMiddleware</code>, the <code>ViewAsGuard</code> step of the shared pipeline, added
+          whether or not view-as is enabled. A request without <code>act_sub</code> passes after one claim lookup. For a
+          view-as request the guard answers in order:</p>
+          <ol>
+          <li>While <code>ViewAs:Enabled</code> is false (it defaults to false), 401, so a token minted before the switch
+          was turned off reaches nothing.</li>
+          <li>Any method other than GET, HEAD or OPTIONS, 403, unless it is a POST to the one action marked as
+          the end-view endpoint or to an endpoint the host marked <code>ViewAsReadOnlyEndpointAttribute</code> (gRPC is
+          always POST).</li>
+          <li>The grant must still be live, else 401. On the host that holds the grant store this is one
+          uncached primary-key read per view-as request, because a cached &quot;live&quot; answer on one replica would
+          outlive an End handled on another. On a service without the store it is the token&#39;s own expiry
+          plus a grant-ended marker in the shared cache.</li>
+          </ol>
+          <p>Every failure on that path is a refusal. A store error, a missing <code>IViewAsService</code>, a missing cache or
+          an unreadable cache all answer 401. That is a deliberate contrast with <code>SoftDeletedUserMiddleware</code>,
+          which fails open, and the remarks on the class give the reason: the exposure here is one staff user&#39;s
+          support session, so an outage costs a support view, never a write in someone else&#39;s name.</p>
+          <p>The command layer is <code>ViewAsCommandDecorator</code>, registered last with <code>TryDecorate</code> so it runs first:
+          the outermost decorator of the standard command pipeline, wrapped only by the optional MiniProfiler
+          decorator that <code>AddApplicationProfiling</code> adds when <code>UseMiniProfiler</code> is on. While the caller carries <code>act_sub</code> it returns <code>Auth.ViewAsReadOnly</code>
+          (Forbidden) and the command does no feature-flag lookup, permission check, logging, validation or
+          transaction work. Queries carry no view-as decorator.</p>
+          <p><strong>The browser never holds the token, and the staff user&#39;s own session survives.</strong> On a web host
+          behind the same-origin proxy, a successful grant writes a separate HttpOnly overlay cookie,
+          <code>mmca_view_as</code> (<code>ViewAsOverlayCookie.Name</code>), whose <code>Max-Age</code> is the token&#39;s remaining life. While it
+          is live its token replaces the session bearer for forwarded calls except sign-in and sign-out; it is
+          deleted on end, sign-out, a successful sign-in, expiry, or an upstream 401. The staff user&#39;s session
+          cookies are never touched, so ending the view lands them back in their own account. MAUI heads do not
+          offer view-as.</p>
+          <p><strong>The account holder can tell.</strong> The grant row is the audit record and the user-visible record at
+          once: the viewed user&#39;s sign-in history merges each grant as a &quot;Viewed by support&quot; row, and a support
+          access log (<code>ViewAsGrantsAdminControllerBase</code> plus the routeless <code>SupportAccessLog</code> component) answers
+          who viewed whom, why, when and how it ended. One write serves the operator and the account holder, so
+          the two cannot disagree.</p>
+          <h2 id="the-mmca-answer-part-two-a-machine-client-is-a-service-account-user">The MMCA answer, part two: a machine client is a service-account user</h2>
+          <p><strong>The decision that makes everything else cheap: a program gets a user id.</strong> Audit stamps, ownership
+          rules and the per-user rate-limit partition all key on the token&#39;s integer <code>sub</code>. A separate client
+          principal type would need a second id space in each of them, and a client id would collide with a
+          user id. So each machine client is backed one to one by its own service-account user, created by the
+          consumer&#39;s <code>IServiceAccountProvisioner</code> over the app&#39;s own user aggregate, because MMCA.Common owns no
+          user table. <code>IAuthUser.IsServiceAccount</code> is a defaulted member, so an app that never adopts machine
+          clients implements nothing.</p>
+          <p><strong>The token endpoint is a base of its own.</strong> <code>MachineTokenControllerBase</code> is an abstract controller
+          whose sealed subclass in the app routes it at <code>auth/token</code>. Its one action is a POST that is
+          <code>[AllowAnonymous]</code> (the secret is the credential), throttled by the <code>auth-ip</code> rate-limit policy as login
+          is, marked <code>[NonIdempotent]</code> so the replay cache never holds a bearer token at rest, and form-encoded
+          with <code>grant_type=client_credentials</code>. The client authenticates with HTTP Basic or with <code>client_id</code> and
+          <code>client_secret</code> form fields. The response is RFC 6749 on the wire, not Problem Details: <code>access_token</code>,
+          <code>token_type</code> and <code>expires_in</code>, or <code>invalid_client</code> (401, with a <code>WWW-Authenticate: Basic</code> header),
+          <code>unsupported_grant_type</code> or <code>invalid_request</code> (400), every answer carrying <code>Cache-Control: no-store</code>.
+          While machine clients are off the action answers 404, so a consumer can inherit the base before it
+          turns the feature on. Putting the action on <code>AuthControllerBase</code> instead would have changed every
+          consumer&#39;s committed OpenAPI documents for a feature none of them had enabled.</p>
+          <p><strong>The token is person-shaped.</strong> <code>MachineClientService.IssueTokenAsync</code> checks the grant type, finds the
+          client and checks its secret, then reads the service account through the provisioner on <strong>every</strong>
+          mint, so a deleted or locked account stops the client at once. It mints through the same raw
+          <code>GenerateShortLivedAccessToken</code> view-as uses, adding <code>client_id</code> and <code>token_use=machine</code>
+          (<code>AuthClaimTypes.ClientId</code>, <code>TokenUse</code>, <code>TokenUseMachine</code>). The <code>sub</code> is the service account and the
+          permission claims are its role&#39;s, baked in exactly as for a person. It carries no refresh token, no
+          <code>sid</code>, no <code>auth_time</code> and no <code>mfa</code>, so a use case that requires a second factor refuses it with no
+          special case. <code>MachineClients:AccessTokenMinutes</code> defaults to 15 and is validated from 1 to 15.</p>
+          <p><strong>Revocation reuses a marker every service already reads.</strong> <code>RevokeAsync</code> saves the row&#39;s
+          <code>RevokedOn</code> first, so no new token is minted, then writes the soft-deleted-user marker for the service
+          account, sized by <code>SoftDeletedUserCache.MarkerDurationFor</code> to the longer of the machine token&#39;s
+          lifetime and the host&#39;s access-token lifetime. Every service&#39;s <code>SoftDeletedUserMiddleware</code> then
+          answers 401 to the tokens the client already holds. The 15-minute cap is what keeps a token from
+          outliving the marker that is meant to stop it.</p>
+          <p><strong>Turning it on is two switches and a class.</strong> <code>MachineClients:Enabled</code> defaults to false, and an
+          enabled host needs both the <code>AddMachineClients</code> call and its own <code>IServiceAccountProvisioner</code>; ADR-140
+          records a settings validator and a startup tripwire that fail each half-configuration.</p>
+          <h2 id="how-each-refuses-the-other">How each refuses the other</h2>
+          <p>The two features meet at one permission, <code>users:view-as</code>, and the refusal runs in both directions.</p>
+          <p><strong>A machine client can never hold <code>users:view-as</code>.</strong> <code>MachineClientService</code> keeps four forbidden
+          permissions, <code>users:view-as</code>, <code>users:manage</code>, <code>roles:manage</code> and <code>clients:manage</code>, and checks the
+          backing role against them at create (before the service account is provisioned, so a refused create
+          leaves no orphan) and again at every mint, because a role can gain a permission after the client
+          exists. A program holding <code>users:view-as</code> could read as any user; that power is reserved for a named
+          staff member giving a reason. The other three are the escalation paths: administering people,
+          granting its own role anything, and minting further clients for itself.</p>
+          <p><strong>View-as can never borrow a machine identity.</strong> <code>ViewAsService</code> refuses a service account as a target
+          with <code>ViewAs.TargetIsServiceAccount</code> (Forbidden): there is no person behind it to support.</p>
+          <p><strong>And view-as refuses its own holders.</strong> The same role check that keeps <code>users:view-as</code> off a machine
+          client keeps it off a view target: an account whose role holds it answers <code>ViewAs.TargetIsStaff</code>. No
+          lateral access between staff, and no chain from one borrowed identity to another, because a grant
+          request made under a view-as token is a POST the guard refuses.</p>
+          <p><strong>Endpoints where a person takes part refuse machines outright.</strong> A machine client holds what its
+          role holds, so an endpoint that asks only for a signed-in caller (casting a vote, saving a bookmark,
+          checking in) is open to every machine client whatever its role. <code>[RefuseMachineClients]</code> is an
+          authorization filter that answers 403 with <code>MachineClients.EndpointRefused</code> to any request carrying
+          <code>token_use=machine</code> and leaves every other caller to <code>[Authorize]</code> and the permission attributes.
+          Declared on a controller it covers every action, permission-gated ones included.</p>
+          <pre class="doc-pre" tabindex="0" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-comment">// Illustrative of the documented shape: the two narrowing claims and where each is read.</span>
+<span class="hljs-comment">// Condensed from ViewAsGuardMiddleware, ViewAsCommandDecorator, MachineClientService and</span>
+<span class="hljs-comment">// RefuseMachineClientsAttribute; logging, ConfigureAwait and the no-store path are dropped.</span>
+
+<span class="hljs-comment">// 1. The HTTP layer: a view-as request may only read, and only while its grant is live.</span>
+<span class="hljs-function"><span class="hljs-keyword">public</span> <span class="hljs-keyword">async</span> Task <span class="hljs-title">InvokeAsync</span>(<span class="hljs-params">HttpContext context, ILogger&lt;ViewAsGuardMiddleware&gt; logger</span>)</span>
+{
+    <span class="hljs-keyword">if</span> (!context.User.IsViewAs()) { <span class="hljs-keyword">await</span> next(context); <span class="hljs-keyword">return</span>; }   <span class="hljs-comment">// one claim lookup</span>
+
+    <span class="hljs-keyword">var</span> settings = context.RequestServices?.GetService&lt;IOptions&lt;ViewAsSettings&gt;&gt;()?.Value;
+    <span class="hljs-keyword">if</span> (settings <span class="hljs-keyword">is</span> <span class="hljs-literal">null</span> || !settings.Enabled) { context.Response.StatusCode = <span class="hljs-number">401</span>; <span class="hljs-keyword">return</span>; }
+
+    <span class="hljs-keyword">if</span> (!IsSafeMethod(context.Request.Method) &amp;&amp; !IsEndViewAsEndpoint(context) &amp;&amp; !IsReadOnlyEndpoint(context))
+    { context.Response.StatusCode = <span class="hljs-number">403</span>; <span class="hljs-keyword">return</span>; }
+
+    <span class="hljs-keyword">if</span> (!<span class="hljs-keyword">await</span> IsGrantLiveOnThisHostAsync(context, settings.HostsGrantStore, logger))
+    { context.Response.StatusCode = <span class="hljs-number">401</span>; <span class="hljs-keyword">return</span>; }                   <span class="hljs-comment">// store error = refused</span>
+
+    <span class="hljs-keyword">await</span> next(context);
+}
+
+<span class="hljs-comment">// 2. The command layer: outermost decorator of the standard pipeline, so a refused command does no other work.</span>
+<span class="hljs-function"><span class="hljs-keyword">public</span> <span class="hljs-keyword">async</span> Task&lt;TResult&gt; <span class="hljs-title">HandleAsync</span>(<span class="hljs-params">TCommand command, CancellationToken cancellationToken = <span class="hljs-literal">default</span></span>)</span>
+{
+    <span class="hljs-keyword">if</span> (!currentUser.User.IsViewAs())
+        <span class="hljs-keyword">return</span> <span class="hljs-keyword">await</span> inner.HandleAsync(command, cancellationToken);
+
+    <span class="hljs-keyword">return</span> CreateFailure()([Error.Forbidden(<span class="hljs-string">&quot;Auth.ViewAsReadOnly&quot;</span>, <span class="hljs-string">&quot;Viewing as another user is read-only.&quot;</span>)]);
+}
+
+<span class="hljs-comment">// 3. The machine mint: the account and its role are re-read every time.</span>
+<span class="hljs-keyword">var</span> account = <span class="hljs-keyword">await</span> provisioner.FindAsync(client.ServiceAccountUserId, cancellationToken);
+<span class="hljs-keyword">if</span> (account <span class="hljs-keyword">is</span> <span class="hljs-literal">null</span> || account.UserId != client.ServiceAccountUserId || IsForbiddenRole(account.Role))
+    <span class="hljs-keyword">return</span> invalidClient;                                            <span class="hljs-comment">// users:view-as among the four</span>
+
+<span class="hljs-keyword">var</span> token = tokenService.GenerateShortLivedAccessToken(
+    account.UserId, account.Email, account.Role, account.Name,
+    [<span class="hljs-meta">new(AuthClaimTypes.ClientId, client.Id.ToString()),
+     new(AuthClaimTypes.TokenUse, AuthClaimTypes.TokenUseMachine)</span>],
+    TimeSpan.FromMinutes(settings.Value.AccessTokenMinutes));
+
+<span class="hljs-comment">// 4. The participation guard: a person must be at the keyboard.</span>
+<span class="hljs-function"><span class="hljs-keyword">public</span> <span class="hljs-keyword">void</span> <span class="hljs-title">OnAuthorization</span>(<span class="hljs-params">AuthorizationFilterContext context</span>)</span>
+{
+    <span class="hljs-keyword">if</span> (context.HttpContext.User.HasClaim(AuthClaimTypes.TokenUse, AuthClaimTypes.TokenUseMachine))
+        context.Result = Refusal(context.HttpContext);               <span class="hljs-comment">// 403 MachineClients.EndpointRefused</span>
+}</code></pre>
+          <h2 id="where-the-two-stand-in-a-deployed-app">Where the two stand in a deployed app</h2>
+          <p>MMCA.ADC is the one consumer that enables either, and the two are in different states.</p>
+          <p><strong>View-as is switched on in ADC.</strong> All four service hosts set <code>ViewAs:Enabled</code> true in their base
+          <code>appsettings.json</code>; Identity keeps the default <code>HostsGrantStore</code> and holds the grant table, while
+          Conference, Engagement and Notification set <code>HostsGrantStore</code> false and read the grant-ended marker
+          from the shared Redis cache. ADC registers its own <code>IViewAsSubjectResolver</code> over its <code>User</code>
+          aggregate, grants <code>users:view-as</code> in its Identity permission grants, places <code>ViewAsButton</code> on its
+          organizer user detail page, and routes the support access log as <code>AdminViewAsGrantsController</code> with a
+          <code>SupportAccess</code> page.</p>
+          <p><strong>Machine clients ship switched off in ADC production.</strong> The Identity service calls
+          <code>AddMachineClients</code> and implements the provisioner, but its base <code>appsettings.json</code> sets
+          <code>MachineClients:Enabled</code> false with <code>AccessTokenMinutes</code> 15, so <code>auth/token</code> and every
+          <code>Admin/MachineClients</code> route answer 404 there. Only local development turns it on, through
+          <code>appsettings.Development.json</code> and the AppHost&#39;s <code>MachineClients__Enabled</code>. Eight participation
+          controllers declare <code>[RefuseMachineClients]</code> anyway (six in Engagement, two in Conference), so the
+          refusal is in place before the feature is.</p>
+          <h2 id="trade-offs-honestly">Trade-offs, honestly</h2>
+          <ul>
+          <li><strong>One primary-key read per view-as request, and failing closed.</strong> Only view-as requests pay it; an
+          ordinary request pays one claim lookup in the middleware and one in the decorator. An outage of the
+          grant store or the shared cache ends every live support view. That is the intended direction, and
+          it is still an outage.</li>
+          <li><strong>A page that writes on GET does not render for a viewer.</strong> The method rule and the decorator
+          refuse it with 403. That is correct and occasionally surprising.</li>
+          <li><strong>The view is of standard claims only.</strong> The token is minted from <code>ViewAsSubject</code> (subject, email,
+          role, display name and the role&#39;s permissions). A claim an app adds through its own sign-in path is
+          not reproduced, so a page that depends on one can render differently for the viewer.</li>
+          <li><strong><code>ViewAsReadOnlyEndpointAttribute</code> is an assertion nobody checks.</strong> A host that marks a gRPC
+          method read-only is promising it performs no write; the command decorator still refuses a command
+          however it was reached, but a write that bypasses commands would pass.</li>
+          <li><strong>A multi-service host needs one shared cache.</strong> With a cache per service, a view ended on Identity
+          keeps working on the others until its token expires: at most 15 minutes, still read-only.</li>
+          <li><strong>A machine identity is a user row.</strong> It shows up wherever the app lists users unless the app
+          filters on <code>IsServiceAccount</code>.</li>
+          <li><strong>Machine revocation is as fast as the soft-deleted check, and that check fails open.</strong> Outstanding
+          tokens are refused within the marker&#39;s window, not instantly, and <code>SoftDeletedUserMiddleware</code> lets a
+          request through on a cache or validator error. The 15-minute token cap bounds the worst case.</li>
+          <li><strong>No refresh token for programs.</strong> A program asks for a new token when one expires, one request per
+          quarter hour per program at the default. A refresh token would be a second long-lived credential
+          beside the secret it already holds.</li>
+          <li><strong><code>[RefuseMachineClients]</code> is opt-in per endpoint.</strong> The framework refuses only the four escalation
+          permissions; deciding which endpoints need a person is the app&#39;s job, and declared at class level
+          the attribute also refuses a machine client on the organizer actions inside those controllers.</li>
+          <li><strong>Creating a machine client asks for no recent interactive sign-in.</strong> ADR-140 lists step-up at
+          client creation as a precondition for turning the feature on in production, which is one reason it
+          stays off in ADC.</li>
+          </ul>
+          <h2 id="apply-this-even-without-mmca">Apply this even without MMCA</h2>
+          <ol>
+          <li><strong>Mint borrowed and machine identities as ordinary tokens.</strong> If every service already validates one
+          token format, a support view and a program should arrive in that format, so no service grows a
+          second validation path.</li>
+          <li><strong>Mark the borrowed token with a claim whose presence narrows it.</strong> <code>act_sub</code> present means
+          read-only everywhere; nothing has to remember to check a flag that defaults to &quot;write&quot;.</li>
+          <li><strong>Enforce read-only at both places writes live.</strong> The HTTP method catches the writes that never
+          become commands; a command decorator at the front of the pipeline catches the commands reached from a read.</li>
+          <li><strong>Write the audit row before the token, and show it to the account holder.</strong> Access only an
+          operator can see is access the user takes on trust.</li>
+          <li><strong>Fail closed where the exposure is small.</strong> A support view that cannot prove its grant is live
+          should stop, because the cost is one support session.</li>
+          <li><strong>Give a program a user id, not a new kind of principal.</strong> Audit, ownership and rate limiting all
+          keep working when the caller is a row in the same table.</li>
+          <li><strong>Re-check the backing role at every mint.</strong> A role can gain a permission after the credential was
+          issued; a check at creation alone is a check that expires.</li>
+          <li><strong>Name the permissions that can never back a program.</strong> Impersonation and the three escalation
+          paths (managing users, managing roles, minting clients) belong to people.</li>
+          <li><strong>Let an endpoint say a person must be present.</strong> A role grants capabilities; it cannot express
+          &quot;this vote must be cast by a human&quot;. An attribute on the endpoint can.</li>
+          </ol>
+          <p>The rule of thumb: <strong>a token that does not belong to the person at the keyboard should carry a claim
+          that says so, and every layer that can write should read it.</strong></p>
+          <hr>
+          <p><strong>What we covered:</strong> why a support view and a program both end in a token that names somebody else,
+          how view-as mints a 15-minute, unrenewed token carrying <code>act_sub</code> and <code>vag</code> behind a permission, a
+          reason and an audit row written first, how <code>ViewAsGuardMiddleware</code> and the outermost
+          <code>ViewAsCommandDecorator</code> enforce read-only where the two kinds of write live, how the <code>mmca_view_as</code>
+          overlay cookie keeps the staff user&#39;s own session intact, how <code>MachineTokenControllerBase</code> serves the
+          client credentials grant at <code>auth/token</code> for a service-account user with no refresh, <code>sid</code> or <code>mfa</code>,
+          how four forbidden permissions and <code>[RefuseMachineClients]</code> bound a program&#39;s reach, how the
+          <code>users:view-as</code> role guard makes each feature refuse the other, and where MMCA.ADC stands on both.</p>
+          <p><strong>Next in the series:</strong> Article 55, &quot;Your App as an MCP Server: Read-Only Tools Over the Queries You
+          Already Govern.&quot;</p>
+          <p><em>MMCA.Common is open source. Star the repo, read the 2-minute ADR-137 and ADR-140 behind these
+          patterns, or <code>dotnet add package MMCA.Common.API</code> and build the monolith you can extract later.</em></p>
+          <ul>
+          <li>Repo: <a href="https://github.com/ivanball/MMCA.Common" target="_blank" rel="noopener">https://github.com/ivanball/MMCA.Common</a></li>
+          <li>This pattern&#39;s decision records: <a href="../docs/adr/137-read-only-view-as-support-access.html">ADR-137: Read-Only View-As Support Access (Reasoned, 15 Minutes, Visible to the User)</a> and
+          <a href="../docs/adr/140-machine-clients-oauth-client-credentials.html">ADR-140: Machine Clients Through OAuth Client Credentials Backed by Service Accounts</a></li>
+          <li>The full 34-category scorecard, §11 included, lives in
+          <a href="../docs/governance/common-ArchitectureScorecard.html">MMCA.Common: Architecture Scorecard</a> in the docs site.</li>
+          </ul>
+          <p><em>Previous: Article 53, &quot;One Framework, Three Clouds: A Cloud-Neutral Core With Vendor Adapter Packages.&quot;
+          Next: Article 55, &quot;Your App as an MCP Server: Read-Only Tools Over the Queries You Already Govern.&quot;</em></p>
+          <p><em>Tags: .NET, C Sharp, Authentication, Security, OAuth</em></p>
+          
+        <nav class="article-pager" aria-label="Series navigation">
+          <a class="article-pager-link article-pager-link--prev" href="cloud-neutral-vendor-adapters.html" rel="prev"><span class="article-pager-dir">← Previous</span><span class="article-pager-title">53 · One framework, three clouds</span></a>
+          <a class="article-pager-link article-pager-link--next" href="app-as-mcp-server.html" rel="next"><span class="article-pager-dir">Next →</span><span class="article-pager-title">55 · Your app as an MCP server</span></a>
+        </nav>
+        <div class="doc-foot btn-row">
+          <a class="btn btn--ghost" href="../articles/index.html">← Back to The MMCA.Common series</a>
+        </div>
+        </article>
+        <aside class="doc-aside" id="doc-rail">
+          <nav class="doc-toc" aria-label="On this page">
+            <p class="doc-toc-title">On this page</p>
+            <ul>
+            <li><a href="#why-it-matters">Why it matters</a></li>
+            <li><a href="#the-mmca-answer-part-one-view-as-is-a-token-that-cannot-write">The MMCA answer, part one: view-as is a token that cannot write</a></li>
+            <li><a href="#the-mmca-answer-part-two-a-machine-client-is-a-service-account-user">The MMCA answer, part two: a machine client is a service-account user</a></li>
+            <li><a href="#how-each-refuses-the-other">How each refuses the other</a></li>
+            <li><a href="#where-the-two-stand-in-a-deployed-app">Where the two stand in a deployed app</a></li>
+            <li><a href="#trade-offs-honestly">Trade-offs, honestly</a></li>
+            <li><a href="#apply-this-even-without-mmca">Apply this even without MMCA</a></li>
+            </ul>
+          </nav>
+        </aside>
+      </div>
+    </div>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container">
+      <div class="footer-grid">
+        <p class="footer-meta mb-0"><strong>Ivan Ball-llovera</strong> · Principal Software Architect · Douglasville, GA</p>
+        <ul class="footer-links">
+          <li><a href="../resume.html">Résumé</a></li>
+          <li><a href="../platform.html">Platform</a></li>
+          <li><a href="../docs/index.html">Reference</a></li>
+          <li><a href="../writing.html">Writing</a></li>
+          <li><a href="../speaking.html">Speaking</a></li>
+          <li><a href="../contact.html">Contact</a></li>
+          <li><a href="https://github.com/ivanball" target="_blank" rel="me noopener">GitHub</a></li>
+          <li><a href="https://www.linkedin.com/in/ivan-ball-llovera-6549a911" target="_blank" rel="me noopener">LinkedIn</a></li>
+        </ul>
+      </div>
+      <p class="footer-meta" style="margin-top:1rem">© <span class="js-year">2026</span> Ivan Ball-llovera. Reference docs generated from source.</p>
+    </div>
+  </footer>
+
+</body>
+</html>

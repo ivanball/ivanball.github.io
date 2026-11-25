@@ -1,0 +1,511 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#0e151f" media="(prefers-color-scheme: dark)">
+  <title>Sending Webhooks Without Opening a Door: Signed Delivery, Connect-Time SSRF Defense and a Lane of Its Own · MMCA · Ivan Ball-llovera</title>
+  <meta name="description" content="Standard Webhooks signatures with secret rotation, every delivery a durable internal command, an SSRF check enforced where the socket opens, and a per-receiver lane whose cooldown keeps a dead receiver from delaying anything else.">
+  <link rel="canonical" href="https://ivanball.github.io/articles/outbound-webhooks.html">
+  <link rel="icon" href="../assets/img/favicon.svg" type="image/svg+xml">
+  <link rel="alternate" type="application/rss+xml" title="Ivan Ball-llovera: deep dives on enterprise .NET" href="https://ivanball.github.io/feed.xml">
+  <meta property="og:type" content="article">
+  <meta property="og:site_name" content="Ivan Ball-llovera">
+  <meta property="og:title" content="Sending Webhooks Without Opening a Door: Signed Delivery, Connect-Time SSRF Defense and a Lane of Its Own">
+  <meta property="og:description" content="Standard Webhooks signatures with secret rotation, every delivery a durable internal command, an SSRF check enforced where the socket opens, and a per-receiver lane whose cooldown keeps a dead receiver from delaying anything else.">
+  <meta property="og:url" content="https://ivanball.github.io/articles/outbound-webhooks.html">
+  <meta property="og:image" content="https://ivanball.github.io/assets/img/og-image.png">
+  <meta property="og:image:alt" content="Ivan Ball-llovera, Principal Software Architect">
+  <meta property="og:locale" content="en_US">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Sending Webhooks Without Opening a Door: Signed Delivery, Connect-Time SSRF Defense and a Lane of Its Own">
+  <meta name="twitter:description" content="Standard Webhooks signatures with secret rotation, every delivery a durable internal command, an SSRF check enforced where the socket opens, and a per-receiver lane whose cooldown keeps a dead receiver from delaying anything else.">
+  <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"TechArticle","headline":"Sending Webhooks Without Opening a Door: Signed Delivery, Connect-Time SSRF Defense and a Lane of Its Own","description":"Standard Webhooks signatures with secret rotation, every delivery a durable internal command, an SSRF check enforced where the socket opens, and a per-receiver lane whose cooldown keeps a dead receiver from delaying anything else.","url":"https://ivanball.github.io/articles/outbound-webhooks.html","mainEntityOfPage":"https://ivanball.github.io/articles/outbound-webhooks.html","datePublished":"2026-11-25T12:00:00Z","author":{"@type":"Person","name":"Ivan Ball-llovera","url":"https://ivanball.github.io"},"isPartOf":{"@type":"CreativeWorkSeries","name":"The MMCA.Common series","url":"https://ivanball.github.io/articles/index.html"},"position":56}</script>
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Writing","item":"https://ivanball.github.io/writing.html"},{"@type":"ListItem","position":2,"name":"The MMCA.Common series","item":"https://ivanball.github.io/articles/index.html"},{"@type":"ListItem","position":3,"name":"56 · Sending webhooks without opening a door","item":"https://ivanball.github.io/articles/outbound-webhooks.html"}]}</script>
+  <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);if(localStorage.getItem('mmca-rail')==='hidden')document.documentElement.setAttribute('data-rail','hidden');if(localStorage.getItem('mmca-cites')==='shown')document.documentElement.setAttribute('data-cites','shown');}catch(e){}})();</script>
+  <link rel="preload" href="../assets/fonts/inter-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="../assets/fonts/jetbrains-mono-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="../assets/css/styles.css">
+  <link rel="stylesheet" href="../assets/css/docs.css">
+  <script defer src="../assets/js/main.js"></script>
+  <script defer src="../assets/js/search.js"></script>
+  <script defer src="../assets/js/analytics.js"></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+
+  <header class="site-header">
+    <div class="container nav">
+      <a class="brand" href="../index.html">
+        <span class="brand-mark" aria-hidden="true">IB</span>
+        <span>Ivan Ball-llovera</span>
+      </a>
+      <nav aria-label="Primary">
+        <ul class="nav-links" id="nav-links">
+          <li><a href="../index.html">Home</a></li>
+          <li><a href="../resume.html">Résumé</a></li>
+          <li><a href="../platform.html">Platform</a></li>
+          <li><a href="../docs/index.html">Reference</a></li>
+          <li><a href="../writing.html" aria-current="page">Writing</a></li>
+          <li><a href="../speaking.html">Speaking</a></li>
+          <li><a href="../contact.html">Contact</a></li>
+        </ul>
+      </nav>
+      <div class="nav-tools">
+        <button class="icon-btn search-open" type="button" aria-label="Search the site" data-search-open>
+          <span aria-hidden="true">⌕</span>
+        </button>
+        <button class="icon-btn theme-toggle" type="button" aria-label="Switch color theme">
+          <span class="sun" aria-hidden="true">☀</span><span class="moon" aria-hidden="true">☾</span>
+        </button>
+        <button class="icon-btn nav-toggle" type="button" aria-label="Toggle navigation menu" aria-expanded="false" aria-controls="nav-links">☰</button>
+      </div>
+    </div>
+  </header>
+  <dialog class="search-dialog" id="site-search" aria-label="Search this site">
+    <form class="search-box" method="dialog" role="search">
+      <span class="search-icon" aria-hidden="true">⌕</span>
+      <input class="search-input" type="search" id="site-search-input" placeholder="Search ADRs, guides, chapters, articles…"
+             autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
+             aria-controls="site-search-results" aria-describedby="site-search-status">
+      <button class="btn btn--ghost search-close" type="button" data-search-close>Esc</button>
+    </form>
+    <p class="search-status" id="site-search-status" role="status" aria-live="polite"></p>
+    <ul class="search-results" id="site-search-results"></ul>
+    <p class="search-foot">
+      <span><kbd>↑</kbd><kbd>↓</kbd> to navigate</span>
+      <span><kbd>Enter</kbd> to open</span>
+      <span><kbd>"…"</kbd> all these words</span>
+      <span><kbd>AND</kbd><kbd>OR</kbd> to combine</span>
+    </p>
+  </dialog>
+
+  <main id="main">
+    <div class="container doc-container">
+      <nav class="doc-breadcrumb" aria-label="Breadcrumb">
+        <a href="../writing.html">Writing</a>
+        <span aria-hidden="true">/</span>
+        <a href="../articles/index.html">The MMCA.Common series</a>
+        <span aria-hidden="true">/</span>
+        <span class="current">56 · Sending webhooks without opening a door</span>
+        <button class="rail-toggle" type="button" data-rail-toggle aria-expanded="true" aria-controls="doc-rail">On this page</button>
+      </nav>
+      <div class="doc-layout doc-layout--toc">
+      <aside class="doc-sidebar">
+      <details class="doc-sidebar-details" open>
+        <summary>All 57 articles</summary>
+        <nav class="doc-nav" aria-label="The MMCA.Common series">
+          <ol>
+        <li><a href="index.html">Overview</a></li>
+        <li><a href="open-sourced-enterprise-dotnet-34-categories.html">01 · Open-sourced and graded against 34 categories</a></li>
+        <li><a href="modular-monolith-to-microservices.html">02 · Modular monolith to microservices</a></li>
+        <li><a href="34-category-architecture-rubric.html">03 · The 34-category architecture rubric</a></li>
+        <li><a href="result-railway-csharp.html">04 · The Result railway in C#</a></li>
+        <li><a href="kill-anemic-domain-model.html">05 · Kill the anemic domain model</a></li>
+        <li><a href="specification-pattern.html">06 · Specifications over LINQ spaghetti</a></li>
+        <li><a href="cqrs-decorator-pipeline.html">07 · The CQRS decorator pipeline</a></li>
+        <li><a href="validation-kit.html">08 · Compose validators, don&#39;t copy them</a></li>
+        <li><a href="transactional-outbox-dotnet.html">09 · The transactional outbox</a></li>
+        <li><a href="database-per-service.html">10 · Database-per-service inside a monolith</a></li>
+        <li><a href="polyglot-persistence.html">11 · Polyglot persistence: one model, four engines</a></li>
+        <li><a href="navigation-populators.html">12 · Navigation populators</a></li>
+        <li><a href="optimistic-concurrency-rowversion.html">13 · Optimistic concurrency: RowVersion round-trips</a></li>
+        <li><a href="self-ordering-modules.html">14 · Self-ordering modules</a></li>
+        <li><a href="event-schema-versioning.html">15 · Event-schema versioning</a></li>
+        <li><a href="jwks-cross-service-auth.html">16 · JWKS cross-service auth</a></li>
+        <li><a href="password-hashing.html">17 · Password hashing done right</a></li>
+        <li><a href="idempotency-attribute.html">18 · Idempotency in one attribute</a></li>
+        <li><a href="self-invalidating-cache.html">19 · The self-invalidating cache</a></li>
+        <li><a href="problem-details-http-grpc.html">20 · Problem Details across HTTP and gRPC</a></li>
+        <li><a href="notifications-vertical-slice.html">21 · Notifications as a vertical slice</a></li>
+        <li><a href="live-channel-push.html">22 · Live channels over one SignalR hub</a></li>
+        <li><a href="manual-dto-mapping.html">23 · Delete AutoMapper: manual DTO mapping</a></li>
+        <li><a href="permission-based-authorization.html">24 · Permission-based authorization over roles</a></li>
+        <li><a href="session-cookie-auth-blazor-ssr.html">25 · Browser session-cookie auth for Blazor SSR</a></li>
+        <li><a href="external-oauth-login.html">26 · External OAuth login behind your own JWTs</a></li>
+        <li><a href="jwt-refresh-token-rotation.html">27 · Refresh tokens that rotate per device</a></li>
+        <li><a href="generic-entity-controllers.html">28 · Generic entity controllers</a></li>
+        <li><a href="resource-ownership-authorization.html">29 · Resource-ownership authorization</a></li>
+        <li><a href="rate-limiting-brute-force-protection.html">30 · Rate limiting and brute-force protection</a></li>
+        <li><a href="aspire-one-command.html">31 · Aspire: one command</a></li>
+        <li><a href="extract-module-to-grpc-service.html">32 · Extracting a module to a gRPC service</a></li>
+        <li><a href="resilience-recovery-objectives.html">33 · Resilience and recovery objectives</a></li>
+        <li><a href="architecture-fitness-functions.html">34 · Architecture fitness functions</a></li>
+        <li><a href="test-pyramid.html">35 · The test pyramid</a></li>
+        <li><a href="soft-delete-vs-erasure.html">36 · Soft-delete vs the right to erasure</a></li>
+        <li><a href="reusable-blazor-ui-framework.html">37 · A reusable Blazor UI framework</a></li>
+        <li><a href="i18n-and-theming.html">38 · i18n and theming on one preference pipeline</a></li>
+        <li><a href="build-your-first-module.html">39 · Build your first module</a></li>
+        <li><a href="write-your-first-fitness-test.html">40 · Write your first fitness test</a></li>
+        <li><a href="two-real-apps-case-study.html">41 · Two real apps on one framework</a></li>
+        <li><a href="device-capability-abstraction.html">42 · One Blazor UI, two hosts</a></li>
+        <li><a href="managed-file-storage-avatars.html">43 · Managed file storage: uploads you don&#39;t have to trust</a></li>
+        <li><a href="http-api-versioning.html">44 · HTTP API versioning, proven not just claimed</a></li>
+        <li><a href="feature-flags-cqrs-pipeline.html">45 · Feature flags in the CQRS pipeline</a></li>
+        <li><a href="field-level-encryption-ef-core.html">46 · Field-level encryption in EF Core</a></li>
+        <li><a href="security-headers-csp-blazor.html">47 · Security headers and CSP for Blazor</a></li>
+        <li><a href="observability-opentelemetry.html">48 · Observability by default</a></li>
+        <li><a href="saga-compensation-reconciliation.html">49 · Saga compensation and the reconciliation backstop</a></li>
+        <li><a href="governed-llm-boundary.html">50 · The governed LLM boundary</a></li>
+        <li><a href="durable-internal-commands.html">51 · Four ways to do work later</a></li>
+        <li><a href="identity-completions.html">52 · Finishing identity</a></li>
+        <li><a href="cloud-neutral-vendor-adapters.html">53 · One framework, three clouds</a></li>
+        <li><a href="borrowed-and-machine-identities.html">54 · Borrowed and machine identities</a></li>
+        <li><a href="app-as-mcp-server.html">55 · Your app as an MCP server</a></li>
+        <li><a href="outbound-webhooks.html" aria-current="page">56 · Sending webhooks without opening a door</a></li>
+        <li><a href="series-index.html">57 · The series index</a></li>
+          </ol>
+        </nav>
+      </details>
+    </aside>
+        <article class="doc-content">
+          <p class="eyebrow doc-kicker">Core patterns · No. 56</p>
+          <h1 id="sending-webhooks-without-opening-a-door-signed-delivery-connect-time-ssrf-defense-and-a-lane-of-its-own">Sending Webhooks Without Opening a Door: Signed Delivery, Connect-Time SSRF Defense and a Lane of Its Own</h1>
+          <p class="article-meta"><time datetime="2026-11-25T12:00:00Z">November 25, 2026</time> <span aria-hidden="true">·</span> Ivan Ball-llovera</p>
+          <p class="article-subtitle">An outbound webhook is the one feature where an operator types a URL and your server
+          dutifully connects to it, retries it for hours and signs everything it sends. Here is how MMCA.Common
+          ships it: Standard Webhooks signatures with a rotation window, every delivery a durable internal command,
+          an address policy enforced at the moment the socket opens, and a delivery lane that keeps a dead receiver
+          from delaying anything else.</p>
+          <hr>
+          <p>A tenant admin pastes a URL into your settings page. &quot;Notify us when a ticket opens.&quot; You save it, and
+          the next event posts JSON to it.</p>
+          <p>That URL is now operator input your server dials on its own schedule, and every obvious implementation
+          of &quot;post JSON to it&quot; gets at least one of four things wrong.</p>
+          <p>It trusts the URL. <a href="http://169.254.169.254/" target="_blank" rel="noopener">http://169.254.169.254/</a> is a perfectly valid absolute URI, and so is a hostname
+          whose DNS answer is public when you validate it and private when you connect. Either way your server has
+          just made a request into its own network on a stranger&#39;s behalf: server-side request forgery.</p>
+          <p>It trusts the receiver. The receiver is down for the weekend, or answers in 29 seconds, and the loop
+          that posts to it is the same loop that runs your business work, so a partner&#39;s outage becomes yours.</p>
+          <p>It loses deliveries. A post from inside the request, or from a fire-and-forget task, dies with the
+          process and leaves no record of what was owed.</p>
+          <p>And it cannot prove anything. Without a signature the receiver cannot tell your post from anyone else&#39;s,
+          and without a stable delivery id it cannot tell your retry from a second event.</p>
+          <p><strong>ADR-142</strong> is the record of answering all four: stored subscriptions, HMAC-signed delivery scheduled as
+          internal commands the framework already had, an outbound address policy enforced at validation time and
+          again at connect time, and a dedicated delivery lane (<code>ADR-142:35-37</code>). It is the outbound twin of
+          the inbound webhook edge in Article 49 (<a href="saga-compensation-reconciliation.html">Undo Is a Feature: Saga Compensation and the Reconciliation Backstop</a>),
+          and it builds directly on the durable internal commands of Article 51
+          (<a href="durable-internal-commands.html">Four Ways to Do Work Later: Channels, Cron, the Outbox and Durable Internal Commands</a>), which this article assumes rather than
+          re-teaches.</p>
+          <h2 id="the-mmca-answer-three-calls-and-the-rest-is-policy">The MMCA answer: three calls, and the rest is policy</h2>
+          <p>The whole feature is opt-in, and registering it turns nothing on by itself.</p>
+          <p><code>AddWebhooks(configuration)</code> (<code>WebhookServiceCollectionExtensions.cs:67</code>) binds the <code>Webhooks</code> section
+          with data-annotation validation at startup (<code>:71-74</code>) and registers the subscription store, the
+          administration service, the target validator, the signed sender, the secret protector, the DNS resolver
+          and the event catalog (<code>:76-82</code>), plus data protection (<code>:85</code>), the hardened <code>MMCA.Webhooks</code> HTTP client
+          (<code>:87-102</code>), a startup notice for an ignored development switch (<code>:104</code>) and the delivery lane (<code>:106</code>).
+          Its own remarks spell out what else turning it on needs: <code>pipeline.AddWebhookDelivery()</code> inside
+          <code>AddMmcaApplicationPipeline</code>, one <code>AddWebhookEvent&lt;TEvent&gt;(name)</code> per published event, the migration on
+          the <code>Webhooks:DataSourceName</code> database, and a controller deriving from <code>WebhookSubscriptionsControllerBase</code>
+          granted <code>webhooks:manage</code> (<code>:33-39</code>). With <code>Webhooks:Enabled</code> false, which is the default
+          (<code>WebhookSettings.cs:16-17</code>), the fan-out stays inert, every administration endpoint answers 404 and no
+          context maps the subscription table (<code>WebhookServiceCollectionExtensions.cs:33-35</code>).</p>
+          <p>MMCA.Helpdesk is the one adopter, and its wiring is the shape:</p>
+          <pre class="doc-pre" tabindex="0" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-comment">// MMCA.Helpdesk.Web/Program.cs (illustrative excerpt; the two calls are verbatim)</span>
+services.AddWebhooks(builder.Configuration);
+
+builder.Services.AddMmcaApplicationPipeline(pipeline =&gt; pipeline
+    <span class="hljs-comment">// ... module scans ...</span>
+    .AddWebhookDelivery());   <span class="hljs-comment">// the delivery handler, inside the pipeline so every decorator wraps it</span>
+
+<span class="hljs-comment">// MMCA.Helpdesk.Tickets.Application/DependencyInjection.cs (verbatim)</span>
+services.AddWebhookEvent&lt;TicketOpenedIntegrationEvent&gt;(<span class="hljs-string">&quot;ticket.opened&quot;</span>);
+
+<span class="hljs-comment">// appsettings.json: &quot;Webhooks&quot;: { &quot;Enabled&quot;: true }</span>
+<span class="hljs-comment">// appsettings.Development.json: &quot;Webhooks&quot;: { &quot;AllowInsecureTargetsInDevelopment&quot;: true }</span></code></pre>
+          <p>One integration event, published under one webhook type name, to whatever subscriptions the tenant has
+          created. That is the entire adopter surface. Said plainly, because it matters for how much weight to put
+          on the rest of this article: Helpdesk is the only adopter, and the record states that nothing has been
+          exercised against a real third-party receiver or a Standard Webhooks library on the receiving side; the
+          evidence is the framework&#39;s unit and integration tiers (<code>ADR-142:338-340</code>).</p>
+          <h2 id="fan-out-one-event-one-durable-row-per-subscriber">Fan-out: one event, one durable row per subscriber</h2>
+          <p>When the event arrives, <code>WebhookFanOutHandler&lt;TEvent&gt;</code> does four things in order
+          (<code>WebhookFanOutHandler.cs:60-123</code>). It returns at once unless webhooks are enabled and the event type is
+          registered in the catalog (<code>:62-67</code>). It lists the enabled subscriptions of the event&#39;s tenant and keeps
+          the ones that subscribe to this event type (<code>:69-78</code>). It serializes the event once and skips the whole
+          event with one warning when the payload is over <code>MaxPayloadBytes</code> (<code>:80-86</code>), default 65536, range 1024
+          to 1048576 (<code>WebhookSettings.cs:51-56</code>). And it schedules one <code>DeliverWebhookInternalCommand</code> per
+          matching subscription, all inside <strong>one</strong> transaction (<code>WebhookFanOutHandler.cs:88-115</code>).</p>
+          <p>The failure branch is the part worth copying. If any schedule fails, the handler <strong>throws</strong>
+          (<code>:117-123</code>), and the exception message says why: &quot;The event will be redelivered.&quot; A thrown handler is
+          the outbox&#39;s (or the broker&#39;s) cue to redeliver the event, so a fan-out that could not record its rows
+          gets another chance instead of silently delivering to half the subscribers.</p>
+          <p>Each row carries a <code>webhook-id</code> computed by <code>WebhookDeliveryId.For(eventId, subscriptionId)</code>: the first
+          16 bytes of SHA-256 over the event&#39;s <code>MessageId</code> followed by the subscription id, returned as a <code>Guid</code>
+          (<code>WebhookDeliveryId.cs:11-27</code>). That determinism is what makes at-least-once delivery survivable on the
+          other side. The outbox can redeliver an event, so the fan-out can run twice, but the same (event,
+          subscription) pair always produces the same id (<code>:5-8</code>), and a receiver that dedupes on <code>webhook-id</code> sees
+          one delivery. It is the receiver-side equivalent of the consumer inbox (ADR-021).</p>
+          <p>From here a delivery is an ordinary internal command, so it inherits everything Article 51 describes:
+          the durable row, the claim lease, the jittered backoff, the attempt ceiling, the dead letter and the
+          operator console. Retries come from the <code>InternalCommands:*</code> settings, not from a webhook-specific policy
+          (<code>WebhookSettings.cs:8-9</code>).</p>
+          <h2 id="signing-standard-webhooks-with-a-rotation-window">Signing: Standard Webhooks, with a rotation window</h2>
+          <p><code>WebhookSignature</code> implements the Standard Webhooks scheme (<code>WebhookSignature.cs:8-13</code>). A secret is
+          <code>whsec_</code> plus Base64 of 32 random bytes (<code>:16</code>, <code>:28</code>, <code>GenerateSecret</code> <code>:32-33</code>). A signature is <code>v1,</code>
+          plus the Base64 HMAC-SHA256 over <code>{id}.{timestamp}.{body}</code> (<code>Compute</code>, <code>:61-69</code>), and the three values
+          travel in the <code>webhook-id</code>, <code>webhook-timestamp</code> (Unix seconds) and <code>webhook-signature</code> headers
+          (<code>:18-25</code>).</p>
+          <p>The signature header is a <strong>space-separated list</strong> (<code>:24-25</code>), and that is what makes rotation painless.
+          After a secret rotates, the previous secret keeps signing beside the new one for
+          <code>PreviousSecretGraceHours</code>, default 24, range 0 to 168 (<code>WebhookSettings.cs:58-60</code>); the delivery
+          handler asks the subscription for its signing secrets as of now (<code>DeliverWebhookInternalCommandHandler.cs:64</code>).
+          A receiver that still holds the old secret keeps verifying during the window, and one that already holds
+          the new secret verifies too.</p>
+          <p>The framework also ships the receiver&#39;s half. <code>WebhookSignature.Verify</code> accepts a delivery when the
+          timestamp lies within a tolerance of the receiver&#39;s clock and any <code>v1,</code> entry in the header matches,
+          compared in constant time (<code>:71-108</code>, <code>CryptographicOperations.FixedTimeEquals</code> at <code>:107</code>). The tolerance
+          check saturates at the <code>long</code> range, so a hostile timestamp cannot wrap the comparison or throw
+          (<code>:110-124</code>). A malformed secret is a <code>Webhooks.SecretUnreadable</code> <code>Result</code> failure from <code>DecodeSecret</code>,
+          never an exception (<code>:38-53</code>, <code>:126-130</code>).</p>
+          <p>A receiver written against this contract looks like this:</p>
+          <pre class="doc-pre" tabindex="0" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-comment">// Illustrative receiver; WebhookSignature.DecodeSecret and Verify are the real signatures.</span>
+<span class="hljs-keyword">var</span> key = WebhookSignature.DecodeSecret(storedSecret);          <span class="hljs-comment">// Result&lt;byte[]&gt;</span>
+<span class="hljs-keyword">if</span> (key.IsFailure) <span class="hljs-keyword">return</span> Results.StatusCode(<span class="hljs-number">500</span>);
+
+<span class="hljs-keyword">var</span> ok = WebhookSignature.Verify(
+    webhookId:       Request.Headers[<span class="hljs-string">&quot;webhook-id&quot;</span>],
+    timestamp:       <span class="hljs-built_in">long</span>.Parse(Request.Headers[<span class="hljs-string">&quot;webhook-timestamp&quot;</span>]),
+    body:            rawBody,                                   <span class="hljs-comment">// the exact bytes received, as text</span>
+    signatureHeader: Request.Headers[<span class="hljs-string">&quot;webhook-signature&quot;</span>],
+    key:             key.Value,
+    nowUnixSeconds:  DateTimeOffset.UtcNow.ToUnixTimeSeconds(),
+    tolerance:       TimeSpan.FromMinutes(<span class="hljs-number">5</span>));
+
+<span class="hljs-keyword">if</span> (!ok) <span class="hljs-keyword">return</span> Results.Unauthorized();
+<span class="hljs-comment">// Dedupe on webhook-id before acting: the sender is at-least-once.</span></code></pre>
+          <p>The secrets are stored protected by the host&#39;s data-protection key ring (<code>DataProtectionWebhookSecretProtector</code>
+          registered at <code>WebhookServiceCollectionExtensions.cs:80</code>, data protection at <code>:85</code>), which is why the
+          registration remarks say a multi-replica host needs the shared key ring of ADR-069 to read a secret
+          another replica wrote (<code>:44-45</code>). A replica that cannot read the secret does not throw: the outcome is
+          <code>SecretUnreadable</code>, the row fails and retries (<code>DeliverWebhookInternalCommandHandler.cs:113-120</code>).</p>
+          <h2 id="ssrf-the-check-that-counts-is-the-one-where-the-socket-opens">SSRF: the check that counts is the one where the socket opens</h2>
+          <p><code>OutboundAddressPolicy</code> is the rule. <code>IsPublicAddress</code> (<code>OutboundAddressPolicy.cs:68</code>) denies the
+          private, loopback, link-local, shared, benchmarking, multicast and reserved IPv4 ranges plus the single
+          cloud host endpoint <code>168.63.129.16</code> (<code>:15</code>), and judges an IPv4-mapped IPv6 address as its IPv4 form
+          (<code>:72</code>). For IPv6 it is an <strong>allow-list</strong>: only global unicast <code>2000::/3</code> can be public (<code>:35</code>, <code>:60</code>),
+          so a range nobody listed, including one added to the address architecture later, is refused by default.
+          <code>IsAcceptableTargetUri</code> (<code>:100</code>) adds the URI rules: https only, and never <code>localhost</code> or <code>*.localhost</code>
+          (<code>:124-125</code>).</p>
+          <p>The obvious place to apply that rule is when the subscription is saved, and MMCA does: the registered
+          target validator is <code>DnsWebhookTargetValidator</code> (<code>WebhookServiceCollectionExtensions.cs:78</code>), which the
+          record describes as resolving the host at create and update and refusing when any answer is not public
+          (<code>ADR-142:132-135</code>). But the record is explicit that this answer is <strong>early feedback only</strong>
+          (<code>ADR-142:135</code>), because a validation-time check is defeated by DNS rebinding: the name resolves to a
+          public address when you check it and to <code>10.0.0.5</code> when you connect.</p>
+          <p>So the authoritative check lives in the HTTP client&#39;s <code>ConnectCallback</code>, wired into the primary
+          <code>SocketsHttpHandler</code> (<code>WebhookServiceCollectionExtensions.cs:95-99</code>). <code>WebhookConnectCallback</code> resolves
+          the host <strong>itself</strong> (<code>WebhookConnectCallback.cs:37-40</code>), refuses with <code>WebhookTargetRefusedException</code>
+          <strong>before opening a socket</strong> when any resolved address is not public (<code>:48-53</code>), and then dials only the
+          addresses it just checked, in order, returning the first that connects (<code>:55-70</code>). It never dials an
+          address it did not check (<code>:11-12</code>), which is what makes the policy hold against DNS rebinding and
+          against any handler earlier in the pipeline that rewrites the request URI (<code>:12-14</code>).</p>
+          <p>One small judgement in that callback is worth noticing. An <strong>empty</strong> DNS answer is not a refusal: it
+          throws a <code>SocketException</code> with <code>HostNotFound</code>, because an empty answer may be transient, so the
+          delivery is retried (<code>:42-46</code>). A non-public answer, by contrast, is final. The delivery handler records
+          a fixed reason (&quot;Target refused: not a public address.&quot;) and <strong>completes</strong> the row, because retrying
+          cannot change the answer, while the detail that can name the resolved address goes only to a server-side
+          Warning, since a tenant admin API reads the last-failure column
+          (<code>DeliverWebhookInternalCommandHandler.cs:33-34</code>, <code>:92-98</code>, <code>:133-140</code>). A stored target that is not
+          https is refused by the sender before anything is sent, under its own fixed reason (<code>:133-140</code>).</p>
+          <p><code>AllowInsecureTargetsInDevelopment</code> lifts the scheme, localhost and private-address rules for local
+          work, honoured only when the environment is Development and otherwise ignored with one startup warning
+          (<code>WebhookSettings.cs:69-73</code>; the notice service at <code>WebhookServiceCollectionExtensions.cs:104</code>).
+          Helpdesk sets it in its Development file only (<code>appsettings.Development.json:10-11</code>).</p>
+          <h2 id="a-client-that-does-exactly-one-thing">A client that does exactly one thing</h2>
+          <p>The <code>MMCA.Webhooks</code> client&#39;s primary handler sets <code>AllowAutoRedirect = false</code>, <code>UseProxy = false</code>,
+          <code>UseCookies = false</code> and <code>ActivityHeadersPropagator = null</code> (<code>WebhookServiceCollectionExtensions.cs:89-94</code>),
+          then clears every additional handler a host default adds and removes the client&#39;s default loggers
+          (<code>:101-102</code>). Each of those is a deliberate refusal, and the remarks give the reasons (<code>:47-55</code>):</p>
+          <ul>
+          <li><strong>No redirect.</strong> A 3xx is not followed; the handler treats it as a failed status that retries
+          (<code>DeliverWebhookInternalCommandHandler.cs:113-114</code>), so the only address ever dialled is the stored one.</li>
+          <li><strong>No second retry policy.</strong> A host-wide resilience pipeline would retry beside the internal-command
+          queue; clearing the handlers leaves the queue as the only retry and the only failure policy.</li>
+          <li><strong>No URL in the logs.</strong> The target URL often carries the receiver&#39;s token in its path, and the client
+          loggers would write it.</li>
+          <li><strong>No trace context to a third party.</strong> No <code>traceparent</code>, <code>tracestate</code> or <code>baggage</code> header leaves the
+          host.</li>
+          </ul>
+          <p>The request timeout is <code>TimeoutSeconds</code> (<code>:87-88</code>), default 10, range 1 to 30 (<code>WebhookSettings.cs:25-34</code>).</p>
+          <p>The outcome mapping is short and every branch is a decision (<code>DeliverWebhookInternalCommandHandler.cs:79-125</code>).
+          A 2xx completes the row (<code>:85-90</code>). A 410 Gone records the failure, <strong>disables the subscription</strong> and
+          completes the row (<code>:101-111</code>). A refused target completes the row (<code>:92-98</code>). Anything else (any other
+          status, redirects included, a transport failure, timeouts included, or an unreadable secret) fails the
+          row so the processor retries with backoff and dead-letters after <code>MaxAttempts</code> (<code>:113-124</code>). A missing,
+          deleted or disabled subscription completes the row without sending (<code>:52-57</code>), and a host where
+          <code>Webhooks:Enabled</code> is false fails the row before reading anything, so a row queued before webhooks were
+          switched off retries, dead-letters and stays requeue-able (<code>:41-50</code>). The handler is deliberately not
+          <code>ITransactional</code>: the outcome is recorded on its own save (<code>:12-16</code>, <code>:69</code>).</p>
+          <h2 id="the-lane-a-dead-receiver-cannot-delay-anything-else">The lane: a dead receiver cannot delay anything else</h2>
+          <p>Here is the problem the first five sections do not solve. Internal commands are a shared queue. Business
+          commands run on it too. A receiver that takes 10 seconds to time out, multiplied by a backlog of its
+          deliveries, is 10 seconds of every cycle your business commands do not run.</p>
+          <p>So delivery rows get a lane of their own. <code>WebhookDeliveryLane</code> routes them to their own
+          <code>InternalCommandLaneProcessor</code>, never the shared loop, so a slow or failing receiver cannot delay the
+          other internal commands (<code>WebhookDeliveryLane.cs:14-19</code>). It registers the lane only when both
+          <code>Webhooks:Enabled</code> and <code>InternalCommands:Enabled</code> are true (<code>:51-67</code>). The lane is named <code>webhooks</code>, the
+          value of its <code>lane</code> metric tag (<code>:22-23</code>), and it is built from three settings (<code>:36-49</code>): the cooldown
+          is <code>ReceiverCooldownSeconds</code> (<code>:43</code>), the concurrency is <code>DeliveryConcurrency</code> (<code>:47</code>), default 4,
+          range 1 to 16 (<code>WebhookSettings.cs:36-41</code>), and the batch start budget is <code>TimeoutSeconds</code> (<code>:48</code>). The
+          receiver key is the subscription id (<code>:44-46</code>).</p>
+          <p>Inside a claimed batch up to that many rows run at once per replica, two rows of one receiver never run
+          at the same time, and the earliest allowed row starts first (<code>InternalCommandLaneProcessor.cs:28-30</code>).
+          No row starts once the start budget has elapsed since the batch&#39;s first start, and the rows that never
+          started are released <strong>uncharged</strong>, so they are due again at once (<code>:31-33</code>, <code>ReleaseAsync</code> <code>:542-558</code>).</p>
+          <h3 id="the-cooldown-charges-an-attempt-without-sending">The cooldown charges an attempt without sending</h3>
+          <p>This is the part of the design that is easiest to get wrong, so it is worth reading slowly.</p>
+          <p>A receiver whose real attempt failed cools down on this replica (<code>:36-37</code>). While it cools down, each of
+          its rows whose turn comes is <strong>not sent and its handler is not invoked</strong>; it is charged one failed
+          attempt through the unchanged failure path, with the error code <code>InternalCommands.ReceiverCoolingDown</code>
+          and the message &quot;Receiver cooling down after a failed delivery.&quot; (<code>:37-39</code>, <code>:60-64</code>, <code>ChargeAsync</code>
+          <code>:519-540</code>). The first row whose turn comes after the cooldown ends runs for real; a success closes the
+          cooldown, a failure reopens it (<code>:39-41</code>, <code>ApplyOutcome</code> <code>:502-517</code>). A cooldown opens from the instant
+          the attempt failed, not from when the scheduler got round to it (<code>:495-500</code>, <code>OpenCooldown</code> <code>:564-576</code>).</p>
+          <p>Why charge? Because the alternative, deferring a cooling receiver&#39;s rows for free, lets a permanently
+          dead receiver cost one real attempt per cooldown per replica forever, and a subscription receiving
+          events faster than that accumulates pending rows without bound (<code>ADR-142:297-304</code>). Charging keeps each
+          row on the normal retry timeline, so a dead receiver&#39;s backlog dead-letters on the normal attempt budget.</p>
+          <p>The obvious objection is that charging could dead-letter a row without ever really trying it. The clamp
+          answers that. <code>ReceiverCooldownSeconds</code> (default 60, range 5 to 120, <code>WebhookSettings.cs:43-49</code>) is not
+          applied as configured: the effective cooldown is <code>min(configured, S - attemptTimeout - 1 s)</code>, never below
+          1 second, where <code>S</code> is the shortest possible span from a row&#39;s first attempt to its last under the
+          queue&#39;s backoff settings, and the cooldown is off when <code>S</code> is zero (<code>InternalCommandLaneProcessor.cs:89-116</code>).
+          Leaving room for one attempt in flight is what guarantees, on any number of replicas, that a receiver
+          answering from the moment a row is scheduled gets at least one real attempt on that row before it can
+          dead-letter, unless the 1-second floor applied (<code>:93-96</code>).</p>
+          <h2 id="trade-offs-honestly">Trade-offs, honestly</h2>
+          <ul>
+          <li><strong>It has not met a real receiver.</strong> Helpdesk is the only adopter (<code>Program.cs:107</code>, <code>:160</code>;
+          <code>DependencyInjection.cs:60</code>), and nothing has been exercised against a real third-party receiver or a
+          Standard Webhooks library on the receiving side (<code>ADR-142:338-340</code>). The signature format follows the
+          scheme as the source documents it; interoperability is asserted, not observed.</li>
+          <li><strong>The whole event is the payload.</strong> There is no projection step: the fan-out serializes the event as
+          it is (<code>WebhookFanOutHandler.cs:80</code>), so registering an event publishes every member of its contract to
+          a third party. Register only terminal contracts you would be comfortable printing.</li>
+          <li><strong>The cooldown is per replica.</strong> It is held on each replica (<code>WebhookSettings.cs:44-46</code>), so R replicas
+          each spend a real attempt per window on a failing receiver.</li>
+          <li><strong>Recovery after an outage costs a window.</strong> Because cooling rows are charged, a row whose receiver
+          comes back too close to the row&#39;s last attempt can dead-letter without another real try. That is the
+          stated price of the charged fail-fast (<code>ADR-142:264-266</code>), and the dead letter is requeue-able from the
+          internal-command console.</li>
+          <li><strong>Only 410 disables a subscription</strong> (<code>DeliverWebhookInternalCommandHandler.cs:106-111</code>). A receiver
+          that fails forever with a 500 keeps being retried and dead-lettered event by event, bounded by the
+          charged cooldown rather than by a circuit that turns the subscription off.</li>
+          <li><strong>A slow but succeeding receiver never cools down.</strong> A success closes the cooldown
+          (<code>InternalCommandLaneProcessor.cs:513-516</code>), and one receiver never runs two rows at once (<code>:28-30</code>), so
+          its backlog drains at one row per response time per replica.</li>
+          <li><strong>Many distinct failing receivers still fill the lane.</strong> A hanging receiver holds a slot for up to
+          <code>TimeoutSeconds</code>, so <code>DeliveryConcurrency</code> or more of them can occupy every slot; one tenant can hold up
+          to <code>MaxSubscriptionsPerTenant</code> subscriptions (default 25, a soft limit, <code>WebhookSettings.cs:62-67</code>). One
+          tenant can delay other tenants&#39; deliveries. It cannot delay the shared queue.</li>
+          <li><strong>Every replica needs the same <code>Webhooks:Enabled</code>.</strong> A replica that drains the queue with webhooks off
+          registers no lane (<code>WebhookDeliveryLane.cs:64-67</code>), and its handler fails delivery rows without sending
+          (<code>DeliverWebhookInternalCommandHandler.cs:41-50</code>), spending attempts toward the dead letter.</li>
+          <li><strong>The client trace still records the URL path.</strong> Loggers and trace headers are removed, but the HTTP
+          client span is not, so a host exporting traces to a shared backend filters the <code>MMCA.Webhooks</code> spans
+          itself (<code>WebhookServiceCollectionExtensions.cs:53-54</code>).</li>
+          </ul>
+          <h2 id="apply-this-even-without-mmca">Apply this even without MMCA</h2>
+          <p>The design ports to any stack with a relational database and a background worker. Six steps:</p>
+          <ol>
+          <li><strong>Make each delivery a durable row, written in one transaction per event.</strong> One row per (event,
+          subscriber), all or nothing, and if the write fails, fail the event handler so your event transport
+          redelivers it. A post from inside the request is a delivery you cannot prove you owed.</li>
+          <li><strong>Derive the delivery id from the event and the subscriber.</strong> A hash of the pair, not a fresh GUID, so
+          a redelivered event produces the same id and the receiver can dedupe. At-least-once is only tolerable
+          when the duplicate is recognizable.</li>
+          <li><strong>Sign with a public scheme and let the signature header carry a list.</strong> Standard Webhooks gives your
+          receivers a library instead of your documentation. A list header makes secret rotation a grace window
+          instead of a coordinated cutover, and ship a constant-time verifier with a timestamp tolerance.</li>
+          <li><strong>Check the address where the socket opens, and dial only what you checked.</strong> Resolve the name
+          yourself in the connect callback, refuse if any answer is non-public, then connect to those addresses
+          and no others. Treat IPv6 as an allow-list. Treat an empty answer as transient and a private answer as
+          final. Validation at save time is a courtesy to the admin, not a control.</li>
+          <li><strong>Strip the client to one handler.</strong> No redirects, no proxy, no cookies, no trace propagation, no
+          URL-logging handler, no second retry policy. Every default you leave on is a channel you did not
+          decide to open.</li>
+          <li><strong>Give deliveries their own lane, and charge cooling receivers.</strong> Isolate the drain from your
+          business work, key concurrency by receiver, and when a receiver is failing, fail its due rows on the
+          normal retry timeline without sending, clamped so every row still gets one real attempt before it can
+          dead-letter.</li>
+          </ol>
+          <p>The rule of thumb: <strong>an outbound webhook is a URL a stranger chose, dialled by your server on your
+          schedule. Decide where it may connect at the socket, not at the form, and decide what its outage may cost
+          you before it has one.</strong></p>
+          <hr>
+          <p><strong>What we covered:</strong> why outbound webhooks fail in four distinct ways (SSRF, a slow receiver, lost work
+          and unprovable posts), how <code>AddWebhooks</code> registers an inert feature that two further calls
+          (<code>AddWebhookDelivery</code> and one <code>AddWebhookEvent</code> per event), a migration, an admin controller and a flag
+          turn on, how the fan-out schedules one durable internal command per subscriber in one transaction and
+          throws to get the event redelivered, why the deterministic <code>webhook-id</code> makes at-least-once dedupable,
+          how Standard Webhooks signatures and a space-separated header give secret rotation a grace window, why
+          the authoritative SSRF check is a connect callback that dials only the addresses it checked, what the
+          stripped <code>MMCA.Webhooks</code> client refuses and why, how each send outcome maps onto the row, and how the
+          delivery lane, its per-receiver concurrency and its charged, clamped cooldown keep a dead receiver from
+          delaying anything else.</p>
+          <p><em>MMCA.Common is open source. Star the repo, read the 2-minute ADR-142 behind this pattern, or
+          <code>dotnet add package MMCA.Common.API</code> and build the monolith you can extract later.</em></p>
+          <ul>
+          <li>Repo: <a href="https://github.com/ivanball/MMCA.Common" target="_blank" rel="noopener">https://github.com/ivanball/MMCA.Common</a></li>
+          <li>This pattern&#39;s decision record: <a href="../docs/adr/142-outbound-webhooks-and-delivery-lane.html">ADR-142: Outbound Webhooks (Signed Delivery over Internal Commands, with a Dedicated Delivery Lane)</a></li>
+          <li>The inbound side of the same contract: <a href="saga-compensation-reconciliation.html">Undo Is a Feature: Saga Compensation and the Reconciliation Backstop</a>
+          (its &quot;The inbound edge&quot; section); the queue every delivery runs on:
+          <a href="durable-internal-commands.html">Four Ways to Do Work Later: Channels, Cron, the Outbox and Durable Internal Commands</a>.</li>
+          </ul>
+          <p><em>Previous: Article 55, <a href="app-as-mcp-server.html">&quot;Your App as an MCP Server: Read-Only Tools Over the Queries You Already
+          Govern&quot;</a>. Next in the series: Article 57, <a href="series-index.html">&quot;The MMCA series: every pattern, one
+          place&quot;</a>.</em></p>
+          <p><em>Tags: .NET, C Sharp, Security, Distributed Systems, Software Architecture</em></p>
+          
+        <nav class="article-pager" aria-label="Series navigation">
+          <a class="article-pager-link article-pager-link--prev" href="app-as-mcp-server.html" rel="prev"><span class="article-pager-dir">← Previous</span><span class="article-pager-title">55 · Your app as an MCP server</span></a>
+          <a class="article-pager-link article-pager-link--next" href="series-index.html" rel="next"><span class="article-pager-dir">Next →</span><span class="article-pager-title">57 · The series index</span></a>
+        </nav>
+        <div class="doc-foot btn-row">
+          <a class="btn btn--ghost" href="../articles/index.html">← Back to The MMCA.Common series</a>
+        </div>
+        </article>
+        <aside class="doc-aside" id="doc-rail">
+          <nav class="doc-toc" aria-label="On this page">
+            <p class="doc-toc-title">On this page</p>
+            <ul>
+            <li><a href="#the-mmca-answer-three-calls-and-the-rest-is-policy">The MMCA answer: three calls, and the rest is policy</a></li>
+            <li><a href="#fan-out-one-event-one-durable-row-per-subscriber">Fan-out: one event, one durable row per subscriber</a></li>
+            <li><a href="#signing-standard-webhooks-with-a-rotation-window">Signing: Standard Webhooks, with a rotation window</a></li>
+            <li><a href="#ssrf-the-check-that-counts-is-the-one-where-the-socket-opens">SSRF: the check that counts is the one where the socket opens</a></li>
+            <li><a href="#a-client-that-does-exactly-one-thing">A client that does exactly one thing</a></li>
+            <li><a href="#the-lane-a-dead-receiver-cannot-delay-anything-else">The lane: a dead receiver cannot delay anything else</a></li>
+            <li><a href="#trade-offs-honestly">Trade-offs, honestly</a></li>
+            <li><a href="#apply-this-even-without-mmca">Apply this even without MMCA</a></li>
+            </ul>
+          </nav>
+        </aside>
+      </div>
+    </div>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container">
+      <div class="footer-grid">
+        <p class="footer-meta mb-0"><strong>Ivan Ball-llovera</strong> · Principal Software Architect · Douglasville, GA</p>
+        <ul class="footer-links">
+          <li><a href="../resume.html">Résumé</a></li>
+          <li><a href="../platform.html">Platform</a></li>
+          <li><a href="../docs/index.html">Reference</a></li>
+          <li><a href="../writing.html">Writing</a></li>
+          <li><a href="../speaking.html">Speaking</a></li>
+          <li><a href="../contact.html">Contact</a></li>
+          <li><a href="https://github.com/ivanball" target="_blank" rel="me noopener">GitHub</a></li>
+          <li><a href="https://www.linkedin.com/in/ivan-ball-llovera-6549a911" target="_blank" rel="me noopener">LinkedIn</a></li>
+        </ul>
+      </div>
+      <p class="footer-meta" style="margin-top:1rem">© <span class="js-year">2026</span> Ivan Ball-llovera. Reference docs generated from source.</p>
+    </div>
+  </footer>
+
+</body>
+</html>

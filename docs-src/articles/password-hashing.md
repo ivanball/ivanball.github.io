@@ -140,12 +140,16 @@ sits behind `IPasswordHasher`: the registration is a single Infrastructure line,
 handlers never name a password-hashing primitive.
 
 The login path's timing defense goes through the same interface. To keep an unknown address from
-answering faster than a wrong password, it hashes the submitted password once and discards the result,
-so that throwaway call costs whatever the registered hasher costs and follows any replacement without a
-matching change. That burn costs the current work factor, though. A wrong password against a record
-still on an older factor (a legacy 600,000-iteration hash) costs that older amount, so until the record
-is rehashed, an unknown address answers faster than a wrong password against it. Rehash-on-login closes
-that gap one sign-in at a time, and only in an app that opts in.
+answering faster than a wrong password, it calls `IPasswordHasher.BurnVerificationCost`, one throwaway
+derivation that costs what verifying the most expensive record the hasher can have stored costs. The
+interface default discards one `HashPassword`, so a replacement hasher gets a burn at its own cost
+without a matching change. The shipped hasher overrides it with one derivation over a fresh salt at the
+larger of its current and legacy counts, 600,000 iterations, so an unknown address, an account with no
+stored credential and a service account all cost the same as a wrong password against a legacy record.
+The residual runs the other way: a wrong password against a current-format account verifies at 210,000
+and answers faster, so a caller timing failed sign-ins can tell an upgraded account from a missing or
+legacy one. Every hash written at registration and every record rehashed on sign-in joins that faster
+set. ADR-133 accepts that knowingly, because registration already answers whether an address is taken.
 
 ## Defense in depth: PII at rest, not just passwords
 
@@ -194,9 +198,9 @@ The current §11 entry itself names three reasons it holds at Implementation 8: 
 threat-model criterion is unmet, authorization is RBAC with a capability layer plus opt-in ownership
 checks rather than a full resource- or attribute-based policy engine, and the failed-login counter
 behind the brute-force lockout is documented as non-atomic. It also records that service-to-service
-trust is met only in part: a broker consumer restores user identity and tenant from unsigned message
+trust is met only in part: a broker consumer restores user id, roles and tenant from unsigned message
 headers, in-cluster gRPC forwards the user token over cleartext HTTP/2, and the opt-in service token
-beside it is HS256 over one key every service shares (only Store adopts it). Tenant resolution defaults
+beside it is HS256 over one key every service shares (Store and ADC both adopt it). Tenant resolution defaults
 to the signed claim, with a request header as an explicit opt-in. All of it sits
 upstream of the hash, and none of it undermines the storage scheme. They are the operational and governance work that surrounds a correct
 hash.
@@ -234,7 +238,8 @@ canonical-material guard means a credential row in any other shape authenticates
 rehash-on-login moves legacy records to the current work factor in the apps that opt in, how
 AES-256-GCM field encryption via `EncryptedStringConverter` extends the same care to other PII, and the
 honest trade-offs (the HTTPS-metadata opt-out, an iteration count that ratchets with hardware, and an
-unknown-address burn that costs the current factor).
+unknown-address burn priced at the legacy factor, which leaves current-format accounts the faster branch
+to time).
 
 **Next in the series:** idempotency in one attribute, so a client that retries a write gets the first
 response replayed instead of a duplicate.
@@ -246,170 +251,6 @@ response replayed instead of a duplicate.
 
 *Tags: .NET, C Sharp, Software Architecture, Security, Cryptography*
 
-*Notes (re-verified 2026-10-29 against MMCA.Common v1.265.1 for every password-hashing anchor; the
-field-encryption, scorecard, JWT-metadata and CORS anchors were last re-read
-2026-10-22 at v1.250.0; previous passes 2026-10-08 at v1.233.0 and 2026-10-02 at v1.221.0).
-2026-10-29 entry (v1.265.1): STRUCTURAL REGROUND onto ADR-133
-(`Website/docs-src/adr/133-versioned-password-hash-work-factor.md:4`, Accepted 2026-10-23, supersedes
-ADR-102, which now carries a Superseded banner at `102-pbkdf2-only-password-hashing.md:4`; the change
-shipped in v1.252.0 per ADR-133 `:5-6`). `PasswordHasher.cs` is now 148 lines. DRIFTED, REWRITTEN: the
-H1 dropped "600k" for "a versioned work factor"; new hashes use `Iterations = 210_000` (`:34`, OWASP
-SHA-512 figure with 600,000 named as the SHA-256 one at `:9-11`, `:31-32`); 600,000 survives only as
-`LegacyIterations` (`:37`) for header-less 64-byte hashes (`:16-17`, read at `:124-128`); the stored hash
-is 69 bytes `[0x01][4-byte BE iterations][64-byte digest]` (`:14-15`, `FormatVersion` `:40`,
-`HeaderSize = 5` `:43`, `VersionedHashSize` `:46`, written at `:68-71`); the stored count is bounded by
-`MinIterations = 100_000` (`:52`, rationale `:48-51`) and `MaxIterations = 2_000_000` (`:58`, rationale
-`:54-57`) in `TryReadIterations` (`:122`, version check `:130`, bounds `:133`, reject `:136-137`); the
-guard is `:90` (rationale `:83-89`), the compare runs on the trailing `HashSize` bytes (`:95`) after a
-derive at the stored count (`:96`) via `FixedTimeEquals(computedHash, expected)` (`:100`); `NeedsRehash`
-`:109-115` (remarks `:104-108`). The "one path" trade-off paragraph was rewritten around the versioned
-format and rehash-on-login: `IPasswordHasher.NeedsRehash` default `=> false`
-(`Source/Core/MMCA.Common.Application/Interfaces/Infrastructure/Auth/IPasswordHasher.cs:28`, doc
-`:20-25`); `IPasswordRehashableUser` (`Source/Core/MMCA.Common.Domain/Auth/IPasswordRehashableUser.cs:16`);
-`AuthenticationServiceBase.RehashPasswordIfNeededAsync`
-(`Source/Core/MMCA.Common.Application/Auth/AuthenticationServiceBase.cs:676`, summary `:658-662`,
-best-effort remarks `:664-672`, opt-in check `:678`, `NeedsRehash` `:688`, `HashPassword` `:693`,
-`RehashPassword` `:694`), called at `:237` after issuance at `:230`; a wrong password returns from the
-verify at `:178`. Opt-ins: `MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Domain/Users/User.cs:36`
-(`RehashPassword` `:442`) and `MMCA.Store/Source/Modules/Identity/MMCA.Store.Identity.Domain/Users/User.cs:30`
-(`RehashPassword` `:205`); Grep for `IPasswordRehashableUser|IPasswordHasher|PasswordHash` over
-`MMCA.Helpdesk/Source/**/*.cs` returned 0. DRIFTED, EXTENDED: the burn caveat.
-`BurnPasswordVerificationCost` (`AuthenticationServiceBase.cs:648-656`, discard `:655`, call site
-`:172`) costs the current work factor, and its remarks (`:642-646`) state a record on an older factor
-costs that older amount until rehashed. DRIFTED, REWRITTEN: the tests paragraph (four reflected
-constants, not three; KATs at both counts; bounds theory) and the trade-offs bullet (raising the
-constant upgrades opted-in records on sign-in; the window bounds a new count). The OWASP "at or above"
-hedge was replaced by attributing the figure to the hasher's own documentation (`PasswordHasher.cs:9-11`).
-Header ADR re-pointed from ADR-102 to ADR-133. Verifier follow-ups (same day): the empty-material
-hazard is restated as that of a hasher taking its output length from the stored hash (this one
-derives `HashSize` always, `PasswordHasher.cs:141-147`, and checks shape before slicing at `:90`,
-`:95`; login screens empty material first, `AuthenticationServiceBase.cs:170`, `:627-628`); the
-section 11 credit no longer names an ADR, because `common-ArchitectureScorecard.md:75` still describes
-the ADR-032 form at 600k; "hashing primitive" narrowed to "password-hashing primitive" (other SHA256
-uses exist, e.g. `IdempotencyFilter.cs:550`); "Today ... yet ... still" dropped from the converter
-sentence; rehash upgrade scoped to opted-in apps (`AuthenticationServiceBase.cs:678`). RE-ANCHORED:
-ADR-005 `:27` to `:29`; `LoginProtectionService.cs` non-atomic `:78-86` to `:79-87`, backoff `:102` to
-`:104` (`:98-104`), reset `:117-118` to `:119-120`, success call `AuthenticationServiceBase.cs:207` to
-`:224`; bicep as at the end. 2026-10-22 entry (v1.250.0):
-`PasswordHasher.cs` body unchanged (75 lines; every `PasswordHasher.cs` and test anchor below still
-holds). DRIFTED, REWRITTEN: the "one coupling survives the interface" sentences.
-`AuthenticationServiceBase.BurnPasswordVerificationCost`
-(`Source/Core/MMCA.Common.Application/Auth/AuthenticationServiceBase.cs:623-631`, remarks `:615-622`,
-call site `:155`) now discards `passwordHasher.HashPassword(password)` at `:630`, with no fixed decoy
-material, so the cost tracks whichever hasher is registered and the size coupling is gone (ADR-102
-revision 2026-10-21 at `102-pbkdf2-only-password-hashing.md:11`); the body says the burn goes through
-the same interface. DRIFTED, REWORDED: "no entity configuration in any of the four repositories wires"
-the converter now reads "only test harnesses map and no production entity configuration ... wires",
-because `Tests/Core/MMCA.Common.Infrastructure.Tests/Persistence/AuditTrail/AuditTrailTestHarness.cs:264`
-and the re-encryption suite map it (ADR-037 revision 2026-10-21 at `037-field-level-encryption-at-rest.md:7-9`,
-production adoption zero at `:155-159`). DRIFTED, REWRITTEN: the section 11 trust sentence. The row
-(`Website/docs-src/governance/common-ArchitectureScorecard.md:75`, still 3 / 4 / 8 / 12/24) now reads
-"Service-to-service trust is met only in part", adds the opt-in HS256 service token on one shared key
-adopted only by Store, and records claim-only tenant resolution (`TenancySettings.cs:61-62`,
-`DefaultResolutionOrder = [TenantResolutionStrategy.Claim]`, header opt-in), so the tenant-header clause
-was dropped. UNVERIFIED and left as written: "the consumer apps still overwrite every PII field on
-anonymization" (only zero converter usage under ADC, Store and Helpdesk was confirmed) and the OWASP
-"at or above" hedge (external fact). RE-ANCHORED below: `DependencyInjection.cs` `:315` to `:320`;
-ADR-005 `:25` to `:27`; ADR-037 item 10 `:123` to `:131`, zero adoption `:137-142` to `:155-159`;
-ADR-102 revisions `:5-8` to `:5-11`; `AesGcm` `:200`, `:235` to `:230`, `:265`; nonce `:78` to `:82`;
-tag `:81` to `:85`; key guards `:130`, `:166` to `:160-163`, `:196-199`; envelope `:203-208` to
-`:233-238`, documented `:38-44` to `:40-44`; `AGENTS.md` `:131` to `:132`; gRPC h2c `:95` to `:97-101`;
-`ConsumerOriginRestore.cs` `:50` to `:44` (user id) and `:55` (tenant); `TenancySettings.cs` `:56` to
-`:61-62`; bicep anchors as listed at the end. 2026-10-08 entry (v1.233.0): `PasswordHasher.cs` body
-unchanged (75 lines, anchors below still hold). REWORDED: "each guess costs 600,000 SHA-512 operations"
-now reads "600,000 HMAC-SHA512 operations" (one PBKDF2 iteration is one HMAC-SHA512 over
-`HashAlgorithmName.SHA512`, `PasswordHasher.cs:36`, `:73`). HEDGED (external fact, not settleable
-in-repo): "matches / is OWASP 2023 guidance" and the checklist's "600k+ PBKDF2-SHA512 at the time of
-writing" now say "at or above" and point readers at the OWASP cheat sheet's per-hash figure; the only
-in-repo support is the code comment `PasswordHasher.cs:21`, and the audit reports the cheat sheet's
-600,000 figure as its PBKDF2-HMAC-SHA256 value with a lower SHA-512 value, which would make 600,000
-above guidance rather than equal to it. NARROWED: the Argon2id swap is no longer called a pure
-registration change; `AuthenticationServiceBase.BurnPasswordVerificationCost`
-(`Source/Core/MMCA.Common.Application/Auth/AuthenticationServiceBase.cs:615-625`, call site `:155`)
-then ran `VerifyPassword(password, new byte[64], new byte[32])` (superseded, see the 2026-10-22 entry), which only paid the full
-derivation cost because `PasswordHasher.cs:55` accepts exactly that shape (it still does). EXTENDED: the section 11 row
-(`Website/docs-src/governance/common-ArchitectureScorecard.md:75`, still 3 / 4 / 8 / 12/24, re-scored
-by Website #244 on 2026-10-07) keeps the same three hold-at-8 reasons and adds "Service-to-service and
-tenant trust is met only in part" (unsigned `MMCA-*` headers restored at
-`Infrastructure/Messaging/Consumers/ConsumerOriginRestore.cs:44`, `:55`, cleartext h2c JWT forwarding
-`Grpc/DependencyInjection.cs:97-101`, then a default `[Claim, Header]` tenant order, since replaced by `[Claim]`
-`Infrastructure/Persistence/Tenancy/TenancySettings.cs:61-62`), so the trade-offs paragraph names it.
-RE-ANCHORED in place below: `DependencyInjection.cs` `:314` to `:315`; ADR-005 `:23` to `:25`; ADR-037
-item 10 `:122` to `:123` and zero adoption `:136-141` to `:137-142`; `LoginProtectionService.cs`
-non-atomic `:55` to `:78-86`, backoff `:77` (`:71-78`) to `:102` (`:98-103`), reset `:85-86` to
-`:117-118` (called on success at `AuthenticationServiceBase.cs:207`); the Authentication partial and
-CORS and bicep anchors as listed at the end.
-Port and adapter: `IPasswordHasher` in `MMCA.Common.Application` (namespace
-`MMCA.Common.Application.Interfaces.Infrastructure.Auth`,
-`Source/Core/MMCA.Common.Application/Interfaces/Infrastructure/Auth/IPasswordHasher.cs:1`, interface at
-`:6`); the single `PasswordHasher` in `MMCA.Common.Infrastructure` (namespace
-`MMCA.Common.Infrastructure.Auth`, `Source/Core/MMCA.Common.Infrastructure/Auth/PasswordHasher.cs:5`,
-class at `:22`), registered by `TryAddSingleton<IPasswordHasher, PasswordHasher>`
-(`Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:335`). Behavior as of v1.265.1:
-PBKDF2-HMAC-SHA512 (`HashAlgorithmName.SHA512` inside `ComputePbkdf2Hash` at `:141-147`, the only
-derive path, called from `HashPassword` `:66` and `VerifyPassword` `:96`), `Iterations = 210_000` (`:34`,
-a private const), `LegacyIterations = 600_000` (`:37`), `SaltSize = 32` (`:25`, drawn at `:65`),
-`HashSize = 64` (`:28`), the versioned layout and bounds as in the 2026-10-29 entry, class doc "PBKDF2 is
-the only supported algorithm" (`:11-12`); the type is 148 lines with no legacy HMAC branch. ADR:
-`Website/docs-src/adr/133-versioned-password-hash-work-factor.md` (Accepted 2026-10-23, supersedes
-ADR-102 at `:4`, revised 2026-10-26 and 2026-10-28 at `:9-12`; Decision bullets `:48-75`, rehash
-`:76-100`, burn `:101-104`, opt-ins `:105-114`). Tests:
-`Tests/Core/MMCA.Common.Infrastructure.Tests/Auth/PasswordHasherSecurityTests.cs` pins
-`210_000`, `600_000`, 32, 64, 69 and `0x01` (`:23-28`); accepts a legacy digest at 600,000 (`:34`) and a
-versioned one (`:53`); checks `HashPassword` byte by byte against an independent known answer (`:67`);
-honors a stored 300,000 and reports it for rehash (`:86-96`); rejects counts 99,999, 2,000,001, 0 and -1
-and versions `0x00` and `0x02` (`:98-105`) and a header-less digest at 100,000 (`:121-136`); reflects
-`Iterations` (`:141`), `LegacyIterations` (`:147`), `SaltSize` (`:153`) and `HashSize` (`:159`) via
-`ReadPrivateConstant` (`:256`); rejects a legacy HMAC digest (`:164`), an empty hash and salt (`:180`),
-ten non-canonical length pairs (`:184-195`) and a valid header over an odd salt (`:209`);
-`Tests/Core/MMCA.Common.Infrastructure.Tests/Auth/PasswordHasherTests.cs` holds 11 `[Fact]` + 2
-`[Theory]`. NARROWED (2026-10-02): the fitness-rule sentence.
-`Tests/Architecture/MMCA.Common.Architecture.Tests/Governance/PasswordHashingFitnessTests.cs` asserts
-`HaveDependencyOnAll` on the TYPES `System.Security.Cryptography.Rfc2898DeriveBytes` (`:19`, rule
-`:34`) and `System.Security.Cryptography.CryptographicOperations` (`:17`, rule `:47`), not on the
-`FixedTimeEquals` method, so the body now says the `SequenceEqual` swap fails only because
-`FixedTimeEquals` is the type's sole `CryptographicOperations` use (`PasswordHasher.cs:64`) and that a
-rewrite keeping another call on that class would pass. REWORDED (2026-10-02): "Treat the iteration count
-as a config decision" read as configurable; the count is a private const (`PasswordHasher.cs:24`) and the
-stored record is only `(Hash, Salt)` (`:27`, `:43`), so the bullet now says raising it is a code change
-needing a plan for stored hashes. "now recorded in its own decision record" lost its "now"
-(current-state rule). Field encryption: `EncryptedStringConverter`
-(`Source/Core/MMCA.Common.Infrastructure/Persistence/Encryption/EncryptedStringConverter.cs`) uses
-`AesGcm` (`:230`, `:265`), nonce 12 (`:82`), tag 16 (`:85`), key guards `:160-163` (single key) and `:196-199`
-(per ring entry), envelope `[key version (1)][nonce (12)][ciphertext (N)][tag (16)]` assembled at
-`:233-238` and documented at `:40-44`, 29 bytes of overhead; re-read line by line this run.
-`Website/docs-src/adr/037-field-level-encryption-at-rest.md` Decision item 10 starts at `:131` and records
-zero production adoption at `:155-159`; ADR-005 names the converter for retrievable
-fields (`Website/docs-src/adr/005-soft-delete-vs-erasure.md:29`). Section 11 Security RE-ANCHORED to
-`Website/docs-src/governance/common-ArchitectureScorecard.md:75` (from `:91`, which is now section 27) =
-Weight 3, **Maturity 4 / Implementation 8**, weighted 12/24, unchanged. DRIFTED (2026-10-02): the row
-credits alg pinning, the PBKDF2 hasher, permission-based authz and rate limiting plus brute-force
-protection, and lists the ADR-037 converter only as "ships but is latent/unadopted", so AES-256-GCM was
-dropped from the strength list and the body says it is not part of the credit. The row's hold-at-8
-reasons are now THREE (threat-model criterion unmet; RBAC with capability indirection plus opt-in
-ownership rather than ABAC; failed-login counter documented non-atomic,
-`Source/Core/MMCA.Common.Infrastructure/Auth/LoginProtectionService.cs:79-87`; the row itself still
-cites `:55`), and vault binding is no
-longer a limitation (the row records opt-in `AddCommonKeyVaultConfiguration` via
-`DefaultAzureCredential`), so the trade-offs paragraph was rewritten to the three. Scorecard-side drift
-(not an article defect): the row still cites ADR-032 and `Infrastructure/Services/PasswordHasher.cs:9,53`
-plus `Services/PasswordHasherTests.cs` (11 tests). Brute force: exponential backoff
-`LoginProtectionService.cs:104` (clamped shift, `:98-104`), counter and lockout cleared in
-`ResetFailedAttemptsAsync` (`:119-120`), which a successful login calls
-(`AuthenticationServiceBase.cs:224`). Analyzers: `TreatWarningsAsErrors` at
-`MMCA.Common/Directory.Build.props:7`; five analyzers, no dedicated security analyzer. Header
-re-pointed from `MMCA.Common/CLAUDE.md` (now a stub importing `AGENTS.md`, `:3`) to
-`MMCA.Common/AGENTS.md`, whose `:132` states the `AddForwardedJwtBearer` resolution order. ANCHORS
-REBASED (2026-10-02): the HTTPS-metadata bullet's behavior is unchanged, but the code moved into the
-partial `Source/Presentation/MMCA.Common.API/Startup/WebApplicationBuilderExtensions.Authentication.cs`:
-`RequireHttpsMetadataConfigKey` `:25`, the single public `AddForwardedJwtBearer` `:52-57`, the resolve
-chain argument then key then `!environment.IsDevelopment()` `:64-66`, the
-`InsecureJwtMetadataWarningStartupFilter` registration `:68-72` (type at
-`Startup/Auth/InsecureJwtMetadataWarningStartupFilter.cs:15`), private `AddForwardedJwtBearerCore` `:77`
-(re-anchored 2026-10-08 from `:24`, `:51-56`, `:63-65`, `:67-71`, `:76`).
-Permissive dev CORS unchanged: `AllowAnyOrigin` at `WebApplicationBuilderExtensions.cs:146` inside the
-S5122 pragma (`:144` disable, `:149` restore). Production opt-outs with justification beside the setting
-re-anchored 2026-10-29: `MMCA.ADC/infra/main.bicep:2196,2332,2486` and
-`MMCA.Store/infra/main.bicep:1787,1923` (each `Authentication__JwtBearer__RequireHttpsMetadata` entry set to `'false'`; Store justification comment at `:1785` and `:1921`).*
+*Notes (re-verified 2026-11-25 against MMCA.Common v1.319.0 for every password-hashing, login-path, section 11, bicep, CORS and analyzer anchor below; the field-encryption, test-suite, fitness-rule and JWT-metadata partial anchors were last re-read in the 2026-10-29 and 2026-10-22 (v1.250.0) passes and are carried, not re-read, this run; earlier passes 2026-10-08 at v1.233.0 and 2026-10-02 at v1.221.0). 2026-11-25 entry (v1.319.0): DRIFTED, REWRITTEN: the burn paragraph. The login path calls `IPasswordHasher.BurnVerificationCost` from `AuthenticationServiceBase.BurnPasswordVerificationCost` (`Source/Core/MMCA.Common.Application/Auth/AuthenticationServiceBase.cs:958-966`, call `:965`, remarks `:944-957`), reached when `CanSignInWithPassword` fails (`:201`, burn call `:203`; the predicate `:941-942` rejects null, service accounts and rows without a stored credential via `HasStoredCredential` `:935`). The interface member (`Source/Core/MMCA.Common.Application/Interfaces/Infrastructure/Auth/IPasswordHasher.cs:39`, doc `:30-37`) defaults to discarding one `HashPassword`, and `PasswordHasher` overrides it with one derivation over a fresh salt at `BurnIterations` (`Source/Core/MMCA.Common.Infrastructure/Auth/PasswordHasher.cs:114-119`, derive `:118`), where `BurnIterations` is the larger of `Iterations` and `LegacyIterations`, 600,000 (`:64`, doc `:60-63`). So the timing residual is inverted: a wrong password against a current-format account verifies at 210,000 (`AuthenticationServiceBase.cs:212`, `PasswordHasher.cs:34`) and is the faster branch, which every registration hash and every rehash grows (ADR-133 Trade-offs, `Website/docs-src/adr/133-versioned-password-hash-work-factor.md:200-211`; Revision 2026-11-23 at `:12-16`; Decision bullet `:105-113`). The old "costs the current factor; rehash closes the gap" text and its summary clause were replaced. DRIFTED, CHANGED: the section 11 trust sentence. `Website/docs-src/governance/common-ArchitectureScorecard.md:76` (Weight 3, Maturity 4 / Implementation 8, 12/24, unchanged) records the service token as adopted by both Store and ADC; in source ADC wires `WithServiceToken()` at `MMCA.ADC/Source/Services/MMCA.ADC.Engagement.Contracts/DependencyInjection.cs:110` (also `MMCA.ADC.Identity.Contracts/DependencyInjection.cs:74`, `MMCA.ADC.Notification.Contracts/DependencyInjection.cs:51`) and the shared signing key at `MMCA.ADC/Source/Hosting/MMCA.ADC.AppHost/Program.cs:245-247`. "user identity and tenant" became "user id, roles and tenant" to match the row and `Source/Core/MMCA.Common.Infrastructure/Messaging/Consumers/ConsumerOriginRestore.cs:37-43` (user id), `:48` (roles), `:50` (tenant), restored through `AmbientOrigin.Restore` `:45-52`. Flag (2026-11-25): "the consumer apps overwrite every PII field on anonymization" is still unproven; per the audit only the converse is enforced (whatever `Anonymize()` overwrites must carry `[Pii]`, `MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Bases/Governance/PiiConventionTestsBase.cs:43`, and `[Pii]` entities must implement `IAnonymizable`, `:34`), no guard checks that every `[Pii]` field is overwritten, and the text is left as written. RE-ANCHORED (all read this run): `PasswordHasher.cs` is 166 lines; `SaltSize = 32` `:25`, `HashSize = 64` `:28`, `Iterations = 210_000` `:34` (OWASP SHA-512 figure, 600,000 named as the SHA-256 one at `:9-11`, `:30-33`), `LegacyIterations = 600_000` `:37`, `FormatVersion = 0x01` `:40`, `HeaderSize = 5` `:43`, `VersionedHashSize` `:46`, `MinIterations = 100_000` `:52` (rationale `:48-51`), `MaxIterations = 2_000_000` `:58` (rationale `:54-57`), class doc "PBKDF2 is the only supported algorithm" `:11-12`, versioned layout `:14-19`; `HashPassword` `:67` (salt `:71`, derive `:72`, header written `:74-77`); `VerifyPassword` `:83`, canonical-material guard `:96` (rationale `:89-95`, ADR-036 named at `:91`), trailing slice `:101`, derive at the stored count `:102`, `FixedTimeEquals` `:106` (its only `CryptographicOperations` use); `NeedsRehash` `:127-133` (remarks `:122-126`); `TryReadIterations` `:140-156` (legacy `:142-146`, version check `:148`, bounds `:151`); `ComputePbkdf2Hash` `:159-165` (`HashAlgorithmName.SHA512` `:164`, always `HashSize` output `:165`). `IPasswordHasher.NeedsRehash` default `=> false` `IPasswordHasher.cs:28` (doc `:20-25`). Registration `TryAddSingleton<IPasswordHasher, PasswordHasher>` at `Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:359`. `AuthenticationServiceBase`: verify `:212`, `ResetFailedAttemptsAsync` on success `:274`, `RehashPasswordIfNeededAsync` called `:295` after issuance, defined `:1004` (summary `:986-991`, best-effort remarks `:992-1000`, opt-in check `:1006`, `NeedsRehash` `:1016`, `HashPassword` `:1021`, `RehashPassword` `:1022`). Opt-ins: `MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Domain/Users/User.cs:39` (`RehashPassword` `:583`) and `MMCA.Store/Source/Modules/Identity/MMCA.Store.Identity.Domain/Users/User.cs:30` (`RehashPassword` `:231`); Helpdesk holding no password material is carried from the 2026-10-29 pass (Grep for `IPasswordRehashableUser|IPasswordHasher|PasswordHash` over `MMCA.Helpdesk/Source/**/*.cs` returned 0 then), not re-run. `LoginProtectionService.cs` (`Source/Core/MMCA.Common.Infrastructure/Auth/`): non-atomic counter documented `:129-136`, clamped exponential backoff `:155-159`, `ResetFailedAttemptsAsync` `:184`. Section 11 row `common-ArchitectureScorecard.md:76` credits alg pinning, the PBKDF2 hasher, permission-based authz and rate limiting plus brute-force protection, names the three hold-at-8 reasons (threat-model criterion unmet; RBAC with capability indirection plus opt-in ownership rather than ABAC; non-atomic counter citing `LoginProtectionService.cs:129`), records claim-only tenant resolution, and lists the ADR-037 converter only as "ships but is latent/unadopted"; it still cites ADR-032 rather than ADR-133 (scorecard-side drift, not an article defect). Analyzers: `TreatWarningsAsErrors` at `MMCA.Common/Directory.Build.props:19`. Permissive dev CORS: `AllowAnyOrigin` at `Source/Presentation/MMCA.Common.API/Startup/WebApplicationBuilderExtensions.cs:153` inside the S5122 pragma (`:151` disable, `:156` restore). Production `RequireHttpsMetadata` opt-outs, each `'false'` with a justification comment beside it: `MMCA.ADC/infra/main.bicep:2676,2820,2990` (comments `:2673-2675`, `:2817-2819`, `:2987-2989`) and `MMCA.Store/infra/main.bicep:2285,2430` (comments `:2283-2284`, `:2428-2429`). CARRIED, not re-read this run (the audit reports moved anchors, recorded here as leads only): `PasswordHasherSecurityTests.cs` (`ReadPrivateConstant` reported at `:313`, burn tests reported at `:235-277`), `PasswordHashingFitnessTests.cs` (`CryptographicOperations` rule reported at `:46`), `EncryptedStringConverter.cs` (AES-GCM `:230`, `:265`, nonce `:82`, tag `:85`, envelope `:233-238`), ADR-037 item 10 `:131` and zero adoption `:155-159`, ADR-005 `:29`, the Authentication partial (`WebApplicationBuilderExtensions.Authentication.cs`, resolve chain `:64-66`), the `MMCA.Common/AGENTS.md` resolution-order sentence. Earlier history (the ADR-133 reground, the ADR-102 supersession, the first burn interface change and the scorecard re-scores) lives in the prior entries of this ledger's git history.*
 
 - Full series index: https://ivanball.github.io/writing.html

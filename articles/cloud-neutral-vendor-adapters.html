@@ -95,7 +95,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 54 articles</summary>
+        <summary>All 57 articles</summary>
         <nav class="doc-nav" aria-label="The MMCA.Common series">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -152,7 +152,10 @@
         <li><a href="durable-internal-commands.html">51 · Four ways to do work later</a></li>
         <li><a href="identity-completions.html">52 · Finishing identity</a></li>
         <li><a href="cloud-neutral-vendor-adapters.html" aria-current="page">53 · One framework, three clouds</a></li>
-        <li><a href="series-index.html">54 · The series index</a></li>
+        <li><a href="borrowed-and-machine-identities.html">54 · Borrowed and machine identities</a></li>
+        <li><a href="app-as-mcp-server.html">55 · Your app as an MCP server</a></li>
+        <li><a href="outbound-webhooks.html">56 · Sending webhooks without opening a door</a></li>
+        <li><a href="series-index.html">57 · The series index</a></li>
           </ol>
         </nav>
       </details>
@@ -164,7 +167,7 @@
           <figure class="article-hero"><img src="../assets/img/articles/article-53.webp" srcset="../assets/img/articles/article-53.webp 800w, ../assets/img/articles/article-53-1600.webp 1600w" sizes="(max-width: 900px) 100vw, 900px" alt="" width="800" height="420" decoding="async"></figure>
           <p class="article-subtitle">A framework that ships its first cloud&#39;s SDKs inside the core makes every consumer pay for
           that cloud, whether it runs there or not. Here is the alternative: a core that references no cloud SDK
-          and ships inert defaults, one adapter package per cloud with one call per capability, a startup check
+          and ships inert defaults, adapter packages per cloud with one call per capability, a startup check
           that names the call a host forgot, and two gates that keep the core honest.</p>
           <hr>
           <p>Your framework runs on Azure. It always has, so the Key Vault configuration source, the Blob storage
@@ -194,30 +197,36 @@
           published framework (<code>:861</code>). Every SDK a consumer restores and never calls is a transitive dependency
           somebody has to audit for nothing.</p>
           <p>MMCA.Common scores §7 at Maturity 4 / Implementation 9, §10 at Maturity 4 / Implementation 8 and §32 at
-          Maturity 4 / Implementation 9 (<code>common-ArchitectureScorecard.md:71</code>, <code>:74</code>, <code>:96</code>; evidence as of
-          2026-10-29 at v1.265.1, <code>:5</code>). The cloud boundary is one of the reasons those rows hold.</p>
+          Maturity 4 / Implementation 9 (<code>common-ArchitectureScorecard.md:72</code>, <code>:75</code>, <code>:97</code>; evidence as of
+          2026-11-23 at v1.315.0, <code>:5</code>). The cloud boundary is one of the reasons those rows hold.</p>
           <h2 id="the-mmca-answer-the-core-references-no-cloud-sdk">The MMCA answer: the core references no cloud SDK</h2>
           <p>The decision is one sentence: <strong>the core packages reference no cloud SDK; each vendor integration ships
           in an adapter package that references the core, and a host opts in with one registration call per
-          capability</strong> (<code>ADR-134:44-47</code>).</p>
+          capability</strong> (<code>ADR-134:61-62</code>).</p>
           <p>The core ships the abstractions and an inert or neutral default for each. Native push and file storage
           default to <code>Null*</code> implementations that an adapter call replaces: the null storage service fails each
-          upload with <code>FileStorage.NotConfigured</code> rather than pretending to succeed (<code>CloudAdapterTripwire.cs:22-26</code>).
+          upload with <code>FileStorage.NotConfigured</code> rather than pretending to succeed (<code>CloudAdapterTripwire.cs:24-28</code>).
           The message bus defaults to in-process dispatch (<code>MessageBusSettings.cs:25</code>). Telemetry export is OTLP,
           switched on by <code>AddServiceDefaults()</code> only when <code>OTEL_EXPORTER_OTLP_ENDPOINT</code> is set
-          (<code>Extensions.Telemetry.cs:165-170</code>), which is the one exporter no cloud owns.</p>
-          <p>Then three adapter packages, one per cloud. Their calls stay inert until configuration or selection
-          asks for them, though not all in the same way. A service call such as <code>AddAzureBlobFileStorage</code> is a
-          no-op while its section is incomplete (<code>AzureServiceCollectionExtensions.cs:36-37</code>). A transport call
-          always registers its transport, which stays unused unless <code>MessageBus:Provider</code> selects it (<code>:114-118</code>).
-          And every host-level call leaves its tripwire marker whether or not its gate key is set, while the
-          exporters throw when they run before <code>AddServiceDefaults()</code> regardless of configuration
-          (<code>AzureMonitorExporterExtensions.cs:44-56</code>):</p>
+          (<code>Extensions.Telemetry.cs:166-172</code>), which is the one exporter no cloud owns.</p>
+          <p>Then four cloud adapter packages and one test adapter (<code>ADR-134:65-68</code>). Azure ships as two:
+          <code>MMCA.Common.Azure.Startup</code> holds the start-up calls (the Key Vault source, the key ring and the Azure
+          Monitor exporter), so a gateway that needs only start-up wiring takes them without EF Core
+          (<code>ADR-134:69-70</code>), and <code>MMCA.Common.Azure</code> holds the service-level calls and references the Startup
+          package (<code>MMCA.Common.Azure.csproj:39</code>), so a host that references it gets both. AWS and Google Cloud
+          ship one package each.</p>
+          <p>Their calls stay inert until configuration or selection asks for them, though not all in the same way.
+          A service call such as <code>AddAzureBlobFileStorage</code> is a no-op while its section is incomplete
+          (<code>AzureServiceCollectionExtensions.cs:51-62</code>). A transport call always registers its transport, which
+          stays unused unless <code>MessageBus:Provider</code> selects it (<code>:150-155</code>). And an exporter checks its order
+          first and its gate second: <code>AddAzureMonitorExporter()</code> throws when it runs before <code>AddServiceDefaults()</code>
+          regardless of configuration, then returns without registering anything, its receipt included, while
+          <code>APPLICATIONINSIGHTS_CONNECTION_STRING</code> is absent (<code>AzureMonitorExporterExtensions.cs:44-59</code>):</p>
           <div class="table-wrap"><table>
           <thead>
           <tr>
           <th>Capability</th>
-          <th><code>MMCA.Common.Azure</code></th>
+          <th><code>MMCA.Common.Azure</code> (+ <code>.Startup</code>)</th>
           <th><code>MMCA.Common.Aws</code></th>
           <th><code>MMCA.Common.Gcp</code></th>
           </tr>
@@ -253,218 +262,286 @@
           <td>none (the built-in <code>PostgreSql</code> provider)</td>
           </tr>
           <tr>
-          <td>Passwordless database</td>
-          <td>the Entra SQL provider, by package reference</td>
+          <td>Passwordless PostgreSQL</td>
+          <td><code>AddAzurePostgreSqlEntraAuthentication(configuration)</code></td>
           <td><code>AddAwsRdsIamAuthentication(configuration)</code></td>
           <td><code>AddCloudSqlIamAuthentication(configuration)</code></td>
           </tr>
           <tr>
+          <td>Passwordless SQL Server</td>
+          <td>the Entra SQL provider, by package reference</td>
+          <td>none</td>
+          <td>none</td>
+          </tr>
+          <tr>
+          <td>Passwordless Redis</td>
+          <td><code>AddAzureRedisEntraAuthentication(configuration)</code></td>
+          <td>none</td>
+          <td>none</td>
+          </tr>
+          <tr>
           <td>Telemetry exporter</td>
           <td><code>AddAzureMonitorExporter()</code></td>
-          <td>none (OTLP)</td>
+          <td><code>AddAwsTelemetryExporter()</code></td>
           <td><code>AddGoogleCloudTelemetryExporter()</code></td>
           </tr>
           </tbody></table></div>
           <p>Every call in the table is a real method (anchors in the Notes). Two shapes repeat: the host-level
           calls (configuration source, key ring, telemetry exporter) extend the host builder (<code>TBuilder</code>, for
-          example <code>AzureKeyVaultConfigurationExtensions.cs:80</code>, <code>AzureDataProtectionExtensions.cs:53</code>,
-          <code>AwsDataProtectionExtensions.cs:70</code> and <code>GoogleCloudDataProtectionExtensions.cs:76</code>), and the
-          service-level calls extend <code>IServiceCollection</code> (for example <code>AzureServiceCollectionExtensions.cs:41</code>).
-          Each adapter binds the framework&#39;s standard configuration sections and keys (<code>ADR-134:108-113</code>), so a
+          example <code>AzureKeyVaultConfigurationExtensions.cs:80</code>, <code>AzureDataProtectionExtensions.cs:54</code>,
+          <code>AwsDataProtectionExtensions.cs:70</code> and <code>GoogleCloudDataProtectionExtensions.cs:77</code>), and the
+          service-level calls extend <code>IServiceCollection</code> (for example <code>AzureServiceCollectionExtensions.cs:44</code>).
+          Each adapter binds the framework&#39;s standard configuration sections and keys (<code>ADR-134:196-201</code>), so a
           deployment&#39;s environment variables and vault names are the same whichever adapter call reads them.</p>
-          <p><code>MMCA.Common.Testing.Azure</code> is the fourth adapter, for tests: the Service Bus emulator fixture lives
-          there, so a test project that never touches Service Bus never restores its emulator stack
-          (<code>ADR-134:105-107</code>).</p>
+          <p><code>MMCA.Common.Testing.Azure</code> is the test adapter: the Service Bus emulator fixture lives there, so a test
+          project that never touches Service Bus never restores its emulator stack (<code>ADR-134:193-195</code>).</p>
           <h2 id="the-broker-is-a-string-and-the-core-owns-the-cloud-neutral-one">The broker is a string, and the core owns the cloud-neutral one</h2>
           <p>The transport selection is where a closed list hurts most, so it is the part that opened furthest.</p>
           <p><code>MessageBusSettings.Provider</code> is a <code>string</code> defaulting to <code>InProcess</code> (<code>MessageBusSettings.cs:25</code>).
           The built-in values are three constants on <code>MessageBusProviders</code> (<code>MessageBusProviders.cs:10</code>):
           <code>InProcess</code> (<code>:16</code>), <code>RabbitMq</code> (<code>:19</code>) and <code>PostgreSql</code> (<code>:27</code>), compared case-insensitively (<code>:4-8</code>).
           Any other value names a transport an adapter registered.</p>
-          <p>The extension point is <code>IBrokerTransport</code>: a <code>Name</code> the configuration selects it by, and one
-          <code>Configure(IBusRegistrationConfigurator, BrokerTransportContext)</code> that issues the <code>Using{Transport}</code> call
-          and applies the shared receive policies (<code>IBrokerTransport.cs:25</code>, <code>:31</code>, <code>:41</code>). An adapter registers
-          one through <code>AddBrokerTransport</code> (<code>DependencyInjection.Messaging.cs:159</code>), which adds it as an
-          enumerable singleton (<code>:168</code>). The whole Azure adapter call is that registration:</p>
-          <pre class="doc-pre" tabindex="0" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-comment">// MMCA.Common.Azure/AzureServiceCollectionExtensions.cs:117-118 (verbatim)</span>
+          <p>The extension point is <code>IBrokerTransport</code> (<code>IBrokerTransport.cs:22</code>), and it is deliberately small: a
+          <code>Name</code> the configuration selects it by (<code>:28</code>), a <code>MaxRedeliveryDelay</code> for a broker that caps how far
+          ahead it can schedule (<code>:35</code>), and one <code>Register(IServiceCollection, BrokerTransportContext)</code> that adds a
+          singleton <code>IBrokerPublisher</code> and a hosted receiver for the host&#39;s queue (<code>:37-51</code>). Everything that is
+          the same on every broker stays in the framework: the topology, the wire format, the receive pipeline
+          (origin restore, inbox, retry, redelivery and dead-letter decisions), the outbox-only publish path and
+          the tracing. A transport only moves bytes (<code>:8-14</code>). An adapter registers one through
+          <code>AddBrokerTransport</code> (<code>DependencyInjection.Messaging.cs:174</code>), which adds it as an enumerable singleton,
+          idempotent per transport type (<code>:163-170</code>, <code>:183</code>). The whole Azure adapter call is that registration:</p>
+          <pre class="doc-pre" tabindex="0" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-comment">// MMCA.Common.Azure/AzureServiceCollectionExtensions.cs:154-155 (verbatim)</span>
 <span class="hljs-function"><span class="hljs-keyword">public</span> IServiceCollection <span class="hljs-title">AddAzureServiceBusTransport</span>()</span> =&gt;
     services.AddBrokerTransport(<span class="hljs-keyword">new</span> AzureServiceBusTransport());
 
-<span class="hljs-comment">// MMCA.Common.Aws/AwsServiceCollectionExtensions.cs:85-86 (verbatim)</span>
+<span class="hljs-comment">// MMCA.Common.Aws/AwsServiceCollectionExtensions.cs:86-87 (verbatim)</span>
 <span class="hljs-function"><span class="hljs-keyword">public</span> IServiceCollection <span class="hljs-title">AddAmazonSqsTransport</span>()</span> =&gt;
     services.AddBrokerTransport(<span class="hljs-keyword">new</span> AmazonSqsTransport());</code></pre>
-          <p><code>AddBrokerMessaging</code> (<code>DependencyInjection.Messaging.cs:48</code>) returns early for <code>InProcess</code> (<code>:57</code>),
-          otherwise resolves the transport by name before it registers MassTransit, so an unknown name leaves no
-          half-registered bus behind (<code>:67-69</code>), and hands it the bus configurator (<code>:109</code>). Resolution checks the
-          two built-ins first and then the adapter registrations (<code>ResolveBrokerTransport</code>, <code>:188</code>). A name that
-          matches nothing throws, and the message is actionable: for <code>AzureServiceBus</code> and <code>AmazonSqs</code> it names
-          the package to reference and the call to make before <code>AddBrokerMessaging</code> (<code>MessageBusProviders.cs:34-39</code>,
-          <code>DependencyInjection.Messaging.cs:215-220</code>); for any other name it says to register an <code>IBrokerTransport</code>
-          under it or correct the spelling (<code>:217</code>).</p>
+          <p><code>AddBrokerMessaging</code> (<code>DependencyInjection.Messaging.cs:63</code>) returns early for <code>InProcess</code> (<code>:72-75</code>),
+          otherwise resolves the transport by name before it registers anything, so an unknown name leaves no
+          half-registered broker behind (<code>:82-84</code>), builds the receive pipeline with the transport&#39;s delay cap
+          (<code>:108-115</code>), and calls <code>transport.Register</code> last, so a missing namespace or connection string throws at
+          startup rather than at the first publish (<code>:150-158</code>, <code>IBrokerTransport.cs:45-46</code>). Resolution checks the
+          two built-ins first and then the adapter registrations, the last one registered under the name winning
+          (<code>ResolveBrokerTransport</code>, <code>DependencyInjection.Messaging.cs:199-221</code>). A name that matches nothing
+          throws, and the message is actionable: for <code>AzureServiceBus</code> and <code>AmazonSqs</code> it names the package to
+          reference and the call to make before <code>AddBrokerMessaging</code> (<code>MessageBusProviders.cs:34-39</code>,
+          <code>DependencyInjection.Messaging.cs:226-227</code>); for any other name it says to register an <code>IBrokerTransport</code>
+          under it or correct the spelling (<code>:228</code>).</p>
           <p>Why is <code>PostgreSql</code> in the core rather than in the Google adapter? Because it needs a database, not a
-          cloud. <code>PostgreSqlBrokerTransport</code> (<code>PostgreSqlBrokerTransport.cs:40</code>, <code>Name</code> at <code>:43</code>) runs
-          MassTransit&#39;s SQL transport, which keeps queues, topics and scheduled messages in tables of one
-          PostgreSQL database, so Cloud SQL, Amazon RDS, Azure Database for PostgreSQL or a container is the
-          broker (<code>:10-14</code>). Putting it in <code>MMCA.Common.Gcp</code> would make an AWS or self-hosted consumer reference
-          the Google adapter to use a broker that has nothing to do with Google (<code>ADR-134:342-345</code>). It is also
-          Google Cloud&#39;s broker answer, since there is no MassTransit v8 Pub/Sub transport (<code>ADR-134:134-139</code>).</p>
-          <p>Whichever transport runs, retry, redelivery and backpressure come from the same policy code:
-          <code>BrokerTransportPolicies</code> is applied by every transport, built in or adapter (<code>ADR-134:129-133</code>). The
-          inputs still differ per transport: SQS substitutes its own <code>[60, 300, 900]</code> redelivery default when none
-          is configured (<code>AmazonSqsTransport.cs:22-25</code>, <code>:55</code>), and RabbitMQ applies delayed redelivery only when
-          <code>EnableDelayedRedelivery</code> is set (<code>RabbitMqBrokerTransport.cs:33</code>).</p>
-          <h2 id="passwordless-postgresql-through-one-hook">Passwordless PostgreSQL through one hook</h2>
-          <p>Both IAM adapters that target PostgreSQL go through the same core extension point rather than each
-          inventing a connection path. <code>INpgsqlDataSourceConfigurator</code> has one method,
-          <code>Configure(NpgsqlDataSourceBuilder)</code> (<code>INpgsqlDataSourceConfigurator.cs:23</code>, <code>:27</code>), registered through
-          <code>AddNpgsqlDataSourceConfigurator</code> as an enumerable (<code>DependencyInjection.Persistence.cs:24</code>, <code>:28</code>),
-          which builds one shared <code>NpgsqlDataSource</code> per connection string (<code>:32-34</code>). With none registered the
-          contexts get the raw connection string and no data source is built (<code>INpgsqlDataSourceConfigurator.cs:12-13</code>).</p>
-          <p><code>RdsIamAuthenticationConfigurator</code> refreshes its token every 10 minutes
-          (<code>RdsIamAuthenticationConfigurator.cs:20</code>, <code>:24</code>) and <code>CloudSqlIamAuthenticationConfigurator</code> every
-          minute (<code>CloudSqlIamAuthenticationConfigurator.cs:23</code>, <code>:26</code>). Because the <code>PostgreSql</code> broker runs on
-          the same shared data source, an IAM configurator covers the broker&#39;s connections too
-          (<code>PostgreSqlBrokerTransport.cs:29-33</code>).</p>
+          cloud. <code>PostgreSqlBrokerTransport</code> (<code>Transports/PostgreSql/PostgreSqlBrokerTransport.cs:36</code>, <code>Name</code> at
+          <code>:55</code>) is written on Npgsql against the same <code>IBrokerTransport</code> contract an adapter implements, and keeps
+          topics, queues and delayed redeliveries in three tables of one PostgreSQL database, so Cloud SQL, Amazon
+          RDS, Azure Database for PostgreSQL or a container is the broker (<code>:10-15</code>). A publish inserts one row per
+          subscribed queue and wakes the receivers with <code>pg_notify</code>; a receiver claims rows with
+          <code>FOR UPDATE SKIP LOCKED</code> under a renewed lease and falls back to polling (<code>:17-19</code>). Putting it in
+          <code>MMCA.Common.Gcp</code> would make an AWS or self-hosted consumer reference the Google adapter to use a broker
+          that has nothing to do with Google (<code>ADR-134:483-486</code>). It is also the broker a Google Cloud host
+          selects, since the Google adapter ships no transport (<code>ADR-134:191-192</code>).</p>
+          <p>Whichever transport runs, retry, redelivery and dead-letter decisions come from the same receive
+          pipeline (<code>IBrokerTransport.cs:8-14</code>). A transport changes the inputs in one place, its delay cap: the
+          pipeline shortens every redelivery interval, default or configured, to <code>MaxRedeliveryDelay</code>
+          (<code>BrokerTransportPolicies.cs:65-75</code>, <code>MessageBusSettings.cs:199-201</code>). SQS declares 900 seconds
+          (<code>AmazonSqsTransport.cs:46</code>, <code>:65</code>); PostgreSQL pushes a row&#39;s visibility out and declares no cap
+          (<code>PostgreSqlBrokerTransport.cs:19-21</code>, <code>:58</code>). Each transport schedules the delay its own way: RabbitMQ
+          through per-interval delay queues with no plugin, PostgreSQL through the row&#39;s visibility time, Azure
+          Service Bus and Amazon SQS through their native scheduling (<code>MessageBusSettings.cs:208-210</code>).</p>
+          <h2 id="passwordless-connections-through-core-hooks">Passwordless connections through core hooks</h2>
+          <p>The adapters that put a database or cache on token login go through core extension points rather than
+          each inventing a connection path. For PostgreSQL that point is <code>INpgsqlDataSourceConfigurator</code>, with one
+          method, <code>Configure(NpgsqlDataSourceBuilder)</code> (<code>INpgsqlDataSourceConfigurator.cs:23</code>, <code>:27</code>), registered
+          through <code>AddNpgsqlDataSourceConfigurator</code> as an enumerable (<code>DependencyInjection.Persistence.cs:24</code>,
+          <code>:28</code>), which builds one shared <code>NpgsqlDataSource</code> per connection string (<code>:32-34</code>). With none
+          registered the contexts get the raw connection string and no data source is built
+          (<code>INpgsqlDataSourceConfigurator.cs:12-13</code>).</p>
+          <p>Three configurators implement it, one per cloud. <code>AzurePostgreSqlEntraAuthenticationConfigurator</code>
+          refreshes its Entra token every four minutes (<code>AzurePostgreSqlEntraAuthenticationConfigurator.cs:23</code>,
+          <code>:26</code>), <code>RdsIamAuthenticationConfigurator</code> every 10 minutes (<code>RdsIamAuthenticationConfigurator.cs:20</code>,
+          <code>:24</code>) and <code>CloudSqlIamAuthenticationConfigurator</code> every minute
+          (<code>CloudSqlIamAuthenticationConfigurator.cs:23</code>, <code>:26</code>). Because the token travels as the password, the
+          Azure call fails registration for a configured PostgreSQL connection string that does not require TLS
+          (<code>AzureServiceCollectionExtensions.cs:167-170</code>, <code>:193-195</code>). And because the <code>PostgreSql</code> broker runs on
+          the same shared data source, a token configurator covers the broker&#39;s connections too, the startup
+          migration included (<code>PostgreSqlBrokerTransport.cs:31-33</code>, <code>:103-109</code>).</p>
+          <p>Redis gets the same treatment on Azure: <code>AddAzureRedisEntraAuthentication</code> puts every framework Redis
+          connection (the client and distributed cache, the output-cache store, the SignalR backplane and the
+          health check) on Entra token login through the core <code>IRedisConfigurationOptionsConfigurator</code> extension
+          point (<code>AzureServiceCollectionExtensions.cs:210-221</code>, <code>:230</code>). SQL Server takes Entra through the SqlClient
+          extension package <code>MMCA.Common.Azure</code> references, with no call at all (<code>MMCA.Common.Azure.csproj:31</code>).</p>
           <h2 id="silent-degradation-is-the-failure-the-tripwires-remove">Silent degradation is the failure the tripwires remove</h2>
           <p>An opt-in adapter call has one failure mode of its own. A host that has the configuration but not the
           adapter call would start cleanly with every vault secret missing, or with no telemetry
           export, and look healthy while doing it (<code>HostIntegrationTripwire.cs:6-11</code>). The framework turns that
           into a startup failure.</p>
           <p><code>HostIntegrationTripwire</code> (<code>HostIntegrationTripwire.cs:15</code>) is an <code>IValidateOptions</code> registered by
-          <code>AddServiceDefaults()</code> under <code>ValidateOnStart</code> (<code>Extensions.cs:44-46</code>), so it runs before any hosted
-          service starts. It holds one gate key per host-level adapter call:</p>
+          <code>AddServiceDefaults()</code> under <code>ValidateOnStart</code> (<code>Extensions.cs:50-52</code>), so it runs before any hosted
+          service starts. It holds one presence gate per host-level adapter call:</p>
           <ul>
           <li>Azure: <code>APPLICATIONINSIGHTS_CONNECTION_STRING</code> (<code>:20</code>), <code>KeyVault:Uri</code> (<code>:23</code>) and
           <code>DataProtection:BlobStorageUri</code> (<code>:26</code>).</li>
           <li>AWS: <code>SecretsManager:NamePrefix</code> (<code>:29</code>), <code>DataProtection:S3ObjectUri</code> (<code>:32</code>) and
           <code>AwsTelemetry:Region</code> (<code>:56</code>).</li>
-          <li>Google Cloud: <code>GoogleSecretManager:NamePrefix</code> (<code>:40</code>), <code>DataProtection:GcsObjectUri</code> (<code>:43</code>) and
-          <code>GoogleCloudTelemetry:ProjectId</code> (<code>:46</code>).</li>
+          <li>Google Cloud: <code>GoogleSecretManager:NamePrefix</code> (<code>:47</code>), <code>DataProtection:GcsObjectUri</code> (<code>:50</code>) and
+          <code>GoogleCloudTelemetry:ProjectId</code> (<code>:53</code>).</li>
           </ul>
+          <p>It also holds one boolean gate per token configurator: <code>AzurePostgreSql:EntraAuthentication:Enabled</code>,
+          <code>Rds:IamAuthentication:Enabled</code>, <code>CloudSql:IamAuthentication:Enabled</code> and
+          <code>AzureRedis:EntraAuthentication:Enabled</code> (<code>:63</code>, <code>:69</code>, <code>:75</code>, <code>:81</code>). A boolean gate fails when it reads
+          true with no configurator registered, and also when its value is neither blank nor a boolean, because
+          whoever wrote &quot;yes&quot; meant on (<code>:191-205</code>). A retired AWS key-ring key fails startup naming the key that
+          replaced it (<code>:34-39</code>, <code>:123-127</code>).</p>
           <p>Each adapter call leaves a receipt behind, a <code>HostIntegrationMarker</code> singleton
-          (<code>HostIntegrationMarker.cs:10</code>; for example <code>AzureMonitorExporterExtensions.cs:56</code>), and the tripwire
-          fails any gate key that is set with no matching receipt (<code>HostIntegrationTripwire.cs:117-123</code>). A key
-          holding only whitespace counts as unset (<code>:125</code>). The message names the package and the call. A host
+          (<code>HostIntegrationMarker.cs:10</code>; for example <code>AzureMonitorExporterExtensions.cs:63</code>), and the tripwire
+          fails any presence gate that is set with no matching receipt (<code>HostIntegrationTripwire.cs:183-189</code>). A key
+          holding only whitespace counts as unset (<code>:207</code>). The message names the package and the call. A host
           with a vault URI and no vault call fails with:</p>
           <pre class="doc-pre" tabindex="0" data-lang="Text"><code class="language-text hljs">KeyVault:Uri is set, but no Key Vault configuration source was added, so every secret the vault holds
-is missing from configuration. Reference MMCA.Common.Azure and call
-builder.AddAzureKeyVaultConfiguration() early in Program.cs.</code></pre>
-          <p>(The format is <code>&quot;{key} is set, but {consequence}.&quot;</code>, <code>:121</code>, with the consequence at <code>:71</code>.) The same
+is missing from configuration. Reference MMCA.Common.Azure.Startup (or MMCA.Common.Azure, which
+includes it) and call builder.AddAzureKeyVaultConfiguration() early in Program.cs.</code></pre>
+          <p>(The format is <code>&quot;{key} is set, but {consequence}.&quot;</code>, <code>:187</code>, with the consequence at <code>:106</code>.) The same
           validator refuses a host that sets more than one of the three key-ring gates, because two configured
           rings are a split ring, not a stronger one: whichever registration runs last owns the repository, and
-          replicas that disagree mint cookies the others cannot decrypt (<code>:49-54</code>, <code>:104-112</code>).</p>
-          <p>The service-level twin is <code>CloudAdapterTripwire</code> (<code>CloudAdapterTripwire.cs:30</code>), registered by
-          <code>AddInfrastructure</code> (<code>DependencyInjection.cs:221-223</code>). It fails <code>NativePush:Enabled=true</code> when
-          <code>INativePushSender</code> is still the null default (<code>CloudAdapterTripwire.cs:33</code>, <code>:48-50</code>), naming the call
-          of each of the three push adapters (<code>:53</code>). File storage deliberately has no check: a tripwire must
-          fire on a key that declares intent, and a <code>FileStorage</code> section is routinely shared across every service
-          of a solution, including the ones that never store files (<code>:22-26</code>).</p>
+          replicas that disagree mint cookies the others cannot decrypt (<code>:84-89</code>, <code>:170-178</code>).</p>
+          <p>The service-level twin is <code>CloudAdapterTripwire</code> (<code>CloudAdapterTripwire.cs:32</code>), registered by
+          <code>AddInfrastructure</code> (<code>DependencyInjection.cs:244-246</code>). It fails <code>NativePush:Enabled=true</code> when
+          <code>INativePushSender</code> is still the null default (<code>CloudAdapterTripwire.cs:35</code>, <code>:77-78</code>), naming the call
+          of each of the three push adapters (<code>:81</code>), and applies the same rule to two opt-in framework features,
+          <code>Passkeys:Enabled</code> and <code>MachineClients:Enabled</code> (<code>:37-49</code>, <code>:64-75</code>). File storage deliberately has no
+          check: a tripwire must fire on a key that declares intent, and a <code>FileStorage</code> section is routinely
+          shared across every service of a solution, including the ones that never store files (<code>:24-28</code>).</p>
           <p>Order matters in two places, and both fail loudly. <code>AddAzureMonitorExporter()</code> throws when it runs
           before <code>AddServiceDefaults()</code>, because the outbox-poll and probe filter processors must be registered
           ahead of the exporter&#39;s batch processor (<code>AzureMonitorExporterExtensions.cs:44-52</code>), and
-          <code>AddGoogleCloudTelemetryExporter()</code> carries the same guard (<code>GoogleCloudTelemetryExporterExtensions.cs:105-110</code>).
-          An adapter transport must be registered before <code>AddBrokerMessaging</code> resolves it
-          (<code>DependencyInjection.Messaging.cs:150-155</code>).</p>
+          <code>AddGoogleCloudTelemetryExporter()</code> and <code>AddAwsTelemetryExporter()</code> carry the same guard
+          (<code>GoogleCloudTelemetryExporterExtensions.cs:103-111</code>, <code>AwsTelemetryExporterExtensions.cs:91-99</code>). An
+          adapter transport must be registered before <code>AddBrokerMessaging</code> resolves it
+          (<code>DependencyInjection.Messaging.cs:163-170</code>).</p>
           <h2 id="the-boundary-is-gated-twice">The boundary is gated twice</h2>
           <p>A rule that lives in a guideline erodes the first time an SDK is one <code>dotnet add package</code> away. This
           one is held by two gates that look at different evidence.</p>
-          <p><strong>At build time</strong>, the <code>EnforceCloudVendorBoundary</code> target (<code>MMCA.Common.LayerEnforcement.targets:130</code>)
-          runs in every MMCA.Common source project except the four adapters: the targets file is imported only
-          for a project under <code>Source</code> whose name starts with <code>MMCA.Common</code> (<code>MMCA.Common/Directory.Build.props:148-149</code>),
-          and the target skips the adapters (<code>:128</code>), so test and consumer projects are outside it. It fails a <code>PackageReference</code>
-          whose id starts with <code>Azure.</code>, <code>Microsoft.Azure.</code>, <code>AWSSDK.</code>, <code>Google.</code> or <code>FirebaseAdmin</code>, equals
-          <code>Grpc.Auth</code>, is a vendor MassTransit transport, or carries an <code>.Azure</code> segment (<code>:138-147</code>), and it
-          fails a <code>ProjectReference</code> naming an adapter project (<code>:148-149</code>), each with its own error (<code>:151</code>, <code>:153</code>).</p>
-          <p><strong>At test time</strong>, <code>CloudVendorIsolationTestsBase</code> (<code>CloudVendorIsolationTestsBase.cs:15</code>) judges the
+          <p><strong>At build time</strong>, the <code>EnforceCloudVendorBoundary</code> target (<code>MMCA.Common.LayerEnforcement.targets:155</code>)
+          runs in every MMCA.Common source project except the five adapters: the targets file is imported only
+          for a project under <code>Source</code> whose name starts with <code>MMCA.Common</code> (<code>MMCA.Common/Directory.Build.props:189-190</code>),
+          and the target skips the adapters (<code>:153</code>), so test and consumer projects are outside it. It fails a
+          <code>PackageReference</code> whose id starts with <code>Azure.</code>, <code>Microsoft.Azure.</code>, <code>AWSSDK.</code>, <code>Google.</code> or
+          <code>FirebaseAdmin</code>, equals <code>Grpc.Auth</code>, is one of the retired MassTransit vendor transports, or carries an
+          <code>.Azure</code> segment (<code>:162-172</code>), and it fails a <code>ProjectReference</code> naming an adapter project (<code>:173-174</code>),
+          each with its own error (<code>:176-177</code>, <code>:178-179</code>).</p>
+          <p><strong>At test time</strong>, <code>CloudVendorIsolationTestsBase</code> (<code>CloudVendorIsolationTestsBase.cs:16</code>) judges the
           compiled assemblies instead of the declared references, so a vendor type that arrives transitively is
-          caught too (<code>:9-12</code>). A subclass names the assemblies that must stay neutral (<code>:18</code>) and any engine
-          allowance (<code>:24-25</code>), and inherits two facts: no vendor type named (<code>:27-29</code>) and no vendor or adapter
-          assembly referenced (<code>:31-33</code>). The rule bodies match the namespace roots <code>Azure</code>, <code>Microsoft.Azure</code>,
-          <code>Amazon</code>, <code>Google</code>, <code>FirebaseAdmin</code> and <code>Grpc.Auth</code>, the two vendor transports and the four adapters
-          (<code>ArchitectureRules.CloudVendors.cs:25-41</code>), plus the matching assembly prefixes (<code>:48-62</code>).</p>
+          caught too (<code>:10-13</code>). A subclass names the assemblies that must stay neutral (<code>:19</code>) and any engine
+          allowance (<code>:25-26</code>), and inherits two facts: no vendor type named (<code>:28-30</code>) and no vendor or adapter
+          assembly referenced (<code>:32-34</code>). The rule bodies match the namespace roots <code>Azure</code>, <code>Microsoft.Azure</code>,
+          <code>Amazon</code>, <code>Google</code>, <code>FirebaseAdmin</code> and <code>Grpc.Auth</code> (where <code>Azure</code> and <code>Amazon</code> also cover the Service
+          Bus and SQS/SNS clients the native transports run on), the retired MassTransit vendor transports and the
+          adapter roots (<code>ArchitectureRules.CloudVendors.cs:8-15</code>, <code>:28-44</code>), plus the matching assembly prefixes
+          (<code>:51-65</code>).</p>
           <p>One detail in that list is worth copying for its own sake: the namespace roots carry <strong>no trailing dot</strong>,
           because the rule engine matches whole namespace segments and an entry ending in a dot matches nothing, which
-          would make the type-level rule pass vacuously (<code>:27-28</code>). A fitness test that cannot fail is worse than
+          would make the type-level rule pass vacuously (<code>:30-31</code>). A fitness test that cannot fail is worse than
           no test, because it reads as coverage.</p>
           <p>The build gate exempts exactly two references, and both are database engines rather than cloud
           services: <code>Microsoft.EntityFrameworkCore.Cosmos</code> in Infrastructure, because Cosmos DB is one of the four
           EF engines and brings <code>Microsoft.Azure.Cosmos</code> with it, and <code>Aspire.Hosting.Azure.CosmosDB</code> in
           Aspire.Hosting, the AppHost-side emulator resource that never reaches a service process
-          (<code>MMCA.Common.LayerEnforcement.targets:117-124</code>, exemptions at <code>:134-135</code>). The test gate in
+          (<code>MMCA.Common.LayerEnforcement.targets:142-149</code>, exemptions at <code>:159-160</code>). The test gate in
           MMCA.Common&#39;s own architecture tests carries one allowance, <code>Microsoft.Azure.Cosmos</code> in Infrastructure
-          (<code>Tests/Architecture/MMCA.Common.Architecture.Tests/Layering/CloudVendorIsolationTests.cs:31</code>), and
-          Aspire.Hosting is not among the assemblies it holds (<code>:19-26</code>), so the AppHost-side exemption belongs to
+          (<code>Tests/Architecture/MMCA.Common.Architecture.Tests/Layering/CloudVendorIsolationTests.cs:32</code>), and
+          Aspire.Hosting is not among the assemblies it holds (<code>:19-27</code>), so the AppHost-side exemption belongs to
           the build gate alone.</p>
           <h2 id="how-adc-and-store-adopt-it">How ADC and Store adopt it</h2>
-          <p>Both consumers run on Azure, so the adoption is a set of Azure calls in each host&#39;s <code>Program.cs</code>, in a
-          fixed order. ADC&#39;s Identity service shows every host-level call and two service-level ones (condensed,
-          comments shortened):</p>
+          <p>Both consumers run on Azure, so the adoption is a set of Azure calls in each host. The services build
+          their hosts through <code>AddMmcaServiceHost</code>, which takes the adapter calls as callbacks and runs them in a
+          fixed order: configuration sources, then <code>AddServiceDefaults()</code>, then the after-service-defaults
+          callback (<code>ServiceHostBuilderExtensions.cs:79</code>, <code>:85-86</code>), and later <code>AddInfrastructure</code>, the services
+          callback, the broker transports and the application pipeline (<code>:146</code>, <code>:153</code>, <code>:156</code>, <code>:158</code>). Both
+          order rules are therefore held by the host builder, not by each <code>Program.cs</code>. ADC&#39;s Identity service
+          shows every host-level call and its four service-level ones (condensed, comments shortened):</p>
           <pre class="doc-pre" tabindex="0" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-comment">// MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs (condensed)</span>
-builder.AddAzureKeyVaultConfiguration();     <span class="hljs-comment">// :112, BEFORE AddServiceDefaults(), which reads configuration eagerly</span>
-builder.AddServiceDefaults();                <span class="hljs-comment">// :114, registers the HostIntegrationTripwire</span>
-builder.AddAzureMonitorExporter();           <span class="hljs-comment">// :119, AFTER service defaults; no-op without the connection string</span>
-builder.AddAzureDataProtection();            <span class="hljs-comment">// :127, shared key ring; no-op without DataProtection:BlobStorageUri</span>
+<span class="hljs-keyword">var</span> host = builder.AddMmcaServiceHost(<span class="hljs-keyword">new</span>()
+{
+    <span class="hljs-comment">// :91, runs first, so every eager bind can read vault values</span>
+    ConfigureConfigurationSources = b =&gt; b.AddAzureKeyVaultConfiguration(),
 
-services.AddAzureBlobFileStorage(builder.Configuration);   <span class="hljs-comment">// :261, no-op unless FileStorage is complete</span>
+    AfterServiceDefaults = b =&gt;
+    {
+        b.AddAzureMonitorExporter();   <span class="hljs-comment">// :98, no-op without the connection string</span>
+        b.AddAzureDataProtection();    <span class="hljs-comment">// :106, shared key ring; no-op without DataProtection:BlobStorageUri</span>
+    },
 
-<span class="hljs-comment">// Registration only: production sets MessageBus:Provider=AzureServiceBus.</span>
-services.AddAzureServiceBusTransport();                    <span class="hljs-comment">// :339, BEFORE AddBrokerMessaging</span>
-services.AddMmcaApplicationPipeline(pipeline =&gt; pipeline
-    .Register(moduleHost.RegisterModules)
-    .Register(s =&gt; s.AddBrokerMessaging(builder.Configuration, x =&gt; { <span class="hljs-comment">/* consumers */</span> })));  <span class="hljs-comment">// :340, :345</span></code></pre>
+    ConfigureServices = b =&gt;
+    {
+        <span class="hljs-keyword">var</span> services = b.Services;
+        <span class="hljs-keyword">var</span> configuration = b.Configuration;
+        services.AddAzureRedisEntraAuthentication(configuration);   <span class="hljs-comment">// :128, inert until its gate is set</span>
+        services.AddAzureBlobFileStorage(configuration);            <span class="hljs-comment">// :225, no-op unless FileStorage is complete</span>
+        services.AddAzureNotificationHubsPush(configuration);       <span class="hljs-comment">// :231, account erasure reaches the hub</span>
+    },
+
+    <span class="hljs-comment">// Registration only: production sets MessageBus:Provider=AzureServiceBus.</span>
+    RegisterBrokerTransports = services =&gt; services.AddAzureServiceBusTransport(),   <span class="hljs-comment">// :260</span>
+
+    ConfigurePipeline = (pipeline, moduleHost) =&gt; pipeline
+        .Register(moduleHost.RegisterModules)
+        .Register(s =&gt; s.AddBrokerMessaging(builder.Configuration, IdentityBrokerConsumers.Register)),   <span class="hljs-comment">// :302-308</span>
+});</code></pre>
           <p>The provider string itself comes from the deployment, not the code: ADC&#39;s container apps carry
-          <code>MessageBus__Provider</code> = <code>AzureServiceBus</code> (<code>MMCA.ADC/infra/main.bicep:1980</code>), and Store&#39;s do the same
-          (<code>MMCA.Store/infra/main.bicep:1608</code>). The comment at the transport call says what that buys: a RabbitMQ
-          or in-process run is unaffected by the registration (<code>Program.cs:336-338</code>).</p>
-          <p>The other ADC hosts follow the same lines: Conference (<code>MMCA.ADC.Conference.Service/Program.cs:115</code>,
-          <code>:117</code>, <code>:122</code>, Blob storage <code>:367</code>, transport <code>:428</code>), Engagement (<code>:96</code>, <code>:98</code>, <code>:103</code>, transport
-          <code>:298</code>), Notification (<code>:99</code>, <code>:101</code>, <code>:106</code>, transport <code>:238</code>), the Gateway (<code>:68</code>, <code>:70</code>, <code>:75</code>) and
-          the web UI host with its key ring (<code>MMCA.ADC.UI.Web/Program.cs:63</code>, <code>:65</code>, <code>:70</code>, <code>:72</code>). Native push is
-          a module call, not a host one: the Notification module&#39;s <code>AddNotificationModule</code> calls
-          <code>AddAzureNotificationHubsPush(configuration)</code>, safe in every environment because it is a no-op until the
-          <code>NativePush</code> section is enabled and complete (<code>MMCA.ADC.Notification.API/DependencyInjection.cs:37-40</code>).</p>
-          <p>Store&#39;s shape is the same with fewer capabilities: every service and the Gateway call
+          <code>MessageBus__Provider</code> = <code>AzureServiceBus</code> (<code>MMCA.ADC/infra/main.bicep:2439</code>), and Store&#39;s do the same
+          (<code>MMCA.Store/infra/main.bicep:2076</code>). The comment at the transport callback says what that buys: a
+          RabbitMQ or in-process run is unaffected by the registration (<code>Program.cs:256-259</code>).</p>
+          <p>The other ADC services follow the same lines: Conference (<code>MMCA.ADC.Conference.Service/Program.cs:82</code>;
+          vault <code>:97</code>, exporter <code>:118</code>, Redis <code>:228</code>, Blob storage <code>:301</code>, transport <code>:325</code>), Engagement (<code>:70</code>,
+          <code>:75</code>, Redis <code>:85</code>, transport <code>:140</code>) and Notification (<code>:70</code>, <code>:85</code>, Redis <code>:91</code>, transport <code>:97</code>). The
+          Gateway makes the host-level calls directly, in the same order (<code>MMCA.ADC.Gateway/Program.cs:75</code>, <code>:77</code>,
+          <code>:82</code>), and the web UI host passes them through the same callback names, with its key ring
+          (<code>MMCA.ADC.UI.Web/Program.cs:39</code>, <code>:46</code>, <code>:47</code>). Native push is a module call plus one host call: the
+          Notification module&#39;s <code>AddNotificationModule</code> calls <code>AddAzureNotificationHubsPush(configuration)</code>, safe
+          in every environment because it is a no-op until the <code>NativePush</code> section is enabled and complete
+          (<code>MMCA.ADC.Notification.API/DependencyInjection.cs:31</code>, <code>:37-40</code>), and the Identity host makes the same
+          call so account erasure reaches the hub the devices are registered in
+          (<code>MMCA.ADC.Identity.Service/Program.cs:227-231</code>).</p>
+          <p>Store&#39;s shape is the same with fewer capabilities. Its three broker services build through
+          <code>AddMmcaServiceHost</code> with the vault source, the exporter, Redis Entra sign-in and the Service Bus
+          transport ahead of <code>AddBrokerMessaging</code> (Sales <code>MMCA.Store.Sales.Service/Program.cs:63</code>, <code>:76</code>, <code>:93</code>,
+          <code>:124</code>, <code>:139</code>; Identity <code>:48</code>, <code>:56</code>, <code>:77</code>, <code>:119</code>, <code>:125</code>; Catalog <code>:42</code>, <code>:46</code>, <code>:80</code>, <code>:102</code>,
+          <code>:110</code>), and Sales and Identity add the key ring (Sales <code>:82</code>, Identity <code>:62</code>). The Gateway calls
           <code>AddAzureKeyVaultConfiguration()</code>, <code>AddServiceDefaults()</code> and <code>AddAzureMonitorExporter()</code> in that order
-          (Sales <code>MMCA.Store.Sales.Service/Program.cs:64</code>, <code>:90</code>, <code>:95</code>), the three broker services register
-          <code>AddAzureServiceBusTransport()</code> ahead of <code>AddBrokerMessaging</code> (Sales <code>:247</code>/<code>:269</code>, Identity <code>:254</code>/<code>:264</code>,
-          Catalog <code>:266</code>/<code>:279</code>), and the web UI host adds the key ring (<code>MMCA.Store.UI.Web/Program.cs:76</code>).</p>
+          (<code>MMCA.Store.Gateway/Program.cs:67</code>, <code>:69</code>, <code>:74</code>), and the web UI host adds the key ring through its
+          callbacks (<code>MMCA.Store.UI.Web/Program.cs:39</code>, <code>:45</code>, <code>:50</code>).</p>
           <p>Neither consumer calls an AWS or Google method, and neither restores those packages. That is the point.</p>
           <h2 id="trade-offs-honestly">Trade-offs, honestly</h2>
           <ul>
           <li><strong>Every Azure host carries more calls.</strong> The exporter, the transport, the key ring and the vault
-          source are explicit lines in each <code>Program.cs</code>, and <code>MMCA.Common/UPGRADING.md</code> lists the calls a host
-          makes (<code>ADR-134:274-276</code>, <code>:348-352</code>). The tripwire is what keeps a forgotten line from being a silent regression.</li>
+          source are explicit calls in each host (<code>ADR-134:402-404</code>). The tripwire is what keeps a
+          forgotten line from being a silent regression.</li>
           <li><strong>Registration order matters, twice.</strong> Exporter after <code>AddServiceDefaults()</code>, transport before
-          <code>AddBrokerMessaging</code>. Both fail at startup with the fix in the message, which is the best an order
-          dependency can do, but it is still an order dependency.</li>
+          <code>AddBrokerMessaging</code>. <code>AddMmcaServiceHost</code> fixes both for a service, and both fail at startup with the
+          fix in the message for a host wired by hand, which is the best an order dependency can do, but it is
+          still an order dependency.</li>
           <li><strong>The core is cloud-neutral in its cloud services, not free of every Azure assembly.</strong> The Cosmos
           engine brings <code>Microsoft.Azure.Cosmos</code> transitively, and both gates name that exemption explicitly
-          (<code>MMCA.Common.LayerEnforcement.targets:119-122</code>, <code>CloudVendorIsolationTests.cs:31</code>). A third exemption is a deliberate edit to both gates.</li>
-          <li><strong>Every consumer restores the SQL transport.</strong> The built-in <code>PostgreSql</code> provider lives in
-          Infrastructure, so its MassTransit SQL transport is restored whichever broker a host selects
-          (<code>ADR-134:290-292</code>).</li>
-          <li><strong>An IAM-only broker database cannot migrate at startup.</strong> MassTransit&#39;s migrator opens its own
-          connections from the connection string, so such a host sets <code>MessageBus:PostgreSql:MigrateOnStartup=false</code>
-          and creates the transport schema in a deployment step that connects with a password
-          (<code>PostgreSqlBrokerTransport.cs:33-37</code>).</li>
+          (<code>MMCA.Common.LayerEnforcement.targets:144-147</code>, <code>CloudVendorIsolationTests.cs:32</code>). A third exemption is a deliberate edit to both gates.</li>
           <li><strong>Clouds are not interchangeable at the edges.</strong> SQS caps a message delay at 900 seconds
-          (<code>AmazonSqsTransport.cs:43</code>). With <code>MessageBus:RedeliveryIntervalsSeconds</code> unconfigured, the SQS
-          transport substitutes <code>[60, 300, 900]</code> (<code>:22-25</code>, <code>:55</code>) for a framework default that reaches an hour
-          (<code>MessageBusSettings.cs:217</code>); only an explicitly configured interval above 900 seconds fails, rather
-          than being silently shortened (<code>:161</code>). Google Cloud metrics need the Google-built OpenTelemetry Collector,
-          because the Telemetry API takes at most 200 data points per metric request and the .NET SDK cannot
-          split one metric (<code>GoogleCloudTelemetryExporterExtensions.cs:78-86</code>).</li>
-          <li><strong>The AWS and Google tiers are not merge gates.</strong> The live-broker CI coverage is the built-in
-          <code>PostgreSql</code> transport and SQS/SNS against LocalStack, neither a required check, and no CI job runs a
-          live Azure Service Bus (<code>common-ArchitectureScorecard.md:74</code>). The adapters a consumer deploys today are
-          the ones exercised least against real infrastructure.</li>
+          (<code>AmazonSqsTransport.cs:46</code>), and the pipeline shortens any longer redelivery interval to that cap
+          rather than failing it (<code>AmazonSqsTransport.cs:28-30</code>, <code>BrokerTransportPolicies.cs:65-75</code>), so the
+          framework default <code>[60, 600, 3600]</code> (<code>MessageBusSettings.cs:190</code>) runs as one minute, ten minutes and
+          fifteen minutes on SQS. Metrics need a collector on both non-Azure clouds: the Google Telemetry API
+          takes at most 200 data points per metric request and the .NET SDK cannot split one metric
+          (<code>GoogleCloudTelemetryExporterExtensions.cs:78-86</code>), and the AWS call exports traces and logs only,
+          because one request is capped at 1,000 data points, so metrics go through an ADOT collector
+          (<code>AwsTelemetryExporterExtensions.cs:66-69</code>).</li>
+          <li><strong>Emulators are not the clouds, and the live tiers are not merge gates.</strong> The live-broker CI tiers
+          cover all four transports (PostgreSQL, SQS/SNS against LocalStack, RabbitMQ and the Azure Service Bus
+          emulator), none of them a required check (<code>common-ArchitectureScorecard.md:75</code>), and the AWS telemetry
+          exporter has not been exercised against live X-Ray or CloudWatch Logs endpoints
+          (<code>AwsTelemetryExporterExtensions.cs:72-74</code>).</li>
           </ul>
           <h2 id="apply-this-even-without-mmca">Apply this even without MMCA</h2>
           <p>The pattern ports to any framework, internal platform or shared library that more than one deployment
           consumes. Six steps:</p>
           <ol>
           <li><strong>Draw the line at the package, not the namespace.</strong> A vendor SDK in a core package is a dependency
-          of every consumer, whatever namespace hides it. One adapter package per vendor, referencing the core,
+          of every consumer, whatever namespace hides it. Adapter packages per vendor, referencing the core,
           never the reverse.</li>
           <li><strong>Ship an inert or neutral default for every capability.</strong> A null push sender, a storage service
           that fails each call with a named error, in-process messaging, OTLP telemetry. The core must run, and
@@ -472,9 +549,10 @@ services.AddMmcaApplicationPipeline(pipeline =&gt; pipeline
           <li><strong>One call per capability, a no-op until configured.</strong> A host that calls the method in every
           environment keeps one <code>Program.cs</code>; the configuration decides what is live. Keep the configuration
           keys stable across the move so deployments do not change.</li>
-          <li><strong>Make selection open.</strong> A provider name as a string resolved against registered implementations, not
-          an enum. Fail at registration when the name matches nothing, and put the package and the call in the
-          message for the names you know.</li>
+          <li><strong>Make selection open, and keep the plug-in small.</strong> A provider name as a string resolved against
+          registered implementations, not an enum, and a transport contract that only moves bytes while the
+          framework keeps the policy. Fail at registration when the name matches nothing, and put the package
+          and the call in the message for the names you know.</li>
           <li><strong>Fail startup on intent without implementation.</strong> For each configuration key that declares &quot;this
           host uses vendor X&quot;, have the adapter call leave a marker and check the pair at startup. Check only
           keys that declare intent; a shared section that every service sees is not one.</li>
@@ -486,13 +564,14 @@ services.AddMmcaApplicationPipeline(pipeline =&gt; pipeline
           adapter should not start.</strong></p>
           <hr>
           <p><strong>What we covered:</strong> why cloud SDKs in a core package tax every consumer, how ADR-134 splits the
-          framework into a cloud-neutral core with inert defaults and three adapter packages with one call per
-          capability, why the broker provider is an open string resolved against <code>IBrokerTransport</code>
-          registrations and why the database-only <code>PostgreSql</code> broker belongs in the core, how passwordless
-          PostgreSQL goes through one <code>INpgsqlDataSourceConfigurator</code> hook, how <code>HostIntegrationTripwire</code> and
-          <code>CloudAdapterTripwire</code> turn a missing adapter call into a startup error that names it, how
-          <code>EnforceCloudVendorBoundary</code> and <code>CloudVendorIsolationTestsBase</code> hold the boundary at build and test
-          time, and how ADC and Store wire the Azure adapter host by host.</p>
+          framework into a cloud-neutral core with inert defaults, four cloud adapter packages and a test adapter
+          with one call per capability, why the broker provider is an open string resolved against
+          <code>IBrokerTransport</code> registrations that only move bytes and why the database-only <code>PostgreSql</code> broker
+          belongs in the core, how passwordless PostgreSQL and Redis go through core configurator hooks, how
+          <code>HostIntegrationTripwire</code> and <code>CloudAdapterTripwire</code> turn a missing adapter call into a startup error
+          that names it, how <code>EnforceCloudVendorBoundary</code> and <code>CloudVendorIsolationTestsBase</code> hold the boundary
+          at build and test time, and how ADC and Store wire the Azure adapter through <code>AddMmcaServiceHost</code>
+          callbacks host by host.</p>
           <p><em>MMCA.Common is open source. Star the repo, read the 2-minute ADR-134 behind this pattern, or
           <code>dotnet add package MMCA.Common.API</code> and build the monolith you can extract later.</em></p>
           <ul>
@@ -502,12 +581,13 @@ services.AddMmcaApplicationPipeline(pipeline =&gt; pipeline
           <a href="../docs/governance/common-ArchitectureScorecard.html">MMCA.Common: Architecture Scorecard</a> in the docs site.</li>
           </ul>
           <p><em>Previous: Article 52, &quot;Finishing identity: second factor, email confirmation and stored permission
-          grants.&quot; Next in the series: Article 54, <a href="series-index.html">the series index</a>.</em></p>
+          grants.&quot; Next in the series: Article 54, <a href="borrowed-and-machine-identities.html">&quot;Borrowed and Machine Identities: Read-Only View-As and OAuth Client
+          Credentials&quot;</a>.</em></p>
           <p><em>Tags: .NET, C Sharp, Cloud Computing, Microservices, Software Architecture</em></p>
           
         <nav class="article-pager" aria-label="Series navigation">
           <a class="article-pager-link article-pager-link--prev" href="identity-completions.html" rel="prev"><span class="article-pager-dir">← Previous</span><span class="article-pager-title">52 · Finishing identity</span></a>
-          <a class="article-pager-link article-pager-link--next" href="series-index.html" rel="next"><span class="article-pager-dir">Next →</span><span class="article-pager-title">54 · The series index</span></a>
+          <a class="article-pager-link article-pager-link--next" href="borrowed-and-machine-identities.html" rel="next"><span class="article-pager-dir">Next →</span><span class="article-pager-title">54 · Borrowed and machine identities</span></a>
         </nav>
         <div class="doc-foot btn-row">
           <a class="btn btn--ghost" href="../articles/index.html">← Back to The MMCA.Common series</a>
@@ -520,7 +600,7 @@ services.AddMmcaApplicationPipeline(pipeline =&gt; pipeline
             <li><a href="#why-it-matters">Why it matters</a></li>
             <li><a href="#the-mmca-answer-the-core-references-no-cloud-sdk">The MMCA answer: the core references no cloud SDK</a></li>
             <li><a href="#the-broker-is-a-string-and-the-core-owns-the-cloud-neutral-one">The broker is a string, and the core owns the cloud-neutral one</a></li>
-            <li><a href="#passwordless-postgresql-through-one-hook">Passwordless PostgreSQL through one hook</a></li>
+            <li><a href="#passwordless-connections-through-core-hooks">Passwordless connections through core hooks</a></li>
             <li><a href="#silent-degradation-is-the-failure-the-tripwires-remove">Silent degradation is the failure the tripwires remove</a></li>
             <li><a href="#the-boundary-is-gated-twice">The boundary is gated twice</a></li>
             <li><a href="#how-adc-and-store-adopt-it">How ADC and Store adopt it</a></li>

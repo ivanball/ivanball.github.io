@@ -95,7 +95,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 54 articles</summary>
+        <summary>All 57 articles</summary>
         <nav class="doc-nav" aria-label="The MMCA.Common series">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -152,7 +152,10 @@
         <li><a href="durable-internal-commands.html">51 · Four ways to do work later</a></li>
         <li><a href="identity-completions.html">52 · Finishing identity</a></li>
         <li><a href="cloud-neutral-vendor-adapters.html">53 · One framework, three clouds</a></li>
-        <li><a href="series-index.html">54 · The series index</a></li>
+        <li><a href="borrowed-and-machine-identities.html">54 · Borrowed and machine identities</a></li>
+        <li><a href="app-as-mcp-server.html">55 · Your app as an MCP server</a></li>
+        <li><a href="outbound-webhooks.html">56 · Sending webhooks without opening a door</a></li>
+        <li><a href="series-index.html">57 · The series index</a></li>
           </ol>
         </nav>
       </details>
@@ -296,7 +299,8 @@
           through a single <code>builder.OwnsAddress(p =&gt; p.Address);</code> call that names no length itself.
           <code>EmailInvariants.MaxLength</code> does not get
           the same treatment: each consumer declares its own, separate email length limit instead (Store&#39;s
-          <code>CustomerInvariants.EmailMaxLength</code> is 100, ADC&#39;s <code>UserInvariants.EmailMaxLength</code> is 100, and ADC&#39;s
+          <code>CustomerInvariants.EmailMaxLength</code> aliases the 100 its own DTO declares, ADC&#39;s
+          <code>UserInvariants.EmailMaxLength</code> is 100, and ADC&#39;s
           <code>SpeakerInvariants.EmailMaxLength</code> aliases the 255 its own DTO declares), none derived from the 256
           <code>EmailInvariants</code> itself declares.</p>
           <h3 id="identifier-aliases-the-war-on-primitive-obsession">Identifier aliases: the war on primitive obsession</h3>
@@ -312,8 +316,9 @@
           over the alias), and <code>Money</code> instead of <code>decimal</code> means the currency travels with the amount. This is
           primitive obsession addressed at the type level rather than in code review.</p>
           <h3 id="the-opt-in-alternative-a-wrapper-struct-the-compiler-enforces">The opt-in alternative: a wrapper struct the compiler enforces</h3>
-          <p>The alias is the default, and it stays the default: every entity, DTO and consumer in this workspace
-          identifies itself through a primitive alias. An alias is a name for a primitive, though, so it buys
+          <p>The alias is the default, and it stays the default: every entity and DTO in MMCA.Common, MMCA.Store
+          and MMCA.ADC identifies itself through a primitive alias, and the one wrapper in the workspace is a
+          deliberate demonstration in the Helpdesk reference app (its ticket comment id). An alias is a name for a primitive, though, so it buys
           readability rather than enforcement. <code>UserIdentifierType</code> and <code>OrderIdentifierType</code> are both <code>int</code>, and
           a call that transposes them compiles. For the case where you want that to be a compile error,
           MMCA.Common ships the wrapper struct as an opt-in capability (ADR-115).</p>
@@ -350,7 +355,7 @@
           <p>For a contract that deliberately keeps primitives on the wire, <code>StronglyTypedIdMappings&lt;TSelf, TValue&gt;</code>
           exposes <code>ToValue</code> and <code>ToIdentifier</code> as plain static methods that a Mapperly-generated mapper discovers
           by signature. The posture the framework takes is worth stating plainly: the aliases are the identifier
-          model for everything shipped here, nothing pushes a consumer toward a wrapper, and the capability
+          model for the framework and both production apps, nothing pushes a consumer toward a wrapper, and the capability
           exists so that a team that does want transposition caught by the compiler gets JSON, EF Core, MVC
           binding, filtering and OpenAPI answered in one place instead of hand-rolling a variant at six
           boundaries.</p>
@@ -379,7 +384,10 @@
           the smaller <code>AggregateConventionTestsBase</code>, which pins the four construction facts on their own.</p>
           <p>The convention half is the rest. <code>GetChildOrNotFound</code>, <code>SetItems</code> and the remove, restore and
           cascade-delete helpers are protected members of <code>AuditableAggregateRootEntity</code>, and no fitness rule
-          requires an aggregate to use them. <code>Result.Combine</code> is a framework member too: its arguments are
+          requires an aggregate to use them. One adjacent fact is gated: <code>CascadeSoftDeleteConventionTestsBase</code>
+          fails an aggregate root that owns child entities when its <code>Delete()</code> override does not delete them
+          (unless the type sits on a reviewed exemption list), so that a soft delete reaches the children is a
+          test, while which helper performs it is not. <code>Result.Combine</code> is a framework member too: its arguments are
           evaluated before the call, so every invariant runs and the one failure it returns carries every error.
           Whether an aggregate composes its invariants that way is convention; the single gated piece is a
           naming rule, separate from the entity base, that a class named <code>*Invariants</code> must be static.

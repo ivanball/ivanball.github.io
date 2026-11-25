@@ -95,7 +95,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 54 articles</summary>
+        <summary>All 57 articles</summary>
         <nav class="doc-nav" aria-label="The MMCA.Common series">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -152,7 +152,10 @@
         <li><a href="durable-internal-commands.html">51 · Four ways to do work later</a></li>
         <li><a href="identity-completions.html">52 · Finishing identity</a></li>
         <li><a href="cloud-neutral-vendor-adapters.html">53 · One framework, three clouds</a></li>
-        <li><a href="series-index.html">54 · The series index</a></li>
+        <li><a href="borrowed-and-machine-identities.html">54 · Borrowed and machine identities</a></li>
+        <li><a href="app-as-mcp-server.html">55 · Your app as an MCP server</a></li>
+        <li><a href="outbound-webhooks.html">56 · Sending webhooks without opening a door</a></li>
+        <li><a href="series-index.html">57 · The series index</a></li>
           </ol>
         </nav>
       </details>
@@ -261,7 +264,7 @@
           missing and never replaces a descriptor MVC supplied (<code>ApiParameterDescriptorBackfillProvider.cs:65</code>).
           Because this framework&#39;s reader is the header, no host was hit either way, which is exactly why that
           failure could ship unnoticed. MMCA.Common references only <code>Asp.Versioning.Mvc</code> and
-          <code>Asp.Versioning.Mvc.ApiExplorer</code> (<code>MMCA.Common/Directory.Packages.props:14</code>, <code>:20</code>), not
+          <code>Asp.Versioning.Mvc.ApiExplorer</code> (<code>MMCA.Common/Directory.Packages.props:75</code>, <code>:83</code>), not
           <code>Asp.Versioning.OpenApi</code>; the guard stays because it costs nothing and protects any other consumer of
           the API descriptions from the same null (ADR-046).</p>
           <p><strong>A shipped exemplar proves two versions coexist.</strong> This is the part most &quot;we support versioning&quot;
@@ -298,12 +301,15 @@
           (<code>MMCA.Store.Catalog.IntegrationTests/Contract/ApiVersioningTests.cs:16</code>). This is the rubric §9 fitness
           check, and the same invariant-over-discipline posture the framework prefers (ADR-015): without a second
           working version, everything above would be asserted rather than proven.</p>
-          <p><strong>Every REST host adopts it the same way.</strong> The extracted services call <code>AddCommonApiVersioning</code> in
-          their startup: ADC&#39;s Conference (<code>MMCA.ADC.Conference.Service/Program.cs:226</code>), Identity (<code>:162</code>),
-          Engagement (<code>:156</code>), and Notification (<code>:145</code>) hosts, Store&#39;s Catalog (<code>:146</code>), Sales (<code>:154</code>), and
-          Identity (<code>:141</code>) hosts, and the monolith reference host
-          (<code>MMCA.Helpdesk.Web/Program.cs:35</code>). One call per host, and the reader, default, and reporting choices
-          cannot drift apart between services. The discovery exemplar is narrower than the registration: only ADC&#39;s
+          <p><strong>Every REST host adopts it the same way.</strong> The extracted services do not call
+          <code>AddCommonApiVersioning</code> themselves: each composes its startup with <code>builder.AddMmcaServiceHost(...)</code>
+          from <code>MMCA.Common.ServiceHost</code>, and that method makes the call
+          (<code>Source/Hosting/MMCA.Common.ServiceHost/ServiceHostBuilderExtensions.cs:109</code>). That covers ADC&#39;s
+          Conference (<code>MMCA.ADC.Conference.Service/Program.cs:82</code>), Identity (<code>:79</code>), Engagement (<code>:58</code>), and
+          Notification (<code>:58</code>) hosts and Store&#39;s Catalog (<code>:32</code>), Sales (<code>:51</code>), and Identity (<code>:37</code>) hosts. The
+          monolith reference host composes its startup by hand and makes the one direct call
+          (<code>MMCA.Helpdesk.Web/Program.cs:36</code>). Either way the policy lives in one method, and the reader, default,
+          and reporting choices cannot drift apart between services. The discovery exemplar is narrower than the registration: only ADC&#39;s
           Conference and Store&#39;s Catalog hosts ship a <code>ServiceInfoController</code> subclass today.</p>
           <h2 id="trade-offs-honestly">Trade-offs, honestly</h2>
           <p>ADR-046 is refreshingly candid about what is real today versus what the shape leaves room for. Four
@@ -313,8 +319,10 @@
           <code>[ApiVersion(...)]</code> and routing attributes. It is one line of duplication per host, and it is the
           same inheritance caveat ADR-036 already records for ADC&#39;s sealed <code>OAuthController</code>.
           The shared behavior lives in the base; the attributes are the deliberate exception.</li>
-          <li><strong>Adoption is per host.</strong> A new REST host that forgets <code>AddCommonApiVersioning</code> gets no versioning and
-          no reported versions, and the shared fitness contract only guards a host once its subclass is added.
+          <li><strong>Adoption is per host outside <code>MMCA.Common.ServiceHost</code>.</strong> A host composed with
+          <code>AddMmcaServiceHost</code> gets the registration with no call of its own, but a REST host that composes its
+          startup by hand (as Helpdesk does) and forgets <code>AddCommonApiVersioning</code> gets no versioning and no
+          reported versions, and the shared fitness contract only guards a host once its subclass is added.
           This is the same audit-the-inventory caveat that every opt-in framework registration carries.</li>
           <li><strong>Only the discovery endpoint has evolved to 2.0.</strong> This is the honest one. Application controllers
           beyond <code>ServiceInfo</code> declare only <code>[ApiVersion(&quot;1.0&quot;)]</code> today. The second version exists on the
@@ -325,19 +333,22 @@
           dev/CI-only <code>v1</code>.</strong> A version chosen by header does not show up in a copied URL or a browser address
           bar, so the version in play is only visible to a caller that reads request and response headers. The
           generated contract does not follow the versioning axis either. Each extracted service host registers
-          the plain <code>v1</code> document itself with <code>services.AddOpenApi()</code> (Helpdesk&#39;s monolith host serves no
-          OpenAPI document at all), next to <code>AddCommonOpenApi</code>, which registers no document and only configures
-          the ones present (<code>WebApplicationBuilderExtensions.cs:101</code>). <code>MapCommonOpenApi</code>
-          then maps that single document with <code>app.MapOpenApi().AllowAnonymous()</code>
-          (<code>Startup/Endpoints/OpenApiEndpointExtensions.cs:74</code>, document name <code>v1</code> at <code>:28</code>), throws at startup
-          when no <code>v1</code> document was registered (<code>:65-71</code>), and is a no-op in Production (<code>:62</code>). So the <code>2.0</code>
+          the plain <code>v1</code> document itself with <code>builder.Services.AddOpenApi()</code> (for example
+          <code>MMCA.ADC.Conference.Service/Program.cs:80</code>; Helpdesk&#39;s monolith host serves no OpenAPI document at
+          all). <code>AddMmcaServiceHost</code> pins that document to OpenAPI 3.1 (<code>ServiceHostBuilderExtensions.cs:127-129</code>)
+          and calls <code>AddCommonOpenApi</code> (<code>:130</code>), which registers no document and only configures the ones
+          present (<code>WebApplicationBuilderExtensions.cs:108</code>). At startup <code>UseMmcaServiceHostAsync</code> refuses to
+          run without the host&#39;s own document (<code>ServiceHostApplicationExtensions.cs:51</code>), then calls
+          <code>MapCommonOpenApi</code> (<code>:66</code>), which maps that single document with <code>app.MapOpenApi().AllowAnonymous()</code>
+          (<code>Startup/Endpoints/OpenApiEndpointExtensions.cs:73</code>, document name <code>v1</code> at <code>:27</code>), throws at startup
+          when no <code>v1</code> document was registered (<code>:64-71</code>), and is a no-op in Production (<code>:61</code>). So the <code>2.0</code>
           <code>ServiceInfo</code> action is served and exercised by the fitness contract above but appears in no
           generated document, and the only document any host&#39;s contract test pins is <code>/openapi/v1.json</code>
           (<code>Conformance/OpenApiContractTestsBase.cs:51</code>). ADC and Store also write that document to disk at
           build time and commit it per service host (four in ADC, three in Store, for example
           <code>MMCA.ADC.Conference.Service/openapi/MMCA.ADC.Conference.Service.json</code>), and an &quot;OpenAPI documents are
-          current&quot; CI step fails a PR whose document changed without being committed (<code>MMCA.ADC/.github/workflows/deploy.yml:306</code>,
-          <code>MMCA.Store/.github/workflows/deploy.yml:291</code>). All seven consumer OpenAPI contract tests also opt into
+          current&quot; CI step fails a PR whose document changed without being committed (<code>MMCA.ADC/.github/workflows/deploy.yml:387</code>,
+          <code>MMCA.Store/.github/workflows/deploy.yml:316</code>). All seven consumer OpenAPI contract tests also opt into
           a committed-baseline diff: each overrides <code>BaselineDocumentPath</code> (<code>OpenApiContractTestsBase.cs:80</code>;
           ADC Conference&#39;s <code>Contract/OpenApiContractTests.cs:29</code>, for example) to point at an
           <code>openapi-baseline.json</code> beside the test, and <code>OpenApiBreakingChangeDetector</code>
@@ -377,7 +388,7 @@
           generation from failing) in one call, how <code>ServiceInfoControllerBase</code> ships a
           real deprecated <code>1.0</code> alongside a <code>2.0</code> so <code>ServiceInfoVersioningContractTestsBase</code> can prove two versions
           coexist rather than assert it, and the honest current-reality caveats (only the discovery endpoint has
-          a <code>2.0</code>, adoption is per host, the attributes are repeated per subclass, and the OpenAPI contract is a
+          a <code>2.0</code>, adoption is per host outside <code>MMCA.Common.ServiceHost</code>, the attributes are repeated per subclass, and the OpenAPI contract is a
           single dev/CI-only <code>v1</code> document that does not show the <code>2.0</code> shape).</p>
           <p><strong>Next in the series:</strong> Article 45, &quot;Feature Flags in the CQRS Pipeline: Gate Commands, Not Code,&quot; on
           gating a command in the pipeline instead of branching the code that runs it.</p>

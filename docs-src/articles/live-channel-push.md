@@ -22,9 +22,10 @@ the message minutes later.
 
 Now the conference floor opens a live poll. Two hundred phones are looking at the same question, votes
 are landing several per second, and every one of them needs to light up the running tally on every other
-screen in under a second. Reach for the durable pipeline here and you inherit all the wrong costs. The
-outbox deliberately holds a fresh row back from its background processor for
-`Outbox:ProcessingDelaySeconds` (default 5s, ADR-003), which is exactly the latency you cannot pay. You would write a per-user
+screen in under a second. Reach for the durable pipeline here and you inherit all the wrong costs. Every
+vote would take the outbox hop (ADR-003): a row written in the same transaction as the aggregate, then a
+background processor, woken by the post-save signal, that publishes it on. That machinery exists so
+delivery survives a crash, and a tally needs to survive nothing. You would write a per-user
 inbox row for a tally that is worthless a second later and that nobody will ever open. You would persist
 data whose entire value is that it is on screen right now.
 
@@ -192,9 +193,12 @@ broadcast path that has quietly stopped working is a number an operator can aler
 line nobody reads.
 
 On the Notification side, `LiveChannelGrpcService` receives the RPC, checks its shape, and delegates to
-its own `ILiveChannelPublisher`, which in that host is the real `SignalRLiveChannelPublisher`. The check is
-the bounded-payload control for an unauthenticated internal endpoint: a channel key or event name that is
-blank, longer than its cap (200 and 100 characters) or outside `[a-z0-9:.-]`, or a payload over 64 KiB of
+its own `ILiveChannelPublisher`, which in that host is the real `SignalRLiveChannelPublisher`. The edge
+writes to every connected client, so it is not left to internal-only reach: Notification maps it under
+the service-only `ServiceCaller` policy, and Engagement's live-channel client attaches its own service
+token, because the drain runs with no HttpContext and has no user bearer to forward. A signed-in user's
+bearer is refused. The shape check then runs on every admitted call and bounds the payload: a channel
+key or event name that is blank, longer than its cap (200 and 100 characters) or outside `[a-z0-9:.-]`, or a payload over 64 KiB of
 UTF-8, is refused with `InvalidArgument` before it reaches the publisher. The payload's opacity is still
 what makes the relay trivial: the service counts its bytes and never deserializes it, and neither does
 any other hop, so no shared payload type has to cross the wire.
@@ -247,10 +251,12 @@ drops: the drain worker completes the queue, cancels its in-flight publish (that
 then publishes what remains in FIFO order inside a single five-second budget and logs a count of
 whatever it has to abandon. A crash takes every pending item with it, and so does a stop whose budget
 runs out. That is the correct trade for a poll tally, whose value expires in a second anyway, and it
-is why the only bounded `Channel<T>` instances in MMCA.Common, MMCA.Store and MMCA.ADC both sit in
-ADC's Engagement module and both carry best-effort signals: the live-publish queue, and a capacity-one
-`DropWrite` flag (`BookmarkCacheEvictionSignal`) that coalesces any burst of bookmark changes into one
-pending cache eviction. Work that a restart must not lose goes
+is why both ADR-121 work queues across MMCA.Common, MMCA.Store and MMCA.ADC sit in ADC's Engagement
+module and both carry best-effort signals: the live-publish queue, and a capacity-one `DropWrite` flag
+(`BookmarkCacheEvictionSignal`) that coalesces any burst of bookmark changes into one pending cache
+eviction. (The framework's PostgreSQL broker receiver holds the one other bounded channel, a
+capacity-one `DropWrite` wake flag that carries no work: the messages it wakes for live in the
+database.) Work that a restart must not lose goes
 in a row instead. ADC's AI scoring pass over an event's sessions is that kind of work, so the
 organizer's request writes one durable internal command row and returns, and the framework's processor
 claims it, restores the requesting organizer's principal and runs the pass through the ordinary CQRS
@@ -335,8 +341,12 @@ Two consequences worth stating plainly. A missed schedule runs **once** and then
 occurrence is computed from the instant the run finished, not from the occurrence that was missed, so
 a host that was down for six hours fires one purge instead of six. That is right for a purge and
 wrong for a job that must produce an artifact per window, which has to make the window explicit in
-its own state rather than infer it from the schedule. And the lease is a time lease, not a fence: a
-run that overstays it can be claimed by another replica, so job bodies carry the same idempotency
+its own state rather than infer it from the schedule. And the lease is renewed, but it is not a fence.
+While a job runs, the runner pushes `LockedUntil` out by a full lease every half lease, guarded by the
+claim token, so a long but healthy run keeps its row, and a renewal that finds the row under another
+token cancels the run. A replica that stops renewing (it dies, or its renewals keep failing) loses the
+row when the lease runs out, another replica can claim and run it, and the first run, if still going,
+is cancelled only when a renewal next reaches the row. So job bodies carry the same idempotency
 obligation the outbox already puts on event handlers.
 
 The capability is opt-in, and the proof is a test rather than a promise: build the real model for a
@@ -435,7 +445,38 @@ pattern, or `dotnet add package MMCA.Common.Infrastructure` and try it.*
 
 *Tags: .NET, C Sharp, SignalR, Real Time, Software Architecture*
 
-*Notes: 2026-10-29 refresh (MMCA.Common v1.265.1). Body changes: the queue section cites ADR-121, not
+*Notes: 2026-11-25 refresh, re-verified 2026-11-25 against MMCA.Common v1.319.0. Body changes, each
+read in source this run: (1) the cold open no longer prices the outbox as a 5 s hold:
+`Outbox:ProcessingDelaySeconds` defaults to 0 (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/Administration/OutboxSettings.cs:45`,
+doc `:33-43`, the post-save signal wake `:35-36`; ADR-003 Revision (2026-11-18),
+`Website/docs-src/adr/003-outbox-dual-dispatch.md:708`, item 1 `:714-723`), so the cost is restated as the
+durable hop plus the per-user inbox row. (2) The gRPC edge is authenticated: Notification maps
+`LiveChannelGrpcService` with `RequireAuthorization(ServiceTokenDefaults.ServiceCallerPolicy)`
+(`MMCA.ADC/Source/Services/MMCA.ADC.Notification.Service/Program.cs:160`, rationale `:152-159`,
+`AddServiceTokenAuthentication` `:137`), Engagement's client attaches a service token
+(`MMCA.ADC/Source/Services/MMCA.ADC.Notification.Contracts/DependencyInjection.cs:51`), and the
+validation still runs on every admitted call (`.../Notification.Service/Grpc/LiveChannelGrpcService.cs:54-56`,
+caps `:34-36`, charset `:43-44`, doc `:25-28`). (3) The bounded-channel census is narrowed to the two
+ADR-121 work queues: Grep for `CreateBounded` this run finds `LiveChannelPublishQueue.cs:33` and
+`BookmarkCacheEvictionSignal.cs:27` in ADC, one in MMCA.Common
+(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Messaging/Transports/PostgreSql/PostgreSqlReceiver.cs:41`,
+a `Channel<bool>` of capacity 1 with `DropWrite`) and none in MMCA.Store; none is `Wait` mode. (4) The
+scheduler lease is renewed while a job runs: `RenewLeaseWhileRunningAsync`
+(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Scheduling/ScheduledJobRunner.cs:556-614`, started
+`:488`, half-lease interval `:575`, token-guarded renewal `:586-589`, cancel on a lost row `:591-595`,
+retry sooner on a failed renewal `:605-612`), and the lost-lease cancellation is caught without a stamp
+(`:495-499`). Source-prose notes, reported and not edited: `LiveChannelGrpcService.cs:17` and
+`Notification.Contracts/DependencyInjection.cs:43` name the `InternalCaller` policy while `Program.cs:160`
+maps `ServiceCaller` (the body follows the mapping); per the 2026-11-25 audit (not re-read here), ADR-039
+Context (`039-live-channel-push.md:24`) still speaks of seconds of outbox latency and ADR-074
+(`074-recurring-job-scheduler.md:187-190`) still describes the lease without renewal.
+Flag (2026-11-25): only the anchors marked re-read 2026-11-25 below were re-pinned this run; the rest
+(`NotificationHub`, `PushNotificationSettings`, `NotificationScopeKey`, `NotificationHubService`, the
+Engagement handler, `LiveChannelPublishQueue` and `LiveChannelPublishProcessor` line numbers, the ADR-039,
+ADR-074 and ADR-121 section anchors, `ApplicationDbContext`, `SchedulerSettings`, the adoption greps
+and the Notification Kestrel comment) are carried, and the audit reports that many have moved. The body
+claims they back were confirmed by the 2026-11-25 audit, not re-pinned here.
+2026-10-29 refresh. Body changes: the queue section cites ADR-121, not
 ADR-052, which is Superseded by ADR-121 (`Website/docs-src/adr/052-background-job-execution.md:4-7`;
 `Website/docs-src/adr/121-ephemeral-in-process-work-queue.md:4`); the header ADR list swaps 052 for 121
 to match. The "two opposite correctness decisions in `FullMode`" framing is restated around ADR-121's two
@@ -543,8 +584,8 @@ UI `NotificationHubService` (`Source/Presentation/MMCA.Common.UI/Services/Notifi
 re-read 2026-10-22: single-subscriber `NotificationCallback` (`:77`), `Reconnected` re-joins via
 `RejoinChannelsAsync` (`:227`, method `:699`), `JoinChannelAsync` (`:320`), `LeaveChannelAsync` (`:353`),
 multicast `OnChannelEvent` (`:383`).
-Outbox delay: `Outbox:ProcessingDelaySeconds` default 5 at
-`Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/Administration/OutboxSettings.cs:41` (doc `:33-38`); ADR-039
+Outbox delay, re-read 2026-11-25: `Outbox:ProcessingDelaySeconds` defaults to 0 at
+`Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/Administration/OutboxSettings.cs:45` (doc `:33-43`); ADR-039
 names the setting without a value (`Website/docs-src/adr/039-live-channel-push.md:20`).
 ADR-039 (status and section headings re-read 2026-10-22; the sub-item anchors inside each revision
 move with their headings and are not individually re-read): status `:3-13` (Accepted 2026-07-09, revised
@@ -561,8 +602,9 @@ ADC Engagement live path. Queue `.../Engagement.Application/Live/LiveChannelPubl
 2026-10-22: `Capacity = 1024` (`:18`), the itemDropped comment (`:30-32`), `CreateBounded` with `DropOldest`,
 `SingleReader = true`, `SingleWriter = false`, `itemDropped: OnItemDropped` (`:33-40`), `DroppedCount`
 (`:47`), the never-fails-until-`Complete` remarks (`:51-54`), the private `_channel.Writer.TryWrite` (`:59`),
-`Complete` (`:66`), `OnItemDropped` (`:68`). `CreateBounded` appears in two ADC files (this one and
-`BookmarkCacheEvictionSignal.cs:27`, see the 2026-10-08 entry) and nowhere in MMCA.Common or MMCA.Store.
+`Complete` (`:66`), `OnItemDropped` (`:68`). `CreateBounded` (Grep 2026-11-25) appears in two ADC files
+(this one at `:33` and `BookmarkCacheEvictionSignal.cs:27`), once in MMCA.Common (`PostgreSqlReceiver.cs:41`)
+and nowhere in MMCA.Store.
 The queue is registered as one concrete singleton exposed through the interface
 (`.../Engagement.Application/DependencyInjection.cs:53-54`). Handler anchors in the next block are
 re-read 2026-10-22.
@@ -592,31 +634,34 @@ rationale `:30-38`, operation prefix `"live-channel-publish:"` `:47`, `ShutdownD
 `:125`, per-item `ILiveChannelPublisher` resolution `:131`; registered `AddHostedService`
 (`.../Engagement.Infrastructure/DependencyInjection.cs:23`).
 Engagement's composition root states the no-await rule in a comment
-(`MMCA.ADC/Source/Services/MMCA.ADC.Engagement.Service/Program.cs:249-257`) and registers
-`AddNotificationLiveChannelClient()` at `:303`, after `AddScheduledJobs` at `:198`.
-gRPC ingress, re-read 2026-10-22: `AddNotificationLiveChannelClient` defaults to `_grpc.notification` and
-`Replace`s the port with the adapter (`MMCA.ADC/Source/Services/MMCA.ADC.Notification.Contracts/DependencyInjection.cs:42`,
-`:48`); `LiveChannelPublisherGrpcAdapter` (`.../Notification.Contracts/LiveChannelPublisherGrpcAdapter.cs:29`,
+(`MMCA.ADC/Source/Services/MMCA.ADC.Engagement.Service/Program.cs`, item 4 of the registration comment
+from `:156`, service-token note `:166`) and registers `AddNotificationLiveChannelClient()` at `:222`, after
+`AddScheduledJobs` at `:118`, with `AddServiceTokenClient` at `:232` (all re-read 2026-11-25 by Grep).
+gRPC ingress, re-read 2026-11-25: `AddNotificationLiveChannelClient` defaults to `_grpc.notification`
+(`MMCA.ADC/Source/Services/MMCA.ADC.Notification.Contracts/DependencyInjection.cs:49`), attaches the
+service token (`WithServiceToken()` `:51`) and `Replace`s the port with the adapter (`:55`); `LiveChannelPublisherGrpcAdapter` (`.../Notification.Contracts/LiveChannelPublisherGrpcAdapter.cs:29`,
 2s `PushDeadline` `:34` applied `:48`, propagate-not-swallow doc `:14-21`); `LiveChannelGrpcService` takes
 the host's `ILiveChannelPublisher` (`.../Notification.Service/Grpc/LiveChannelGrpcService.cs:31`) and
-delegates at `:58-60` after validation. Notification's Kestrel profile: mixed-endpoint comment
+delegates at `:58-60` after validation (re-read 2026-11-25). Notification maps it under
+`ServiceTokenDefaults.ServiceCallerPolicy` (`.../Notification.Service/Program.cs:160`). Notification's Kestrel profile: mixed-endpoint comment
 `.../Notification.Service/Program.cs:57-67` (the dedicated Http2-only endpoint named `grpc` is declared in
 the `Kestrel:Endpoints` config section, `:61-64`) and default `Http1AndHttp2` endpoint `:73`;
-`MapGrpcService<LiveChannelGrpcService>` `:304` (`MapNotificationHub` `:295`). The hub mapping line is carried from 2026-09-19, not
-re-pinned.
+`MapGrpcService<LiveChannelGrpcService>` `:160` (`MapNotificationHub` `:150`), both re-read 2026-11-25; the
+Kestrel comment and endpoint lines above are carried, not re-pinned.
 Recurring job scheduler, grounded in `Website/docs-src/adr/074-recurring-job-scheduler.md` (smart-wait
 section heading `:79`, job-store field list naming `LastError` `:66`, and the revision headings
 (2026-10-01) `:207`, (2026-10-06) `:218`, (2026-10-07) `:231` and (2026-10-21) `:255` re-read 2026-10-22; its anchors `:17-20`,
 `:30-35`, `:37-42`, `:67-71`, `:164-167`, `:177-180` are carried from 2026-09-19) plus MMCA.Common
 source. `ScheduledJobRunner` (`Source/Core/MMCA.Common.Infrastructure/Scheduling/ScheduledJobRunner.cs`),
 re-read 2026-10-22: Cronos alias `:12`, class `:39-44` (a `BackgroundService` taking an optional
-`TimeProvider`, `:44`), `MinimumWait` 1s `:72`, cycle loop feeding `earliestNextRun` into
+`TimeProvider`, `:44`), `MinimumWait` 1s `:73` (re-read 2026-11-25), cycle loop feeding `earliestNextRun` into
 `ComputeWaitTime` `:102-134`, `ComputeWaitTime` `:146-160` (doc `:137-141`; returns the lesser of the
 time until due and the polling interval, `:159`), `GetNextOccurrence(afterUtc, inclusive: false)` `:195`,
-`RunCycleAsync` `:213` (its earliest-due read covers only this host's registered job names, `:229-235`), the claim's `ExecuteUpdateAsync` `:441` (block quoted from `:435-445`, comment
-and statement, `.ConfigureAwait(false)` dropped). Carried from 2026-10-02, not re-read: due-row read
-`:417-424`, missed-run policy comment `:484-486`, token-guarded outcome stamp `:497-512`,
-`InvokeJobAsync` `:528` opening a fresh scope per run `:532`. `SchedulerSettings.PollingIntervalSeconds`
+`RunCycleAsync` `:213` (its earliest-due read covers only this host's registered job names, `:229-235`), the claim's `ExecuteUpdateAsync` `:444` (block quoted from `:438-447`, re-read 2026-11-25, comment
+and statement, `.ConfigureAwait(false)` dropped). Re-read 2026-11-25: missed-run policy comment
+`:517-519`, token-guarded outcome stamp `:530-545`, `InvokeJobAsync` `:621` opening a fresh scope per run
+`:625`, lease renewal `:556-614` (started `:488`). Carried from 2026-10-02, not re-read: due-row read
+`:417-424`. `SchedulerSettings.PollingIntervalSeconds`
 defaults to 30 and `LeaseSeconds` to 300 (`Source/Core/MMCA.Common.Infrastructure/Scheduling/SchedulerSettings.cs:34`,
 `:43`, re-read 2026-10-22). `ScheduledJobEntry` columns re-read 2026-10-22 (`.../Scheduling/ScheduledJobEntry.cs:26-74`, `LastError` `:57`),
 mapped only for the Default source (`.../Persistence/DbContexts/ApplicationDbContext.cs:327-329`,
@@ -628,7 +673,7 @@ ADC Identity (`MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:253
 (`.../MMCA.ADC.Engagement.Service/Program.cs:204`), Conference (`.../MMCA.ADC.Conference.Service/Program.cs:358`);
 Helpdesk web host (`MMCA.Helpdesk/Source/Hosts/MMCA.Helpdesk.Web/Program.cs:89`).
 Illustrative-of-documented-shape: the scheduler code block pairs the three `IScheduledJob` member
-signatures (inline comments replace the XML docs) with the claim from `ScheduledJobRunner.cs:435-445`.
+signatures (inline comments replace the XML docs) with the claim from `ScheduledJobRunner.cs:438-447`.
 The live-channel code block condenses `CastVoteHandler.cs:63-88` (commit, build results for the caller,
 return) and `LivePollVoteChangedHandler.cs:73-82` (rebuild with `userId: null`, channel key, `Enqueue`),
 eliding the scope creation, the enclosing `BestEffort.ExecuteAsync` call, the unique-constraint and concurrency-conflict catches (`:65-79`), the log call and

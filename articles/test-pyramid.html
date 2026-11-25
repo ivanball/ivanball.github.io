@@ -5,24 +5,24 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#0e151f" media="(prefers-color-scheme: dark)">
-  <title>The test pyramid, not the ice-cream cone: 8,000 fast tests, zero Docker · MMCA · Ivan Ball-llovera</title>
+  <title>The test pyramid, not the ice-cream cone: 13,000 fast tests, zero Docker · MMCA · Ivan Ball-llovera</title>
   <meta name="description" content="How the framework&#39;s tests stack up: fast unit and architecture tests at the base, E2E at the tip.">
   <link rel="canonical" href="https://ivanball.github.io/articles/test-pyramid.html">
   <link rel="icon" href="../assets/img/favicon.svg" type="image/svg+xml">
   <link rel="alternate" type="application/rss+xml" title="Ivan Ball-llovera: deep dives on enterprise .NET" href="https://ivanball.github.io/feed.xml">
   <meta property="og:type" content="article">
   <meta property="og:site_name" content="Ivan Ball-llovera">
-  <meta property="og:title" content="The test pyramid, not the ice-cream cone: 8,000 fast tests, zero Docker">
+  <meta property="og:title" content="The test pyramid, not the ice-cream cone: 13,000 fast tests, zero Docker">
   <meta property="og:description" content="How the framework&#39;s tests stack up: fast unit and architecture tests at the base, E2E at the tip.">
   <meta property="og:url" content="https://ivanball.github.io/articles/test-pyramid.html">
   <meta property="og:image" content="https://ivanball.github.io/assets/img/articles/article-35.png">
-  <meta property="og:image:alt" content="The test pyramid, not the ice-cream cone: 8,000 fast tests, zero Docker">
+  <meta property="og:image:alt" content="The test pyramid, not the ice-cream cone: 13,000 fast tests, zero Docker">
   <meta property="og:locale" content="en_US">
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:title" content="The test pyramid, not the ice-cream cone: 8,000 fast tests, zero Docker">
+  <meta name="twitter:title" content="The test pyramid, not the ice-cream cone: 13,000 fast tests, zero Docker">
   <meta name="twitter:description" content="How the framework&#39;s tests stack up: fast unit and architecture tests at the base, E2E at the tip.">
   <meta name="twitter:image" content="https://ivanball.github.io/assets/img/articles/article-35.png">
-  <script type="application/ld+json">{"@context":"https://schema.org","@type":"TechArticle","headline":"The test pyramid, not the ice-cream cone: 8,000 fast tests, zero Docker","description":"How the framework's tests stack up: fast unit and architecture tests at the base, E2E at the tip.","url":"https://ivanball.github.io/articles/test-pyramid.html","mainEntityOfPage":"https://ivanball.github.io/articles/test-pyramid.html","image":"https://ivanball.github.io/assets/img/articles/article-35.png","datePublished":"2026-08-04T11:46:55Z","author":{"@type":"Person","name":"Ivan Ball-llovera","url":"https://ivanball.github.io"},"isPartOf":{"@type":"CreativeWorkSeries","name":"The MMCA.Common series","url":"https://ivanball.github.io/articles/index.html"},"position":35,"sameAs":"https://medium.com/@ivanball76/the-test-pyramid-not-the-ice-cream-cone-1-880-fast-tests-zero-docker-cb459fda73d9"}</script>
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"TechArticle","headline":"The test pyramid, not the ice-cream cone: 13,000 fast tests, zero Docker","description":"How the framework's tests stack up: fast unit and architecture tests at the base, E2E at the tip.","url":"https://ivanball.github.io/articles/test-pyramid.html","mainEntityOfPage":"https://ivanball.github.io/articles/test-pyramid.html","image":"https://ivanball.github.io/assets/img/articles/article-35.png","datePublished":"2026-08-04T11:46:55Z","author":{"@type":"Person","name":"Ivan Ball-llovera","url":"https://ivanball.github.io"},"isPartOf":{"@type":"CreativeWorkSeries","name":"The MMCA.Common series","url":"https://ivanball.github.io/articles/index.html"},"position":35,"sameAs":"https://medium.com/@ivanball76/the-test-pyramid-not-the-ice-cream-cone-1-880-fast-tests-zero-docker-cb459fda73d9"}</script>
   <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Writing","item":"https://ivanball.github.io/writing.html"},{"@type":"ListItem","position":2,"name":"The MMCA.Common series","item":"https://ivanball.github.io/articles/index.html"},{"@type":"ListItem","position":3,"name":"35 · The test pyramid","item":"https://ivanball.github.io/articles/test-pyramid.html"}]}</script>
   <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);if(localStorage.getItem('mmca-rail')==='hidden')document.documentElement.setAttribute('data-rail','hidden');if(localStorage.getItem('mmca-cites')==='shown')document.documentElement.setAttribute('data-cites','shown');}catch(e){}})();</script>
   <link rel="preload" href="../assets/fonts/inter-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
@@ -95,7 +95,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 54 articles</summary>
+        <summary>All 57 articles</summary>
         <nav class="doc-nav" aria-label="The MMCA.Common series">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -152,19 +152,22 @@
         <li><a href="durable-internal-commands.html">51 · Four ways to do work later</a></li>
         <li><a href="identity-completions.html">52 · Finishing identity</a></li>
         <li><a href="cloud-neutral-vendor-adapters.html">53 · One framework, three clouds</a></li>
-        <li><a href="series-index.html">54 · The series index</a></li>
+        <li><a href="borrowed-and-machine-identities.html">54 · Borrowed and machine identities</a></li>
+        <li><a href="app-as-mcp-server.html">55 · Your app as an MCP server</a></li>
+        <li><a href="outbound-webhooks.html">56 · Sending webhooks without opening a door</a></li>
+        <li><a href="series-index.html">57 · The series index</a></li>
           </ol>
         </nav>
       </details>
     </aside>
         <article class="doc-content">
           <p class="eyebrow doc-kicker">Proof &amp; getting started · No. 35</p>
-          <h1 id="the-test-pyramid-not-the-ice-cream-cone-8000-fast-tests-zero-docker">The test pyramid, not the ice-cream cone: 8,000 fast tests, zero Docker</h1>
+          <h1 id="the-test-pyramid-not-the-ice-cream-cone-13000-fast-tests-zero-docker">The test pyramid, not the ice-cream cone: 13,000 fast tests, zero Docker</h1>
           <p class="article-meta"><time datetime="2026-08-04T11:46:55Z">August 4, 2026</time> <span aria-hidden="true">·</span> Ivan Ball-llovera <span aria-hidden="true">·</span> <a href="https://medium.com/@ivanball76/the-test-pyramid-not-the-ice-cream-cone-1-880-fast-tests-zero-docker-cb459fda73d9" target="_blank" rel="noopener">Also on Medium ↗</a></p>
           <figure class="article-hero"><img src="../assets/img/articles/article-35.webp" srcset="../assets/img/articles/article-35.webp 800w, ../assets/img/articles/article-35-1600.webp 1600w" sizes="(max-width: 900px) 100vw, 900px" alt="" width="800" height="420" decoding="async"></figure>
           <p class="article-subtitle">A suite you run constantly is worth more than a suite you run nervously. Here is how
-          MMCA.Common keeps more than 8,000 tests fast enough to live in the inner loop, with real-database
-          integration coverage and no Docker in that loop.</p>
+          MMCA.Common keeps more than 13,000 tests per framework leg fast enough to live in the inner loop, with
+          real-database integration coverage and no Docker in that loop.</p>
           <hr>
           <p>There is a failure mode that almost every long-lived codebase drifts into, and it has a name: the
           ice-cream cone. The pyramid is inverted. A thin layer of unit tests sits at the bottom, and the bulk of
@@ -172,10 +175,11 @@
           takes twenty minutes, fails intermittently for reasons nobody can reproduce, and developers stop running
           it locally because the inner loop is too painful. The tests that were supposed to give you confidence
           instead give you a reason to avoid them.</p>
-          <p>MMCA.Common deliberately builds the right shape. <strong>About 7,600 <code>[Fact]</code>/<code>[Theory]</code> attributes, more than
+          <p>MMCA.Common deliberately builds the right shape. <strong>About 10,400 <code>[Fact]</code>/<code>[Theory]</code> attributes, nearly
           half of them in the Core tests,</strong> form a correct, non-inverted pyramid, with a wide base that runs in
-          milliseconds and needs no database and no Docker. Expanded into theory data rows, the CI unit run
-          executes 9,122 tests (the <code>build-and-test</code> job of CI run 40870473851). That suite, and the architecture
+          milliseconds and needs no database and no Docker. Expanded into theory data rows, each framework leg of
+          the CI unit run (<code>net11.0</code> and <code>net10.0</code>) executes about 13,190 tests (13,188 and 13,185 in the
+          <code>build-and-test</code> jobs of CI run 45693724979). That suite, and the architecture
           behind it, is the single most-cited evidence in the framework&#39;s testability score: category 14 stands
           at <strong>maturity 4 / implementation 9</strong>, carried by the enforced coverage floor and the size of the suite
           behind it.</p>
@@ -227,7 +231,7 @@
           fastest tier of all, pure reflection, and they catch a class of regression that no functional test
           would.</p>
           <h2 id="shipped-test-packages-consumers-do-not-re-invent-the-harness">Shipped test packages: consumers do not re-invent the harness</h2>
-          <p>Seven of the framework&#39;s twenty-six published NuGet packages are test <em>infrastructure</em>, not test code, and this is
+          <p>Seven of the framework&#39;s thirty published NuGet packages are test <em>infrastructure</em>, not test code, and this is
           how the pyramid stays consistent across three codebases instead of being rebuilt three times:</p>
           <ul>
           <li><code>MMCA.Common.Testing</code>, the integration base: <code>IntegrationTestBase&lt;TFixture&gt;</code> supplies a configured
@@ -236,24 +240,28 @@
           with an embedded dev keypair so tests exercise the same JWKS validation path production runs.</li>
           <li><code>MMCA.Common.Testing.E2E</code>, the Playwright base: browser fixtures, Blazor-aware navigation helpers that
           handle the InteractiveAuto hydration race, Identity page objects, and abstract workflow bases for the
-          Login, Register, Profile, Logout, password-reset and authorization journeys (four of which close with
-          an axe-core WCAG 2.1 AA assertion), plus user-preferences and pseudo-localization bases and
-          <code>KeyboardOperabilityTestsBase</code>, a WCAG 2.1 keyboard gate (skip link, focus trap, Escape returning
-          focus to the opener, visible focus) that ADC and Store each subclass once.</li>
+          Login, Register, Profile, Logout, password-reset, authorization and account-deletion journeys (four of
+          which close with an axe-core WCAG 2.1 AA assertion), plus user-preferences, pseudo-localization and
+          installable-web-app bases and <code>KeyboardOperabilityTestsBase</code>, a WCAG 2.1 keyboard gate (skip link,
+          focus trap, Escape returning focus to the opener, visible focus) that ADC and Store each subclass once.</li>
           <li><code>MMCA.Common.Testing.UI</code>, the bUnit base: <code>BunitComponentTestBase</code> registers MudBlazor&#39;s services,
           configures loose JSInterop, and wires real auth doubles so component tests resolve <code>&lt;AuthorizeView&gt;</code>
-          cascades; the same package ships the <code>MarkupSnapshot</code> golden-markup helper and page-test bases for the
-          framework&#39;s identity pages (<code>ConfirmEmailPageTestsBase</code>, <code>RoleAdminListPageTestsBase&lt;TPage&gt;</code>,
-          <code>RoleAdminEditPageTestsBase&lt;TPage&gt;</code>).</li>
+          cascades; the same package ships the <code>MarkupSnapshot</code> golden-markup helper, page-test bases for the
+          framework&#39;s identity pages (<code>ConfirmEmailPageTestsBase</code>, <code>SignInLinkPageTestsBase</code>,
+          <code>RoleAdminListPageTestsBase&lt;TPage&gt;</code>, <code>RoleAdminEditPageTestsBase&lt;TPage&gt;</code>), list-page and detail-page
+          load-state bases (<code>DataGridListPageTestsBase</code>, <code>DetailPageLoadStateTestsBase</code>), and navigation contract
+          bases (<code>NavigationContractTestsBase</code>, <code>NavItemGuardContractTestsBase</code>).</li>
           <li><code>MMCA.Common.Testing.Aspire</code>, the AppHost base: <code>AppHostFixtureBase</code> boots a real AppHost once per
           test collection and waits on each resource&#39;s own readiness signal, while <code>AppHostTestBase&lt;TFixture&gt;</code>
           hands a test a client bound to a named resource plus typed health, readiness, JWKS, h2c and
-          data-source assertions.</li>
+          data-source assertions. <code>DependencyOutageTestBase&lt;TFixture&gt;</code> builds on the same fixture for
+          dependency-outage scenarios.</li>
           <li><code>MMCA.Common.Testing.Architecture</code>, the fitness-rule library: the architecture rules defined once and
           consumed by each repo&#39;s thin test suite.</li>
           <li><code>MMCA.Common.Testing.Azure</code>, the Service Bus broker-parity base: <code>ServiceBusEmulatorFixtureBase</code> starts
-          one warm, image-pinned Azure Service Bus emulator per test collection and owns the one MassTransit bus
-          every test publishes through, with both startup phases wall-clock bounded so a hang names its phase.</li>
+          one warm, image-pinned Azure Service Bus emulator per test collection and owns the one transport host
+          every test publishes through, the framework&#39;s own Azure Service Bus transport publishing through
+          <code>IMessageBus</code>, with each startup phase wall-clock bounded so a hang names its phase.</li>
           <li><code>MMCA.Common.AI.Testing</code>, the AI test harness: <code>ReplayChatClient</code>, <code>GoldenReplayTestsBase</code> and
           <code>PromptContractPinTestsBase</code>, keyed on a <code>PromptContract</code>&#39;s normalized SHA-256 hash.</li>
           </ul>
@@ -347,7 +355,10 @@
           stack (ADC&#39;s E2E workflow brings the Aspire stack up in CI), but it asserts browser journeys rather than
           the wiring contracts, and the deploy path runs it only for UI-affecting changes.
           ADR-117 closes that gap as a package rather than a per-repo copy, exercised in the framework&#39;s own CI
-          over a sample AppHost; each consumer&#39;s real AppHost is booted by its E2E workflow instead.</p>
+          over a sample AppHost. ADC also boots its real AppHost through the packaged base, in an opt-in outage
+          tier that derives <code>AppHostFixtureBase</code> and <code>DependencyOutageTestBase</code>, stops Redis and RabbitMQ one at a
+          time and asserts its Notification service&#39;s probes; that tier runs only when opted in and is neither a
+          required check nor a deploy gate.</p>
           <p><code>AppHostFixtureBase</code> is a collection fixture: it boots the real AppHost once through an
           <code>IDistributedApplicationTestingBuilder</code>, starts it, waits for the resources to report ready, and hands the
           running <code>DistributedApplication</code> to every test in the collection. The wait is the design point. &quot;The
@@ -438,22 +449,45 @@
           Platform (MTP), not VSTest</strong>, configured in <code>global.json</code>, with <strong>xUnit v3</strong>, AwesomeAssertions, and
           Moq. To run one class or method you target the project and pass an MTP filter after <code>--</code>
           (<code>-- --filter-class &quot;*FooTests*&quot;</code> or <code>-- --filter-method &quot;*Pattern*&quot;</code>). One sharp edge worth knowing: every test
-          project must contain at least one test or MTP exits with code 8. The unit run also floors at
-          <code>--minimum-expected-tests 2000</code>, so a discovery or filter regression that leaves only a handful of
-          tests discovered fails the job instead of passing green. Against the 9,122 tests that run executes
-          (CI run 40870473851), the floor is coarse: a regression that drops a few thousand tests still clears it.</p>
+          project must contain at least one test or MTP exits with code 8. Each framework leg of the unit run also
+          floors at <code>--minimum-expected-tests 11250</code>, so a discovery or filter regression that leaves only part of
+          the suite discovered fails the job instead of passing green. Against the roughly 13,190 tests each leg
+          executes (CI run 45693724979), the floor sits about 1,940 below: a regression that drops a large slice of
+          the suite fails, while one that drops fewer tests than that still clears it.</p>
           <p>And the suite is a real gate, not a suggestion. CI collects coverage via <code>dotnet-coverage</code> (which wraps
           the MTP run and returns its exit code, so a test failure still fails the build) and <strong>enforces a
           coverage floor</strong>: the unit tier must stay at or above <strong>68.3%</strong> line coverage as a regression backstop,
           gated on the unit tier alone rather than a gallery-diluted merged report. The unit tier measures
-          <strong>87.0%</strong> (the <code>coverage</code> job of CI run 40870473851), so the floor sits about 19 points below the
+          <strong>89.2%</strong> (the <code>coverage</code> job of CI run 45693724979), so the floor sits about 21 points below the
           suite it guards.</p>
+          <h2 id="the-ratchet-beside-the-floor-new-risk-only-adr-147">The ratchet beside the floor: new risk only (ADR-147)</h2>
+          <p>A line floor bounds volume. It says nothing about where untested complexity lands, and a new, branchy,
+          barely covered method can arrive while the total stays comfortably above 68.3%. ADR-147 adds a second
+          gate aimed at exactly that: one composite action, <code>coverage-ratchet</code>, shared by MMCA.Common, ADC and
+          Store, that reads Cobertura reports and fails on <strong>new</strong> risk only, measured against committed baselines.</p>
+          <p>It has two checks. <code>check: crap</code> scores each method&#39;s CRAP as <code>cx^2 * (1 - cov)^3 + cx</code> and fails when a
+          method missing from the baseline crosses the threshold (30 by default), or when a baselined method&#39;s
+          score rises past its recorded value. <code>check: entrypoints</code> fails when a method of an entry-point class
+          (matched by a regex over the class name, <code>Controller$</code> by default) has no line coverage in any report and
+          is not in its baseline. A stale baseline entry is a warning, never a failure, so improving coverage never
+          turns a build red and the baselines only shrink. The action fails closed: a missing or unreadable report,
+          a missing baseline, or zero matched methods is an error, not a pass.</p>
+          <p>MMCA.Common runs <code>check: crap</code> in its <code>coverage-risk</code> job, which merges the unit coverage of both
+          framework legs with the reports of the Testcontainers and emulator tiers and runs the action&#39;s own
+          self-test before the ratchet. Common has no API host of its own, so the entry-point check belongs to the
+          consumers: ADC and Store each run both checks in their own <code>coverage-risk</code> job, against the same action
+          pinned to a release commit.</p>
+          <p>Every one of those jobs starts <strong>non-required</strong>. The Common job&#39;s own comment says so, and keeps it out of
+          the required <code>coverage</code> job&#39;s <code>needs</code> on purpose: a failed non-required job in a required job&#39;s <code>needs</code>
+          would skip that job, and a skipped required check posts green, silently passing the line floor. Promotion
+          to required comes after about ten green runs. Until then a red ratchet does not block a merge, and the
+          gate relies on the author reading it.</p>
           <h2 id="trade-offs-honestly">Trade-offs, honestly</h2>
           <p>The shape is right, but the scorecard names real gaps and one is squarely in the testing story.</p>
           <ul>
-          <li><strong>The UI tier&#39;s visual check is markup-deep, not pixel-deep.</strong> The framework ships 32 reusable
-          Blazor components in <code>MMCA.Common.UI</code>, some with real branching logic (<code>MobileCardList</code>,
-          <code>MobileInfiniteScrollList</code>), and the pyramid carries a fast base layer <em>for the UI</em> under them: the
+          <li><strong>The UI tier&#39;s visual check is markup-deep, not pixel-deep.</strong> The framework ships 44 reusable
+          Blazor components in <code>MMCA.Common.UI</code>, some with real branching logic (<code>MobileInfiniteScrollList</code>,
+          for one), and the pyramid carries a fast base layer <em>for the UI</em> under them: the
           <code>MMCA.Common.Testing.UI</code> bUnit base backs their component tests, a real-browser render-smoke gate
           runs in CI, and a render-snapshot regression tier diffs their markup against committed baselines.
           Category 28 (Front-End Testing) scores maturity 4 / implementation 9 on that evidence. The limit is
@@ -467,15 +501,16 @@
           deliberately latent, with no production entity on them. The trade buys a fast, Docker-free inner loop
           at the cost of needing the consumer apps and CI to cover the SQL-Server-specific paths.</li>
           <li><strong>The honest limits are mutation testing and the container tiers, not coverage.</strong> The unit tier holds a <strong>68.3%</strong> line-coverage
-          floor, enforced in CI, against a measured 87.0%. What holds category 14 below the top band starts with mutation testing: there is none
+          floor, enforced in CI, against a measured 89.2%. What holds category 14 below the top band starts with mutation testing: there is none
           on the Core tier, so a green suite proves the lines run, not that every assertion would catch a
-          mutant. Three structural gaps sit beside it: the integration tier (Redis, PostgreSQL, SQL Server, the
-          AWS LocalStack and Google Cloud emulator jobs, package consumption, Bicep) runs on pull requests but is
-          not a merge gate, the AppHost tier blocks the run (a red fails it) without being a required merge
-          check, and real-broker coverage is partial: only the built-in PostgreSql transport (against a real
-          PostgreSQL) and the SQS/SNS transport (against LocalStack) meet a live endpoint, both inside those
-          non-required jobs, while RabbitMQ and Azure Service Bus never meet one in the framework&#39;s own CI. Those
-          are real limits, stated plainly.</li>
+          mutant. Three structural gaps sit beside it: the integration tier (Redis, PostgreSQL, RabbitMQ, SQL
+          Server, the AWS LocalStack, Google Cloud and Azure Service Bus emulator jobs, package consumption,
+          Bicep) runs on pull requests but is not a merge gate, and neither is the <code>coverage-risk</code> ratchet; the
+          AppHost tier blocks the run (a red fails it) without being a required merge check; and real-broker
+          coverage lives entirely in those non-required jobs: all four transports meet a live endpoint (the
+          built-in PostgreSql transport against a real PostgreSQL, RabbitMQ against a real broker container,
+          SQS/SNS against LocalStack, Azure Service Bus against its emulator), but no required check runs any of
+          them. Those are real limits, stated plainly.</li>
           </ul>
           <p>None of these argue against the pyramid. They are the cost of keeping the base fast and honest about
           what each tier actually proves.</p>
@@ -491,8 +526,8 @@
           tests into deterministic ones.</li>
           <li><strong>Ship your test harness, do not copy it.</strong> If you have more than one service, put the fixtures, page
           objects, and base classes in a shared package so every consumer reuses one evolving harness.</li>
-          <li><strong>Gate it, then ratchet.</strong> A modest coverage floor that only goes up beats an aspirational target
-          nobody enforces.</li>
+          <li><strong>Gate it, then ratchet.</strong> A modest coverage floor beats an aspirational target nobody enforces, and a
+          committed baseline that only shrinks makes new code meet the bar without a big-bang cleanup of the old.</li>
           </ol>
           <p>The rule of thumb is the title: build the pyramid, not the ice-cream cone. A suite you run constantly,
           because it is fast and green, is worth more than a comprehensive suite you run nervously, because it is
@@ -504,8 +539,9 @@
           the seven shipped test packages that let consumers reuse the harness, the seven runtime conformance bases
           that prove a really-booted host wired the framework&#39;s contracts (ADR-058) and their partial adoption, the
           AppHost tier that compiles a claim about the composition itself (ADR-117), WCAG 2.1 AA shipped as a named
-          axe target with one recorded exception (ADR-063), the xUnit v3 / MTP runner and the CI coverage floor, and
-          the UI tier&#39;s honest limit: markup-deep snapshots rather than pixel-deep rendering.</p>
+          axe target with one recorded exception (ADR-063), the xUnit v3 / MTP runner and the CI coverage floor, the
+          new-risk coverage ratchet beside it (ADR-147), and the UI tier&#39;s honest limit: markup-deep snapshots
+          rather than pixel-deep rendering.</p>
           <p><strong>Next in the series:</strong> soft-delete vs the right to erasure, the GDPR conflict that was this
           framework&#39;s lowest-scoring category, and the boundary that resolved it.</p>
           <p><em>MMCA.Common is Apache-2.0 licensed and open source. Star the repo, read the Testing section of its
@@ -538,6 +574,7 @@
             <li><a href="#the-apphost-tier-a-compiled-claim-about-the-composition">The AppHost tier: a compiled claim about the composition</a></li>
             <li><a href="#accessibility-as-a-shipped-test-contract">Accessibility as a shipped test contract</a></li>
             <li><a href="#runner-and-gate-xunit-v3-mtp-and-a-coverage-floor">Runner and gate: xUnit v3, MTP, and a coverage floor</a></li>
+            <li><a href="#the-ratchet-beside-the-floor-new-risk-only-adr-147">The ratchet beside the floor: new risk only (ADR-147)</a></li>
             <li><a href="#trade-offs-honestly">Trade-offs, honestly</a></li>
             <li><a href="#apply-this-even-without-mmca">Apply this even without MMCA</a></li>
             </ul>

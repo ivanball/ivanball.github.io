@@ -95,7 +95,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 54 articles</summary>
+        <summary>All 57 articles</summary>
         <nav class="doc-nav" aria-label="The MMCA.Common series">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -152,7 +152,10 @@
         <li><a href="durable-internal-commands.html">51 · Four ways to do work later</a></li>
         <li><a href="identity-completions.html">52 · Finishing identity</a></li>
         <li><a href="cloud-neutral-vendor-adapters.html">53 · One framework, three clouds</a></li>
-        <li><a href="series-index.html">54 · The series index</a></li>
+        <li><a href="borrowed-and-machine-identities.html">54 · Borrowed and machine identities</a></li>
+        <li><a href="app-as-mcp-server.html">55 · Your app as an MCP server</a></li>
+        <li><a href="outbound-webhooks.html">56 · Sending webhooks without opening a door</a></li>
+        <li><a href="series-index.html">57 · The series index</a></li>
           </ol>
         </nav>
       </details>
@@ -250,7 +253,7 @@
           own doc comment names it the &quot;untracked-then-tracked dual-fetch&quot;; the ADC and
           Store Identity modules are thin sealed subclasses that supply the app-specific hooks (the untracked
           lookup, the claim set) and re-label it &quot;dual-fetch pattern&quot; in their class doc comments
-          (<code>AuthenticationService.cs:20</code> in both ADC and Store). It is shared framework login code, not a
+          (<code>AuthenticationService.cs:23</code> in ADC, <code>:20</code> in Store). It is shared framework login code, not a
           per-app copy, but it is not part of ADR-004&#39;s cross-service validation design.</p>
           <h2 id="jwt-algorithm-pinning-the-attack-you-would-otherwise-ship">JWT algorithm pinning: the attack you would otherwise ship</h2>
           <p>Switching to asymmetric keys opens a specific, classic attack, and the framework closes it explicitly.</p>
@@ -301,10 +304,17 @@
 }</code></pre>
           <p>The receiving service opts in separately with <code>AddServiceTokenAuthentication</code>: a second JwtBearer
           scheme that pins <code>ValidAlgorithms</code> to HS256, refuses a token without the <code>svc</code> claim, and is never the
-          default scheme. Only an endpoint under the <code>InternalCaller</code> policy accepts it, and that policy takes an
-          authenticated caller from either scheme, so a user token on the same call is validated by the user
-          scheme against the issuer&#39;s JWKS exactly as described above. Store is the one adopter: its Sales service sends the token on its Customers client, and
-          its Identity service validates it (<code>MMCA.Store.Identity.Service/Program.cs:179</code>); ADC uses neither half.</p>
+          default scheme. It registers two policies, and only an endpoint under one of them accepts the token.
+          <code>InternalCaller</code> takes an authenticated caller from either scheme, so a user token on the same call is
+          validated by the user scheme against the issuer&#39;s JWKS exactly as described above, and an edge that
+          admits both kinds of caller tells them apart with <code>IsServiceCaller()</code>. <code>ServiceCaller</code> evaluates the
+          service scheme alone, so an end-user token is refused there.</p>
+          <p>Both apps adopt it. In Store, the Sales service sends the token on its Customers client, and Identity
+          validates it on the Customers edge under <code>InternalCaller</code>. ADC runs three such edges: Engagement sends
+          its token to Identity&#39;s VerifiedUserLookup edge (<code>InternalCaller</code>, reached by the roster import, which
+          has no user) and to Notification&#39;s LiveChannelPush edge (<code>ServiceCaller</code>, reached only by the
+          live-channel publish drain), and Identity sends its own to Engagement&#39;s TicketInvitation edge
+          (<code>ServiceCaller</code>, for the anonymous sign-in link request).</p>
           <h2 id="trade-offs-honestly">Trade-offs, honestly</h2>
           <p>The JWKS layer is the right model, but it is not free, and the rough edges are worth naming.</p>
           <ul>
@@ -365,12 +375,14 @@
           on an empty scan, on an endpoint that declares neither <code>[Authorize]</code> nor <code>[AllowAnonymous]</code> (a
           stricter gate that is on by default, which a repo not yet ready opts out of explicitly; Common, ADC,
           Store and Helpdesk all keep it on), and on a stale entry in that second, undecorated allow-list. The
-          framework&#39;s own allow-list holds 21 entries: twelve credential-exchange actions that cannot require
-          a token because issuing one is what they do, or because the caller has no session yet (login,
-          register, refresh, the OAuth exchange, the three provider challenges and the provider callback,
-          forgot-password and reset-password, and sending and confirming an email-confirmation link), six
-          credential pages (the email-confirmation landing among them), and three landing and outcome pages
-          that render nothing depending on the caller. The scan matches <code>ControllerBase</code>, <code>RouteAttribute</code>
+          framework&#39;s own allow-list holds 29 entries: nineteen credential-exchange actions that cannot
+          require a token because issuing one is what they do, or because the caller has no session yet
+          (login, register, refresh, the OAuth exchange, the four provider challenges for Google, GitHub,
+          Apple and OIDC and the provider callback, OIDC home-realm discovery, forgot-password and
+          reset-password, sending and confirming an email-confirmation link, sending and redeeming a sign-in
+          link, beginning and completing a passkey sign-in, and the machine-client token endpoint), seven
+          credential pages (the email-confirmation and sign-in-link landings among them), and three landing
+          and outcome pages that render nothing depending on the caller. The scan matches <code>ControllerBase</code>, <code>RouteAttribute</code>
           and <code>AllowAnonymousAttribute</code> by full-name reflection, which keeps the shared test package free of
           ASP.NET references, and the bearer and CORS invariants run the real registration code and read the
           options back. Two residuals stay
@@ -380,11 +392,12 @@
           each consuming repo owns its own allow-list. The framework&#39;s thesis is that a rule that matters
           should fail the build, and these rules do.</p>
           </li>
-          <li><p><strong>The service token is one shared secret, scoped to one edge.</strong> It is HS256 over a single key that
-          the caller and the receiver both hold, so any holder can mint a token naming any service, and the
-          receiving scheme checks that the <code>svc</code> claim is present, not which service it names. What bounds it
-          is the opt-in on both sides: the scheme is never the default, a plain <code>[Authorize]</code> endpoint still
-          authenticates the user scheme alone, and only <code>InternalCaller</code> endpoints accept it. Per-service keys
+          <li><p><strong>The service token is one shared secret, scoped to the edges that opt in.</strong> It is HS256 over a
+          single key that the callers and the receivers both hold, so any holder can mint a token naming any
+          service, and the receiving scheme checks that the <code>svc</code> claim is present, not which service it
+          names. What bounds it is the opt-in on both sides: the scheme is never the default, a plain
+          <code>[Authorize]</code> endpoint still authenticates the user scheme alone, and only endpoints under
+          <code>InternalCaller</code> or <code>ServiceCaller</code> accept it. Per-service keys
           or transport-level service identity are a deliberate non-goal for traffic that stays inside the
           Container Apps environment; the governance backlog names a service reachable from outside it, or a
           second team owning a service, as the condition to revisit that.</p>

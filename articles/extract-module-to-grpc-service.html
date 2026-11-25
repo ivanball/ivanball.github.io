@@ -95,7 +95,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 54 articles</summary>
+        <summary>All 57 articles</summary>
         <nav class="doc-nav" aria-label="The MMCA.Common series">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -152,7 +152,10 @@
         <li><a href="durable-internal-commands.html">51 · Four ways to do work later</a></li>
         <li><a href="identity-completions.html">52 · Finishing identity</a></li>
         <li><a href="cloud-neutral-vendor-adapters.html">53 · One framework, three clouds</a></li>
-        <li><a href="series-index.html">54 · The series index</a></li>
+        <li><a href="borrowed-and-machine-identities.html">54 · Borrowed and machine identities</a></li>
+        <li><a href="app-as-mcp-server.html">55 · Your app as an MCP server</a></li>
+        <li><a href="outbound-webhooks.html">56 · Sending webhooks without opening a door</a></li>
+        <li><a href="series-index.html">57 · The series index</a></li>
           </ol>
         </nav>
       </details>
@@ -180,15 +183,17 @@
           abstractions, and transport choices live at the edges.</strong></p>
           <p>Concretely, that means two things were true while the code still ran as a monolith:</p>
           <ul>
-          <li>Asynchronous, fire-and-forget flows go through <code>IMessageBus</code>, defined in
-          <code>MMCA.Common.Application</code>. The application never references the broker library.</li>
+          <li>Asynchronous, fire-and-forget flows go through <code>IEventBus</code>, defined in <code>MMCA.Common.Application</code>.
+          Beneath it, <code>IMessageBus</code> (also an Application abstraction) is the transport the outbox drains
+          through. The application never references the broker library.</li>
           <li>Synchronous cross-module calls go through a plain C# interface (for example
           <code>IBookmarkCountService</code>), resolved from DI. The caller does not know whether the implementation is an
           in-process object or something else.</li>
           </ul>
           <p>This invariant is not a hope. It is enforced. <code>MicroserviceExtractionTests</code> in the architecture suite
-          fail the build if <code>MassTransit</code>, gRPC, or Protobuf types appear in any Domain, Application, or Shared
-          assembly. So you cannot accidentally couple the core to a transport during normal development, which
+          fail the build if a broker client (RabbitMQ, Azure Service Bus, Amazon SQS or SNS), <code>MassTransit</code>
+          (banned outright), or gRPC or Protobuf types appear in any Domain, Application, or Shared assembly.
+          So you cannot accidentally couple the core to a transport during normal development, which
           means when extraction day arrives the core is genuinely host-agnostic. If your codebase does not have
           this property, stop here and fix that first. Everything below assumes it.</p>
           <p>We will extract a module (call it Engagement) whose interface <code>IBookmarkCountService</code> a peer module
@@ -281,8 +286,10 @@ services.AddEngagementBookmarkCountClient();   <span class="hljs-comment">// shi
           events) need the same treatment, and the framework makes it a configuration switch rather than a code
           change.</p>
           <p><code>IMessageBus</code> has two implementations in Infrastructure: <code>InProcessMessageBus</code> (in-monolith, delivery is
-          a method call) and <code>BrokerMessageBus</code> (a MassTransit broker, RabbitMQ locally and Azure Service Bus in
-          production, with an <code>IntegrationEventConsumer</code>).
+          a method call) and <code>BrokerMessageBus</code>, which publishes through the selected transport&#39;s
+          <code>IBrokerPublisher</code>. RabbitMQ and PostgreSQL transports are built in, and an adapter package
+          (MMCA.Common.Azure for Azure Service Bus, MMCA.Common.Aws for Amazon SQS) registers its own; on the
+          receiving side an <code>IntegrationEventConsumer</code> delivers each event to its handlers.
           <code>MessageBusSettings</code> selects the mode. In the monolith you ran in-process; in the extracted service you
           flip the setting to the broker.</p>
           <pre class="doc-pre" tabindex="0" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-comment">// Program.cs: the broker registration is conditional on settings, not hard-coded.</span>
@@ -304,12 +311,15 @@ builder.Services.AddBrokerMessaging(builder.Configuration);
           in-cluster address (ADR-004, ADR-012). Validating a user&#39;s token never requires services to share a
           symmetric secret, which is what makes the fleet safe to grow. The framework&#39;s one shared key is opt-in
           and separate: an HS256 service token (configuration section <code>Grpc:ServiceToken</code>) for calls that carry
-          no user, which Store enables on its Sales-to-Identity edge and ADC does not use (ADR-007).</p>
+          no user, which Store enables on its Sales-to-Identity edge and ADC on three edges (the verified-user
+          lookup, the live-channel push and the ticket-invitation call) (ADR-007).</p>
           <h2 id="step-6-wire-it-in-the-apphost-with-mmcacommonaspirehosting">Step 6: wire it in the AppHost with MMCA.Common.Aspire.Hosting</h2>
           <p>Local orchestration is where the topology becomes runnable. <code>MMCA.Common.Aspire.Hosting</code> provides
-          AppHost extension methods for the cross-cutting infrastructure of an extracted deployment: the RabbitMQ
-          broker, JWKS service discovery, and the per-service data sources. The gRPC edge is not one of them, as
-          the snippet below shows: peers are wired with stock Aspire <code>WithReference</code>.</p>
+          AppHost extension methods for the cross-cutting infrastructure of an extracted deployment: the broker
+          (RabbitMQ, or the Azure Service Bus emulator, with an <code>AddSelectedBroker</code>/<code>WithSelectedBroker</code> pair),
+          JWKS service discovery, the per-service data sources, <code>WithMmcaServiceInfrastructure</code> for the chain
+          every service shares, and the signing key for the opt-in service token. The peer gRPC edge is not one
+          of them, as the snippet below shows: peers are wired with stock Aspire <code>WithReference</code>.</p>
           <pre class="doc-pre" tabindex="0" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-comment">// AppHost Program.cs</span>
 <span class="hljs-keyword">var</span> broker = builder.AddRabbitMQ(<span class="hljs-string">&quot;broker&quot;</span>);
 
@@ -353,8 +363,8 @@ engagementService.WithJwksDiscovery(identityService, gateway);  <span class="hlj
           that makes the client IP the caller&#39;s rather than the ingress&#39;s, ships in <code>MMCA.Common.Gateway</code>
           alongside <code>AddMmcaGateway</code>, the shared YARP forwarder profile both gateways chain onto
           <code>AddReverseProxy</code>. The package placement is a constraint, not a preference: a YARP host has no
-          controllers, so it references those two framework packages plus <code>MMCA.Common.Azure</code> (for Key Vault
-          configuration and Azure Monitor export, see
+          controllers, so it references those two framework packages plus <code>MMCA.Common.Azure.Startup</code> (Key Vault
+          configuration and Azure Monitor export only, with no persistence or messaging code, see
           <a href="cloud-neutral-vendor-adapters.html">the cloud adapters article</a>) and nothing else from the framework, and
           it cannot reach the service-tier <code>CorrelationIdMiddleware</code> or <code>AddCommonRateLimiting</code> that live in
           <code>MMCA.Common.API</code>.</p>
@@ -390,15 +400,19 @@ app.MapReverseProxy();</code></pre>
           from the output cache, and that cache lives <em>behind</em> the proxy, so a flood is paid for in full at the
           edge before anything can be served cheaply. The two limiters answer different failures: the window
           answers one noisy source, the concurrency cap answers total in-flight work no matter how many sources
-          produced it. Four kinds of request take the no-limiter partition on both limiters. <code>/health</code>,
+          produced it. Three kinds of request take the no-limiter partition on both limiters. <code>/health</code>,
           <code>/alive</code> and <code>/.well-known</code> are always bypassed, because throttling them takes out the probes and
           JWKS discovery as collateral. A host adds its own prefixes through <code>BypassPathPrefixes</code>, which is
-          how Store exempts its Stripe webhook route and ADC its SignalR hub route. The other two are
-          secret-proving headers, each off until its secret is configured: <code>SyntheticTrafficSecret</code>, so a
-          load run measures the system rather than the limiter, and <code>TrustedCallerSecret</code>, for a
-          server-rendered UI host whose every back-end call leaves from one address that the per-IP window
-          would otherwise collapse into a single partition. ADC&#39;s gateway names the trusted-caller header in
-          configuration and takes the secret itself from Key Vault. A request with no attributable client IP
+          how Store exempts its Stripe webhook route and ADC its SignalR hub route. The third is a
+          secret-proving header, off until its secret is configured: <code>SyntheticTrafficSecret</code>, so a load run
+          measures the system rather than the limiter. A second secret-proving header, <code>TrustedCallerSecret</code>,
+          serves a server-rendered UI host whose every back-end call leaves from one address that the per-IP
+          window would otherwise collapse into a single partition. A proven trusted caller skips the
+          concurrency cap, and under the default <code>TrustedCallerMode.PerVisitor</code> it is counted in the per-IP
+          window of the visitor it forwards in <code>X-Forwarded-For</code> rather than of its own address;
+          <code>TrustedCallerMode.Exempt</code> exempts it from both limiters. ADC&#39;s gateway names the trusted-caller
+          header in configuration, takes the secret itself from Key Vault, and sets no mode, so it runs
+          per-visitor. A request with no attributable client IP
           skips the per-IP window (fail-open, chosen over collapsing every unattributable caller into one shared
           bucket) but still counts against the concurrency cap. The settings
           validate on both construction paths, the options pipeline (<code>ValidateOnStart</code>) and a
@@ -419,7 +433,7 @@ app.MapReverseProxy();</code></pre>
           to revisit is measured, not felt: when invalid-token traffic is a material share of forwarded volume,
           it becomes a cost argument, and the services keep validating either way (ADR-088).</p>
           <p>The route table itself is configuration, not code. What step 7 calls &quot;the gateway&#39;s table&quot; is YARP
-          <code>ReverseProxy</code> configuration as the single source, 33 routes in ADC and 15 in Store, pinned in both
+          <code>ReverseProxy</code> configuration as the single source, 45 routes in ADC and 18 in Store, pinned in both
           repositories by a <code>RouteMapTests</code> drift gate that drives each route through the real proxy pipeline
           and compares the loaded <code>IProxyConfig</code> back against the pinned list in both directions. The
           alternative shape, hand-written <code>MapForwarder</code> calls, states the same table three times inside one
@@ -487,7 +501,9 @@ app.MapReverseProxy();</code></pre>
           locally; production needs the matching Bicep and ingress configuration.</li>
           <li><strong>Distributed-systems semantics are now yours.</strong> Cross-service consistency is eventual (outbox plus
           integration events). There are no cross-service transactions and no cross-database foreign keys.
-          Consumers must be idempotent because broker delivery is at-least-once.</li>
+          Broker delivery is at-least-once, so redeliveries must be deduplicated. The framework inbox does that
+          for every consumer and is on by default under any broker (ADR-021), at the price of an
+          <code>InboxMessages</code> table in each service database.</li>
           <li><strong>The transport profile leaks into hosting.</strong> ADR-012 is not optional reading. The Kestrel protocol
           choice, the gateway-forward mode, the ingress transport, and the JWKS form are a coupled set, and a
           half-configured set fails in ways that only show up in the cloud, not locally.</li>

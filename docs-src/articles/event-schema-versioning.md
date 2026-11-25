@@ -33,8 +33,9 @@ deployed and running, and you reshaped the contract under them.
 This is not a hypothetical. With database-per-service and async integration over the outbox, consumers
 resolve an event *by its identity, never by its shape*: the outbox serializes the event to JSON keyed by
 an `EventType` that holds the event's declared `[EventName]` identity when it has one (and its
-assembly-qualified type name otherwise), and the broker path binds by .NET message type. Neither key says
-anything about which fields the payload carries. There is no schema registry in the middle
+assembly-qualified type name otherwise), and the broker path publishes on a topic named for the event's
+wire name, the kebab-cased `[EventName]` identity (or the full type name when none is declared), carried
+in an `mmca-event-name` header. Neither key says anything about which fields the payload carries. There is no schema registry in the middle
 saying "this is a different shape than you expect." A producer that reshapes a payload silently breaks
 every consumer, and it does it in production, asynchronously, where it is hardest to trace.
 
@@ -76,12 +77,13 @@ public sealed record UserRegisteredV2(int UserId, string FirstName, string LastN
 }
 ```
 
-It is serialized with the payload (System.Text.Json on the outbox path, MassTransit on the broker
-path), so a consumer always sees the producer's declared version and has an explicit value to branch or
+It is serialized with the payload (System.Text.Json on both the outbox path and the broker path, with
+the same options), so a consumer always sees the producer's declared version and has an explicit value to branch or
 upcast on. And it is not just a convention you have to remember: a fitness function,
 `EventVersioningConventionTests`, asserts that every concrete integration event declares an `int
 SchemaVersion`, so a new event cannot ship without one. The same invariant-over-discipline approach as
-the layer rules and the MassTransit-v8 pin: a thing that matters is a check, not a comment.
+the layer rules and the dependency fact that fails the build on any `MassTransit*` package pin: a thing
+that matters is a check, not a comment.
 
 **Half two: the rule for changing a shape.**
 
@@ -94,12 +96,13 @@ the layer rules and the MassTransit-v8 pin: a thing that matters is a check, not
   type/version to the new shape before their handler runs. The old type is retired only after every
   consumer has drained it.
 
-That last point is forced by the transport, not chosen for taste. The broker binds by type, so a rename
-is a parallel-publish-and-drain migration with a real compatibility window, not an in-place edit. An
-in-place reshape has *no* compatibility window: the instant the producer deploys, the old shape is
+That last point is forced by the transport, not chosen for taste. The broker routes by the event's
+declared contract name, and a new type carries a new `[EventName]` identity and so a new topic, so a
+rename is a parallel-publish-and-drain migration with a real compatibility window, not an in-place edit.
+An in-place reshape has *no* compatibility window: the instant the producer deploys, the old shape is
 gone, and any consumer mid-deploy or slow to upgrade is reading a contract that no longer exists.
-New-type-for-breaking-change is the only safe option when transport binds by type and consumers deploy
-independently.
+New-type-for-breaking-change is the only safe option when the transport routes by contract identity and
+consumers deploy independently.
 
 The framework ships the wiring for that migration, not only the rule (ADR-090, accepted 2026-08-21). An
 upcaster is one typed class, `IEventUpcaster<TSource, TTarget>`, registered by the module that owns the
@@ -109,7 +112,8 @@ contract:
 // Module DI: one line per retired contract (hypothetical V2 shown).
 services.AddEventUpcaster<ProductVariantChanged, ProductVariantChangedV2, ProductVariantChangedUpcaster>();
 
-// Broker hosts also bind the retired queue, inside AddBrokerMessaging's consumer callback:
+// Broker hosts also subscribe their one queue to the retired contract's topic,
+// inside AddBrokerMessaging's consumer callback:
 x.RegisterIntegrationEventConsumer<ProductVariantChangedV2>();       // the current contract
 x.RegisterUpcastedIntegrationEventConsumer<ProductVariantChanged>(); // the old one, draining
 ```
@@ -185,7 +189,7 @@ ADR-010 is candid that the field is a signal, not a complete mechanism.
   member, or a new event, fails the build until someone versions the event and updates the snapshot in
   the same commit; ADC, Store and Helpdesk each subclass it, while Common does not freeze its own event.
   And the reshape itself has framework support in the registration extension point (ADR-090): a typed
-  `IEventUpcaster<TSource, TTarget>`, `AddEventUpcaster<...>()`, a chaining registry that preserves the envelope, a draining broker consumer for the retired queue, and two fitness
+  `IEventUpcaster<TSource, TTarget>`, `AddEventUpcaster<...>()`, a chaining registry that preserves the envelope, a draining broker consumer for the retired contract's topic, and two fitness
   functions that reject two upcasters claiming one source contract or a target that does not raise
   `SchemaVersion`. Two gaps stay open and are worth naming: the framework itself still ships no V2 event
   of its own (its one concrete integration event stays at version 1, so the first real consumer
@@ -211,8 +215,9 @@ ADR-010 is candid that the field is a signal, not a complete mechanism.
   property means you read the version off the concrete type or the JSON, you do not mutate it per
   instance. That is intentional (a version is a property of the type, not of an individual message), but
   it means the upcaster reads the declared type, not a settable field. That is literally how the shipped
-  registry works: it indexes upcasters and walks chains by the declared .NET type, which is what both
-  transport bindings already key on.
+  registry works: it indexes upcasters and walks chains by the declared .NET type, and both transports
+  resolve a message back to that type before dispatch (the outbox from its stored identity, the broker
+  from its wire name).
 
 None of these are reasons to skip the field. They are the reasons the field is necessary but not
 sufficient, and the discipline is the rest of the answer.
@@ -226,8 +231,9 @@ The policy ports to any event-driven system with independently deployed consumer
 2. **Treat additive-and-optional as the only in-place change you are allowed to make.** New nullable
    field with a default: fine. Anything else is breaking.
 3. **For breaking changes, publish a new type and upcast, then drain and retire the old one.** Never
-   edit a shape that a deployed reader still expects. The broker binds by type; use that to get a
-   compatibility window instead of a cliff.
+   edit a shape that a deployed reader still expects. Give the new type its own identity on the wire
+   (its own name, and so its own topic or routing key); use that to get a compatibility window instead
+   of a cliff.
 4. **Pair it with at-least-once delivery and idempotent consumers.** Versioning answers "can I
    understand this?"; the outbox and idempotency answer "did I get it, exactly once in effect?" You need
    both.
@@ -254,14 +260,44 @@ policy, or `dotnet add package MMCA.Common.API` and try it.*
 
 *Tags: .NET, C Sharp, Software Architecture, Event-Driven Architecture, Microservices*
 
-*Notes: 2026-10-29 refresh, re-verified at MMCA.Common v1.265.1 (`MMCA.Common/FACTS.md:14`) against the
+*Notes: 2026-11-25 refresh, re-verified 2026-11-25 against MMCA.Common v1.319.0 (`MMCA.Common/FACTS.md:14`)
+for the same-day `/update-medium` audit. Infrastructure paths in this entry are relative to
+`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/`. Changed this run, because MassTransit is out of the
+framework (ADR-118 Amendment (2026-11-23), `Website/docs-src/adr/118-message-transport-library-policy.md:494`)
+and the broker leg is framework code: (1) the broker key is the wire name, the kebab-cased `[EventName]`
+identity or the CLR full name (`Messaging/Broker/BrokerNaming.cs:25-29`), carried in the `mmca-event-name`
+header (`Messaging/Broker/BrokerHeaders.cs:11`) and published on topic `{namespace}-{eventName}`
+(`Messaging/Broker/BrokerTopology.cs:55`, `Messaging/Broker/BrokerNaming.cs:36-41`); (2) the broker body is
+System.Text.Json (`Messaging/BrokerMessageBus.cs:83`, read back at
+`Messaging/Consumers/BrokerReceivePipeline.cs:132`) with `BrokerWire.JsonOptions` setting only
+`ReferenceHandler.IgnoreCycles` (`Messaging/BrokerWire.cs:34-36`), the same as the outbox options
+(`Persistence/Outbox/OutboxMessage.cs:19`); (3) the "MassTransit-v8 pin" analogy becomes the ban fact
+`MassTransit_MustNotBeReferenced`
+(`MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Bases/Governance/DependencyVersionTestsBase.cs:13-18`);
+(4) "binds by type" becomes routing by the declared contract name, a new type taking a new `[EventName]`
+and so a new topic (`Messaging/Consumers/BrokerConsumerBuilder.cs:49`, `:60`); (5) the retired-queue wording
+becomes one queue per host, with `RegisterUpcastedIntegrationEventConsumer<TEvent>` adding a subscription
+that binds the retired contract's topic to it (`Messaging/Broker/IBrokerConsumerBuilder.cs:6-10`, `:40`,
+implemented at `Messaging/Consumers/BrokerConsumerBuilder.cs:25`), and the `x.Register...` calls in the
+sample still match the `AddBrokerMessaging(IConfiguration, Action<IBrokerConsumerBuilder>?)` callback
+(`DependencyInjection.Messaging.cs:63-65`); (6) the trade-off phrase "which is what both transport bindings
+already key on" becomes "both transports resolve a message back to that type": the registry indexes by
+`SourceType` (`MMCA.Common/Source/Core/MMCA.Common.Application/Services/EventUpcasterRegistry.cs:38`, `:71`,
+chain walk `:110`), the outbox stores `EventNameResolver.GetStorageName`
+(`Persistence/Outbox/Processing/EventNameResolver.cs:47-49`) and resolves it with `Type.GetType` then
+`FindTypeByDeclaredName` (`Persistence/Outbox/OutboxMessage.cs:229`), and the broker deserializes into the
+subscription's CLR type (`Messaging/Consumers/BrokerReceivePipeline.cs:132`); (7) the "Apply this" step 3
+states the same rule without the type-binding claim. All three consumer trees pin
+`MMCA.Common.Testing.Architecture` `1.319.0` (`MMCA.ADC/Directory.Packages.props:194`,
+`MMCA.Store/Directory.Packages.props:49`, `MMCA.Helpdesk/Directory.Packages.props:96`). The header blockquote
+is unchanged. Moved anchors in the earlier entries below were re-read this run and corrected in place.
+Earlier entry: 2026-10-29 refresh, re-verified at MMCA.Common 1.265.1 against the
 same-day `/update-medium` audit; anchors this entry touches were re-read at their current location and
 corrected in place. Changed this run: the `[EventName]` trade-off sentence says "in Common and in every
 consumer tree", because the MMCA.ECommerce sample is retired and all three consumer trees (ADC, Store,
 Helpdesk) resolve the current rule set (ADR-010 Status, Updated 2026-10-28,
 `Website/docs-src/adr/010-integration-event-schema-versioning.md:4`), each pinning
-`MMCA.Common.Testing.Architecture` `1.265.1` (`MMCA.ADC/Directory.Packages.props:140`,
-`MMCA.Store/Directory.Packages.props:23`, `MMCA.Helpdesk/Directory.Packages.props:95`). The body's "four
+`MMCA.Common.Testing.Architecture` `1.265.1` at that run (the current `1.319.0` pins are in the 2026-11-25 entry above). The body's "four
 points" enforcement count (Common plus three consumer trees) matches ADR-010's trade-off (`:66-67`); the
 2026-10-28 body edit that set it to four was not recorded in this ledger until now, and the 2026-10-22
 entry's "five points" wording below is superseded. The `AddEventUpcaster` code sample is illustrative: it
@@ -309,7 +345,7 @@ the Shared-layer reason
 (`MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.Shared/Products/IntegrationEvents/ProductChangeState.cs:7-12,15-28`),
 the purity rule is `IntegrationEventPayloadsAreDomainFree`
 (`MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Rules/Contracts/ArchitectureRules.IntegrationEventPurity.cs:56`,
-the `.Domain` assembly test at `:152`), and the frozen line is
+the `.Domain` assembly test `IsDomainAssembly` at `:151`), and the frozen line is
 `MMCA.Store/Tests/Architecture/MMCA.Store.Architecture.Tests/Contracts/IntegrationEventContractTests.cs:12`. The
 additive-versus-breaking enum rule is ADR-083's own trade-off (`:214-216`); "no fitness rule names
 `EntityChangedEvent`" is ADR-083's Decision (`:130-151`), consistent with the search above finding no
@@ -317,9 +353,9 @@ additive-versus-breaking enum rule is ADR-083's own trade-off (`:214-216`); "no 
 verified at MMCA.Common v1.233.0 (Common `main` at v1.233.0-4-g55e427b3) against the same-day audit
 (`Docs/Planning/Quality/medium-apply-2026-10-08/15-event-schema-versioning.json`). Changed this run: the
 "solely by its type string" sentence is replaced by the stored identity, because `EventType` holds
-`EventNameResolver.GetStorageName(type)` (`OutboxMessage.cs:148`, documented at `:35-40`), the `[EventName]`
+`EventNameResolver.GetStorageName(type)` (`OutboxMessage.cs:157`, documented at `:35-40`), the `[EventName]`
 identity when declared (Commons own event declares one, `OutputCacheEvictionRequested.cs:28`) and the
-assembly-qualified name otherwise, resolved CLR name first then declared name (`ResolveEventType` at `:199`, the fallback at `:209`); ADR-010s Revision
+assembly-qualified name otherwise, resolved CLR name first then declared name (`ResolveEventType` at `:209`, the fallback at `:229`); ADR-010s Revision
 (2026-10-06) keeps its own "type string" Context as decision-time framing
 (`Website/docs-src/adr/010-integration-event-schema-versioning.md:182`, in the Revision at `:174-186`). The first trade-off now names
 the frozen wire-contract snapshot gate
@@ -336,7 +372,7 @@ the 2026-10-02 run re-verified the article against MMCA.Common `main` at v1.221.
 location. Body corrections this run: the outbox payload key is `"SchemaVersion":1`, not camelCase, because
 the outbox `SerializerOptions` set only `ReferenceHandler.IgnoreCycles` and no naming policy
 (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/OutboxMessage.cs:17-20`, with the
-payload serialized at line 149), matching ADR-010's Rationale
+payload serialized at line 158), matching ADR-010's Rationale
 (`Website/docs-src/adr/010-integration-event-schema-versioning.md:45`) and its Revision (2026-10-01)
 (lines 162-172); and the "one substantive gap the scorecard names under section 6" sentence is replaced, because
 the current Common section 6 row (`Website/docs-src/governance/common-ArchitectureScorecard.md:70`) cites
@@ -358,23 +394,23 @@ instance after every hop (`PreserveEnvelope`, lines 169-179). Registration is
 `AddEventUpcaster<TSource, TTarget, TUpcaster>()`
 (`MMCA.Common/Source/Core/MMCA.Common.Application/DependencyInjection.Extensibility.cs:81`), a singleton
 added through `TryAddEnumerable` (line 86), with the registry itself added by `TryAddSingleton` at
-`MMCA.Common/Source/Core/MMCA.Common.Application/DependencyInjection.cs:40`. Both delivery paths consult
+`MMCA.Common/Source/Core/MMCA.Common.Application/DependencyInjection.cs:44`. Both delivery paths consult
 it: `DomainEventDispatcher` upcasts the integration branch to its terminal contract before selecting
 handlers (`MMCA.Common/Source/Core/MMCA.Common.Application/Services/DomainEventDispatcher.cs:62`) while
-the `IDomainEventHandler<T>` branch is deliberately untouched (line 55), and a broker host binds a
-retired queue with `RegisterUpcastedIntegrationEventConsumer<TEvent>`
-(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Messaging/Consumers/IntegrationEventConsumerExtensions.cs:123`)
+the `IDomainEventHandler<T>` branch is deliberately untouched (line 55), and a broker host subscribes its one queue to a
+retired contract with `RegisterUpcastedIntegrationEventConsumer<TEvent>`
+(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Messaging/Broker/IBrokerConsumerBuilder.cs:40`, implemented at `Messaging/Consumers/BrokerConsumerBuilder.cs:25`)
 onto `UpcastingIntegrationEventConsumer<TEvent>`
-(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Messaging/Consumers/UpcastingIntegrationEventConsumer.cs:32`),
-which dedups on the original `MessageId` before any upcasting (lines 70-84: the id is read at line 72 and
-`IInboxStore.TryBeginAsync` runs at line 80). Misconfiguration fails host start:
+(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Messaging/Consumers/UpcastingIntegrationEventConsumer.cs:29`),
+which dedups on the original `MessageId` before any upcasting (lines 68-82: the id is read at line 68 and
+`IInboxStore.TryBeginAsync` runs at line 76, ahead of the upcaster check at line 82). Misconfiguration fails host start:
 `EventUpcasterStartupValidator`
 (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Messaging/Consumers/EventUpcasterStartupValidator.cs:20`)
 resolves the registry as an `IHostedService`, added through `TryAddEnumerable` at
-`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:207-208`. The two upcaster
+`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:230-231`. The two upcaster
 fitness functions are `EventUpcastersHaveUniqueSourceTypes` and `EventUpcastersIncreaseSchemaVersion`
-(`MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Rules/Contracts/ArchitectureRules.Upcasters.cs:12`
-and `:28`), surfaced as two facts on `EventConventionTestsBase`
+(`MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Rules/Contracts/ArchitectureRules.Upcasters.cs:14`
+and `:36`), surfaced as two facts on `EventConventionTestsBase`
 (`MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Bases/Contracts/EventConventionTestsBase.cs:27`
 and `:30`), so every consumer tree inherits them with no edit. ADR-090 records the decision: its Status
 line ties it to ADR-010's named follow-up
@@ -408,13 +444,13 @@ gates a real event in Common's own build; the rule body
 `ArchitectureRules.IntegrationEventsDeclareSchemaVersion`
 (`MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Rules/Contracts/ArchitectureRules.Events.cs:6`);
 outbox `EventType`-keyed JSON serialization (`OutboxMessage.FromDomainEvent`,
-`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/OutboxMessage.cs:140`, with
-`EventType` set from `EventNameResolver.GetStorageName` at line 148); and enforcement at four points,
+`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/OutboxMessage.cs:149`, with
+`EventType` set from `EventNameResolver.GetStorageName` at line 157); and enforcement at four points,
 Common itself plus ADC
 (`MMCA.ADC/Tests/Architecture/MMCA.ADC.Architecture.Tests/Contracts/EventConventionTests.cs:3`), Store
 (`MMCA.Store/Tests/Architecture/MMCA.Store.Architecture.Tests/Contracts/EventConventionTests.cs:3`),
 Helpdesk (`MMCA.Helpdesk/Tests/Architecture/MMCA.Helpdesk.Architecture.Tests/ArchitectureTests.cs:38`,
-gating `TicketOpenedIntegrationEvent`), all three trees on `1.265.1` and inheriting the `[EventName]` rule
+gating `TicketOpenedIntegrationEvent`), all three trees on `1.319.0` and inheriting the `[EventName]` rule
 and the two upcaster facts (`Website/docs-src/adr/010-integration-event-schema-versioning.md:4`, `:66-67`).*
 
 - Full series index: https://ivanball.github.io/writing.html

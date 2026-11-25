@@ -95,7 +95,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 54 articles</summary>
+        <summary>All 57 articles</summary>
         <nav class="doc-nav" aria-label="The MMCA.Common series">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -152,7 +152,10 @@
         <li><a href="durable-internal-commands.html">51 · Four ways to do work later</a></li>
         <li><a href="identity-completions.html">52 · Finishing identity</a></li>
         <li><a href="cloud-neutral-vendor-adapters.html">53 · One framework, three clouds</a></li>
-        <li><a href="series-index.html">54 · The series index</a></li>
+        <li><a href="borrowed-and-machine-identities.html">54 · Borrowed and machine identities</a></li>
+        <li><a href="app-as-mcp-server.html">55 · Your app as an MCP server</a></li>
+        <li><a href="outbound-webhooks.html">56 · Sending webhooks without opening a door</a></li>
+        <li><a href="series-index.html">57 · The series index</a></li>
           </ol>
         </nav>
       </details>
@@ -239,13 +242,20 @@
           new <code>DataSource</code> enum member, its sealed context class, the provider marker interface the engine-aware
           base implements, one strategy class, and one line in the registry, plus the engine&#39;s connection-string
           properties on the settings classes the strategy reads (top-level, per-source and per-tenant). A few
-          places also name every engine&#39;s connection-string key directly: the startup validator that refuses a
-          host with no database, the Aspire health-check registration, and the per-engine AppHost helpers.
+          touch points sit around that core. The startup validator that refuses a host with no database and the
+          per-engine AppHost helpers name every engine&#39;s connection-string key directly. The Aspire
+          health-check registration reads only the SQL Server, PostgreSQL and SQLite keys, so a fifth engine
+          joins it only if it is relational. An engine that migrates gets a design-time entry point beside
+          <code>CreateSqlServer</code>, and each engine so far also has its own thin shim base.
           What keeps the engine <em>value</em> from spreading is a source-scanning fitness test,
-          <code>DataSourceBranchingFitnessTests</code>, which fails the test run on any reference to a concrete engine
-          value or engine context type outside the strategies and a short, reasoned allow-list, and also fails
-          when an allow-list entry goes stale. A new <code>switch</code> over the engine cannot quietly reappear in a call
-          site; a branch on a connection-string key name is outside what it scans.</p>
+          <code>DataSourceBranchingFitnessTests</code>, which fails the test run on any <code>DataSource.&lt;engine&gt;</code> reference, or
+          any <code>is</code> / <code>is not</code> test against an engine context type, outside an allow-list where every file entry
+          carries its reason, and also fails when an allow-list entry goes stale. That list is not short: 29
+          files, the strategies, contexts and shim bases plus settings defaults, the design-time helper and ten
+          call sites that ask for the framework-default engine. The scan is a text pattern with the four engine
+          names written into it, so a fifth engine extends that pattern too. A new <code>switch</code> over the engine
+          value cannot quietly reappear in a call site; a <code>typeof</code>, an <code>as</code> cast or a declaration naming an
+          engine context, and a branch on a connection-string key name, are outside what it scans.</p>
           <p>On top of the engine-aware base sit four <strong>thin shims</strong>: <code>EntityTypeConfigurationSQLServer</code>,
           <code>EntityTypeConfigurationPostgreSQL</code>, <code>EntityTypeConfigurationCosmos</code>, and
           <code>EntityTypeConfigurationSqlite</code>. None of them has a body. Each is the attribute plus a

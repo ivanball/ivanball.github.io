@@ -95,7 +95,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 54 articles</summary>
+        <summary>All 57 articles</summary>
         <nav class="doc-nav" aria-label="The MMCA.Common series">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -152,7 +152,10 @@
         <li><a href="durable-internal-commands.html">51 · Four ways to do work later</a></li>
         <li><a href="identity-completions.html">52 · Finishing identity</a></li>
         <li><a href="cloud-neutral-vendor-adapters.html">53 · One framework, three clouds</a></li>
-        <li><a href="series-index.html">54 · The series index</a></li>
+        <li><a href="borrowed-and-machine-identities.html">54 · Borrowed and machine identities</a></li>
+        <li><a href="app-as-mcp-server.html">55 · Your app as an MCP server</a></li>
+        <li><a href="outbound-webhooks.html">56 · Sending webhooks without opening a door</a></li>
+        <li><a href="series-index.html">57 · The series index</a></li>
           </ol>
         </nav>
       </details>
@@ -199,7 +202,7 @@
           three layers. It is neither MSBuild nor the runtime rule suite: <code>Microsoft.CodeAnalysis.PublicApiAnalyzers</code> runs on
           every published package except <code>MMCA.Common.UI.Maui</code> (excluded by name, because it builds only on the
           Windows MAUI job outside the main solution) against committed baselines (a <code>PublicAPI.Shipped.txt</code> /
-          <code>PublicAPI.Unshipped.txt</code> pair per gated package, twenty-five pairs), so adding or removing a public
+          <code>PublicAPI.Unshipped.txt</code> pair per gated package, twenty-nine pairs), so adding or removing a public
           member fails the compile until the change is declared in that package&#39;s <code>PublicAPI.Unshipped.txt</code> in the
           same pull request; the release step then folds every unshipped file into its shipped baseline. It guards the shipped package surface rather than layer
           flow, which is why the two speeds above are the ones this tutorial teaches.</p>
@@ -207,22 +210,23 @@
           <h2 id="prerequisites">Prerequisites</h2>
           <ul>
           <li>A .NET solution with a layered shape you want to protect. The MMCA layers are
-          API/Grpc -&gt; Infrastructure -&gt; Application -&gt; Domain -&gt; Shared, but the rule library generalizes.</li>
+          API -&gt; Infrastructure -&gt; Application -&gt; Domain -&gt; Shared (UI and Grpc depend on Shared only), but the
+          rule library generalizes.</li>
           <li><strong>Microsoft Testing Platform</strong> as your test runner (MMCA.Common uses it via <code>global.json</code> with
           xUnit v3). The fitness tests run inside the normal <code>dotnet test</code> tier, so they gate CI like any other
           test.</li>
-          <li>The package you are about to install: <strong><code>MMCA.Common.Testing.Architecture</code></strong>, one of the twenty-six
+          <li>The package you are about to install: <strong><code>MMCA.Common.Testing.Architecture</code></strong>, one of the thirty
           packages the framework publishes. Its README row describes it exactly: &quot;<code>IArchitectureMap</code> + reusable
           metadata-based architecture rule library + abstract test bases (consumed by each repo&#39;s <code>*.Architecture.Tests</code>).&quot;</li>
           </ul>
           <p>The key design idea: the rule <em>bodies</em> ship in the package once. You do not copy them. You supply a tiny
           map of your assemblies and subclass the bases, and you inherit roughly the same suite that runs across
-          MMCA.Common, MMCA.Store, MMCA.ADC and MMCA.Helpdesk (160 test methods across 64 abstract <code>*TestsBase</code>
-          classes; the framework&#39;s own build executes 479 of them).</p>
+          MMCA.Common, MMCA.Store, MMCA.ADC and MMCA.Helpdesk (186 test methods across 74 abstract <code>*TestsBase</code>
+          classes; the framework&#39;s own build executes 767 of them).</p>
           <blockquote>
           <p><strong>If you scaffolded with <code>dotnet new mmca-app</code>, steps 1 through 4 are already done.</strong> The generated
           solution ships the architecture-test project, the <code>IArchitectureMap</code>, and the reference app&#39;s set of
-          base subclasses (32 sealed subclasses in the current seed), including the wire-contract
+          base subclasses (46 sealed subclasses in the current seed), including the wire-contract
           freeze, which arrives frozen under your own names and green on the first <code>dotnet test</code>. Read those
           steps anyway to know what you have, then skip to Step 5. If you are retrofitting an existing
           solution, the steps are the work.</p>
@@ -233,7 +237,7 @@
           <pre class="doc-pre" tabindex="0" data-lang="PowerShell"><code class="language-powershell hljs">dotnet add package MMCA.Common.Testing.Architecture</code></pre>
           <p>The package brings its own rule engine (<code>ArchitectureTypes</code>, which reads your compiled assemblies
           through <code>System.Reflection.Metadata</code> and needs no third-party package), the <code>ArchitectureRules</code> rule
-          library, the diagnostic helpers, and the 64 abstract <code>*TestsBase</code> classes. You will not write rule
+          library, the diagnostic helpers, and the 74 abstract <code>*TestsBase</code> classes. You will not write rule
           logic; you will point the rules at your assemblies and subclass the bases.</p>
           <h2 id="step-2-implement-iarchitecturemap-one-anchor-type-per-layer">Step 2: implement <code>IArchitectureMap</code>, one anchor type per layer</h2>
           <p>This is the only real work, and it is small. <code>IArchitectureMap</code> is the single extension point every rule is
@@ -271,7 +275,7 @@
           <h2 id="step-3-subclass-the-test-bases-to-inherit-the-rule-library">Step 3: subclass the test bases to inherit the rule library</h2>
           <p>Now your test classes shrink to thin sealed subclasses that supply the map and inherit the <code>[Fact]</code>s.
           Two of the most valuable bases to start with:</p>
-          <pre class="doc-pre" tabindex="0" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-comment">// Layer-flow rules: 15 facts (13 forbidden edges + 2 map guards) (representative)</span>
+          <pre class="doc-pre" tabindex="0" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-comment">// Layer-flow rules: 18 facts (16 forbidden edges + 2 map guards) (representative)</span>
 <span class="hljs-keyword">public</span> <span class="hljs-keyword">sealed</span> <span class="hljs-keyword">class</span> <span class="hljs-title">LayerDependencyTests</span> : <span class="hljs-title">LayerDependencyTestsBase</span>
 {
     <span class="hljs-keyword">protected</span> <span class="hljs-keyword">override</span> IArchitectureMap Map { <span class="hljs-keyword">get</span>; } = <span class="hljs-keyword">new</span> MyAppArchitectureMap();
@@ -287,10 +291,11 @@
           <li><strong><code>LayerDependencyTestsBase</code></strong> asserts the inward dependency rule across every assembly your map
           declares: Domain must not depend on Application/Infrastructure/API, Application must not depend on
           Infrastructure/API, and so on, with one named <code>[Fact]</code> per forbidden edge. A named test per edge (&quot;UI
-          references Domain&quot;) gives you a precise red instead of an opaque &quot;layering broken.&quot; Thirteen of its
-          fifteen <code>[Fact]</code>s are those edges; the other two assert that your map actually declares every expected
+          references Domain&quot;) gives you a precise red instead of an opaque &quot;layering broken.&quot; Sixteen of its
+          eighteen <code>[Fact]</code>s are those edges; the other two assert that your map actually declares every expected
           layer, and that every module declares its layers, so the edge rules cannot pass vacuously against a
-          map that forgot an assembly.</li>
+          map that forgot an assembly. Grpc is the one optional layer: a map that declares no Grpc assembly
+          satisfies the three Grpc edges vacuously, by design.</li>
           <li><strong><code>DomainPurityTestsBase</code></strong> asserts that Domain and Shared stay free of infrastructure frameworks and
           that Application stays host-agnostic (no EF Core, no ASP.NET Core in Application). It even exposes a
           <code>protected virtual ExtraForbiddenDomainDependencies</code> so your repo can <em>add</em> bans on top of the shared
@@ -298,8 +303,8 @@
           SDK, which the base names only generically in its doc comment as &quot;a payment SDK or a broker client&quot;)
           without editing the package.</li>
           </ul>
-          <p>The other bases cover more ground when you are ready: <code>MicroserviceExtractionTestsBase</code> (no MassTransit,
-          gRPC or Protobuf in Application/Domain/Shared), entity and aggregate conventions (aggregates have no public constructors,
+          <p>The other bases cover more ground when you are ready: <code>MicroserviceExtractionTestsBase</code> (no broker client such as
+          RabbitMQ, Azure Service Bus, Amazon SQS or SNS, and no MassTransit, gRPC or Protobuf in Application/Domain/Shared), entity and aggregate conventions (aggregates have no public constructors,
           a <code>Result</code>-returning <code>Create</code> factory, entities are sealed and live in the Domain layer), concurrency
           awareness, controller conventions, and PII conventions (<code>[Pii]</code> implies <code>IAnonymizable</code>). You opt into
           each by adding a subclass.</p>
@@ -314,8 +319,8 @@ dotnet test <span class="hljs-literal">--project</span> Tests/Architecture/MyApp
           <p>Because they run in the normal tier, a violated invariant fails CI exactly like a failing unit test. One
           operational note: Microsoft Testing Platform fails the build if a test project discovers zero tests, so
           make sure your subclasses are public and actually inherit <code>[Fact]</code>s. The framework&#39;s CI even floors its
-          test steps with <code>--minimum-expected-tests</code> (<code>5000</code> on ADC&#39;s CI run, <code>2650</code> on Store&#39;s CI run, <code>2000</code> on MMCA.Common&#39;s own
-          solution-wide run, <code>40</code> on its Helpdesk canary) so neither an empty suite nor a silently shrunken one can
+          test steps with <code>--minimum-expected-tests</code> (<code>5000</code> on each of ADC&#39;s two framework legs, <code>2650</code> on Store&#39;s CI run, <code>11250</code> on each of
+          MMCA.Common&#39;s own two framework legs, <code>40</code> on its Helpdesk canary) so neither an empty suite nor a silently shrunken one can
           pass. Where a step carries no floor the workflow says why, as ADC&#39;s live-judge step does: every case
           there skips itself without an API key, and a zero-run must not red the deploy.</p>
           <p>Now introduce a violation on purpose to feel the payoff: add a project reference from your Domain project
@@ -331,7 +336,7 @@ dotnet test <span class="hljs-literal">--project</span> Tests/Architecture/MyApp
           <pre class="doc-pre" tabindex="0" data-lang="XML"><code class="language-xml hljs"><span class="hljs-comment">&lt;!-- Imported from Directory.Build.props for each layer project (representative) --&gt;</span>
 <span class="hljs-tag">&lt;<span class="hljs-name">Import</span> <span class="hljs-attr">Project</span>=<span class="hljs-string">&quot;$(MSBuildThisFileDirectory)Source\Build\MMCA.Common.LayerEnforcement.targets&quot;</span>
         <span class="hljs-attr">Condition</span>=<span class="hljs-string">&quot;$(MSBuildProjectDirectory.Contains(&#x27;Source&#x27;)) AND $(MSBuildProjectName.StartsWith(&#x27;MMCA.Common&#x27;))&quot;</span> /&gt;</span></code></pre>
-          <p>The file holds ten targets of the same <code>BeforeTargets=&quot;ResolveProjectReferences&quot;</code> shape, each guarding
+          <p>The file holds fourteen targets of the same <code>BeforeTargets=&quot;ResolveProjectReferences&quot;</code> shape, each guarding
           one reference rule; the layer target is the one to copy first. It inspects each project&#39;s
           <code>ProjectReference</code> set, and fails the build with a descriptive error if a layer references a forbidden
           upstream layer. This is the &quot;two speeds&quot; design from ADR-015: the MSBuild guard catches the common case

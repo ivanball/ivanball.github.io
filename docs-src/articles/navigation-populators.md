@@ -145,7 +145,7 @@ the design.
 - **Extra abstraction for the single-database case.** For a pure single-SQL-Server host where `Include`
   always works, the populator is a layer you do not strictly need. It is mitigated by being free at
   runtime there: the populator is only invoked when the metadata actually reports an unsupported
-  include, and otherwise the `NullNavigationPopulator` no-ops. You pay in concepts, not in cycles.
+  include, and otherwise no populator runs at all. You pay in concepts, not in cycles.
 - **Every entity read through the generic query service needs a populator, even a no-op one.** Such
   entities that need no manual loading still require `NullNavigationPopulator<TEntity>` (or an empty
   declarative one) so the pipeline has something to call. That is a registration line per entity;
@@ -202,22 +202,33 @@ pattern, or `dotnet add package MMCA.Common.API` and try it.*
 `ChildNavigationDescriptor`/`FKNavigationDescriptor`, `CrossDataSourceDegradeConvention`,
 `EventNavigationPopulator` (ADC Conference). Trade-offs drawn from ADR-002 and
 `group-11-navigation-populators.md`, stated as trade-offs, not hidden.
-Re-verified 2026-10-29 against MMCA.Common v1.265.1 (`MMCA.Common/FACTS.md:14`); paths under
+Re-verified 2026-11-25 against MMCA.Common v1.319.0 (`MMCA.Common/FACTS.md:14`); paths under
 `Source/` are relative to `MMCA.Common/`.
-**2026-10-29 run (v1.265.1):** four corrections. (1) The trade-offs lead no longer credits all four
+**2026-11-25 run (v1.319.0):** one body correction and four anchor moves. (1) The single-database
+trade-off said the `NullNavigationPopulator` no-ops when no include is unsupported; in fact no
+populator of any type is invoked then: the pipeline takes the populator path only when
+`UnsupportedIncludes.Count != 0` (`Source/Core/MMCA.Common.Application/Services/Query/EntityQueryPipeline.cs:53-56`)
+and calls the populator only for a non-empty page (`:199-202`), so the bullet reads "otherwise no
+populator runs at all". (2) Anchors moved, corrected in the entries below: cross-source degrade
+convention `MMCA.Common/AGENTS.md:118` -> `:136`; one database per ADC host `MMCA.ADC/AGENTS.md:64` ->
+`:76`; `LivePollNavigationPopulator` registration `DependencyInjection.cs:61` -> `:67`; the
+no-populator comment for PointsEntry/LeaderboardOptIn `:81-83` -> `:87-89`. Every other anchor below
+re-read this run and unchanged (`UnitOfWork.cs:68,75`, `EntityQueryService.cs:37,94`,
+`DeclarativeNavigationPopulator.cs:14-16,27-34`, `NullNavigationPopulator.cs:19`, ADR-002:25-27,32).
+**2026-10-29 run:** four corrections. (1) The trade-offs lead no longer credits all four
 bullets to ADR-002: its Trade-offs section names only the extra abstraction and the no-op populator
 (`Website/docs-src/adr/002-navigation-populators.md:25-27`); the cached reflection is from
 `group-11-navigation-populators.md:54-56,358-361`. (2) "Add one descriptor" is scoped to an entity that
 already has a declarative populator: the descriptor list is a constructor parameter
 (`DeclarativeNavigationPopulator.cs:14-16`), so a Null Object entity needs a subclass
 (`EventNavigationPopulator.cs:11-13`) and a replacing registration (example
-`MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Application/DependencyInjection.cs:61`). (3) The
+`MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Application/DependencyInjection.cs:67`). (3) The
 extraction story is scoped to a data-source split the host can still reach: children load through
 `GetReadRepository`, which opens a context for the child's `DataSourceKey`
 (`Source/Core/MMCA.Common.Infrastructure/Persistence/UnitOfWork.cs:75-77`), while an ADC service host
-declares exactly one database (`MMCA.ADC/AGENTS.md:64`); subtitle, extraction section and recap
+declares exactly one database (`MMCA.ADC/AGENTS.md:76`); subtitle, extraction section and recap
 reworded to match. (4) Header source moved from `MMCA.Common/CLAUDE.md`, which now only imports
-`AGENTS.md`, to `MMCA.Common/AGENTS.md:118`; `EventNavigationPopulator` anchor widened to `11-36`.
+`AGENTS.md`, to `MMCA.Common/AGENTS.md:136`; `EventNavigationPopulator` anchor widened to `11-36`.
 **2026-10-22 run (v1.250.0):** four body corrections. (1) The "30 to 40 lines per entity" figure is
 gone, matching ADR-002's 2026-10-06 revision that drops it as overstated
 (`Website/docs-src/adr/002-navigation-populators.md:32`). (2) `HaveIncludeSupport` takes entity full
@@ -226,7 +237,7 @@ is supported only for the same `DataSourceKey` on a relational engine, false whe
 unregistered (`DataSourceService.cs:31-32,35-38`); co-located Cosmos navigations are unsupported
 (ADR-002:6,9). (3) The populator requirement is scoped to entities read through `EntityQueryService`
 (ctor `EntityQueryService.cs:37`, null guard `:94`); ADC registers none for PointsEntry,
-LeaderboardOptIn, CheckIn and AttendeeBadge (`MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Application/DependencyInjection.cs:81-83`).
+LeaderboardOptIn, CheckIn and AttendeeBadge (`MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Application/DependencyInjection.cs:87-89`).
 (4) "picks it up automatically" became a precise account: the degrade convention and the metadata
 provider each read the registry, the pipeline routes unsupported includes to the populator
 (`EntityQueryPipeline.cs:53-54`), and a declarative populator loads only declared unsupported
@@ -234,8 +245,8 @@ properties (`DeclarativeNavigationPopulator.cs:30-37`) while the Null Object loa
 (`NullNavigationPopulator.cs:19`).
 Anchors confirmed this run: `NavigationAttribute.cs:10` (`IsCollection` `:16`),
 `NavigationMetadataProvider.cs:20` (cache keyed by `(Type, NavigationType)` `:28`),
-`EntityQueryPipeline.cs:132-142` (Path 1, `AsSplitQuery` on a child collection `:141-142`),
-`:176-201` (Path 2 sort, page, materialize, then populate), `NavigationLoader.cs:21` (expression-tree
+`EntityQueryPipeline.cs:132-143` (Path 1, `AsSplitQuery` on a child collection `:141-142`),
+`:176-202` (Path 2 sort, page, materialize, then populate), `NavigationLoader.cs:21` (expression-tree
 `Contains` predicate `:71-75,144-148`, `GroupBy` `:89,162`, compiled-selector cache `:27,178-180`),
 `INavigationPopulator.cs:9`, `NullNavigationPopulator.cs:11`, `DeclarativeNavigationPopulator.cs:14`,
 `ChildNavigationDescriptor.cs:15`, `FKNavigationDescriptor.cs:14`,

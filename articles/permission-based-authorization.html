@@ -95,7 +95,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 54 articles</summary>
+        <summary>All 57 articles</summary>
         <nav class="doc-nav" aria-label="The MMCA.Common series">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -152,7 +152,10 @@
         <li><a href="durable-internal-commands.html">51 · Four ways to do work later</a></li>
         <li><a href="identity-completions.html">52 · Finishing identity</a></li>
         <li><a href="cloud-neutral-vendor-adapters.html">53 · One framework, three clouds</a></li>
-        <li><a href="series-index.html">54 · The series index</a></li>
+        <li><a href="borrowed-and-machine-identities.html">54 · Borrowed and machine identities</a></li>
+        <li><a href="app-as-mcp-server.html">55 · Your app as an MCP server</a></li>
+        <li><a href="outbound-webhooks.html">56 · Sending webhooks without opening a door</a></li>
+        <li><a href="series-index.html">57 · The series index</a></li>
           </ol>
         </nav>
       </details>
@@ -207,9 +210,13 @@
           class is also the host&#39;s <code>IPermissionCatalog</code>, exposing the closed set of roles and permissions the code
           compiled in, so an administration screen enumerates the compiled map itself rather than a hand-kept second
           list. It is the one place that knows the role-to-capability mapping, so no API endpoint&#39;s authorization
-          attribute names a role: no controller in either app carries <code>[Authorize(Roles = ...)]</code>. The routable
-          Blazor pages are a separate layer that the registry does not govern: ADC&#39;s 37 admin pages carry
-          <code>[Authorize(Roles = RoleNames.Organizer)]</code> and Store&#39;s admin pages <code>[Authorize(Roles = RoleNames.Admin)]</code>.
+          attribute names a role: no controller in either app carries <code>[Authorize(Roles = ...)]</code>. ADC&#39;s 28
+          conference management pages state a capability as well: they carry
+          <code>[HasPagePermission(ConferencePermissions.X)]</code> from <code>MMCA.Common.UI</code>, a claim-only check of the same
+          capability their API enforces. The remaining routable pages are a separate layer that the registry does
+          not govern: ADC&#39;s 14 other organizer pages (feature flags, the two feedback pages, check-in, attendance,
+          points, tickets, and the user, role, support-access and machine-client administration) carry
+          <code>[Authorize(Roles = RoleNames.Organizer)]</code>, and Store&#39;s 19 admin pages <code>[Authorize(Roles = RoleNames.Admin)]</code>.
           (Endpoint code may still read a role for a business rule rather than a gate: ADC&#39;s
           live-poll, question and bookmark controllers pass an organizer flag from <code>IsInRole(RoleNames.Organizer)</code>
           to their handlers for the organizer bypass.)</p>
@@ -225,7 +232,8 @@ services.AddPermissions(ConferencePermissionGrants.Apply);
 <span class="hljs-comment">// ConferencePermissionGrants.Apply: the entire role-to-capability map for the module.</span>
 <span class="hljs-function"><span class="hljs-keyword">public</span> <span class="hljs-keyword">static</span> <span class="hljs-keyword">void</span> <span class="hljs-title">Apply</span>(<span class="hljs-params">PermissionRegistryBuilder permissions</span>)</span>
 {
-    permissions.Grant(RoleNames.Organizer, [.. ConferencePermissions.All]);
+    <span class="hljs-comment">// Organizer holds every Conference capability, plus the framework&#x27;s feature-flag capability.</span>
+    permissions.Grant(RoleNames.Organizer, [.. ConferencePermissions.All, AdministrationPermissions.ManageFeatures]);
 
     <span class="hljs-comment">// Content editors get ONLY the catalog-curation subset: no event structure, rooms,</span>
     <span class="hljs-comment">// questions, session selection, or speaker-account linking. The distinction role checks</span>
@@ -241,28 +249,33 @@ services.AddPermissions(ConferencePermissionGrants.Apply);
           the <code>DefaultAuthorizationPolicyProvider</code>, so a host that hand-registers a named policy still gets it.</p>
           <p><strong>The handler accepts two grant sources.</strong> <code>PermissionAuthorizationHandler</code> succeeds when the principal
           either carries the permission directly as a claim, or holds a role the registry grants it.</p>
-          <pre class="doc-pre" tabindex="0" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-comment">// PermissionAuthorizationHandler.HandleRequirementAsync: two ways to satisfy a capability.</span>
-<span class="hljs-keyword">if</span> (context.User.Identity?.IsAuthenticated != <span class="hljs-literal">true</span>)
-{
-    <span class="hljs-keyword">return</span> Task.CompletedTask;
-}
+          <pre class="doc-pre" tabindex="0" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-comment">// PermissionAuthorizationHandler: one evaluation, two ways to satisfy a capability.</span>
+<span class="hljs-function"><span class="hljs-keyword">internal</span> <span class="hljs-keyword">static</span> <span class="hljs-built_in">bool</span> <span class="hljs-title">Holds</span>(<span class="hljs-params">ClaimsPrincipal user, IPermissionRegistry? permissionRegistry, <span class="hljs-built_in">string</span> permission</span>)</span> =&gt;
+    user.Identity?.IsAuthenticated == <span class="hljs-literal">true</span>
+    &amp;&amp; (user.HasPermissionClaim(permission)
+        || permissionRegistry?.HasPermission(user.GetRoleValues(), permission) == <span class="hljs-literal">true</span>);
 
-<span class="hljs-keyword">if</span> (context.User.HasPermissionClaim(requirement.Permission)
-    || permissionRegistry.HasPermission(context.User.GetRoleValues(), requirement.Permission))
+<span class="hljs-comment">// HandleRequirementAsync</span>
+<span class="hljs-keyword">if</span> (Holds(context.User, permissionRegistry, requirement.Permission))
 {
     context.Succeed(requirement);
 }</code></pre>
           <p>Both reads are framework-wide definitions rather than local helpers. <code>GetRoleValues()</code> gathers roles from
           <code>ClaimTypes.Role</code>, <code>&quot;role&quot;</code>, and <code>&quot;roles&quot;</code>, so it works whether or not inbound-claim mapping is on; the
           CQRS gate reads the same three claim types through <code>ICurrentUserService.Roles</code>. <code>HasPermissionClaim(...)</code>
-          is the single definition of &quot;the token itself grants this&quot;, and both gates call it. The framework&#39;s
+          is the single definition of &quot;the token itself grants this&quot;: the HTTP handler and the CQRS gate call it
+          beside the registry check, and the Blazor page policy and navigation filter call it alone, because a UI
+          head holds no registry. The framework&#39;s
           <code>TokenService</code> writes that claim at sign-in: every access token carries one <code>permission</code> claim for each
           permission the minting host&#39;s registry grants the account&#39;s role. Both apps&#39; Identity hosts apply every
           module&#39;s grant map before minting (<code>AddTokenPermissionGrants()</code>), so a service that does not own a
           module&#39;s grant map and the CQRS gate in that service both read the capability from the token rather than
-          from a registry they do not hold. The Blazor navigation reads it for one entry: the framework&#39;s
-          push-notifications link is gated on <code>notifications:manage</code>, while the apps&#39; own admin entries gate on a
-          role (<code>Organizer</code> in ADC, <code>Admin</code> in Store).</p>
+          from a registry they do not hold. The Blazor navigation reads it on both sides of a menu click: ADC&#39;s ten
+          conference management entries carry <code>RequiredPermission</code> with the same capability their pages require,
+          the framework&#39;s push-notifications link is gated on <code>notifications:manage</code>, and the feature-flag,
+          support-access and machine-client entries state a capability beside their role. ADC&#39;s remaining organizer
+          entries (check-in, attendance, points, tickets, users, roles) gate on the <code>Organizer</code> role, and Store&#39;s
+          admin entries on <code>Admin</code>.</p>
           <p><strong>The same registry gates use cases, not just routes.</strong> A command or query that implements
           <code>IRequiresPermission</code> is checked by <code>AuthorizationGate.Evaluate</code> inside the CQRS decorator pipeline,
           against that same registry and that same claim read, returning a <code>Forbidden</code> error rather than throwing.
@@ -280,12 +293,13 @@ services.AddPermissions(ConferencePermissionGrants.Apply);
           <p>Adoption is a per-module decision, and every module in both real apps has made it. ADC&#39;s Conference module
           defines twelve capabilities, including the seven-member <code>ContentManagement</code> subset granted to its own
           <code>ContentEditor</code> role (<code>conference:speakers:link</code> stays Organizer-only, because linking a speaker to a
-          user account confers a speaker identity); its Engagement module defines three (among them <code>engagement:live:manage</code>, granted to
+          user account confers a speaker identity); its Engagement module defines four (among them <code>engagement:live:manage</code>, granted to
           <code>Organizer</code>, gating the organizer&#39;s event-wide live-poll list, while poll authoring is checked in the
           handlers so a session&#39;s assigned speakers can run their own polls); its Notification module grants the
-          framework&#39;s own <code>notifications:manage</code> to <code>Organizer</code>; and its Identity module defines three, two of which
-          alias the framework-owned <code>users:manage</code> and <code>roles:manage</code> from <code>AdministrationPermissions</code> so the shared
-          administration controller bases can carry their own <code>[HasPermission]</code>. MMCA.Store defines eleven of its own
+          framework&#39;s own <code>notifications:manage</code> to <code>Organizer</code>; and its Identity module defines five, four of which
+          alias framework-owned capabilities from <code>AdministrationPermissions</code> (<code>ManageUsers</code>, <code>ManageRoles</code>,
+          <code>ViewAsUsers</code> and <code>ManageClients</code>) so the shared administration controller bases can carry their own
+          <code>[HasPermission]</code>. MMCA.Store defines eleven of its own
           across Catalog, Sales and Identity, each module granting its whole set to its own <code>Admin</code> role from its own
           <code>AddPermissions(...)</code> call. Both apps&#39; Identity hosts also call <code>AddStoredPermissionGrants(...)</code>, which
           decorates <code>IPermissionRegistry</code> with a <code>LayeredPermissionRegistry</code> (the compiled grants plus stored ones,
@@ -301,19 +315,24 @@ services.AddPermissions(ConferencePermissionGrants.Apply);
           attribute conditions. &quot;A customer may read only their own order&quot; is a different concern (an
           <code>OwnerOrAdminFilter</code>), and a route that needs both composes the two. If most of your rules are
           per-resource ownership, a capability registry is not the tool you are missing.</li>
-          <li><strong>A grant is only as good as the person who wrote it.</strong> A missing or wrong <code>Grant(...)</code> silently denies
-          or over-permits. The framework unit tests plus each app&#39;s own grant tests are the mitigation, but the
-          mapping is declared in code and is <em>not</em> enforced by a fitness rule, unlike the layer dependencies
-          elsewhere in this framework. That is an honest asymmetry with the project&#39;s own &quot;make it a build
-          failure&quot; thesis.</li>
+          <li><strong>A grant is only as good as the person who wrote it.</strong> A missing or wrong <code>Grant(...)</code> denies or
+          over-permits. Half of that is a build failure: the framework fitness rule behind
+          <code>PermissionCoverageTestsBase</code>, which both apps subclass, fails the build when any permission a
+          controller, page, MCP tool or menu entry names is granted to no role, so a gate nobody can pass never
+          ships. The other half is not: the rule checks only that direction, so an over-permitting grant, or a
+          grant to the wrong role, still compiles. The framework unit tests plus each app&#39;s own grant tests are
+          the mitigation there.</li>
           <li><strong>Opt-in per endpoint.</strong> A route that carries a plain <code>[Authorize]</code> states no capability and gets none
           of the benefit. This is the same audit-the-inventory caveat that soft-delete erasure and the
           <code>[Idempotent]</code> attribute carry: the mechanism is only as complete as your coverage of it.</li>
-          <li><strong>It governs the API, not the pages.</strong> In ADC the content-editor grant holds at the API: a
-          <code>ContentEditor</code> may call the session, speaker, category, sponsor, partner and activity endpoints. The
-          matching admin pages and their navigation entries are Organizer-only by role, and no page names
-          <code>ContentEditor</code>, so in the shipped UI a content editor has no admin screen for that work. Opening one
-          is a page-attribute and nav-entry edit, which is exactly the sweep the API layer avoids.</li>
+          <li><strong>Pages read the claim, not the registry.</strong> In ADC the content-editor grant holds at both layers: a
+          <code>ContentEditor</code> may call the session, speaker, category, sponsor, partner and activity endpoints, and
+          the matching management pages and navigation entries gate on the same capabilities, so it sees and opens
+          exactly the catalog screens its grant covers. The page check is claim-only, though, so it suits a host
+          whose token issuer stamps permission claims; a role-only token never passes it. And the pages still
+          gated on a role (ADC&#39;s conference-day, feedback and user and role administration pages, and every Store
+          admin page) take a page-attribute and nav-entry edit to open to a new narrow role, which is exactly the
+          sweep the API layer avoids.</li>
           <li><strong>Compiled grants are fixed at startup.</strong> The registry is built once on first resolve, so an
           <code>AddPermissions(...)</code> call after it has materialized is not seen, which is the price of the immutable
           frozen map. Grants an operator can edit without a deploy are a separate layer on top of this one, and

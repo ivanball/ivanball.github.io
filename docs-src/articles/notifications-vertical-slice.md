@@ -89,11 +89,15 @@ by POSTing to `NotificationsController`. The handler runs in a deliberate order:
    failure `notification.MarkAsFailed()`. This SignalR leg alone owns the audit status.
 6. **Deliver OS-level native push, best-effort (ADR-044).** The handler then calls
    `INativePushSender.SendToUsersAsync` inside its own non-fatal try/catch, reaching devices the hub
-   cannot (app backgrounded or killed). This leg is fire-and-forget: a failure is logged via
-   `LogNativePushFailed` and does not touch the audit status the SignalR leg already decided. The
-   default `NullNativePushSender` keeps it a no-op until a delivery adapter is registered and configured.
-7. **Save and return the DTO.** The handler saves the observed status a third time, then maps the
-   saved aggregate and returns `201 Created`.
+   cannot (app backgrounded or killed). The sender answers with a `NativePushOutcome`, and the handler
+   records it on the audit row through `notification.RecordNativePushOutcome(...)`: sent and failed
+   counts per platform (Android and Apple) plus the unit the provider counts in, where a null pair
+   means that platform was not attempted. A failure, whether reported in the outcome or thrown, is
+   logged as a Warning via `LogNativePushFailed`. None of this touches the audit status the SignalR leg
+   already decided. The default `NullNativePushSender` keeps the leg a no-op until a delivery adapter is
+   registered and configured.
+7. **Save and return the DTO.** The handler saves a third time, recording the observed status and the
+   native outcome, then maps the saved aggregate and returns `201 Created`.
 
 Those three saves are one unit of work, not three. `SendPushNotificationCommand` declares
 `ITransactional`, and `TransactionalCommandDecorator` wraps any command carrying that marker in a
@@ -132,10 +136,16 @@ await _unitOfWork.SaveChangesAsync(ct);                            // save 2: th
 try { await _push.SendToUsersAsync(recipients, title, body, LiveMetadata(scopeKey), ct); notification.MarkAsSent(); }
 catch { notification.MarkAsFailed(); }                            // CA1031: SignalR leg owns the status
 
-try { await _nativePush.SendToUsersAsync(recipients, title, body, ct); } // ADR-044: OS-level leg
+try                                                               // ADR-044: OS-level leg
+{
+    var outcome = await _nativePush.SendToUsersAsync(recipients, title, body, ct);
+    notification.RecordNativePushOutcome(                         // per-platform counts, not the status
+        unit, androidSent, androidFailed, appleSent, appleFailed);
+    if (outcome.FirstFailure is { } failure) { /* LogNativePushFailed */ }
+}
 catch { /* LogNativePushFailed; native delivery is best-effort, audit status untouched */ } // CA1031
 
-await _unitOfWork.SaveChangesAsync(ct);                           // record observed status; commit on return
+await _unitOfWork.SaveChangesAsync(ct);         // record status + native outcome; commit on return
 ```
 
 Notice what this ordering buys you. `PushNotificationStatus` is an observed-delivery audit field, not a
@@ -366,11 +376,12 @@ at the call site and gives you a single place to change the underlying type late
 - **Scale-out needs the backplane.** SignalR across multiple replicas only works correctly with the
   Redis backplane wired. Forget the `redis` connection string in a multi-replica deployment and pushes
   reach only the users connected to the replica that handled the send.
-- **Native push is inert until provisioned, and fire-and-forget once live.** The native leg stays a
-  no-op until the host calls a delivery adapter, the provider behind it holds the platform credentials
-  (on Azure, a notification hub carrying a Firebase service account and an APNs key), and the
-  `NativePush` section is enabled. Once live it does no per-device delivery tracking: the provider's
-  telemetry is the observability surface, and the inbox remains the recovery path.
+- **Native push is inert until provisioned, and counted rather than tracked once live.** The native leg
+  stays a no-op until the host calls a delivery adapter, the provider behind it holds the platform
+  credentials (on Azure, a notification hub carrying a Firebase service account and an APNs key), and
+  the `NativePush` section is enabled. Once live the audit row carries per-platform sent and failed
+  counts, in whatever unit the provider reports, but nothing per device: which phone missed a push is
+  the provider's telemetry, and the inbox remains the recovery path.
 - **It is one example, not a notification platform.** This is a reference vertical slice, not a
   full-featured notification product. There is no retry queue for failed real-time delivery, no template
   engine, no per-channel user preferences. The slice is shaped to teach the pattern and to be extended,
@@ -422,29 +433,42 @@ example, or `dotnet add package MMCA.Common.API` and try it.*
 
 *Tags: .NET, C Sharp, Software Architecture, SignalR, Vertical Slice*
 
-*Notes: re-verified 2026-10-29 against MMCA.Common v1.265.1 (paths below are under `MMCA.Common/` unless
-stated). Changes this run: the Azure native push types and their registration left Infrastructure for
-the MMCA.Common.Azure adapter package (ADR-134), so the layer bullet, the native-channel section and the
-trade-off are restated: `AzureNotificationHubNativePushSender`
-(`Source/Hosting/MMCA.Common.Azure/Notifications/AzureNotificationHubNativePushSender.cs:15`) and
-`AzureNotificationHubDeviceRegistrar` (`.../Notifications/AzureNotificationHubDeviceRegistrar.cs:15`) are
-registered by `AddAzureNotificationHubsPush(configuration)`
-(`Source/Hosting/MMCA.Common.Azure/AzureServiceCollectionExtensions.cs:83`, guard `:91`-`:96`, swaps
-`:101`-`:102`; ADC calls it at
-`MMCA.ADC/Source/Modules/Notification/MMCA.ADC.Notification.API/DependencyInjection.cs:40`), with siblings
-`AddAmazonSnsPush` (`Source/Hosting/MMCA.Common.Aws/AwsServiceCollectionExtensions.cs:164`) and
-`AddFirebaseCloudMessagingPush` (`Source/Hosting/MMCA.Common.Gcp/GcpServiceCollectionExtensions.cs:142`),
-the three adapters ADR-044 names (`Website/docs-src/adr/044-native-push-delivery.md:36`, Azure `:39`,
-SNS `:43`, FCM `:56`; move recorded `:12`). The startup tripwire sentence is
-`Source/Core/MMCA.Common.Infrastructure/Configuration/CloudAdapterTripwire.cs:33` (key), `:48`-`:53`
-(check and message). The 409 is restated with its push-channel condition and the same-device handover
-(registrar comment `AzureNotificationHubDeviceRegistrar.cs:46`-`:53`, conflict `:54`-`:59`, condition
-`:130`; `Source/Presentation/MMCA.Common.API/Controllers/Notifications/DevicesController.cs:31`-`:33`).
-Header grounding is AGENTS.md "Native push and file storage" (`MMCA.Common/AGENTS.md:143`, under Other
-Framework Pieces `:138`); the "Push notifications" bullet no longer exists. Re-anchored in place below:
-handler lines from `:98` on (one up), Infrastructure `DependencyInjection.cs` `:254`/`:315`/`:345`-`:354`,
-`DependencyInjection.Notifications.cs` `:38`-`:67`, `DbUpdateExceptionHandler` `:18`/`:41`,
-`DbContextFactory` `:673`/`:679`, ADR-044 "gains the third leg" `:91`.
+*Notes: re-verified 2026-11-25 against MMCA.Common v1.319.0 (paths below are under `MMCA.Common/` unless
+stated). Changes this run: the native leg is restated as recording its outcome on the audit row.
+`SendPushNotificationHandler` runs the native leg in a private `SendNativeAsync`
+(`Source/Core/MMCA.Common.Application/Notifications/PushNotifications/UseCases/Send/SendPushNotificationHandler.cs:142`,
+body `:153`-`:190`); `INativePushSender.SendToUsersAsync` returns a `NativePushOutcome` (`:161`; contract
+`Source/Core/MMCA.Common.Application/Interfaces/Infrastructure/Notifications/INativePushSender.cs:26`, record
+`NativePushOutcome.cs:9`, `Unit` `:21`, `NativePushDeliveryUnit.cs:4`); the handler calls
+`notification.RecordNativePushOutcome(unit, androidSent, androidFailed, appleSent, appleFailed)` (`:172`-`:177`)
+and logs `outcome.FirstFailure` through `LogNativePushFailed` (`:179`-`:181`), the thrown case still caught
+(CA1031 pragma `:184`, log `:188`). `PushNotification.RecordNativePushOutcome`
+(`Source/Core/MMCA.Common.Domain/Notifications/PushNotifications/PushNotification.cs:185`, doc "the overall
+Status is the SignalR leg's and is left as it is" `:173`-`:175`) sets `AndroidSent`, `AndroidFailed`,
+`AppleSent`, `AppleFailed` (`:63`-`:72`) and `NativeDeliveryUnit` (`:79`); the DTO carries them
+(`Source/Core/MMCA.Common.Shared/Notifications/PushNotifications/PushNotificationDTO.cs:32`-`:47`). Step 6,
+step 7, the code block (its native leg inlines `SendNativeAsync`) and the native trade-off ("counted rather
+than tracked") follow from that. Re-anchored this run: `AddAzureNotificationHubsPush`
+`Source/Hosting/MMCA.Common.Azure/AzureServiceCollectionExtensions.cs:95` (enabled-and-complete guard
+`:103`-`:108` on `ConnectionString` and `HubName`, `AzureNotificationHubNativePushSender` `:133`,
+`AzureNotificationHubDeviceRegistrar` `:134`; ADC calls it at
+`MMCA.ADC/Source/Modules/Notification/MMCA.ADC.Notification.API/DependencyInjection.cs:40`), siblings
+`AddAmazonSnsPush` (`Source/Hosting/MMCA.Common.Aws/AwsServiceCollectionExtensions.cs:174`) and
+`AddFirebaseCloudMessagingPush` (`Source/Hosting/MMCA.Common.Gcp/GcpServiceCollectionExtensions.cs:149`);
+startup tripwire `Source/Core/MMCA.Common.Infrastructure/Configuration/CloudAdapterTripwire.cs:35` (key),
+`:77`-`:81` (check and message).
+Flag (2026-11-25): not re-read this run (budget), article text kept as it stood: the
+`SendPushNotificationCommand` and `TransactionalCommandDecorator` anchors, `PushNotificationConfiguration`
+(index, column lengths), `SendPushNotificationRequest` and its validator, `NotificationScopeKey`,
+`DbUpdateExceptionHandler`, `DbContextFactory` rollback lines, the inner lines of the three controllers and the
+four inbox handlers, the hub's channel methods, `SignalRPushNotificationSender` `:20`/`:23`, the
+`DevicesController` and `AzureNotificationHubDeviceRegistrar` ownership and handover lines, `SmtpEmailSender`,
+`UserNotification.MarkAsRead`, the `MMCA.Common/AGENTS.md` line numbers, and the ADR-024 and ADR-044 line
+anchors. Their last-read anchors are in the history below.
+Previous refresh 2026-10-29: the Azure native push types and their registration left Infrastructure for the
+MMCA.Common.Azure adapter package (ADR-134), so the layer bullet, the native-channel section and the
+trade-off were restated; the 409 was restated with its push-channel condition and the same-device handover;
+header grounding moved to AGENTS.md "Native push and file storage" (under Other Framework Pieces).
 Previous refresh 2026-10-22 (v1.250.0): the channel paragraph no longer puts email under the feature flag (the flag
 sits on the three controllers only, `NotificationsController.cs:28`, `NotificationInboxController.cs:27`,
 `DevicesController.cs:24`, while `IEmailSender` is registered unconditionally,
@@ -487,93 +511,60 @@ inside the transaction is added to the transaction trade-off; ADC's scope fallba
 fails narrow to the last resolved key or an `event:0` sentinel, never to null); the Redis backplane's
 per-application channel prefix is added; three "as it always did / as before" phrasings are removed;
 every DI anchor is re-pointed (the push registrations live in `DependencyInjection.Notifications.cs`).
-Handler, every anchor re-read this run (re-read 2026-10-29; lines from `:98` on moved up one since v1.250.0):
+Handler, every anchor re-read 2026-11-25:
 `Source/Core/MMCA.Common.Application/Notifications/PushNotifications/UseCases/Send/SendPushNotificationHandler.cs`.
 "Atomicity" XML doc `:21`-`:31` (live legs re-run under the execution strategy on a transient fault of
 the final save, at-least-once for SignalR and native, exactly-once for inbox rows, `:28`-`:30`);
 "Deduplication race" XML doc `:33`-`:41`; `INativePushSender nativePushSender` injected `:47`. Dedup:
 whitespace to null, otherwise `SenderScopedDedupKey(command.SentByUserId, command.DedupKey)`
 (`:60`-`:62`), which is `Convert.ToHexString(SHA256.HashData(...$"{sentByUserId}:{clientKey}"))`
-(`:167`-`:169`; its XML doc `:160`-`:163` states the result is always 64 characters); lookup and hit
-`:63`-`:71` (`LogDedupHit` `:68`); `FindByDedupKeyAsync` `:187`-`:196` via
-`unitOfWork.GetReadRepository<...>` `:189`. Recipients `:74`-`:75`, empty-set `Validation` failure
+(`:199`-`:201`; its XML doc `:193`-`:194` states the result is always 64 characters); lookup and hit
+`:63`-`:71` (`LogDedupHit` `:68`); `FindByDedupKeyAsync` `:219`-`:228` via
+`unitOfWork.GetReadRepository<...>` `:221`. Recipients `:74`-`:75`, empty-set `Validation` failure
 `:77`-`:83`. `PushNotification.Create(...)` called `:86`-`:92` with the hashed `dedupKey` and
 `command.Request.ScopeKey`. Repositories via `unitOfWork.GetRepository<...>` `:98` and `:105`. Audit
 save alone, bare and uncaught, `:102` (propagate comment `:101`). Inbox rows `:106`-`:110`, second
-save `:112`. SignalR leg `:116`-`:134` (metadata `:122`, `MarkAsSent` `:125`, CA1031 pragma `:128`,
-`MarkAsFailed` `:132`); native leg `:140`-`:153` (call `:142`-`:146`, CA1031 pragma `:148`,
-`LogNativePushFailed` call `:152`, `[LoggerMessage]` `:204`, declaration `:205`); final save `:155`;
-DTO returned `:157`. The only CA1031 suppressions left are the two delivery legs.
-Command and decorator: `SendPushNotificationCommand.cs:21`-`:23` (`ITransactional` `:23`,
-"Transactional on purpose" doc `:11`-`:19`, sender-scoped `DedupKey` doc `:25`-`:35`);
-`Source/Core/MMCA.Common.Application/UseCases/Decorators/TransactionalCommandDecorator.cs` passes a
-command without the marker straight through (`:30`-`:31`) and otherwise calls
-`unitOfWork.ExecuteInTransactionAsync` (`:33`).
+save `:112`. SignalR leg `:116`-`:134` (metadata `LiveMetadata(notification.ScopeKey)` `:122`,
+`MarkAsSent` `:125`, CA1031 pragma `:128`, `MarkAsFailed` `:132`); "Third channel (ADR-044)" comment
+`:136`-`:141`, `SendNativeAsync` call `:142` (body `:153`-`:190`, outcome `:161`, record `:172`-`:177`,
+first failure `:179`-`:181`, CA1031 pragma `:184`); final save `:144`; DTO returned `:146`; `LiveMetadata`
+`:209`-`:212`; `[LoggerMessage]` block `:230`-`:240` (`LogNativePushFailed` at Warning `:236`-`:237`). The
+only CA1031 suppressions are the two delivery legs (`:128`, `:184`).
 Aggregate: `Source/Core/MMCA.Common.Domain/Notifications/PushNotifications/PushNotification.cs`,
-`DedupKeyMaxLength = 128` `:19`, `ScopeKeyMaxLength = 128` `:22`, `DedupKey` `:45`, `ScopeKey` `:53`
-(view-filter XML doc `:47`-`:52`), whitespace normalization in the private constructor `:75`-`:76`,
+`DedupKeyMaxLength = 128` `:19`, `ScopeKeyMaxLength = 128` `:22`, `NativeDeliveryUnitMaxLength = 20` `:25`,
+`ScopeKey` `:56`, whitespace normalization in the private constructor `:101`-`:102`,
 `Create(string title, string body, UserIdentifierType sentByUserId, int recipientCount, string? dedupKey = null, string? scopeKey = null)`
-`:96`-`:102` (doc from `:79`), both length checks `:107`-`:120`. EF:
-`Source/Core/MMCA.Common.Infrastructure/Persistence/Configuration/EntityTypeConfiguration/Notifications/PushNotificationConfiguration.cs`,
-`DedupKey` max length `:46`-`:47`, `ScopeKey` `:52`-`:53` deliberately unindexed (comment `:49`-`:51`),
-filtered unique index `:69`-`:73` (`IsUnique()` + `HasSoftDeleteFilter`, `[DedupKey] IS NOT NULL`,
-engine-aware quoting; rationale `:55`-`:68`). Request: `ScopeKey` init-only at
-`Source/Core/MMCA.Common.Shared/Notifications/PushNotifications/SendPushNotificationRequest.cs:28`,
-bounded by `SendPushNotificationRequestValidator.cs:27`-`:29`.
-Controllers (`Source/Presentation/MMCA.Common.API/Controllers/Notifications/`):
+`:122`-`:128` (doc from `:105`), title and body via `PushNotificationInvariants` `:131`-`:132`
+(`.../PushNotifications/Invariants/PushNotificationInvariants.cs` `EnsureTitleIsValid` `:18`,
+`EnsureBodyIsValid` `:23`), both length checks `:133`-`:146`, `MarkAsSent` `:165`, `MarkAsFailed` `:170`.
+Controllers (`Source/Presentation/MMCA.Common.API/Controllers/Notifications/`), re-read this run:
 `NotificationsController.cs` `[FeatureGate]` `:28`, `[HasPermission(NotificationPermissions.Manage)]`
-`:29`, class `:30`, `[HttpPost]` `:43`, `[Idempotent]` `:44`, `Idempotency-Key` read after the S6932
-pragma `:61`, command with `DedupKey = dedupKey` `:69` (the raw header; hashing happens in the
-handler); `NotificationInboxController.cs` `[FeatureGate]` `:27`, `[Authorize]` `:28`,
-`InboxController` `:29`, `[FromQuery, StringLength(PushNotification.ScopeKeyMaxLength)] string? scope`
-`:46`, `:70`, `:113` (mark-one `[HttpPut("{id:int}/read")]` `:86` takes no scope, read-all `:110`);
-`DevicesController.cs` `[FeatureGate]` `:24`, `[Authorize]` `:25`, class `:26`,
-`IPushDeviceRegistrar` `:27`, `[HttpPut]` `:35`, `[HttpDelete("{installationId}")]` `:60`.
-Inbox slices (`Source/Core/MMCA.Common.Application/Notifications/UserNotifications/UseCases/`):
-`GetInbox/GetMyNotificationsHandler.cs` `MaxPageSize = 500` `:21`, scope filter `:40`-`:43`, caller
-filter `:50`; `GetUnreadCount/GetUnreadNotificationCountHandler.cs` caller `:25`, scope `:31`-`:38`;
-`MarkAllRead/MarkAllNotificationsReadHandler.cs` caller `:30`, scope `:37`-`:45`;
-`MarkRead/MarkNotificationReadHandler.cs` id plus caller `:26`, `TimeProvider` injected `:15` and used
-`:38`.
-DI: `Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs` `AddInfrastructure` `:57` calls
-`AddServices()` `:254` (declared `:315`), which does `TryAddTransient` for `IEmailSender` ->
-`SmtpEmailSender` `:345`, `IPushNotificationSender` -> `NullPushNotificationSender` `:346`,
-`ILiveChannelPublisher` -> `NullLiveChannelPublisher` `:347`, `INativePushSender` ->
-`NullNativePushSender` `:353`, `IPushDeviceRegistrar` -> `NullPushDeviceRegistrar` `:354` (adapter-call comment `:349`-`:352`).
+`:29`, class `:30`, `[Idempotent]` `:44`; `NotificationInboxController.cs` `[FeatureGate]` `:27`,
+`InboxController` `:29`; `DevicesController.cs` `[FeatureGate]` `:24`, class `:26`.
+Inbox: `Source/Core/MMCA.Common.Application/Notifications/UserNotifications/UseCases/GetInbox/GetMyNotificationsHandler.cs`
+`MaxPageSize = 500` `:21`.
+DI: `Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs` `AddInfrastructure` `:58` calls
+`AddServices()` `:277` (declared `:338`), which does `TryAddTransient` for `IEmailSender` ->
+`SmtpEmailSender` `:369`, `IPushNotificationSender` -> `NullPushNotificationSender` `:370`,
+`ILiveChannelPublisher` -> `NullLiveChannelPublisher` `:371`, `INativePushSender` ->
+`NullNativePushSender` `:377`, `IPushDeviceRegistrar` -> `NullPushDeviceRegistrar` `:378`.
 `Source/Core/MMCA.Common.Infrastructure/DependencyInjection.Notifications.cs`: `AddPushNotifications`
-`:38`, `AddSignalR()` `:45`, `redis` connection string `:47`, per-application `ChannelPrefix` with
-`AddStackExchangeRedis` `:56`-`:58`, `SignalRPushNotificationSender` `:62`,
-`SignalRLiveChannelPublisher` `:63`, `ClaimBasedUserIdProvider` `:67` (file ends `:72`). Native push: `AddAzureNotificationHubsPush`
-at `Source/Hosting/MMCA.Common.Azure/AzureServiceCollectionExtensions.cs:83`, enabled-and-complete guard `:91`-`:96`, `AzureNotificationHubNativePushSender` `:101`,
-`AzureNotificationHubDeviceRegistrar` `:102`. Application registers only
-`NullNotificationRecipientProvider` at `Source/Core/MMCA.Common.Application/Notifications/DependencyInjection.cs:75`.
-Hub and sender: `Source/Core/MMCA.Common.Infrastructure/Notifications/NotificationHub.cs`
-`[Authorize]` `:24`, class `:25`, `ReceiveNotificationMethod` `:30` (plus `ReceiveChannelEventMethod`
-`:33`, `JoinChannelMethod` `:36`, `LeaveChannelMethod` `:39`, `JoinChannelAsync` `:128`
-(`[HubMethodName]` `:127`), `LeaveChannelAsync` `:145` (`[HubMethodName]` `:144`), per ADR-039);
-`Source/Core/MMCA.Common.Infrastructure/Notifications/Push/SignalRPushNotificationSender.cs`
-`BatchSize = 100` `:14`, `SendToUsersAsync(userIds, title, body, metadata = null, cancellationToken)`
-`:23`, sends on `NotificationHub.ReceiveNotificationMethod` `:20`, `:29`, `:37`;
-`ClaimBasedUserIdProvider` at `Source/Core/MMCA.Common.Infrastructure/Context/ClaimBasedUserIdProvider.cs`.
+`:41`, `AddSignalR()` `:48`, `redis` connection string `:50`, `AddStackExchangeRedis` with the
+per-application `ChannelPrefix` `:60`-`:61`, `SignalRPushNotificationSender` `:76`,
+`SignalRLiveChannelPublisher` `:77`, `ClaimBasedUserIdProvider` `:81`. `NullNotificationRecipientProvider`
+is `Source/Core/MMCA.Common.Application/Interfaces/Infrastructure/Notifications/NullNotificationRecipientProvider.cs:8`.
+Hub and sender: `Source/Core/MMCA.Common.Infrastructure/Notifications/NotificationHub.cs` class `:25`,
+`ReceiveNotificationMethod = "ReceiveNotification"` `:30`;
+`Source/Core/MMCA.Common.Infrastructure/Notifications/Push/SignalRPushNotificationSender.cs` `BatchSize = 100` `:14`.
+ADC recipients: `MMCA.ADC/Source/Modules/Notification/MMCA.ADC.Notification.Application/AttendeeNotificationRecipientProvider.cs:10`
+bridges the Identity module's `IAttendeeQueryService` (`:11`, `:16`), registered with `TryAddScoped` at
+`MMCA.ADC/Source/Modules/Notification/MMCA.ADC.Notification.Application/DependencyInjection.cs:25`.
 ADC scope: `MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.UI/Services/Notifications/CurrentEventNotificationScopeProvider.cs`
 resolves `NotificationScopeKey.ForEvent(currentEvent.EventId)` `:67`, caches a resolved key five
-minutes `:41`, and on no event or a failure (`catch` `:74`) answers from `LastResolvedOrSentinel`
-(`:79`-`:83`, `:124`-`:128`): the last resolved key or `UnresolvedScopeKey` = `event:0` `:39`, a key
+minutes `:41`, and on no event or a failure (`catch` `:75`) answers from `LastResolvedOrSentinel`
+(call `:85`, declared `:128`-`:134`): the last resolved key or `UnresolvedScopeKey` = `event:0` `:39`, a key
 no row carries; the "never answers unscoped" reasoning is its own remarks `:20`-`:24`.
-ADR mapping: `Website/docs-src/adr/024-push-notifications.md` records the scope key (status `:5`-`:6`),
-the per-application backplane channel (`:9`-`:10`), the sender-scoped dedup key (`:13`), the
-propagate-and-roll-back dedup race (`:14`, decision bullet `:44`-`:58`) and the WebSockets-only hub
-client (`:15`); its 2026-10-21 revision (`:16`) covers the ADC scale block and anchors only. ADR-024 independently
-cites `SendPushNotificationCommand.cs:23` (`:41`) and `PushNotificationConfiguration.cs:69`-`:73`
-(`:52`), both still correct; the ADR-024 + ADR-044 mapping holds.
-Re-read this run beyond the anchors above: `SmtpEmailSender` builds a client per send
-(`Source/Core/MMCA.Common.Infrastructure/Mail/SmtpEmailSender.cs:67`, `using var`); the idempotent
-`UserNotification.MarkAsRead(DateTime readOnUtc)`
-(`Source/Core/MMCA.Common.Domain/Notifications/UserNotifications/UserNotification.cs:58`, `IsRead` guard
-`:60`); `Source/Core/MMCA.Common.Shared/GlobalUsings.NotificationIdentifierType.cs` exists.
-Carried forward, not re-read this run: `AttendeeNotificationRecipientProvider` (ADC),
-`PushNotificationInvariants`, and the body of `Website/docs-src/adr/044-native-push-delivery.md`
-beyond its title and "third leg" lines.
 The `SendPushNotificationHandler` code block is an illustrative reconstruction of the step order, not
-a verbatim copy: it simplifies variable names, inlines the `LiveMetadata` dictionary as a comment and
-drops the `Result<PushNotification>` unwrap. Next article: Article 22, live channel push.*
+a verbatim copy: it simplifies variable names, inlines the `LiveMetadata` dictionary as a comment and the
+private `SendNativeAsync` body (with the outcome's per-platform fields shown as plain names), and drops the
+`Result<PushNotification>` unwrap. Next article: Article 22, live channel push.*

@@ -6,7 +6,7 @@
     <atom:link href="https://ivanball.github.io/feed.xml" rel="self" type="application/rss+xml"/>
     <description>A long-form series turning a production .NET framework's architecture decisions into teachable patterns: the Result railway, the transactional outbox, database-per-service, JWKS auth, fitness functions, and more.</description>
     <language>en-us</language>
-    <lastBuildDate>Thu, 29 Oct 2026 12:00:00 GMT</lastBuildDate>
+    <lastBuildDate>Wed, 25 Nov 2026 12:00:00 GMT</lastBuildDate>
     <managingEditor>noreply@ivanball.github.io (Ivan Ball-llovera)</managingEditor>
     <item>
       <title>The series index</title>
@@ -15,6 +15,34 @@
       <pubDate>Thu, 20 Aug 2026 12:18:00 GMT</pubDate>
       <description>The full series index and recommended reading order.</description>
       <category>Proof &amp; getting started</category>
+    </item>
+    <item>
+      <title>Sending webhooks without opening a door</title>
+      <link>https://ivanball.github.io/articles/outbound-webhooks.html</link>
+      <guid isPermaLink="true">https://ivanball.github.io/articles/outbound-webhooks.html</guid>
+      <pubDate>Wed, 25 Nov 2026 12:00:00 GMT</pubDate>
+      <description>Standard Webhooks signatures with secret rotation, every delivery a durable internal command, an SSRF check enforced where the socket opens, and a per-receiver lane whose cooldown keeps a dead receiver from delaying anything else.</description>
+      <category>Core patterns</category>
+      <category>ADR 142</category>
+    </item>
+    <item>
+      <title>Your app as an MCP server</title>
+      <link>https://ivanball.github.io/articles/app-as-mcp-server.html</link>
+      <guid isPermaLink="true">https://ivanball.github.io/articles/app-as-mcp-server.html</guid>
+      <pubDate>Wed, 25 Nov 2026 12:00:00 GMT</pubDate>
+      <description>An opt-in MCP endpoint whose tools are read-only wrappers over the query path you already govern, with a switch, a permission and a rate limit per tool, and a startup refusal for hidden text.</description>
+      <category>Run &amp; extract</category>
+      <category>ADR 138</category>
+    </item>
+    <item>
+      <title>Borrowed and machine identities</title>
+      <link>https://ivanball.github.io/articles/borrowed-and-machine-identities.html</link>
+      <guid isPermaLink="true">https://ivanball.github.io/articles/borrowed-and-machine-identities.html</guid>
+      <pubDate>Wed, 25 Nov 2026 12:00:00 GMT</pubDate>
+      <description>A read-only, time-boxed support view of another account and OAuth client-credentials tokens for programs, each an ordinary token limited by one claim, and each refusing the other.</description>
+      <category>Auth &amp; the edge</category>
+      <category>ADR 137</category>
+      <category>ADR 140</category>
     </item>
     <item>
       <title>One framework, three clouds</title>

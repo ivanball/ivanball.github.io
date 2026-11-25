@@ -95,7 +95,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 54 articles</summary>
+        <summary>All 57 articles</summary>
         <nav class="doc-nav" aria-label="The MMCA.Common series">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -152,7 +152,10 @@
         <li><a href="durable-internal-commands.html">51 · Four ways to do work later</a></li>
         <li><a href="identity-completions.html">52 · Finishing identity</a></li>
         <li><a href="cloud-neutral-vendor-adapters.html">53 · One framework, three clouds</a></li>
-        <li><a href="series-index.html">54 · The series index</a></li>
+        <li><a href="borrowed-and-machine-identities.html">54 · Borrowed and machine identities</a></li>
+        <li><a href="app-as-mcp-server.html">55 · Your app as an MCP server</a></li>
+        <li><a href="outbound-webhooks.html">56 · Sending webhooks without opening a door</a></li>
+        <li><a href="series-index.html">57 · The series index</a></li>
           </ol>
         </nav>
       </details>
@@ -275,7 +278,7 @@
           <li><strong>Extra abstraction for the single-database case.</strong> For a pure single-SQL-Server host where <code>Include</code>
           always works, the populator is a layer you do not strictly need. It is mitigated by being free at
           runtime there: the populator is only invoked when the metadata actually reports an unsupported
-          include, and otherwise the <code>NullNavigationPopulator</code> no-ops. You pay in concepts, not in cycles.</li>
+          include, and otherwise no populator runs at all. You pay in concepts, not in cycles.</li>
           <li><strong>Every entity read through the generic query service needs a populator, even a no-op one.</strong> Such
           entities that need no manual loading still require <code>NullNavigationPopulator&lt;TEntity&gt;</code> (or an empty
           declarative one) so the pipeline has something to call. That is a registration line per entity;

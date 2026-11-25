@@ -95,7 +95,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 54 articles</summary>
+        <summary>All 57 articles</summary>
         <nav class="doc-nav" aria-label="The MMCA.Common series">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -152,7 +152,10 @@
         <li><a href="durable-internal-commands.html">51 · Four ways to do work later</a></li>
         <li><a href="identity-completions.html">52 · Finishing identity</a></li>
         <li><a href="cloud-neutral-vendor-adapters.html">53 · One framework, three clouds</a></li>
-        <li><a href="series-index.html">54 · The series index</a></li>
+        <li><a href="borrowed-and-machine-identities.html">54 · Borrowed and machine identities</a></li>
+        <li><a href="app-as-mcp-server.html">55 · Your app as an MCP server</a></li>
+        <li><a href="outbound-webhooks.html">56 · Sending webhooks without opening a door</a></li>
+        <li><a href="series-index.html">57 · The series index</a></li>
           </ol>
         </nav>
       </details>
@@ -209,24 +212,28 @@
           also why the backends had to be hand-built rather than pulled off the shelf: <code>IMemoryCache</code> has no key
           enumeration, and <code>IDistributedCache</code> has no prefix delete. Four of the eight are default interface
           members, so a hand-written implementer keeps compiling when one is added.</p>
+          <p>The prefix carries one rule of its own: it is empty or it ends at a <code>:</code> boundary (<code>&quot;Catalog:Products:&quot;</code>,
+          never <code>&quot;Catalog:Prod&quot;</code>), and every shipped store rejects anything else with an <code>ArgumentException</code>. The
+          rule is what lets the shared store invalidate without walking its keyspace, as the backend section below
+          shows, and enforcing it in every store means a prefix behaves the same on a laptop and in production.</p>
           <p>The two specialized reads each close a gap a plain <code>GetAsync</code> leaves open. <code>TryGetAsync</code> reports
           presence separately from the value, because for a value type a miss and a cached <code>default</code> (<code>0</code>,
           <code>false</code>, <code>Guid.Empty</code>) look identical. The default member infers presence from a non-null <code>GetAsync</code>
-          result, which is exact for reference and nullable types, and all three shipped stores override it with
+          result, which is exact for reference and nullable types, and both shipped stores override it with
           a real presence check. <code>HybridCache</code> has no presence-reporting read, so the hybrid store asks for the
           entry with a factory that throws a tagged miss: a hit never calls it, and the thrown sentinel reads as
           not found, so a cached <code>0</code> or <code>false</code> still counts as a hit.
           <code>GetFromSharedStoreAsync</code> reads the shared store and never a process-local copy, for values whose change
           on one replica must be visible on every other replica at once: single-use records (an OAuth exchange
           code, a password-reset or email-confirmation token, the last accepted second-factor time step), the
-          registration counter read, and the two flags whose removal must be seen everywhere (the login lockout
+          registration counter read, Store&#39;s guest-checkout throttle counter read, and the two flags whose removal must be seen everywhere (the login lockout
           flag and the soft-deleted-user marker). The hybrid backend below is the store that overrides it.
           (<code>IncrementAsync</code> is the single entry point for the brute-force and rate-limit counters of ADR-029
-          instead of a read-then-write pair at each call site. The distributed and hybrid backends both override
-          it, each with the same read-modify-write shape rather than a Redis <code>INCR</code>, because <code>StackExchangeRedisCache</code>
-          stores every entry as a Redis hash (<code>absexp</code>, <code>sldexp</code>, <code>data</code>) and an <code>INCR</code> string at the same key
-          would fail the next read: the override buys one call site, not atomicity. The hybrid override keeps
-          both legs on L2, so no replica counts from a stale local copy.)</p>
+          instead of a read-then-write pair at each call site. The memory backend keeps the interface default and
+          the hybrid backend overrides it, both with the same read-modify-write shape rather than a Redis <code>INCR</code>,
+          because the distributed cache stores every entry as a Redis hash and an <code>INCR</code> string at the same key
+          would fail the next read with <code>WRONGTYPE</code>: the member buys one call site, not atomicity. The hybrid
+          override keeps both legs on L2, so no replica counts from a stale local copy.)</p>
           <p><code>GetOrCreateAsync</code> is the most interesting of the default members, because of who does <em>not</em> use
           it. Its default body is get, then take a per-key lock from a process-wide stripe, double-check, run the
           factory, store the result; the hybrid store overrides it with <code>HybridCache</code>&#39;s own call, which folds the
@@ -241,55 +248,59 @@
           composition root. Handlers and decorators never see <code>StackExchange.Redis</code> or
           <code>Microsoft.Extensions.Caching</code> directly. That is a textbook Clean Architecture port/adapter split: the
           business code programs against the contract, the transport is a deployment concern.</p>
-          <h2 id="one-contract-three-backends">One contract, three backends</h2>
-          <p><code>AddCaching()</code> picks a backend by probing the container. If a real distributed cache is registered (an
-          <code>IDistributedCache</code> that is not the default <code>MemoryDistributedCache</code>, typically Redis wired by Aspire), it
-          builds a <code>DistributedCacheService</code>. Otherwise it falls back to a <code>MemoryCacheService</code> over the in-process
-          <code>IMemoryCache</code>. No flag, no per-environment branch in application code:</p>
+          <h2 id="one-contract-two-backends">One contract, two backends</h2>
+          <p><code>AddCaching()</code> registers the in-process backend and no other cache backend. A host that wires a shared store
+          states it: any host with a distributed L2 calls <code>AddCommonHybridCache()</code>, which replaces that
+          registration in either call order. A host that registers a real distributed cache (an <code>IDistributedCache</code>
+          that is not the default <code>MemoryDistributedCache</code>, typically Redis) without that call does not fall back
+          to memory: resolving <code>ICacheService</code> throws an <code>InvalidOperationException</code> that names the missing call,
+          because a silent in-process fallback would make single-use records, counters and the lockout flag
+          per-replica. No flag, no per-environment branch in application code, and no way to end up on the wrong
+          backend quietly:</p>
           <ul>
           <li><strong><code>MemoryCacheService</code></strong> is the single-instance fast path. Because <code>IMemoryCache</code> cannot enumerate its
           own keys, it maintains a side <code>ConcurrentDictionary</code> key set so it can satisfy <code>RemoveByPrefixAsync</code>,
           and keeps that index honest with a post-eviction callback so expired entries prune themselves rather
           than leaking.</li>
-          <li><strong><code>DistributedCacheService</code></strong> is the out-of-process adapter, serializing values to UTF-8 JSON. When a
-          Redis <code>IConnectionMultiplexer</code> is available, prefix eviction reaches past <code>IDistributedCache</code> to the raw
-          connection and uses server-side <code>SCAN</code> to find and delete matching keys (that scan lives in a shared
-          <code>RedisPrefixScanner</code>, because two backends need it). This is the cache with a Redis
-          backplane the architecture scorecard carries in its §10 row as related cross-cutting evidence,
-          scored under §5, §6, §9, §12, §17 and §29, and whose
-          substrate is recorded in ADR-026: a single-host monolith caches in-process for free, and the
-          same code transparently uses a shared Redis once the distributed cache is present, so cached reads stay
-          coherent when a module is scaled out or extracted into its own service.</li>
-          </ul>
-          <p>That auto-swap covers two of the three implementations. The third sits outside the probe, which
-          deliberately never selects it, so a host has to ask for it by name:</p>
-          <ul>
           <li><strong><code>HybridCacheService</code></strong> puts an in-process L1 in front of the distributed L2, over
           <code>Microsoft.Extensions.Caching.Hybrid</code>, so a repeat read inside one replica never leaves the process
-          while invalidation still crosses replicas through L2. It is opt-in: a host calls <code>AddCommonHybridCache()</code>
-          and that call replaces whatever <code>ICacheService</code> was registered, in either call order. Its defining
-          constraint is a keyspace rule, not a performance one. <code>HybridCache</code> writes its own payload layout, which
-          is not the UTF-8 JSON the distributed adapter writes, so it writes under a disjoint <code>hc:</code> keyspace: an
-          old-format entry is simply invisible to the new service and vice versa, including while a rolling deploy
-          runs both. That rule generalizes a real failure this framework already shipped once, a Redis <code>INCR</code>
-          counter written as a string and read back by a hash-shaped path, which answered <code>WRONGTYPE</code> and
-          surfaced as a 500 on the endpoints owning the counter (registration and login). Two serialization formats must never share one keyspace, so the second
-          writer gets its own.</li>
+          while invalidation still crosses replicas. It is the only cache service over a shared store, and its
+          prefix invalidation never walks the keyspace: every <code>:</code> boundary of a key (the empty root, then each
+          prefix ending at <code>:</code>) carries a generation token, the tokens in force are folded into the key an entry
+          is stored under, and <code>RemoveByPrefixAsync</code> replaces one token. That is one Redis write whatever the
+          size of the keyspace. Nothing is scanned or deleted: every entry written under the old token simply
+          stops being addressed, and the orphaned entries expire on their own TTL. It is a generation token
+          rather than <code>HybridCache</code>&#39;s own tag invalidation for a reason worth knowing: a process reads a tag&#39;s
+          invalidation timestamp once, the first time it meets the tag, and never refreshes it, so another
+          replica that has already seen the tag never learns of the invalidation. This is the cache with a Redis
+          backplane the architecture scorecard carries in its §10 row as related cross-cutting evidence,
+          scored under §5, §6, §9, §12, §17 and §29, and whose substrate is recorded in ADR-026: a single-host
+          monolith caches in-process for free, and the same code uses a shared Redis once the hybrid backend is
+          registered, so cached reads stay coherent when a module is scaled out or extracted into its own
+          service.</li>
           </ul>
-          <p>Be honest about what &quot;opt-in&quot; means in a deployed system: all seven ADC and Store services call
-          <code>AddCommonHybridCacheWhenRedisConfigured(builder.Configuration)</code>, a framework helper that registers the
-          hybrid backend only when the Redis connection string is set (with no Redis L2 the hybrid tier would be a
-          plain in-memory cache, which the memory fallback already is). So whenever Redis is configured, the
-          effective Tier-1 substrate in production is the hybrid one, not the distributed adapter, and the
-          memory-or-Redis swap is what a host gets when it does <em>not</em> state a preference. The contract that makes that
-          substitution a one-line change is the point. Nothing in any handler, decorator, or query changes.</p>
+          <p>The hybrid backend&#39;s defining constraint is a keyspace rule, not a performance one. Every key it writes
+          sits under a disjoint <code>hc:</code> segment, so an entry can never meet a value another writer put in the same
+          server (a host&#39;s own <code>IDistributedCache</code> use, or the generation keys under <code>hcg:</code>) in a format it cannot
+          parse. That rule generalizes a real failure this framework already shipped once, a Redis <code>INCR</code>
+          counter written as a string and read back by a hash-shaped path, which answered <code>WRONGTYPE</code> and
+          surfaced as a 500 on the endpoints owning the counter (registration and login). Two serialization
+          formats must never share one keyspace, so each writer gets its own.</p>
+          <p>Be concrete about how a deployed service gets there, because none of the seven ADC and Store services
+          makes these calls itself. Each is built on the composed service host, <code>builder.AddMmcaServiceHost(...)</code>,
+          which calls <code>builder.AddRedisCaching()</code> and then <code>AddCommonHybridCacheWhenRedisConfigured(configuration)</code>,
+          a framework helper that registers the hybrid backend only when the Redis connection string is set (with
+          no Redis L2 the hybrid tier would be a plain in-memory cache, which the memory backend already is). So
+          wherever Redis is configured the live substrate is the hybrid one, and the memory backend runs where it
+          is not: local runs, tests, and any host that wires no Redis. The contract that makes that substitution a
+          deployment concern is the point. Nothing in any handler, decorator, or query changes.</p>
           <p>A short, conservative default TTL keeps a write that names no lifetime erring toward correctness over
           hit-rate: 30 seconds. The constant sits in one place (<code>CacheOptions.DefaultDuration</code>, a bare <code>TimeSpan</code>)
           precisely so the hybrid backend, whose entry options are a different type entirely, defaults to the same
           policy instead of hard-coding the figure a second time, and one binding layer sits above it:
           <code>CacheSettings.DefaultDuration</code> is bound from the <code>Cache</code> configuration section, defaults to that same
-          constant, and is what all three backends (memory, distributed and hybrid) actually read, so a host can
-          retune the figure without any two of them disagreeing. Its reach is narrower than its name suggests. The
+          constant, and is what both backends (memory and hybrid) actually read, so a host can retune the figure
+          without the two disagreeing. Its reach is narrower than its name suggests. The
           backends apply it only when a caller passes no expiration, and a cached query always passes one:
           <code>IQueryCacheable.CacheDuration</code> is a mandatory member and the query decorator hands it to every write. So
           the default governs direct <code>ICacheService</code> writes, never a decorator-cached query, which lives exactly as
@@ -328,9 +339,15 @@
           <pre class="doc-pre" tabindex="0" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-function"><span class="hljs-keyword">public</span> <span class="hljs-keyword">sealed</span> <span class="hljs-keyword">record</span> <span class="hljs-title">UpdateProductCommand</span>(<span class="hljs-params"><span class="hljs-built_in">int</span> ProductId, <span class="hljs-built_in">decimal</span> NewPrice</span>)
     : ICacheInvalidating, ITransactional</span>
 {
-    <span class="hljs-keyword">public</span> <span class="hljs-built_in">string</span> CachePrefix =&gt; <span class="hljs-string">&quot;Catalog:Products&quot;</span>;
+    <span class="hljs-keyword">public</span> <span class="hljs-built_in">string</span> CachePrefix =&gt; <span class="hljs-string">&quot;Catalog:Products:&quot;</span>;
 }</code></pre>
-          <p>The decorator calls <code>RemoveByPrefixAsync(&quot;Catalog:Products&quot;)</code> only when <strong>three conditions</strong> hold: the
+          <p>A command that invalidates one aggregate&#39;s reads need not spell the prefix at all: implementing
+          <code>ICacheInvalidating&lt;TEntity&gt;</code> supplies <code>&quot;{typeof(TEntity).FullName}:&quot;</code>, the same prefix the generic CRUD
+          commands evict by default. That is the form a shared fitness rule expects: it flags every concrete
+          <code>ICacheInvalidating</code> implementer that does not take the generic form, or that declares its own
+          <code>CachePrefix</code> on it, unless the type is listed in <code>AllowedCustomPrefixTypes</code>. So a hand-written prefix
+          like the one above passes only as a deliberate, allow-listed exception.</p>
+          <p>The decorator calls <code>RemoveByPrefixAsync(&quot;Catalog:Products:&quot;)</code> only when <strong>three conditions</strong> hold: the
           command implements <code>ICacheInvalidating</code>, its <code>CachePrefix</code> is not blank, <em>and</em> the <code>Result</code> is not a
           failure. The blank-prefix guard is not a formality: <code>RemoveByPrefixAsync(&quot;&quot;)</code> would evict the entire
           cache, so an empty or whitespace prefix is the deliberate opt-out for a command that carries a defaulted
@@ -345,7 +362,7 @@
           mutation that then rolls back.</li>
           </ul>
           <p>That prefix eviction clears every read the mutation could have staled. The price change under
-          <code>&quot;Catalog:Products&quot;</code> drops the single-product read <em>and</em> every paged and filtered product list cached
+          <code>&quot;Catalog:Products:&quot;</code> drops the single-product read <em>and</em> every paged and filtered product list cached
           under that prefix, in one operation. The handler that changed the price did not name a single cache key.</p>
           <p>It evicts twice, though, and the second one is the interesting part. A read that missed the cache
           <em>before</em> this command committed can still be running its handler against pre-write state and repopulate
@@ -355,6 +372,13 @@
           has already committed and a client that walks away must not strand stale entries), and any failure is
           logged at warning level and swallowed: a cache outage must never turn a committed command into a failed
           one. Whatever the two evictions cannot clear still expires on its own TTL.</p>
+          <p>One failure is treated differently, because it is not a fault in the cache. A prefix that breaks the
+          boundary rule (<code>&quot;Catalog:Products&quot;</code>, with no trailing <code>:</code>) is rejected by the store with an
+          <code>ArgumentException</code>, and the decorator catches that one separately: it logs it at Error as a
+          misconfigured command, names the command and the prefix, and returns without scheduling the delayed
+          retry, since the second attempt would fail identically. The committed command still succeeds, and
+          nothing is invalidated, so its entries stay stale until their TTL. A typo in a prefix is a bug, and the
+          log level says so.</p>
           <h2 id="swallowing-a-failure-is-a-discipline-not-a-catch">Swallowing a failure is a discipline, not a <code>catch</code></h2>
           <p>That swallow is the right call here and a dangerous habit everywhere else, so the framework gives it a
           name: <code>BestEffort.ExecuteAsync(operation, logger, action, ct)</code>, for a side effect that must never fail
@@ -393,11 +417,11 @@
           <code>t:{tenantId}:{key}</code> when a tenant is resolved and the untouched key when none is. Three properties fall
           out of that shape:</p>
           <ul>
-          <li><strong>It is a prefix, not a suffix</strong>, so prefix eviction keeps working. Evicting <code>t:acme:products</code> removes
+          <li><strong>It is a prefix, not a suffix</strong>, so prefix eviction keeps working. Evicting <code>t:acme:products:</code> removes
           that tenant&#39;s product entries and nothing else, and no command in one tenant can evict another tenant&#39;s
           cache.</li>
           <li><strong>Both decorators call the same helper</strong>, which is what keeps reads and invalidations symmetric. A query
-          cached under <code>t:acme:products</code> is evicted by a command whose prefix became <code>t:acme:products</code> through
+          cached under <code>t:acme:products:42</code> is evicted by a command whose prefix became <code>t:acme:products:</code> through
           exactly the same transformation. Scoping one side only would be worse than scoping neither: the write
           would evict a key nobody wrote.</li>
           <li><strong>With no tenant resolved, keys are byte-identical to the pre-tenancy framework.</strong> A single-tenant host
@@ -407,8 +431,9 @@
           honest limit: this lives in the decorators, so code that resolves <code>ICacheService</code> directly gets no tenant
           prefix at all. Today&#39;s direct consumers (login and registration counters, OAuth exchange state,
           idempotency records, password-reset and email-confirmation tokens, the last accepted second-factor time
-          step, the soft-deleted marker) are keyed by subject already, and Store&#39;s cache of Stripe webhook signing
-          secrets is keyed by endpoint, so they are safe by the shape of their keys rather than by a rule that would catch the
+          step, the soft-deleted marker, ADC&#39;s ticket-claim attempt counter and sign-in-link invitation sent marker,
+          Store&#39;s guest-checkout throttle counter) are keyed by subject already (a user, an invitation, a hashed
+          recipient address), and Store&#39;s cache of Stripe webhook signing secrets is keyed by endpoint, so they are safe by the shape of their keys rather than by a rule that would catch the
           next one. The rest of the tenancy model (resolution middleware, the named query filter, the write
           interceptor, database-per-tenant routing) is ADR-073&#39;s, and belongs to the multi-tenancy deep-dive.</p>
           <p>The second transformation answers the parameter that is never on the request: who is asking. A query
@@ -420,23 +445,25 @@
           every user&#39;s entry outside the prefix an invalidating command computes, so nothing would ever be evicted.
           Appended, the prefix stays intact and one command still clears every caller&#39;s copy. Over-eviction across
           users is harmless; the leak it closes is not.</p>
-          <p>Two further transformations do happen, but underneath the port rather than in key design. The
-          distributed and hybrid backends prepend a service namespace to every key on get, set, remove <em>and</em> the
-          prefix scan, so two services sharing one Redis instance cannot collide. It is bound from
+          <p>Two further transformations do happen, but underneath the port rather than in key design. The hybrid
+          backend prepends a service namespace to every key on get, set and remove, and to the generation keys its
+          prefix invalidation writes, so two services sharing one Redis instance cannot collide. It is bound from
           <code>Cache:KeyPrefix</code>, and left unset it is not empty: the framework resolves a per-application default of
           <code>{application namespace}:</code>, because an empty default would put two applications sharing one Redis into
-          one keyspace for both cache entries and distributed locks, silently. It is applied inside the adapter
-          rather than through <code>RedisCacheOptions.InstanceName</code> precisely so prefix eviction still matches the keys
-          that were actually written. The in-process backend skips it, its keyspace being private by construction.
-          The hybrid backend adds its <code>hc:</code> segment on top, for the serialization-format reason above. Neither
-          transformation changes what your key <em>means</em>: they are keyspace hygiene applied uniformly under the
-          contract, which is why tenant and caller scoping stay the only places the framework decides part of your
-          key for you.</p>
+          one keyspace for both cache entries and distributed locks, silently. It is applied inside the adapter, so
+          an entry and the generation tokens that govern it always carry the same namespace. The in-process backend
+          skips it, its keyspace being private by construction. One family of keys is the deliberate exception:
+          cross-service keys such as the soft-deleted-user marker, which Identity writes and every other service
+          reads, take a namespace every service of the deployment shares (<code>Cache:CrossServiceKeyPrefix</code>, otherwise
+          the token audience) and carry no generation token, so they resolve to the same stored key everywhere. The
+          hybrid backend adds its <code>hc:</code> segment on top, for the keyspace reason above. Neither transformation
+          changes what your key <em>means</em>: they are keyspace hygiene applied uniformly under the contract, which is
+          why tenant and caller scoping stay the only places the framework decides part of your key for you.</p>
           <h2 id="one-application-namespace-for-every-shared-keyspace">One application namespace for every shared keyspace</h2>
           <p>The <code>{application namespace}</code> in that backend prefix is not a cache setting. It comes from
           <code>ApplicationNamespace.Resolve</code>, the one resolver that names the shared-infrastructure keyspaces of five
           subsystems (ADR-135): distributed cache and lock keys, distributed rate-limit counters, the Redis
-          output-cache store, the SignalR Redis backplane channel, and the message broker&#39;s endpoint names. Each of
+          output-cache store, the SignalR Redis backplane channel, and the message broker&#39;s topic names. Each of
           those fails the same way. Two applications pointed at one Redis or one broker share any keyspace that
           carries no prefix, and neither Redis nor the broker warns. The backplane makes the cost concrete: the
           framework ships <code>NotificationHub</code>, so its channel name is identical in every consumer, and with no prefix a
@@ -446,7 +473,7 @@
           application name (<code>IHostEnvironment.ApplicationName</code>, or the <code>applicationName</code> configuration key when no
           environment is passed or its name is blank), otherwise the constant <code>app</code>. It sanitizes the result once for every consumer,
           replacing each run of characters outside <code>[a-zA-Z0-9_-]</code> with <code>-</code> and trimming the ends, because a Redis
-          key tolerates almost anything while a MassTransit queue name and a SignalR channel prefix do not. It never
+          key tolerates almost anything while a broker queue or topic name and a SignalR channel prefix do not. It never
           returns an empty string, so isolation is the default rather than an opt-in. Each subsystem derives its
           keyspace from that one value:</p>
           <pre class="doc-pre" tabindex="0" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-keyword">var</span> ns = ApplicationNamespace.Resolve(configuration, environment); <span class="hljs-comment">// Application:Namespace, app name, &quot;app&quot;</span>
@@ -454,27 +481,29 @@
 <span class="hljs-comment">// cache, lock and Redis output-cache keys  &quot;{ns}:&quot;                unless Cache:KeyPrefix is set</span>
 <span class="hljs-comment">// distributed rate-limit counters          &quot;{ns}:{scope}:{key}&quot;   Cache:KeyPrefix, trimmed, when set</span>
 <span class="hljs-comment">// SignalR Redis backplane                  ChannelPrefix = ns     no narrower knob</span>
-<span class="hljs-comment">// broker endpoint names                    new KebabCaseEndpointNameFormatter(ns, includeNamespace: false)</span>
-<span class="hljs-comment">//                                          unless MessageBus:EndpointPrefix or PreserveDefaultEndpointNames</span></code></pre>
+<span class="hljs-comment">// broker topics                            prefixed with ns       Application:Namespace must be set explicitly</span></code></pre>
           <p>The output cache shows why one name beats one default per subsystem. <code>AddCaching</code> post-configures
           <code>RedisOutputCacheOptions.InstanceName</code> to the same prefix the cache keys use whenever the host left it
           empty, and keeps one a host set explicitly. The store prefixes both its value keys and its tag keys with
           that name, so the cross-service tag eviction later in this article still matches what was written. The
           in-process memory backend takes no prefix, its keyspace being private to the process.</p>
+          <p>The broker is the one subsystem that refuses the fallback. Every broker topic is prefixed with the
+          namespace, so a per-service value would put publishers and consumers on different topics and lose
+          integration events silently; a host on a real broker therefore fails at registration when
+          <code>Application:Namespace</code> is not set explicitly, rather than deriving it from its own application name.</p>
           <p>The override exists for the opposite case: two hosts of the same application that must share a keyspace,
           such as a web head and a worker draining one backplane. Both deployed apps pin their keyspaces rather
           than derive them. ADC sets <code>Application:Namespace</code> to <code>adc</code> and <code>Cache:KeyPrefix</code> to <code>adc:</code> in all four of
-          its services, so they share one keyspace on purpose. Store sets a distinct pair per service
-          (<code>store-catalog</code>, <code>store-identity</code>, <code>store-sales</code>, each with the matching <code>Cache:KeyPrefix</code>), so a project
-          rename cannot move a keyspace and cost a cold cache. Because an explicit <code>Cache:KeyPrefix</code> wins, the cache,
-          lock, output-cache and rate-limit keyspaces of those services come from that setting, and the resolved
-          namespace drives only the SignalR backplane. It does not drive their broker names either: both apps set
-          <code>MessageBus:PreserveDefaultEndpointNames</code> in every service, so no deployed host prefixes its broker
-          endpoints, and their live queues and subscriptions keep MassTransit&#39;s default names, which no prefix value
-          reproduces. The resolver&#39;s default is what a host that configures none of these keys gets. Two limits stay
-          honest. The fallback <code>app</code> is shared, and the backplane and
-          broker call sites pass no host environment, so they depend on the <code>applicationName</code> configuration key
-          being populated. And sanitizing can merge two raw names that differ only in characters it replaces.</p>
+          its services, so they share one keyspace on purpose. Store sets <code>Application:Namespace</code> to <code>store</code> in all
+          three of its services, so their broker topics meet, and gives each service its own <code>Cache:KeyPrefix</code>
+          (<code>store-catalog:</code>, <code>store-identity:</code>, <code>store-sales:</code>), so a project rename cannot move a cache keyspace
+          and cost a cold cache. Because an explicit <code>Cache:KeyPrefix</code> wins, the cache, lock, output-cache and
+          rate-limit keyspaces of those services come from that setting, and the resolved namespace drives the
+          SignalR backplane and the broker topic prefix. The resolver&#39;s default is what a host that configures none
+          of these keys gets. Two limits stay honest. The fallback <code>app</code> is shared, and the backplane call site
+          passes no host environment, so it depends on the <code>applicationName</code> configuration key being populated (a
+          broker host never reaches the fallback, since it must set the namespace). And sanitizing can merge two
+          raw names that differ only in characters it replaces.</p>
           <h2 id="what-the-cache-is-and-is-not">What the cache is, and is not</h2>
           <p>This is a request-result read-through cache for query handlers. It is not a session store and not a
           write-behind buffer. The cross-source consistency mechanism in this framework is the outbox (ADR-003,
@@ -483,22 +512,19 @@
           system: it errs toward correctness over hit-rate.</p>
           <p>ADR-026 decides two tiers, and this <code>ICacheService</code> substrate is the first. The second is an HTTP
           output-cache edge (<code>app.UseOutputCache()</code>, with per-host opt-in policies) that lets a public read
-          endpoint skip the handler entirely. A third sits in the framework as a capability rather than a
-          decision: <code>IUiReadCache</code>, a read-through cache in front of the API client, registered scoped by the UI
-          package so it is one instance per Blazor Server circuit, and keyed on the relative URL to line up with
-          the edge tier&#39;s query-string variance rule. It ships and it is wired, and no consumer app switches it
-          on. The edge tier is host-configured rather than part of the pipeline, but it hides a correctness trap
+          endpoint skip the handler entirely. Both are server tiers; nothing caches API responses on the client.
+          The edge tier is host-configured rather than part of the pipeline, but it hides a correctness trap
           sharp enough to earn the section that follows.</p>
           <h2 id="the-edge-tier-caching-authenticated-reads-without-leaking-identity">The edge tier: caching authenticated reads without leaking identity</h2>
           <p>Tier 2 sits in front of the handler instead of inside the pipeline. <code>MMCA.Common.API</code> always calls
           <code>app.UseOutputCache()</code> but ships no policies: each host opts in. A read-heavy public service (ADC&#39;s
           Conference service, Store&#39;s Catalog) declares named short-TTL policies on its <code>[AllowAnonymous]</code> GET
           controllers, so an anonymous agenda or speaker read is served straight from the output cache and never
-          reaches a query handler. Store&#39;s Catalog runs four such policies, three at 5 minutes and
-          <code>ProductsCache</code> at 60 seconds, because a product payload carries each variant&#39;s effective price, which
-          moves on the clock when a discount window opens or closes with no mutation to evict on; ADC&#39;s
-          Conference service runs twelve, ten at 5 minutes and two at 60 seconds where the payload turns over
-          faster. This is also the lever ADR-019 leans on: the global rate limiter partitions by authenticated user
+          reaches a query handler. Store&#39;s Catalog runs three such policies, <code>CategoriesCache</code> and
+          <code>ProductImagesCache</code> at 5 minutes and <code>ProductsCache</code> at 60 seconds, because a product payload carries
+          each variant&#39;s effective price, which moves on the clock when a discount window opens or closes with no
+          mutation to evict on; ADC&#39;s Conference service runs twelve output-cache policies, ten at 5 minutes and
+          two at 60 seconds where the payload turns over faster. This is also the lever ADR-019 leans on: the global rate limiter partitions by authenticated user
           and routes anonymous traffic to a <code>NoLimiter</code> partition (anonymous SignalR hub requests are the one
           exception, metered per IP), so output caching, not a throttle, is what absorbs that load.</p>
           <p>The sharp mismatch sits in ASP.NET Core&#39;s built-in default output-cache policy, which
@@ -540,9 +566,14 @@
           shared, never restated per policy: ADC keeps it in a single <code>ConferenceReadAudience.PrivilegedRoles</code> list
           (<code>Organizer</code>, <code>ContentEditor</code>) that both the host&#39;s bypass array and the API layer&#39;s read-visibility check
           read, because two lists naming different roles would put a privileged payload into the shared public entries
-          and serve it to everyone. Nor is the bypass a rare exception: eleven of ADC&#39;s twelve public-read policies pass
+          and serve it to everyone. Nor is the bypass a rare exception: ten of ADC&#39;s eleven public-read policies pass
           it, and only <code>NowNextCache</code> (a 60-second now/next feed of published-only data) passes none, because its
-          response varies for nobody.</p>
+          response varies for nobody. When the elevated payload is gated by a permission rather than a role, a
+          second constructor takes bypass permissions too: ADC&#39;s <code>SessionsCache</code> also bypasses any caller holding
+          <code>conference:session-assets:manage</code>, by claim, by role or by stored grant, so a grant held outside the two privileged
+          roles neither reads the public entry nor stores into it. The twelfth policy, <code>ConferenceCache</code>, stays on
+          the built-in default semantics on purpose: a permission-gated controller also references it, and a
+          cached hit is served before MVC&#39;s filters run, so the public policy must never back that endpoint.</p>
           <h3 id="crossing-a-service-boundary-with-a-tag-eviction-event">Crossing a service boundary with a tag-eviction event</h3>
           <p>The edge tier&#39;s other limit is structural rather than sharp. <code>IOutputCacheStore</code> is a per-host store,
           so a host can evict its own tags and nothing else. In a database-per-service system the write that
@@ -582,26 +613,31 @@
           <ul>
           <li><strong>Cache key correctness is the consumer&#39;s responsibility.</strong> The framework gives you read-through caching
           and prefix invalidation. It cannot know that <code>GetProductQuery</code>&#39;s key and <code>UpdateProductCommand</code>&#39;s prefix
-          refer to the same data. If a query caches under <code>&quot;Catalog:Product&quot;</code> and a command invalidates
-          <code>&quot;Catalog:Products&quot;</code>, the cache silently goes stale and nothing complains. The pipeline guarantees that
+          refer to the same data. If a query caches under <code>&quot;Catalog:Product:&quot;</code> and a command invalidates
+          <code>&quot;Catalog:Products:&quot;</code>, the cache silently goes stale and nothing complains. The boundary rule catches one
+          shape of mistake loudly (a prefix that stops mid-segment is logged at Error), but a well-formed prefix
+          that names the wrong family passes every check. The pipeline guarantees that
           invalidation <em>runs</em> on success; it does not guarantee that your keys and prefixes line up. That mapping
           is yours to design and test. The tenant prefix and the caller suffix above are the only exceptions, and
           they are a good model for the rule: the framework only takes over a piece of key construction when
           getting it wrong leaks data rather than merely serving it late.</li>
-          <li><strong>Distributed prefix eviction needs a Redis <code>IConnectionMultiplexer</code>, and every deployed service wires
-          one.</strong> <code>RemoveByPrefixAsync</code> can scan-and-delete by prefix only when a multiplexer is in the container.
-          All seven ADC and Store services reach Redis through one framework wrapper, <code>builder.AddRedisCaching()</code>,
-          which registers the distributed cache and the multiplexer together and no-ops when the named connection
-          string is blank, so whenever Redis is configured, prefix-based invalidation runs (against whatever a
-          query decorator wrote, which in the deployed services is nothing, per the read-path section). The hosts
-          call that wrapper rather than Aspire&#39;s integrations directly, because the raw integrations register an
+          <li><strong>Cross-replica prefix invalidation needs a Redis <code>IConnectionMultiplexer</code>, and every deployed service
+          wires one.</strong> The multiplexer holds the generation tokens, which is what carries an invalidation to
+          every replica. All seven ADC and Store services reach Redis through one framework wrapper,
+          <code>builder.AddRedisCaching()</code>, called once by the composed service host, which registers the distributed
+          cache and the multiplexer together and no-ops when the named connection string is blank, so whenever
+          Redis is configured, prefix-based invalidation reaches every replica (against whatever a query
+          decorator wrote, which in the deployed services is nothing, per the read-path section). The host calls
+          that wrapper rather than Aspire&#39;s integrations directly, because the raw integrations register an
           untagged Redis health check that gates readiness (ADR-025). In-memory mode needs no multiplexer at all:
-          <code>MemoryCacheService</code> removes by prefix in-process through its tracked key set. Prefix eviction is a
-          no-op only on a distributed or hybrid backend with no multiplexer, where cached entries expire on their
-          TTL alone (for a decorator-cached query, its declared <code>CacheDuration</code>). Neither backend fails silently
-          there: each logs the dead invalidation once (<code>Interlocked</code>-guarded, so a mutating command does not flood
-          the log) so an unwired backplane is observable instead of invisible. Single-key <code>RemoveAsync</code> is
-          unaffected in either mode.</li>
+          <code>MemoryCacheService</code> removes by prefix in-process through its tracked key set. On the hybrid backend
+          with no multiplexer the tokens live in the process, so an invalidation still takes effect where it ran
+          but reaches no other replica, whose entries expire on their TTL alone (for a decorator-cached query, its
+          declared <code>CacheDuration</code>). That does not fail silently: it is warned once (<code>Interlocked</code>-guarded, so a
+          mutating command does not flood the log), so an unwired backplane is observable instead of invisible.
+          One operational rule comes with the tokens: the generation keys carry no TTL, so keep them out of
+          Redis eviction, because a lost key brings back the entries written before that prefix&#39;s first
+          invalidation until their own TTL. Single-key <code>RemoveAsync</code> is unaffected in either mode.</li>
           <li><strong>A cache outage degrades reads instead of failing them, and the one fail-open on the auth path has a
           bounded cost.</strong> Every cache call in <code>CachingQueryDecorator</code> is fail-open: a failed read is logged at
           warning level and treated as a miss, so the query falls through to the inner handler and still answers
@@ -622,10 +658,14 @@
           what makes the fail-open a deliberate choice rather than an accident of the code path.</li>
           <li><strong>Per-instance memory caches diverge, and the hybrid backend buys its L1 hit rate with a smaller
           version of the same problem.</strong> The in-process backend is not shared across instances, so two hosts hold
-          independent copies until each entry&#39;s TTL reconciles them. That is exactly why the distributed adapter
-          exists for scaled-out deployments. The two-level backend narrows the window rather than closing it: an
-          eviction clears L2 and the evicting process&#39;s L1, but every other replica&#39;s L1 copy survives until its
-          local expiration, capped at 30 seconds by default (<code>Cache:LocalCacheDuration</code> retunes it). Single-use
+          independent copies until each entry&#39;s TTL reconciles them. That is exactly why a scaled-out host runs
+          the hybrid backend. The two-level backend narrows the window rather than closing it: a single-key
+          removal clears L2 and the removing process&#39;s L1, but every other replica&#39;s L1 copy survives until its
+          local expiration, and a prefix invalidation takes effect in the invalidating process at once and on
+          every other replica within one local duration plus one refresh round trip of its remembered token (in a
+          partial outage, where L2 reads succeed but generation reads fail, within the outage&#39;s length plus one
+          local duration). The local duration is 30 seconds by default (<code>Cache:LocalCacheDuration</code> retunes it).
+          Single-use
           records, counters, and the flags that must clear everywhere at once (the login lockout flag and the
           soft-deleted-user marker) read through <code>GetFromSharedStoreAsync</code> or increment on L2 and skip L1
           entirely, so that window never applies to a token that must not be used twice or a flag that must not
@@ -634,10 +674,11 @@
           <li><strong>The edge tier trades a data-leak risk for its speed.</strong> <code>PublicEndpointOutputCachePolicy</code> serves one
           cached response verbatim to every later caller, so it is safe only on endpoints that are
           <code>[AllowAnonymous]</code> and identity-independent. Adopting it is an audit, not a toggle: a permission-gated or
-          per-user endpoint must never move onto it, and the bypass-roles overload covers role-shaped variance
-          only, never per-user variance. The store behind it is the other thing to get right: <code>AddOutputCache</code>
-          defaults to per-replica memory, so under scale-out a tag eviction reaches only the replica that handled
-          the mutation. Both deployed adopters call the framework&#39;s <code>builder.AddRedisOutputCaching()</code>, which
+          per-user endpoint must never move onto it, and the bypass by role or by permission covers role- and
+          permission-shaped variance only, never per-user variance. The store behind it is the other thing to get
+          right: <code>AddOutputCache</code> defaults to per-replica memory, so under scale-out a tag eviction reaches only
+          the replica that handled the mutation. Both deployed adopters opt in with <code>UseRedisOutputCaching = true</code>
+          on the composed service host, which then calls the framework&#39;s <code>builder.AddRedisOutputCaching()</code>; that
           registers a Redis-backed output-cache store when the Redis connection string is set and no-ops
           otherwise, and ADR-040 makes the shared store the expected posture
           wherever a service runs more than one replica; the in-memory store is the single-replica case.</li>
@@ -689,8 +730,8 @@
           <hr>
           <p><strong>What we covered:</strong> why scattering cache invalidation across handlers goes stale by omission, how
           MMCA.Common&#39;s <code>ICacheService</code> port plus two pipeline decorators cache reads and invalidate writes
-          automatically, how one contract over three backends (memory, Redis, and the opt-in two-level hybrid every
-          deployed service selects) keeps the same code coherent from monolith to scaled-out service, why
+          automatically, how one contract over two backends (in-process memory, and the two-level hybrid every
+          Redis-configured service must run) keeps the same code coherent from monolith to scaled-out service, why
           invalidation runs on success outside the transaction and then runs again five seconds later, which two
           pieces of key construction the framework takes over for you (the tenant prefix and the caller suffix),
           why every cache call is fail-open
@@ -721,7 +762,7 @@
             <ul>
             <li><a href="#why-invalidation-belongs-in-the-pipeline-not-the-handler">Why invalidation belongs in the pipeline, not the handler</a></li>
             <li><a href="#the-cache-abstraction">The cache abstraction</a></li>
-            <li><a href="#one-contract-three-backends">One contract, three backends</a></li>
+            <li><a href="#one-contract-two-backends">One contract, two backends</a></li>
             <li><a href="#the-read-path-opt-in-by-marker-interface">The read path: opt in by marker interface</a></li>
             <li><a href="#the-write-path-invalidate-on-success-outside-the-transaction">The write path: invalidate on success, outside the transaction</a></li>
             <li><a href="#swallowing-a-failure-is-a-discipline-not-a-catch">Swallowing a failure is a discipline, not a catch</a></li>

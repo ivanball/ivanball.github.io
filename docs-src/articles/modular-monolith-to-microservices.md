@@ -1,12 +1,12 @@
 # Modular monolith to microservices, without the rewrite
 
 > Series: MMCA.Common · Article #2 (cornerstone thesis) · Pillar P1/P3 · Groups G07,G13,G14 ·
-> Rubric §7 · ADRs 006/007/008 · Status: grounded in `MMCA.Common/AGENTS.md` (its "Microservices
+> Rubric §7 · ADRs 006/007/008/118 · Status: grounded in `MMCA.Common/AGENTS.md` (its "Microservices
 > Extraction Boundaries" section), `Website/docs-src/adr/006-database-per-service.md`, `Website/docs-src/adr/007-grpc-extraction.md`,
 > `Website/docs-src/adr/008-service-extraction-topology.md`, and `Website/docs-src/onboarding/group-14-module-system-composition.md`
-> + `group-13-grpc-contracts.md`, with source re-read 2026-10-29 at v1.265.1 (`MessageBusSettings.cs`,
-> `ArchitectureRules.Transport.cs`, `ResultGrpcExtensions.cs`, ADC `IBookmarkCountService.cs`,
-> `GetSessionBookmarkCountHandler.cs`, Engagement.Contracts `DependencyInjection.cs`, Conference.Service
+> + `group-13-grpc-contracts.md`, with source re-read 2026-11-25 at v1.319.0 (`MessageBusSettings.cs`,
+> `IMessageBus.cs`, `BrokerMessageBus.cs`, `ArchitectureRules.Transport.cs`, `ResultGrpcExtensions.cs`,
+> ADC `main.bicep`, Engagement.Contracts `DependencyInjection.cs`, Conference.Service
 > `Program.cs`). No em dashes.
 
 **Subtitle:** "Monolith or microservices" is the wrong question. Build the extraction point now, keep it tested,
@@ -62,21 +62,26 @@ until you use it.
 
 ### 2. A transport-agnostic message bus
 
-The second leak is event delivery. There is one abstraction, `IMessageBus`, defined in the
-Application layer, with two implementations in Infrastructure: `InProcessMessageBus` (delivery is a
-method call, used in the monolith) and `BrokerMessageBus` (delivery is over a MassTransit broker,
-used once a module is its own service). `MessageBusSettings.Provider`, a plain string, selects the
-mode: `InProcess`, `RabbitMq` and `PostgreSql` are built in, and any other value names a broker
-transport an adapter package registers (`AzureServiceBus` from `MMCA.Common.Azure`, `AmazonSqs` from
-`MMCA.Common.Aws`; the adapter pattern has [its own article](cloud-neutral-vendor-adapters.md)).
+The second leak is event delivery. Application code publishes an integration event through
+`IEventBus` and never touches the transport. Beneath it sits one transport abstraction, `IMessageBus`,
+defined in the Application layer, with two implementations in Infrastructure: `InProcessMessageBus`
+(delivery is a method call, used in the monolith) and `BrokerMessageBus` (delivery goes through the
+selected broker transport's `IBrokerPublisher`, used once a module is its own service). The broker
+transports are framework code, not a third-party bus library. `MessageBusSettings.Provider`, a plain
+string, selects the mode: `InProcess`, `RabbitMq` and `PostgreSql` are built in, and any other value
+names a broker transport an adapter package registers (`AzureServiceBus` from `MMCA.Common.Azure`,
+`AmazonSqs` from `MMCA.Common.Aws`; the adapter pattern has [its own article](cloud-neutral-vendor-adapters.md)).
 ADC runs RabbitMQ locally and Azure Service Bus in production. Your handler code does not change when
 you flip it.
 
-The rule that keeps this honest is that **Application, Domain, and Shared must never reference
-MassTransit directly.** That is not a code-review comment. It is a fitness test,
-`MicroserviceExtractionTests`, that fails the build if a transport type leaks into the core. The
-transactional outbox (its own article in this series) is what makes the flip safe: the same durable
-event record drains to an in-process handler today and to a broker tomorrow.
+The rule that keeps this honest is that **Application, Domain, and Shared never reference a broker
+client or the gRPC runtime directly.** That is not a code-review comment. It is a fitness test,
+`MicroserviceExtractionTests`, that fails the build if a transport type (RabbitMQ, Azure Service Bus,
+Amazon SQS or SNS, gRPC, protobuf, or the banned MassTransit) leaks into the core. The transactional
+outbox (its own article in this series) is what makes the flip safe. Under a broker it is always on:
+each integration event is written in the same transaction as the aggregate change and drained to the
+broker. A monolith on `InProcess` dispatches synchronously by default and gets the same durable
+record, and at-least-once delivery across a crash, by setting `MessageBus:EnableOutbox=true`.
 
 ### 3. gRPC contracts for synchronous calls (ADR-007)
 
@@ -98,20 +103,22 @@ The error model survives the hop too. On the server, `GrpcResultExceptionInterce
 structured trailers. On the client, an adapter whose interface returns a `Result` catches that
 `RpcException` and calls `ToResult()` (or `ToResult<T>()`), which rebuilds `Result.Failure(errors)`
 from the trailers and degrades a bare transport fault (a reset connection, a missed deadline) to a
-single failure carrying the RPC detail. Callers keep programming against `Result<T>` whether the
-answer came from an object or a network round-trip. This is "Result over the wire," and it is why
-the wire hop does not poison your error handling.
+single retryable `Unexpected` error coded `Grpc.{StatusCode}` that carries the RPC detail. Callers keep
+programming against `Result<T>` whether the answer came from an object or a network round-trip. This
+is "Result over the wire," and it is why the wire hop does not poison your error handling.
 
 ### 4. Federated auth, a gateway, and Aspire hosting (ADR-008)
 
-The last leak is everything around the services. Cross-service auth uses JWKS, not a shared secret:
-`IJwksProvider` (`RsaJwksProvider`) exposes signing keys, and `JwksEndpointExtensions` serves
-`/.well-known/jwks.json`, so an extracted service validates a forwarded token against the issuer's
-public keys. Under the Aspire AppHost each service discovers those keys through the gateway; in
-production each service points its JWT authority straight at the Identity service. A single YARP reverse-proxy gateway is the only client
-entry point, owning the route-to-service map; clients never address a service directly.
-`MMCA.Common.Aspire.Hosting` wires the broker, JWKS discovery, and the per-service data sources for
-the extracted topology.
+The last leak is everything around the services. User tokens cross services through JWKS, not a
+shared secret: `IJwksProvider` (`RsaJwksProvider`) exposes signing keys, and `JwksEndpointExtensions`
+serves `/.well-known/jwks.json`, so an extracted service validates a forwarded token against the
+issuer's public keys. Under the Aspire AppHost each service discovers those keys through the gateway;
+in production each service points its JWT authority straight at the Identity service. The one
+exception is a service-to-service gRPC call with no user token to forward (a background drain, an
+internal command): it carries an HS256 service token signed with a key the services share (ADR-061).
+A single YARP reverse-proxy gateway is the only client entry point, owning the route-to-service map;
+clients never address a service directly. `MMCA.Common.Aspire.Hosting` wires the broker, JWKS
+discovery, the service-token key, and the per-service data sources for the extracted topology.
 
 ADR-008 names the payoff precisely: each extracted service is just **the monolith with one module
 enabled.** The `ModuleLoader` still runs, but each service host names only its own module assembly,
@@ -190,7 +197,7 @@ actually built. You have drawn a picture of one.
 ---
 
 **What we covered:** why monolith-versus-microservices is a false binary, the four extraction points MMCA.Common
-enforces inside one deployable (database-per-service, the transport-agnostic `IMessageBus`, gRPC
+enforces inside one deployable (database-per-service, `IEventBus` over the transport-agnostic `IMessageBus`, gRPC
 `.Contracts` with Result-over-the-wire, and JWKS auth behind a YARP gateway with Aspire hosting), and
 the one invariant that ties them together: application code talks to abstractions, transport lives at
 the edge, enforced by `MicroserviceExtractionTests`.
@@ -207,118 +214,96 @@ install it and try the split for yourself.*
 
 *Tags: .NET, C Sharp, Software Architecture, Microservices, Modular Monolith*
 
-*Notes: 2026-10-29 re-verify at framework v1.265.1 (`MMCA.Common/FACTS.md:14`); every anchor below was
-re-read in this run. Messaging: `IMessageBus`
-(`MMCA.Common/Source/Core/MMCA.Common.Application/Messaging/IMessageBus.cs:28`), `InProcessMessageBus`
-(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Messaging/InProcessMessageBus.cs:19`) and
-`BrokerMessageBus` (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Messaging/BrokerMessageBus.cs:43`,
-publishing through MassTransit, transport-neutral); the provider is the string
-`MessageBusSettings.Provider` defaulting to `InProcess`
-(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Messaging/MessageBusSettings.cs:25`, adapter-registered
-brokers described at :8-11 and :18-23), with the built-in constants in `MessageBusProviders`
-(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Messaging/Transports/MessageBusProviders.cs:10`:
-`InProcess` :16, `RabbitMq` :19, `PostgreSql` :27; the known adapter transports `AzureServiceBus` from
-`MMCA.Common.Azure` and `AmazonSqs` from `MMCA.Common.Aws` at :34-39); ADC production sets
-`MessageBus__Provider` to `AzureServiceBus` (`MMCA.ADC/infra/main.bicep:1980`, :2205, :2349, :2502).
-Transport-leak fitness rule: the forbidden set is MassTransit, Grpc **and** Google.Protobuf
-(`MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Rules/Layering/ArchitectureRules.Transport.cs:11-16`),
-asserted by `MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Bases/Layering/MicroserviceExtractionTestsBase.cs:13`
-and subclassed in Common, ADC, Store and Helpdesk. Data sources: `DataSourceKey`
+*Notes: re-verified 2026-11-25 against MMCA.Common v1.319.0 (`MMCA.Common/FACTS.md:14`). Anchors marked
+"audit-confirmed" were confirmed by this run's audit and not re-opened by the apply step; every other anchor
+was read in this run. Messaging: application code publishes through `IEventBus` and `IMessageBus` is only
+the transport the outbox drains through (`MMCA.Common/Source/Core/MMCA.Common.Application/Messaging/IMessageBus.cs:5-10`,
+the interface at :29, its two implementations listed at :12-25); the `IEventBus` implementations are
+`InProcessEventBus` (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Messaging/InProcessEventBus.cs:34`) and
+`BrokerEventBus` (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Messaging/BrokerEventBus.cs:31`);
+`InProcessMessageBus` (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Messaging/InProcessMessageBus.cs:18`) and
+`BrokerMessageBus` (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Messaging/BrokerMessageBus.cs:46`, publishing
+through the transport's `IBrokerPublisher` per its doc comment at :13-18, constructor parameter at :47). The provider
+is the string `MessageBusSettings.Provider` defaulting to `InProcess`
+(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Messaging/MessageBusSettings.cs:25`, adapter-registered brokers
+at :8-11 and :18-23); built-in constants in `MessageBusProviders`
+(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Messaging/Transports/MessageBusProviders.cs`: `InProcess` :16,
+`RabbitMq` :19, `PostgreSql` :27, adapter transports at :34-39; audit-confirmed). Outbox posture: `EnableOutbox`
+(`MessageBusSettings.cs:172`, doc :144-171: off under `InProcess` with synchronous dispatch and no outbox rows, on
+under a broker, `MessageBus:EnableOutbox=true` opts a monolith in at :159-161, turning it off under a broker is
+refused at registration at :161-163) resolved by `IsOutboxEnabled` at :180. ADC production sets
+`MessageBus__Provider` to `AzureServiceBus` (`MMCA.ADC/infra/main.bicep:2439`, :2686, :2846, :3006).
+Transport-leak fitness rule: `TransportDependencies`
+(`MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Rules/Layering/ArchitectureRules.Transport.cs:14-23`:
+MassTransit, RabbitMQ.Client, Azure.Messaging.ServiceBus, Amazon.SQS, Amazon.SimpleNotificationService, Grpc,
+Google.Protobuf; MassTransit "banned outright, ADR-118" at :7-8), asserted by `TransportDoesNotLeakIntoCoreLayers`
+(:26) through `MicroserviceExtractionTestsBase`
+(`MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Bases/Layering/MicroserviceExtractionTestsBase.cs:9`,
+test at :14); the AGENTS.md bullet says "never reference a broker client" (`MMCA.Common/AGENTS.md:151`).
+Data sources: `DataSourceResolver`
+(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DataSources/DataSourceResolver.cs:16`, collapse
+onto Default described at :212 and :289, unmapped-name fallback to `DataSourceKey.Default` at :99-106); `DataSourceKey`
 (`MMCA.Common/Source/Core/MMCA.Common.Application/Interfaces/Infrastructure/Persistence/DataSourceKey.cs:15`,
-`DefaultName = "Default"` at :18), `DataSourceResolver`
-(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DataSources/DataSourceResolver.cs:16`, the
-collapse onto Default described at :211 and :287-289, the unmapped-name fallback at :104-106) and `EntityDataSourceRegistry`
-(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DataSources/EntityDataSourceRegistry.cs:21`).
-Modules: `ModuleLoader` (`MMCA.Common/Source/Core/MMCA.Common.Application/Modules/ModuleLoader.cs:16`, the
-disabled-module stub path `module.RegisterDisabledStubs(services)` at :119) and the `Disabled*` stubs, e.g.
-`DisabledBookmarkCountService`
-(`MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Shared/UserSessionBookmarks/DisabledBookmarkCountService.cs:7`).
-The extracted Conference host passes only its own assembly to `AddModuleHost`
-(`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:379-381`, the single-assembly array at
-:380), so no Engagement stub is registered (header comment at :36-39, pipeline comment at :399-403), and
-registers `AddEngagementBookmarkCountClient()` at :431 inside `AddMmcaApplicationPipeline` (:429);
-ADR-008's 2026-10-01 Revision (`Website/docs-src/adr/008-service-extraction-topology.md:158`) states the
-same and its 2026-10-21 Revision (:209) re-verifies it, while the payoff wording "the monolith with one
-module enabled" stays at its :51.
-Auth: `IJwksProvider` (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Auth/IJwksProvider.cs:11`, serving
-`/.well-known/jwks.json` per its doc comment at :6), `RsaJwksProvider`
-(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Auth/RsaJwksProvider.cs:14`) and `JwksEndpointExtensions`
-(`MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/Endpoints/JwksEndpointExtensions.cs:15`). JWKS
-discovery through the gateway is AppHost-only (`WithJwksDiscovery(identityService, gateway)` at
-`MMCA.ADC/Source/Hosting/MMCA.ADC.AppHost/Program.cs:374-376`); in production each service's
-`Authentication__JwtBearer__Authority` is `http://${identityApp.name}` (`MMCA.ADC/infra/main.bicep:2192`,
-:2328, :2482). gRPC and
-Result over the wire: `GrpcResultExceptionInterceptor`
-(`MMCA.Common/Source/Presentation/MMCA.Common.Grpc/Interceptors/GrpcResultExceptionInterceptor.cs:19`,
-catching `ResultFailureException` at :34 and mapping its errors through `ToRpcException()` in
-`ToTransportException` at :126), `ResultFailureException`
-(`MMCA.Common/Source/Presentation/MMCA.Common.Grpc/Exceptions/ResultFailureException.cs:16`), and
+`DefaultName` at :18) and `EntityDataSourceRegistry`
+(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DataSources/EntityDataSourceRegistry.cs:21`) are
+audit-confirmed. Modules: `module.RegisterDisabledStubs(services)` at
+`MMCA.Common/Source/Core/MMCA.Common.Application/Modules/ModuleLoader.cs:121` (the class at :16 and
+`DisabledBookmarkCountService` at
+`MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Shared/UserSessionBookmarks/DisabledBookmarkCountService.cs:7`
+audit-confirmed). The extracted Conference host calls `AddMmcaServiceHost`
+(`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:82`) with `ModuleAssemblies` holding only the
+Conference module assembly (:89), and registers `AddEngagementBookmarkCountClient()` in the `ConfigurePipeline`
+option (:357, the call at :359; comments at :37 and :332). ADR-008's payoff "the monolith with one module enabled"
+is at `Website/docs-src/adr/008-service-extraction-topology.md:54` (and :113); its 2026-11-23 Revision (:309)
+records the `AddMmcaServiceHost` / `ModuleAssemblies` shape at :318-322. Auth: AppHost JWKS discovery through
+the gateway (`WithJwksDiscovery(identityService, gateway)` at `MMCA.ADC/Source/Hosting/MMCA.ADC.AppHost/Program.cs:373-375`);
+in production each service's `Authentication__JwtBearer__Authority` is `http://${identityApp.name}`
+(`MMCA.ADC/infra/main.bicep:2672`, :2816, :2986). Service tokens: `Grpc__ServiceToken__SigningKey`
+(`MMCA.ADC/infra/main.bicep:2492`, :2839, :3014) and the AppHost helper
+(`MMCA.Common/Source/Hosting/MMCA.Common.Aspire.Hosting/ServiceTokenExtensions.cs:9-11`, ADR-061); `IJwksProvider`,
+`RsaJwksProvider` and `JwksEndpointExtensions` anchors are audit-confirmed. gRPC and Result over the wire:
 `ResultGrpcExtensions` (`MMCA.Common/Source/Presentation/MMCA.Common.Grpc/ResultGrpcExtensions.cs:31`:
-`ToRpcException()` at :119, client-side `ToResult()` at :218 and `ToResult<T>()` at :242, structured
-trailers first, a bare transport fault degrading to one `Grpc.{StatusCode}` failure). Result-returning ADC
-adapters call it, e.g. `ex.ToResult<EventLiveInfo>()`
-(`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Contracts/EventLiveValidationServiceGrpcAdapter.cs:61`) and
+`ToRpcException()` at :119, client-side `ToResult()` at :219 and `ToResult<T>()` at :244, the transport-fault
+degrade documented at :210-212 and :234-236, built by `TransportError` at :340 with code `Grpc.{StatusCode}` at
+:342 and its `Unexpected`-not-`Failure` rationale at :336-338); `GrpcResultExceptionInterceptor` and
+`ResultFailureException` are audit-confirmed. Result-returning ADC adapters call it, e.g.
+`ex.ToResult<EventLiveInfo>()`
+(`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Contracts/EventLiveValidationServiceGrpcAdapter.cs:70`) and
 `ex.ToResult()` (`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Contracts/SessionBookmarkValidationServiceGrpcAdapter.cs:58`);
 `BookmarkCountServiceGrpcAdapter`
-(`MMCA.ADC/Source/Services/MMCA.ADC.Engagement.Contracts/BookmarkCountServiceGrpcAdapter.cs:14`) returns a
-plain count and has no `Result` to rebuild. The `.Contracts` convention:
-`MMCA.Common/Directory.Build.props:158` (the `EndsWith('.Contracts')` item group) with
-`<Protobuf Include="Protos\**\*.proto" GrpcServices="Both" />` at :165 (ADC carries the same convention at
-`MMCA.ADC/Directory.Build.props:144`/:151). Worked example:
-`IBookmarkCountService` carries `[ServiceContract]` and declares
-`Task<int> GetBookmarkCountForSessionAsync(SessionIdentifierType sessionId, CancellationToken)`
-(`MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Shared/UserSessionBookmarks/IBookmarkCountService.cs:10`
-and :19); `GetSessionBookmarkCountHandler`
-(`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Speakers/UseCases/GetSessionBookmarkCount/GetSessionBookmarkCountHandler.cs:14`,
-primary constructor `(IUnitOfWork unitOfWork, IBookmarkCountService bookmarkCountService)` at :15-16,
-implementing `IQueryHandler<GetSessionBookmarkCountQuery, Result<int>>` at :16) makes the call at :43 and
-returns `Result.Success(count)` at :45; the code sample's `services.Replace(...)` line is verbatim source
-(`MMCA.ADC/Source/Services/MMCA.ADC.Engagement.Contracts/DependencyInjection.cs:49`, inside
-`AddEngagementBookmarkCountClient` at :43; the comment at :47-48 notes Replace wins over an in-process
-registration or a disabled stub where one exists). Aspire hosting: `MMCA.Common.Aspire.Hosting` ships five
-source files (`BrokerSelection.cs`, `Extensions.cs`, `H2cHealthCheckExtensions.cs`, `H2cEndpointHealthCheck.cs`,
-`ServiceBusEmulatorResource.cs`); `MMCA.Common/Source/Hosting/MMCA.Common.Aspire.Hosting/Extensions.cs`
-exposes `AddMessageBroker` (:172), `WithBroker` (:264, second overload :293), `WithJwksDiscovery` (:322),
-`WithE2eRsaKeys` (:366) and
+(`MMCA.ADC/Source/Services/MMCA.ADC.Engagement.Contracts/BookmarkCountServiceGrpcAdapter.cs:14`) returns a plain
+`Task<int>` (:23). The `.Contracts` convention: `MMCA.Common/Directory.Build.props:198` (the `EndsWith('.Contracts')`
+item group) with `<Protobuf Include="Protos\**\*.proto" GrpcServices="Both" />` at :205 (ADC: `MMCA.ADC/Directory.Build.props:180`/:187).
+Worked example: `IBookmarkCountService` and `GetSessionBookmarkCountHandler` anchors (interface :10/:19, handler
+:14-16, call :43, return :45) are audit-confirmed; the code sample's `services.Replace(...)` line is verbatim source
+(`MMCA.ADC/Source/Services/MMCA.ADC.Engagement.Contracts/DependencyInjection.cs:52`, inside
+`AddEngagementBookmarkCountClient` at :46; the comment at :50-51 notes Replace wins over an in-process
+registration or a disabled stub). Aspire hosting: `MMCA.Common.Aspire.Hosting` ships eleven source files
+(`BrokerSelection.cs`, `Extensions.cs`, `GatewayUiExtensions.cs`, `H2cEndpointHealthCheck.cs`,
+`H2cHealthCheckExtensions.cs`, `IdentityLinkExtensions.cs`, `MmcaReplicas.cs`, `ServiceBusEmulatorResource.cs`,
+`ServiceEndpointProfile.cs`, `ServiceInfrastructureExtensions.cs`, `ServiceTokenExtensions.cs`);
+`MMCA.Common/Source/Hosting/MMCA.Common.Aspire.Hosting/Extensions.cs` exposes `AddMessageBroker` (:220),
+`WithBroker` (:312, second overload :341), `WithJwksDiscovery` (:370), `WithE2eRsaKeys` (:414) and
 `WithSQLServerDataSource`/`WithPostgreSQLDataSource`/`WithCosmosDataSource`/`WithSqliteDataSource`
-(:531/:561/:590/:615), and **no** gRPC project-reference API (the only gRPC mention is a prose comment at
-:335). ADC's AppHost wires gRPC peers with stock Aspire `WithReference`
-(`MMCA.ADC/Source/Hosting/MMCA.ADC.AppHost/Program.cs:265-302` under the block comment at :249-263, whose
-deadlock and self-heal rationale is at :255-262; the Conference to Engagement reference at :270 carries no
-`WaitFor`, per the comment at :268-269). Repo and license: `ivanball/MMCA.Common`, Apache-2.0
-(`MMCA.Common/Directory.Build.props:54-55`). Header source: the "Microservices Extraction Boundaries"
-heading is at `MMCA.Common/AGENTS.md:129`, its message-bus bullet (the string provider) at :133. Changes
-this run (2026-10-29): section 2's selector sentence was corrected, because there is no
-`MessageBusProvider` enum: the provider is a string (`MessageBusSettings.cs:25`) with `InProcess`,
-`RabbitMq` and `PostgreSql` built in (`MessageBusProviders.cs:16`/:19/:27) and `AzureServiceBus` /
-`AmazonSqs` registered by the adapter packages (:34-39), and the Notes messaging entry was rewritten to
-match; a pointer to the vendor-adapters article was added; the framework stamp moved to v1.265.1 and the
-other anchors were re-anchored (`DataSourceResolver` collapse 192/295 to 211/287-289, Conference.Service
-`AddModuleHost` 373-375 to 379-381, its pipeline comment 393-397 to 399-403 and client registration 420
-to 431, ADR-008 Revisions and payoff 155/206/48 to 158/209/51, AppHost JWKS 373-375 to 374-376,
-`main.bicep` 2161/2297/2451 to 2192/2328/2482, `Directory.Build.props` 175/182 to 158/165 and 71-72 to
-54-55, `Extensions.cs` 292/321/365 to 293/322/366, its data-source methods 530/560/589/614 to
-531/561/590/615 and its gRPC comment 334 to 335, AppHost peer block 264-301/269/268 to
-265-302/270/268-269, `AGENTS.md` 126 to 129). The 2026-10-22 run: no body claim had drifted; the
-framework stamp moved to v1.250.0 and only anchors were re-anchored (`DataSourceResolver` collapse 191/294
-to 192/295, ADR-008 Revision and payoff 154/47 to 155/48, AppHost JWKS 368-370 to 373-375, `main.bicep`
-2005/2141/2295 to 2161/2297/2451, `Extensions.cs` 160/252/280/309/353 to 172/264/292/321/365, its
-data-source methods 483/513/542/567 to 530/560/589/614 and its gRPC comment 322 to 334, AppHost peer block
-264-296 to 264-301, `AGENTS.md` 125 to 126). The 2026-10-08 run: section 4's module paragraph and
-the code sample's extracted-host comment were corrected (an extracted host names only its own module
-assembly, so no `Disabled*` stub holds the peer's slot; the stubs serve a combined host), the JWKS sentence
-was corrected (gateway discovery is AppHost-only, production points at Identity directly), the code sample's
-handler constructor gained its `IUnitOfWork` parameter, the header source moved from `MMCA.Common/CLAUDE.md`
-to `MMCA.Common/AGENTS.md`, the Aspire.Hosting file count went from four to five (`BrokerSelection.cs`),
-and the `Directory.Build.props` anchors (153/160 to 175/182, 49-50 to 71-72) and AppHost anchors (269-301/274
-to 264-296/269) were re-anchored. The 2026-10-02 run: the license/URL anchor was re-anchored to
-49-50; the error-model paragraph was corrected (the trailer-to-`Result` rebuild is `ToResult()` in
-`ResultGrpcExtensions`, called by Result-returning adapters, not something the bookmark adapter does); the
-code sample's handler shape now matches source (primary constructor plus `IQueryHandler`); a "now" was
-dropped from section 1. Earlier runs: the 2026-09-19 run corrected three moved paths
-(`MessageBusSettings.cs` to `Messaging/`, `ArchitectureRules.Transport.cs` to `Rules/Layering/`,
-`MicroserviceExtractionTestsBase.cs` to `Bases/Layering/`) and retired the `ServiceContractAttribute` gap;
-before that, "over RabbitMQ" became provider-neutral, an invented Aspire gRPC API was removed, and a
-nonexistent `GetCountAsync(...) returns Result<int>` was replaced with the real interface method.*
+(:587/:617/:646/:671), and **no** gRPC project-reference API (its only gRPC mention is a prose comment at :383;
+`ServiceTokenExtensions.cs` names gRPC only for the service-token key). ADC's AppHost wires gRPC peers with stock
+Aspire `WithReference` (`MMCA.ADC/Source/Hosting/MMCA.ADC.AppHost/Program.cs:266-308` under the block comment at
+:251-265, whose deadlock and self-heal rationale is at :257-264; the Conference to Engagement reference at :276
+carries no `WaitFor`, per the comment at :274-275). Repo and license: `ivanball/MMCA.Common`, Apache-2.0
+(`MMCA.Common/Directory.Build.props:94-95`). Header source: the "Microservices Extraction Boundaries" heading is
+at `MMCA.Common/AGENTS.md:147`, its message-bus bullet at :151. Changes this run (2026-11-25): section 2 names
+`IEventBus` as the application publish API and `IMessageBus` as the transport beneath it (`IMessageBus.cs:5-10`);
+`BrokerMessageBus` delivery became the transport's `IBrokerPublisher` rather than MassTransit (`BrokerMessageBus.cs:13-18`,
+:47); the fitness-rule sentence names the broker clients and gRPC runtime it forbids (`ArchitectureRules.Transport.cs:14-23`);
+the outbox sentence states the per-provider posture (off by default in-process, forced on under a broker,
+`MessageBusSettings.cs:144-180`); the error-model sentence names the synthesized error `Unexpected` with code
+`Grpc.{StatusCode}` (`ResultGrpcExtensions.cs:336-342`); section 4 scopes JWKS to user tokens and adds the
+HS256 service token (`main.bicep:2492`, `ServiceTokenExtensions.cs:9-11`); ADR-118 joined the header; the
+framework stamp moved to v1.319.0, the Aspire.Hosting file count from five to eleven, the forbidden transport set
+from three to seven, and the Conference host evidence from `AddModuleHost`/`AddMmcaApplicationPipeline` to
+`AddMmcaServiceHost`/`ModuleAssemblies`/`ConfigurePipeline`; every other anchor was re-anchored. Earlier runs
+(2026-09-19 through 2026-10-29) corrected the provider selector to a string, the extracted-host and `Disabled*`
+stub description, the AppHost-only JWKS discovery, the error-model attribution to `ToResult()`, the handler's
+constructor shape, the header source file, and several moved paths and anchors.*
 
 - Full series index: https://ivanball.github.io/writing.html

@@ -188,8 +188,9 @@ and consistent, so the domain factory is free to focus on the rules only it can 
 - **Composition is opt-in, so adoption is uneven.** Nothing forces a validator to include a fragment.
   Store's registration validator hand-writes its email, password and name chains instead of including
   the fragments. Its password chain reads the same `PasswordComplexity` lengths and four regexes the
-  fragment uses, each with its own error code, but its email and name caps are literal 100s. Common's own
-  login and forgot-password validators hand-write their email rule. The kit removes the reason to copy; it does not detect a copy.
+  fragment uses, and its email and name caps read the `CustomerInvariants` constants the domain's own
+  length checks use, every rule with its own error code. Common's own login and forgot-password
+  validators hand-write their email rule. The kit removes the reason to copy; it does not detect a copy.
 - **This layer is structural only.** A fragment validates shape, never cross-entity or stateful rules.
   That is correct (those belong in the domain factory), but it means the validator is not the whole
   story, and a reviewer must check both altitudes to know a command is fully guarded.
@@ -241,32 +242,32 @@ guide, or `dotnet add package MMCA.Common.Application` and try it.*
 
 *Tags: .NET, C Sharp, Validation, Software Architecture, FluentValidation*
 
-*Notes: source-verified 2026-10-29 against MMCA.Common v1.265.1 (`MMCA.Common/FACTS.md:14`), paths
+*Notes: re-verified 2026-11-25 against MMCA.Common v1.319.0 (`MMCA.Common/FACTS.md:14`), paths
 relative to `MMCA.Common/Source/Core/MMCA.Common.Application/` unless prefixed. Rule fragments, all
-eleven, in `Validation/CommonValidationRules.cs`: `RequiredStringRules<T>` (:42), `OptionalStringRules<T>`
-(:54), `EmailRules<T>` (:65), `AbsoluteUrlRules<T>` (:86), `PositiveIntRules<T>` (:101),
-`PositiveDecimalRules<T>` (:112), `NonNegativeIntRules<T>` (:123), `RequiredIdRules<T, TId>` (:143),
-`OptionalPositiveIdRules<T, TId>` (:162), `PasswordRules<T>` (:175), `StrongPasswordRules<T>` (:191);
-internal `OptionalErrorCodeExtensions` helper at :20. `EmailRules<T>` ctor :67, chain :68-71;
-`RequiredStringRules<T>` ctor :44; every fragment ctor ends in an optional `string? errorCode = null`.
-`PasswordRules<T>` chains literal `MinimumLength(8)` / `MaximumLength(128)` (:179-181);
+eleven, in `Validation/CommonValidationRules.cs`: `RequiredStringRules<T>` (:41), `OptionalStringRules<T>`
+(:53), `EmailRules<T>` (:64), `AbsoluteUrlRules<T>` (:85), `PositiveIntRules<T>` (:100),
+`PositiveDecimalRules<T>` (:111), `NonNegativeIntRules<T>` (:122), `RequiredIdRules<T, TId>` (:142),
+`OptionalPositiveIdRules<T, TId>` (:161), `PasswordRules<T>` (:174), `StrongPasswordRules<T>` (:190);
+internal `OptionalErrorCodeExtensions` helper at :19. `EmailRules<T>` ctor :66, chain :67-70;
+`RequiredStringRules<T>` ctor :43; every fragment ctor ends in an optional `string? errorCode = null`.
+`PasswordRules<T>` chains literal `MinimumLength(8)` / `MaximumLength(128)` (:179-180);
 `StrongPasswordRules<T>` chains `MinimumLength(PasswordComplexity.MinimumLength)`,
 `MaximumLength(PasswordComplexity.MaximumLength)` and four `Matches(PasswordComplexity.Uppercase/
-Lowercase/Digit/SpecialCharacter)` (:195-201), with the shared-with-the-client-form-attribute statement in
-its class doc (:187-188); `MMCA.Common.Shared/Auth/PasswordComplexity.cs` declares `MinimumLength = 8`
+Lowercase/Digit/SpecialCharacter)` (:194-200), with the shared-with-the-client-form-attribute statement in
+its class doc (:186-187); `MMCA.Common.Shared/Auth/PasswordComplexity.cs` declares `MinimumLength = 8`
 (:21), `MaximumLength = 128` (:24) and the four Unicode-category regexes (:28, :32, :36, :43). The code
 block is verbatim from `MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Application/Users/Validation/
 RegisterRequestValidator.cs:12-25` (includes :16-19); its caps come from
 `MMCA.ADC.Identity.Domain/Users/UserInvariants.cs:12,15,18` (`const`), which the domain's own checks use
-(`EnsureEmailIsValid` :38, `EmailMaxLength` read at :44; first and last name at :63, :68). Other `EmailRules`
-users: ADC `SpeakerValidationRules.cs:46`, `EventValidationRules.cs:123` (inside
+(`User.Create` calls them at `User.cs:229-231`; `EnsureEmailFitsColumn` :45, `EmailMaxLength` read at :46; first and last name at :51, :56). Other `EmailRules`
+users: ADC `SpeakerValidationRules.cs:47` (inside `SpeakerEmailRules<T>`, :39), `EventValidationRules.cs:123` (inside
 `EventOrganizerContactEmailRules<T>`, :115);
 `StrongPasswordRules` also in ADC `ChangePasswordRequestValidator.cs:18`. Uneven adoption: Store
-`MMCA.Store.Identity.Application/Users/Validation/RegisterRequestValidator.cs:21-24` (email, literal 100),
-:26-33 (password: `MinimumLength(PasswordComplexity.MinimumLength)`, `MaximumLength(PasswordComplexity.
+`MMCA.Store.Identity.Application/Users/Validation/RegisterRequestValidator.cs:23-26` (email, cap `CustomerInvariants.EmailMaxLength` at :26),
+:28-35 (password: `MinimumLength(PasswordComplexity.MinimumLength)`, `MaximumLength(PasswordComplexity.
 MaximumLength)` and four `Matches(PasswordComplexity.Uppercase/Lowercase/Digit/SpecialCharacter)`, each
-with its own `WithErrorCode`) and :35-41 (first and last name, literal 100), composing only
-`AddressValidator` (:43-45); Common
+with its own `WithErrorCode`) and :37-43 (first and last name, caps `CustomerInvariants.FirstNameMaxLength` / `LastNameMaxLength` at :39, :43; every Store chain carries its own `WithErrorCode`; the three caps are `const` at `MMCA.Store.Identity.Domain/Customers/CustomerInvariants.cs:15,18,25`, read by its own length checks at :36, :47, :58), composing only
+`AddressValidator` (:45-47); Common
 `Auth/Validation/LoginRequestValidator.cs:15` and `ForgotPasswordRequestValidator.cs:14` hand-write
 `RuleFor(x => x.Email)`. Address family: `Validation/AddressValidationRules.cs`, `AddressValidator` :13
 with six `Include` calls :17-22, fragments :31-88 reading `AddressInvariants`
@@ -292,23 +293,23 @@ registering via `TryAddTransient(serviceType, validatorType)` (:134). Explicit f
 `AddEntityUpdate` (:199; derived command, "complete whether or not the command lives in a scanned
 assembly" doc at :177-179). `ValidationFailureExtensions.ToErrors(string source)`
 (`Extensions/ValidationFailureExtensions.cs:11,19-21`) builds `Error.Validation(code, message, source,
-target)` (`MMCA.Common.Shared/Abstractions/Error.cs:37-38`). `ValidatingCommandDecorator` calls
+target)` (`MMCA.Common.Shared/Abstractions/Error.cs:45-46`). `ValidatingCommandDecorator` calls
 `ToErrors(typeof(TCommand).Name)` (`UseCases/Decorators/ValidatingCommandDecorator.cs:83`) and returns a
 failure without calling the inner handler (:86-94); its comment that a validator may reach the database
 through a scoped repository is at :70-72. Registration path: ADC
-`MMCA.ADC.Identity.API/Controllers/AuthController.cs:66` calls `AuthenticationService.RegisterAsync`
-(`MMCA.ADC.Identity.Application/Users/AuthenticationService.cs:81`, delegating to the base at :87 inside
-`UnitOfWork.ExecuteInTransactionAsync` at :86, `MMCA.Common.Infrastructure/Persistence/UnitOfWork.cs:91-94`),
-and `Auth/AuthenticationServiceBase.cs` `RegisterAsync` (:243) validates via `validators.Register` at :249
-as its first statement, then calls `ToErrors(nameof(RegisterAsync))` at :252, outside the command
-decorator and inside that transaction scope. Decorator order: `DependencyInjection.cs:134` Transactional
-(innermost), :135 Timeout, :136 Validating. `ErrorType.Validation` -> 400 at
-`MMCA.Common/Source/Presentation/MMCA.Common.API/Middleware/ErrorHttpMapping.cs:22`. FluentValidation 12:
-`MMCA.Common/Directory.Packages.props:30` (`FluentValidation.DependencyInjectionExtensions` 12.2.0). Next-in-series
+`MMCA.ADC.Identity.API/Controllers/AuthController.cs:67` (method :60) calls `AuthenticationService.RegisterAsync`
+(`MMCA.ADC.Identity.Application/Users/AuthenticationService.cs:84`, delegating to the base at :90 inside
+`UnitOfWork.ExecuteInTransactionAsync` at :89, `MMCA.Common.Infrastructure/Persistence/UnitOfWork.cs:91-94`),
+and `Auth/AuthenticationServiceBase.cs` `RegisterAsync` (:301) validates via `validators.Register` at :307
+as its first statement, then calls `ToErrors(nameof(RegisterAsync))` at :310, outside the command
+decorator and inside that transaction scope. Decorator order: `DependencyInjection.cs:152` Transactional
+(innermost), :153 Timeout, :154 Validating. `ErrorType.Validation` -> 400 at
+`MMCA.Common/Source/Presentation/MMCA.Common.API/Middleware/ErrorHttpMapping.cs:25`. FluentValidation 12:
+`MMCA.Common/Directory.Packages.props:86` (`FluentValidation.DependencyInjectionExtensions` 12.2.0). Next-in-series
 outbox wording: at-least-once delivery documented on `MMCA.Common.Infrastructure/Persistence/Outbox/
-Processing/OutboxProcessor.cs:35` (class :58). There
+Processing/OutboxProcessor.cs:38` (class :61). There
 is no dedicated ADR for validation; it is governed by the CQRS-decorator ADRs (ADR-014) and the layering
-fitness tests. Change history (2026-10-29, v1.265.1): stamp refreshed; Store's registration password
+fitness tests. Change history (2026-11-25, v1.319.0): stamp refreshed; Store's registration email and name caps re-described from literal 100s to the `CustomerInvariants` constants (Store `RegisterRequestValidator.cs:26,39,43`), and its anchors re-based (:21-24 to :23-26, :26-33 to :28-35, :35-41 to :37-43, :43-45 to :45-47); every `CommonValidationRules.cs` anchor shifted up one line; the `UserInvariants` email check is `EnsureEmailFitsColumn` (:45, was cited as `EnsureEmailIsValid` :38) and the name checks re-based (:63/:68 to :51/:56); `SpeakerValidationRules.cs` :46 to :47; `Error.cs` :37-38 to :45-46; ADC registration path re-based (`AuthController.cs` :66 to :67, `AuthenticationService.cs` :81/:86/:87 to :84/:89/:90); `AuthenticationServiceBase` :243/:249/:252 to :301/:307/:310; decorator order :134-136 to :152-154; `ErrorHttpMapping.cs` :22 to :25; FluentValidation pin line :30 to :86 (still 12.2.0); `OutboxProcessor.cs` :35/:58 to :38/:61. Change history (2026-10-29): stamp refreshed; Store's registration password
 chain re-described (it reads `PasswordComplexity` lengths and the four regexes, Store `RegisterRequestValidator.cs:26-33`)
 and its anchors re-based (:17-20 to :21-24, :22-25 to :26-33, :35-37 to :43-45); `AuthenticationServiceBase`
 anchors re-based (:227 to :249, :230 to :252); "validation runs before the transaction opens" scoped to

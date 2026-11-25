@@ -95,7 +95,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 54 articles</summary>
+        <summary>All 57 articles</summary>
         <nav class="doc-nav" aria-label="The MMCA.Common series">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -152,7 +152,10 @@
         <li><a href="durable-internal-commands.html">51 · Four ways to do work later</a></li>
         <li><a href="identity-completions.html">52 · Finishing identity</a></li>
         <li><a href="cloud-neutral-vendor-adapters.html">53 · One framework, three clouds</a></li>
-        <li><a href="series-index.html">54 · The series index</a></li>
+        <li><a href="borrowed-and-machine-identities.html">54 · Borrowed and machine identities</a></li>
+        <li><a href="app-as-mcp-server.html">55 · Your app as an MCP server</a></li>
+        <li><a href="outbound-webhooks.html">56 · Sending webhooks without opening a door</a></li>
+        <li><a href="series-index.html">57 · The series index</a></li>
           </ol>
         </nav>
       </details>
@@ -228,7 +231,8 @@
     <span class="hljs-keyword">public</span> <span class="hljs-keyword">required</span> <span class="hljs-built_in">string</span> Title { <span class="hljs-keyword">get</span>; <span class="hljs-keyword">init</span>; }
 }
 
-<span class="hljs-comment">// The action reads the decoded header token and puts it on the command.</span>
+<span class="hljs-comment">// SessionsController.UpdateAsync reads the decoded header token itself and puts it on the command</span>
+<span class="hljs-comment">// (most guarded actions hand this step to ApiControllerBase.HandleConditionalCommandAsync).</span>
 <span class="hljs-keyword">var</span> rowVersion = SupportsIfMatchAttribute.RequiredToken(HttpContext);
 <span class="hljs-keyword">var</span> result = <span class="hljs-keyword">await</span> UpdateHandler.HandleAsync(
     <span class="hljs-keyword">new</span> UpdateSessionCommand(id, request, rowVersion), cancellationToken);
@@ -282,15 +286,25 @@
           <p>The same <code>RowVersion</code>, the same <code>SetOriginalRowVersion</code> extension point, the same comparison inside the
           UPDATE. The header is where the token lives on the wire, which means anything that speaks HTTP can
           participate: a generic REST tool, a mobile stack, curl.</p>
-          <p>The read emits it. <code>EntityControllerBase</code> calls <code>SetConcurrencyETag</code> on the DTO it is about to return,
-          which writes a weak <code>ETag</code> (<code>W/&quot;&lt;base64 of the token&gt;&quot;</code>). Weak is the honest strength: the tag
+          <p>The read emits it. <code>EntityControllerBase</code> calls <code>SetConcurrencyETag</code> on the DTO it is about to return.
+          That emitter is a protected member of <code>ApiControllerBase</code>, so any controller that serves a row writes the
+          same header the same way: a weak <code>ETag</code> (<code>W/&quot;&lt;base64 of the token&gt;&quot;</code>). Weak is the honest strength: the tag
           identifies the row&#39;s version, not a byte-exact representation, and the same row serializes differently
           under a <code>fields=</code> projection (the emitter reads the token out of the shaped dictionary in that case). A
-          DTO with no <code>RowVersion</code> property, or an empty token, gets no header at all.</p>
+          DTO with no <code>RowVersion</code> property, or an empty token, gets no header at all. A conditional write that
+          answers with the updated row emits its refreshed tag through the same member, so the client can state it
+          on the next write without a second read.</p>
           <p>The write consumes it. <code>[SupportsIfMatch]</code> is a sealed attribute that implements <code>IAsyncActionFilter</code>
-          directly, so unlike the DI-resolved <code>[Idempotent]</code> filter it needs no host registration. Before the action
-          runs it decodes <code>If-Match</code> and places the token in <code>HttpContext.Items</code> under <code>TokenItemKey</code>, where the
-          action reads it back with <code>SupportsIfMatchAttribute.RequiredToken</code>. No bound argument is written to, so no
+          directly, so unlike the DI-resolved <code>[Idempotent]</code> filter it needs no host registration. It is also an
+          action and controller model convention: it goes on an action or on a whole controller, and it documents
+          its own two answers, a ProblemDetails <code>412</code> and <code>428</code>, in the action&#39;s response metadata. A fitness rule,
+          <code>ConditionalActionsDoNotRedeclarePreconditionResponses</code>, fails the build on a guarded action that declares
+          either status by hand. Before the action runs the filter decodes <code>If-Match</code> and places the token in
+          <code>HttpContext.Items</code> under <code>TokenItemKey</code>, where the action reads it back with
+          <code>SupportsIfMatchAttribute.RequiredToken</code>. Most actions never make that call themselves: <code>ApiControllerBase</code>
+          carries two conditional-write helpers that read the token, build the command from it and dispatch it,
+          <code>HandleConditionalCommandAsync</code> answering <code>204 No Content</code> and <code>HandleConditionalCommandWithResponseAsync</code>
+          answering <code>200 OK</code> with the value and its fresh <code>ETag</code>. No bound argument is written to, so no
           request model has to loosen its immutability to receive a token. Three decisions matter: a request that
           states <strong>no precondition</strong> is refused with <code>428 Precondition Required</code> and the action never runs (a blank
           header and <code>*</code> both count, because the wildcard names no particular version), a <strong>malformed</strong> tag is a
@@ -311,6 +325,8 @@ GET /orders/42
 200 OK
 <span class="hljs-attribute">ETag</span><span class="hljs-punctuation">: </span>W/&quot;AAAAAAAAB9E=&quot;
 
+(another admin updates order 42 first, so its token moves on)
+
 PUT /orders/42/pay
 <span class="hljs-attribute">If-Match</span><span class="hljs-punctuation">: </span>W/&quot;AAAAAAAAB9E=&quot;
 412 Precondition Failed</code></pre>
@@ -324,7 +340,9 @@ PUT /orders/42/pay
           <code>ReviewsController</code>; in Identity, three in <code>CustomersController</code>) and 16 across twelve in ADC (three in
           Engagement&#39;s <code>SessionQuestionsController</code>, two in its <code>LivePollsController</code>, two in Conference&#39;s
           <code>EventLifecycleController</code>, and one each in nine more Conference controllers), and three in Helpdesk&#39;s
-          <code>TicketsController</code>. Nothing here decides
+          <code>TicketsController</code>. All but three of those 45 run through the <code>ApiControllerBase</code> helpers; Store&#39;s
+          <code>GuestOrdersController.CancelAsync</code> and the ADC <code>EventsController</code> and <code>SessionsController</code> updates read
+          the token with <code>RequiredToken</code> themselves, as the generic <code>UpdateAsync</code> does. Nothing here decides
           conditional GET. The tag exists to be stated back on the next write, and there is no <code>If-None-Match</code>
           handling and no 304 path.</p>
           <h2 id="the-invariant-one-source-for-the-precondition">The invariant: one source for the precondition</h2>

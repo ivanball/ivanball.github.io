@@ -19,18 +19,18 @@ Working file for `/update-medium` (underscore-prefixed, so the site build skips 
   `Tools/Scripts/render-medium-variants.ps1` (workspace harness), never committed here.
 
 **Anchor facts (current state, verify before publishing)**
-- .NET 10, C# preview (extension types), Apache-2.0, repo `https://github.com/ivanball/MMCA.Common`
+- .NET 10 and .NET 11 from one source tree (libraries multi-target `net10.0;net11.0`, `MMCA.Common/build/Frameworks.props:23`, ADR-141; ADC runs net11.0, Store and Helpdesk net10.0), Apache-2.0, repo `https://github.com/ivanball/MMCA.Common`
   (confirmed via git remote).
-- Framework version **v1.265.1**, tracked in lockstep by every consumer (per `MMCA.Common/FACTS.md`).
-- 26 NuGet packages released in lockstep; **136 ADRs (001-136)** (per `Website/docs-src/adr/README.md`).
-- `MMCA.Common.Testing.Architecture` defines 160 test methods across 64 base classes;
-  Common's own build runs 479, plus a compile-time MSBuild layer guard (per `FACTS.md`).
+- Framework version **v1.319.0**, tracked in lockstep by every consumer (per `MMCA.Common/FACTS.md:14`).
+- 30 NuGet packages released in lockstep (`FACTS.md:20`); **147 ADRs (001-147)** (per `Website/docs-src/adr/README.md:6`).
+- `MMCA.Common.Testing.Architecture` defines 186 test methods across 74 base classes;
+  Common's own build runs 767, plus a compile-time MSBuild layer guard (per `FACTS.md:98,101`).
 - Two-axis architecture index (current per-repo scorecards): Common **Maturity 97.3% (319/328),
-  Implementation 85.4% (700/820)** across all 34 categories (none N/A now: §27 i18n is scored after
-  ADR-027 superseded the single-locale ADR-011); ADC **Maturity 97.5% (316/324), Implementation 86.0% (697/810)**; Store **Maturity 97.5% (308/316), Implementation 83.2% (657/790)**.
-- 9,122 tests executed by Common's `build-and-test` job (CI run 40870473851, 2026-10-29), no Docker; the
-  CI comment's "~2,254" (`MMCA.Common/.github/workflows/ci.yml:160`) is stale. Two real consumer apps: MMCA.ADC (conference, Azure Container Apps) and
-  MMCA.Store (e-commerce, Stripe). Both consumers are pinned at 1.265.1 in lockstep.
+  Implementation 85.1% (698/820)** across all 34 categories (none N/A now: §27 i18n is scored after
+  ADR-027 superseded the single-locale ADR-011); ADC **Maturity 97.5% (316/324), Implementation 85.7% (694/810)**; Store **Maturity 96.8% (306/316), Implementation 83.2% (657/790)**.
+- About 13,190 tests executed per framework leg by Common's CI (13,188 net11.0 and 13,185 net10.0, CI run 45693724979), no Docker, held
+  above an 11250-per-leg floor (`MMCA.Common/.github/workflows/ci.yml:185`). Two real consumer apps: MMCA.ADC (conference, Azure Container Apps) and
+  MMCA.Store (e-commerce, Stripe). Every consumer (ADC, Store, Helpdesk) is pinned at 1.319.0 in lockstep.
 
 > **Note on the scorecard:** the repo's committed `Website/docs-src/governance/common-ArchitectureScorecard.md` is now the
 > canonical **two-axis** scorecard (Maturity 97.3% (319/328) / Implementation 85.4% (700/820) as of the 2026-10-29 evidence stamp at v1.265.1;
@@ -84,7 +84,7 @@ Working file for `/update-medium` (underscore-prefixed, so the site build skips 
 > workspace eval files (`Docs/Architecture/ArchitectureEvaluation-MMCA.*.md`) are now pointer stubs, so
 > cite the in-repo scorecards. Re-derive numbers before publishing.
 
-> **Note on ADRs:** the set has grown to **136 (001-136)**. Each ADR maps to an article or is a recorded
+> **Note on ADRs:** the set has grown to **147 (001-147)**. Each ADR maps to an article or is a recorded
 > scope-out. Shared homes: ADR-017 (request idempotency) and ADR-021 (consumer-side inbox idempotency) are
 > both taught in **Article 18**; ADR-018 (polyglot persistence) is **Article 11**; ADR-001 (manual DTO
 > mapping) is **Article 23**; ADR-026 (two-tier caching) is **Article 19**; ADR-024 (two-channel
@@ -398,10 +398,28 @@ Working file for `/update-medium` (underscore-prefixed, so the site build skips 
 > service worker never caches a page) is a new section of **Article 37**. **ADR-121** replaces the
 > superseded ADR-052 in Article 22's cell. Every ADR in 001-136 and every functional group in G01-G29 has
 > an article cell or a recorded scope-out.
+>
+> **2026-11-25 coverage audit** (full sweep at v1.319.0, against the grown ADR set 137-147 and the
+> v1.316.0 native-transport rewrite): three new articles and seven sections. **ADR-137** (read-only view-as
+> support access) and **ADR-140** (machine clients over OAuth client credentials) share the new dedicated
+> **Article 54** (`borrowed-and-machine-identities.md`); **ADR-138** (the application as an MCP server over
+> its module queries) is the new **Article 55** (`app-as-mcp-server.md`); **ADR-142** (outbound webhooks
+> with signed delivery, connect-time SSRF defense and a per-receiver lane) is the new **Article 56**
+> (`outbound-webhooks.md`). All three are appended before the hub, which moves to 57. Sections:
+> **ADR-139** (passkeys) in **Article 52**, with the passkey token-issuing path noted in **Article 25**;
+> **ADR-141** (two framework lines from one tree) in **Article 41**; **ADR-143** (the process-manager
+> primitive) in **Article 49**, which also rewrites its ADR-086 deferral bullet, linked from **Article 51**;
+> **ADR-144** (offline writes and delta reads) in **Article 42**, cross-linked from **Article 18**;
+> **ADR-145** (opt-in cursor paging) in **Article 28**; **ADR-146** (UI page bases and the list shell) in
+> **Article 37**; **ADR-147** (test gaps by risk ratchets and traceability) in **Articles 35 and 34**. The
+> MassTransit exit (ADR-118 Amendment 2026-11-23) is a currency fix, not a coverage item: Articles 2, 9,
+> 15, 18, 32 and 53 now teach the native transports. ADR-066, ADR-086 and ADR-087 still describe
+> MassTransit in their own text; that ADR drift is left to `/update-adrs`. Every ADR in 001-147 and every
+> functional group in G01-G29 has an article cell or a recorded scope-out.
 
 **Coverage history**
 
-Twenty-six articles were added during coverage audits against the functional-group onboarding guide and the
+Twenty-nine articles were added during coverage audits against the functional-group onboarding guide and the
 ADR set, and are now woven into that order: polyglot persistence (ADR-018), manual DTO mapping (ADR-001),
 the Common UI framework / front-end story (previously unrepresented), the G06 validation kit, resilience +
 recovery objectives (ADR-009), permission-based authorization (ADR-020), browser session-cookie auth for
@@ -460,3 +478,7 @@ ADR-061 (runtime secret management) and ADR-064 (deploy recency gates), which st
 The 2026-10-29 audit appended one more dedicated article against the grown ADR set 133-136: the
 cloud-neutral core with vendor adapter packages (ADR-134 + G29), the new Article 53, with the series
 index moving to 54.
+
+The 2026-11-25 audit appended three more dedicated articles against the grown ADR set 137-147:
+borrowed and machine identities (ADR-137 + ADR-140, Article 54), the application as an MCP server
+(ADR-138, Article 55) and outbound webhooks (ADR-142, Article 56), with the series index moving to 57.

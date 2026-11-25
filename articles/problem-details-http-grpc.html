@@ -95,7 +95,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 54 articles</summary>
+        <summary>All 57 articles</summary>
         <nav class="doc-nav" aria-label="The MMCA.Common series">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -152,7 +152,10 @@
         <li><a href="durable-internal-commands.html">51 · Four ways to do work later</a></li>
         <li><a href="identity-completions.html">52 · Finishing identity</a></li>
         <li><a href="cloud-neutral-vendor-adapters.html">53 · One framework, three clouds</a></li>
-        <li><a href="series-index.html">54 · The series index</a></li>
+        <li><a href="borrowed-and-machine-identities.html">54 · Borrowed and machine identities</a></li>
+        <li><a href="app-as-mcp-server.html">55 · Your app as an MCP server</a></li>
+        <li><a href="outbound-webhooks.html">56 · Sending webhooks without opening a door</a></li>
+        <li><a href="series-index.html">57 · The series index</a></li>
           </ol>
         </nav>
       </details>
@@ -198,12 +201,14 @@
           failures are <em>values</em>, not exceptions. Handlers return <code>Result&lt;T&gt;</code> carrying an <code>Error</code> list, each error
           typed by an <code>ErrorType</code>. The edge&#39;s only job is to translate that value into the right wire shape.</p>
           <p>On the <strong>HTTP</strong> side, the framework&#39;s result-returning controller bases (<code>EntityControllerBase</code> among
-          them) derive from <code>ApiControllerBase</code>, whose single job is
-          <code>HandleFailure(IEnumerable&lt;Error&gt;)</code>. It produces an <code>ObjectResult</code> whose status belongs to the <em>most
+          them) derive from <code>ApiControllerBase</code>, whose error path is
+          <code>HandleFailure(IEnumerable&lt;Error&gt;)</code> (the same base also emits concurrency <code>ETag</code>s and runs <code>If-Match</code>
+          conditional writes, which are outside this article). It produces an <code>ObjectResult</code> whose status belongs to the <em>most
           severe</em> <code>ErrorType</code> present, deliberately not the first error&#39;s, so an aggregate built by
           <code>Result.Combine</code> cannot be downgraded by error ordering: a 403 or a 500 travelling alongside a
           validation error still answers 403 or 500, and equal ranks keep the earliest error. Every error still
-          travels in the Problem Details <code>errors</code> array; only the status is ranked. The actual
+          travels in the Problem Details <code>errors</code> array; only the status is ranked. A 429 whose <code>TooManyRequests</code>
+          errors carry a retry hint also answers with a <code>Retry-After</code> header, the longest hint winning. The actual
           <code>ErrorType -&gt; status</code> table does not live in the controller. It lives once in <code>ErrorHttpMapping</code>, a
           <code>FrozenDictionary</code> keyed by error type:</p>
           <pre class="doc-pre" tabindex="0" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-comment">// ErrorHttpMapping - the single ErrorType -&gt; HTTP status table (FrozenDictionary):</span>
@@ -236,7 +241,9 @@
           invariant: every error an action returns or throws leaves the API as an RFC 9457
           Problem Details with a sensible status. The invariant covers the MVC pipeline, not the middleware in
           front of it: the rate limiter rejects with a 429 that carries a <code>Retry-After</code> header whenever the
-          limiter knows when its window resets, but writes no body, and an unmatched route is a bare 404, because the framework does not call <code>UseStatusCodePages</code>.</p>
+          limiter knows when its window resets, but writes no body, and on an API host an unmatched route is a
+          bare 404, because the API pipeline does not call <code>UseStatusCodePages</code> (only the Blazor web host
+          pipeline re-executes error statuses to its <code>/not-found</code> page).</p>
           <p>There is also a guard against the most insidious bug in this space: a controller that calls
           <code>Ok(result)</code> on a <em>failed</em> <code>Result</code>. Without a guard that serializes as a misleading <code>200 OK</code> carrying
           an error body. <code>UnhandledResultFailureFilter</code> is an always-run result filter, registered globally, that
@@ -261,8 +268,11 @@
           encoder omitted it, and falling back to <code>ErrorType.Failure</code> on a type name it does not recognize so a
           newer peer cannot break an older client. <code>RpcException.ToResult()</code> and <code>ToResult&lt;T&gt;()</code> sit on top of it
           and rebuild <code>Result.Failure(errors)</code>, degrading a transport fault that carries no trailers (a reset
-          connection, an exceeded deadline) to a single <code>Failure</code> error coded <code>Grpc.{StatusCode}</code> rather than
-          letting an exception escape. A consumer&#39;s client adapter is then a two-line <code>catch</code>: ADC&#39;s
+          connection, an exceeded deadline) to a single <code>Unexpected</code> error coded <code>Grpc.{StatusCode}</code> rather than
+          letting an exception escape. <code>Unexpected</code> is deliberate: a fault with no trailers never came from the
+          peer&#39;s own <code>Result</code>, so it says nothing about the request, and it reaches the HTTP edge as a 500 at the
+          top severity rank that callers treat as retryable, never as the definitive 400 a <code>Failure</code> would be.
+          A consumer&#39;s client adapter is then a two-line <code>catch</code>: ADC&#39;s
           <code>SessionBookmarkValidationServiceGrpcAdapter</code> and <code>EventLiveValidationServiceGrpcAdapter</code> catch
           <code>RpcException</code> and <code>return ex.ToResult()</code> or <code>ex.ToResult&lt;T&gt;()</code>, and the caller sees the same <code>Result</code>
           it would have seen in-process.</p>
@@ -285,7 +295,7 @@
           <li><strong>Disabled features speak the same dialect.</strong> A <code>[FeatureGate]</code> on an off flag returns an RFC 9457
           404 (via <code>DisabledFeatureHandler</code>), not a bespoke 403, so a disabled feature reads as absent and
           still matches the API&#39;s error shape. It is not disguised as a missing route: the body is titled
-          &quot;Feature not available&quot;, while an unknown route answers with an empty-body 404.</li>
+          &quot;Feature not available&quot;, while an unknown route on an API host answers with an empty-body 404.</li>
           </ul>
           <h2 id="trade-offs-honestly">Trade-offs, honestly</h2>
           <p>The scorecard scores §9 (API and Contract Design) at Maturity 4 of 4 and Implementation 9 of 10
@@ -305,9 +315,12 @@
           <code>MapCommonOpenApi()</code>), fetches <code>/openapi/v1.json</code>, normalizes it (the
           host-assigned <code>servers</code> block is dropped, object properties are ordered ordinally so generator
           ordering is not mistaken for drift, array order is preserved because it is contractual), and diffs the
-          result against a committed <code>openapi-baseline.v1.json</code>. A change to the generated surface fails the
-          build; an intended change is regenerated deliberately, by setting <code>MMCA_UPDATE_OPENAPI_BASELINE=1</code>
-          and committing the new baseline in the same pull request. What that gate covers is the
+          result against the committed baseline for the framework it runs on (<code>openapi-baseline.v1.net11.json</code>
+          on net11.0, <code>openapi-baseline.v1.json</code> on net10.0, because the two framework lines emit the same
+          contract with a different spec revision and tag ordering). A change to the generated surface fails the
+          build; an intended change is regenerated deliberately, by setting <code>MMCA_UPDATE_OPENAPI_BASELINE=1</code>,
+          re-running the test on each target framework, and committing the new baselines in the same pull
+          request. What that gate covers is the
           framework-owned surface: the probe controllers stand in for a consumer&#39;s real controllers precisely
           so the test guards document generation rather than any concrete API. The concrete surface stays
           guarded by the consumer hosts&#39; own contract-snapshot tests, where the endpoints actually live. Two
@@ -323,7 +336,7 @@
           registers a Contracts layer in its map today, so a layer-iterating rule would pass vacuously forever,
           while an attribute-driven one starts biting the moment a repo marks its first contract type. The
           honest part is that MMCA.Common marks no type with the attribute, so the framework&#39;s own run of the
-          rule asserts nothing and is a ratchet there. The consumers are where it bites: ADC marks seven Shared
+          rule asserts nothing and is a ratchet there. The consumers are where it bites: ADC marks nine Shared
           interfaces (<code>ISessionBookmarkValidationService</code> and <code>IEventLiveValidationService</code> among them) and
           Store marks four (<code>IProductVariantService</code>, <code>ICustomerService</code> and two export services), and both
           repos run the rule on every build.</li>
