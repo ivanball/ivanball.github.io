@@ -25,7 +25,7 @@ an in-process object or a wire hop.
 **The cast of types in this group is small, and all but one lives in `MMCA.Common.Grpc`**: a
 *transport-only* package that, per Clean Architecture, depends on **`Shared` only** (it must never
 couple to Domain, Application, or Infrastructure; see [primer §1](00-primer.md#1-the-big-picture)).
-There are sixteen, and seven of them carry the core transport: [`DependencyInjection`](#dependencyinjection) (the registration surface,
+There are seventeen, and seven of them carry the core transport: [`DependencyInjection`](#dependencyinjection) (the registration surface,
 `AddGrpcServiceDefaults()` server-side and `AddTypedGrpcClient<TClient>(serviceName)` client-side, at
 `MMCA.Common/Source/Presentation/MMCA.Common.Grpc/DependencyInjection.cs:26`),
 [`GrpcResultExceptionInterceptor`](#grpcresultexceptioninterceptor) (server-side: turns a failed
@@ -39,15 +39,16 @@ and money, at `MMCA.Common/Source/Presentation/MMCA.Common.Grpc/GrpcWireFormat.c
 `MMCA.Common.Shared` marker
 [`ServiceContractAttribute`](#servicecontractattribute)
 (`MMCA.Common/Source/Core/MMCA.Common.Shared/Abstractions/ServiceContractAttribute.cs:23`), which tags
-the wire surface of an extracted service. The other nine form the **service-token** family for calls
-that have no user token to forward, eight in `MMCA.Common.Grpc.Authentication` plus one client
+the wire surface of an extracted service. The other ten form the **service-token** family for calls
+that have no user token to forward, nine in `MMCA.Common.Grpc.Authentication` plus one client
 interceptor: [`IServiceTokenProvider`](#iservicetokenprovider) and its
 [`ServiceTokenProvider`](#servicetokenprovider) (with the private [`CachedToken`](#cachedtoken)
 record), [`ServiceTokenSettings`](#servicetokensettings), [`ServiceTokenDefaults`](#servicetokendefaults),
 the two registration surfaces [`ServiceTokenServiceCollectionExtensions`](#servicetokenservicecollectionextensions)
 (with the private [`DefaultSchemeGuard`](#defaultschemeguard) marker) and
-[`ServiceTokenHttpClientBuilderExtensions`](#servicetokenhttpclientbuilderextensions), and
-[`ServiceTokenClientInterceptor`](#servicetokenclientinterceptor). The concrete `.proto` definitions and the typed clients they
+[`ServiceTokenHttpClientBuilderExtensions`](#servicetokenhttpclientbuilderextensions),
+[`ServiceTokenClientInterceptor`](#servicetokenclientinterceptor), and the receiving-side check
+[`ServiceCallerClaimsPrincipalExtensions`](#servicecallerclaimsprincipalextensions). The concrete `.proto` definitions and the typed clients they
 generate do *not* live here: they live in each consumer's `*.Contracts` project (ADC's
 `MMCA.ADC.Conference.Contracts`, `.Engagement.Contracts`, `.Identity.Contracts`,
 `.Notification.Contracts`), which this package exists to wire up.
@@ -87,10 +88,13 @@ client against the named service (`DependencyInjection.cs:46`), and (2) calls
 real in-process implementation (if that peer module is enabled in this host) *or* a `Disabled*` stub
 registered by the module when the peer is disabled. `Replace` wins over both, so after the call the
 resolved interface is always the gRPC adapter pointing at the extracted peer. Ordering is not left to
-chance: each host registers these helpers as steps inside
-`services.AddMmcaApplicationPipeline(pipeline => pipeline.Register(moduleHost.RegisterModules).Register(s => s.AddConferenceSessionValidationClient())...)`
-(`MMCA.ADC/Source/Services/MMCA.ADC.Engagement.Service/Program.cs:299-303`), so module discovery runs
-first and the client replacements run after it, in declaration order.
+chance: each host registers these helpers as steps of the `ConfigurePipeline` callback it hands to
+`AddMmcaServiceHost`,
+`ConfigurePipeline = (pipeline, moduleHost) => pipeline.Register(moduleHost.RegisterModules).Register(s => s.AddConferenceSessionValidationClient())...`
+(`MMCA.ADC/Source/Services/MMCA.ADC.Engagement.Service/Program.cs:218-224`), which the shared host
+forwards into `services.AddMmcaApplicationPipeline(...)`
+(`MMCA.Common/Source/Hosting/MMCA.Common.ServiceHost/ServiceHostBuilderExtensions.cs:158`), so module
+discovery runs first and the client replacements run after it, in declaration order.
 
 **`Result` over the wire, the outbound half.** The codebase's pervasive
 [`Result`](group-01-result-error-handling.md#result) pattern (errors as values, not exceptions; see
@@ -99,7 +103,7 @@ the **server**, a gRPC service implementation calls the inner C# service, gets b
 calls `result.ThrowIfFailure()` (from [`ResultGrpcExtensions`](#resultgrpcextensions),
 `MMCA.Common/Source/Presentation/MMCA.Common.Grpc/ResultGrpcExtensions.cs:72`); see
 `SessionBookmarksGrpcService`
-(`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Grpc/SessionBookmarksGrpcService.cs:39`). That
+(`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Grpc/SessionBookmarksGrpcService.cs:40`). That
 guard throws a [`ResultFailureException`](#resultfailureexception)
 (`MMCA.Common/Source/Presentation/MMCA.Common.Grpc/Exceptions/ResultFailureException.cs:16`) carrying
 the [`Error`](group-01-result-error-handling.md#error) list
@@ -119,22 +123,25 @@ error ordering; the `ErrorType` to `StatusCode` table itself is a `FrozenDiction
 serialized into the trailers as `error-{i}-code`, `-message`, `-type`, and (when non-empty) `-source`
 and `-target` entries (`ResultGrpcExtensions.cs:132-147`). Because gRPC text metadata is printable
 ASCII only, the message, source, and target values are percent-encoded as UTF-8 for every character
-outside that range and for `%` itself (`ResultGrpcExtensions.cs:287-314`), so an accented name or a
+outside that range and for `%` itself (`ResultGrpcExtensions.cs:289-316`), so an accented name or a
 newline in a validation message cannot break the trailer at the transport; a value that is already
-plain printable ASCII goes on the wire unchanged (`ResultGrpcExtensions.cs:289-292`).
+plain printable ASCII goes on the wire unchanged (`ResultGrpcExtensions.cs:291-294`).
 
 **`Result` over the wire, the inbound half.** The same class owns the decoder, so the round trip is
 closed by framework code rather than by hand-rolled parsing in each adapter. `Metadata.ToErrors()`
 (`ResultGrpcExtensions.cs:173`) walks `error-{i}-code` from index zero and stops at the first gap,
 matching the contiguous layout the encoder writes, percent-decodes the message, source, and target
-(`ResultGrpcExtensions.cs:191-194`, `:314-315`), and an unrecognized `error-{i}-type` falls back to
-`ErrorType.Failure` instead of throwing (`ResultGrpcExtensions.cs:278-281`), so a newer peer that adds
+(`ResultGrpcExtensions.cs:191-194`, `:319-320`), and an unrecognized `error-{i}-type` falls back to
+`ErrorType.Failure` instead of throwing (`ResultGrpcExtensions.cs:280-283`), so a newer peer that adds
 an error type cannot break an older client. On top of that, `RpcException.ToResult()` and
-`ToResult<T>()` (`ResultGrpcExtensions.cs:218` and `:240`) hand the caller a failed `Result` directly:
+`ToResult<T>()` (`ResultGrpcExtensions.cs:219` and `:244`) hand the caller a failed `Result` directly:
 structured trailers win when present, and a pure transport fault that carries none (a reset
-connection, an exceeded deadline) degrades to a single `ErrorType.Failure` error coded
-`Grpc.{StatusCode}` and stamped with the calling member's name via `[CallerMemberName]`
-(`ResultGrpcExtensions.cs:331-335`). A client adapter's catch block is therefore one line:
+connection, an exceeded deadline) degrades to a single `ErrorType.Unexpected` error coded
+`Grpc.{StatusCode}`, carrying the RPC status detail and stamped with the calling member's name via
+`[CallerMemberName]` (`ResultGrpcExtensions.cs:340-344`). `Unexpected` rather than `Failure` is
+deliberate: a fault with no trailers never came from the peer's own `Result`, so it says nothing about
+the request, and it surfaces as a retryable server fault (HTTP 500 at the edge) instead of a
+definitive 400 that would blame the caller (`ResultGrpcExtensions.cs:333-339`). A client adapter's catch block is therefore one line:
 `return ex.ToResult();`
 (`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Contracts/SessionBookmarkValidationServiceGrpcAdapter.cs:58`).
 That symmetry, one error model over two transports, is the `[Rubric §9, API & Contract Design]` and
@@ -161,11 +168,11 @@ through a double and never misread under a comma-decimal locale. The `Parse*` me
 `FormatException` on a corrupt peer payload, treating it as a fault; an adapter that wants to map a
 malformed amount to its own answer uses `TryParseDecimal` instead (`GrpcWireFormat.cs:93-94`). In ADC
 the data-subject export edges are the users: Engagement's server writes `FormatUtc`
-(`MMCA.ADC/Source/Services/MMCA.ADC.Engagement.Service/Grpc/UserEngagementExportGrpcService.cs:50`)
+(`MMCA.ADC/Source/Services/MMCA.ADC.Engagement.Service/Grpc/UserEngagementExportGrpcService.cs:62`)
 and its adapter reads `ParseUtc`
-(`MMCA.ADC/Source/Services/MMCA.ADC.Engagement.Contracts/UserEngagementExportServiceGrpcAdapter.cs:45`),
+(`MMCA.ADC/Source/Services/MMCA.ADC.Engagement.Contracts/UserEngagementExportServiceGrpcAdapter.cs:46`),
 and Notification pairs `FormatUtcOrEmpty` with `ParseUtcOrNull` for a notification's read time
-(`MMCA.ADC/Source/Services/MMCA.ADC.Notification.Service/Grpc/UserNotificationExportGrpcService.cs:49`,
+(`MMCA.ADC/Source/Services/MMCA.ADC.Notification.Service/Grpc/UserNotificationExportGrpcService.cs:60`,
 `MMCA.ADC/Source/Services/MMCA.ADC.Notification.Contracts/UserNotificationExportServiceGrpcAdapter.cs:44`).
 
 **Auth and the network shape.** Every typed client wired by `AddTypedGrpcClient<TClient>`
@@ -232,34 +239,58 @@ first fetches its OIDC metadata to do so, which can stall a call while that endp
 (`ServiceTokenClientInterceptor.cs:13-17`).
 
 **Service tokens, the receiving side.** `AddServiceTokenAuthentication(configuration)`
-(`ServiceTokenServiceCollectionExtensions.cs:63`) adds a JwtBearer scheme named by
+(`ServiceTokenServiceCollectionExtensions.cs:66`) adds a JwtBearer scheme named by
 [`ServiceTokenDefaults`](#servicetokendefaults)`.AuthenticationScheme`, `"ServiceToken"`
-(`MMCA.Common/Source/Presentation/MMCA.Common.Grpc/Authentication/ServiceTokenDefaults.cs:15`;
-`ServiceTokenServiceCollectionExtensions.cs:70-72`). It validates issuer, audience, lifetime, and
+(`MMCA.Common/Source/Presentation/MMCA.Common.Grpc/Authentication/ServiceTokenDefaults.cs:16`;
+`ServiceTokenServiceCollectionExtensions.cs:73-75`). It validates issuer, audience, lifetime, and
 signature against the shared key, pins the algorithm to HS256 so an algorithm-confusion swap cannot
-pass (`ServiceTokenServiceCollectionExtensions.cs:133-145`), and fails any token that validates without
-the `svc` claim (`ServiceTokenDefaults.cs:27`; `ServiceTokenServiceCollectionExtensions.cs:151-157`). It
-also adds the `InternalCaller` policy (`ServiceTokenDefaults.cs:21`), which admits an authenticated
-caller from either the user scheme or the service scheme
-(`ServiceTokenServiceCollectionExtensions.cs:84-87`). The service scheme is never made the default, so a
-service token satisfies only an endpoint that names that policy, and a plain `[Authorize]` endpoint
-still authenticates users alone. Rather than document the trap, the registration fails the host at
-startup when the service scheme would end up the default, explicitly or as the lone registered scheme
-ASP.NET Core promotes, through the start-time validation of the private
-[`DefaultSchemeGuard`](#defaultschemeguard) marker options type
-(`ServiceTokenServiceCollectionExtensions.cs:78-82`, `:110-129`, `:165`). The settings bind and validate
-once however many of the two halves a host calls (`ServiceTokenServiceCollectionExtensions.cs:96-107`).
+pass (`ServiceTokenServiceCollectionExtensions.cs:140-156`), and fails any token that validates without
+the `svc` claim (`ServiceTokenDefaults.cs:35`; `ServiceTokenServiceCollectionExtensions.cs:162-168`). It
+also adds two policies. `InternalCaller` (`ServiceTokenDefaults.cs:22`) admits an authenticated caller
+from either the user scheme or the service scheme (`ServiceTokenServiceCollectionExtensions.cs:88-90`);
+`ServiceCaller` (`ServiceTokenDefaults.cs:29`) evaluates the service scheme alone and requires the `svc`
+claim, so an end-user token is refused outright (`ServiceTokenServiceCollectionExtensions.cs:91-94`).
+The service scheme is never made the default, so a service token satisfies only an endpoint that names
+one of those policies, and a plain `[Authorize]` endpoint still authenticates users alone. Rather than
+document the trap, the registration fails the host at startup when the service scheme would end up the
+default, explicitly or as the lone registered scheme ASP.NET Core promotes, through the start-time
+validation of the private [`DefaultSchemeGuard`](#defaultschemeguard) marker options type
+(`ServiceTokenServiceCollectionExtensions.cs:81-85`, `:117-136`, `:176`). The settings bind and validate
+once however many of the two halves a host calls (`ServiceTokenServiceCollectionExtensions.cs:103-114`).
+An endpoint under `InternalCaller` still has to tell the two kinds of caller apart, and
+[`ServiceCallerClaimsPrincipalExtensions`](#servicecallerclaimsprincipalextensions) answers that with
+`principal.IsServiceCaller()`
+(`MMCA.Common/Source/Presentation/MMCA.Common.Grpc/Authentication/ServiceCallerClaimsPrincipalExtensions.cs:21`):
+true only when an authenticated identity was issued by the `ServiceToken` scheme and carries a
+non-empty `svc` claim (`ServiceCallerClaimsPrincipalExtensions.cs:25-28`), which works in a principal
+merged from several schemes because the bearer stamps the scheme name as the identity's
+`AuthenticationType` (`ServiceTokenServiceCollectionExtensions.cs:153-155`). A user token never
+qualifies, so a data-subject export edge can let a service through and still compare a user caller to
+the subject it asked for
+(`MMCA.ADC/Source/Services/MMCA.ADC.Engagement.Service/Grpc/UserEngagementExportGrpcService.cs:42`).
 The shared symmetric key is a deliberate choice for east-west traffic inside one deployment, with no
 issuer service to call and a key rotation that is one configuration change on every service
-(`ServiceTokenSettings.cs:12-17`), in contrast to the JWKS validation of forwarded user tokens. In the
-repos today the adopter is Store: Sales registers the calling half
-(`MMCA.Store/Source/Services/MMCA.Store.Sales.Service/Program.cs:289`) and opts its
-`CustomerServiceClient` in
+(`ServiceTokenSettings.cs:12-17`), in contrast to the JWKS validation of forwarded user tokens. Both
+consumer apps wire it. In ADC, Engagement registers both halves
+(`MMCA.ADC/Source/Services/MMCA.ADC.Engagement.Service/Program.cs:232`, `:238`) and maps
+`TicketInvitationGrpcService` under `ServiceCaller` (`Program.cs:278`), Identity registers both halves
+and maps `VerifiedUserLookupGrpcService` under `InternalCaller`
+(`MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:140`, `:146`, `:344`), and Notification
+registers the receiving half and maps `LiveChannelGrpcService` under `ServiceCaller`
+(`MMCA.ADC/Source/Services/MMCA.ADC.Notification.Service/Program.cs:137`, `:160`); the matching clients
+opt in with `.WithServiceToken()`
+(`MMCA.ADC/Source/Services/MMCA.ADC.Engagement.Contracts/DependencyInjection.cs:110`,
+`MMCA.ADC/Source/Services/MMCA.ADC.Identity.Contracts/DependencyInjection.cs:74`,
+`MMCA.ADC/Source/Services/MMCA.ADC.Notification.Contracts/DependencyInjection.cs:51`). In Store, Sales
+registers the calling half (`MMCA.Store/Source/Services/MMCA.Store.Sales.Service/Program.cs:147`) and
+opts its `CustomerServiceClient` in
 (`MMCA.Store/Source/Services/MMCA.Store.Identity.Contracts/DependencyInjection.cs:46`), and Identity
-registers the receiving half and maps `CustomersGrpcService` under the `InternalCaller` policy
-(`MMCA.Store/Source/Services/MMCA.Store.Identity.Service/Program.cs:173`, `:343`). ADC wires neither
-half. `[Rubric §11, Security]` again: a service identity that is minted, scoped by audience, and
-admitted only where an endpoint asks for it.
+registers the receiving half and maps `CustomersGrpcService` under `InternalCaller`
+(`MMCA.Store/Source/Services/MMCA.Store.Identity.Service/Program.cs:85`, `:149`), where
+`IsServiceCaller()` separates the two callers
+(`MMCA.Store/Source/Services/MMCA.Store.Identity.Service/Grpc/CustomersGrpcService.cs:98`).
+`[Rubric §11, Security]` again: a service identity that is minted, scoped by audience, and admitted
+only where an endpoint asks for it.
 
 **The transport is HTTP/2 cleartext (h2c) with prior knowledge.** The client addresses
 `http://{serviceName}` (`DependencyInjection.cs:98-99`), resolved by **Aspire service discovery**,
@@ -274,7 +305,7 @@ an explicit Polly pipeline sourced entirely from the `Grpc`-prefixed members of
 [`HttpResilienceDefaults`](group-16-aspire-orchestration.md#httpresiliencedefaults)
 (`DependencyInjection.cs:142-168`): the attempt and total timeouts are the gRPC path's own, 8 and 20
 seconds, sized from measured east-west latency rather than taken from the outbound-HTTP 30s/90s
-(`MMCA.Common/Source/Core/MMCA.Common.Shared/Resilience/HttpResilienceDefaults.cs:73`, `:76`), while
+(`MMCA.Common/Source/Core/MMCA.Common.Shared/Resilience/HttpResilienceDefaults.cs:72`, `:76`), while
 the retry budget and the breaker sampling window are shared with the HTTP path
 (`DependencyInjection.cs:146`, `:161`). The retry is narrowed: every gRPC call is a POST, so only a failure
 to reach the peer before the request was sent is retried, an `HttpRequestException` whose
@@ -284,7 +315,7 @@ connect, or the TLS handshake during a replica rollover). A status, an attempt t
 handler and could run the call twice, so none of those is retried (`DependencyInjection.cs:148-160`). The circuit-breaker values are
 spelled out (`FailureRatio` 0.5,
 `MinimumThroughput` 10, `BreakDuration` 10 seconds, at
-`MMCA.Common/Source/Core/MMCA.Common.Shared/Resilience/HttpResilienceDefaults.cs:82-94`) precisely
+`MMCA.Common/Source/Core/MMCA.Common.Shared/Resilience/HttpResilienceDefaults.cs:81-93`) precisely
 because an east-west gRPC call bypasses the Gateway's active health checks
 `[Rubric §29, Resilience & Business Continuity]`.
 
@@ -300,34 +331,48 @@ endpoint on port 8081
 (`MMCA.ADC/Source/Services/MMCA.ADC.Notification.Service/appsettings.json:9-19`); Store's Sales host
 runs that same mixed profile. That second profile is why one client registration names its target
 `"_grpc.notification"` rather than `"notification"`
-(`MMCA.ADC/Source/Services/MMCA.ADC.Notification.Contracts/DependencyInjection.cs:42`): Aspire service
+(`MMCA.ADC/Source/Services/MMCA.ADC.Notification.Contracts/DependencyInjection.cs:49`): Aspire service
 discovery injects a `services__notification__grpc__0` key for the named endpoint, and the `_grpc.`
 prefix selects it.
 
-**The live topology in ADC.** There are seven gRPC edges today, one per `.proto` under
-`MMCA.ADC/Source/Services/*/Protos/`, each with a generated client, a hand-written adapter, and a
-server-side service class. Reading them as consumer to producer: Engagement to Conference for
+**The live topology in ADC.** There are ten `.proto` contracts today under
+`MMCA.ADC/Source/Services/*.Contracts/Protos/`, each with a generated client, a hand-written adapter, and a
+server-side service class; event-live validation has two consumers, so the hosts register eleven
+client edges. Reading them as consumer to producer: Engagement to Conference for
 `ISessionBookmarkValidationService` and `IEventLiveValidationService`
-(`MMCA.ADC/Source/Services/MMCA.ADC.Engagement.Service/Program.cs:301-302`), Engagement to Notification
-for the best-effort live-channel push (`Program.cs:303`, replacing the framework's
+(`MMCA.ADC/Source/Services/MMCA.ADC.Engagement.Service/Program.cs:220-221`), Engagement to Notification
+for the best-effort live-channel push (`Program.cs:222`, replacing the framework's
 [`NullLiveChannelPublisher`](group-10-notifications.md#nulllivechannelpublisher) behind
-[`ILiveChannelPublisher`](group-10-notifications.md#ilivechannelpublisher)), Conference to Engagement
+[`ILiveChannelPublisher`](group-10-notifications.md#ilivechannelpublisher)), Engagement to Identity
+for verified-user lookup (`Program.cs:223`), Conference to Engagement
 for `IBookmarkCountService` on the speaker dashboard
-(`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:431`), Notification to Identity for
-attendee user ids (`MMCA.ADC/Source/Services/MMCA.ADC.Notification.Service/Program.cs:241`), and
-Identity to Engagement plus Identity to Notification for the cross-service data-subject export
-aggregation (`MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:342-343`). Server sides are
-mapped in each host with `AddGrpcServiceDefaults()` plus `app.MapGrpcService<...>()`, mostly behind
-`.RequireAuthorization()`
-(`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:441`, `:396-397`).
+(`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:359`), Notification to Identity for
+attendee user ids and Notification to Conference for event-live validation
+(`MMCA.ADC/Source/Services/MMCA.ADC.Notification.Service/Program.cs:119-120`), Identity to Engagement,
+Notification and Conference for the cross-service data-subject export aggregation
+(`MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:304-306`), and Identity to Engagement
+for re-issuing an expired ticket invitation (`MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:307`).
+Server sides get `AddGrpcServiceDefaults()` from the shared host
+(`MMCA.Common/Source/Hosting/MMCA.Common.ServiceHost/ServiceHostBuilderExtensions.cs:167`) and are
+mapped with `MapGrpcService<...>()`, mostly behind `.RequireAuthorization()`; Conference keeps its three
+mappings in `ConferenceGrpcEndpoints`
+(`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:385`,
+`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/ConferenceGrpcEndpoints.cs:20`, `:28`). The
+exceptions are the two anonymous edges serving public or internal-ingress reads
+(`MMCA.ADC/Source/Services/MMCA.ADC.Engagement.Service/Program.cs:262`,
+`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/ConferenceGrpcEndpoints.cs:40`) and the
+service-token policies from [`ServiceTokenDefaults`](#servicetokendefaults)
+(`MMCA.ADC/Source/Services/MMCA.ADC.Engagement.Service/Program.cs:278`,
+`MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:344`,
+`MMCA.ADC/Source/Services/MMCA.ADC.Notification.Service/Program.cs:160`).
 
 **The startup-ordering edge worth knowing.** Conference and Engagement call *each other*, so the
 AppHost gives Engagement a `WithReference(conference).WaitFor(conference)` but the reverse Conference
 to Engagement edge only a `WithReference` with **no `WaitFor`**
-(`MMCA.ADC/Source/Hosting/MMCA.ADC.AppHost/Program.cs:267`, `:273`), because a reciprocal wait would
+(`MMCA.ADC/Source/Hosting/MMCA.ADC.AppHost/Program.cs:269`, `:273`), because a reciprocal wait would
 deadlock startup with each service waiting for the other to be healthy. The same reasoning drops the
-`WaitFor` on Engagement to Notification (`Program.cs:278`) and on both Identity edges
-(`Program.cs:288-289`); only Notification to Identity keeps one (`Program.cs:265`). The transient
+`WaitFor` on Engagement to Notification (`Program.cs:284`) and on both Identity edges
+(`Program.cs:294-295`); only Notification to Identity keeps one (`Program.cs:267`). The transient
 "peer not ready" errors that result self-heal through the resilience pipeline. This is the practical
 cost [ADR-007](https://ivanball.github.io/docs/adr/007-grpc-extraction.html) calls out: mutual
 synchronous dependencies need care, and the retry plus circuit breaker is what makes them tolerable.
@@ -347,12 +392,15 @@ marks its own. Two fitness functions read the attribute by full name
 or Infrastructure (`ArchitectureRules.Contracts.cs:32`, exposed through
 [`ServiceContractPurityTestsBase`](group-29-testing-infrastructure.md#servicecontractpuritytestsbase)),
 and the **encapsulation** rule, that the class serving a `[ServiceContract]` interface must not be
-public (`ArchitectureRules.Contracts.cs:81`, exposed through
+public (`ArchitectureRules.Contracts.cs:80`, exposed through
 [`ContractImplementationTestsBase`](group-29-testing-infrastructure.md#contractimplementationtestsbase)),
 which is why every gRPC adapter above is `internal sealed`. Alongside them,
 [`MicroserviceExtractionTestsBase`](group-29-testing-infrastructure.md#microserviceextractiontestsbase)
-forbids MassTransit and gRPC types from leaking into Application, Domain, or Shared. Each repo
-subclasses all three (for example
+forbids transport types from leaking into Application, Domain, or Shared: the gRPC and Protobuf
+runtime, the broker clients the framework's own transports run on (RabbitMQ, Azure Service Bus, Amazon
+SQS and SNS), and MassTransit, which is banned outright under ADR-118
+(`MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Rules/Layering/ArchitectureRules.Transport.cs:14`,
+asserted at `ArchitectureRules.Transport.cs:26`). Each repo subclasses all three (for example
 `MMCA.ADC/Tests/Architecture/MMCA.ADC.Architecture.Tests/Layering/ServiceContractPurityTests.cs:9`). That is the
 executable governance keeping this transport genuinely at the edge
 `[Rubric §34, Architecture Governance & Documentation]` and `[Rubric §15, Best Practices & Code
@@ -376,17 +424,17 @@ virtue of their `.proto`.
 - **Where it's used**: only inside `ServiceTokenProvider.cs`.
 
 ### DefaultSchemeGuard
-> MMCA.Common.Grpc · `MMCA.Common.Grpc.Authentication` · `MMCA.Common/Source/Presentation/MMCA.Common.Grpc/Authentication/ServiceTokenServiceCollectionExtensions.cs:165` · Level 0 · class (private, sealed)
+> MMCA.Common.Grpc · `MMCA.Common.Grpc.Authentication` · `MMCA.Common/Source/Presentation/MMCA.Common.Grpc/Authentication/ServiceTokenServiceCollectionExtensions.cs:176` · Level 0 · class (private, sealed)
 
 - **What it is**: an empty marker class nested in
   [`ServiceTokenServiceCollectionExtensions`](#servicetokenservicecollectionextensions)
-  (`ServiceTokenServiceCollectionExtensions.cs:165`), declared `private sealed class DefaultSchemeGuard;`.
+  (`ServiceTokenServiceCollectionExtensions.cs:176`), declared `private sealed class DefaultSchemeGuard;`.
   Its doc comment calls it "marker options whose start-time validation runs the default-scheme guard"
   (line 164).
 - **Depends on**: nothing; it carries no members.
 - **Concept reinforced, fail-fast configuration contract.** [ADR-070](https://ivanball.github.io/docs/adr/070-fail-fast-configuration-contract.html)
   `[Rubric §11, Security]`: the options system runs `Validate` plus `ValidateOnStart` against it, so the check
-  executes once at host startup (`ServiceTokenServiceCollectionExtensions.cs:78-82`).
+  executes once at host startup (`ServiceTokenServiceCollectionExtensions.cs:81-85`).
 - **Walkthrough**: `AddOptions<DefaultSchemeGuard>().Validate<IOptions<AuthenticationOptions>>(...)` calls
   `ServiceTokenIsNotTheDefaultScheme` and, on failure, reports that the `ServiceToken` scheme must not be the
   default (lines 78-82).
@@ -439,12 +487,12 @@ virtue of their `.proto`.
   fault; an adapter that wants its own answer for bad input uses `TryParseDecimal` and decides itself.
 - **Where it's used**: the ADC export contracts on both sides of the wire. Server side,
   [`UserEngagementExportGrpcService`](group-22-engagement-module.md#userengagementexportgrpcservice)
-  (`MMCA.ADC/Source/Services/MMCA.ADC.Engagement.Service/Grpc/UserEngagementExportGrpcService.cs:50,56,65`)
+  (`MMCA.ADC/Source/Services/MMCA.ADC.Engagement.Service/Grpc/UserEngagementExportGrpcService.cs:62,69,78`)
   and [`UserNotificationExportGrpcService`](group-10-notifications.md#usernotificationexportgrpcservice)
-  (`MMCA.ADC/Source/Services/MMCA.ADC.Notification.Service/Grpc/UserNotificationExportGrpcService.cs:47,49`)
+  (`MMCA.ADC/Source/Services/MMCA.ADC.Notification.Service/Grpc/UserNotificationExportGrpcService.cs:58,60`)
   call `FormatUtc` / `FormatUtcOrEmpty`; client side, the matching adapters
   [`UserEngagementExportServiceGrpcAdapter`](group-22-engagement-module.md#userengagementexportservicegrpcadapter)
-  (`MMCA.ADC/Source/Services/MMCA.ADC.Engagement.Contracts/UserEngagementExportServiceGrpcAdapter.cs:45,51,60`)
+  (`MMCA.ADC/Source/Services/MMCA.ADC.Engagement.Contracts/UserEngagementExportServiceGrpcAdapter.cs:46,53,62`)
   and [`UserNotificationExportServiceGrpcAdapter`](group-10-notifications.md#usernotificationexportservicegrpcadapter)
   (`MMCA.ADC/Source/Services/MMCA.ADC.Notification.Contracts/UserNotificationExportServiceGrpcAdapter.cs:42,44`)
   call `ParseUtc` / `ParseUtcOrNull`. Covered by `GrpcWireFormatTests`
@@ -577,7 +625,7 @@ virtue of their `.proto`.
   (`MeetCustomRule(CarriesServiceContractAttribute)`, line 44, matched by the full type name string held
   in `ServiceContractAttributeFullName`, lines 10-11), and asserts none of them depends on the producing
   service's Domain, Application, or Infrastructure namespaces. A second rule,
-  `ServiceContractImplementationsAreNotPublic` (`ArchitectureRules.Contracts.cs:81`), walks the same
+  `ServiceContractImplementationsAreNotPublic` (`ArchitectureRules.Contracts.cs:80`), walks the same
   marker in the other direction: a type implementing a `[ServiceContract]` interface must not itself be
   public, because the interface is the published surface, not the implementation.
 - **Walkthrough**: `[AttributeUsage(AttributeTargets.Interface | AttributeTargets.Class |
@@ -608,7 +656,7 @@ virtue of their `.proto`.
   [`ISessionBookmarkValidationService`](group-17-conference-domain.md#isessionbookmarkvalidationservice)
   (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Shared/Sessions/ISessionBookmarkValidationService.cs:10`),
   [`IEventLiveValidationService`](group-17-conference-domain.md#ieventlivevalidationservice)
-  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Shared/Events/Live/IEventLiveValidationService.cs:12`),
+  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Shared/Events/Live/IEventLiveValidationService.cs:13`),
   `IUserEngagementExportService`
   (`MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Shared/Exports/IUserEngagementExportService.cs:13`),
   and `IUserNotificationExportService`
@@ -632,28 +680,38 @@ virtue of their `.proto`.
   version negotiation.
 
 ### ServiceTokenDefaults
-> MMCA.Common.Grpc · `MMCA.Common.Grpc.Authentication` · `MMCA.Common/Source/Presentation/MMCA.Common.Grpc/Authentication/ServiceTokenDefaults.cs:8` · Level 0 · class (static)
+> MMCA.Common.Grpc · `MMCA.Common.Grpc.Authentication` · `MMCA.Common/Source/Presentation/MMCA.Common.Grpc/Authentication/ServiceTokenDefaults.cs:9` · Level 0 · class (static)
 
-- **What it is**: the three well-known names of the service-token scheme, held as constants so the minting
+- **What it is**: the four well-known names of the service-token scheme, held as constants so the minting
   side and the validating side cannot drift: the authentication scheme `"ServiceToken"`
-  (`ServiceTokenDefaults.cs:15`), the authorization policy `"InternalCaller"` (line 21), and the claim
-  type `"svc"` that carries the calling service's name (line 27).
-- **Depends on**: nothing; it is three `const string` members in `MMCA.Common.Grpc`.
+  (`ServiceTokenDefaults.cs:16`), the authorization policies `"InternalCaller"` (line 22) and
+  `"ServiceCaller"` (line 29), and the claim type `"svc"` that carries the calling service's name
+  (line 35).
+- **Depends on**: nothing; it is four `const string` members in `MMCA.Common.Grpc`.
 - **Concept introduced, a service-to-service credential kept separate from the user credential.**
   `[Rubric §11, Security]` (assesses how callers are told apart and how far a credential reaches). The
   doc comment on the scheme states the key rule: it is **never the default scheme**, so a service token
   only authenticates an endpoint that names the scheme, in practice one under `InternalCallerPolicy`
-  (lines 10-14). The policy accepts an authenticated caller from either the user JwtBearer scheme or the
-  service scheme (lines 17-20). A token without the `svc` claim is not a service token and is refused
-  (lines 23-26).
-- **Walkthrough**: no behavior, only the three constants above.
+  (lines 11-15). `InternalCallerPolicy` accepts an authenticated caller from either the user JwtBearer
+  scheme or the service scheme (lines 18-21). `ServiceCallerPolicy` is the service-only variant: the
+  caller must be authenticated by the service scheme and carry the `svc` claim, and the user JwtBearer
+  scheme is not evaluated, so an end-user token is refused (lines 24-28). A token without the `svc`
+  claim is not a service token and is refused (lines 31-34).
+- **Walkthrough**: no behavior, only the four constants above.
 - **Why it's built this way**: the scheme name is shared by `AddServiceTokenAuthentication`, the default
-  scheme guard, and the policy registration, and the claim type is shared by the minting side and the
-  validation event, so one definition removes string drift between them.
+  scheme guard, the two policy registrations and
+  [`ServiceCallerClaimsPrincipalExtensions`](#servicecallerclaimsprincipalextensions), and the claim type
+  is shared by the minting side and the validation event, so one definition removes string drift
+  between them.
 - **Where it's used**: [`ServiceTokenServiceCollectionExtensions`](#servicetokenservicecollectionextensions)
-  (13 references, `ServiceTokenServiceCollectionExtensions.cs`), [`ServiceTokenProvider`](#servicetokenprovider)
-  (writes the claim, `ServiceTokenProvider.cs:88`), and the tests
-  `MMCA.Common/Tests/Presentation/MMCA.Common.Grpc.Tests/Authentication/ServiceTokenAuthenticationTests.cs`.
+  (registers the scheme and both policies), [`ServiceCallerClaimsPrincipalExtensions`](#servicecallerclaimsprincipalextensions)
+  (reads the scheme and claim names), [`ServiceTokenProvider`](#servicetokenprovider)
+  (writes the claim, `ServiceTokenProvider.cs:88`), and the ADC service hosts, which map service-only
+  gRPC endpoints under `ServiceCallerPolicy`
+  (`MMCA.ADC/Source/Services/MMCA.ADC.Engagement.Service/Program.cs:278`,
+  `MMCA.ADC/Source/Services/MMCA.ADC.Notification.Service/Program.cs:160`). Tests:
+  `MMCA.Common/Tests/Presentation/MMCA.Common.Grpc.Tests/Authentication/ServiceTokenAuthenticationTests.cs`
+  and `ServiceCallerPolicyTests.cs` (same folder, pins the `"ServiceCaller"` name at line 41).
 
 ### ServiceTokenSettings
 > MMCA.Common.Grpc · `MMCA.Common.Grpc.Authentication` · `MMCA.Common/Source/Presentation/MMCA.Common.Grpc/Authentication/ServiceTokenSettings.cs:18` · Level 0 · class (sealed)
@@ -679,9 +737,39 @@ virtue of their `.proto`.
   because the audience is what keeps a service token out of the user scheme (doc comment, lines 44-47).
   The five-minute default and 60-minute cap bound the damage of a leaked token.
 - **Where it's used**: bound and validated once by `AddServiceTokenSettings`
-  (`ServiceTokenServiceCollectionExtensions.cs:96-106`), read by [`ServiceTokenProvider`](#servicetokenprovider)
+  (`ServiceTokenServiceCollectionExtensions.cs:103-113`), read by [`ServiceTokenProvider`](#servicetokenprovider)
   to mint, and covered by `ServiceTokenSettingsTests`
   (`MMCA.Common/Tests/Presentation/MMCA.Common.Grpc.Tests/Authentication/ServiceTokenSettingsTests.cs`).
+
+### ServiceCallerClaimsPrincipalExtensions
+> MMCA.Common.Grpc · `MMCA.Common.Grpc.Authentication` · `MMCA.Common/Source/Presentation/MMCA.Common.Grpc/Authentication/ServiceCallerClaimsPrincipalExtensions.cs:9` · Level 1 · class (static)
+
+- **What it is**: a C# `extension(ClaimsPrincipal)` block (see
+  [primer §4](00-primer.md#4-c-build-and-code-style-conventions)) with one method, `IsServiceCaller()`
+  (`ServiceCallerClaimsPrincipalExtensions.cs:21`), that answers whether the current caller is another
+  service presenting a service token rather than an end user.
+- **Depends on**: [`ServiceTokenDefaults`](#servicetokendefaults) (the scheme name and the `svc` claim
+  type) and `System.Security.Claims.ClaimsPrincipal` (BCL).
+- **Concept introduced, telling a service caller apart inside a merged principal.** `[Rubric §11, Security]`
+  (assesses how callers are told apart). An endpoint under `InternalCallerPolicy` authenticates both the
+  user scheme and the service scheme, so `HttpContext.User` can hold identities from either. Checking for
+  the `svc` claim alone does not say which scheme produced it; the method also checks the identity's
+  `AuthenticationType`.
+- **Walkthrough**: null-checks the principal (line 23), then returns `true` when any identity is
+  authenticated, has `AuthenticationType` equal (ordinal) to `ServiceTokenDefaults.AuthenticationScheme`,
+  and carries a non-blank `svc` claim (lines 25-28). The `AuthenticationType` match works because
+  `ConfigureServiceTokenBearer` sets `TokenValidationParameters.AuthenticationType` to the scheme name
+  (`ServiceTokenServiceCollectionExtensions.cs:155`), so a service identity is stamped with it.
+- **Why it's built this way**: a user token never qualifies (doc comment, lines 13-19), so an edge can let
+  a service through and still compare a user caller to the subject it asked for. That is the shape the
+  ADC export services use: `caller.GetUserId() != request.UserId && !caller.IsServiceCaller()` before the
+  organizer check.
+- **Where it's used**: ADC gRPC services in the Conference, Engagement, Identity and Notification hosts,
+  for example `MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Grpc/UserConferenceExportGrpcService.cs:38`,
+  `MMCA.ADC/Source/Services/MMCA.ADC.Engagement.Service/Grpc/TicketInvitationGrpcService.cs:40` and
+  `MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Grpc/AttendeesGrpcService.cs:43`; tested against a
+  real endpoint in `ServiceCallerPolicyTests`
+  (`MMCA.Common/Tests/Presentation/MMCA.Common.Grpc.Tests/Authentication/ServiceCallerPolicyTests.cs:164,223`).
 
 ### ServiceTokenClientInterceptor
 > MMCA.Common.Grpc · `MMCA.Common.Grpc.Interceptors` · `MMCA.Common/Source/Presentation/MMCA.Common.Grpc/Interceptors/ServiceTokenClientInterceptor.cs:28` · Level 1 · class (sealed)
@@ -738,50 +826,6 @@ virtue of their `.proto`.
   [`ServiceTokenClientInterceptor`](#servicetokenclientinterceptor); tested in `ServiceTokenProviderTests`
   (`MMCA.Common/Tests/Presentation/MMCA.Common.Grpc.Tests/Authentication/ServiceTokenProviderTests.cs`).
 
-### ResultFailureException
-> MMCA.Common.Grpc · `MMCA.Common.Grpc.Exceptions` · `MMCA.Common/Source/Presentation/MMCA.Common.Grpc/Exceptions/ResultFailureException.cs:16` · Level 2 · class (sealed)
-
-- **What it is**: a typed exception that carries the `IReadOnlyList<Error>` from a failing
-  [`Result`](group-01-result-error-handling.md#result). gRPC service implementations raise it indirectly
-  via `result.ThrowIfFailure()`; the
-  [`GrpcResultExceptionInterceptor`](#grpcresultexceptioninterceptor) catches it and translates it into
-  an `RpcException` with the right status code and structured error trailers.
-- **Depends on**: [`Error`](group-01-result-error-handling.md#error) (via
-  `using MMCA.Common.Shared.Abstractions`, `ResultFailureException.cs:1`); `System.Exception` (BCL).
-- **Concept introduced, bridging the Result pattern across the gRPC transport.** `[Rubric §9, API &
-  Contract Design]` (assesses consistent error shapes across transports) and `[Rubric §7, Microservices
-  Readiness]` (the gRPC extraction boundary). gRPC has no native "return a failure value": failures
-  travel as `RpcException` plus a status code. So the
-  [`Result`](group-01-result-error-handling.md#result) pattern (taught in
-  [primer §2](00-primer.md#2-architectural-styles-this-codebase-commits-to) and G01) is adapted to the
-  wire by smuggling the failure through a single exception type, internal to the transport edge, whose
-  payload is the original `Error` list, so the interceptor can rebuild the exact same
-  `Code`/`Message`/`Type`/`Source`/`Target` fields a consumer would have seen over HTTP. This mirrors the
-  HTTP side: where REST maps `Result` failures to RFC 9457 Problem Details in
-  [`ApiControllerBase`](group-12-api-hosting-mapping.md#apicontrollerbase), gRPC maps them to
-  `RpcException`.
-- **Walkthrough**: four constructors. The three standard `Exception` constructors (parameterless line 19,
-  message line 24, message plus inner exception line 30) each set `Errors = []` and exist **only to
-  satisfy CA1032**, the analyzer that requires the full exception constructor set (stated at line 18).
-  The meaningful one is `ResultFailureException(IReadOnlyList<Error> errors)` (line 35), whose message is
-  built by the private `BuildMessage` (line 41): it joins the errors as `"Code: Message"` pairs, or
-  answers the literal `"Result failure"` when the list is empty. `Errors` (line 39) is a get-only
-  property, documented as empty for the three CA1032 constructors.
-- **Why it's built this way**: using a *single, dedicated* exception rather than throwing arbitrary
-  exceptions lets the server interceptor catch exactly one type and translate it deterministically;
-  anything else propagating out is a genuine fault. The XML doc (lines 11-14) is explicit that service
-  code should **not** `throw` this directly, it should call `result.ThrowIfFailure()` from
-  [`ResultGrpcExtensions`](#resultgrpcextensions), which keeps the throw site uniform and guarantees the
-  `Errors`-carrying constructor is the one used.
-- **Where it's used**: thrown by `ThrowIfFailure()` and `UnwrapOrThrow<T>()` in
-  [`ResultGrpcExtensions`](#resultgrpcextensions)
-  (`MMCA.Common/Source/Presentation/MMCA.Common.Grpc/ResultGrpcExtensions.cs:77,94`); caught by
-  [`GrpcResultExceptionInterceptor`](#grpcresultexceptioninterceptor) in all four server-handler shapes.
-- **Caveats / not-in-source**: the three CA1032 constructors produce an instance with **no** errors, and
-  that case is not free downstream. The interceptor treats it specially (see
-  `GrpcResultExceptionInterceptor.cs:126-138`) because the normal encoder would otherwise flatten the
-  message away; prefer the `IReadOnlyList<Error>` constructor, which is what `ThrowIfFailure` uses.
-
 ### ServiceTokenHttpClientBuilderExtensions
 > MMCA.Common.Grpc · `MMCA.Common.Grpc.Authentication` · `MMCA.Common/Source/Presentation/MMCA.Common.Grpc/Authentication/ServiceTokenHttpClientBuilderExtensions.cs:11` · Level 2 · class (static)
 
@@ -823,27 +867,35 @@ virtue of their `.proto`.
   [ADR-070](https://ivanball.github.io/docs/adr/070-fail-fast-configuration-contract.html).
 - **Walkthrough**: `AddServiceTokenClient` binds the settings, `TryAddSingleton(TimeProvider.System)` and
   `TryAddSingleton<IServiceTokenProvider, ServiceTokenProvider>()` (lines 39-41).
-  `AddServiceTokenAuthentication` binds the settings (line 67), adds the `ServiceToken` JwtBearer scheme
-  (line 70), configures it from the validated settings (lines 71-72), registers the default-scheme guard
-  with `ValidateOnStart` (lines 78-82), and adds the `InternalCaller` policy over the user scheme plus the
-  service scheme with `RequireAuthenticatedUser` (lines 84-87). The private `AddServiceTokenSettings`
-  (line 96) returns early when a `DataAnnotationValidateOptions<ServiceTokenSettings>` is already
-  registered (line 98), then binds `Grpc:ServiceToken` with `ValidateDataAnnotations().ValidateOnStart()`
-  (lines 103-106), so a bad section reports each problem once. `ServiceTokenIsNotTheDefaultScheme`
-  (line 110) is false if any of the four default-scheme slots is `ServiceToken`, or if no default is set and
-  `ServiceToken` is the lone registered scheme (ASP.NET Core promotes a lone scheme to default).
-  `ConfigureServiceTokenBearer` (line 131) validates issuer, audience, lifetime and signing key, pins
-  `ValidAlgorithms` to HS256 against algorithm-confusion (lines 133-145), and its `OnTokenValidated` event
-  fails the context when the `svc` claim is missing or blank (lines 147-161).
+  `AddServiceTokenAuthentication` (line 66) binds the settings (line 70), adds the `ServiceToken`
+  JwtBearer scheme (line 73), configures it from the validated settings (lines 74-75), registers the
+  default-scheme guard with `ValidateOnStart` (lines 81-85), and adds two policies (lines 87-94): the
+  `InternalCaller` policy over the user scheme plus the service scheme with `RequireAuthenticatedUser`,
+  and the `ServiceCaller` policy over the service scheme alone with `RequireAuthenticatedUser` and
+  `RequireClaim("svc")`. The private `AddServiceTokenSettings` (line 103) returns early when a
+  `DataAnnotationValidateOptions<ServiceTokenSettings>` is already registered (line 105), then binds
+  `Grpc:ServiceToken` with `ValidateDataAnnotations().ValidateOnStart()` (lines 110-113), so a bad
+  section reports each problem once. `ServiceTokenIsNotTheDefaultScheme` (line 117) is false if any of
+  the four default-scheme slots is `ServiceToken`, or if no default is set and `ServiceToken` is the lone
+  registered scheme (ASP.NET Core promotes a lone scheme to default). `ConfigureServiceTokenBearer`
+  (line 138) validates issuer, audience, lifetime and signing key, pins `ValidAlgorithms` to HS256
+  against algorithm-confusion (line 151), sets `AuthenticationType` to the scheme name so
+  [`IsServiceCaller`](#servicecallerclaimsprincipalextensions) can tell a service identity apart from a
+  user identity in a merged principal (lines 153-155), and its `OnTokenValidated` event fails the
+  context when the `svc` claim is missing or blank (lines 158-172).
 - **Why it's built this way**: the guard exists because a service token that became the default scheme
   would satisfy every plain `[Authorize]` endpoint. The check runs once at startup via a marker options type,
-  so reading `AuthenticationOptions` stays free of side effects. See
-  [ADR-007](https://ivanball.github.io/docs/adr/007-grpc-extraction.html).
-- **Where it's used**: not referenced outside its defining file in source; the tests
-  `ServiceTokenAuthenticationTests` and `ServiceTokenDefaultSchemeGuardTests`
+  so reading `AuthenticationOptions` stays free of side effects. The separate `ServiceCaller` policy
+  exists for endpoints no end user should reach: since the user scheme is not evaluated, a user token
+  cannot satisfy it. See [ADR-007](https://ivanball.github.io/docs/adr/007-grpc-extraction.html).
+- **Where it's used**: the ADC service hosts. `AddServiceTokenAuthentication` is called by the
+  Engagement, Identity and Notification hosts
+  (`MMCA.ADC/Source/Services/MMCA.ADC.Engagement.Service/Program.cs:238`,
+  `MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:140`,
+  `MMCA.ADC/Source/Services/MMCA.ADC.Notification.Service/Program.cs:137`), and `AddServiceTokenClient`
+  by the Engagement and Identity hosts (`Program.cs:232` and `Program.cs:146` respectively). The tests
+  `ServiceTokenAuthenticationTests`, `ServiceTokenDefaultSchemeGuardTests` and `ServiceCallerPolicyTests`
   (`MMCA.Common/Tests/Presentation/MMCA.Common.Grpc.Tests/Authentication/`) exercise it.
-- **Caveats / not-in-source**: ADC and Store host usage of these two methods was not found in the usage
-  list for this section (Not determinable from source here).
 
 ### GrpcResultExceptionInterceptor
 > MMCA.Common.Grpc · `MMCA.Common.Grpc.Interceptors` · `MMCA.Common/Source/Presentation/MMCA.Common.Grpc/Interceptors/GrpcResultExceptionInterceptor.cs:19` · Level 3 · class (sealed, partial)
@@ -897,9 +949,9 @@ virtue of their `.proto`.
   gRPC server pipeline of every extracted service host. Its live counterparts are the gRPC service
   implementations that call `result.ThrowIfFailure()`, for example
   [`SessionBookmarksGrpcService`](group-20-conference-api-grpc.md#sessionbookmarksgrpcservice)
-  (`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Grpc/SessionBookmarksGrpcService.cs:39,57`) and
+  (`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Grpc/SessionBookmarksGrpcService.cs:40,65`) and
   [`EventLiveValidationGrpcService`](group-20-conference-api-grpc.md#eventlivevalidationgrpcservice)
-  (`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Grpc/EventLiveValidationGrpcService.cs:38,62,91,115`).
+  (`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Grpc/EventLiveValidationGrpcService.cs:46,74,103,131`).
 
 ### ResultGrpcExtensions
 > MMCA.Common.Grpc · `MMCA.Common.Grpc` · `MMCA.Common/Source/Presentation/MMCA.Common.Grpc/ResultGrpcExtensions.cs:31` · Level 3 · class (static)
@@ -960,24 +1012,25 @@ virtue of their `.proto`.
     contiguous layout the encoder writes; message, source, and target are percent-decoded through
     `Unescape`, a missing message decodes to the empty string, and a missing source or target to `null`
     (lines 191-194), mirroring the encoder's omission rule.
-  - `extension(RpcException exception)` (line 204) contributes `ToResult()` (line 218) and
-    `ToResult<T>()` (line 242), which close the round trip. Both decode `exception.Trailers.ToErrors()`
+  - `extension(RpcException exception)` (line 204) contributes `ToResult()` (line 219) and
+    `ToResult<T>()` (line 244), which close the round trip. Both decode `exception.Trailers.ToErrors()`
     and return `Result.Failure(errors)` when the trailers carried a structured failure, or
-    `Result.Failure(TransportError(exception, source))` when they did not (lines 224-226 and 248-250).
+    `Result.Failure(TransportError(exception, source))` when they did not (lines 225-227 and 250-252).
     Both take a `[CallerMemberName] string source = ""` parameter, so the synthesized transport error is
     stamped with the calling adapter method's name for free.
-  - The private helpers close the file. `ErrorFactories` (lines 259-271) is a second `FrozenDictionary`
-    mapping each `ErrorType` to its `Error` factory method, documented (lines 254-258) as a lookup table
+  - The private helpers close the file. `ErrorFactories` (lines 261-273) is a second `FrozenDictionary`
+    mapping each `ErrorType` to its `Error` factory method, documented (lines 256-260) as a lookup table
     rather than a `switch` so adding an error type stays a one-line entry instead of pushing the decoder
     past the cyclomatic-complexity ceiling `[Rubric §15, Best Practices & Code Quality]`.
-    `ParseErrorType` (line 278) does a case-**sensitive** `Enum.TryParse` and falls back to
-    `ErrorType.Failure`. `EscapeTrailerValue` (line 287) returns the value unchanged when every
+    `ParseErrorType` (line 280) does a case-**sensitive** `Enum.TryParse` and falls back to
+    `ErrorType.Failure`. `EscapeTrailerValue` (line 289) returns the value unchanged when every
     character is verbatim-safe, otherwise walks it rune by rune and writes each byte of a non-verbatim
-    rune's UTF-8 encoding as `%XX`; `IsVerbatimTrailerChar` (line 314) defines verbatim-safe as printable
+    rune's UTF-8 encoding as `%XX`; `IsVerbatimTrailerChar` (line 316) defines verbatim-safe as printable
     ASCII (`' '` to `'~'`) except `%` itself, so the decoder can tell an escape from a literal.
-    `Unescape` (line 317) is `Uri.UnescapeDataString`, with `null` staying `null`. `BuildError`
-    (line 321) dispatches through the factory table, and `TransportError` (line 331) builds the stand-in
-    error coded `$"Grpc.{exception.StatusCode}"` carrying `exception.Status.Detail`.
+    `Unescape` (line 319) is `Uri.UnescapeDataString`, with `null` staying `null`. `BuildError`
+    (line 323) dispatches through the factory table, and `TransportError` (line 340) builds the stand-in
+    error with `Error.Unexpected` (line 341), coded `$"Grpc.{exception.StatusCode}"` and carrying
+    `exception.Status.Detail`.
 - **Why it's built this way**: four decisions are worth naming.
   1. **The most severe error picks the status, not the first one** (line 124). The encoder ranks the list
      through [`ErrorTypeSeverity`](group-01-result-error-handling.md#errortypeseverity)
@@ -987,11 +1040,16 @@ virtue of their `.proto`.
      answers `Unauthenticated`. Ranking picks the status only; **all** errors still travel in the
      trailers.
   2. **The decoder degrades rather than throws.** An unrecognized `error-{i}-type` falls back to
-     `ErrorType.Failure` (line 281) instead of raising, so a newer peer that adds an error type cannot
+     `ErrorType.Failure` (line 283) instead of raising, so a newer peer that adds an error type cannot
      break an older client, and an `RpcException` with no structured trailers at all (a reset connection,
      an exceeded deadline) still reaches the caller as a `Result` failure rather than an exception
-     (lines 326-336). That is the `[Rubric §29, Resilience & Business Continuity]` angle: the client-side
-     programming model never changes shape because the network misbehaved.
+     (lines 328-344). That stand-in is typed `ErrorType.Unexpected`, never `ErrorType.Failure`
+     (remarks, lines 333-339): a fault with no trailers never came from the peer's own `Result`, so it
+     says nothing about the request. `Unexpected` answers HTTP 500 at the edge, is the top rank in
+     `ErrorTypeSeverity`, and is treated as retryable, where `Failure` would reach the client as a
+     definitive 400. That is the `[Rubric §29, Resilience & Business Continuity]` angle: the client-side
+     programming model never changes shape because the network misbehaved, and a peer outage is not
+     reported as the caller's mistake.
   3. **Trailers carry the full error list, not a flattened string**, so the client reconstructs real
      `Error` objects with their original `Code`, `Message`, `Type`, `Source`, and `Target`. This is what
      makes the Result pattern survive the hop intact ([ADR-007](https://ivanball.github.io/docs/adr/007-grpc-extraction.html)).
@@ -1003,7 +1061,7 @@ virtue of their `.proto`.
 - **Where it's used**: `ThrowIfFailure` and `UnwrapOrThrow` are called by the gRPC service
   implementations in each service project, for example
   [`SessionBookmarksGrpcService`](group-20-conference-api-grpc.md#sessionbookmarksgrpcservice)
-  (`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Grpc/SessionBookmarksGrpcService.cs:39`);
+  (`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Grpc/SessionBookmarksGrpcService.cs:40`);
   `ToRpcException` is called by [`GrpcResultExceptionInterceptor`](#grpcresultexceptioninterceptor)
   (`GrpcResultExceptionInterceptor.cs:130`); `ToResult` and `ToResult<T>` are called by the client-side
   adapters in the `*.Contracts` projects, for example
@@ -1060,7 +1118,7 @@ virtue of their `.proto`.
     `HttpResilienceDefaults`: `PooledConnectionLifetime` (10 minutes), `PooledConnectionIdleTimeout`
     (5 minutes), `KeepAlivePingDelay` (60 seconds), `KeepAlivePingTimeout` (30 seconds), and
     `KeepAlivePingPolicy = WithActiveRequests`
-    (`MMCA.Common/Source/Core/MMCA.Common.Shared/Resilience/HttpResilienceDefaults.cs:47,50,53,56`).
+    (`MMCA.Common/Source/Core/MMCA.Common.Shared/Resilience/HttpResilienceDefaults.cs:46,49,52,55`).
     Fourth it layers `AddStandardResilienceHandler` back on (lines 142-168), setting every knob from
     [`HttpResilienceDefaults`](group-16-aspire-orchestration.md#httpresiliencedefaults) (lines 144-146
     and 161-164): the east-west path's own `GrpcAttemptTimeout` (8 seconds) and
@@ -1068,7 +1126,7 @@ virtue of their `.proto`.
     `MaxRetryAttempts` (one retry beyond the initial attempt); and an explicit circuit breaker
     (the shared 60-second `CircuitBreakerSamplingDuration`, then `GrpcCircuitBreakerFailureRatio` 0.5,
     `GrpcCircuitBreakerMinimumThroughput` 10, `GrpcCircuitBreakerBreakDuration` 10 seconds)
-    (`MMCA.Common/Source/Core/MMCA.Common.Shared/Resilience/HttpResilienceDefaults.cs:19,33,73,76,82,88,94`).
+    (`MMCA.Common/Source/Core/MMCA.Common.Shared/Resilience/HttpResilienceDefaults.cs:18,32,72,75,81,87,93`).
     The retry is narrowed by `options.Retry.ShouldHandle` (lines 155-160) to an `HttpRequestException`
     whose `HttpRequestError` is `NameResolutionError`, `ConnectionError`, or `SecureConnectionError`:
     only a failure to reach the service before the request was sent is retried. Last,
@@ -1094,10 +1152,10 @@ virtue of their `.proto`.
      precisely why the pooled-lifetime and keep-alive values have to be re-applied from the same
      `HttpResilienceDefaults` source of truth: the override drops whatever the global default had set.
   3. **The east-west values are stated explicitly, not left at the library defaults** (comment at
-     lines 134-141, values at `HttpResilienceDefaults.cs:73-94`). The timeouts are sized from measured
+     lines 134-141, values at `HttpResilienceDefaults.cs:72-93`). The timeouts are sized from measured
      gRPC latency: `GrpcAttemptTimeout` is about ten times the slowest measured east-west p99 (784ms),
      so the outbound-HTTP 30s/90s budget would hold a caller on a hung peer far too long
-     (`HttpResilienceDefaults.cs:60-61,69-73`). The breaker shape is explicit because an east-west gRPC
+     (`HttpResilienceDefaults.cs:59-60,68-72`). The breaker shape is explicit because an east-west gRPC
      call addresses a peer directly and bypasses the Gateway's active health checks, so the breaker is
      the only thing that notices a peer going bad. The retry budget and the sampling window, by
      contrast, are shared with the HTTP path so the two cannot drift, and a consumer whose edge is
@@ -1133,6 +1191,50 @@ virtue of their `.proto`.
   `DependencyInjection` (one per package or module); this section is specifically the
   `MMCA.Common.Grpc` one. The `_typemap.tsv` anchor for the bare name is owned by another group, so
   link to this one as `#dependencyinjection` from within this chapter only.
+
+### ResultFailureException
+> MMCA.Common.Grpc · `MMCA.Common.Grpc.Exceptions` · `MMCA.Common/Source/Presentation/MMCA.Common.Grpc/Exceptions/ResultFailureException.cs:16` · Level 2 · class (sealed)
+
+- **What it is**: a typed exception that carries the `IReadOnlyList<Error>` from a failing
+  [`Result`](group-01-result-error-handling.md#result). gRPC service implementations raise it indirectly
+  via `result.ThrowIfFailure()`; the
+  [`GrpcResultExceptionInterceptor`](#grpcresultexceptioninterceptor) catches it and translates it into
+  an `RpcException` with the right status code and structured error trailers.
+- **Depends on**: [`Error`](group-01-result-error-handling.md#error) (via
+  `using MMCA.Common.Shared.Abstractions`, `ResultFailureException.cs:1`); `System.Exception` (BCL).
+- **Concept introduced, bridging the Result pattern across the gRPC transport.** `[Rubric §9, API &
+  Contract Design]` (assesses consistent error shapes across transports) and `[Rubric §7, Microservices
+  Readiness]` (the gRPC extraction boundary). gRPC has no native "return a failure value": failures
+  travel as `RpcException` plus a status code. So the
+  [`Result`](group-01-result-error-handling.md#result) pattern (taught in
+  [primer §2](00-primer.md#2-architectural-styles-this-codebase-commits-to) and G01) is adapted to the
+  wire by smuggling the failure through a single exception type, internal to the transport edge, whose
+  payload is the original `Error` list, so the interceptor can rebuild the exact same
+  `Code`/`Message`/`Type`/`Source`/`Target` fields a consumer would have seen over HTTP. This mirrors the
+  HTTP side: where REST maps `Result` failures to RFC 9457 Problem Details in
+  [`ApiControllerBase`](group-12-api-hosting-mapping.md#apicontrollerbase), gRPC maps them to
+  `RpcException`.
+- **Walkthrough**: four constructors. The three standard `Exception` constructors (parameterless line 19,
+  message line 24, message plus inner exception line 30) each set `Errors = []` and exist **only to
+  satisfy CA1032**, the analyzer that requires the full exception constructor set (stated at line 18).
+  The meaningful one is `ResultFailureException(IReadOnlyList<Error> errors)` (line 35), whose message is
+  built by the private `BuildMessage` (line 41): it joins the errors as `"Code: Message"` pairs, or
+  answers the literal `"Result failure"` when the list is empty. `Errors` (line 39) is a get-only
+  property, documented as empty for the three CA1032 constructors.
+- **Why it's built this way**: using a *single, dedicated* exception rather than throwing arbitrary
+  exceptions lets the server interceptor catch exactly one type and translate it deterministically;
+  anything else propagating out is a genuine fault. The XML doc (lines 11-14) is explicit that service
+  code should **not** `throw` this directly, it should call `result.ThrowIfFailure()` from
+  [`ResultGrpcExtensions`](#resultgrpcextensions), which keeps the throw site uniform and guarantees the
+  `Errors`-carrying constructor is the one used.
+- **Where it's used**: thrown by `ThrowIfFailure()` and `UnwrapOrThrow<T>()` in
+  [`ResultGrpcExtensions`](#resultgrpcextensions)
+  (`MMCA.Common/Source/Presentation/MMCA.Common.Grpc/ResultGrpcExtensions.cs:77,94`); caught by
+  [`GrpcResultExceptionInterceptor`](#grpcresultexceptioninterceptor) in all four server-handler shapes.
+- **Caveats / not-in-source**: the three CA1032 constructors produce an instance with **no** errors, and
+  that case is not free downstream. The interceptor treats it specially (see
+  `GrpcResultExceptionInterceptor.cs:126-138`) because the normal encoder would otherwise flatten the
+  message away; prefer the `IReadOnlyList<Error>` constructor, which is what `ThrowIfFailure` uses.
 
 
 ---

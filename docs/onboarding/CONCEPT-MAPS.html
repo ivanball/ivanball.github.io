@@ -155,8 +155,8 @@
           <a href="00-primer.html"><code>00-primer.md</code></a> · <a href="00-group-taxonomy.html"><code>00-group-taxonomy.md</code></a> ·
           <a href="00-dependency-manifest.html"><code>00-dependency-manifest.md</code></a> · the <code>group-NN-*.md</code> chapters.</p>
           <hr>
-          <h2 id="1-system-context-two-codebases--the-26-packages">1. System context, two codebases + the 26 packages</h2>
-          <p><code>MMCA.Common</code> is a framework published as twenty-six NuGet packages in lockstep, to nuget.org <strong>and</strong>
+          <h2 id="1-system-context-two-codebases--the-30-packages">1. System context, two codebases + the 30 packages</h2>
+          <p><code>MMCA.Common</code> is a framework published as thirty NuGet packages in lockstep, to nuget.org <strong>and</strong>
           GitHub Packages from one tag (<a href="https://ivanball.github.io/docs/adr/053-dual-registry-package-publishing.html" target="_blank" rel="noopener">ADR-053</a>);
           <code>MMCA.ADC</code> and <code>MMCA.Store</code> consume them. <code>MMCA.Common/FACTS.md</code> owns the count and the list (link
           there, do not recount). The framework depends on neither consumer (that one-way arrow is why the
@@ -169,10 +169,17 @@
           (<a href="https://ivanball.github.io/docs/adr/088-gateway-edge-responsibilities.html" target="_blank" rel="noopener">ADR-088</a>). <code>UI.Maui</code>
           is the one MAUI-TFM package: it lives outside <code>MMCA.Common.slnx</code> and is built and packed by
           dedicated windows CI jobs
-          (<a href="https://ivanball.github.io/docs/adr/042-device-capability-abstraction.html" target="_blank" rel="noopener">ADR-042</a>). Three more
-          families stand apart from the layer chain. The three cloud adapter packages, <code>MMCA.Common.Aws</code>,
-          <code>MMCA.Common.Azure</code> and <code>MMCA.Common.Gcp</code>, carry every vendor SDK so the core packages reference
-          none; each references <code>MMCA.Common.Infrastructure</code> and <code>MMCA.Common.Aspire</code>, and
+          (<a href="https://ivanball.github.io/docs/adr/042-device-capability-abstraction.html" target="_blank" rel="noopener">ADR-042</a>). Three
+          opt-in packages sit on the layer chain without being layers of their own: <code>MMCA.Common.Passkeys</code>
+          (WebAuthn sign-in over <code>Application</code>,
+          <a href="https://ivanball.github.io/docs/adr/139-passkeys-webauthn-opt-in-sign-in.html" target="_blank" rel="noopener">ADR-139</a>),
+          <code>MMCA.Common.Mcp</code> (the MCP endpoint over <code>API</code>) and <code>MMCA.Common.ServiceHost</code> (the composed
+          service-host start-up over <code>API</code>, <code>Grpc</code> and <code>Aspire</code>). Three more families stand apart from the
+          layer chain. The three cloud adapter packages, <code>MMCA.Common.Aws</code>, <code>MMCA.Common.Azure</code> and
+          <code>MMCA.Common.Gcp</code>, carry every vendor SDK so the core packages reference none; each references
+          <code>MMCA.Common.Infrastructure</code> and <code>MMCA.Common.Aspire</code>, <code>MMCA.Common.Azure.Startup</code> is the Azure
+          adapter&#39;s start-up slice (Key Vault, the Azure Monitor exporter and the DataProtection key ring,
+          referencing only <code>Aspire</code>, which <code>MMCA.Common.Azure</code> references and type-forwards), and
           <code>MMCA.Common.Testing.Azure</code> is their test-side companion
           (<a href="https://ivanball.github.io/docs/adr/134-cloud-neutral-core-vendor-adapters.html" target="_blank" rel="noopener">ADR-134</a>, taught as
           its own chapter group). The four AI packages form the governed language-model
@@ -183,25 +190,28 @@
           MMCA.Common project reference. <code>MMCA.Common.Testing.Aspire</code> ships the AppHost integration-test base
           (<a href="https://ivanball.github.io/docs/adr/117-apphost-integration-test-base.html" target="_blank" rel="noopener">ADR-117</a>).</p>
           <pre class="mermaid">flowchart TD
-    subgraph COMMON[&quot;MMCA.Common: framework, 26 NuGet packages (lockstep versioned)&quot;]
+    subgraph COMMON[&quot;MMCA.Common: framework, 30 NuGet packages (lockstep versioned)&quot;]
         direction TB
-        subgraph CORE[&quot;Core (4)&quot;]
+        subgraph CORE[&quot;Core (5)&quot;]
             SH[&quot;Shared&quot;]
             DOM[&quot;Domain&quot;]
             APP[&quot;Application&quot;]
             INF[&quot;Infrastructure&quot;]
+            PK[&quot;Passkeys&lt;br/&gt;(opt-in WebAuthn, ADR-139)&quot;]
         end
-        subgraph PRES[&quot;Presentation / transport (5)&quot;]
+        subgraph PRES[&quot;Presentation / transport (6)&quot;]
             API[&quot;API&quot;]
             GRPC[&quot;Grpc&quot;]
+            MCP[&quot;Mcp&lt;br/&gt;(opt-in MCP endpoint)&quot;]
             UI[&quot;UI&quot;]
             UIW[&quot;UI.Web&quot;]
             UIM[&quot;UI.Maui&lt;br/&gt;(outside the slnx)&quot;]
         end
-        subgraph HOSTPK[&quot;Hosting / edge (3)&quot;]
+        subgraph HOSTPK[&quot;Hosting / edge (4)&quot;]
             ASPIRE[&quot;Aspire&quot;]
             ASPH[&quot;Aspire.Hosting&quot;]
             GWPK[&quot;Gateway&lt;br/&gt;(YARP edge kit, ADR-088)&quot;]
+            SHOST[&quot;ServiceHost&lt;br/&gt;(composed service-host start-up)&quot;]
         end
         subgraph TEST[&quot;Testing (6)&quot;]
             T1[&quot;Testing&quot;]
@@ -211,9 +221,10 @@
             T5[&quot;Testing.Aspire&lt;br/&gt;(AppHost test base, ADR-117)&quot;]
             T6[&quot;Testing.Azure&lt;br/&gt;(Azure test fixtures, ADR-134)&quot;]
         end
-        subgraph CLOUD[&quot;Cloud adapters (3), ADR-134&quot;]
+        subgraph CLOUD[&quot;Cloud adapters (3) + Azure start-up slice, ADR-134&quot;]
             AWS[&quot;Aws&quot;]
             AZ[&quot;Azure&quot;]
+            AZS[&quot;Azure.Startup&lt;br/&gt;(Key Vault, exporter, key ring)&quot;]
             GCP[&quot;Gcp&quot;]
         end
         subgraph AIFAM[&quot;AI boundary (4), ADR-120&quot;]
@@ -233,7 +244,7 @@
 
     classDef fw fill:#e8f0fe,stroke:#4285f4,color:#111
     classDef con fill:#e6f4ea,stroke:#34a853,color:#111
-    class SH,DOM,APP,INF,API,GRPC,UI,UIW,UIM,ASPIRE,ASPH,GWPK,T1,T2,T3,T4,T5,T6,AWS,AZ,GCP,AIPK,AIA,AIO,AIT,META fw
+    class SH,DOM,APP,INF,PK,API,GRPC,MCP,UI,UIW,UIM,ASPIRE,ASPH,GWPK,SHOST,T1,T2,T3,T4,T5,T6,AWS,AZ,AZS,GCP,AIPK,AIA,AIO,AIT,META fw
     class ADC,STORE con</pre>
           <hr>
           <h2 id="2-clean-architecture-the-layered-dependency-rule">2. Clean Architecture, the layered dependency rule</h2>
@@ -502,8 +513,13 @@
           in-process by the interceptor right after the save (deferred until after commit inside a
           Transactional command) and their outbox rows marked processed, while <strong>integration events</strong> are
           never dispatched locally: their rows stay unprocessed until the background <code>OutboxProcessor</code>
-          publishes them through <code>IMessageBus</code>, so the registered transport (in-process for a monolith, a
-          MassTransit broker for extracted services) decides delivery. The processor is also the safety net
+          publishes them through <code>IMessageBus</code>, so the registered transport (in-process for a monolith, or
+          <code>BrokerMessageBus</code> over a framework-owned <code>IBrokerTransport</code> for extracted services: RabbitMQ and
+          PostgreSQL built in, Azure Service Bus and Amazon SQS from the cloud adapters, selected by
+          <code>MessageBus:Provider</code>,
+          <a href="https://ivanball.github.io/docs/adr/066-broker-transport-selection.html" target="_blank" rel="noopener">ADR-066</a> /
+          <a href="https://ivanball.github.io/docs/adr/118-message-transport-library-policy.html" target="_blank" rel="noopener">118</a>) decides
+          delivery. The processor is also the safety net
           for a local dispatch that failed. A handler that publishes an integration event itself calls
           <code>IEventBus.PublishAsync</code>, which writes outbox rows rather than sending inline (the removed
           <code>IIntegrationEventPublisher</code> is not a caller-facing option any more). Every integration event carries
@@ -524,7 +540,7 @@
     end
     DISP[&quot;IDomainEventDispatcher: in-process handlers&lt;br/&gt;(deferred until after commit)&quot;]
     PROC[&quot;OutboxProcessor: background, smart-wait poll,&lt;br/&gt;leased rows for replica scale-out,&lt;br/&gt;opt-in per-key ordered delivery via IHasOrderingKey,&lt;br/&gt;broker publish behind a circuit breaker (ADR-087),&lt;br/&gt;dead-letter on retry exhaustion, with list/replay&lt;br/&gt;through IOutboxAdministration&quot;]
-    BUS[&quot;IMessageBus: InProcessMessageBus or BrokerMessageBus&lt;br/&gt;→ MassTransit v8 (RabbitMQ / Azure Service Bus)&quot;]
+    BUS[&quot;IMessageBus: InProcessMessageBus or BrokerMessageBus&lt;br/&gt;over a native IBrokerTransport: RabbitMQ / PostgreSQL built in,&lt;br/&gt;Azure Service Bus / Amazon SQS from the cloud adapters (ADR-066/118)&quot;]
     CONSUMER[&quot;IntegrationEventConsumer in another module/service&quot;]
     INBOX[(&quot;Opt-in inbox: dedup by MessageId (ADR-021)&quot;)]
     HANDLER[&quot;IIntegrationEventHandler&quot;]
@@ -670,7 +686,7 @@
         OWN[&quot;OwnerOrAdminFilter / OwnershipHelper&lt;br/&gt;row-scope a single resource (ADR-033)&quot;]
     end
 
-    RL[&quot;Global rate limiter: authenticated-only,&lt;br/&gt;infra/anon exempt (ADR-019)&quot;]
+    RL[&quot;Global rate limiter: authenticated-only,&lt;br/&gt;infra/anon exempt (ADR-019, taught in G12)&quot;]
 
     JWT --&gt; CU
     JWKS --&gt; JWT
@@ -856,7 +872,7 @@
       087 Broker poison-message handling
       083 CRUD lifecycle event taxonomy
       054 Saga compensation and reconciliation
-      086 Process manager deferred
+      086 Orchestrated process manager deferred, 143 covers one-aggregate flows
       052 Background job execution superseded by 121
       074 Recurring job scheduler
     Notifications and real time
@@ -1056,7 +1072,7 @@
           <nav class="doc-toc" aria-label="On this page">
             <p class="doc-toc-title">On this page</p>
             <ul>
-            <li><a href="#1-system-context-two-codebases--the-26-packages">1. System context, two codebases + the 26 packages</a></li>
+            <li><a href="#1-system-context-two-codebases--the-30-packages">1. System context, two codebases + the 30 packages</a></li>
             <li><a href="#2-clean-architecture-the-layered-dependency-rule">2. Clean Architecture, the layered dependency rule</a></li>
             <li><a href="#3-the-29-functional-groups-dependency--build-order">3. The 29 functional groups, dependency / build order</a></li>
             <li><a href="#4-core-framework-patterns-how-the-building-blocks-compose">4. Core framework patterns, how the building blocks compose</a></li>
