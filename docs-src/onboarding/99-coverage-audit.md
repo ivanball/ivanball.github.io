@@ -11,20 +11,20 @@ explained, and lists what could not be determined from source. All counts are re
 
 | Quantity | Count | Source |
 |----------|------:|--------|
-| `.cs` files scanned | 3,746 | `00-inventory.md` |
-|, in-scope | 3,612 | |
-|, generated/excluded | 134 | logged exception §2.1 |
-| Type declaration rows (incl. partial-class fragments) | 5,055 | `00-inventory.md` |
-| **Distinct type nodes (partials collapsed)** | **4,905** | the master checklist |
-| → mapped to a functional group | 4,905 | `classify.ps1` (0 unmapped) |
-| → individually sectioned (named in a chapter) | 2,624 | `verify.ps1` |
-| → rolled up by project (G25 test classes) | 2,281 | logged exception §2.2 |
-| Distinct `###` sections written across 28 chapters | 2,554 | covering the 2,624 (sibling families share a section, §2.3) |
-| Chapter overviews written | 28 | one per group |
+| `.cs` files scanned | 5,902 | `00-inventory.md` |
+|, in-scope | 5,694 | |
+|, generated/excluded | 208 | logged exception section 2.1 |
+| Type declaration rows (incl. partial-class fragments) | 8,334 | `00-inventory.md` |
+| **Distinct type nodes (partials collapsed)** | **8,100** | the master checklist |
+| -> mapped to a functional group | 8,100 | `classify.ps1` (0 unmapped) |
+| -> individually sectioned (named in a chapter) | 4,055 | `verify.ps1` |
+| -> rolled up by project (G25 test classes) | 4,045 | logged exception section 2.2 |
+| Distinct `###` sections written across 29 chapters | 3,968 | covering the 4,055 (sibling families share a section, section 2.3) |
+| Chapter overviews written | 29 | one per group |
 
-**Cross-check result:** `verify.ps1` confirms **0** of the 2,624 individually-sectioned types are
+**Cross-check result** (2026-11-25 sweep): `verify.ps1` confirms **0** of the 4,055 individually-sectioned types are
 missing from their group chapter, every one appears as a `###` heading or in a sibling-family
-`File:Line` table. 4,905 = 2,624 individually-sectioned + 2,281 rolled-up. Nothing dropped, nothing
+`File:Line` table. 8,100 = 4,055 individually-sectioned + 4,045 rolled-up. Nothing dropped, nothing
 double-counted (each type maps to exactly one group).
 
 > **Caveat on what `verify.ps1` proves.** Its check is name presence: a type counts as covered when
@@ -1431,7 +1431,7 @@ double-counted (each type maps to exactly one group).
 
 ## 2. Exceptions log (every deliberate omission, with reason)
 
-### 2.1 Generated / scaffolded code, not sectioned (134 files)
+### 2.1 Generated / scaffolded code, not sectioned (208 files)
 EF Core migrations (`/Migrations/`, `.Migrations.SqlServer`), `ModelSnapshot`, `*.Designer.cs`,
 `*.g.cs`, `GlobalUsings.g.cs`, and `AssemblyInfo.cs` are excluded by rule (`Tools/invtool` `IsGenerated`).
 The **mechanisms** that produce them are taught instead: the `DbContext`, the migration workflow, and
@@ -1439,10 +1439,10 @@ the `.proto`/gRPC contracts (see [group-07](group-07-persistence-ef-core.md),
 [group-13](group-13-grpc-contracts.md), and [devops-testing](devops-testing.md)). The full file list is
 in [`00-inventory.md`](00-inventory.md#generated--excluded-artifacts-no-type-sections-written).
 
-### 2.2 Per-`[Fact]` test classes, rolled up by project (2,281 types)
+### 2.2 Per-`[Fact]` test classes, rolled up by project (4,045 types)
 Per the guide's TESTS note, individual test classes are **not** given per-type sections. The
-[Testing chapter (group-28)](group-29-testing-infrastructure.md) instead:
-- sections the **reusable** test infrastructure in full (the **400** types in `MMCA.Common.Testing`,
+[Testing chapter (group-29)](group-29-testing-infrastructure.md) instead:
+- sections the **reusable** test infrastructure in full (the **876** types in `MMCA.Common.Testing`,
   `.Testing.E2E`, `.Testing.UI`, the shared **`.Testing.Architecture`** rule library + bases, now
   including the six convention/fitness bases added since v1.93.0, the web-vitals collector, the
   localization resx-parity base, the slice-cohesion base, the markup-snapshot helper, the new
@@ -1452,12 +1452,15 @@ Per the guide's TESTS note, individual test classes are **not** given per-type s
   `GracefulShutdownTestsBase<TEntryPoint>` host bases and the `ObservabilityConventionTestsBase`
   fitness base added at the v1.135.0 pass, plus the cross-service fixture/data-source bases,
   `DependencyInjectionAssert`, `TestPolling`, `ModuleConformanceTestsBase<TModule>` and the
-  `WebVitalsBudget` added at the v1.142.0 pass, and the per-repo architecture-fitness test classes
-  plus the `Gallery` harness), and
-- rolls the remaining **2,281** per-suite test classes (including the `MMCA.Common.Benchmarks`
+  `WebVitalsBudget` added at the v1.142.0 pass, the 22 shared `Tests/Shared` bases linked into
+  several test projects (sectioned since the 2026-11-25 pass), and the per-repo architecture-fitness
+  test classes plus the `Gallery` harness; by assembly: `MMCA.Common.Architecture.Tests` 524,
+  `MMCA.Common.Testing.Architecture` 113, `MMCA.ADC.Architecture.Tests` 86, `MMCA.Common.Testing` 44,
+  `.Testing.E2E` 41, `.Testing.UI` 31, `MMCA.Common.Tests.Shared` 22, `MMCA.Common.UI.Gallery` 15), and
+- rolls the remaining **4,045** per-suite test classes (including the `MMCA.Common.Benchmarks`
   perf-smoke project) into a **per-project table** (purpose + style:
   unit / integration / fitness / E2E / component / performance-smoke).
-Every one of the 2,281 remains individually listed with `file:line` in
+Every one of the 4,045 remains individually listed with `file:line` in
 [`00-inventory.md`](00-inventory.md). This is the only category of first-party type not given its own
 prose section.
 
@@ -1465,40 +1468,36 @@ prose section.
 Near-identical families (per-entity `Add*/Remove*/Update*` commands, `*DTOMapper`, `*CreateRequest`,
 `*Validator`, per-type filter strategies, etc.) are taught in one `### A, B, C` section that explains
 the shared shape once. **Every** grouped type is still named and cited individually via the section's
-`File:Line` table, so citation coverage is complete (this is what `verify.ps1` checks). The 2,624
-individually-sectioned types are covered by 2,554 `###` sections; the 70-type difference is family grouping.
+`File:Line` table, so citation coverage is complete (this is what `verify.ps1` checks). The 4,055
+individually-sectioned types are covered by 3,968 `###` sections; the 87-type difference is family grouping.
 
 ---
 
 ## 3. Grouping & ordering verification
 
-- **Every type in exactly one group.** `classify.ps1` assigns all 3,668 nodes via name-level overrides
+- **Every type in exactly one group.** `classify.ps1` assigns all 8,100 nodes via name-level overrides
   (for the grab-bag `MMCA.Common.*Interfaces*/Services` namespaces) + ordered namespace-prefix rules;
-  it reports **0 unmapped** and the per-group counts sum to 3,668. See
+  it reports **0 unmapped** and the per-group counts sum to 8,100. See
   [`00-group-taxonomy.md`](00-group-taxonomy.md).
 - **Within-group ascending Level.** Each chapter's sections were authored from a pre-sorted, Level-
   ascending unit table, so no section precedes a same-group type it depends on (ties broken by name).
-- **Cycles kept whole.** **18 of the 19** dependency cycles (SCCs) sit inside a single group, never
-  split. The one exception is the 19th, added this pass, and it is not a real cycle: the two
-  identically-named `SelfHttpWarmupTask` classes
-  (`MMCA.ADC.Engagement.Service/SelfHttpWarmupTask.cs:19`, `G22`, and
-  `MMCA.ADC.Identity.Service/SelfHttpWarmupTask.cs:19`, `G23`) are unrelated types in different
-  services that neither references the other; the extractor's globally-unique-name fallback cannot
-  distinguish them and links each to the other, producing a phantom 2-node SCC whose members sit in
-  two different groups. Splitting it across the two service chapters is correct, since each chapter
-  teaches its own class. The real cycles were re-verified as whole
-  (including the two new in the v1.128.0 pass, both test-only and both wholly in
-  [group-28](group-29-testing-infrastructure.md): `MidSaveContextCreatingDbContext` /
-  `ReentrantSaveInterceptor` and `FailingSaveInterceptor` / `OutboxRoutingTestDbContext`, all four
-  assigned `G25` in `out/00-assigned.csv`):
-  the `ApplicationDbContext ↔ AuditSaveChangesInterceptor ↔ DomainEventSaveChangesInterceptor ↔
-  DataSourceModelCacheKeyFactory ↔ OutboxFinalizer ↔ DeferredDispatch` cycle (now 6 members, the
-  `DeferredDispatch` record added this pass so the domain-event interceptor can defer a dispatch across
-  the SaveChanges boundary) is wholly in [group-07](group-07-persistence-ef-core.md); the
+- **Cycles kept whole, with one deliberate split.** Re-checked mechanically at the 2026-11-25 pass
+  (each manifest cycle's members mapped to their groups through `out/00-assigned.csv`): **70 of the
+  74** dependency cycles (SCCs) sit inside a single group. Of the four that cross a group line, three
+  are not real cycles. The two identically-named `SelfHttpWarmupTask` classes
+  (`MMCA.ADC.Engagement.Service`, `G22`, and `MMCA.ADC.Identity.Service`, `G23`) are unrelated types
+  in different services, and the extractor's name fallback links each to the other. Likewise a
+  test-local `Speaker` and `Session` in `MMCA.Common.Application.Tests` (`G25`) are pulled into the
+  Conference `Speaker` and `Session` aggregate cycles (`G17`), which the Conference domain cannot
+  reference. The fourth is real: the 23-member persistence SCC (`ApplicationDbContext`, its four
+  per-engine contexts and engines, the save-changes interceptors, `DeferredDispatch`, the
+  conventions and `DataSourceModelCacheKeyFactory`) is taught in
+  [group-07](group-07-persistence-ef-core.md) except `OutboxFinalizer`, which belongs to the outbox
+  and is taught in [group-04](group-04-events-outbox.md); group-07 cross-links it there. The
   Event/Session/Speaker/Category aggregate nav-cycles are wholly in
-  [group-17](group-17-conference-domain.md); the `Address`/`Currency` value-object + converter pairs in
-  [group-02](group-02-domain-building-blocks.md) (plus polyglot-fitness and the new localization/markup
-  test cycles in [group-28](group-29-testing-infrastructure.md)). Full list:
+  [group-17](group-17-conference-domain.md), the `Address`/`Currency` value-object + converter pairs in
+  [group-02](group-02-domain-building-blocks.md), and the test-only cycles in
+  [group-29](group-29-testing-infrastructure.md). Full list:
   [manifest](00-dependency-manifest.md#cycles).
 - **Cross-group forward references are allowed and cross-linked.** Because group order is functional
   (not a strict global topological sort), some sections reference a first-party type whose home group
@@ -1583,8 +1582,10 @@ chapters. It also reports a 35th distinct `§N` token, `§1798`, which is the le
    [primer §2](00-primer.md#2-architectural-styles-this-codebase-commits-to) and group-07), not yet as
    live production options.
 3. **Edge-resolution approximation.** The dependency graph is a *syntactic* (namespace-aware) resolve,
-   not a full semantic compiler bind: ~96% of edges bind by namespace visibility (17,963), the rest by a
-   globally-unique-name fallback (736 edges), and 101 references are dropped as ambiguous. This is accurate enough
+   not a full semantic compiler bind: ~96% of edges bind by namespace visibility (30,323 at the
+   2026-11-25 pass), the rest by a globally-unique-name fallback (1,294 edges), and 232 references are
+   dropped as ambiguous; this approximation is also what produces the three phantom cross-group
+   cycles in section 3. This is accurate enough
    for the leveling spine but is a documented approximation
    ([manifest accuracy note](00-dependency-manifest.md#edge-resolution--accuracy)).
 4. **64 cross-linked types have no section of their own** (measured at the v1.135.0 pass by the
