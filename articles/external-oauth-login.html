@@ -95,7 +95,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 54 articles</summary>
+        <summary>All 57 articles</summary>
         <nav class="doc-nav" aria-label="The MMCA.Common series">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -152,7 +152,10 @@
         <li><a href="durable-internal-commands.html">51 · Four ways to do work later</a></li>
         <li><a href="identity-completions.html">52 · Finishing identity</a></li>
         <li><a href="cloud-neutral-vendor-adapters.html">53 · One framework, three clouds</a></li>
-        <li><a href="series-index.html">54 · The series index</a></li>
+        <li><a href="borrowed-and-machine-identities.html">54 · Borrowed and machine identities</a></li>
+        <li><a href="app-as-mcp-server.html">55 · Your app as an MCP server</a></li>
+        <li><a href="outbound-webhooks.html">56 · Sending webhooks without opening a door</a></li>
+        <li><a href="series-index.html">57 · The series index</a></li>
           </ol>
         </nav>
       </details>
@@ -208,29 +211,43 @@
           <p><strong>Scheme registration is gated per provider, and inert until configured.</strong> <code>AddExternalAuthProviders</code>
           reads the <code>OAuth</code> config section and turns on the Google scheme only if <code>OAuth:Google:ClientId</code> is
           set, the GitHub scheme only if <code>OAuth:GitHub:ClientId</code> is set, and the Apple scheme only if
-          <code>OAuth:Apple:ClientId</code> is set. With all three absent it returns the service collection untouched, so a
-          host with no OAuth secrets keeps exactly the JWT-only pipeline <code>AddCommonAuthentication</code> gave it. It
-          calls <code>AddAuthentication()</code> with no argument on purpose, so the new schemes append rather than
-          displacing the JWT bearer default. Fail-fast is per provider: Google and GitHub throw when a
-          <code>ClientId</code> is set without its matching <code>ClientSecret</code>, while Apple has no static client secret at all
-          (the handler mints a short-lived ES256 assertion instead, <code>GenerateClientSecret = true</code>) and throws on
-          a missing <code>OAuth:Apple:TeamId</code>, <code>OAuth:Apple:KeyId</code> or <code>OAuth:Apple:PrivateKeyPem</code>. Those throws live
-          in each scheme&#39;s options callback, so they fire when the options are first built (the first request
-          through the authentication middleware), not at host build. Either way a half-wired provider fails with
-          a named configuration error before any sign-in reaches the provider.</p>
-          <p><strong>A ten-minute cookie carries the external principal, and nothing else.</strong> The provider callback signs
-          into a dedicated <code>ExternalLogin</code> cookie scheme (cookie name <code>mmca_external_login</code>, HttpOnly,
-          <code>SameSite=Lax</code>, a ten-minute lifetime). That cookie exists only to hand the external claims from the
-          provider callback to the controller. It is never the app session. GitHub is asked for the <code>user:email</code>
-          scope, because its default scope omits the email the exchange needs to match an account. Apple returns
-          its callback as a cross-site form POST (<code>response_mode=form_post</code> is forced by the name and email
-          scopes), which the middleware handles at <code>/auth/callback/apple</code> like any other provider callback.</p>
+          <code>OAuth:Apple:ClientId</code> is set. Beside those three, every <code>OAuth:Oidc:&lt;Name&gt;</code> section that sets a
+          <code>ClientId</code> becomes a generic OpenID Connect scheme named <code>&lt;Name&gt;</code> (Entra ID, Okta, any OIDC issuer),
+          running the authorization code flow with PKCE into the same handoff cookie, with its callback at
+          <code>/auth/callback/&lt;Name&gt;</code>. With the three built-in client ids absent and no OIDC section, it returns the
+          service collection untouched, so a host with no OAuth secrets keeps exactly the JWT-only pipeline
+          <code>AddCommonAuthentication</code> gave it. It calls <code>AddAuthentication()</code> with no argument on purpose, so the
+          new schemes append rather than displacing the JWT bearer default. Fail-fast is per provider: Google and
+          GitHub throw when a <code>ClientId</code> is set without its matching <code>ClientSecret</code>, while Apple has no static
+          client secret at all (the handler mints a short-lived ES256 assertion instead,
+          <code>GenerateClientSecret = true</code>) and throws on a missing <code>OAuth:Apple:TeamId</code>, <code>OAuth:Apple:KeyId</code> or
+          <code>OAuth:Apple:PrivateKeyPem</code>. Those throws live in each scheme&#39;s options callback, so they fire when the
+          options are first built (the first request through the authentication middleware), not at host build.
+          The OIDC sections are read and validated eagerly instead, so a misconfigured one fails startup naming
+          its key. Either way a half-wired provider fails with a named configuration error before any sign-in
+          reaches the provider.</p>
+          <p><strong>A ten-minute cookie carries the external principal, and it dies at the exchange.</strong> The provider
+          callback signs into a dedicated <code>ExternalLogin</code> cookie scheme (cookie name <code>mmca_external_login</code>,
+          HttpOnly, <code>SameSite=Lax</code>, a ten-minute lifetime). That cookie exists only to hand the external claims,
+          with the stashed <code>returnUrl</code> and client state, from the provider callback to the controller. It is
+          never the app session, and nothing persists provider tokens beyond it. The Google, GitHub and Apple
+          handlers set <code>SaveTokens = true</code>, so their provider tokens do ride inside that cookie&#39;s ticket for its
+          short life, until <code>CompleteAsync</code> signs it out; the generic OIDC scheme sets <code>SaveTokens = false</code>, so
+          its ID token never enters the cookie at all. GitHub is asked for the <code>user:email</code> scope, because its
+          default scope omits the email the exchange needs to match an account. Apple returns its callback as a
+          cross-site form POST (<code>response_mode=form_post</code> is forced by the name and email scopes), which the
+          middleware handles at <code>/auth/callback/apple</code> like any other provider callback.</p>
           <p><strong>The exchange swaps the external identity for a local JWT, then hides the tokens behind a single-use
           code.</strong> The challenge endpoints (<code>GET auth/oauth/google</code>, <code>GET auth/oauth/github</code>,
-          <code>GET auth/oauth/apple</code>) redirect to the provider and back to <code>OAuthControllerBase.CompleteAsync</code>. Each
-          of them takes an optional opaque <code>state</code> value the client round-trips through the provider, which the
-          challenge stashes in the authentication properties and the completion redirect hands back, so the
-          client can prove the code belongs to the flow it started. The server never interprets that value.
+          <code>GET auth/oauth/apple</code>, and <code>GET auth/oauth/{provider}</code> for a configured OIDC scheme, which answers 404
+          for an unknown name) redirect to the provider and back to <code>OAuthControllerBase.CompleteAsync</code>. A fifth
+          route, <code>GET auth/oauth/discover?email=</code>, is home-realm discovery: anonymous and rate limited per client
+          IP, it maps the address&#39;s domain to the OIDC provider whose <code>Domains</code> list claims it, so the sign-in
+          page can offer one &quot;Sign in with your organization&quot; step, and it reveals which provider owns a domain,
+          never whether an account exists. Each challenge takes an optional opaque <code>state</code> value the client
+          round-trips through the provider, which the challenge stashes in the authentication properties and the
+          completion redirect hands back, so the client can prove the code belongs to the flow it started. The
+          server never interprets that value.
           <code>CompleteAsync</code> authenticates the <code>ExternalLogin</code> cookie, pulls
           <code>(provider, providerKey, email, firstName, lastName)</code> off the external principal (the key and email
           from the standard name-identifier and email claims, the name from the given-name and surname claims,
@@ -244,12 +261,12 @@
           <pre class="doc-pre" tabindex="0" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-comment">// OAuthControllerBase.CompleteAsync (trimmed): swap the external identity for a local JWT pair,</span>
 <span class="hljs-comment">// then hand the UI only a single-use code, never the tokens.</span>
 <span class="hljs-keyword">var</span> (returnUrl, clientState) = ReadChallengeState(authenticateResult.Properties);  <span class="hljs-comment">// stashed at challenge time</span>
-<span class="hljs-keyword">var</span> mobileReturnUrl = GetAllowedMobileReturnUrl(returnUrl);   <span class="hljs-comment">// an allow-listed native scheme, or null for web</span>
+<span class="hljs-keyword">var</span> mobileReturnUrl = OAuthReturnUrls.GetAllowedMobileReturnUrl(configuration, returnUrl);  <span class="hljs-comment">// native scheme, or null for web</span>
 <span class="hljs-keyword">var</span> result = <span class="hljs-keyword">await</span> authenticationService.ExternalLoginAsync(
     providerName, providerKey, email, firstName, lastName);   <span class="hljs-comment">// by provider, guarded link, or create</span>
 <span class="hljs-keyword">if</span> (result.IsFailure)
 {
-    <span class="hljs-keyword">return</span> RedirectError(uiBaseUrl, mobileReturnUrl, GetErrorCode(result.Errors));
+    <span class="hljs-keyword">return</span> Redirect(OAuthReturnUrls.ErrorRedirectUrl(uiBaseUrl, mobileReturnUrl, GetErrorCode(result.Errors)));
 }
 <span class="hljs-keyword">var</span> response = result.Value;
 
@@ -318,7 +335,7 @@
           <h2 id="finding-the-local-user-three-ways">Finding the local user, three ways</h2>
           <p><code>ExternalLoginAsync</code> is where the external identity becomes one of your users, and it resolves in a
           deliberate order inside a single transaction. First it looks for a user already carrying this
-          <code>LoginProvider</code> + <code>ProviderKey</code>: a returning social user, signed in immediately. If there is none, it
+          <code>LoginProvider</code> + <code>ProviderKey</code>: a returning social user. If there is none, it
           validates the provider-supplied email with <code>Email.Create</code> (this is the one address in the system no
           request validator has already gated, and an unparseable claim returns <code>Auth.ExternalEmailInvalid</code>
           rather than turning the next query into &quot;find the users whose email is null&quot;), then looks the account
@@ -351,21 +368,30 @@
           its address the way a local registration is: the create schedules the confirmation email on the same
           unit of work as the account, so the two commit together or not at all.</p>
           <p>An external user is a <code>User</code> with an empty password hash and salt, carrying <code>LoginProvider</code> and
-          <code>ProviderKey</code>; <code>IsExternalLogin</code> is simply <code>LoginProvider is not null</code>, and <code>HasLocalPassword</code> is the
-          complementary question the third guard asks. The linkage is two nullable columns
+          <code>ProviderKey</code>; <code>IsExternalLogin</code> is simply <code>LoginProvider is not null</code>. The third guard asks a
+          different question, <code>HasLocalPassword</code> (a non-empty password hash), and the two are not complements:
+          an account provisioned by an invitation link, a service account, and an account whose password was
+          cleared all have neither a password nor a provider link, so an external login whose provider verified
+          the same address can claim any of them by email. The linkage is two nullable columns
           (<code>LoginProvider varchar(50)</code>, <code>ProviderKey varchar(256)</code>) plus a unique index over the pair filtered
-          to non-null rows, so two external identities cannot collide onto one account while local (null, null)
-          accounts stay unconstrained. An existing account, whether matched by provider key or linked by email,
-          is refused before anything is saved when an administrator has locked it; a brand-new account cannot
-          be locked. Whichever of the three paths runs, the exchange finishes through the
+          to rows where both are non-null and the row is not soft-deleted, so two live external identities
+          cannot collide onto one account while local (null, null) accounts stay unconstrained. An existing
+          account, whether matched by provider key or linked by email, then passes two gates before anything is
+          saved. An administrator lock refuses it outright. Next comes the privileged-account email rule the
+          password and refresh paths share: a confirmed account passes; an unconfirmed one is confirmed on the
+          spot when this sign-in&#39;s provider asserted the account&#39;s own address as verified; otherwise an
+          Organizer, ContentEditor or speaker-linked account is refused with <code>Authentication.EmailNotConfirmed</code>,
+          and an attendee signs in unconfirmed. A brand-new account cannot be locked and is an attendee, so it
+          skips both. Whichever of the three paths runs, the exchange finishes through the
           shared <code>IssueTokensAsync</code> workflow, which opens a refresh <em>session</em> for the device (hashed at rest, a
           per-user cap, a rotation chain) rather than stamping a plaintext refresh token on the aggregate, and
           hands back the same <code>AuthenticationResponse</code> shape a password login returns. A brand-new external user
           also publishes a post-commit <code>UserRegistered</code> integration event, and the one field that differs from
           the local registration path decides what happens next: the external event carries the provider&#39;s
           <code>emailVerified</code> assertion, while local registration hard-codes it to <code>false</code>, so the downstream
-          speaker auto-link runs only for an address a provider vouched for and the rest are logged for an
-          organizer to link by hand.</p>
+          speaker auto-link runs only for a proven address and the rest are logged for an organizer to link by
+          hand. An invitation sign-in link also counts as proof: its redemption raises <code>UserRegistered</code> with
+          <code>EmailVerified: true</code>, because delivery to the mailbox proved the address.</p>
           <p>The split of responsibility is the point. The handshake, the cookie, and the code exchange are generic
           and live in the framework&#39;s <code>OAuthControllerBase</code>. The <code>User</code> factory, the default role, the claim
           set, and the link guards are app-specific and live in the subclass. The interface member
@@ -382,8 +408,10 @@
           <li><strong>The link guards are ADC-level, not framework-provided.</strong> Linking on a bare email match would let
           an unverified address attach to an existing account, so ADC runs all three refusals in its own
           override: already linked elsewhere, not provider-verified, and still holding a local password.
-          Google&#39;s <code>email_verified</code> claim passes the verifier; GitHub&#39;s OAuth flow asserts nothing, so a
-          GitHub sign-in whose email matches an existing account is refused rather than linked. A verified
+          Google&#39;s and Apple&#39;s <code>email_verified</code> claims pass the verifier, and so does a generic OIDC
+          provider&#39;s when the operator marks it <code>TrustEmail</code> and the token asserts it; GitHub&#39;s OAuth flow
+          asserts nothing, so a GitHub sign-in whose email matches an existing account is refused rather than
+          linked. A verified
           assertion is still not enough on its own: an account that signs in with a password is refused too,
           and the refusal sends that person back to the password they already hold (the API message says so
           outright; the login page shows its generic &quot;use another sign-in method&quot; text). Those guards live in
@@ -395,8 +423,9 @@
           challenge can leave a local account whose token pair was never collected.</li>
           <li><strong>A second credential shape on <code>User</code>.</strong> External accounts carry empty password hash and salt and
           rely on <code>LoginProvider</code> / <code>ProviderKey</code>. Any code that assumes every <code>User</code> has a usable password
-          has to check <code>IsExternalLogin</code> first. The pair is single-valued, so a person holds at most one
-          provider link, which is exactly what the first guard enforces.</li>
+          has to check <code>HasLocalPassword</code>, not <code>IsExternalLogin</code>, because invitation, service-account and
+          cleared-password accounts carry no password and no provider link either. The pair is single-valued,
+          so a person holds at most one provider link, which is exactly what the first guard enforces.</li>
           </ul>
           <p><strong>Adoption is one app deep, by design.</strong> ADC&#39;s Identity module wires the whole flow: a sealed
           <code>OAuthController</code> subclass carrying the <code>[ApiController]</code> / <code>[Route(&quot;auth/oauth&quot;)]</code> / <code>[ApiVersion(&quot;1.0&quot;)]</code>
@@ -436,15 +465,18 @@
           <hr>
           <p><strong>What we covered:</strong> why rolling your own social login leaks the session token through the redirect URL
           (browser history, the <code>Referer</code> header, and proxy logs) and why storing provider tokens you never call
-          is needless risk, how MMCA.Common closes both gaps with a config-gated <code>AddExternalAuthProviders</code> for
-          Google, GitHub and Apple, a throwaway ten-minute <code>ExternalLogin</code> cookie, and an <code>OAuthControllerBase</code>
-          that swaps the external identity for a local JWT pair and hands the UI a single-use, cache-backed code
-          bound to the client&#39;s own state value instead of the tokens, how <code>ExternalLoginAsync</code> resolves a local
-          <code>User</code> by provider, then by a guarded email match (already linked elsewhere, not provider-verified, or
-          still holding a local password are all refusals), then by create, and the honest costs: a per-app
-          opt-in that is easy to half-wire, link guards that are ADC-level rather than framework ones, a
-          not-exactly-once account creation across the redirect, a second credential shape on <code>User</code>, and
-          adoption that is ADC-only while Store&#39;s user sign-in stays local-credential with RS256 tokens.</p>
+          is needless risk, how MMCA.Common keeps the session token off the URL and provider tokens out of
+          storage with a config-gated <code>AddExternalAuthProviders</code> for Google, GitHub, Apple and any configured
+          OpenID Connect issuer, a throwaway ten-minute <code>ExternalLogin</code> cookie the exchange signs out, and an
+          <code>OAuthControllerBase</code> that swaps the external identity for a local JWT pair and hands the UI a
+          single-use, cache-backed code bound to the client&#39;s own state value instead of the tokens, how
+          <code>ExternalLoginAsync</code> resolves a local <code>User</code> by provider, then by a guarded email match (already linked
+          elsewhere, not provider-verified, or still holding a local password are all refusals), then by create,
+          with every existing account still facing the administrator lock and the privileged-account email rule,
+          and the honest costs: a per-app opt-in that is easy to half-wire, link guards that are ADC-level rather
+          than framework ones, a not-exactly-once account creation across the redirect, a second credential shape
+          on <code>User</code>, and adoption that is ADC-only while Store&#39;s user sign-in stays local-credential with RS256
+          tokens.</p>
           <p><strong>Next in the series:</strong> refresh tokens that rotate per device, stored only as hashes in a
           <code>RefreshSession</code> row, and the reuse detection that turns a replayed token into a self-limiting,
           revoke-on-reuse forced re-login.</p>

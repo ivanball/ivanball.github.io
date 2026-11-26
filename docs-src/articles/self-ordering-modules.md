@@ -4,7 +4,9 @@
 > Status: grounded in `MMCA.Common/AGENTS.md` ("Module System"),
 > `MMCA.Common.Application/Modules/*`, `.../Settings/ModulesSettings.cs`, `.../DependencyInjection.cs` and
 > `.../DependencyInjection.ModuleScanning.cs`, `MMCA.Common.API/Startup/ModuleHostExtensions.cs` and
-> `ModuleHostContext.cs` source, the reference hosts `MMCA.ADC.{Conference,Engagement,Identity,Notification}.Service/Program.cs`,
+> `ModuleHostContext.cs` source, `MMCA.Common.ServiceHost/ServiceHostBuilderExtensions.cs` and
+> `MmcaServiceHostOptions.cs`, the reference hosts `MMCA.ADC.{Conference,Engagement,Identity,Notification}.Service/Program.cs`,
+> `MMCA.Store.{Catalog,Identity,Sales}.Service/Program.cs`, `MMCA.Helpdesk.Web/Program.cs`,
 > `MMCA.ADC.Engagement.API/EngagementModule.cs`, `MMCA.ADC.Engagement.Contracts/DependencyInjection.cs`,
 > `MMCA.ADC/AGENTS.md`, `MMCA.Helpdesk/AGENTS.md`, and
 > ADR-059 (the `IModule` contract and reflection-based module composition). No em dashes.
@@ -105,27 +107,35 @@ you precisely which modules loaded, in what order, and how long each took. When 
 read it, you do not guess it.
 
 ```csharp
-// In each ADC and Store service host's Program.cs. AddModuleHost binds and validates ApplicationSettings and
-// ModulesSettings, builds the ModuleLoader and registers it as a singleton. It deliberately does
-// not run discovery itself.
-using var loggerFactory = SerilogHostExtensions.CreateBootstrapLoggerFactory();
-var moduleHost = builder.AddModuleHost(
-    [typeof(ConferenceModule).Assembly],      // the module assemblies, named explicitly
-    loggerFactory.CreateLogger<ModuleLoader>());
+// In each ADC and Store service host's Program.cs (host-specific options elided). The host names its
+// module assemblies and its pipeline steps; MMCA.Common.ServiceHost's AddMmcaServiceHost does the rest.
+var host = builder.AddMmcaServiceHost(new()
+{
+    ModuleAssemblies = [typeof(ConferenceModule).Assembly],   // the module assemblies, named explicitly
 
-// Discovery is a step of the application pipeline, so every module handler lands in the container
-// before the decorators close over it.
-services.AddMmcaApplicationPipeline(pipeline => pipeline
-    .Register(moduleHost.RegisterModules));
+    // Discovery is a step of the application pipeline, so every module handler lands in the
+    // container before the decorators close over it.
+    ConfigurePipeline = (pipeline, moduleHost) => pipeline
+        .Register(moduleHost.RegisterModules),
+});
+
+// Inside AddMmcaServiceHost: AddModuleHost binds and validates ApplicationSettings and ModulesSettings,
+// builds the ModuleLoader (logging through a bootstrap logger factory) and registers it as a
+// singleton, deliberately without running discovery. Later, AddMmcaApplicationPipeline hands the
+// pipeline builder and that ModuleHostContext to ConfigurePipeline.
 ```
 
 A subtlety worth stating because it is easy to assume otherwise: discovery is **not** something
-`AddApplication()` does for you, and an ADC or Store service host does not call `DiscoverAndRegister`
-by hand either. `AddModuleHost` captures the configuration, the bound settings, the environment name and
+`AddApplication()` does for you, and an ADC or Store service host calls neither `AddModuleHost` nor
+`DiscoverAndRegister` by hand. Both values the host supplies are required options, and
+`AddMmcaServiceHost` rejects an empty `ModuleAssemblies` list before it does anything else. It then
+calls `AddModuleHost`, which captures the configuration, the bound settings, the environment name and
 the module assemblies, and hands back a `ModuleHostContext` whose `RegisterModules` method is the
 delegate that calls `DiscoverAndRegister` with those five values plus the `IServiceCollection` the
-pipeline passes in. Registering that delegate as a pipeline step is what puts the modules in the right
-place in the sequence. Helpdesk's monolith host composes the same step by hand: it builds its own
+pipeline passes in. The host's `ConfigurePipeline` callback registers that delegate as a pipeline step,
+which is what puts the modules in the right place in the sequence. Helpdesk's monolith host runs
+issuer-less, and `AddMmcaServiceHost` accepts only a forwarded JWT bearer or the token issuer's own authentication, so it
+composes the same step by hand: it builds its own
 `ModuleLoader`, registers it as a singleton, and calls `DiscoverAndRegister` inside a pipeline
 `Register` step, so discovery still runs before the decorators. The loader stays a singleton, which is how it also
 drives startup seeding through `SeedAllAsync` (which invokes each enabled module's
@@ -196,6 +206,7 @@ described earlier, and `AddMmcaApplicationPipeline` is the call that composes it
 collection.
 
 ```csharp
+// The order AddMmcaServiceHost runs for a service host (Helpdesk's monolith host writes it by hand).
 services.AddInfrastructure(configuration);    // repos, UoW, DbContexts, caching, outbox
 services.AddAPI(moduleHost.ModulesSettings);  // controllers, idempotency, error mapping
 
@@ -293,94 +304,55 @@ or `dotnet add package MMCA.Common.API` and try it.*
 
 *Tags: .NET, C Sharp, Software Architecture, Modular Monolith, Microservices*
 
-*Notes: re-verified against source this run (2026-10-29 apply pass, MMCA.Common v1.265.1,
-`MMCA.Common/FACTS.md:14`). Changed this run: (1) the subtitle and the Kahn paragraph no longer say the
-sort is the decorator precondition: `TryDecorate` runs once in `AddApplicationDecorators()` after the
-whole pipeline callback (`DependencyInjection.cs:213-215`), so it needs every handler registered first,
-whatever the inter-module order; (2) `RegisterModules` passes the five captured values plus the
-`IServiceCollection` it receives (`ModuleHostContext.cs:66`, call `:70-76`, fields `:23-25`); (3) "the
-host does not call `DiscoverAndRegister` by hand" is scoped to the ADC and Store service hosts (Store
-`AddModuleHost` at `MMCA.Store.Catalog.Service/Program.cs:131`, `Identity.Service/Program.cs:126`,
-`Sales.Service/Program.cs:139`), because the Helpdesk monolith builds its own loader
-(`MMCA.Helpdesk/Source/Hosts/MMCA.Helpdesk.Web/Program.cs:107-111`) and calls `DiscoverAndRegister`
-inside a pipeline step (`:125-133`); (4) "about fifteen lines" became the measured size of
-`TopologicalSort` (`ModuleLoader.cs:282-332`); (5) ADC host, AGENTS.md and ADR-059 anchors re-anchored
-below. Left as-is: the forgotten-stub failure timing (framework-default `ValidateOnBuild` behavior is not
-determinable from repo source). Earlier pass: 2026-10-22 at v1.250.0, no body claim changed meaning. Carried from the
-2026-10-02 pass (MMCA.Common v1.221.0), where four claims changed meaning. (1) Scan guard:
-`DiscoverAndRegister` scans `moduleAssemblies` at
-`MMCA.Common.Application/Modules/ModuleLoader.cs:74-95` with TWO catches, a typed
-`catch (ReflectionTypeLoadException ex)` at `:81-88` that keeps the loaded types
-(`ex.Types.OfType<Type>()` at `:87`) and logs at Error through `LogAssemblyPartiallyLoaded`
-(`:352-353`), and a broad `catch (Exception ex)` at `:89-93` that returns no types and logs at Error
-through `LogAssemblyScanFailed` (`:349-350`); the rationale comment is `:69-73`. The body previously said
-a broken assembly contributes no types, which holds only for the broad catch. (2) Fleet topology: every
-ADC service host names ONLY its own module assembly (`MMCA.ADC.Conference.Service/Program.cs:380`,
-`MMCA.ADC.Engagement.Service/Program.cs:221`, `MMCA.ADC.Identity.Service/Program.cs:274`,
-`MMCA.ADC.Notification.Service/Program.cs:203`; `MMCA.ADC/AGENTS.md:43`), so peers are never discovered
-and no disabled stub is registered there, even though Conference's appsettings disables Engagement
-(`MMCA.ADC.Conference.Service/appsettings.json:21,24`: the `Modules` section opens at `:21`, Engagement
-`"Enabled": false` is `:24`). `AddEngagementBookmarkCountClient` is a
-pipeline step at `Program.cs:431` and calls
-`services.Replace(ServiceDescriptor.Scoped<IBookmarkCountService, BookmarkCountServiceGrpcAdapter>())` at
-`MMCA.ADC.Engagement.Contracts/DependencyInjection.cs:49`; the host comments at `Program.cs:34-39` and
-`:399-403` state that no Engagement stub exists in this host. The body previously said the host
-replaces a stub with a gRPC client; it now says the host adds the adapter and frames the stub path as the
-name-and-disable shape. (3) Disabled-module example: the handler is
-`GetSessionBookmarkCountsHandler` (plural, batched, `Conference.Application/Speakers/UseCases/GetSessionBookmarkCounts/GetSessionBookmarkCountsHandler.cs:17`,
-`IBookmarkCountService` parameter `:19`); the stub is real (`EngagementModule.cs:30-33`, registering
-`DisabledBookmarkCountService` at `:32`) and the example is framed for a host that names the
-Engagement assembly and disables it. The Conference host comments (`Program.cs:34`, `:399`) name the
-sibling single-session `GetSessionBookmarkCountHandler`
-(`Conference.Application/Speakers/UseCases/GetSessionBookmarkCount/GetSessionBookmarkCountHandler.cs:14`,
-`IBookmarkCountService` parameter `:16`), which consumes the same interface; the article names the
-batched one. (4) "A forgotten stub is caught at startup"
-was UNVERIFIABLE and is removed: no `ValidateOnBuild` appears in Common or ADC source and the loader does
-not check stub coverage. Added instead: `ValidateRemoteDependencies(IServiceProvider)` at
-`ModuleLoader.cs:212` (doc `:198-211`, stub capture `:118-120`, throw `:244-249`, still-stub warning
-`:251-255`/`:355-356`), stated as opt-in because no ADC host calls it. Also added: a module absent from
-the `Modules` section is disabled (`Settings/ModulesSettings.cs:13-19`).
-Other anchors re-verified this run: `ModuleLoader` `sealed partial class` `:16`, `DisabledModuleNames`
-`:28`, `Logger` (default `NullLogger`) `:34`, `moduleAssemblies` XML doc `:49-54` (the `AppDomain`
-rationale), `DiscoverAndRegister` six-parameter signature `:59-65`, `IModule`/`IModuleSeeder`
-instantiation `:97-105`, `TopologicalSort(allModules)` call `:108`, disabled branch `:112-123`
-(`RegisterDisabledStubs` `:119`, name recorded `:122`), `ValidateModuleDependencies` `:136-169`
-(remote-satisfied comment `:138-141`, throw `:150-158`), `modules.{name}.json` `:185` and the
-environment variant `:188`, `SeedAllAsync` `:266`, Kahn `TopologicalSort` `:282-332` (zero-in-degree seed
-`:306-307`, decrement and enqueue `:316-320`, cycle throw `:324-329`), `[LoggerMessage]` declarations
-`:334-356`. `IModule` members at `IModule.cs:12,17,23,28,34`; `IModuleSeeder.ModuleName`/`SeedAsync` at
-`IModuleSeeder.cs:13,18`. `ModulesSettings : Dictionary<string, ModuleSettings>` and `SectionName =
-"Modules"` at `ModulesSettings.cs:7,10`; `ModuleSettings.Enabled` (default `true`) and
-`RemoteDependencies` at `ModuleSettings.cs:9,38`. `AddModuleHost` at
+*Notes: re-verified 2026-11-25 against MMCA.Common v1.319.0 (`MMCA.Common/FACTS.md:14`). Changed this
+run: (1) the ADC/Store host snippet and the paragraph after it. No ADC or Store service host calls
+`AddModuleHost`, `CreateBootstrapLoggerFactory` or `AddMmcaApplicationPipeline` directly; each calls
+`builder.AddMmcaServiceHost(new() { ModuleAssemblies = [...], ConfigurePipeline = (pipeline, moduleHost)
+=> pipeline.Register(moduleHost.RegisterModules)... })` (ADC Conference
+`MMCA.ADC.Conference.Service/Program.cs:82`, `ModuleAssemblies` `:89`, `ConfigurePipeline` `:357-360`;
+Engagement `Program.cs:58,65,218-219`; Identity `Program.cs:79,86,302-303`; Notification
+`Program.cs:58,65,117-118`; Store `MMCA.Store.Catalog.Service/Program.cs:32,38,111`,
+`Identity.Service/Program.cs:37,43,126`, `Sales.Service/Program.cs:51,58,130`). Inside the package:
+`AddMmcaServiceHost` `MMCA.Common.ServiceHost/ServiceHostBuilderExtensions.cs:65`, empty-list throw
+`:69-74`, bootstrap logger factory `:101`, `AddModuleHost(options.ModuleAssemblies, ...)` `:102-104`,
+`AddInfrastructure` `:146`, `AddAPI` `:147`, `AddMmcaApplicationPipeline(pipeline =>
+options.ConfigurePipeline(pipeline, moduleHost))` `:158`; both options are `required`
+(`MmcaServiceHostOptions.cs:28,35`). The Helpdesk reason clause rests on the authentication branch
+(`ServiceHostBuilderExtensions.cs:132-143`: `TokenIssuer` or `AddForwardedJwtBearer`) and
+`MMCA.Helpdesk/AGENTS.md` ("cannot call it ... runs issuer-less"). (2) The second snippet gains a comment
+naming it as the order `AddMmcaServiceHost` runs (`:146-147,158`) and Helpdesk writes by hand. (3) The
+header grounding adds `MMCA.Common.ServiceHost`, the Store hosts and the Helpdesk host. ADR-059 records
+the same composition (`Website/docs-src/adr/059-module-contract-and-composition.md:9` amendment, Decision
+bullet `:76`); the header ADR list is unchanged. Rejected from the findings: the "148 seed files" numeric
+row names no claim in this article (neither the number nor seed files appears here). Confirmed this run,
+text unchanged: `ModuleLoader` (`MMCA.Common.Application/Modules/ModuleLoader.cs`) `sealed partial class`
+`:16`, `Logger` default `NullLogger` `:34`, `DiscoverAndRegister` `:59`, two catches in the scan
+(`ReflectionTypeLoadException` `:81` keeping `ex.Types.OfType<Type>()` `:87`; broad `catch (Exception)`
+`:90`), both logged at Error (`:351`, `:354`), `TopologicalSort(allModules)` call `:110`,
+`RegisterDisabledStubs` `:121`, unsatisfied-dependency throw `:154`, `modules.{name}.json` `:187` and the
+environment variant `:190`, `ValidateRemoteDependencies` `:214` (throw `:247`, still-stub warning `:357`),
+`SeedAllAsync` `:268` (called from `MMCA.Common.API/Startup/DatabaseInitializationExtensions.cs:137`),
+Kahn `TopologicalSort` `:284-334` (51 lines, so "about fifty lines" holds; zero-in-degree seed `:307`,
+decrement and enqueue `:317-321`, cycle throw `:329`). `AddModuleHost`
 `MMCA.Common.API/Startup/ModuleHostExtensions.cs:51` binds and validates both settings (`:62-64`,
-`:70-72`), registers the loader (`:82`) and returns the `ModuleHostContext` (`:84`); it is shipped API
-(`MMCA.Common.API/PublicAPI.Shipped.txt:413,584`, absent from Unshipped).
-`ModuleHostContext.RegisterModules` at `ModuleHostContext.cs:66`, passing all six arguments to
-`DiscoverAndRegister` at `:70-76`. The convention scan lives in
-`MMCA.Common.Application/DependencyInjection.ModuleScanning.cs`: generic `:28`, `Assembly` overload `:46`,
-`ThrowIfPipelineSealed` `:49`, domain event handlers `:54`, integration event handlers `:61`,
-`IEntityDTOMapper<,,>` `:67`, `IEntityDTOProjector<,,>` `:76`, `IEntityRequestMapper<,,>` `:82`,
-`IEntityUpdateApplier<,,>` `:92`, `IEntityUpdateCommandApplier<,,,>` `:101`, `ICommandHandler<,>` `:107`,
-`IQueryHandler<,>` `:113`, `AddValidatorsFromAssembly` `:117`, `ICommandWithRequest<>` block `:119-134`
-(`TryAddTransient` `:134`); `AddValidatorsFromAssemblyContaining` appears only in `AddApplication` at
-`DependencyInjection.cs:48`. `AddMmcaApplicationPipeline` at `DependencyInjection.cs:207-216`
-(`AddApplication()` `:211`, callback `:213`, `AddApplicationDecorators()` `:215`), remarks `:185-206` with
-the non-handler note at `:195-196`, `VerifyDecoratorPipeline()` `:244`, `ThrowIfPipelineSealed` `:310`
-(also called from `DependencyInjection.Crud.cs:80` for `AddEntityCrud`, `:142` for `AddEntityUpdateVerb`
-and `:193` for `AddEntityUpdate`). Conference host: `AddInfrastructure` `Program.cs:354`, "deliberately
-does NOT run discovery" `:370-373`, "no AppDomain scan" `:375-377`, `AddModuleHost` `:378-381` (bootstrap
-logger factory `:378`), `AddAPI` `:383`, pipeline comment `:388-427`, `AddMmcaApplicationPipeline`
-`:429-432` with `RegisterModules` at `:430`; the snippets mirror `:378-381` and `:429-430` with
-ADC-specific steps elided. `EngagementModule`
-`Dependencies => ["Conference"]` `:20`, `RequiresDependencies => true` `:23`. `ConferenceModule` shape
-re-read this run: `Name` `ConferenceModule.cs:19`, `RegisterDisabledStubs` `:22`, `Register` forwards to
-`AddConferenceModule(applicationSettings)` at `:31`, no `Dependencies` override. Topology: ADC four
-single-module hosts behind YARP, no single WebAPI host (`MMCA.ADC/AGENTS.md:7`); Helpdesk monolith-first,
-one `Tickets` module, "build the monolith now, extract a service later" (`MMCA.Helpdesk/AGENTS.md:7`).
-Both repos' `CLAUDE.md` are `@AGENTS.md` imports, so the grounding cites `AGENTS.md`; the header cites
-`MMCA.Common/AGENTS.md` "Module System" (`:99`). The "DI Registration Sequence" section
-(`MMCA.Common/AGENTS.md:75-77`) now agrees with the code (`AddInfrastructure`, `AddAPI` and other
-non-handler registrations stay outside the call, matching `DependencyInjection.cs:211-215`), so the
-source-doc drift recorded on 2026-10-02 is closed; the header is unchanged. ADR-059 Decision
-re-read this run at `Website/docs-src/adr/059-module-contract-and-composition.md:28-31` (Status last
-revised 2026-10-28, `:8`).*
+`:70-72`), registers the loader (`:82`) and returns the context (`:84`); `ModuleHostContext.RegisterModules`
+`ModuleHostContext.cs:66` passes five captured values plus the collection to `DiscoverAndRegister`
+(`:70-76`). Helpdesk builds its own loader (`MMCA.Helpdesk/Source/Hosts/MMCA.Helpdesk.Web/Program.cs:124-128`)
+and calls `DiscoverAndRegister` inside a pipeline step (`:138-150`). `AddMmcaApplicationPipeline`
+`MMCA.Common.Application/DependencyInjection.cs:226-235` (`AddApplication()` `:230`, callback `:232`,
+`AddApplicationDecorators()` `:234`), non-handler remark `:214-215`, `VerifyDecoratorPipeline()` `:263`,
+`ThrowIfPipelineSealed` `:329`; `ScanModule<TAssemblyMarker>()` `MmcaApplicationPipelineBuilder.cs:27`.
+Convention scan `DependencyInjection.ModuleScanning.cs`: generic `:28`, `Assembly` overload `:46`, sealed
+check `:49`, domain and integration event handlers `:54`, `:61`, mapper `:67`, projector `:76`, request
+mapper `:82`, update appliers `:92`, `:101`, command and query handlers `:107`, `:113`, validators `:117`,
+`ICommandWithRequest<>` bridge `:125-134`. ADC modules: `ConferenceModule` `Name` `ConferenceModule.cs:19`,
+`RegisterDisabledStubs` `:22`, `AddConferenceModule(applicationSettings)` `:31`, no `Dependencies`
+override; `EngagementModule` `Dependencies => ["Conference"]` `EngagementModule.cs:21`,
+`RequiresDependencies => true` `:24`, `RegisterDisabledStubs` `:31` registering
+`DisabledBookmarkCountService` `:33`. Conference host comments: no Engagement stub in this host
+(`Program.cs:33-38`, `:332-336`), `AddEngagementBookmarkCountClient` as a pipeline step `:359`. Left
+as-is (carried from earlier passes): the forgotten-stub failure timing, since framework-default
+`ValidateOnBuild` behavior is not determinable from repo source; `ModulesSettings`/`ModuleSettings`
+anchors and the `GetSessionBookmarkCountsHandler` example, not re-read this run. Earlier passes:
+2026-10-29, 2026-10-22 and 2026-10-02 (four claims changed meaning then: scan guard, fleet topology,
+disabled-module example, forgotten-stub claim removed).*

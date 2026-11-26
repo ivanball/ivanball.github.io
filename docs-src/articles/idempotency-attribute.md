@@ -1,10 +1,12 @@
 # Idempotency in one attribute: safe retries for HTTP APIs
 
-> Series: MMCA.Common · Article #18 (deep-dive) · Pillar P2 · Group G12 · Rubric §6,§9,§10,§29 · ADR-017 · ADR-021 ·
+> Series: MMCA.Common · Article #18 (deep-dive) · Pillar P2 · Group G12 · Rubric §6,§9,§10,§29 · ADR-017 · ADR-021 · ADR-144 ·
 > Status: grounded in `MMCA.Common/Source/Presentation/MMCA.Common.API/Idempotency/IdempotencyFilter.cs`,
 > `MMCA.Common/Source/Presentation/MMCA.Common.API/Idempotency/IdempotencyRecord.cs`,
 > `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Inbox/EfInboxStore.cs`,
-> `Website/docs-src/adr/017-request-idempotency.md`, `Website/docs-src/onboarding/group-12-api-hosting-mapping.md`,
+> `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Messaging/Consumers/BrokerReceivePipeline.cs`,
+> `Website/docs-src/adr/017-request-idempotency.md`, `Website/docs-src/adr/144-offline-writes-and-delta-reads.md`,
+> `Website/docs-src/onboarding/group-12-api-hosting-mapping.md`,
 > and `Website/docs-src/governance/common-ArchitectureScorecard.md` (§6, §9, §10, §29). No em dashes.
 
 **Subtitle:** Clients retry, and not every client's retry policy knows which verbs are safe to resend. A `POST` that creates a resource must
@@ -78,6 +80,13 @@ The cache window defaults to **24 hours** (bound from an `IdempotencySettings` s
 one-week maximum, validated at startup). A first-call `201 Created` replays as a `201` that still points at
 the created resource, not as a generic `200`, because the record captures the original status code and its
 `Location` header as well as the body.
+
+The same key is what makes an offline write safe to resend. The opt-in client write queue of ADR-144 stores
+every queued write with an idempotency key (the caller's, or a GUID the queue mints), and its handler resends
+the write with that same key on every replay, so a write that reached the server before the connection
+dropped still runs once, while the queue's own age limit defaults to the same 24 hours as the replay window
+(the connectivity service that triggers those replays is covered in
+`Website/docs-src/articles/device-capability-abstraction.md`).
 
 Binding the body to the key is why the filter runs at two pipeline stages rather than one. It is an
 `IAsyncResourceFilter` as well as an `IAsyncActionFilter`: the resource stage runs before model binding,
@@ -217,9 +226,11 @@ genuinely idempotent inbox consumer (dedup by `MessageId` via `IInboxStore`):
   `MessageBus:EnableInbox=false` gets the no-op store plus one startup warning recording the opt-out,
   while `true` on an in-process host registers nothing.
 
-The retry half is wired too: every receive endpoint gets an exponential-backoff `UseMessageRetry` policy
-(`MessageBusSettings.RetryLimit`), and the consumer rethrows on handler failure so MassTransit applies it
-before dead-lettering. So the honest framing is: the HTTP write path is idempotent-by-attribute (the
+The retry half is wired too: the framework's own receive pipeline, shared by every broker transport, runs
+the consumer again after a failure, each attempt in a fresh DI scope with an exponentially growing delay,
+up to `MessageBusSettings.RetryLimit` retries (default 5), then asks the transport for a second-level
+redelivery and dead-letters the message only once those are spent too. The consumer rethrows on handler
+failure so that pipeline sees it. So the honest framing is: the HTTP write path is idempotent-by-attribute (the
 scorecard credits the filter under §9 and §10, where the §10 row, scored Implementation 8, lists the
 filter taking a distributed lock with the stripe as fallback among its evidence, while §29 covers the Polly
 handlers and the outbox's graceful degradation), and the broker consumer path dedups by `MessageId` by
@@ -320,20 +331,43 @@ onboarding guide, or `dotnet add package MMCA.Common.API` and try it.*
 
 *Tags: .NET, C Sharp, Web API, Distributed Systems, Resilience*
 
-*Notes: re-verified in source 2026-10-29 at framework v1.265.1 (`MMCA.Common/FACTS.md:4,14`). **Corrected this
-pass (2026-10-29):** (A) "Why it matters" names the one HTTP handler that disables the retry for POST and
+*Notes: re-verified 2026-11-25 against MMCA.Common v1.319.0 (`MMCA.Common/FACTS.md:4,14`). **Corrected this
+pass (2026-11-25):** (A) The broker retry sentence named a MassTransit `UseMessageRetry` policy. MassTransit is
+out of the framework (removed in v1.316.0, ADR-118, and `DependencyVersionTests` bans it) and no
+`UseMessageRetry` exists, so the sentence describes the framework's own receive pipeline, shared by every
+transport (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Messaging/Consumers/BrokerReceivePipeline.cs:12-26`):
+up to `RetryLimit + 1` attempts, each in a fresh scope (`:179-215`, loop `:193`), waiting
+`BrokerTransportPolicies.RetryDelay` between them (`.../Messaging/Transports/BrokerTransportPolicies.cs:27`,
+called at `BrokerReceivePipeline.cs:197`), then a second-level redelivery while one is left and a dead-letter
+after that (`:152-177`, redeliver `:162-167`, dead-letter `:176`). `RetryLimit` defaults to 5, `[Range(0, 20)]`,
+with intervals that double from `RetryMinIntervalSeconds` up to `RetryMaxIntervalSeconds`
+(`.../Messaging/MessageBusSettings.cs:86-94`, `:96-107`). The consumer abandons the staged row and rethrows
+into that pipeline (`.../Messaging/Consumers/IntegrationEventConsumer.cs:113`, comment `:115-118`, rethrow
+`:120`). (B) Added the ADR-144 paragraph in the mechanism section: `PendingWrite` carries an `IdempotencyKey`,
+the caller's or a GUID the queue mints (`Website/docs-src/adr/144-offline-writes-and-delta-reads.md:20`); the
+handler resends the write with it (`:25`); the queue's `MaxAge` defaults to 24 hours, the same as the server's
+default window, as two separate settings (`:23`); the rejected key-less replay alternative records that the key
+is what makes "resend until answered" safe (`:72`); a replay starts when connectivity turns online (`:24`). The
+link target covers `IConnectivityStatusService` (`Website/docs-src/articles/device-capability-abstraction.md:30`)
+but not the queue itself, so the sentence links it for the connectivity service only. The header adds ADR-144,
+`BrokerReceivePipeline.cs` and the ADR-144 file to the grounding. (C) Line anchors that moved are corrected in
+place below; anchors not listed as re-read in this pass were confirmed by the 2026-11-25 audit, not re-read
+during the apply.
+**Flag (2026-11-25):** ADR-021 still describes MassTransit applying the retry and dead-letter policy
+(`Website/docs-src/adr/021-consumer-inbox-idempotency.md:48`, `:75`, `:308`); the article's retry sentence
+rests on the source above, not on that wording, and the ADR text is outside this article's scope.
+**Earlier pass (2026-10-29):** (A) "Why it matters" names the one HTTP handler that disables the retry for POST and
 PATCH, the global `ConfigureHttpClientDefaults` handler (`MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Extensions.cs:50`,
 handler `:60-85`, `DisableFor` at `:74`), because the framework ships no typed HTTP service-client helper
 (`Website/docs-src/adr/009-resilience-and-recovery-objectives.md:64-67`); the gRPC handler, where every call
 is a POST, keeps a retry limited to pre-send failures (`MMCA.Common/Source/Presentation/MMCA.Common.Grpc/DependencyInjection.cs:148-160`).
 (B) The inbox table is `InboxMessages`
-(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/ApplicationDbContext.cs:730`, unique
-`IX_InboxMessages_MessageId` `:735`). (C) The `EnableInbox` override is stated as broker-only:
+(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/ApplicationDbContext.cs:883`, unique
+`IX_InboxMessages_MessageId` `:888`). (C) The `EnableInbox` override is stated as broker-only:
 `AddBrokerMessaging` returns before any inbox registration for the in-process provider
-(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.Messaging.cs:57-60`), so `true` on an
+(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.Messaging.cs:72-75`), so `true` on an
 in-process host registers nothing; both the posture bullet and the trade-off bullet follow. (D) Header adds
-ADR-021, which the body relies on and the series README row already lists. All other anchors in the entries
-below were re-read and moved ones corrected in place. **Earlier pass (2026-10-22):** (i) "Why it matters": the UI client's key requirement is narrowed to a POST that may have
+ADR-021, which the body relies on and the series README row already lists. **Earlier pass (2026-10-22):** (i) "Why it matters": the UI client's key requirement is narrowed to a POST that may have
 reached the server. A response-based retry of a POST or PATCH needs a key (`IsReplaySafe`,
 `MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/Api/AuthenticatedServiceBase.cs:135-159`, method `:145`,
 applied at `:126`), while a transport failure is retried key-less when it happened before the send (name
@@ -345,92 +379,89 @@ is declared, not silent: `NonIdempotentAttribute`
 `IdempotencyConventionTestsBase` gate
 (`MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Bases/Cqrs/IdempotencyConventionTestsBase.cs:3-10`,
 fact `:14-16`), recorded in ADR-017 (`Website/docs-src/adr/017-request-idempotency.md:8-13`, Revision 2026-08-18
-`:143`; Revised 2026-10-28 at `:20`). (iii) The §10 row now scores Implementation 8, not 9
-(`Website/docs-src/governance/common-ArchitectureScorecard.md:74`), still listing the filter's `IDistributedLock`
-with the striped fallback; the body figure follows. **Earlier pass (2026-10-08), re-anchored 2026-10-22:** (a) Opener
-and "Why it matters": MMCA's own resilience handlers never replay a POST or PATCH (then two handlers, the
-global default and a typed-client helper since removed; the current single handler and its anchors are in the
-2026-10-29 entry above), and `EntityServiceBase` stamps
+`:143`; Revised 2026-10-28 at `:20`). (iii) The §10 row scores Implementation 8
+(`Website/docs-src/governance/common-ArchitectureScorecard.md:75`; listed among the Implementation-8-or-below
+categories at `:14`), still listing the filter's `IDistributedLock` with the striped fallback; the body figure
+follows. **Earlier pass (2026-10-08), re-anchored 2026-10-22:** (a) Opener
+and "Why it matters": MMCA's own resilience handlers never replay a POST or PATCH (the current single handler
+and its anchors are in the 2026-10-29 entry above), and `EntityServiceBase` stamps
 an `Idempotency-Key` on creates and holds it across attempts (`.../Services/Api/EntityServiceBase.cs:18`, `:174`).
-The opener's "ADR-009 wires one onto every outbound client" retry premise and the "more automatic retries" sentence
-are reframed around a client or third-party retry policy; the subtitle and recap follow. (b) Inbox bullet: the
-framework's handlers derive from `ScopedIntegrationEventHandlerBase`, which opens its own scope
+The opener's retry premise is framed around a client or third-party retry policy; the subtitle and recap follow.
+(b) Inbox bullet: the framework's handlers derive from `ScopedIntegrationEventHandlerBase`, which opens its own scope
 (`MMCA.Common/Source/Core/MMCA.Common.Application/DomainEvents/ScopedIntegrationEventHandlerBase.cs:51`), so their
 saves never carry the staged row; `CompleteAsync` writes it after every handler succeeds
-(`IntegrationEventConsumer.cs:77-81`, `:123`; `EfInboxStore.cs:18-27`; ADR-021 Revision 2026-10-06,
+(`IntegrationEventConsumer.cs:88-92`, `:134`; `EfInboxStore.cs:18-27`; ADR-021 Revision 2026-10-06,
 `Website/docs-src/adr/021-consumer-inbox-idempotency.md:29-32`, the handler-base passage `:92-94`,
-Revision section `:406`). (c) Handlers must be idempotent with the inbox on too (`IntegrationEventConsumer.cs:80-81`;
-ADR-021 `:80-82`, `:92-93`): the section close and the transport trade-off bullet are rewritten. (d) The
-several-handlers trade-off is narrowed to same-scope handlers and gains the `ScopedIntegrationEventHandlerBase`
-full-redelivery case (`EfInboxStore.cs:109-133`, log-and-false `:128-132`; `IInboxStore.cs:57-62`). (e) Replicas:
-both apps run `minReplicas: 1` and autoscale to two or more (`MMCA.ADC/infra/main.bicep:2103`, `:2256`, `:2391`,
-`:2577`, `:2729-2730`, with `conferenceScaledMaxReplicas` 2, or 4 in conference mode, at `:192`;
-`MMCA.Store/infra/main.bicep:1689`, `:1813`, `:1961`, `:2079-2080`, `:2197-2198`), so "run more than one" becomes
-"autoscale to more than one". (f) Newline separator: narrowed to the client key, since an HTTP header value
-cannot carry a newline; the source comment (`IdempotencyFilter.cs:548`) asserts it for every component, but nothing
-validates the subject claim or the decoded-path route fallback (`:544-546`). **Earlier pass (2026-10-02):** (1) `IdempotencyRecord` is `(int StatusCode, string ResponseBody, string RequestBodyHash,
-string? Location = null, string? ETag = null)`
-(`MMCA.Common/Source/Presentation/MMCA.Common.API/Idempotency/IdempotencyRecord.cs:21-26`; hash doc `:9-13`,
-header docs `:14-20`). `BuildRecord` (`.../Idempotency/IdempotencyFilter.cs:463-501`) stores the ETag the action
-wrote (`:468-469`) on both cached shapes (`:483-488`, `:495`) and the `Location` of a `Created`,
-`CreatedAtRoute` or `CreatedAtAction` result (`ResolveLocation` `:507-528`); `TryReplayAsync` (`:352-404`)
-re-emits both (`:386-392`). Tested at `Tests/Presentation/MMCA.Common.API.Tests/Idempotency/IdempotencyFilterTests.cs:590`
-(Location) and `:601` (ETag). The body statements that the record holds only status, body and hash, and that a
-replayed 201 lacks its `Location`, are rewritten. (2) The cache-key subject is `FindUserIdValue()`
-(`IdempotencyFilter.cs:541`), which reads `sub` then `ClaimTypes.NameIdentifier`
-(`MMCA.Common/Source/Core/MMCA.Common.Shared/Auth/ClaimsPrincipalExtensions.cs:26-28`), else `anon:{ip}` or
-`anon:unknown` (`IdempotencyFilter.cs:541-542`); the components are joined with a newline (`:548-549`) and
-SHA-256 hashed under the `idempotency:` prefix (`:550-552`, prefix `:76`) in `BuildCacheKey` (`:539-553`), with
-the SECURITY rationale in the class remarks (`:60-66`). The earlier `user_id` claim wording is removed. (3) Inbox
-abandon: the consumer calls `inbox.Abandon(...)` and ignores its result
-(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Messaging/Consumers/IntegrationEventConsumer.cs:102`).
+Revision section `:409`). (c) Handlers must be idempotent with the inbox on too (`IntegrationEventConsumer.cs:91-92`;
+ADR-021 `:80-82`, `:92-93`). (d) The several-handlers trade-off is narrowed to same-scope handlers and carries the
+`ScopedIntegrationEventHandlerBase` full-redelivery case (`EfInboxStore.cs:109-133`, log-and-false `:128-132`;
+`IInboxStore.cs:57-62`). (e) Replicas: both apps run `minReplicas: 1` and autoscale to two or more
+(`MMCA.ADC/infra/main.bicep:2103`, `:2256`, `:2391`, `:2577`, `:2729-2730`, with `conferenceScaledMaxReplicas` 2,
+or 4 in conference mode, at `:192`; `MMCA.Store/infra/main.bicep:1689`, `:1813`, `:1961`, `:2079-2080`,
+`:2197-2198`). (f) Newline separator: narrowed to the client key, since an HTTP header value cannot carry a
+newline; the source comment (`IdempotencyFilter.cs:547`) asserts it for every component, but nothing validates
+the subject claim or the decoded-path route fallback (`:543-545`). **Earlier pass (2026-10-02):** (1)
+`IdempotencyRecord` is `(int StatusCode, string ResponseBody, string RequestBodyHash, string? Location = null,
+string? ETag = null)` (`MMCA.Common/Source/Presentation/MMCA.Common.API/Idempotency/IdempotencyRecord.cs:21-26`;
+hash doc `:9-13`, header docs `:14-20`). `BuildRecord` (`.../Idempotency/IdempotencyFilter.cs:463-500`) stores
+the ETag the action wrote and the `Location` of a `Created`, `CreatedAtRoute` or `CreatedAtAction` result
+(`ResolveLocation` `:506-527`, called at `:486`); `TryReplayAsync` (`:352-404`) re-emits both (`:386-392`).
+Tested at `Tests/Presentation/MMCA.Common.API.Tests/Idempotency/IdempotencyFilterTests.cs:550` (Location) and
+`:561` (ETag). (2) The cache-key subject is `FindUserIdValue()` (`IdempotencyFilter.cs:540`), which reads `sub`
+then `ClaimTypes.NameIdentifier` (`MMCA.Common/Source/Core/MMCA.Common.Shared/Auth/ClaimsPrincipalExtensions.cs:26-28`),
+else `anon:{ip}` or `anon:unknown` (`IdempotencyFilter.cs:540-541`); the components are joined with a newline
+(`:548`) and SHA-256 hashed (`:549-551`) under the `idempotency:` prefix (`:76`) in `BuildCacheKey`
+(`:538-552`), with the SECURITY rationale in the class remarks (`:60-66`). (3) Inbox abandon: the consumer
+calls `inbox.Abandon(...)` and ignores its result
+(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Messaging/Consumers/IntegrationEventConsumer.cs:113`).
 `EfInboxStore.Abandon` (`.../Persistence/Inbox/EfInboxStore.cs:109-133`) returns false and logs when a handler's
 save already committed the row (`:128-132`), and the contract says the redelivery is then treated as a duplicate
-and the remaining handlers do not run again (`.../Persistence/Inbox/IInboxStore.cs:57-62`). The inbox bullet is
-narrowed and a trade-off bullet added. (4) §10 attribution: the scorecard no longer records a twenty-fifth-wave 8
-to 9 lift. The §10 row (`Website/docs-src/governance/common-ArchitectureScorecard.md:74`, Implementation 8 as of
-2026-10-22) lists `IdempotencyFilter` resolving an `IDistributedLock` among its evidence, so the body says that
-instead of "on the strength of". (5) ADR-017 was revised 2026-10-01 (`Website/docs-src/adr/017-request-idempotency.md:13-15`,
-Revision `:211`) and documents the caller-scoped `sub` subject (`:40-50`), Location and ETag replay
-(`:57-59`), the body binding and 422 (`:60-65`) and the fail-open behavior (`:77-80`, `:128-131`); the previous
-ledger note that the ADR did not cover these is retired. **Re-anchored in `IdempotencyFilter.cs`:** class
-`IAsyncActionFilter, IAsyncResourceFilter` `:68-69`; two-stage remarks `:45-51`; fail-open remarks `:54-58`;
-`KeyLocks` `:91` (xmldoc `:83-90`); 30s time-to-live `:98`; 5s wait `:105`; `EmptyBodyHash` `:111-112`;
-`OnResourceExecutionAsync` `:120-126` (buffering only with a key, `:122-123`); fast path `:144`;
-`IDistributedLock` from DI `:149`, stripe fallback when null `:150-154`; `ReadIdempotencyKey` `:164-171`;
-`ComputeRequestBodyHashAsync` `:183-194` (non-seekable stream takes the empty hash, `:186-187`);
-`ExecuteUnderProcessLockAsync` `:200-215` (acquire `:207`); distributed acquire `:250-252`; lock fault
-`:254-260` (rationale `:234-236`); 409 path `:262-274`; double-check `:279` then execute-and-store `:282`
-(`ExecuteAndStoreAsync` `:287-296`); `InFlightDuplicateResult` `:302-311`; `BodyMismatchResult` `:323-332`
-(422-not-409 rationale `:318-322`); cache read fault `:363-368`; ordinal hash compare `:373`;
-`X-Idempotent-Replay` `:384`; bare-status replay `:394-395`; store fault `:452-456`; `IsSuccess` `:530`. Faults
-count on `idempotency.degraded` (`.../Idempotency/IdempotencyMetrics.cs:47`, conflict kinds `:24,29`). Tests:
-same body `IdempotencyFilterTests.cs:816`, different body `:850` (422 asserted `:874`), body-less `:883`,
-resource stage `:916` and `:931`, cache read and store faults `:948` and `:980`, distributed-lock facts `:672`,
-`:712`, `:747`, `:783`; no test exercises the lock-acquisition-fault path. **Unchanged and re-confirmed:**
+and the remaining handlers do not run again (`.../Persistence/Inbox/IInboxStore.cs:57-62`). (4) §10 attribution:
+the §10 row (`Website/docs-src/governance/common-ArchitectureScorecard.md:75`) lists `IdempotencyFilter`
+resolving an `IDistributedLock` among its evidence. (5) ADR-017 documents the caller-scoped `sub` subject
+(`Website/docs-src/adr/017-request-idempotency.md:40-50`), Location and ETag replay (`:57-59`), the body
+binding and 422 (`:60-65`) and the fail-open behavior (`:77-80`, `:128-131`). **Anchors in
+`IdempotencyFilter.cs`:** class `IAsyncActionFilter, IAsyncResourceFilter` `:68-69`; two-stage remarks
+`:45-51`; fail-open remarks `:54-58`; `KeyLocks` `:91` (xmldoc `:83-90`); 30s time-to-live `:98`; 5s wait
+`:105`; `EmptyBodyHash` `:111-112`; `OnResourceExecutionAsync` `:120-126` (buffering only with a key,
+`:122-123`); cache key built `:139`; fast path `:144`; `IDistributedLock` from DI `:149`, stripe fallback when
+null `:150-154`; `ReadIdempotencyKey` `:164-171`; `ComputeRequestBodyHashAsync` `:183-194` (hash `:190`,
+non-seekable stream takes the empty hash, `:186-187`); `ExecuteUnderProcessLockAsync` `:200-215` (acquire
+`:207`); distributed acquire `:250-252`; lock fault `:254-260` (rationale `:234-236`); 409 path `:262-274`;
+double-check `:279` then execute-and-store `:282` (`ExecuteAndStoreAsync` `:287-296`);
+`InFlightDuplicateResult` `:302-311`; `BodyMismatchResult` `:323-332` (422-not-409 rationale `:318-322`);
+cache read fault `:363-368`; ordinal hash compare `:373`; `X-Idempotent-Replay` `:384`; bare-status replay
+`:394-395`; `BuildRecord` called `:438`; store fault `:452-456`; `IsSuccess` `:529` (2xx range). Faults count
+on `idempotency.degraded` (`.../Idempotency/IdempotencyMetrics.cs:47`, conflict kinds `:24,29`). Tests
+(`IdempotencyFilterTests.cs`, re-read this pass): same body `:776`, different body `:810`, body-less `:843`,
+resource stage `:876` and `:891`, cache read fault `:908`, store fault `:940`, distributed-lock facts `:632`,
+`:672`, `:707`, `:743`; no test exercises the lock-acquisition-fault path. **Also confirmed:**
 `IdempotentAttribute` is a `ServiceFilterAttribute` (`.../Idempotency/IdempotentAttribute.cs:16`); the generic
 create action carries it (`.../Controllers/AggregateRootEntityControllerBase.cs:76`, `[HttpPost]` `:75`);
 `IdempotencySettings.CacheExpirationHours` defaults to 24 with `[Range(1, 168)]`
-(`.../Idempotency/IdempotencySettings.cs:15-16`). The Infrastructure DI registration is split into partials:
-`AddInfrastructure` (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:57`) calls
-`AddCaching` at `:140`, and `AddCaching` (`.../DependencyInjection.Caching.cs:27`) registers the lock through
-`TryAddSingleton<IDistributedLock>` (`:105-119`; `RedisDistributedLock` `:113`, `InProcessDistributedLock`
-`:118`). The Redis acquire is `SET ... NX PX` (`.../Concurrency/RedisDistributedLock.cs:11`, `When.NotExists` at
+(`.../Idempotency/IdempotencySettings.cs:15-16`). Lock registration (re-read this pass): `AddInfrastructure`
+calls `AddCaching` at `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:141`, and
+`AddCaching` (`.../DependencyInjection.Caching.cs:30`) registers the lock through
+`TryAddSingleton<IDistributedLock>` (`:109-123`; `RedisDistributedLock` `:117`, `InProcessDistributedLock`
+`:122`). The Redis acquire is `SET ... NX PX` (`.../Concurrency/RedisDistributedLock.cs:11`, `When.NotExists` at
 `:67`), single-instance and not Redlock (`:20`), with a Lua compare-and-delete release script (`:37`); the
-in-process fallback warns once (`.../Concurrency/InProcessDistributedLock.cs:75`). Contract:
+in-process fallback warns once (`.../Concurrency/InProcessDistributedLock.cs:52-54`, message `:75-76`). Contract:
 `MMCA.Common/Source/Core/MMCA.Common.Application/Interfaces/IDistributedLock.cs:30` (not reentrant `:20`,
 best-effort and not consensus `:24`). Stripe: `MMCA.Common/Source/Core/MMCA.Common.Shared/Concurrency/KeyedSemaphoreStripe.cs:22`
-(width 256 `:25`, acquire `:60`, the `Releaser` only releases `:78-85`), class doc `:8-16`. Inbox posture:
-`MessageBusSettings.EnableInbox` is `bool?` (`.../Messaging/MessageBusSettings.cs:139`), `IsInboxEnabled`
-`:147`, `RetryLimit` default 5 `:99`; registration `.../DependencyInjection.Messaging.cs:127-142`
-(`EfInboxStore` `:129`, `NoOpInboxStore` `:137`, `InboxDisabledWarningService` `:142`), after the in-process early return `:57-60`; `UseMessageRetry`
-`.../Messaging/Transports/BrokerTransportPolicies.cs:85` (exponential). Consumer: `TryBeginAsync` `IntegrationEventConsumer.cs:82` (staging rationale `:77-81`),
-rethrow `:109`, `CompleteAsync` `:123`. `InboxMessages` table
-(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/ApplicationDbContext.cs:730`) with a
-unique `MessageId` index (`:733-735`) inside `ConfigureInbox` (`:727`, invoked `:427`). ADR-021
-(`Website/docs-src/adr/021-consumer-inbox-idempotency.md:8`, revised 2026-10-06, 2026-10-07, 2026-10-21, 2026-10-26 and 2026-10-28, `:29-40`). At-least-once outbox delivery
-from ADR-003. Scorecard: evidence stamp 2026-10-29 at v1.265.1 (`common-ArchitectureScorecard.md:5`), Maturity
-97.3% (319/328) `:9`, Implementation 85.4% (700/820) `:10`; §6 credits the inbox consumer `:70`, §9 the filter
-`:73`, §10 the filter's `IDistributedLock` `:74`, §29 the Polly handlers plus outbox degradation `:93`. Owner decision 2026-10-22: the header and the series README mapping row (`Website/docs-src/articles/README.md:28`) widen to Rubric §6, §9, §10, §29, matching the grounding line and the four scorecard credits above.*
+(width 256 `:25`, acquire `:60`, the `Releaser` only releases `:78-85`), class doc `:8-16`. Inbox posture
+(re-read this pass): `MessageBusSettings.EnableInbox` is `bool?` (`.../Messaging/MessageBusSettings.cs:134`),
+`IsInboxEnabled` `:142`, `RetryLimit` default 5 `:94`; registration in `.../DependencyInjection.Messaging.cs`
+(`EfInboxStore` `:134`, `NoOpInboxStore` `:142`, `InboxDisabledWarningService` `:147`), after the in-process
+early return `:72-75`. Consumer: `TryBeginAsync` `IntegrationEventConsumer.cs:93` (staging rationale
+`:88-92`), `Abandon` `:113`, rethrow `:120`, `CompleteAsync` `:134`. `InboxMessages` table
+(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/ApplicationDbContext.cs:883`) with a
+unique `MessageId` index (`:887-888`) inside `ConfigureInbox` (`:880`, invoked `:562`). ADR-021
+(`Website/docs-src/adr/021-consumer-inbox-idempotency.md`, revised 2026-10-06 through 2026-11-23, `:29-42`).
+At-least-once outbox delivery from ADR-003. Scorecard: evidence as of 2026-11-23 (`common-ArchitectureScorecard.md:5`),
+facts re-verified 2026-11-24 at v1.318.0 (`:6`), Maturity 97.3% (319/328) `:10`, Implementation 85.1%
+(698/820) `:11`; §6 credits the inbox consumer `:71`, §9 the filter `:74`, §10 the filter's `IDistributedLock`
+`:75`, §29 the Polly handlers plus outbox degradation `:94`. Owner decision 2026-10-22: the header and the
+series README mapping row widen to Rubric §6, §9, §10, §29, matching the grounding line and the four scorecard
+credits above.*
 
 - Full series index: https://ivanball.github.io/writing.html

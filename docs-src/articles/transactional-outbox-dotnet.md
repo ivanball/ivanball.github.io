@@ -1,8 +1,8 @@
 # The transactional outbox in .NET 10: never lose an event again
 
 > Series: MMCA.Common · Article #9 (cornerstone deep-dive) · Pillar P2/P3 · Group G04 · Rubric §6,§8 ·
-> ADR-003 · ADR-066 · ADR-075 · ADR-087 · ADR-100 · ADR-107 · Status: grounded in `Website/docs-src/onboarding/group-04-events-outbox.md`, `MMCA.Common/CLAUDE.md`,
-> and `Website/docs-src/adr/003-outbox-dual-dispatch.md`, re-verified against MMCA.Common v1.265.1 source (see Notes). No em dashes.
+> ADR-003 · ADR-066 · ADR-075 · ADR-087 · ADR-100 · ADR-107 · ADR-118 · Status: grounded in `Website/docs-src/onboarding/group-04-events-outbox.md`, `MMCA.Common/CLAUDE.md`,
+> `Website/docs-src/adr/003-outbox-dual-dispatch.md` and `Website/docs-src/adr/118-message-transport-library-policy.md`, re-verified against MMCA.Common v1.319.0 source (see Notes). No em dashes.
 
 **Subtitle:** "Save to the database, then publish to the broker" is a dual write with no atomicity.
 Here is the at-least-once pattern that fixes it, in one SaveChanges call.
@@ -191,18 +191,22 @@ A background service, `OutboxProcessor`, drains the outbox. The details that mak
   `OutboxMessages` table, and the processor drains the sources its host owns. A host never races for
   another service's outbox rows. (That race was a real defect, fixed by going database-per-service;
   see ADR-006.)
-- **Smart waiting, not a hot loop.** It wakes on a signal when new rows are written. When it sees rows
-  that are pending but not yet eligible (messages become eligible a few seconds after creation, default
-  5s), it sleeps only until the earliest becomes eligible.
+- **Smart waiting, not a hot loop.** It wakes on a signal when new rows are written, and with
+  `Outbox:ProcessingDelaySeconds` at its default of 0 a row is eligible as soon as it commits, so an
+  integration event goes out within tens of milliseconds of the save. A host that sets a delay holds
+  rows back deliberately, and when the processor sees rows that are pending but not yet eligible, it
+  sleeps only until the earliest becomes eligible.
   Otherwise it sleeps the full fallback interval (default 2s locally; deployed environments set it high,
-  for example 300s, to cut idle polling without adding latency). The eligibility delay is not what
+  for example 300s, to cut idle polling without adding latency). An eligibility delay is not what
   keeps the processor away from an event the saving process is still handling: on the async save path
   a local domain event's row is inserted already leased (`Outbox:LeaseSeconds`, under a fresh lock
   token), so no replica's poller claims it while the in-process dispatch runs, and a failed dispatch
   releases that lease so the processor retries promptly instead of waiting out the full lease.
 - **Batches and retries.** It processes in batches of 50 and gives each message at most 5 delivery
-  attempts (`Outbox:MaxRetries`, and a rejection by an open broker circuit counts as one) before
-  dead-lettering it, with at-least-once delivery and OpenTelemetry metrics for dead-letter tracking. Retries back off
+  attempts (`Outbox:MaxRetries`) before dead-lettering it. A rejection by an open broker circuit is
+  not an attempt, since that publish never left the process: it spends no retry and cannot
+  dead-letter the row, which is re-leased for about the circuit's break duration plus jitter, capped
+  at the lease. Delivery is at-least-once, with OpenTelemetry metrics for dead-letter tracking. Retries back off
   exponentially: attempt `n` waits `Outbox:RetryBackoffBaseSeconds * 2^(n-1)` (default base 10s),
   multiplied by a random jitter factor between 0.8 and 1.2 and then capped at the lease duration.
   The jitter is what keeps a batch that failed together (one dependency outage fails all 50 rows in
@@ -228,8 +232,10 @@ microservices later." The event you raised does not know how it will be delivere
 There is one abstraction, `IMessageBus`, with two implementations:
 
 - `InProcessMessageBus`, used while the module lives inside the monolith. Delivery is a method call.
-- `BrokerMessageBus`, used once the module is its own service. Delivery is over a MassTransit-backed
-  broker (RabbitMQ in development, Azure Service Bus in production), selected by config.
+- `BrokerMessageBus`, used once the module is its own service. It publishes through the selected
+  transport's `IBrokerPublisher`, and the transports are framework code over the vendor SDKs
+  (RabbitMQ and PostgreSQL built in, Azure Service Bus and Amazon SQS in adapter packages; **ADR-118**).
+  The reference apps run RabbitMQ in development and Azure Service Bus in production, selected by config.
 
 `MessageBusSettings` selects the mode. Your aggregate code, your handler code, none of it changes when
 you extract the module. The outbox is what makes that switch safe: the same durable record is drained
@@ -241,9 +247,10 @@ is a string with three built-in values (`InProcess`, `RabbitMq`, `PostgreSql`), 
 names a transport an adapter package registers (`AzureServiceBus` from MMCA.Common.Azure, `AmazonSqs`
 from MMCA.Common.Aws; see [Cloud-neutral core, vendor adapters](cloud-neutral-vendor-adapters.md)).
 The value is chosen at the deployment edge (the Aspire AppHost locally, Bicep environment variables
-in production) rather than anywhere in application code, and every broker transport takes its retry,
+in production) rather than anywhere in application code. Every broker transport takes its retry,
 redelivery and backpressure from one shared policy (`BrokerTransportPolicies`) over one settings
-object, so the products stay substitutable. It also records the honest residual: the
+object, read by the framework receive pipeline that **ADR-118**'s native-transports amendment
+records, so the products stay substitutable. ADR-066 also records the honest residual: the
 production-only Azure Service Bus binding is exercised by a dedicated emulator test tier that runs on
 the weekday nightly and gates deployment in both ADC and Store, so a Service-Bus-only regression
 blocks the next deploy, though not the merge that introduced it.
@@ -251,7 +258,7 @@ blocks the next deploy, though not the merge that introduced it.
 ```csharp
 // One abstraction, two transports. Application code depends only on IMessageBus.
 // InProcessMessageBus  -> in-monolith, method-call delivery
-// BrokerMessageBus     -> extracted service, MassTransit broker (RabbitMQ dev / Azure Service Bus prod)
+// BrokerMessageBus     -> extracted service, IBrokerPublisher of the selected transport (RabbitMQ dev / Azure Service Bus prod)
 ```
 
 Whether there is an outbox at all is resolved from that same mode. `MessageBus:EnableOutbox` is a
@@ -281,46 +288,51 @@ that asserts on outbox rows or on a retried handler, both have to say so explici
 }
 ```
 
-Application, Domain, and Shared are forbidden from referencing MassTransit directly; a fitness test
-(`MicroserviceExtractionTests`) fails the build if the transport leaks upward. The reliability pattern
-and the extraction boundary are the same mechanism.
+Application, Domain, and Shared are forbidden from referencing a transport directly: a fitness test
+(`MicroserviceExtractionTests`) fails the test run if a broker SDK the transports run on
+(`RabbitMQ.Client`, `Azure.Messaging.ServiceBus`, the Amazon SQS and SNS clients) or the gRPC runtime
+leaks upward, and a governance test fails on any MassTransit package version at all. The reliability
+pattern and the extraction boundary are the same mechanism.
 
 ## When the consumer runs out of retries
 
 The outbox makes the publish durable. It says nothing about what happens after the broker accepts the
-message, and that is the other half of delivery. MassTransit applies its own retry policy on the
-consume side, and when those retries are spent it moves the message to the transport's error queue and
-the consumer moves on. That is correct behavior, and until **ADR-087** it was also silent: the outbox's
-own dead-letter path is loud (a metric, an Error log, a retention window), but it covers the publish leg
-only. An event that left the outbox successfully and then failed every consume attempt produced no
-counter and no log line in any of our meters.
+message, and that is the other half of delivery. The outbox's own dead-letter path (a metric, an Error
+log, a retention window) covers the publish leg only. On the consume side the transports move bytes
+and nothing else: every one of them (RabbitMQ, PostgreSQL, Azure Service Bus, Amazon SQS) hands each
+delivery to the one framework `BrokerReceivePipeline`, and that pipeline owns the whole failure policy
+(**ADR-118**, Amendment 2026-11-23).
 
-`FaultIntegrationEventConsumer<TEvent>` closes that. It consumes `Fault<TEvent>`, the message
-MassTransit publishes when a consumer's retries are exhausted. That fault goes to a topic every service consuming the event subscribes to, so the consumer first asks whether this host
-produced it: it compares the fault's `Host.Assembly` with its own, and a fault from another service
-gets one Debug line and nothing else. For a fault of its own it does exactly two things: it writes
-one Error log line naming the event type and the faulted message id (the broker's own message id when
-MassTransit captured one, the fault id otherwise, since one of the two is always what an operator pastes
-into a queue browser), and it increments `broker.fault.count`, tagged by event type and faulting
-assembly, on a meter named `MMCA.Common.Broker`. It never throws and never replays the failed message, deliberately: a fault
-consumer that tried to recover would be a third retry policy hiding behind the two that already exist.
-Registration is automatic, because `RegisterIntegrationEventConsumer<TEvent>` adds it by default, so
-opting out is a visible `false` at one call site rather than a setting that silently disarms every
-consumer in a service.
+It runs in three stages. First, in-process retry: the consumer (inbox, origin restore, handlers) runs
+up to `MessageBus:RetryLimit + 1` times, each attempt in a fresh DI scope, with an exponential delay
+between attempts (defaults: 5 retries, starting at 1s and doubling to a 30s cap). Second, once every
+retry has failed, second-level redelivery: the pipeline asks the transport to put the message back on
+the host's queue after the next `MessageBus:RedeliveryIntervalsSeconds` step (default one minute, ten
+minutes, one hour), the right tool for a dependency that will come back, but not within seconds.
+Third, once the redeliveries are spent too, the dead-letter: one Error log line naming the event type,
+the message id and the queue, and one increment of `broker.fault.count`, tagged by `event_type` and
+`queue`, on a meter named `MMCA.Common.Broker`. A delivery that no retry can fix skips straight to the
+dead-letter: a body that does not deserialize, or an event name the host has no subscription for.
 
-The other half of ADR-087 is not symmetric across transports. Second-level redelivery (reschedule the
-message minutes or hours later instead of retrying it immediately) is the right tool for a dependency
-that will come back, but not within seconds, and `MessageBus:EnableDelayedRedelivery` defaults to off.
-RabbitMQ consults that flag, because the feature needs the `rabbitmq_delayed_message_exchange` plugin
-that the Aspire development container does not ship, and a default-on setting would fail every
-developer's first run at bus start. Azure Service Bus ignores the flag and always applies the intervals
-(default one minute, ten minutes, one hour), because it schedules natively and has no plugin to be
-missing. Two honest costs ride along. The RabbitMQ deployment is the shape most likely to be running
-without second-level redelivery, and nothing warns it. And an event redelivered an hour later runs its
-handlers an hour after the original attempt, so the consumer-side inbox and every idempotent handler
-have to stay correct across that span rather than across a retry burst. The counter itself only
-observes: a fault means a message is sitting in the error queue until a human acts on it, with no alert
-wired to it and no automated replay path.
+Because the pipeline logs and counts at the moment it dead-letters, there is no fault consumer and no
+fault topic: `RegisterIntegrationEventConsumer<TEvent>()` takes no arguments, and with one queue per
+host each service only ever sees its own failures. The pipeline never throws for a handler or payload
+failure and never replays a dead-lettered message, deliberately: recovery logic at that point would be
+a third retry policy hiding behind the two that already exist. The one exception it lets out is the
+host's own cancellation, and the transport then leaves the message unacknowledged so the broker
+delivers it again after the restart.
+
+Redelivery works the same way on every transport, each through its own native mechanism: RabbitMQ
+through per-interval delay queues (no plugin), PostgreSQL through the row's visibility time, Azure
+Service Bus and Amazon SQS through native scheduling, with any interval longer than a transport's cap
+shortened to it (Amazon SQS caps a message delay at 15 minutes). A configured list replaces the default
+rather than merging with it, and `[0]` turns redelivery off. Two honest costs ride along. An event
+redelivered an hour later runs its handlers an hour after the original attempt, so the consumer-side
+inbox and every idempotent handler have to stay correct across that span rather than across a retry
+burst. And the counter only observes: a dead-lettered message sits in the transport's dead-letter
+location until a human replays or discards it. Both reference applications alert on the Service Bus
+dead-letter count of their host queues, which catches every dead-letter cause rather than only the
+counted one, but there is no automated replay path.
 
 ## The write that skips the whole pipeline
 
@@ -380,8 +392,8 @@ The outbox is not free, and the rubric review of this framework names the rough 
   succeeded, the "mark processed" step did not). The framework does not just
   document this, it ships a consumer-side inbox that is on by default for a broker transport:
   `IInboxStore` (`EfInboxStore` records processed messages in an `InboxMessages` table) dedups by
-  `MessageId`, and `MessageBus:EnableInbox` is a `bool?` that resolves ON for RabbitMQ and Azure
-  Service Bus when unset. `NoOpInboxStore` is reached only through an explicit `EnableInbox=false`,
+  `MessageId`, and `MessageBus:EnableInbox` is a `bool?` that resolves ON for any broker transport
+  (RabbitMQ, PostgreSQL, Azure Service Bus, Amazon SQS) when unset. `NoOpInboxStore` is reached only through an explicit `EnableInbox=false`,
   and that opt-out logs a startup Warning rather than staying silent. The generic
   `IntegrationEventConsumer` stages the inbox row in the scope's unit of work before the handlers
   run, abandons it when a handler throws, and writes it through `CompleteAsync` once every handler
@@ -402,8 +414,13 @@ The outbox is not free, and the rubric review of this framework names the rough 
   residual decision is yours: pick a retention window that satisfies your compliance and replay needs,
   since that setting is what decides how long PII-bearing payloads linger. This is where it intersects
   the compliance category.
-- **Latency.** Eligibility delay plus poll interval means delivery is near-real-time, not instant. That
-  is the correct trade for durability, but size the intervals for your workload.
+- **Latency.** Delivery is near-real-time, not instant. On the happy path the post-save signal wakes
+  the processor and the row publishes within tens of milliseconds (`Outbox:ProcessingDelaySeconds`
+  defaults to 0), and the poll interval only paces idle polling, which is why a deployed host can set
+  it to 300s. The latency cost lives on the failure paths: a failed publish waits out its exponential
+  backoff, and a failed consume walks through in-process retries and then redeliveries a minute, ten
+  minutes and an hour apart. That is the correct trade for durability, but size the backoff and the
+  redelivery intervals for your workload.
 - **It is per-source and best-effort sequential.** There is no two-phase commit across sources; the
   outbox is the cross-source consistency mechanism, not distributed transactions.
 
@@ -438,167 +455,93 @@ pattern, or `dotnet add package MMCA.Common.API` and try it.*
 
 *Tags: .NET, C Sharp, Microservices, Distributed Systems, Software Architecture*
 
-*Notes: 2026-10-29 re-verification pass against MMCA.Common v1.265.1 (the `/update-medium` audit of
-2026-10-29, findings `09-transactional-outbox-dotnet.json`; the anchors below that moved were re-read
-and corrected in place). Changes in this pass: the ADR-066 paragraph taught a three-value
-`MessageBusProvider` enum (`InProcess`, `RabbitMq`, `AzureServiceBus`); `MessageBusSettings.Provider`
-is a string (`Messaging/MessageBusSettings.cs:25`) with three built-in constants (`InProcess` `:16`,
-`RabbitMq` `:19`, `PostgreSql` `:27` in `Messaging/Transports/MessageBusProviders.cs`) and the
-adapter transports `AzureServiceBus` and `AmazonSqs` (`:34-39`), every transport sharing
-`BrokerTransportPolicies.ApplyReceivePolicies` (`Messaging/Transports/BrokerTransportPolicies.cs:37`;
-ADR-066 Decision `:57`, `:61-65`, Revision 2026-10-24 `:39`). The `IsOutboxEnabled` rule reads
-`EnableOutbox ?? !MessageBusProviders.IsInProcess(Provider)` (`MessageBusSettings.cs:185`, the inbox
-twin `:147`), with a blank provider counted as in-process (`MessageBusProviders.cs:44-45`). The fault
-consumer paragraph said it always logs and counts; it logs at Error and counts only a fault this host
-produced, comparing `fault.Host.Assembly` with its own (`Messaging/Consumers/FaultIntegrationEventConsumer.cs:49-57`),
-gives a foreign fault one Debug line (`LogForeignFault` call `:55`, declared `:84`), and tags the
-counter with `event_type` and `faulting_assembly` (`:72-75`). The jsonc comment read "no services";
-the outbox-off path still registers `OutboxDisabledNoticeService` (`DependencyInjection.cs:242-245`),
-so it now reads "no processor (one startup notice says so)". Header stamp v1.250.0 to v1.265.1.
-Prior pass: 2026-10-22 against MMCA.Common v1.250.0 (the `/update-medium` audit of
-2026-10-22; every line anchor below was re-read in that pass and corrected in place where it moved,
-except the `ProductVariantChanged.cs:34` record line in the 2026-10-08 change record, which names a
-snippet the article no longer shows; its `BaseIntegrationEvent` `:41` was re-read). Changes in this
-pass: the inbox bullet called the duplicate window narrow, open only for a handler that writes
-nothing or writes to a different source; ADR-021's 2026-10-06 revision
-(`Website/docs-src/adr/021-consumer-inbox-idempotency.md:29-32`, narrowed-window paragraph `:83-93`,
-Revision `:397`) limits the same-transaction case to a handler that saves on the consumer's own scope,
-and the framework's persisting handlers open a scope of their own
-(`MMCA.Common/Source/Core/MMCA.Common.Application/DomainEvents/ScopedIntegrationEventHandlerBase.cs`
-class `:39`, scope `:51`), so `CompleteAsync` writes the row only after they succeed
-(`Messaging/Consumers/IntegrationEventConsumer.cs` comment `:77-81`, call `:123`); the bullet now
-names that residual as the common case. The retry strategy read "five attempts"; `maxRetryCount: 5`
-is five retries (`Persistence/DbContexts/SQLServerDbContext.cs:64`; ADR-107 Revision 2026-10-21
-item 3 at `:281-283`). The transaction-contract paragraph decides six things: the best-effort
-rollback on any thrown exception joins the list (`DbContextFactory.cs` catch `:673-681`,
-`RollbackBestEffort` `:689-701`; ADR-107 Status `:16-18`), and the internal-command processor wake,
-released after the commit and dropped on every other path (`:657-660`, `DropDeferredWork` `:882-885`;
-ADR-107 Status `:12-14`), joins the deferred-dispatch sentence. The processor bullet read "retries a
-failed message up to 5 times"; `RetryCount++` runs on every failure (`OutboxProcessor.cs:595`, an
-open-circuit rejection included `:609-621`) and the row dead-letters at `RetryCount >= MaxRetries`
-(`:629`; `MaxRetries` 5 at `Persistence/Outbox/Administration/OutboxSettings.cs:21`, `BatchSize` 50
-`:17`), which is 5 attempts in total. The SaveChanges section stated the outbox row unconditionally;
-rows are written only when `IsOutboxEnabled` (`Persistence/Interceptors/DomainEventSaveChangesInterceptor.cs`
-`_outboxEnabled` `:66`, relational-and-enabled branch `:259`, integration-event check `:276`,
-outbox-off doc `:46-50`), so the section and the snippet comment scope it to the outbox being on.
-Header stamp v1.233.0 to v1.250.0. Prior pass: 2026-10-08 against MMCA.Common v1.233.0 (findings
-`Docs/Planning/Quality/medium-apply-2026-10-08/09-transactional-outbox-dotnet.json`). Changes in that
-pass: the smart-waiting bullet credited the 5s processing delay with letting the in-process handler
-run first; v1.233.0 (`MMCA.Common/CHANGELOG.md:339`, release header `:326`) inserts async-path local
-domain-event rows already leased under a fresh lock token, so the bullet now names the lease as what
-keeps the poller off the row and the failed-dispatch lease release as what makes the retry prompt
-(`Persistence/Outbox/Administration/OutboxSettings.cs` `ProcessingDelaySeconds` 5 `:41`, "does not
-bound the duplicate-dispatch window" doc `:34-38`; `Persistence/Interceptors/DomainEventSaveChangesInterceptor.cs`
-class remarks `:17-23`, lease field `:68`, lease stamped `:312-313` from `:316-318`; ADR-003 Status
-revision 2026-10-07 `:34-36` and the processing-delay rationale `:59`). The illustrative snippet raised
-`ProductVariantChanged(Id, newPrice)`, an invented two-argument shape of what is really an integration
-event (`MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.Shared/Products/IntegrationEvents/ProductVariantChanged.cs:34`,
-`BaseIntegrationEvent` `:41`), which is exactly the case the article says is not dispatched
-in-process; it now shows a real pure domain event raised by a real aggregate,
-`InventoryAdjusted(Id, oldAvailableQuantity, AvailableQuantity)` (`MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Domain/Inventory/InventoryItem.cs:172`;
-`Inventory/DomainEvents/InventoryAdjusted.cs:6-10`, `BaseDomainEvent`). Header stamp v1.221.0 to
-v1.233.0. Re-read on 2026-10-08 and corrected in place below where they moved: `OutboxSettings.cs`,
-`DbContextFactory.cs`, `UnitOfWork.cs`, `DomainEventSaveChangesInterceptor.cs`, `OutboxProcessor.cs`,
-`EFRepository.cs`, `IntegrationEventConsumer.cs`, `DependencyInjection.cs`,
-`DependencyInjection.Messaging.cs` and every `AddAuditTrail` call site (still seven hosts; ADC's
-three moved). Re-read and unchanged that day: the `MessageBusSettings.cs` anchors, `PollingLoop.cs`,
-`TransactionCommitAmbiguousException.cs`, `SQLServerDbContext.cs`; the rest was carried from the
-2026-10-02 pass then, and is re-read in the 2026-10-22 pass. `EFRepository.ExecuteUpdateAsync` also calls
-`StampRowVersion(builder)` (`:130`, declared `:141`) after the audit block; the article's block stops
-before it and stays accurate. Prior pass:
-2026-10-02 against MMCA.Common v1.221.0 (audit findings `Reports/update-medium/2026-10-02/09.json`).
-Section history: "The write that skips the whole
-pipeline" was added 2026-07-27 (the set-based-write audit-field trap was taught only inside Article
-49's reconciliation section, and it lives here because this article teaches the `SaveChangesAsync`
-sequence whose first step is "stamp audit fields"); "When the commit itself is ambiguous" 2026-08-01,
-its per-source outcome paragraph 2026-08-15 (MMCA.Common PR #248); the transport-selection paragraph
-2026-08-07; "The third participant in that sequence: the change trail" 2026-08-14; "When the
-consumer runs out of retries" 2026-08-19; the outbox-posture and transaction-contract paragraphs
-2026-09-19. Changes in the 2026-10-02 pass: the inbox bullet described an opt-in inbox with `NoOpInboxStore`
-as the default, a check-before/record-after consumer and "five service hosts"; it now teaches the
-broker default-ON inbox, the staged row and the seven explicit `EnableInbox: true` hosts (ADR-021
-Revision 2026-08-26). The ADR-066 emulator tier read "nightly and non-gating"; it is deploy-gating
-since the 2026-09-01 revision. The audit trail gained its third gate (`AuditTrail:Enabled`) and the
-scheduler dependency of its retention purge; the interceptor paragraph and the SaveChanges sequence
-gained the optional tenant step. The ADR-107 contract decides five things after its 2026-10-01
-revision (`FlushEnrolledCommandsBeforeCommitAsync`). The set-based-write block lost the
-`?? TimeProvider.System` fallback and now also shows the `LastModifiedBy` stamp. "One property above
-it" corrected to two. Anchors (paths under
-`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/` unless stated). Outbox posture
-(`Website/docs-src/adr/100-outbox-opt-in-resolved-from-messaging-mode.md`, Accepted 2026-08-29 at
-`:4`, Decision item 1 at `:46-54`, the in-process default trade-off at `:119-124`):
-`Messaging/MessageBusSettings.cs` `EnableInbox` `bool?` `:139` (broker-ON doc `:122-130`,
-explicit-false Warning doc `:133-136`), `IsInboxEnabled` `:147`, `EnableOutbox` `bool?` `:177` (doc
-`:149-176`, the monolith's explicit `true` at `:164-166`), `IsOutboxEnabled` `:185`. The in-process
-test-host clause follows from that rule (an `InProcess` host with `EnableOutbox` unset resolves OFF
-at `:185` and writes no rows); ADR-100 carries no test-host text, so it is no longer attributed to
-ADR-100's own wording. `DependencyInjection.cs`: `IOutboxSignal` `:225`, transport-decision comment
-`:227-232`, guard call `:235`, enabled registration `:237-241`, disabled `:242-245`.
-`DependencyInjection.Messaging.cs`: `EnsureOutboxAvailableForProvider` declared `:241`, guard `:243`,
-throw `:245-246`, doc `:223-236`, second call site `:65`; `EfInboxStore` registered when
-`IsInboxEnabled` `:127-129`, `NoOpInboxStore` on an explicit false `:137` with the Warning comment
-`:139-142`. Inbox consume path: `Messaging/Consumers/IntegrationEventConsumer.cs` stages the row via
-`TryBeginAsync` (`:82`) and calls `Abandon` on a handler failure (`:102`) before rethrowing
-(`:109`), and `CompleteAsync` writes the row after every handler succeeds (`:123`). ADR-021
-(`Website/docs-src/adr/021-consumer-inbox-idempotency.md`): Status revisions `:4-36`, opt-in
-superseded `:60`, check-before superseded `:67`, window narrowed and then re-narrowed `:83-93`,
-explicit `EnableInbox: true` on four ADC and three Store service hosts `:95-101` (Store Sales
-`appsettings.json:58` re-read), five of seven consuming from the broker `:110`. Audit trail:
-`Persistence/AuditTrail/AuditTrailSettings.cs` single-gate remarks `:11-14`, `Enabled` default false
-`:26`, `RetentionDays` 90 `:38` (`[Range(1, 3650)]` `:37`), scheduler dependency `:33-35`;
-`DependencyInjection.Jobs.cs` registration-is-not-enabling `:89-92`, retention needs the scheduler
-`:97-101`; `MMCA.Common.Domain/Interfaces/IAuditedEntity.cs:34`. Interceptor order in
-`Persistence/DbContexts/ApplicationDbContext.cs`: audit and domain-event interceptors resolved
-`:297-298`, the tenant interceptor between them when registered `:305-308` (otherwise `:311`), the
-trail last through `GetService` `:319-322` (comment `:314-318`). `AddAuditTrail` call sites:
-`MMCA.Store` Sales `Program.cs:215`, Catalog `:239`, Identity `:209`; `MMCA.ADC` Identity
-`Program.cs:257`, Conference `:362`, Engagement `:208`; `MMCA.Helpdesk`
-`Source/Hosts/MMCA.Helpdesk.Web/Program.cs:88`. Transaction contract
-(`Website/docs-src/adr/107-transaction-execution-contract.md`, Accepted 2026-09-03 at `:4`, revised
-2026-09-25 `:5-8`, 2026-10-01 `:9-11`, 2026-10-06 `:12-14`, 2026-10-07 `:15` and 2026-10-21
-`:16-18`): Decision `:46-49`, re-entrant join `:57-65`, retriable unit and `ResetForRetry` `:67-75`,
-failed-Result rollback and the enrolled-command flush `:77-91`, commit never retried `:93-100`,
-per-source outcome `:102-109`, best-effort rollback `:111-115`, deferred flush and drop `:117-128`,
-Revisions `:223`, `:239`, `:254`, `:266`. Source:
-`MMCA.Common.Application/Interfaces/Infrastructure/Persistence/IUnitOfWork.cs:63`;
-`Persistence/UnitOfWork.cs:91-94`; `MMCA.Common.Application/UseCases/Decorators/TransactionalCommandDecorator.cs`
-class `:22`, `ITransactional` check `:30`, call `:33`. `Persistence/DbContexts/Factory/DbContextFactory.cs`:
-`ExecuteInTransactionAsync` `:577`, `strategy.ExecuteAsync` `:604`, `ResetForRetry` call `:607`
-(declared `:868`, `ChangeTracker.Clear()` `:873`), failed `Result` `:641` with `RollbackTransaction`
-call `:646` (declared `:510`), `FlushEnrolledCommandsBeforeCommitAsync` call `:651` (declared `:713`,
-throw `:730-736`, save `:738`), `TryCommit` call `:653` (declared `:751`), processor wake `:657-660`,
-`FlushDeferredAsync` call `:667`, best-effort catch `:673-681` (`RollbackBestEffort` `:689-701`),
-`AbandonAfterCommitFailure` call `:775` (declared `:792`), rethrow past the strategy
-`:618-619` with the inner-chain comment `:614-617`, `SupportsTransactions` `:892-893`
-(`Engine.Capabilities.IsRelational`, false for Cosmos);
-`Persistence/Interceptors/DomainEventSaveChangesInterceptor.cs` `FlushDeferredAsync` `:162`,
-`DropDeferred` `:179`. Delivery side: `Persistence/Outbox/Processing/OutboxProcessor.cs`
-`ClaimEligibleAsync` declared `:345`, invoked `:232`; `ComputeRetryBackoffSeconds` `:1067-1068`
-(delegating to `Persistence/Polling/PollingLoop.cs:183`, jitter `0.8 + NextDouble() * 0.4` at
-`:193`), applied `:605` and `:1044`. Consume-side faults: `RegisterIntegrationEventConsumer<TEvent>`
-(`Messaging/Consumers/IntegrationEventConsumerExtensions.cs:60`), `bool registerFaultConsumer = true`
-(`:61`), guard `:71`, the same opt-out on the sibling overloads (`:124`/`:134`, `:159-160`).
-Set-based write: the block is verbatim from `Persistence/Repositories/EFRepository.cs:114-128` inside
-`ExecuteUpdateAsync`, empty-assignment guard `:111-112`, `Entities.Where(where).ExecuteUpdateAsync(builder.Apply, ...)`
-replay `:132`. Re-read 2026-10-22:
-`Persistence/Outbox/Administration/OutboxSettings.cs` (`ProcessingDelaySeconds` 5 `:41`,
-`PollingIntervalSeconds` 2 `:31`, `RetentionDays` 7 `:66`, `0` disables; `CleanupIntervalHours` 6
-`:74`; `LeaseSeconds` 300 `:86`, `[Range(10, 3600)]` `:85`; `RetryBackoffBaseSeconds` 10 `:103`,
-`[Range(1, 3600)]` `:102`; `DeadLetterRetentionDays` fallback `:112`, doc `:105-110`). Also re-read
-2026-10-22: `OutboxDisabledNoticeService.cs:22` (restore path in the logged message `:34-37`),
-`TransactionCommitAmbiguousException.cs` (sealed `:22`, `CommittedSources` `:76`, `AmbiguousSource`
-`:85`, `RolledBackSources` `:93`, `ComposeMessage` `:99`), `Persistence/DbContexts/SQLServerDbContext.cs:63-66`
-(`EnableRetryOnFailure`, 5 retries, 10s), `MessageBusSettings.Provider` string (`Messaging/MessageBusSettings.cs:25`;
-provider constants in `Messaging/Transports/MessageBusProviders.cs` `:16`, `:19`, `:27`, re-read 2026-10-29), `EnableDelayedRedelivery` `:206`,
-`DefaultRedeliveryIntervalsSeconds` `[60, 600, 3600]` `:217`, `FaultIntegrationEventConsumer.cs`
-(`:38`, own-host check `:49-57`, id `:61`, `LogFault` call `:70` declared `:81`, counter `:72-75`) and `Messaging/BrokerMetrics.cs`
-(`FaultCounter` `:30`, the `broker.fault.count` literal `:31`, `MeterName` `:21`, `Meter` `:23`,
-class `:18`). ADR-066 (`Website/docs-src/adr/066-broker-transport-selection.md`): the 2026-09-01
-revision `:6-12`, the emulator tier that gates the deploy `:156`, both jobs authoritative on the
-weekday nightly `:180-185`, the nightly-not-per-commit trade-off `:235-240`. Carried without line anchors: `Persistence/Repositories/UpdatePropertySetterBuilder.cs`,
-the internals of `OutboxCleanupService.cs`, `AuditTrailSaveChangesInterceptor.cs`,
-`AuditTrailEntry.cs`, `MMCA.Common.Domain/Privacy/PiiRedactor.cs`, the inbox stores under
-`Persistence/Inbox/`, `InboxDisabledWarningService.cs`, `DbContextFactoryCommitAmbiguityTests.cs`,
-and paragraph-level anchors into ADR-003, ADR-075 and ADR-087.*
+*Notes: re-verified 2026-11-25 against MMCA.Common v1.319.0 (`MMCA.Common/CHANGELOG.md:7`), the
+`/update-medium` audit of 2026-11-25 (findings `09-transactional-outbox-dotnet`, verdict
+Needs-structural-change); every changed claim below was re-read in source this run. Paths are under
+`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/` unless stated. Changes in this pass:
+(1) Transport. MassTransit left MMCA.Common in v1.316.0 (`MMCA.Common/CHANGELOG.md:53`). The
+`BrokerMessageBus` bullet and the snippet comment named a MassTransit-backed broker; the bus publishes
+through the selected transport's `IBrokerPublisher` (`Messaging/BrokerMessageBus.cs:13-18`), and the
+transports are framework code over the vendor SDKs (`Website/docs-src/adr/118-message-transport-library-policy.md`
+status `:22-26`, Amendment (2026-11-23) `:494-529`). (2) The consume-side section is rewritten around
+`BrokerReceivePipeline` (`Messaging/Consumers/BrokerReceivePipeline.cs` class summary `:12-24`,
+`ProcessAsync` `:82-105`, immediate dead-letter for an unknown event or a poison body `:107-146`,
+`AfterRetriesExhausted` `:156-177` with the counter tags `event_type` and `queue` at `:171-174`, retry
+loop `:184-200`) and `BrokerMetrics.FaultCounter` (`Messaging/BrokerMetrics.cs:26-33`, `MeterName`
+`:21`). `FaultIntegrationEventConsumer` no longer exists in MMCA.Common/Source; the consumer builder
+registers no fault consumer (`Messaging/Broker/IBrokerConsumerBuilder.cs:11-13`) and
+`RegisterIntegrationEventConsumer<TEvent>()` takes no parameter (`:26`). Retry settings:
+`Messaging/MessageBusSettings.cs` `RetryLimit` 5 `:94`, `RetryMinIntervalSeconds` 1 `:101`,
+`RetryMaxIntervalSeconds` 30 `:107`, doubling doc `:97-98`; redelivery default `[60, 600, 3600]`
+`:190`, replace-not-merge and `[0]` as the off switch `:196-198`, the SQS 15-minute cap `:199-201`,
+the per-transport mechanism (RabbitMQ delay queues, no plugin) `:207-211`. `EnableDelayedRedelivery`
+does not exist. (3) The "no alert wired" clause: both apps declare `brokerDeadLetterAlert` on the
+Service Bus `DeadletteredMessages` metric (`MMCA.ADC/infra/main.bicep:778`, metric `:797`;
+`MMCA.Store/infra/main.bicep:563`); the "no automated replay" half stands. (4) Fitness test:
+`ArchitectureRules.TransportDependencies` lists MassTransit, RabbitMQ.Client,
+Azure.Messaging.ServiceBus, Amazon.SQS, Amazon.SimpleNotificationService, Grpc and Google.Protobuf
+(`MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Rules/Layering/ArchitectureRules.Transport.cs:14-23`,
+doc `:5-13`), asserted by `MicroserviceExtractionTestsBase.CoreLayers_ShouldNotDependOn_Transport`
+(`Bases/Layering/MicroserviceExtractionTestsBase.cs:14`), plus
+`DependencyVersionTestsBase.MassTransit_MustNotBeReferenced` (`Bases/Governance/DependencyVersionTestsBase.cs:13-18`);
+"fails the build" became "fails the test run". (5) `Outbox:ProcessingDelaySeconds` defaults to 0
+(`Persistence/Outbox/Administration/OutboxSettings.cs:45`, doc `:33-43`; v1.306.0 at
+`MMCA.Common/CHANGELOG.md:312`, `:320`); the smart-waiting bullet and the latency bullet are rewritten
+(polling doc `OutboxSettings.cs:23-31`). (6) An open circuit spends no retry
+(`Persistence/Outbox/Processing/OutboxProcessor.cs:636-645`, re-lease `:658-661`,
+`Persistence/Polling/PollingLoop.cs` `ComputeCircuitOpenBackoffSeconds` `:219`; v1.282.0 at
+`CHANGELOG.md:759`, `:779`; ADR-087 Revision 2026-11-08 at `:17`). (7) The inbox resolves ON for any
+broker transport (`MessageBusSettings.cs:117-119`, `IsInboxEnabled` `:142`). (8) Header: ADR-118
+added, the ADR-118 file added to the grounding, stamp moved to v1.319.0 from the 2026-10-29 pass.
+Re-read this run behind unchanged prose: `OutboxSettings.cs` `BatchSize` 50 `:17`, `MaxRetries` 5
+`:21`, `PollingIntervalSeconds` 2 `:31`, `RetentionDays` 7 `:70`, `CleanupIntervalHours` 6 `:78`,
+`LeaseSeconds` 300 `:90`, `RetryBackoffBaseSeconds` 10 `:107`, `DeadLetterRetentionDays` `:118`;
+`OutboxProcessor.cs` `ClaimEligibleAsync` declared `:348` (invoked `:235`), `RetryCount++` `:644`,
+dead-letter at `RetryCount >= MaxRetries` `:681`, `ComputeRetryBackoffSeconds` `:1107-1108` delegating
+to `PollingLoop.cs:197` (jitter `NextJitter` `:223`); `MessageBusSettings.cs` `Provider` string `:25`,
+`EnableInbox` `:134`, `EnableOutbox` `:172`, `IsOutboxEnabled` `:180`;
+`Messaging/Transports/MessageBusProviders.cs` `InProcess` `:16`, `RabbitMq` `:19`, `PostgreSql` `:27`,
+`IsInProcess` `:44`; `Messaging/Transports/BrokerTransportPolicies.cs` `RetryDelay` `:27`,
+`BuildRedeliveryIntervals` `:65`, `ResolvePrefetchCount` `:85`, `ResolveConcurrentMessageLimit` `:98`;
+`DependencyInjection.cs` guard `:258`, enabled registration `:260-262`, `OutboxDisabledNoticeService`
+`:267`; `DependencyInjection.Messaging.cs` `EnsureOutboxAvailableForProvider` declared `:248` (call
+`:80`), `EfInboxStore` `:134`, `NoOpInboxStore` `:142`; `Messaging/Consumers/IntegrationEventConsumer.cs`
+`TryBeginAsync` `:93`, `Abandon` `:113`, `CompleteAsync` `:134`;
+`Persistence/DbContexts/Factory/DbContextFactory.cs` `ExecuteInTransactionAsync` `:578`,
+`strategy.ExecuteAsync` `:605`, `FlushEnrolledCommandsBeforeCommitAsync` call `:652`;
+`Persistence/DbContexts/ApplicationDbContext.cs` audit interceptor resolved `:385`; the seven
+`AddAuditTrail` hosts: `MMCA.Store/Source/Services/MMCA.Store.Sales.Service/Program.cs:105`, Catalog
+`:93`, Identity `:101`; `MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:220`,
+Conference `:295`, Engagement `:122`; `MMCA.Helpdesk/Source/Hosts/MMCA.Helpdesk.Web/Program.cs:104`;
+`InventoryAdjusted` raised at `MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Domain/Inventory/InventoryItem.cs:195`;
+the ADC Service Bus emulator tier (`MMCA.ADC/.github/workflows/cross-service-tests.yml:148`, run in
+`deploy.yml:1013`). Carried without a line re-read this run (prose unchanged, confirmed by the audit):
+`TransactionCommitAmbiguousException.cs`, `SQLServerDbContext.cs` (`EnableRetryOnFailure`, 5 retries,
+10s), the rest of `DbContextFactory.cs` (`ResetForRetry`, `TryCommit`, best-effort rollback,
+`SupportsTransactions`), `UnitOfWork.cs`, `TransactionalCommandDecorator.cs`,
+`EFRepository.ExecuteUpdateAsync` (the snippet) and `UpdatePropertySetterBuilder.cs`,
+`AuditTrailSettings.cs`, `AuditTrailSaveChangesInterceptor.cs`, `PiiRedactor.cs`,
+`OutboxCleanupService.cs`, `ScopedIntegrationEventHandlerBase.cs`, and the paragraph-level anchors into
+ADR-003, ADR-021, ADR-075, ADR-100 and ADR-107.
+Flag (2026-11-25): ADR-087 (`Website/docs-src/adr/087-broker-poison-message-handling.md`, Context
+`:21-49`) and ADR-066 (`066-broker-transport-selection.md:47`, `:103`, `:144`, and its later
+sections) still describe MassTransit (the fault consumer, the delayed-message plugin, MassTransit v8
+transports), and none of their revisions records the native-transport rewrite. The article cites
+ADR-118's Amendment (2026-11-23) for the transport and the consume-side policy, and keeps ADR-087 in
+the header for the publish-side circuit breaker and ADR-066 for provider selection, both of which
+still match source; reconciling the two ADRs is owed to `/update-adrs`.
+Verifier fixes (2026-11-25): the shared-policy sentence in the transport-selection paragraph cites
+ADR-118's Amendment (2026-11-23) (`Website/docs-src/adr/118-message-transport-library-policy.md:514-516`)
+instead of ADR-066, whose only mention (`066-broker-transport-selection.md:170`) names a MassTransit-era
+`ApplyReceivePolicies` member that source no longer has (`BrokerTransportPolicies.cs:16`, `:27`, `:52`,
+`:65`, `:85`, `:98`, under `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Messaging/Transports/`;
+the class comment `:4-5` states the receive pipeline and every transport read it).
+Section history: "The write that skips the whole pipeline" added 2026-07-27; "When the commit itself
+is ambiguous" 2026-08-01, its per-source outcome paragraph 2026-08-15; the transport-selection
+paragraph 2026-08-07; "The third participant in that sequence: the change trail" 2026-08-14; "When the
+consumer runs out of retries" 2026-08-19, rewritten 2026-11-25 for the native transports; the
+outbox-posture and transaction-contract paragraphs 2026-09-19. Prior passes: 2026-10-29 (the v1.265 line),
+2026-10-22 (v1.250.0), 2026-10-08 (v1.233.0), 2026-10-02 (v1.221.0); their line anchors are
+superseded by the ones above and their change records live in this file's Website git history.*
 
 - Full series index: https://ivanball.github.io/writing.html

@@ -95,7 +95,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 54 articles</summary>
+        <summary>All 57 articles</summary>
         <nav class="doc-nav" aria-label="The MMCA.Common series">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -152,7 +152,10 @@
         <li><a href="durable-internal-commands.html">51 · Four ways to do work later</a></li>
         <li><a href="identity-completions.html">52 · Finishing identity</a></li>
         <li><a href="cloud-neutral-vendor-adapters.html">53 · One framework, three clouds</a></li>
-        <li><a href="series-index.html">54 · The series index</a></li>
+        <li><a href="borrowed-and-machine-identities.html">54 · Borrowed and machine identities</a></li>
+        <li><a href="app-as-mcp-server.html">55 · Your app as an MCP server</a></li>
+        <li><a href="outbound-webhooks.html">56 · Sending webhooks without opening a door</a></li>
+        <li><a href="series-index.html">57 · The series index</a></li>
           </ol>
         </nav>
       </details>
@@ -322,8 +325,9 @@
           <li><strong>Composition is opt-in, so adoption is uneven.</strong> Nothing forces a validator to include a fragment.
           Store&#39;s registration validator hand-writes its email, password and name chains instead of including
           the fragments. Its password chain reads the same <code>PasswordComplexity</code> lengths and four regexes the
-          fragment uses, each with its own error code, but its email and name caps are literal 100s. Common&#39;s own
-          login and forgot-password validators hand-write their email rule. The kit removes the reason to copy; it does not detect a copy.</li>
+          fragment uses, and its email and name caps read the <code>CustomerInvariants</code> constants the domain&#39;s own
+          length checks use, every rule with its own error code. Common&#39;s own login and forgot-password
+          validators hand-write their email rule. The kit removes the reason to copy; it does not detect a copy.</li>
           <li><strong>This layer is structural only.</strong> A fragment validates shape, never cross-entity or stateful rules.
           That is correct (those belong in the domain factory), but it means the validator is not the whole
           story, and a reviewer must check both altitudes to know a command is fully guarded.</li>

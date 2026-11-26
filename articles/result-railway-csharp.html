@@ -95,7 +95,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 54 articles</summary>
+        <summary>All 57 articles</summary>
         <nav class="doc-nav" aria-label="The MMCA.Common series">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -152,7 +152,10 @@
         <li><a href="durable-internal-commands.html">51 · Four ways to do work later</a></li>
         <li><a href="identity-completions.html">52 · Finishing identity</a></li>
         <li><a href="cloud-neutral-vendor-adapters.html">53 · One framework, three clouds</a></li>
-        <li><a href="series-index.html">54 · The series index</a></li>
+        <li><a href="borrowed-and-machine-identities.html">54 · Borrowed and machine identities</a></li>
+        <li><a href="app-as-mcp-server.html">55 · Your app as an MCP server</a></li>
+        <li><a href="outbound-webhooks.html">56 · Sending webhooks without opening a door</a></li>
+        <li><a href="series-index.html">57 · The series index</a></li>
           </ol>
         </nav>
       </details>
@@ -210,8 +213,10 @@
           no reference to ASP.NET. The domain never names an HTTP status code.</li>
           <li><strong><code>Error</code></strong> is the carrier: an immutable positional <code>record</code> with a machine-readable <code>Code</code> (e.g.
           <code>&quot;Order.NotFound&quot;</code>, for programmatic branching), a human-readable <code>Message</code>, an <code>ErrorType</code>, and
-          optional <code>Source</code> / <code>Target</code> context. Ten factory methods (one per <code>ErrorType</code>) each hard-code the
-          correct type, so a caller can never pair <code>Error.NotFoundError(...)</code> with the wrong classification.</li>
+          optional <code>Source</code> / <code>Target</code> context, plus an init-only <code>RetryAfter</code> that a <code>TooManyRequests</code>
+          producer sets when it knows how long the refusal lasts (a sign-in lockout does). Ten factory methods
+          (one per <code>ErrorType</code>) each hard-code the correct type, so a caller can never pair
+          <code>Error.NotFoundError(...)</code> with the wrong classification.</li>
           <li><strong><code>Result</code></strong> (and the generic <code>Result&lt;T&gt;</code>) is the outcome envelope: either a success, or a failure
           carrying one or more <code>Error</code>s.</li>
           </ul>
@@ -315,7 +320,9 @@
           429, <code>Unexpected</code> to 500, anything unmapped falling back to 400) and the <code>GetStatusCode</code> lookups over it. Two consumers share the
           status lookup. <code>ApiControllerBase.HandleFailure()</code> is the normal path: a controller action resolves the
           status from the <em>most severe</em> error present through <code>ErrorHttpMapping</code> and renders an RFC 9457
-          ProblemDetails body carrying <em>all</em> the errors. <code>UnhandledResultFailureFilter</code> is the safety net: a global
+          ProblemDetails body carrying <em>all</em> the errors. When that status is 429 and the <code>TooManyRequests</code> errors
+          carry a <code>RetryAfter</code>, it also answers a <code>Retry-After</code> header, the longest hint winning, so a client waits
+          out a lockout instead of guessing. <code>UnhandledResultFailureFilter</code> is the safety net: a global
           filter that catches an action which accidentally returns a failed <code>Result</code> as a 200 body and rewrites it
           into the same ProblemDetails structure (the same status and the same <code>errors</code> extension, under its own
           title) via the same mapping. A third caller, the <code>If-Match</code> concurrency

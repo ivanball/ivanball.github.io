@@ -95,7 +95,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 54 articles</summary>
+        <summary>All 57 articles</summary>
         <nav class="doc-nav" aria-label="The MMCA.Common series">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -152,7 +152,10 @@
         <li><a href="durable-internal-commands.html">51 · Four ways to do work later</a></li>
         <li><a href="identity-completions.html">52 · Finishing identity</a></li>
         <li><a href="cloud-neutral-vendor-adapters.html">53 · One framework, three clouds</a></li>
-        <li><a href="series-index.html">54 · The series index</a></li>
+        <li><a href="borrowed-and-machine-identities.html">54 · Borrowed and machine identities</a></li>
+        <li><a href="app-as-mcp-server.html">55 · Your app as an MCP server</a></li>
+        <li><a href="outbound-webhooks.html">56 · Sending webhooks without opening a door</a></li>
+        <li><a href="series-index.html">57 · The series index</a></li>
           </ol>
         </nav>
       </details>
@@ -236,25 +239,33 @@ services.AddNotificationModule(); <span class="hljs-comment">// needs Identity</
           rest. And every step emits a structured <code>[LoggerMessage]</code>-generated log line, so the startup log tells
           you precisely which modules loaded, in what order, and how long each took. When something is wrong, you
           read it, you do not guess it.</p>
-          <pre class="doc-pre" tabindex="0" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-comment">// In each ADC and Store service host&#x27;s Program.cs. AddModuleHost binds and validates ApplicationSettings and</span>
-<span class="hljs-comment">// ModulesSettings, builds the ModuleLoader and registers it as a singleton. It deliberately does</span>
-<span class="hljs-comment">// not run discovery itself.</span>
-<span class="hljs-keyword">using</span> <span class="hljs-keyword">var</span> loggerFactory = SerilogHostExtensions.CreateBootstrapLoggerFactory();
-<span class="hljs-keyword">var</span> moduleHost = builder.AddModuleHost(
-    [<span class="hljs-meta">typeof(ConferenceModule).Assembly</span>],      <span class="hljs-comment">// the module assemblies, named explicitly</span>
-    loggerFactory.CreateLogger&lt;ModuleLoader&gt;());
+          <pre class="doc-pre" tabindex="0" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-comment">// In each ADC and Store service host&#x27;s Program.cs (host-specific options elided). The host names its</span>
+<span class="hljs-comment">// module assemblies and its pipeline steps; MMCA.Common.ServiceHost&#x27;s AddMmcaServiceHost does the rest.</span>
+<span class="hljs-keyword">var</span> host = builder.AddMmcaServiceHost(<span class="hljs-keyword">new</span>()
+{
+    ModuleAssemblies = [<span class="hljs-keyword">typeof</span>(ConferenceModule).Assembly],   <span class="hljs-comment">// the module assemblies, named explicitly</span>
 
-<span class="hljs-comment">// Discovery is a step of the application pipeline, so every module handler lands in the container</span>
-<span class="hljs-comment">// before the decorators close over it.</span>
-services.AddMmcaApplicationPipeline(pipeline =&gt; pipeline
-    .Register(moduleHost.RegisterModules));</code></pre>
+    <span class="hljs-comment">// Discovery is a step of the application pipeline, so every module handler lands in the</span>
+    <span class="hljs-comment">// container before the decorators close over it.</span>
+    ConfigurePipeline = (pipeline, moduleHost) =&gt; pipeline
+        .Register(moduleHost.RegisterModules),
+});
+
+<span class="hljs-comment">// Inside AddMmcaServiceHost: AddModuleHost binds and validates ApplicationSettings and ModulesSettings,</span>
+<span class="hljs-comment">// builds the ModuleLoader (logging through a bootstrap logger factory) and registers it as a</span>
+<span class="hljs-comment">// singleton, deliberately without running discovery. Later, AddMmcaApplicationPipeline hands the</span>
+<span class="hljs-comment">// pipeline builder and that ModuleHostContext to ConfigurePipeline.</span></code></pre>
           <p>A subtlety worth stating because it is easy to assume otherwise: discovery is <strong>not</strong> something
-          <code>AddApplication()</code> does for you, and an ADC or Store service host does not call <code>DiscoverAndRegister</code>
-          by hand either. <code>AddModuleHost</code> captures the configuration, the bound settings, the environment name and
+          <code>AddApplication()</code> does for you, and an ADC or Store service host calls neither <code>AddModuleHost</code> nor
+          <code>DiscoverAndRegister</code> by hand. Both values the host supplies are required options, and
+          <code>AddMmcaServiceHost</code> rejects an empty <code>ModuleAssemblies</code> list before it does anything else. It then
+          calls <code>AddModuleHost</code>, which captures the configuration, the bound settings, the environment name and
           the module assemblies, and hands back a <code>ModuleHostContext</code> whose <code>RegisterModules</code> method is the
           delegate that calls <code>DiscoverAndRegister</code> with those five values plus the <code>IServiceCollection</code> the
-          pipeline passes in. Registering that delegate as a pipeline step is what puts the modules in the right
-          place in the sequence. Helpdesk&#39;s monolith host composes the same step by hand: it builds its own
+          pipeline passes in. The host&#39;s <code>ConfigurePipeline</code> callback registers that delegate as a pipeline step,
+          which is what puts the modules in the right place in the sequence. Helpdesk&#39;s monolith host runs
+          issuer-less, and <code>AddMmcaServiceHost</code> accepts only a forwarded JWT bearer or the token issuer&#39;s own authentication, so it
+          composes the same step by hand: it builds its own
           <code>ModuleLoader</code>, registers it as a singleton, and calls <code>DiscoverAndRegister</code> inside a pipeline
           <code>Register</code> step, so discovery still runs before the decorators. The loader stays a singleton, which is how it also
           drives startup seeding through <code>SeedAllAsync</code> (which invokes each enabled module&#39;s
@@ -312,7 +323,8 @@ services.AddMmcaApplicationPipeline(pipeline =&gt; pipeline
           described earlier, and <code>AddMmcaApplicationPipeline</code> is the call that composes it: it runs
           <code>AddApplication()</code>, then your callback, then <code>AddApplicationDecorators()</code>, and then <strong>seals</strong> the
           collection.</p>
-          <pre class="doc-pre" tabindex="0" data-lang="C#"><code class="language-csharp hljs">services.AddInfrastructure(configuration);    <span class="hljs-comment">// repos, UoW, DbContexts, caching, outbox</span>
+          <pre class="doc-pre" tabindex="0" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-comment">// The order AddMmcaServiceHost runs for a service host (Helpdesk&#x27;s monolith host writes it by hand).</span>
+services.AddInfrastructure(configuration);    <span class="hljs-comment">// repos, UoW, DbContexts, caching, outbox</span>
 services.AddAPI(moduleHost.ModulesSettings);  <span class="hljs-comment">// controllers, idempotency, error mapping</span>
 
 <span class="hljs-comment">// AddApplication() runs first, inside this call; AddApplicationDecorators() runs last, inside it.</span>

@@ -95,7 +95,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 54 articles</summary>
+        <summary>All 57 articles</summary>
         <nav class="doc-nav" aria-label="The MMCA.Common series">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -152,7 +152,10 @@
         <li><a href="durable-internal-commands.html">51 · Four ways to do work later</a></li>
         <li><a href="identity-completions.html">52 · Finishing identity</a></li>
         <li><a href="cloud-neutral-vendor-adapters.html">53 · One framework, three clouds</a></li>
-        <li><a href="series-index.html">54 · The series index</a></li>
+        <li><a href="borrowed-and-machine-identities.html">54 · Borrowed and machine identities</a></li>
+        <li><a href="app-as-mcp-server.html">55 · Your app as an MCP server</a></li>
+        <li><a href="outbound-webhooks.html">56 · Sending webhooks without opening a door</a></li>
+        <li><a href="series-index.html">57 · The series index</a></li>
           </ol>
         </nav>
       </details>
@@ -197,9 +200,11 @@
           <p>How does one class serve four databases? It is <strong>instantiated once per physical database.</strong> Each
           instance carries a different connection string and builds a different EF model that contains only its
           own database&#39;s entities. The piece that stops EF from reusing the first model for all four is
-          <code>DataSourceModelCacheKeyFactory</code>, which keys EF&#39;s internal model cache by (context type, physical
-          source name) rather than by context type alone. Without it, the first model built would silently be
-          reused for every database, which is a quiet and catastrophic bug.</p>
+          <code>DataSourceModelCacheKeyFactory</code>, which keys EF&#39;s internal model cache by the context type plus the
+          physical source name (along with the other inputs that shape a model: the settings-gated tables, the
+          declared strongly typed identifiers, and the design-time flag) rather than by context type alone.
+          Without the source name, the first model built would silently be reused for every database, which is
+          a quiet and catastrophic bug.</p>
           <h3 id="routing-where-does-an-entity-live">Routing: where does an entity live?</h3>
           <p>An entity&#39;s home database is never declared on the entity. It is derived at startup from its EF
           configuration class. Three cooperating pieces do this:</p>
@@ -306,8 +311,9 @@
           drops the named <code>SoftDelete</code> filter only, through one shared array used at all eight call sites, so a
           soft-delete-inclusive repository read still carries the tenant filter. Outside the repository, reads
           sit on discipline where writes sit on an invariant: EF&#39;s own parameterless <code>IgnoreQueryFilters()</code> on a
-          raw <code>Table</code> surface drops the tenant filter along with soft-delete. The framework source has no such
-          call site, but no build gate holds that count at zero.</p>
+          raw <code>Table</code> surface drops the tenant filter along with soft-delete. The framework source has one such
+          call site, the feature-flag override store&#39;s lookup before an upsert, over an entity that is not an
+          <code>ITenantEntity</code>, and no build gate holds that count where it is.</p>
           <p>Database-per-tenant is then the smallest possible extension of everything above. A per-tenant entry
           overrides the connection string for one source and keeps the <strong>same <code>DataSourceKey</code></strong>, so the scoped
           <code>DbContextFactory</code> clones the resolver&#39;s <code>PhysicalDataSource</code> with the override, EF&#39;s model cache key

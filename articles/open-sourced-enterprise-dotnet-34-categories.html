@@ -95,7 +95,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 54 articles</summary>
+        <summary>All 57 articles</summary>
         <nav class="doc-nav" aria-label="The MMCA.Common series">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -152,7 +152,10 @@
         <li><a href="durable-internal-commands.html">51 · Four ways to do work later</a></li>
         <li><a href="identity-completions.html">52 · Finishing identity</a></li>
         <li><a href="cloud-neutral-vendor-adapters.html">53 · One framework, three clouds</a></li>
-        <li><a href="series-index.html">54 · The series index</a></li>
+        <li><a href="borrowed-and-machine-identities.html">54 · Borrowed and machine identities</a></li>
+        <li><a href="app-as-mcp-server.html">55 · Your app as an MCP server</a></li>
+        <li><a href="outbound-webhooks.html">56 · Sending webhooks without opening a door</a></li>
+        <li><a href="series-index.html">57 · The series index</a></li>
           </ol>
         </nav>
       </details>
@@ -162,7 +165,7 @@
           <h1 id="i-open-sourced-the-enterprise-net-plumbing-i-never-want-to-rewrite-and-graded-it-against-34-categories">I open-sourced the enterprise .NET plumbing I never want to rewrite, and graded it against 34 categories</h1>
           <p class="article-meta"><time datetime="2026-06-22T22:41:45Z">June 22, 2026</time> <span aria-hidden="true">·</span> Ivan Ball-llovera <span aria-hidden="true">·</span> <a href="https://medium.com/@ivanball76/i-open-sourced-the-enterprise-net-77f9200f3728" target="_blank" rel="noopener">Also on Medium ↗</a></p>
           <figure class="article-hero"><img src="../assets/img/articles/article-01.webp" srcset="../assets/img/articles/article-01.webp 800w, ../assets/img/articles/article-01-1600.webp 1600w" sizes="(max-width: 900px) 100vw, 900px" alt="" width="800" height="420" decoding="async"></figure>
-          <p class="article-subtitle">A .NET 10 framework for DDD, Clean Architecture, and CQRS, built as a modular monolith
+          <p class="article-subtitle">A .NET 10 and .NET 11 framework for DDD, Clean Architecture, and CQRS, built as a modular monolith
           that extracts to microservices without a rewrite, and scored in the open against a 34-category rubric.</p>
           <hr>
           <p>I have lost count of how many times I have rebuilt the same plumbing.</p>
@@ -173,10 +176,10 @@
           <p>So I did the obvious thing and extracted it once, properly, into a framework I could reuse. Then I did
           the less obvious thing: I open-sourced it under the Apache 2.0 license, and I graded it against a 34-category
           architecture rubric in public, gaps and all.</p>
-          <p>It is called <strong>MMCA.Common</strong> (Modular Monolith Clean Architecture), it targets .NET 10, and this
-          article is the front door to a series that teaches it one pattern at a time.</p>
+          <p>It is called <strong>MMCA.Common</strong> (Modular Monolith Clean Architecture), it targets .NET 10 and .NET 11
+          from one source tree, and this article is the front door to a series that teaches it one pattern at a time.</p>
           <h2 id="what-it-is">What it is</h2>
-          <p>MMCA.Common is a set of <strong>twenty-six NuGet packages</strong> that give you a DDD + Clean Architecture + CQRS
+          <p>MMCA.Common is a set of <strong>thirty NuGet packages</strong> that give you a DDD + Clean Architecture + CQRS
           foundation as a <strong>modular monolith</strong>, plus the extraction boundaries to pull a module out into its own microservice
           later without rewriting application code.</p>
           <p>The packages layer strictly, each one only depending on the layers below it:</p>
@@ -200,19 +203,26 @@ Shared           (Result pattern, errors, DTOs, value objects)</code></pre>
           calls (ADR-120): <code>AI</code> isolates, versions, evaluates, observes, and bounds every call so a second AI
           feature inherits the rules instead of copying them; <code>AI.Anthropic</code> and <code>AI.OpenAI</code> are provider adapters
           that each register one provider factory, so the governed package never names a vendor; and <code>AI.Testing</code>
-          ships the replay harness that pins prompt contracts. <code>Azure</code>, <code>Aws</code>, and <code>Gcp</code> are the cloud vendor
-          adapters (ADR-134): the core packages reference no cloud SDK, and each adapter, built on <code>Infrastructure</code>
-          and <code>Aspire</code>, adds one registration call per vendor capability (file storage, push, secrets and, for AWS and
-          Azure, a broker transport), with <code>Testing.Azure</code> as the matching test-side fixture (<a href="cloud-neutral-vendor-adapters.html">the adapter pattern in
-          full</a>). The twenty-sixth package is <code>MMCA.Common</code> itself:
+          ships the replay harness that pins prompt contracts. <code>Azure</code>, <code>Azure.Startup</code>, <code>Aws</code>, and <code>Gcp</code> are the
+          cloud vendor adapters (ADR-134): the core packages reference no cloud SDK, and each of <code>Azure</code>, <code>Aws</code>, and
+          <code>Gcp</code>, built on <code>Infrastructure</code> and <code>Aspire</code>, adds one registration call per vendor capability (file storage,
+          push, secrets and, for AWS and Azure, a broker transport), while <code>Azure.Startup</code> carries the Azure start-up
+          pieces (Key Vault configuration, the Azure Monitor exporter, the DataProtection key ring) with no persistence
+          or messaging dependency, and <code>Testing.Azure</code> is the matching test-side fixture (<a href="cloud-neutral-vendor-adapters.html">the adapter pattern in
+          full</a>).</p>
+          <p>Three more opt-in packages build on top of the stack rather than inside it: <code>Passkeys</code> adds WebAuthn
+          sign-in and a second factor on <code>Application</code> (ADR-139), <code>Mcp</code> serves a Model Context Protocol endpoint over
+          a host&#39;s read-only tools on <code>API</code> (ADR-138), and <code>ServiceHost</code> is the composed, cloud-neutral service-host
+          start-up over <code>API</code>, <code>Aspire</code>, and <code>Grpc</code>. The thirtieth package is <code>MMCA.Common</code> itself:
           a metapackage that ships no assembly, one <code>PackageReference</code> in place of the six a standard application
           host always takes (ADR-101).</p>
           <p>Adding it to a solution you already have is one line, and each package transitively pulls the layers
           beneath it:</p>
           <pre class="doc-pre" tabindex="0" data-lang="PowerShell"><code class="language-powershell hljs">dotnet add package MMCA.Common.API</code></pre>
           <p><code>API</code> brings <code>Infrastructure</code>, which brings <code>Application</code>, <code>Domain</code>, and <code>Shared</code>. The other packages
-          (<code>Grpc</code>, <code>UI</code>, <code>UI.Web</code>, <code>UI.Maui</code>, <code>Aspire</code>, <code>Aspire.Hosting</code>, <code>Gateway</code>, the four <code>AI</code> packages, the
-          <code>Azure</code>, <code>Aws</code>, and <code>Gcp</code> adapters, and six <code>Testing.*</code> packages) are opt-in for the surface you need.</p>
+          (<code>Grpc</code>, <code>UI</code>, <code>UI.Web</code>, <code>UI.Maui</code>, <code>Aspire</code>, <code>Aspire.Hosting</code>, <code>Gateway</code>, <code>Passkeys</code>, <code>Mcp</code>,
+          <code>ServiceHost</code>, the four <code>AI</code> packages, the <code>Azure</code>, <code>Azure.Startup</code>, <code>Aws</code>, and <code>Gcp</code> adapters, and six
+          <code>Testing.*</code> packages) are opt-in for the surface you need.</p>
           <p>Starting from nothing is a different command, because a package reference is not an application. A
           solution on this framework is twelve projects and roughly 9,000 lines of C# and Razor before any business
           logic, so the framework ships a <code>dotnet new</code> pack that writes all of it:</p>
@@ -236,7 +246,7 @@ dotnet new mmca<span class="hljs-literal">-app</span> <span class="hljs-literal"
           </ol>
           <p>Those fitness functions do not live as copy-pasted test code in each repo. They live once, in a
           shipped package, <code>MMCA.Common.Testing.Architecture</code>, which exposes a reusable rule library and abstract
-          test bases (<strong>160 test methods across 64 base classes</strong>). MMCA.Common&#39;s own build executes 479 fitness
+          test bases (<strong>186 test methods across 74 base classes</strong>). MMCA.Common&#39;s own build executes 767 fitness
           tests built on them. MMCA.ADC and MMCA.Store subclass the same bases and supply their own architecture
           map, and so does MMCA.Helpdesk, the reference app the templates are staged from, so the rules are
           literally identical in every codebase that runs them.</p>
@@ -249,9 +259,10 @@ dotnet new mmca<span class="hljs-literal">-app</span> <span class="hljs-literal"
           <li><strong>Database-per-service</strong>, even inside the monolith. Every entity resolves to a physical data source;
           a host with no extra configuration behaves exactly like a single-database monolith, and the same code
           runs against per-service databases once you split them (ADR-006).</li>
-          <li>A transport-agnostic <strong><code>IMessageBus</code></strong>. The same code dispatches events <strong>in-process</strong> today
-          (<code>InProcessMessageBus</code>) and over a <strong>broker</strong> the day a module becomes its own service
-          (<code>BrokerMessageBus</code>). Application, Domain, and Shared are forbidden from referencing the broker
+          <li>A transport-agnostic <strong><code>IMessageBus</code></strong>, selected by configuration. The outbox drains integration
+          events through it <strong>in-process</strong> today (<code>InProcessMessageBus</code>) and over a <strong>broker</strong> the day a module
+          becomes its own service (<code>BrokerMessageBus</code>), while application code publishes through <code>IEventBus</code> and
+          never names the transport. Application, Domain, and Shared are forbidden from referencing the broker
           library directly, and a fitness test enforces it.</li>
           <li>A transactional <strong>outbox</strong> so that split never loses an event (its own deep-dive later in the series).</li>
           <li><strong>gRPC contracts</strong>, <strong>JWKS cross-service auth</strong>, and <strong>Aspire hosting</strong> extensions for the extracted
@@ -264,14 +275,14 @@ dotnet new mmca<span class="hljs-literal">-app</span> <span class="hljs-literal"
           <p>I graded MMCA.Common against a 34-category architecture rubric (backend, front-end, and
           operational/governance categories), scoring each category on two axes: <strong>Maturity</strong> (how well-governed
           the process is) and <strong>Implementation</strong> (how much substance is actually executed). It sits at a
-          <strong>maturity index of 97.3% and an implementation index of 85.4%</strong> across all 34 categories
+          <strong>maturity index of 97.3% and an implementation index of 85.1%</strong> across all 34 categories
           (internationalization ships in the framework as en-US plus Spanish under ADR-027, which supersedes the
           single-locale ADR-011, so it scores on both axes like every other category; nothing is excluded as
           N/A). Then I published the full evaluation on the framework&#39;s documentation site, with every category&#39;s
           two scores, the evidence, and the honest gaps.</p>
           <p>The rubric itself is versioned. Version 2 (ADR-110) keeps all 34 categories and scores category 10 as
           <strong>Messaging &amp; Integration Architecture</strong> (Maturity 4 / Implementation 8) and category 16 as <strong>AI-Native
-          Application Architecture</strong> (Maturity 4 / Implementation 9), which is where the governed language-model
+          Application Architecture</strong> (Maturity 4 / Implementation 8), which is where the governed language-model
           boundary is graded.</p>
           <p>The pattern in the scores is the same line from earlier: <strong>every category that earned top marks was
           backed by a fitness function or a compile-time guard. Every category capped lower either has its real
@@ -280,11 +291,12 @@ dotnet new mmca<span class="hljs-literal">-app</span> <span class="hljs-literal"
           Implementation 9, and all of them are enforced automatically. SOLID sits lower, at Maturity 3 /
           Implementation 8, for exactly that reason: the principles are applied throughout, and SRP, DIP and the
           throw half of LSP are enforced automatically, but OCP and ISP have no automated gate. Its Implementation
-          8 is held by named code gaps (a base context that resolves about thirteen collaborators through
+          8 is held by named code gaps (a base context that resolves about nineteen collaborators through
           <code>GetService</code>, one SQL Server-named unique-violation detector serving every engine, a few very large
-          classes). Messaging holds at Implementation 8 the same way: RabbitMQ delayed redelivery is opt-in, the
-          live-broker CI tiers (the built-in PostgreSql transport, and SQS/SNS against LocalStack) are not
-          required checks, and no CI job runs a live RabbitMQ or Azure Service Bus broker.</p>
+          classes). Messaging holds at Implementation 8 the same way: the shared receive pipeline dead-letters a
+          poison message but never replays it, and no shipped alert watches its fault counter; the live-broker CI
+          tiers (PostgreSql, RabbitMQ, SQS/SNS against LocalStack, and Azure Service Bus against its emulator) are
+          not required checks; and a framework saga orchestrator stays a documented deferral (ADR-086).</p>
           <p>Implementation is the weaker axis on purpose. A framework ships mature, well-governed mechanisms whose
           full execution often completes in the apps that consume it. Deployment and resilience recovery both
           stop at Implementation 8 precisely because the substance they reward (a real deploy, production
@@ -300,9 +312,9 @@ dotnet new mmca<span class="hljs-literal">-app</span> <span class="hljs-literal"
           <li><strong>MMCA.Store</strong>, an e-commerce app with Catalog, Sales, and Identity modules and Stripe integration.</li>
           </ul>
           <p>Both run on the same framework version, swept in lockstep when the framework releases. The test suite
-          is more than <strong>9,000 fast tests</strong> in a correct pyramid with no Docker or database dependency, held above
-          a 2,000-test zero-discovery floor by CI, so the inner loop stays quick and a filter regression that
-          silently drops tests fails the build.</p>
+          is more than <strong>12,000 fast tests</strong> per target framework in a correct pyramid with no Docker or database
+          dependency, held above an 11,250-test zero-discovery floor on each framework leg by CI, so the inner
+          loop stays quick and a filter regression that silently drops tests fails the build.</p>
           <h2 id="what-this-series-will-cover">What this series will cover</h2>
           <p>Over the coming weeks I will take one pattern per article and go deep:</p>
           <ul>

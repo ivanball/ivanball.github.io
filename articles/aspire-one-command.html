@@ -95,7 +95,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 54 articles</summary>
+        <summary>All 57 articles</summary>
         <nav class="doc-nav" aria-label="The MMCA.Common series">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -152,7 +152,10 @@
         <li><a href="durable-internal-commands.html">51 · Four ways to do work later</a></li>
         <li><a href="identity-completions.html">52 · Finishing identity</a></li>
         <li><a href="cloud-neutral-vendor-adapters.html">53 · One framework, three clouds</a></li>
-        <li><a href="series-index.html">54 · The series index</a></li>
+        <li><a href="borrowed-and-machine-identities.html">54 · Borrowed and machine identities</a></li>
+        <li><a href="app-as-mcp-server.html">55 · Your app as an MCP server</a></li>
+        <li><a href="outbound-webhooks.html">56 · Sending webhooks without opening a door</a></li>
+        <li><a href="series-index.html">57 · The series index</a></li>
           </ol>
         </nav>
       </details>
@@ -180,7 +183,8 @@
           <h2 id="prerequisites">Prerequisites</h2>
           <p>You need a few things in place before the first run:</p>
           <ul>
-          <li><strong>.NET 10 SDK</strong> (the framework targets .NET 10.0 with C# <code>preview</code> language features).</li>
+          <li><strong>.NET 11 SDK</strong> (<code>global.json</code> pins 11.0.100). The framework libraries multi-target <code>net10.0</code> and
+          <code>net11.0</code> with C# 15.0; ADC runs on <code>net11.0</code>, and Store stays on <code>net10.0</code>.</li>
           <li><strong>Docker</strong> (or a compatible container runtime) running locally. Aspire provisions SQL Server, Redis,
           RabbitMQ, and a mail interceptor as containers.</li>
           <li>An app that consumes MMCA.Common. You can scaffold one in a command
@@ -233,8 +237,9 @@ app.MapDefaultEndpoints();      <span class="hljs-comment">// health + liveness 
           <li><strong>OpenTelemetry</strong> for logging, metrics, and tracing. Logs include the formatted message and scopes;
           metrics cover ASP.NET Core, <code>HttpClient</code>, and the .NET runtime unless a host turns those cost knobs
           off (Step 6); tracing instruments ASP.NET Core and <code>HttpClient</code> and subscribes
-          four activity sources: the application&#39;s own, <code>MMCA.Common.Outbox</code>,
-          <code>MMCA.Common.InternalCommands</code>, and <code>MMCA.Common.AI</code>. It also registers ten MMCA-specific meters
+          five activity sources: the application&#39;s own, <code>MMCA.Common.Outbox</code>, <code>MMCA.Common.Messaging</code> (the
+          broker transport), <code>MMCA.Common.InternalCommands</code>, and <code>MMCA.Common.AI</code>. It also registers eleven
+          MMCA-specific meters
           by literal name: <code>MMCA.Common.Outbox</code> (a dead-letter counter, a processed counter, a dispatch-lag
           histogram, a pending-depth gauge, and an oldest-pending-age gauge), <code>MMCA.Common.Cqrs</code> (RED
           histograms for command and query handlers, query cache hit and miss counters, and the
@@ -246,15 +251,18 @@ app.MapDefaultEndpoints();      <span class="hljs-comment">// health + liveness 
           eviction consumer&#39;s failed tag evictions), <code>MMCA.Common.BestEffort</code> (the swallowed failures of
           best-effort side effects), <code>MMCA.Common.InternalCommands</code> (the durable internal-command runner),
           <code>MMCA.Common.Persistence</code> (the optimistic-concurrency conflict counter, tagged by entity type),
-          and <code>MMCA.Common.AI</code> (the optional AI package&#39;s token spend and call duration, inert until a host
+          <code>MMCA.Common.Auth</code> (password sign-in outcomes), and <code>MMCA.Common.AI</code> (the optional AI package&#39;s token spend and call duration, inert until a host
           adds that package and enables <code>Ai:Enabled</code>). Polly&#39;s own <code>Polly</code> meter is subscribed alongside
           them, so retries, timeouts, and circuit transitions leave the process instead of looking like
           plain latency from the outside.</li>
           <li><strong>Service discovery</strong>, so a service resolves a peer by name (<a href="http://identity" target="_blank" rel="noopener">http://identity</a>,
           <a href="http://conference" target="_blank" rel="noopener">http://conference</a>) rather than a hardcoded address.</li>
           <li><strong>Polly resilience handlers on every <code>HttpClient</code></strong>: a <strong>30 second per-attempt timeout</strong>, a
-          <strong>60 second circuit-breaker sampling window</strong>, and a <strong>90 second total-request timeout</strong>. Every
-          outbound call rides this pipeline by default (this is the runtime side of ADR-009).</li>
+          <strong>60 second circuit-breaker sampling window</strong>, a <strong>90 second total-request timeout</strong>, and one retry
+          per hop that never replays a POST or PATCH. Every typed and named <code>HttpClient</code> rides this pipeline
+          by default (this is the runtime side of ADR-009). Two paths differ: the YARP forwarder builds its
+          clients through its own factory and stays outside it, and the gRPC typed clients keep the one-retry
+          budget but use their own, tighter timeouts (8 seconds per attempt, 20 seconds total).</li>
           </ol>
           <p>It also installs a <code>SocketsHttpHandler</code> tuned for Azure Container Apps and a startup warm-up gate (the
           gate is covered in Step 3, the handler in Step 7). The point of Step 2 is simply this: the moment a
@@ -286,40 +294,53 @@ app.MapDefaultEndpoints();      <span class="hljs-comment">// health + liveness 
           <h2 id="step-4-see-how-the-apphost-wires-the-distributed-app">Step 4: see how the AppHost wires the distributed app</h2>
           <p>The AppHost <code>Program.cs</code> does not start anything immediately. It builds a <em>resource model</em>: a graph of
           containers, databases, services, the gateway, and the UI, with their dependency edges. The cross-cutting
-          wiring vocabulary lives in <code>MMCA.Common.Aspire.Hosting</code> as sixteen fluent helpers (seventeen methods,
-          because <code>WithBroker</code> has one overload per broker resource). Here is the shape of a service declaration
-          (representative, condensed from ADC&#39;s AppHost):</p>
+          wiring vocabulary lives in <code>MMCA.Common.Aspire.Hosting</code> as twenty-six fluent helpers (twenty-seven
+          methods, because <code>WithBroker</code> has one overload per broker resource). Here is the shape of a service
+          declaration (representative, condensed from ADC&#39;s AppHost):</p>
           <pre class="doc-pre" tabindex="0" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-comment">// Representative: the broker is chosen once, then every service host attaches it</span>
 <span class="hljs-keyword">var</span> withBroker = builder.AddSelectedBroker(<span class="hljs-string">&quot;ADC_BROKER&quot;</span>, sqlServer);   <span class="hljs-comment">// RabbitMQ unless ADC_BROKER=servicebus</span>
 
-builder.AddProject&lt;Projects.MMCA_ADC_Conference_Service&gt;(<span class="hljs-string">&quot;conference&quot;</span>, launchProfileName: <span class="hljs-string">&quot;https&quot;</span>)
-    .WithSQLServerDataSource(conferenceDb, <span class="hljs-string">&quot;Conference&quot;</span>)   <span class="hljs-comment">// per-service database (ADR-006)</span>
-    .WithReference(redis)                          <span class="hljs-comment">// distributed cache</span>
-    .WithSelectedBroker(withBroker)                <span class="hljs-comment">// WithBroker on the selected broker resource</span>
-    .WaitFor(redis)
-    .WaitFor(mailDev)
-    .WithH2cHealthCheck()                          <span class="hljs-comment">// liveness over the HTTP/2 cleartext endpoint</span>
-    .WithExternalHttpEndpoints();</code></pre>
+<span class="hljs-keyword">var</span> conferenceService = builder.AddDotnetProject(
+        <span class="hljs-string">&quot;conference&quot;</span>,
+        <span class="hljs-string">&quot;../../Services/MMCA.ADC.Conference.Service/MMCA.ADC.Conference.Service.csproj&quot;</span>,
+        options =&gt; options.LaunchProfileName = <span class="hljs-string">&quot;https&quot;</span>)
+    .WithMmcaServiceInfrastructure(
+        conferenceDb, <span class="hljs-string">&quot;Conference&quot;</span>,                <span class="hljs-comment">// per-service database (ADR-006)</span>
+        redis, mailDev,                            <span class="hljs-comment">// distributed cache and mail interceptor</span>
+        withBroker,                                <span class="hljs-comment">// WithBroker on the selected broker resource</span>
+        ServiceEndpointProfile.Http2Only);         <span class="hljs-comment">// liveness over the HTTP/2 cleartext endpoint</span></code></pre>
           <p>What each framework helper does:</p>
           <ul>
-          <li><strong><code>AddMessageBroker()</code></strong> wraps <code>builder.AddRabbitMQ(name).WithManagementPlugin()</code>. One call provisions
+          <li><p><strong><code>WithMmcaServiceInfrastructure(...)</code></strong> is the chain every service shares, in one call and one
+          order: <code>WithSQLServerDataSource</code> for its own database, <code>WithReference</code> on the cache,
+          <code>WithSelectedBroker</code> for the broker, <code>WaitFor</code> on the cache and the mail server, then the liveness probe
+          the endpoint profile selects (<code>WithH2cHealthCheck</code> for an HTTP/2-only service, the stock HTTP probe for
+          a mixed one). It marks no endpoint external, because a backend service is reached through the gateway:
+          only the gateway and UI helpers (<code>WithMmcaGateway</code>, <code>WithMmcaUi</code>) expose endpoints. It references the
+          cache, the database and the broker and never another project, so the AppHost&#39;s project-to-project
+          edges are exactly the ones it declares itself (Step 5).</p>
+          </li>
+          <li><p><strong><code>AddMessageBroker()</code></strong> wraps <code>builder.AddRabbitMQ(name).WithManagementPlugin()</code>. One call provisions
           the broker container with its admin UI. <code>AddServiceBusEmulatorBroker()</code> is its peer for the official
           Azure Service Bus emulator, so the local topology can stand up either transport. In production the
-          same projects point at Azure Service Bus by config alone, with no AppHost change.</li>
-          <li><strong><code>WithBroker(rabbit)</code></strong> chains <code>.WithReference(broker).WaitFor(broker)</code> and sets
+          same projects point at Azure Service Bus by config alone, with no AppHost change.</p>
+          </li>
+          <li><p><strong><code>WithBroker(rabbit)</code></strong> chains <code>.WithReference(broker).WaitFor(broker)</code> and sets
           <code>MessageBus__Provider=RabbitMq</code>. That environment variable is what the service&#39;s <code>AddBrokerMessaging</code>
           reads to select the RabbitMQ transport over the in-process bus. When the variable is absent (for
           example in integration tests), messaging short-circuits to in-process, so tests need no real broker.
           The Service Bus emulator overload is the same shape one resource type over: it sets
-          <code>MessageBus__Provider=AzureServiceBus</code> plus the emulator&#39;s connection string and admin endpoint.</li>
-          <li><strong><code>AddSelectedBroker(&quot;ADC_BROKER&quot;, sqlServer)</code></strong> makes the broker choice once. When the named
+          <code>MessageBus__Provider=AzureServiceBus</code> plus the emulator&#39;s connection string and admin endpoint.</p>
+          </li>
+          <li><p><strong><code>AddSelectedBroker(&quot;ADC_BROKER&quot;, sqlServer)</code></strong> makes the broker choice once. When the named
           environment variable reads <code>servicebus</code> (case-insensitive) it provisions the emulator through
           <code>AddServiceBusEmulatorBroker(sqlServer)</code>; otherwise it provisions RabbitMQ through <code>AddMessageBroker()</code>
           with a persistent container lifetime. It returns an attach delegate, and <strong><code>WithSelectedBroker(withBroker)</code></strong>
           applies it to each service. The two <code>WithBroker</code> overloads take different resource types, so the choice
           cannot be one variable handed to one call; the delegate keeps every service chain reading the same single
-          line, so a new service cannot quietly be wired to the other broker.</li>
-          <li><strong><code>WithSQLServerDataSource(db, &quot;Conference&quot;)</code></strong> is the AppHost face of database-per-service (ADR-006).
+          line, so a new service cannot quietly be wired to the other broker.</p>
+          </li>
+          <li><p><strong><code>WithSQLServerDataSource(db, &quot;Conference&quot;)</code></strong> is the AppHost face of database-per-service (ADR-006).
           (The package also ships <code>WithPostgreSQLDataSource</code>, <code>WithCosmosDataSource</code>, and
           <code>WithSqliteDataSource</code> for the polyglot engines in ADR-018.) In one
           chain it references the database, waits for it to be healthy, and injects the multi-source routing
@@ -328,12 +349,14 @@ builder.AddProject&lt;Projects.MMCA_ADC_Conference_Service&gt;(<span class="hljs
           with no top-level connection string, the single database a host declares this way also becomes its
           <code>Default</code> source, so the framework&#39;s own tables and the readiness health check land on it too, and
           each service runs as a clean single-database monolith with one change tracker and one migration set,
-          while still owning its own <code>OutboxMessages</code> table.</li>
-          <li><strong><code>WithH2cHealthCheck()</code></strong> gives the AppHost its own health check on a service: a GET to a probe path
+          while still owning its own <code>OutboxMessages</code> table.</p>
+          </li>
+          <li><p><strong><code>WithH2cHealthCheck()</code></strong> gives the AppHost its own health check on a service: a GET to a probe path
           over the service&#39;s HTTP/2 cleartext endpoint, so a resource that waits on that service waits for a
           verified answer. An endpoint name the resource never declares is not an error at wiring time; it
           surfaces as a permanently unhealthy check, which keeps dependents waiting instead of letting them
-          start against a service nobody verified.</li>
+          start against a service nobody verified.</p>
+          </li>
           </ul>
           <h2 id="step-5-wire-the-extraction-points-grpc-and-jwks">Step 5: wire the extraction points (gRPC and JWKS)</h2>
           <p>The same AppHost wires the extraction boundaries that make the modular monolith behave like real microservices: typed
@@ -393,12 +416,14 @@ conferenceService.WithJwksDiscovery(identityService, gateway);</code></pre>
           that by environment, not by code. <code>AddServiceDefaults()</code> enables the OTLP exporter when
           <code>OTEL_EXPORTER_OTLP_ENDPOINT</code> is set, which is exactly the variable the Aspire dashboard injects into
           every process, so the dashboard on your laptop lights up with no configuration. OTLP is the one built-in,
-          vendor-neutral exporter (<code>Extensions.Telemetry.cs:152-172</code>). A vendor exporter is an adapter package&#39;s
-          single call made after <code>AddServiceDefaults()</code>: <code>AddAzureMonitorExporter()</code> from <code>MMCA.Common.Azure</code>
-          enables Azure Monitor (through <code>UseAzureMonitor</code>) when <code>APPLICATIONINSIGHTS_CONNECTION_STRING</code> is set,
-          which the cloud deployment supplies, so production ships to workspace-based Application Insights
-          (<code>AzureMonitorExporterExtensions.cs:42</code>, <code>:63</code>), and it refuses to run ahead of the service defaults,
-          whose filter processors must sit before its batch processor (<code>:51</code>). Both exporters can run at once, each
+          vendor-neutral exporter (<code>Extensions.Telemetry.cs:153-173</code>). A vendor exporter is an adapter package&#39;s
+          single call made after <code>AddServiceDefaults()</code>: <code>AddAzureMonitorExporter()</code> from the
+          <code>MMCA.Common.Azure.Startup</code> adapter (namespace <code>MMCA.Common.Azure</code>, also reachable through
+          <code>MMCA.Common.Azure</code>, which references it) enables Azure Monitor (through <code>UseAzureMonitor</code>) when
+          <code>APPLICATIONINSIGHTS_CONNECTION_STRING</code> is set, which the cloud deployment supplies, so production ships
+          to workspace-based Application Insights (<code>AzureMonitorExporterExtensions.cs:42</code>, <code>:65</code>), and it refuses
+          to run ahead of the service defaults, whose filter processors must sit before its batch processor
+          (<code>:50-51</code>). Both exporters can run at once, each
           shipping its own copy, so the same pipeline feeds the local dashboard and the cloud with no code change
           between them (<a href="cloud-neutral-vendor-adapters.html">how the adapters work</a>).</p>
           <p>A dashboard is only as readable as the trail through it, and one id ties that trail together.
@@ -450,19 +475,25 @@ conferenceService.WithJwksDiscovery(identityService, gateway);</code></pre>
     .ValidateOnStart();</code></pre>
           <p><code>ValidateOnStart()</code> is the load-bearing link. <code>ValidateDataAnnotations()</code> on its own defers evaluation to
           the first resolution, which for a section only a background service reads can be minutes after the replica
-          started taking traffic; pairing the two converts &quot;configured wrong&quot; into &quot;did not start&quot;. Thirty-two
-          framework sections bind with both links: the nineteen Infrastructure sections (connection strings, SMTP,
-          persistence, outbox, login protection, password reset, refresh sessions, message bus, JWKS, tenancy, cache,
-          query-cache pipeline, scheduler, audit trail, internal commands, two-factor, email confirmation, permission
-          grants, push notifications), plus idempotency, JWT, API rate limiting, the UI&#39;s API settings, UI rate
-          limiting, the Blazor circuit limit, the health-report cache, the host-edge security headers, the gateway
-          settings, gateway rate limiting, the gRPC service-token settings, and the optional AI package&#39;s settings
-          and content policy, including the
+          started taking traffic; pairing the two converts &quot;configured wrong&quot; into &quot;did not start&quot;. Thirty-five
+          framework sections bind with both links: the twenty-three Infrastructure sections (connection strings,
+          SMTP, persistence, outbox, login protection, password reset, refresh sessions, view-as, message bus, JWKS,
+          tenancy, cache, query-cache pipeline, feature-flag overrides, scheduler, audit trail, internal commands,
+          two-factor, email confirmation, sign-in links, permission grants, push notifications, outbound webhooks),
+          plus idempotency, JWT, API rate limiting, UI rate limiting, the Blazor circuit limit, the health-report
+          cache, the host-edge security headers, the gateway settings, gateway rate limiting, the gRPC service-token
+          settings, and the optional AI package&#39;s settings and content policy, including the
           ones behind opt-in features. Two of them, UI rate limiting and the Blazor circuit limit, bind through
           <code>BindConfiguration(...)</code> instead of <code>Bind(GetSection(...))</code>, and the security headers attach the
-          validation chain first and bind their section only when the host passes its configuration. Two Blazor-host sections, the CSP settings and the same-origin API proxy settings,
-          call <code>ValidateOnStart()</code> without <code>ValidateDataAnnotations()</code> (the proxy section also runs a <code>PostConfigure</code>
-          that fills its gateway address from the API settings).
+          validation chain first and bind their section only when the host passes its configuration. Six more
+          sections call <code>ValidateOnStart()</code> without <code>ValidateDataAnnotations()</code> and validate another way: the UI&#39;s
+          API settings, whose annotations a source-generated <code>ApiSettingsValidator</code> checks so a WebAssembly client
+          needs no reflection; the machine-client and passkey settings, each with its own <code>IValidateOptions&lt;T&gt;</code>
+          validator; the MCP endpoint&#39;s settings, with an inline <code>Validate</code> rule; and two Blazor-host sections, the
+          CSP settings and the same-origin API proxy settings (the proxy section also runs a <code>PostConfigure</code> that
+          fills its gateway address from the API settings). The webhook delivery registration adds one more
+          startup check on the already validated webhook settings, which fails, naming <code>AddWebhooks(configuration)</code>,
+          when the host registered no subscription store.
           The two sections every host needs, <code>ApplicationSettings</code> and <code>ModulesSettings</code>, bind on the identical chain
           inside the framework&#39;s module-host wiring, so a consuming app inherits them instead of repeating them and
           adds only its module-level sections, such as Store&#39;s Stripe configuration.</p>
@@ -480,9 +511,9 @@ conferenceService.WithJwksDiscovery(identityService, gateway);</code></pre>
           in front of the host that actually uses it, and the call site says so. <code>LegalAcceptanceOptions</code> binds with
           no validation at all, because its one setting has no invalid value (any version string turns the feature on,
           null or whitespace turns it off), which its call site also states. A set of optional sections binds without
-          the validation chain: native push, file storage, the cache-key prefix, and the UI&#39;s layout, legal-link,
-          registration, read-cache and notification-bell options (where the call sites note that an absent section
-          leaves the defaults). The hybrid cache options have no section of their own: they are configured from the
+          the validation chain: the cache-key prefix, the UI&#39;s layout, legal-link, registration, sign-in and
+          notification-bell options (where the call sites note that an absent section leaves the defaults), and the
+          vendor adapters&#39; own settings, such as Azure Blob file storage and Azure Notification Hubs push. The hybrid cache options have no section of their own: they are configured from the
           validated cache settings.</p>
           <h2 id="trade-offs-and-gotchas-honestly">Trade-offs and gotchas, honestly</h2>
           <p>A single-command stack is a force multiplier, but it has edges worth naming:</p>
@@ -491,8 +522,9 @@ conferenceService.WithJwksDiscovery(identityService, gateway);</code></pre>
           And the AppHost launched headless can stall at control-plane init; run it in a real terminal.</li>
           <li><strong>Local broker is RabbitMQ by default; production is Azure Service Bus.</strong> The transport switch is
           entirely environment-driven (<code>MessageBus__Provider</code>), so no code path changes, but they are not the
-          same product. Basic-tier Service Bus also lacks the topics MassTransit needs, so the production tier
-          is Standard. ADC narrows the gap on demand: with <code>ADC_BROKER=servicebus</code>, the framework&#39;s
+          same product. Basic-tier Service Bus supports only queues, while the framework&#39;s transport publishes
+          each event on its own topic and binds each consuming host to it through a subscription that forwards
+          into the host&#39;s queue, so the production tier is Standard. ADC narrows the gap on demand: with <code>ADC_BROKER=servicebus</code>, the framework&#39;s
           <code>AddSelectedBroker</code> swaps the official Azure Service Bus emulator in locally through
           <code>AddServiceBusEmulatorBroker</code>. That costs a second container and a
           warm-up, which is why the everyday inner loop still runs on RabbitMQ.</li>
@@ -503,10 +535,10 @@ conferenceService.WithJwksDiscovery(identityService, gateway);</code></pre>
           so you are not re-seeding on every restart. That is a feature, but it also means stale local data can
           outlive a schema change; reset the container when a migration changes shape.</li>
           <li><strong>Telemetry meters are registered by literal name.</strong> Because the Aspire package has no project
-          reference to the assemblies that define <code>MMCA.Common.Outbox</code>, <code>MMCA.Common.Cqrs</code>,
-          <code>MMCA.Common.Idempotency</code>, <code>MMCA.Common.Scheduler</code>, <code>MMCA.Common.Broker</code>, <code>MMCA.Common.OutputCache</code>,
-          <code>MMCA.Common.BestEffort</code>, <code>MMCA.Common.InternalCommands</code>, <code>MMCA.Common.Persistence</code>, and
-          <code>MMCA.Common.AI</code> (nor to Polly&#39;s own
+          reference to the assemblies that define <code>MMCA.Common.Outbox</code>, <code>MMCA.Common.Messaging</code>,
+          <code>MMCA.Common.Cqrs</code>, <code>MMCA.Common.Idempotency</code>, <code>MMCA.Common.Scheduler</code>, <code>MMCA.Common.Broker</code>,
+          <code>MMCA.Common.OutputCache</code>, <code>MMCA.Common.BestEffort</code>, <code>MMCA.Common.InternalCommands</code>,
+          <code>MMCA.Common.Persistence</code>, <code>MMCA.Common.Auth</code>, and <code>MMCA.Common.AI</code> (nor to Polly&#39;s own
           assemblies for the <code>Polly</code> meter), those source and meter names are duplicated string literals.
           Rename a source in one place and you must rename it in the other; the code comments flag this.</li>
           <li><strong>Nothing gates the fail-fast chain.</strong> No fitness test asserts that a new <code>AddOptions&lt;T&gt;</code> call carries

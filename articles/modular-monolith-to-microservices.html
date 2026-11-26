@@ -95,7 +95,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 54 articles</summary>
+        <summary>All 57 articles</summary>
         <nav class="doc-nav" aria-label="The MMCA.Common series">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -152,7 +152,10 @@
         <li><a href="durable-internal-commands.html">51 · Four ways to do work later</a></li>
         <li><a href="identity-completions.html">52 · Finishing identity</a></li>
         <li><a href="cloud-neutral-vendor-adapters.html">53 · One framework, three clouds</a></li>
-        <li><a href="series-index.html">54 · The series index</a></li>
+        <li><a href="borrowed-and-machine-identities.html">54 · Borrowed and machine identities</a></li>
+        <li><a href="app-as-mcp-server.html">55 · Your app as an MCP server</a></li>
+        <li><a href="outbound-webhooks.html">56 · Sending webhooks without opening a door</a></li>
+        <li><a href="series-index.html">57 · The series index</a></li>
           </ol>
         </nav>
       </details>
@@ -202,20 +205,25 @@
           of its own article; the point here is that the data boundary exists from day one and costs nothing
           until you use it.</p>
           <h3 id="2-a-transport-agnostic-message-bus">2. A transport-agnostic message bus</h3>
-          <p>The second leak is event delivery. There is one abstraction, <code>IMessageBus</code>, defined in the
-          Application layer, with two implementations in Infrastructure: <code>InProcessMessageBus</code> (delivery is a
-          method call, used in the monolith) and <code>BrokerMessageBus</code> (delivery is over a MassTransit broker,
-          used once a module is its own service). <code>MessageBusSettings.Provider</code>, a plain string, selects the
-          mode: <code>InProcess</code>, <code>RabbitMq</code> and <code>PostgreSql</code> are built in, and any other value names a broker
-          transport an adapter package registers (<code>AzureServiceBus</code> from <code>MMCA.Common.Azure</code>, <code>AmazonSqs</code> from
-          <code>MMCA.Common.Aws</code>; the adapter pattern has <a href="cloud-neutral-vendor-adapters.html">its own article</a>).
+          <p>The second leak is event delivery. Application code publishes an integration event through
+          <code>IEventBus</code> and never touches the transport. Beneath it sits one transport abstraction, <code>IMessageBus</code>,
+          defined in the Application layer, with two implementations in Infrastructure: <code>InProcessMessageBus</code>
+          (delivery is a method call, used in the monolith) and <code>BrokerMessageBus</code> (delivery goes through the
+          selected broker transport&#39;s <code>IBrokerPublisher</code>, used once a module is its own service). The broker
+          transports are framework code, not a third-party bus library. <code>MessageBusSettings.Provider</code>, a plain
+          string, selects the mode: <code>InProcess</code>, <code>RabbitMq</code> and <code>PostgreSql</code> are built in, and any other value
+          names a broker transport an adapter package registers (<code>AzureServiceBus</code> from <code>MMCA.Common.Azure</code>,
+          <code>AmazonSqs</code> from <code>MMCA.Common.Aws</code>; the adapter pattern has <a href="cloud-neutral-vendor-adapters.html">its own article</a>).
           ADC runs RabbitMQ locally and Azure Service Bus in production. Your handler code does not change when
           you flip it.</p>
-          <p>The rule that keeps this honest is that <strong>Application, Domain, and Shared must never reference
-          MassTransit directly.</strong> That is not a code-review comment. It is a fitness test,
-          <code>MicroserviceExtractionTests</code>, that fails the build if a transport type leaks into the core. The
-          transactional outbox (its own article in this series) is what makes the flip safe: the same durable
-          event record drains to an in-process handler today and to a broker tomorrow.</p>
+          <p>The rule that keeps this honest is that <strong>Application, Domain, and Shared never reference a broker
+          client or the gRPC runtime directly.</strong> That is not a code-review comment. It is a fitness test,
+          <code>MicroserviceExtractionTests</code>, that fails the build if a transport type (RabbitMQ, Azure Service Bus,
+          Amazon SQS or SNS, gRPC, protobuf, or the banned MassTransit) leaks into the core. The transactional
+          outbox (its own article in this series) is what makes the flip safe. Under a broker it is always on:
+          each integration event is written in the same transaction as the aggregate change and drained to the
+          broker. A monolith on <code>InProcess</code> dispatches synchronously by default and gets the same durable
+          record, and at-least-once delivery across a crash, by setting <code>MessageBus:EnableOutbox=true</code>.</p>
           <h3 id="3-grpc-contracts-for-synchronous-calls-adr-007">3. gRPC contracts for synchronous calls (ADR-007)</h3>
           <p>The third leak is the synchronous call between modules: &quot;how many bookmarks does this session have?&quot;
           needs an answer, not a fire-and-forget event. In the monolith that is a direct interface call. Across
@@ -233,18 +241,20 @@
           structured trailers. On the client, an adapter whose interface returns a <code>Result</code> catches that
           <code>RpcException</code> and calls <code>ToResult()</code> (or <code>ToResult&lt;T&gt;()</code>), which rebuilds <code>Result.Failure(errors)</code>
           from the trailers and degrades a bare transport fault (a reset connection, a missed deadline) to a
-          single failure carrying the RPC detail. Callers keep programming against <code>Result&lt;T&gt;</code> whether the
-          answer came from an object or a network round-trip. This is &quot;Result over the wire,&quot; and it is why
-          the wire hop does not poison your error handling.</p>
+          single retryable <code>Unexpected</code> error coded <code>Grpc.{StatusCode}</code> that carries the RPC detail. Callers keep
+          programming against <code>Result&lt;T&gt;</code> whether the answer came from an object or a network round-trip. This
+          is &quot;Result over the wire,&quot; and it is why the wire hop does not poison your error handling.</p>
           <h3 id="4-federated-auth-a-gateway-and-aspire-hosting-adr-008">4. Federated auth, a gateway, and Aspire hosting (ADR-008)</h3>
-          <p>The last leak is everything around the services. Cross-service auth uses JWKS, not a shared secret:
-          <code>IJwksProvider</code> (<code>RsaJwksProvider</code>) exposes signing keys, and <code>JwksEndpointExtensions</code> serves
-          <code>/.well-known/jwks.json</code>, so an extracted service validates a forwarded token against the issuer&#39;s
-          public keys. Under the Aspire AppHost each service discovers those keys through the gateway; in
-          production each service points its JWT authority straight at the Identity service. A single YARP reverse-proxy gateway is the only client
-          entry point, owning the route-to-service map; clients never address a service directly.
-          <code>MMCA.Common.Aspire.Hosting</code> wires the broker, JWKS discovery, and the per-service data sources for
-          the extracted topology.</p>
+          <p>The last leak is everything around the services. User tokens cross services through JWKS, not a
+          shared secret: <code>IJwksProvider</code> (<code>RsaJwksProvider</code>) exposes signing keys, and <code>JwksEndpointExtensions</code>
+          serves <code>/.well-known/jwks.json</code>, so an extracted service validates a forwarded token against the
+          issuer&#39;s public keys. Under the Aspire AppHost each service discovers those keys through the gateway;
+          in production each service points its JWT authority straight at the Identity service. The one
+          exception is a service-to-service gRPC call with no user token to forward (a background drain, an
+          internal command): it carries an HS256 service token signed with a key the services share (ADR-061).
+          A single YARP reverse-proxy gateway is the only client entry point, owning the route-to-service map;
+          clients never address a service directly. <code>MMCA.Common.Aspire.Hosting</code> wires the broker, JWKS
+          discovery, the service-token key, and the per-service data sources for the extracted topology.</p>
           <p>ADR-008 names the payoff precisely: each extracted service is just <strong>the monolith with one module
           enabled.</strong> The <code>ModuleLoader</code> still runs, but each service host names only its own module assembly,
           so peer modules are never discovered and their interfaces are wired by gRPC clients the host
@@ -310,7 +320,7 @@ services.Replace(ServiceDescriptor.Scoped&lt;IBookmarkCountService, BookmarkCoun
           actually built. You have drawn a picture of one.</p>
           <hr>
           <p><strong>What we covered:</strong> why monolith-versus-microservices is a false binary, the four extraction points MMCA.Common
-          enforces inside one deployable (database-per-service, the transport-agnostic <code>IMessageBus</code>, gRPC
+          enforces inside one deployable (database-per-service, <code>IEventBus</code> over the transport-agnostic <code>IMessageBus</code>, gRPC
           <code>.Contracts</code> with Result-over-the-wire, and JWKS auth behind a YARP gateway with Aspire hosting), and
           the one invariant that ties them together: application code talks to abstractions, transport lives at
           the edge, enforced by <code>MicroserviceExtractionTests</code>.</p>

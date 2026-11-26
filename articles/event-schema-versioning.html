@@ -95,7 +95,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 54 articles</summary>
+        <summary>All 57 articles</summary>
         <nav class="doc-nav" aria-label="The MMCA.Common series">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -152,7 +152,10 @@
         <li><a href="durable-internal-commands.html">51 · Four ways to do work later</a></li>
         <li><a href="identity-completions.html">52 · Finishing identity</a></li>
         <li><a href="cloud-neutral-vendor-adapters.html">53 · One framework, three clouds</a></li>
-        <li><a href="series-index.html">54 · The series index</a></li>
+        <li><a href="borrowed-and-machine-identities.html">54 · Borrowed and machine identities</a></li>
+        <li><a href="app-as-mcp-server.html">55 · Your app as an MCP server</a></li>
+        <li><a href="outbound-webhooks.html">56 · Sending webhooks without opening a door</a></li>
+        <li><a href="series-index.html">57 · The series index</a></li>
           </ol>
         </nav>
       </details>
@@ -178,8 +181,9 @@
           <p>This is not a hypothetical. With database-per-service and async integration over the outbox, consumers
           resolve an event <em>by its identity, never by its shape</em>: the outbox serializes the event to JSON keyed by
           an <code>EventType</code> that holds the event&#39;s declared <code>[EventName]</code> identity when it has one (and its
-          assembly-qualified type name otherwise), and the broker path binds by .NET message type. Neither key says
-          anything about which fields the payload carries. There is no schema registry in the middle
+          assembly-qualified type name otherwise), and the broker path publishes on a topic named for the event&#39;s
+          wire name, the kebab-cased <code>[EventName]</code> identity (or the full type name when none is declared), carried
+          in an <code>mmca-event-name</code> header. Neither key says anything about which fields the payload carries. There is no schema registry in the middle
           saying &quot;this is a different shape than you expect.&quot; A producer that reshapes a payload silently breaks
           every consumer, and it does it in production, asynchronously, where it is hardest to trace.</p>
           <h2 id="why-it-matters">Why it matters</h2>
@@ -210,11 +214,12 @@
 {
     <span class="hljs-keyword">public</span> <span class="hljs-keyword">override</span> <span class="hljs-built_in">int</span> SchemaVersion =&gt; <span class="hljs-number">2</span>;
 }</code></pre>
-          <p>It is serialized with the payload (System.Text.Json on the outbox path, MassTransit on the broker
-          path), so a consumer always sees the producer&#39;s declared version and has an explicit value to branch or
+          <p>It is serialized with the payload (System.Text.Json on both the outbox path and the broker path, with
+          the same options), so a consumer always sees the producer&#39;s declared version and has an explicit value to branch or
           upcast on. And it is not just a convention you have to remember: a fitness function,
           <code>EventVersioningConventionTests</code>, asserts that every concrete integration event declares an <code>int SchemaVersion</code>, so a new event cannot ship without one. The same invariant-over-discipline approach as
-          the layer rules and the MassTransit-v8 pin: a thing that matters is a check, not a comment.</p>
+          the layer rules and the dependency fact that fails the build on any <code>MassTransit*</code> package pin: a thing
+          that matters is a check, not a comment.</p>
           <p><strong>Half two: the rule for changing a shape.</strong></p>
           <ul>
           <li><strong>Additive, optional changes keep the same version.</strong> Adding a nullable or optional field, or one
@@ -226,19 +231,21 @@
           type/version to the new shape before their handler runs. The old type is retired only after every
           consumer has drained it.</li>
           </ul>
-          <p>That last point is forced by the transport, not chosen for taste. The broker binds by type, so a rename
-          is a parallel-publish-and-drain migration with a real compatibility window, not an in-place edit. An
-          in-place reshape has <em>no</em> compatibility window: the instant the producer deploys, the old shape is
+          <p>That last point is forced by the transport, not chosen for taste. The broker routes by the event&#39;s
+          declared contract name, and a new type carries a new <code>[EventName]</code> identity and so a new topic, so a
+          rename is a parallel-publish-and-drain migration with a real compatibility window, not an in-place edit.
+          An in-place reshape has <em>no</em> compatibility window: the instant the producer deploys, the old shape is
           gone, and any consumer mid-deploy or slow to upgrade is reading a contract that no longer exists.
-          New-type-for-breaking-change is the only safe option when transport binds by type and consumers deploy
-          independently.</p>
+          New-type-for-breaking-change is the only safe option when the transport routes by contract identity and
+          consumers deploy independently.</p>
           <p>The framework ships the wiring for that migration, not only the rule (ADR-090, accepted 2026-08-21). An
           upcaster is one typed class, <code>IEventUpcaster&lt;TSource, TTarget&gt;</code>, registered by the module that owns the
           contract:</p>
           <pre class="doc-pre" tabindex="0" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-comment">// Module DI: one line per retired contract (hypothetical V2 shown).</span>
 services.AddEventUpcaster&lt;ProductVariantChanged, ProductVariantChangedV2, ProductVariantChangedUpcaster&gt;();
 
-<span class="hljs-comment">// Broker hosts also bind the retired queue, inside AddBrokerMessaging&#x27;s consumer callback:</span>
+<span class="hljs-comment">// Broker hosts also subscribe their one queue to the retired contract&#x27;s topic,</span>
+<span class="hljs-comment">// inside AddBrokerMessaging&#x27;s consumer callback:</span>
 x.RegisterIntegrationEventConsumer&lt;ProductVariantChangedV2&gt;();       <span class="hljs-comment">// the current contract</span>
 x.RegisterUpcastedIntegrationEventConsumer&lt;ProductVariantChanged&gt;(); <span class="hljs-comment">// the old one, draining</span></code></pre>
           <p>The registry chains registrations to the terminal contract (register V1 to V2 and V2 to V3, and a V1
@@ -299,7 +306,7 @@ x.RegisterUpcastedIntegrationEventConsumer&lt;ProductVariantChanged&gt;(); <span
           member, or a new event, fails the build until someone versions the event and updates the snapshot in
           the same commit; ADC, Store and Helpdesk each subclass it, while Common does not freeze its own event.
           And the reshape itself has framework support in the registration extension point (ADR-090): a typed
-          <code>IEventUpcaster&lt;TSource, TTarget&gt;</code>, <code>AddEventUpcaster&lt;...&gt;()</code>, a chaining registry that preserves the envelope, a draining broker consumer for the retired queue, and two fitness
+          <code>IEventUpcaster&lt;TSource, TTarget&gt;</code>, <code>AddEventUpcaster&lt;...&gt;()</code>, a chaining registry that preserves the envelope, a draining broker consumer for the retired contract&#39;s topic, and two fitness
           functions that reject two upcasters claiming one source contract or a target that does not raise
           <code>SchemaVersion</code>. Two gaps stay open and are worth naming: the framework itself still ships no V2 event
           of its own (its one concrete integration event stays at version 1, so the first real consumer
@@ -325,8 +332,9 @@ x.RegisterUpcastedIntegrationEventConsumer&lt;ProductVariantChanged&gt;(); <span
           property means you read the version off the concrete type or the JSON, you do not mutate it per
           instance. That is intentional (a version is a property of the type, not of an individual message), but
           it means the upcaster reads the declared type, not a settable field. That is literally how the shipped
-          registry works: it indexes upcasters and walks chains by the declared .NET type, which is what both
-          transport bindings already key on.</li>
+          registry works: it indexes upcasters and walks chains by the declared .NET type, and both transports
+          resolve a message back to that type before dispatch (the outbox from its stored identity, the broker
+          from its wire name).</li>
           </ul>
           <p>None of these are reasons to skip the field. They are the reasons the field is necessary but not
           sufficient, and the discipline is the rest of the answer.</p>
@@ -338,8 +346,9 @@ x.RegisterUpcastedIntegrationEventConsumer&lt;ProductVariantChanged&gt;(); <span
           <li><strong>Treat additive-and-optional as the only in-place change you are allowed to make.</strong> New nullable
           field with a default: fine. Anything else is breaking.</li>
           <li><strong>For breaking changes, publish a new type and upcast, then drain and retire the old one.</strong> Never
-          edit a shape that a deployed reader still expects. The broker binds by type; use that to get a
-          compatibility window instead of a cliff.</li>
+          edit a shape that a deployed reader still expects. Give the new type its own identity on the wire
+          (its own name, and so its own topic or routing key); use that to get a compatibility window instead
+          of a cliff.</li>
           <li><strong>Pair it with at-least-once delivery and idempotent consumers.</strong> Versioning answers &quot;can I
           understand this?&quot;; the outbox and idempotency answer &quot;did I get it, exactly once in effect?&quot; You need
           both.</li>

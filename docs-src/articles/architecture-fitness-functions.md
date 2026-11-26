@@ -10,7 +10,8 @@
 > `Website/docs-src/adr/109-feature-by-folder-convention.md`,
 > `Website/docs-src/adr/125-parameterized-sql-only.md`,
 > `Website/docs-src/adr/128-time-as-an-input.md`,
-> `Website/docs-src/adr/132-build-strictness-analyzer-policy.md`, and
+> `Website/docs-src/adr/132-build-strictness-analyzer-policy.md`,
+> `Website/docs-src/adr/147-test-gaps-risk-ratchets-and-traceability.md`, and
 > `Website/docs-src/onboarding/group-29-testing-infrastructure.md`. No em dashes.
 
 **Subtitle:** The inward-dependency rule everyone agrees on is the one everyone eventually breaks. Here
@@ -83,18 +84,18 @@ layer that answers per-line ones on every compile, and it rests on the same conv
 does not fail the build is a comment nobody has to act on (ADR-132).
 
 **Warnings are errors.** Each repo's root `Directory.Build.props` sets `TreatWarningsAsErrors` and
-`CodeAnalysisTreatWarningsAsErrors` (`MMCA.Common/Directory.Build.props:7`, `:13`), pins `AnalysisLevel`
-to `latest` with `AnalysisMode` `All` (`:11-12`), and turns on `EnforceCodeStyleInBuild` (`:14`), so the
+`CodeAnalysisTreatWarningsAsErrors` (`MMCA.Common/Directory.Build.props:19`, `:25`), pins `AnalysisLevel`
+to `latest` with `AnalysisMode` `All` (`:23-24`), and turns on `EnforceCodeStyleInBuild` (`:26`), so the
 IDE-only style rules run in the command-line build too. Five third-party analyzer packages, Meziantou,
 Microsoft.VisualStudio.Threading, Roslynator, SonarAnalyzer and StyleCop, ride into every project except
-a Docker Compose `.dcproj` (`:113-134`), with their versions pinned through Central Package Management
-(`MMCA.Common/Directory.Packages.props:281`, `:287-290`). The shared `.editorconfig` then sets
-`dotnet_analyzer_diagnostic.severity = error` (`MMCA.Common/.editorconfig:312`): every diagnostic
+a Docker Compose `.dcproj` (`:153-170`), with their versions pinned through Central Package Management
+(`MMCA.Common/Directory.Packages.props:317`, `:323-326`). The shared `.editorconfig` then sets
+`dotnet_analyzer_diagnostic.severity = error` (`MMCA.Common/.editorconfig:314`): every diagnostic
 starts as an error, and a rule that does not apply here is turned off by name with its reason beside
 it, so the exception list is something a reviewer can read rather than something implied by silence.
 
 **One baseline, shared above a marker.** Everything above the `# REPO-SPECIFIC DELTAS` line
-(`MMCA.Common/.editorconfig:821`, the same line in all four repos) is meant to be identical across
+(`MMCA.Common/.editorconfig:798`, the same line in all four repos) is meant to be identical across
 MMCA.Common, MMCA.Store, MMCA.ADC and MMCA.Helpdesk, as the file's own header says (`:5-8`); per-repo
 overrides go below it. Code that moves from a consumer into the framework meets the same rules on
 arrival, and a workspace script compares the four shared slices so a drifted line is an exit code
@@ -103,10 +104,10 @@ a four-repo change.
 
 **An empty run is a failure.** A green test step proves only that the tests which ran passed, and a
 broken filter or a discovery failure can turn a suite into zero tests and still report success. So the
-solution-wide unit runs carry `--minimum-expected-tests`: 2000 in MMCA.Common, against a suite that executes
-9,122 tests in CI (`MMCA.Common/.github/workflows/ci.yml:163`), 5000 in MMCA.ADC
-(`MMCA.ADC/.github/workflows/deploy.yml:367`) and 2650 in MMCA.Store
-(`MMCA.Store/.github/workflows/deploy.yml:338`). That is the same vacuity guard the form-count floor
+solution-wide unit runs carry `--minimum-expected-tests`: 11250 per framework leg in MMCA.Common, set
+about five percent under the measured per-framework total (`MMCA.Common/.github/workflows/ci.yml:185`),
+5000 in MMCA.ADC (`MMCA.ADC/.github/workflows/deploy.yml:448`) and 2650 in MMCA.Store
+(`MMCA.Store/.github/workflows/deploy.yml:375`). That is the same vacuity guard the form-count floor
 below applies to a single gate, applied to the whole run. The line-coverage floor that sits beside it
 belongs to the test pyramid and is covered in Article 35
 (`Website/docs-src/articles/test-pyramid.md`).
@@ -121,12 +122,12 @@ Here is the part that makes the fitness functions scale across more than one rep
 three slightly-different copies.
 
 The rule *bodies* do not live in the test project. They live once, in a shipped NuGet package:
-`MMCA.Common.Testing.Architecture` (package 21 of the twenty-six the framework publishes, with
+`MMCA.Common.Testing.Architecture` (package 25 of the thirty the framework publishes, with
 `FACTS.md` the canonical count). That
 package defines:
 
 - `ArchitectureRules`, the reusable rule library that expresses the actual assertions.
-- A set of 64 abstract `*TestsBase` classes holding 160 test methods (for example
+- A set of 74 abstract `*TestsBase` classes holding 186 test methods (for example
   `LayerDependencyTestsBase`, `DomainPurityTestsBase`, `MicroserviceExtractionTestsBase`,
   `PiiConventionTestsBase`, `FolderWidthTestsBase`, `DataResidencyTestsBase`,
   `RawSqlConventionTestsBase`, `ClockReadTestsBase`).
@@ -171,11 +172,11 @@ in its own right (rubric category 34, which absorbs the former maintainability c
 evolves, all consumers inherit the fix.
 
 A small honest detail: a few checks genuinely do not generalize, so they stay local. The
-`MMCA.Common.Grpc` boundary check and the `IMessageBus` / `IJwksProvider` placement checks live in
+`IMessageBus`, `IJwksProvider` and `ILiveChannelPublisher` placement checks live in
 `FrameworkSanityTests` in the Common repo only, because they are about Common's own internal structure.
-And `DependencyVersionTests` (parsing `Directory.Packages.props` to fail the build if MassTransit's
-major version reaches 9, the v8 licensing pin) is subclassed only in Common, because only Common
-actually declares that pin.
+And `DependencyVersionTests`, which parses `Directory.Packages.props` through the shipped
+`DependencyVersionTestsBase` and fails the build on any `MassTransit*` package version (the outright
+ban of ADR-118, since the broker transports are framework code), is subclassed only in Common.
 
 ## The rules that matter most
 
@@ -184,8 +185,8 @@ Three example rule families show what fitness functions actually assert.
 **`LayerDependencyTests`.** The inward-dependency rule: API reaches down to Infrastructure,
 Infrastructure to Application, Application to Domain, Domain to Shared, and never the other way. (UI is
 the deliberate exception, barred from Domain, Application and Infrastructure, so the test encodes that
-too. The same bar on the framework's own `MMCA.Common.Grpc` transport package is one of the Common-only
-checks described above.)
+too. The same three bars apply to the optional Grpc transport layer, and a map that declares no Grpc
+assembly satisfies them vacuously.)
 
 **`DomainPurityTests`.** Domain must be framework-pure, and the rule names the ban explicitly rather
 than gesturing at it: a ten-entry assembly-dependency list covering `Microsoft.AspNetCore`,
@@ -199,9 +200,11 @@ hope.
 **`MicroserviceExtractionTests`.** This one guards the framework's central thesis, that a module can be
 lifted out of the monolith into its own service without rewriting application code. The invariant is
 that application and domain code talk to abstractions while transport choices live at the edges. So the
-rule asserts that **Application, Domain, and Shared must never reference MassTransit directly.** They
-depend on `IMessageBus`, and Infrastructure supplies the broker implementation. If the transport
-library ever leaks upward, the build fails. The reliability boundary and the extraction boundary are
+rule asserts that **Application, Domain, and Shared must never reference a broker client or the gRPC
+runtime directly**: MassTransit (banned outright), `RabbitMQ.Client`, `Azure.Messaging.ServiceBus`,
+Amazon SQS and SNS, `Grpc` and `Google.Protobuf`. They depend on `IEventBus` and the module's own
+interfaces, and the transports live at the edges, in Infrastructure and the vendor adapters. If a
+transport library ever leaks upward, the build fails. The reliability boundary and the extraction boundary are
 protected by the same mechanism.
 
 This is also where the doubled enforcement lifts category 3 and category 34 into the top maturity band
@@ -231,6 +234,38 @@ that reads the clock itself cannot be driven by a test, so every expiry and cuto
 untested or tested by sleeping. The framework's `BaseDomainEvent` occurrence stamp is the one built-in
 exemption, and `AllowedClockReaders` takes any further entry as a reviewed type or member. MMCA.ADC's
 subclass supplies its map and nothing else: no exemptions.
+
+### Three gates on whether a test exists at all
+
+A coverage percentage says how much code ran under test. It does not say whether the use case added
+this sprint has a test of its own, and that is the gap ADR-147 closes with three more bases in the same
+package, each asking the question by name.
+
+**`HandlerTestCoverageTestsBase`.** Every command and query handler in the map's per-module Application
+assemblies must be named, as a whole word, in at least one test source file under `TestsRoots` (default
+`Tests`), so a new use case cannot ship without a test that at least constructs its handler. It reads
+source text rather than test assemblies, which keeps it fast and is also its stated limit: a name match
+proves a test mentions the handler, and the coverage ratchet catches what a name match cannot.
+`AllowedUntestedHandlers` freezes what genuinely needs no test, and an entry that names no handler fails
+as stale, so the list can only shrink.
+
+**`PageE2ECoverageTestsBase`.** Every `@page` route under `SourceRoot` must be reached by at least one
+string literal in the end-to-end sources (`Tests/E2E` by default), with a `{param}` segment matching any
+concrete segment or interpolation hole. `AllowedUntestedRoutes` holds the routes a browser run genuinely
+cannot reach, a device-only page or one behind an external provider's challenge, and
+`AllowList_HasNoStaleEntries` fails an entry that names no page any more or a page a test now reaches.
+
+**`ManualCaseTraitTestsBase`.** A test that verifies a manual test case says so with
+`[Trait("Case", "<id>")]`, and the rule holds every such link to a case that exists as a `### <id>`
+heading in the repo's manual suite (`Docs/ManualTestSuite` by default). A missing suite folder fails,
+because there is nothing to resolve the links against, and `MinimumLinkedCases` floors the number of
+distinct linked cases so links cannot be deleted silently.
+
+All three carry the vacuity floor this article keeps returning to: `MinimumHandlers` and
+`MinimumRoutes` make a map or source root that finds nothing a failure rather than a pass. And because
+the manual suite is an input to a test, both deployed apps' change filters classify
+`Docs/ManualTestSuite/*.md` as code, so a pull request that edits only a case heading still runs the
+gate.
 
 ### A convention becomes a test: twelve files per folder
 
@@ -290,10 +325,10 @@ the SQL server into a different region from its Container Apps, and it still blo
 "central United States" claim its policy once carried. MMCA.Store reads the single-region sentence in
 its disaster-recovery runbook and forbids ADC's two regions from being copied across. A compliance
 statement is usually the last thing anybody thinks of as testable, and it is one a build can check
-outright, with one honest gap in when the check runs. Both deployed apps classify any Markdown-only
-pull request as docs-only and run their `CI.slnf` tests only on a code diff, so a pull request that
-edits only `PRIVACY.md` (or, in MMCA.Store, only the disaster-recovery runbook, its other input) never
-runs this test. The drift still fails a build, on the next pull request that touches code.
+outright. When the check runs matters as much as what it asserts: both deployed apps run their
+`CI.slnf` tests only on a code diff and treat ordinary Markdown as docs-only, but both classify the
+Markdown a test reads as code. A pull request that edits only `PRIVACY.md` (or, in MMCA.Store, only the
+disaster-recovery runbook, its other input) therefore runs this test like any other change.
 
 ## Freezing the wire: the contract no single repo's build can see
 
@@ -330,9 +365,9 @@ on the wire it does not (`:271-273`). Deliberately not pinned: `syntax`, `import
 file-level options and a reordered import turns into a red build, which is the fastest way to teach a
 team to regenerate the snapshot without reading it.
 
-Adoption is the shape this tier always uses. MMCA.ADC's subclass pins the eight protos its four
-`*.Contracts` projects compile, against ninety-nine frozen lines
-(`MMCA.ADC/Tests/Architecture/MMCA.ADC.Architecture.Tests/Contracts/ProtoContractTests.cs:9-19`, list at `:21-122`);
+Adoption is the shape this tier always uses. MMCA.ADC's subclass pins the ten protos its four
+`*.Contracts` projects compile, against 128 frozen lines
+(`MMCA.ADC/Tests/Architecture/MMCA.ADC.Architecture.Tests/Contracts/ProtoContractTests.cs:9-21`, list at `:23-153`);
 MMCA.Store's pins four
 (`MMCA.Store/Tests/Architecture/MMCA.Store.Architecture.Tests/Contracts/ProtoContractTests.cs:13-19`). MMCA.Common
 ships no `.proto` of its own, because it supplies the gRPC plumbing and not the contracts, so it
@@ -438,10 +473,12 @@ two consumers inherit the default, so the workbook fact runs for both. MMCA.Help
 inapplicable gate rather than an unadopted one. The honest limits are two. This is a text gate over
 infrastructure-as-code: it proves the two files agree, not that the deployment ran or that the query
 behind an alert measures what it claims. And it pairs only the SLO alerts declared between the parse
-anchors. MMCA.ADC provisions twelve further operational alerts and MMCA.Store seven (dead-lettered
-outbox messages, a failed revision activation, the gateway availability probe among them) after that
-loop closes, and the gate neither requires nor forbids a runbook section for any of those nineteen; each
-has written triage today, kept by review rather than by the build (ADR-062). The alerting mechanism itself sits with the
+anchors. MMCA.ADC declares fifteen further operational alerts and MMCA.Store ten (dead-lettered
+outbox messages, a failed revision activation, the gateway availability probe among them) outside that
+loop, and the gate neither requires nor forbids a runbook section for any of those twenty-five; each
+has written triage today, kept by review rather than by the build (ADR-062). Three of Store's ten are
+security-signal rules that provision only when a repository variable switches them on (the template
+default is off). The alerting mechanism itself sits with the
 telemetry it watches, in Article 48.
 
 ## The third kind: a fitness function for cost
@@ -520,11 +557,11 @@ Fitness functions are not free, and the scorecard does not pretend otherwise.
   catches collapses and new allocations, not creep. Nothing but review stops someone raising a ceiling to
   turn a red gate green.
 - **Prose masquerading as enforcement is the real trap.** A version pin held only by a comment is
-  exactly what a blanket dependency update walks straight through, and the known-bad MassTransit v9 is
-  the case in point. The `DependencyVersionTests` gate described above turns the licensing-driven v8 pin
-  into a build failure, and that gate, not the comment, is what lets the scorecard record that the
-  "blanket update reintroduces known-bad dependency" red flag cannot recur. A fitness-function culture
-  must be ruthless that a comment describing a check is not a check.
+  exactly what a blanket dependency update walks straight through. The `DependencyVersionTests` gate
+  described above turns the MassTransit ban into a build failure on any `MassTransit*` package version,
+  and that gate, not a comment, is what keeps the "blanket update reintroduces known-bad dependency"
+  red flag from recurring. A fitness-function culture must be ruthless that a comment describing a
+  check is not a check.
 - **Two gates mean two places to update.** Add a layer rule and you maintain both the MSBuild target and
   the runtime rule suite. That is the cost of catching both direct and transitive violations, and the
   contributor doc calls it out so nobody forgets the second one.
@@ -557,7 +594,8 @@ test-count floors beneath both, how the rule bodies live once in
 `MMCA.Common.Testing.Architecture` and run identically across four repos via `IArchitectureMap`, the
 three rule families that matter most (`LayerDependencyTests`, `DomainPurityTests`,
 `MicroserviceExtractionTests`), two gates on what a method body may call (raw-string SQL and the
-ambient clock), how a folder-width rule turns a layout convention into a build failure
+ambient clock), three gates that fail when a handler, a page or a manual case has no test linked to
+it, how a folder-width rule turns a layout convention into a build failure
 and a residency gate turns a published privacy claim into one, how a committed `.proto` snapshot
 freezes the gRPC wire contract in both
 directions, how the same package pairs every provisioned SLO alert to a
@@ -565,7 +603,7 @@ severity-correct runbook section, how the same idea extends to cost through a co
 that gates allocations absolutely and latency only as a ratio, and the honest limit that you only
 enforce what you write a rule for.
 
-**Next in the series:** the test pyramid behind these fitness functions, more than 9,000 fast tests with
+**Next in the series:** the test pyramid behind these fitness functions, more than 13,000 fast tests per framework leg with
 no Docker and no database.
 
 *MMCA.Common is Apache-2.0 licensed and open source. Star the repo, read the Architecture section
@@ -577,26 +615,57 @@ something.*
 
 *Tags: Software Architecture, .NET, C Sharp, Testing, Clean Architecture*
 
-*Notes: 2026-10-29 pass against MMCA.Common v1.265.1 (re-verified 2026-10-29; `MMCA.Common/FACTS.md:14`, was
-v1.250.0). Body corrections, all re-read: fitness counts 160 methods across 64 abstract `*TestsBase` classes
-(`MMCA.Common/FACTS.md:89`; Common's own build executes 479, `:92`); `MMCA.Common.Testing.Architecture` is
-package 21 (`:42`) of 26 published (`:19`); the analyzer `ItemGroup` excluding `.dcproj` is
-`MMCA.Common/Directory.Build.props:113-134` (was `:130-150`) and the CPM pins are
-`MMCA.Common/Directory.Packages.props:281` (Meziantou) and `:287-290` (Threading, Roslynator, Sonar, StyleCop)
-(were `:233`/`:239-242`); ADC's `--minimum-expected-tests 5000` is at `MMCA.ADC/.github/workflows/deploy.yml:367`
-(was `:366`; step name `:351`); ADC embeds `infra/main.bicep` and `infra/OPERATIONS.md` at
-`MMCA.ADC/Tests/Architecture/MMCA.ADC.Architecture.Tests/MMCA.ADC.Architecture.Tests.csproj:25-30` (comment
-`:22-24`; `:17-21` is the brand-token CSS resource); ungated operational alerts are twelve on ADC and seven on
-Store, nineteen in all (`Website/docs-src/adr/062-slo-alerting-as-code.md:85`, `:296`); the G25 chapter file is
-`group-29-testing-infrastructure.md` (`Website/docs-src/onboarding/00-group-taxonomy.md:84`), `group-28` now
-being the cloud provider adapters chapter. `FormsConventionTestsBase` required markers sit at `:72-75` (now
-four, adding `_isDirty`) and the floor assertion at `:244-245` (class `:27` and `MinimumCreateForms` `:53`
-unchanged). Common scorecard evidence is stamped 2026-10-29 at v1.265.1
-(`Website/docs-src/governance/common-ArchitectureScorecard.md:5`), indices unchanged. The executed-test
-figure moves 8,386 to 9,122 and "more than 8,000" to "more than 9,000" (the `build-and-test` job of CI run
-40870473851, 2026-10-29: 9,122 executed, 9,122 succeeded, 0 skipped, the figure Article 35 cites); the floor
-2000 is still `MMCA.Common/.github/workflows/ci.yml:163`. Anchors not named in this entry are as
-of the 2026-10-22 pass that follows, which is superseded wherever this entry moves one.
+*Notes: 2026-11-25 pass, re-verified 2026-11-25 against MMCA.Common v1.319.0 (`MMCA.Common/FACTS.md:14`).
+Every claim changed in this pass was re-read at the anchor given. Counts: `MMCA.Common.Testing.Architecture` is
+package 25 (`FACTS.md:47`) of 30 published (`:20`; the metapackage is the thirtieth, `:52`); 186 test methods across
+74 abstract `*TestsBase` classes (`:98`), of which Common's own build executes 767 (`:101`). Analyzer layer:
+`TreatWarningsAsErrors` `MMCA.Common/Directory.Build.props:19`, `AnalysisLevel` / `AnalysisMode` `:23-24`,
+`CodeAnalysisTreatWarningsAsErrors` `:25`, `EnforceCodeStyleInBuild` `:26`; the five analyzers sit in the
+`.dcproj`-excluded `ItemGroup` opened at `:153` (references `:154`, `:158`, `:162`, `:166`, `:170`), distinct from
+the Source-only `PublicApiAnalyzers` group at `:134-135`; CPM pins `MMCA.Common/Directory.Packages.props:317`
+(Meziantou) and `:323-326` (Threading, Roslynator, Sonar, StyleCop); `dotnet_analyzer_diagnostic.severity = error`
+at `.editorconfig:314` and `# REPO-SPECIFIC DELTAS` at `:798`, both re-read at the same lines in MMCA.Common,
+MMCA.ADC, MMCA.Store and MMCA.Helpdesk; header `:5`. Test floors: Common `--minimum-expected-tests 11250` per
+framework leg (`MMCA.Common/.github/workflows/ci.yml:185`), "about 5 percent under the measured per-framework
+total" and the 22500 `release.yml` floor per `MMCA.Common/AGENTS.md:28`; the executed figure 9,122 is dropped
+from the body because it cannot sit under an 11250 per-leg floor and no current CI run was read; ADC 5000
+(`MMCA.ADC/.github/workflows/deploy.yml:448`, net10 leg `:611`), Store 2650 (`MMCA.Store/.github/workflows/deploy.yml:375`).
+Grpc bars: `Grpc_ShouldNotDependOn_Domain` / `_Application` / `_Infrastructure` are in the shared
+`Bases/Layering/LayerDependencyTestsBase.cs:98-106` (vacuous without a Grpc assembly, comment `:98`), so every
+consumer runs them; `FrameworkSanityTests` (`MMCA.Common/Tests/Architecture/MMCA.Common.Architecture.Tests/Governance/FrameworkSanityTests.cs:13`)
+holds only the `IMessageBus`, `IJwksProvider` and `ILiveChannelPublisher` placement facts (`:19-32`, summary
+`:7-12`). `DependencyVersionTests` (`Governance/DependencyVersionTests.cs:11`) is the MassTransit ban of ADR-118
+driven by `DependencyVersionTestsBase` (`Source/Hosting/MMCA.Common.Testing.Architecture/Bases/Governance/DependencyVersionTestsBase.cs:10`;
+summary `:5-9`, the `MassTransit` prefix rule `:22`); no subclass of the base exists under MMCA.ADC, MMCA.Store or
+MMCA.Helpdesk `Tests/` (Grep this pass); the ban is restated at `MMCA.Common/AGENTS.md` Gotchas. The v8 pin and its
+major-version gate are gone (removed with MassTransit in v1.316.0, per the run's anchor facts), so the trade-offs
+bullet now names the ban and no longer makes a scorecard-wording claim. `MicroserviceExtractionTests`:
+`Rules/Layering/ArchitectureRules.Transport.cs:14-23` lists MassTransit, RabbitMQ.Client,
+Azure.Messaging.ServiceBus, Amazon.SQS, Amazon.SimpleNotificationService, Grpc and Google.Protobuf; the core layers
+depend on `IEventBus` (`:39`, and `MMCA.Common/AGENTS.md` SaveChanges flow: `IMessageBus` is the transport the
+processor drains, not an application API). Residency gap closed: ADC's changes filter classifies `PRIVACY.md`,
+`infra/OPERATIONS.md` and `Docs/ManualTestSuite/*.md` as code (`MMCA.ADC/.github/workflows/deploy.yml:206-210`),
+Store adds `infra/DISASTER-RECOVERY.md` (`MMCA.Store/.github/workflows/deploy.yml:206-211`). ADC protos: ten
+(`MMCA.ADC/Tests/Architecture/MMCA.ADC.Architecture.Tests/Contracts/ProtoContractTests.cs:9-21`, entries `:11-20`,
+still four Contracts projects), `FrozenProtoContracts` `:23` with 128 lines `:25-152`, closing `:153`. Ungated
+alerts: twenty-five, ADC fifteen and Store ten, all with triage, three Store security-signal rules behind
+`enableSecuritySignalAlerts` (default false) set from the `ENABLE_SECURITY_SIGNAL_ALERTS` repository variable
+(`Website/docs-src/adr/062-slo-alerting-as-code.md:741-750`). ADR-147 section (added this pass):
+`Source/Hosting/MMCA.Common.Testing.Architecture/Bases/Governance/TestGaps/HandlerTestCoverageTestsBase.cs:16`
+(summary `:4-13`, `Map` `:18`, `RepoRoot` `:21`, `TestsRoots` `["Tests"]` `:24`, `AllowedUntestedHandlers` `:27`,
+`MinimumHandlers` 1 `:33`, facts `:36-37`, `:40-41`); `PageE2ECoverageTestsBase.cs:16` (summary `:4-13`,
+`SourceRoot` `:22`, `E2ESourceRoots` `["Tests/E2E"]` `:25`, `AllowedUntestedRoutes` `:28`, `MinimumRoutes` 1 `:31`,
+facts `:34-35`, `:38-39`, `:42-43`); `ManualCaseTraitTestsBase.cs:14` (summary `:4-11`, `TestsRoot` `:20`,
+`SuiteFolder` `Docs/ManualTestSuite` `:23`, `MinimumLinkedCases` 1 `:26`, facts `:29-30`, `:33-34`); ADR file
+`Website/docs-src/adr/147-test-gaps-risk-ratchets-and-traceability.md` (header added). Cost gate anchors moved:
+`performance-smoke` `ci.yml:514`, name `:515`, `timeout-minutes: 15` `:518`, the BenchmarkDotNet run `:550`,
+`build/perfgate` `:559`. Flag (2026-11-25): which consumers subclass the three ADR-147 bases was not read this
+pass, so the body claims no adopter. Flag (2026-11-25): the three named examples of ungated alerts (dead-lettered
+outbox messages, a failed revision activation, the gateway availability probe) were not re-opened in the bicep
+templates this pass. The series line reads "more than 13,000 fast tests per framework leg" to match Article 35's title (test-pyramid.md:1), whose count comes from CI run 45693724979. Anchors not
+named in this entry are as of the 2026-10-22 pass that follows and are superseded wherever this entry moves one
+(that pass's Grpc-in-FrameworkSanityTests, MassTransit-v8 pin, residency-gap, eight-proto, nineteen-alert and
+perf-gate line readings no longer hold).
 2026-10-22 pass against MMCA.Common v1.250.0 (re-verified 2026-10-22). Every anchor below was re-opened
 this pass and is given at the line it holds today; the 2026-10-08 (v1.233.0) and 2026-10-02 (v1.221.0) passes are
 superseded wherever an anchor moved. Counts come from the CI-gated `MMCA.Common/FACTS.md` ("As of: 2026-10-21

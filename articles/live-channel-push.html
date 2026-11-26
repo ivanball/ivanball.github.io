@@ -95,7 +95,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 54 articles</summary>
+        <summary>All 57 articles</summary>
         <nav class="doc-nav" aria-label="The MMCA.Common series">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -152,7 +152,10 @@
         <li><a href="durable-internal-commands.html">51 · Four ways to do work later</a></li>
         <li><a href="identity-completions.html">52 · Finishing identity</a></li>
         <li><a href="cloud-neutral-vendor-adapters.html">53 · One framework, three clouds</a></li>
-        <li><a href="series-index.html">54 · The series index</a></li>
+        <li><a href="borrowed-and-machine-identities.html">54 · Borrowed and machine identities</a></li>
+        <li><a href="app-as-mcp-server.html">55 · Your app as an MCP server</a></li>
+        <li><a href="outbound-webhooks.html">56 · Sending webhooks without opening a door</a></li>
+        <li><a href="series-index.html">57 · The series index</a></li>
           </ol>
         </nav>
       </details>
@@ -173,9 +176,10 @@
           the message minutes later.</p>
           <p>Now the conference floor opens a live poll. Two hundred phones are looking at the same question, votes
           are landing several per second, and every one of them needs to light up the running tally on every other
-          screen in under a second. Reach for the durable pipeline here and you inherit all the wrong costs. The
-          outbox deliberately holds a fresh row back from its background processor for
-          <code>Outbox:ProcessingDelaySeconds</code> (default 5s, ADR-003), which is exactly the latency you cannot pay. You would write a per-user
+          screen in under a second. Reach for the durable pipeline here and you inherit all the wrong costs. Every
+          vote would take the outbox hop (ADR-003): a row written in the same transaction as the aggregate, then a
+          background processor, woken by the post-save signal, that publishes it on. That machinery exists so
+          delivery survives a crash, and a tally needs to survive nothing. You would write a per-user
           inbox row for a tally that is worthless a second later and that nobody will ever open. You would persist
           data whose entire value is that it is on screen right now.</p>
           <p>The other instinct is to stand up a second SignalR hub for live traffic. That doubles the WebSocket
@@ -321,9 +325,12 @@ liveChannelPublishQueue.Enqueue(<span class="hljs-keyword">new</span> LiveChanne
           broadcast path that has quietly stopped working is a number an operator can alert on instead of a log
           line nobody reads.</p>
           <p>On the Notification side, <code>LiveChannelGrpcService</code> receives the RPC, checks its shape, and delegates to
-          its own <code>ILiveChannelPublisher</code>, which in that host is the real <code>SignalRLiveChannelPublisher</code>. The check is
-          the bounded-payload control for an unauthenticated internal endpoint: a channel key or event name that is
-          blank, longer than its cap (200 and 100 characters) or outside <code>[a-z0-9:.-]</code>, or a payload over 64 KiB of
+          its own <code>ILiveChannelPublisher</code>, which in that host is the real <code>SignalRLiveChannelPublisher</code>. The edge
+          writes to every connected client, so it is not left to internal-only reach: Notification maps it under
+          the service-only <code>ServiceCaller</code> policy, and Engagement&#39;s live-channel client attaches its own service
+          token, because the drain runs with no HttpContext and has no user bearer to forward. A signed-in user&#39;s
+          bearer is refused. The shape check then runs on every admitted call and bounds the payload: a channel
+          key or event name that is blank, longer than its cap (200 and 100 characters) or outside <code>[a-z0-9:.-]</code>, or a payload over 64 KiB of
           UTF-8, is refused with <code>InvalidArgument</code> before it reaches the publisher. The payload&#39;s opacity is still
           what makes the relay trivial: the service counts its bytes and never deserializes it, and neither does
           any other hop, so no shared payload type has to cross the wire.</p>
@@ -366,10 +373,12 @@ _channel = Channel.CreateBounded&lt;LiveChannelPublishWorkItem&gt;(
           then publishes what remains in FIFO order inside a single five-second budget and logs a count of
           whatever it has to abandon. A crash takes every pending item with it, and so does a stop whose budget
           runs out. That is the correct trade for a poll tally, whose value expires in a second anyway, and it
-          is why the only bounded <code>Channel&lt;T&gt;</code> instances in MMCA.Common, MMCA.Store and MMCA.ADC both sit in
-          ADC&#39;s Engagement module and both carry best-effort signals: the live-publish queue, and a capacity-one
-          <code>DropWrite</code> flag (<code>BookmarkCacheEvictionSignal</code>) that coalesces any burst of bookmark changes into one
-          pending cache eviction. Work that a restart must not lose goes
+          is why both ADR-121 work queues across MMCA.Common, MMCA.Store and MMCA.ADC sit in ADC&#39;s Engagement
+          module and both carry best-effort signals: the live-publish queue, and a capacity-one <code>DropWrite</code> flag
+          (<code>BookmarkCacheEvictionSignal</code>) that coalesces any burst of bookmark changes into one pending cache
+          eviction. (The framework&#39;s PostgreSQL broker receiver holds the one other bounded channel, a
+          capacity-one <code>DropWrite</code> wake flag that carries no work: the messages it wakes for live in the
+          database.) Work that a restart must not lose goes
           in a row instead. ADC&#39;s AI scoring pass over an event&#39;s sessions is that kind of work, so the
           organizer&#39;s request writes one durable internal command row and returns, and the framework&#39;s processor
           claims it, restores the requesting organizer&#39;s principal and runs the pass through the ordinary CQRS
@@ -442,8 +451,12 @@ _channel = Channel.CreateBounded&lt;LiveChannelPublishWorkItem&gt;(
           occurrence is computed from the instant the run finished, not from the occurrence that was missed, so
           a host that was down for six hours fires one purge instead of six. That is right for a purge and
           wrong for a job that must produce an artifact per window, which has to make the window explicit in
-          its own state rather than infer it from the schedule. And the lease is a time lease, not a fence: a
-          run that overstays it can be claimed by another replica, so job bodies carry the same idempotency
+          its own state rather than infer it from the schedule. And the lease is renewed, but it is not a fence.
+          While a job runs, the runner pushes <code>LockedUntil</code> out by a full lease every half lease, guarded by the
+          claim token, so a long but healthy run keeps its row, and a renewal that finds the row under another
+          token cancels the run. A replica that stops renewing (it dies, or its renewals keep failing) loses the
+          row when the lease runs out, another replica can claim and run it, and the first run, if still going,
+          is cancelled only when a renewal next reaches the row. So job bodies carry the same idempotency
           obligation the outbox already puts on event handlers.</p>
           <p>The capability is opt-in, and the proof is a test rather than a promise: build the real model for a
           host that never called <code>AddScheduledJobs</code> and the job entity is simply absent, so a consumer that

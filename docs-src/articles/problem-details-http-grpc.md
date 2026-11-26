@@ -54,12 +54,14 @@ failures are *values*, not exceptions. Handlers return `Result<T>` carrying an `
 typed by an `ErrorType`. The edge's only job is to translate that value into the right wire shape.
 
 On the **HTTP** side, the framework's result-returning controller bases (`EntityControllerBase` among
-them) derive from `ApiControllerBase`, whose single job is
-`HandleFailure(IEnumerable<Error>)`. It produces an `ObjectResult` whose status belongs to the *most
+them) derive from `ApiControllerBase`, whose error path is
+`HandleFailure(IEnumerable<Error>)` (the same base also emits concurrency `ETag`s and runs `If-Match`
+conditional writes, which are outside this article). It produces an `ObjectResult` whose status belongs to the *most
 severe* `ErrorType` present, deliberately not the first error's, so an aggregate built by
 `Result.Combine` cannot be downgraded by error ordering: a 403 or a 500 travelling alongside a
 validation error still answers 403 or 500, and equal ranks keep the earliest error. Every error still
-travels in the Problem Details `errors` array; only the status is ranked. The actual
+travels in the Problem Details `errors` array; only the status is ranked. A 429 whose `TooManyRequests`
+errors carry a retry hint also answers with a `Retry-After` header, the longest hint winning. The actual
 `ErrorType -> status` table does not live in the controller. It lives once in `ErrorHttpMapping`, a
 `FrozenDictionary` keyed by error type:
 
@@ -96,7 +98,9 @@ oversize body or 400 otherwise) and turns everything else into a 500. Together t
 invariant: every error an action returns or throws leaves the API as an RFC 9457
 Problem Details with a sensible status. The invariant covers the MVC pipeline, not the middleware in
 front of it: the rate limiter rejects with a 429 that carries a `Retry-After` header whenever the
-limiter knows when its window resets, but writes no body, and an unmatched route is a bare 404, because the framework does not call `UseStatusCodePages`.
+limiter knows when its window resets, but writes no body, and on an API host an unmatched route is a
+bare 404, because the API pipeline does not call `UseStatusCodePages` (only the Blazor web host
+pipeline re-executes error statuses to its `/not-found` page).
 
 There is also a guard against the most insidious bug in this space: a controller that calls
 `Ok(result)` on a *failed* `Result`. Without a guard that serializes as a misleading `200 OK` carrying
@@ -124,8 +128,11 @@ structured trailers for free, and `Metadata.ToErrors()` is the exact inverse: it
 encoder omitted it, and falling back to `ErrorType.Failure` on a type name it does not recognize so a
 newer peer cannot break an older client. `RpcException.ToResult()` and `ToResult<T>()` sit on top of it
 and rebuild `Result.Failure(errors)`, degrading a transport fault that carries no trailers (a reset
-connection, an exceeded deadline) to a single `Failure` error coded `Grpc.{StatusCode}` rather than
-letting an exception escape. A consumer's client adapter is then a two-line `catch`: ADC's
+connection, an exceeded deadline) to a single `Unexpected` error coded `Grpc.{StatusCode}` rather than
+letting an exception escape. `Unexpected` is deliberate: a fault with no trailers never came from the
+peer's own `Result`, so it says nothing about the request, and it reaches the HTTP edge as a 500 at the
+top severity rank that callers treat as retryable, never as the definitive 400 a `Failure` would be.
+A consumer's client adapter is then a two-line `catch`: ADC's
 `SessionBookmarkValidationServiceGrpcAdapter` and `EventLiveValidationServiceGrpcAdapter` catch
 `RpcException` and `return ex.ToResult()` or `ex.ToResult<T>()`, and the caller sees the same `Result`
 it would have seen in-process.
@@ -151,7 +158,7 @@ The same edge standardizes the things that drift if left to each endpoint:
 - **Disabled features speak the same dialect.** A `[FeatureGate]` on an off flag returns an RFC 9457
   404 (via `DisabledFeatureHandler`), not a bespoke 403, so a disabled feature reads as absent and
   still matches the API's error shape. It is not disguised as a missing route: the body is titled
-  "Feature not available", while an unknown route answers with an empty-body 404.
+  "Feature not available", while an unknown route on an API host answers with an empty-body 404.
 
 ## Trade-offs, honestly
 
@@ -172,9 +179,12 @@ contract. The first two are the honest notes below.
   `MapCommonOpenApi()`), fetches `/openapi/v1.json`, normalizes it (the
   host-assigned `servers` block is dropped, object properties are ordered ordinally so generator
   ordering is not mistaken for drift, array order is preserved because it is contractual), and diffs the
-  result against a committed `openapi-baseline.v1.json`. A change to the generated surface fails the
-  build; an intended change is regenerated deliberately, by setting `MMCA_UPDATE_OPENAPI_BASELINE=1`
-  and committing the new baseline in the same pull request. What that gate covers is the
+  result against the committed baseline for the framework it runs on (`openapi-baseline.v1.net11.json`
+  on net11.0, `openapi-baseline.v1.json` on net10.0, because the two framework lines emit the same
+  contract with a different spec revision and tag ordering). A change to the generated surface fails the
+  build; an intended change is regenerated deliberately, by setting `MMCA_UPDATE_OPENAPI_BASELINE=1`,
+  re-running the test on each target framework, and committing the new baselines in the same pull
+  request. What that gate covers is the
   framework-owned surface: the probe controllers stand in for a consumer's real controllers precisely
   so the test guards document generation rather than any concrete API. The concrete surface stays
   guarded by the consumer hosts' own contract-snapshot tests, where the endpoints actually live. Two
@@ -190,7 +200,7 @@ contract. The first two are the honest notes below.
   registers a Contracts layer in its map today, so a layer-iterating rule would pass vacuously forever,
   while an attribute-driven one starts biting the moment a repo marks its first contract type. The
   honest part is that MMCA.Common marks no type with the attribute, so the framework's own run of the
-  rule asserts nothing and is a ratchet there. The consumers are where it bites: ADC marks seven Shared
+  rule asserts nothing and is a ratchet there. The consumers are where it bites: ADC marks nine Shared
   interfaces (`ISessionBookmarkValidationService` and `IEventLiveValidationService` among them) and
   Store marks four (`IProductVariantService`, `ICustomerService` and two export services), and both
   repos run the rule on every build.
@@ -245,129 +255,73 @@ included), or `dotnet add package MMCA.Common.API` and try it.*
 
 *Tags: .NET, C Sharp, Software Architecture, gRPC, API Design*
 
-*Notes (2026-11-17 refresh against MMCA.Common v1.300.0, read from the `chore/api-drift` branch ahead of
-its tag; only the anchors this run touched were re-read). The opt-in Scalar reference UI mapping and its
-`Scalar.AspNetCore` dependency left the framework (no host called it), so the contract-snapshot trade-off
-ends at `MapCommonOpenApi()` serving `/openapi/v1.json`; the 2026-10-02 entry's OpenAPI anchors were
-repointed (`OpenApiEndpointExtensions.cs:59`, non-Production guard `:61`, missing-`v1` startup throw `:66`,
-`AllowAnonymous` `:73`) and its `MapCommonScalarUi()` anchor dropped.*
-
-*Notes (2026-10-29 refresh against MMCA.Common v1.265.1; the anchors this run touched were re-read, the
-rest carried from the 2026-10-22 pass). The body no longer says one table is reused on both transports:
-HTTP maps through `ErrorHttpMapping.ErrorTypeToStatusCode`
-(`MMCA.Common/Source/Presentation/MMCA.Common.API/Middleware/ErrorHttpMapping.cs:20-32`, `internal`), gRPC
-through its own private `FrozenDictionary<ErrorType, StatusCode>`
-(`MMCA.Common/Source/Presentation/MMCA.Common.Grpc/ResultGrpcExtensions.cs:37-50`, doc "Mirrors" at
-`:34-35`), and only `ErrorTypeSeverity` (`.../MMCA.Common.Shared/Abstractions/ErrorTypeSeverity.cs:38-50`,
-`MostSevere` `:71`) is shared; heading, the enforcement summary and "What we covered" now say one table
-per transport. The rate-limiter sentence gains the `Retry-After` header (`...RateLimiting.cs:424`,
-status `:420`). Re-anchored in the 2026-10-08 and 2026-10-02 entries: `AGENTS.md` "Microservices
-Extraction Boundaries" `:126` to `:129` (headings `:1` to `:164`), the second `UseStatusCodePages`
-comment hit, and the stale `sync-medium-fences.ps1` reference dropped (no such script exists under
-`Tools/Scripts/`).*
-
-*Notes (2026-10-22 refresh against MMCA.Common v1.250.0; every anchor in this ledger re-verified this
-run, and the drifted ones corrected in place). `GlobalExceptionHandler` is still the last handler but
-not a pure 500: `CrossTenantWriteException` answers 400 with Title "Tenant write rejected"
-(`MMCA.Common/Source/Presentation/MMCA.Common.API/Middleware/GlobalExceptionHandler.cs:54-72`, title
-constant `:36`), `BadHttpRequestException` passes its own status through, titled "Payload Too Large" for
-413 and "Bad Request" otherwise (`:74-98`), and only the remainder falls to 500 (`:100-113`); the body
-now says so. ADC marks seven `[ServiceContract]` interfaces, not six: the seventh is
-`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Shared/Exports/IUserConferenceExportService.cs:13`.
-Re-anchored in place below: `AGENTS.md` "Microservices Extraction Boundaries" `:125` to `:126` (headings
-`:5` to `:159`), the exception-handler chain `DependencyInjection.cs:154-158` to `:159-163`
-(`AddCommonExceptionHandlers` at `:154`), and `EventLiveValidationServiceGrpcAdapter.cs` gains a fifth
-catch at `:205` returning `ex.ToResult<T>()` at `:210`. Every other anchor below matched source as
-cited. Header blockquote grounding files all exist as named.*
-
-*Notes (2026-10-08 refresh against MMCA.Common v1.233.0; this run's changes, each anchor re-read).
-Header blockquote drops "Result pattern": `MMCA.Common/AGENTS.md` has no such section (headings `:1`
-to `:164`; "Microservices Extraction Boundaries" at `:129`). The Problem Details invariant is scoped to
-the MVC pipeline: the API rate limiter sets `RejectionStatusCode` 429
-(`MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/WebApplicationBuilderExtensions.RateLimiting.cs:420`)
-and an `OnRejected` that writes only a `Retry-After` header (`:424`, `WithRetryAfterHeader` at `:29`),
-and no `UseStatusCodePages` call exists under `MMCA.Common/Source` (the two hits are comments in
-`.../Authorization/Fallback/FallbackAuthorizationHandler.cs:19` and `.../MMCA.Common.UI/Pages/NotFound.razor:9`). The disabled-feature 404 carries
-Title "Feature not available" and its Detail
-(`.../MMCA.Common.API/FeatureManagement/DisabledFeatureHandler.cs:22-23`), so it is distinguishable from an
-unknown route; the "indistinguishable" wording was dropped. The scorecard row
-(`Website/docs-src/governance/common-ArchitectureScorecard.md:73`) holds Implementation 9 for four
-reasons, not two; the single-document reason anchors at `.../Startup/Endpoints/OpenApiEndpointExtensions.cs:28,65`
-and the event-snapshot gate is `MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Bases/Contracts/IntegrationEventContractTestsBase.cs`
-(the scorecard cites `:35-53`; not re-read this run). `[ServiceContract]` targets Interface, Class and Struct
-(`MMCA.Common/Source/Core/MMCA.Common.Shared/Abstractions/ServiceContractAttribute.cs:22`) and its doc
-says consumers mark interfaces only (`:16-18`). Consumer marks: ADC seven
-(`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Shared/Sessions/ISessionBookmarkValidationService.cs:10`,
-`.../Conference.Shared/Events/Live/IEventLiveValidationService.cs:12`,
+*Notes (2026-11-25 refresh, re-verified 2026-11-25 against MMCA.Common v1.319.0; every anchor in this
+entry was re-read this run, and it supersedes the line anchors in the older entries). Changed claims:
+(1) `ApiControllerBase` is not single-purpose: `HandleFailure` at
+`MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/ApiControllerBase.cs:49` (class `:23`, ranked
+status `:62` via `ErrorHttpMapping.GetStatusCode`, ranking doc `:36-44`), `SetRetryAfter` on a 429 at
+`:74` and `:87-101`, `SetConcurrencyETag` `:125`, `HandleConditionalCommandAsync` `:153` and
+`HandleConditionalCommandWithResponseAsync` `:184`; the body names the error path and the `Retry-After`
+behavior. (2) A trailer-less gRPC fault is `Unexpected`, not `Failure`:
+`MMCA.Common/Source/Presentation/MMCA.Common.Grpc/ResultGrpcExtensions.cs` `TransportError` `:340-344`
+(remarks `:333-339`), `ToResult()` `:219` (doc `:209-212`), `ToResult<T>()` `:244` (doc `:233-236`).
+(3) `UseStatusCodePages` is scoped to API hosts: the one call under `MMCA.Common/Source` is
+`app.UseStatusCodePagesWithReExecute("/not-found", ...)` in `UseMmcaBlazorWebPipeline`
+(`.../MMCA.Common.UI.Web/Hosting/BlazorWebHostExtensions.cs:198`, method `:181`); the other hits are
+comments (`.../API/Authorization/Fallback/FallbackAuthorizationHandler.cs:22`,
+`.../MMCA.Common.UI/Pages/NotFound.razor:9`, `.../MMCA.Common.UI/Services/Navigation/IForbiddenReExecutionDetector.cs:8`);
+the same scoping was applied to the disabled-feature bullet. (4) One OpenAPI baseline per framework:
+`MMCA.Common/Tests/Presentation/MMCA.Common.API.Tests/OpenApi/OpenApiBaselineTests.cs:44-48` (rationale
+`:40-43`, per-framework regeneration guidance `:110`, `MMCA_UPDATE_OPENAPI_BASELINE` `:38`, `servers`
+dropped `:51-52`). (5) ADC marks nine `[ServiceContract]` interfaces, adding
+`MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Shared/Tickets/Invitations/IPendingTicketInvitationService.cs:13`
+and `.../MMCA.ADC.Identity.Shared/Users/IVerifiedUserLookupService.cs:15` to the seven
+(`.../Conference.Shared/Sessions/ISessionBookmarkValidationService.cs:10`,
+`.../Conference.Shared/Events/Live/IEventLiveValidationService.cs:13`,
 `.../Conference.Shared/Exports/IUserConferenceExportService.cs:13`,
-`.../MMCA.ADC.Engagement.Shared/UserSessionBookmarks/IBookmarkCountService.cs:10`,
-`.../MMCA.ADC.Engagement.Shared/Exports/IUserEngagementExportService.cs:13`,
-`.../MMCA.ADC.Identity.Shared/Users/IAttendeeQueryService.cs:10`,
-`.../MMCA.ADC.Notification.Shared/UserNotifications/IUserNotificationExportService.cs:13`); Store four
+`.../Engagement.Shared/UserSessionBookmarks/IBookmarkCountService.cs:10`,
+`.../Engagement.Shared/Exports/IUserEngagementExportService.cs:13`,
+`.../Identity.Shared/Users/IAttendeeQueryService.cs:10`,
+`.../Notification.Shared/UserNotifications/IUserNotificationExportService.cs:13`). Store four unchanged
 (`MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.Shared/Products/IProductVariantService.cs:33`,
-`.../MMCA.Store.Identity.Shared/Customers/ICustomerService.cs:25`,
-`.../MMCA.Store.Sales.Shared/Exports/IUserSalesExportService.cs:20`,
-`.../MMCA.Store.Catalog.Shared/Exports/IUserCatalogExportService.cs:19`). Both run the rule:
-`MMCA.ADC/Tests/Architecture/MMCA.ADC.Architecture.Tests/Layering/ServiceContractPurityTests.cs:9` and
-`MMCA.Store/Tests/Architecture/MMCA.Store.Architecture.Tests/Layering/ServiceContractPurityTests.cs:9`.
-Corrected in place below: `OAuthControllerBase.cs` `:35` to `:50` (base at `:54`),
-`AddCommonOpenApi` `:95-109` to `:101-115` (doc `:82-93` to `:87-100`), and the stale
-`ApiControllerBase` source-doc drift note (the doc comment carries `TooManyRequests` at `:27`).*
+`.../Identity.Shared/Customers/ICustomerService.cs:25`, `.../Sales.Shared/Exports/IUserSalesExportService.cs:20`,
+`.../Catalog.Shared/Exports/IUserCatalogExportService.cs:19`); both run the rule
+(`MMCA.ADC/Tests/Architecture/MMCA.ADC.Architecture.Tests/Layering/ServiceContractPurityTests.cs:9`,
+`MMCA.Store/Tests/Architecture/MMCA.Store.Architecture.Tests/Layering/ServiceContractPurityTests.cs:9`).
+Re-anchored, unchanged claims: `ErrorHttpMapping` table
+`MMCA.Common/Source/Presentation/MMCA.Common.API/Middleware/ErrorHttpMapping.cs:23-35` (Unexpected 500 `:33`,
+TooManyRequests 429 `:34`), list overload `:54-55` via `ErrorTypeSeverity.MostSevere`; exception chain
+`.../MMCA.Common.API/DependencyInjection.cs:162-166` (`AddCommonExceptionHandlers` `:157`),
+`UnhandledResultFailureFilter` `:50`; rate limiter
+`.../API/Startup/WebApplicationBuilderExtensions.RateLimiting.cs:431` (429) and `:435` (`OnRejected`),
+`WithRetryAfterHeader` `:30`; gRPC table `ResultGrpcExtensions.cs:37-50` (doc "Mirrors" `:34`,
+ResourceExhausted `:49`), `ToRpcException()` `:119` ranking at `:124`, `ToErrors()` `:173`,
+`ParseErrorType` falling back to `Failure` `:280-283`, `EscapeTrailerValue` `:289`; ADC adapters in
+`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Contracts/`: `SessionBookmarkValidationServiceGrpcAdapter.cs`
+catches `:53,79`, returns `:58,85`; `EventLiveValidationServiceGrpcAdapter.cs` catches `:65,121,150,186,218`,
+returns `ex.ToResult<T>()` `:70,126,155,191,223`. OpenAPI: `AddCommonOpenApi()`
+`.../API/Startup/WebApplicationBuilderExtensions.cs:108`; `MapCommonOpenApi()`
+`.../Startup/Endpoints/OpenApiEndpointExtensions.cs:59` (non-Production guard `:61`, missing-`v1` throw
+`:66`, `AllowAnonymous` `:73`); probe host `.../MMCA.Common.API.Tests/OpenApi/OpenApiProbeHost.cs`
+(`CreateAsync` `:28`, `AddCommonApiVersioning()` `:39`, `AddOpenApi()` `:44`, `AddCommonOpenApi()` `:45`,
+`MapCommonOpenApi()` `:65`). Scorecard row `Website/docs-src/governance/common-ArchitectureScorecard.md:74`
+(weight 2, Maturity 4, Implementation 9, 8/18, the four held-at-9 reasons). Confirmed by this run's audit
+and not re-read by the apply pass: the `GlobalExceptionHandler` client-status branches, the
+`DisabledFeatureHandler` title, the `ErrorTypeSeverity` ranks, `GrpcResultExceptionInterceptor`'s
+`Internal` fallback, and the `ServiceContractAttribute` targets. Side observation, not an article claim:
+ADC's own doc comment at `EventLiveValidationServiceGrpcAdapter.cs:229` still describes the transport
+fault as `ErrorType.Failure`.*
 
-*Notes (2026-10-02 refresh against MMCA.Common v1.221.0; every anchor below re-read this run, and an
-anchor not re-read was dropped rather than carried). HTTP edge: `ApiControllerBase.HandleFailure`
-(`MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/ApiControllerBase.cs:35`; class at `:16`;
-ranked status at `:47-48` via `ErrorHttpMapping.GetStatusCode(errorList)`). Not every controller derives
-from it: `EntityControllerBase` does (`.../Controllers/EntityControllerBase.cs:34-40`), while
-`OAuthControllerBase` (`.../Controllers/OAuthControllerBase.cs:50`, base `: ControllerBase` at `:54`) and `ServiceInfoControllerBase`
-(`.../Controllers/ServiceInfoControllerBase.cs:30`) derive from `ControllerBase` directly, so the body
-says "result-returning controller bases". `ErrorHttpMapping` is the ten-entry
-`FrozenDictionary<ErrorType, int>` at
-`MMCA.Common/Source/Presentation/MMCA.Common.API/Middleware/ErrorHttpMapping.cs:20-32`
-(`[ErrorType.Unexpected]` 500 at `:30`, `[ErrorType.TooManyRequests]` 429 at `:31`), exactly as the
-fence renders it; the list overload at `:51-52` (doc from `:41`) delegates to
-`ErrorTypeSeverity.MostSevere`. Ranking: `MMCA.Common/Source/Core/MMCA.Common.Shared/Abstractions/ErrorTypeSeverity.cs:38-50`
-(Unexpected 70, Unauthorized 60, Forbidden 50, TooManyRequests 45, Conflict 40, NotFound 30,
-UnprocessableEntity 20, Invariant/Validation/Failure 10; doc list at `:18-25`; `MostSevere` at `:71`).
-The `ApiControllerBase.cs:25-30` doc comment lists the same ranking, `TooManyRequests` (429) at `:27`.
-Exception chain registered in order at
-`MMCA.Common/Source/Presentation/MMCA.Common.API/DependencyInjection.cs:159-163`
-(OperationCanceled, Domain, DbUpdate, Validation, Global); `UnhandledResultFailureFilter` added globally
-at `:50`. gRPC edge: `GrpcResultExceptionInterceptor.ToTransportException`
-(`MMCA.Common/Source/Presentation/MMCA.Common.Grpc/Interceptors/GrpcResultExceptionInterceptor.cs:126-138`)
-calls `ToRpcException()` when errors exist and otherwise throws `StatusCode.Internal` with the exception
-message. `MMCA.Common/Source/Presentation/MMCA.Common.Grpc/ResultGrpcExtensions.cs`: the
-`FrozenDictionary<ErrorType, StatusCode>` at `:37-50` (TooManyRequests -> ResourceExhausted at `:49`);
-`ToRpcException()` at `:119` (doc `:103-117`, percent-encoding described at `:112-116`) ranks via
-`ErrorTypeSeverity.MostSevere` at `:124` and writes code/message/type trailers at `:135-137`,
-source/target at `:138-146`, escaping through `EscapeTrailerValue` (`:287`); `ToErrors()` at `:173`
-(inverse doc from `:155`) with `ParseErrorType` falling back to `Failure` (`:278`); `ToResult()` at
-`:218` and `ToResult<T>()` at `:242`; `TransportError` at `:331`, coding `Grpc.{StatusCode}` at `:333`.
-ADC adapters, `MMCA.ADC/Source/Services/MMCA.ADC.Conference.Contracts/`:
-`SessionBookmarkValidationServiceGrpcAdapter.cs` catches at `:53,79` and returns `ex.ToResult()` at
-`:58` and `ex.ToResult<T>()` at `:85`; `EventLiveValidationServiceGrpcAdapter.cs` catches at
-`:56,112,141,173,205` and returns `ex.ToResult<T>()` at `:61,117,146,178,210`; class remarks at `:20` and `:21`
-name the framework's own `RpcException.ToResult` decoder. OpenAPI:
-`AddCommonOpenApi()` (`MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/WebApplicationBuilderExtensions.cs:101-115`,
-doc `:87-100`) registers no document; it installs the parameter backfill and the strongly-typed-id
-transformers, and the host calls `AddOpenApi()` itself. `MapCommonOpenApi()` at
-`.../Startup/Endpoints/OpenApiEndpointExtensions.cs:59` (non-Production guard `:61`, missing-`v1`
-startup throw `:66`, `AllowAnonymous` `:73`). Baseline gate:
-`MMCA.Common/Tests/Presentation/MMCA.Common.API.Tests/OpenApi/OpenApiProbeHost.cs` (`CreateAsync` `:28`,
-`AddCommonApiVersioning()` `:39`, host `AddOpenApi()` `:40`, `AddCommonOpenApi()` `:41`,
-`MapCommonOpenApi()` `:61`, class doc `:15-16`). Contract purity:
-`ArchitectureRules.ServiceContractsDoNotDependOnServiceInternals` and the second rule
-`ServiceContractImplementationsAreNotPublic` (the latter not described in the body) in
-`MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Rules/Contracts/ArchitectureRules.Contracts.cs`
-(per the 2026-10-02 audit, `:32` and `:81`; not re-read this run). Scorecard: the "API & Contract
-Design" row is `Website/docs-src/governance/common-ArchitectureScorecard.md:73` (weight 2, Maturity 4,
-Implementation 9, weighted 8/18); row 7 is at `:71` and the table header at `:63`. Header blockquote
-now cites `MMCA.Common/AGENTS.md` ("Microservices Extraction Boundaries" at `:129`), since
-`MMCA.Common/CLAUDE.md` only imports it. The fence gained the `TooManyRequests` row and ranking tier this
-run.*
-
-*Notes (history): 2026-08-22 refresh (MMCA.Common PR #271, squash `8a6c603`) rewrote "Trade-offs,
-honestly", takeaway 5 and "What we covered" after the OpenAPI baseline gate and the `[ServiceContract]`
-purity rule landed; anchors re-verified 2026-09-19, when the severity-ranking fence was added.*
+*Notes (history): the 2026-11-17 refresh dropped the opt-in Scalar UI mapping (no host called it). The
+2026-10-29 refresh split the "one table on both transports" wording into one table per transport,
+added the rate limiter's `Retry-After` header, and dropped a reference to a nonexistent fence-sync
+script. The 2026-10-22 refresh described `GlobalExceptionHandler`'s two client-status branches and
+counted the seventh ADC contract. The 2026-10-08 refresh scoped the Problem Details invariant to the
+MVC pipeline, dropped the "indistinguishable" disabled-feature wording, and corrected the scorecard's
+reasons from two to four. The 2026-10-02 refresh re-anchored every claim and added the `TooManyRequests`
+row and ranking tier to the fence. The 2026-08-22 refresh (MMCA.Common PR #271, squash `8a6c603`)
+rewrote "Trade-offs, honestly", takeaway 5 and "What we covered" after the OpenAPI baseline gate and the
+`[ServiceContract]` purity rule landed; anchors were re-verified 2026-09-19, when the severity-ranking
+fence was added.*
 
 - Full series index: https://ivanball.github.io/writing.html

@@ -56,7 +56,7 @@ module, unusable by the next consumer and untestable. ADR-045 splits the job alo
 every app needs and what only an image-handling app needs. The framework ships the storage port and a
 dependency-free magic-byte validator; the re-encode is the application's own processor. The port carries
 more than avatars: ADR-045's avatar-only scope statement is superseded by ADR-123
-(`045-managed-file-storage-and-avatars.md:11`, `:142-144`), which publishes speaker session materials
+(`045-managed-file-storage-and-avatars.md:11`, `:146-148`), which publishes speaker session materials
 through the same `IFileStorageService`.
 
 **`IFileStorageService`** (`IFileStorageService.cs:15`) is the storage boundary: `UploadAsync` takes a
@@ -72,7 +72,7 @@ The default implementation is deliberately inert. `NullFileStorageService`
 a clear `FileStorage.NotConfigured` error (`:34`), and lets deletes succeed (there is nothing to delete).
 A host that never wires storage does not crash mysteriously; its upload endpoints degrade with an honest
 message. A host that wants real storage calls a vendor adapter: `AddAzureBlobFileStorage(configuration)`
-from MMCA.Common.Azure (`AzureServiceCollectionExtensions.cs:41`) swaps in `AzureBlobFileStorageService`
+from MMCA.Common.Azure (`AzureServiceCollectionExtensions.cs:44`) swaps in `AzureBlobFileStorageService`
 (`AzureBlobFileStorageService.cs:20`) when the `FileStorage` section is complete, and MMCA.Common.Aws and
 MMCA.Common.Gcp offer S3 and Google Cloud Storage adapters over the same port
 (`NullFileStorageService.cs:10-12`). The core references no cloud SDK; storage is one adapter call, the
@@ -80,20 +80,20 @@ same shape every vendor capability takes under ADR-134 ([cloud-neutral vendor
 adapters](cloud-neutral-vendor-adapters.md)). Storage deliberately has no startup tripwire: a
 `FileStorage` section is routinely shared configuration that a host storing no files sees too, so a host
 that lost its adapter call is caught by the Null default instead, which fails every upload with
-`FileStorage.NotConfigured` (`CloudAdapterTripwire.cs:22-26`).
+`FileStorage.NotConfigured` (`CloudAdapterTripwire.cs:24-28`).
 
 That registration is defensive on purpose. An incomplete section is a no-op that leaves the Null default
-in place (`AzureServiceCollectionExtensions.cs:49-52`, `:56-59`), so hosts register it
-unconditionally. Production sets `ServiceUri` and authenticates with `DefaultAzureCredential` (`:64`);
-local development can use a `ConnectionString` against Azurite instead (`:65`,
+in place (`AzureServiceCollectionExtensions.cs:52-55`, `:59-62`), so hosts register it
+unconditionally. Production sets `ServiceUri` and authenticates with `DefaultAzureCredential` (`:67`);
+local development can use a `ConnectionString` against Azurite instead (`:68`,
 `AzureBlobFileStorageSettings.cs:16-19`). One detail earns its comment in the source: an empty-string
 `ServiceUri` binds to a *relative* `Uri`, so the guard only accepts an absolute one
-(`AzureServiceCollectionExtensions.cs:54-55`).
+(`AzureServiceCollectionExtensions.cs:57-58`).
 
 But storage is the boring half. The security boundary is the image processor, and the framework
 deliberately does not ship one: its own registration comment says image normalization is the
 application's concern, because decoding needs a native image library that every consumer of the
-package would otherwise carry (`DependencyInjection.cs:356-360`).
+package would otherwise carry (`DependencyInjection.cs:380-384`).
 
 ### The re-encode is the boundary
 
@@ -186,7 +186,7 @@ Undecodable content is a validation failure too, not an exception: a disallowed 
 cannot parse, an incomplete decode or a failed encode all return
 `Error.Validation("Image.Undecodable", ...)` (`:336-340`), so a garbage upload is a clean 400, not a 500.
 The Identity module registers the processor unconditionally, as a stateless singleton, in
-`AddModuleIdentityInfrastructure` (`MMCA.ADC.Identity.Infrastructure/DependencyInjection.cs:22-24`).
+`AddModuleIdentityInfrastructure` (`MMCA.ADC.Identity.Infrastructure/DependencyInjection.cs:23-25`).
 Unlike storage there is no Null image processor, because there is no safe way to skip the re-encode.
 
 Ahead of the processor sits the framework's `ImageContentSniffer` (`ImageContentSniffer.cs:9`), a
@@ -206,10 +206,11 @@ Storage and the sniffer are framework legs; the re-encode is the app's. The avat
 re-encodes to a 256x256 JPEG (`SetUserAvatarHandler.cs:37`) through its own image processor, treating
 client-declared content types as advisory only. The blob name is
 `{userId}-{random8}.jpg` in the public-read `avatars` container, so the URL path reads
-`avatars/{userId}-{random8}.jpg`. Replacing, removing or erasing an avatar schedules a durable
+`avatars/{userId}-{random8}.jpg`. Replacing, removing or erasing an avatar, and a failed save that
+leaves a freshly uploaded blob with no row pointing at it, schedules a durable
 `DeleteAvatarBlobInternalCommand` (ADR-114) rather than deleting the blob inline. The URL lives on the
 user entity as `[Pii]`: nulled on anonymize with the blob delete scheduled in the same transaction, and
-included in the GDPR data export (`045-managed-file-storage-and-avatars.md:97-104`). That last part is why
+included in the GDPR data export (`045-managed-file-storage-and-avatars.md:100-108`). That last part is why
 this article carries a §30 (data privacy) tie alongside the §8 (data access) and §11 (security) ones: the
 avatar is treated as personal data from the moment it lands to the moment it is erased.
 
@@ -238,9 +239,9 @@ they are real design choices rather than oversights.
   staleness is bounded by cache TTLs and self-heals; there is no cache-busting dance to get right.
 - **Avatar blob deletion is eventual, not synchronous.** A replaced or deleted avatar has its blob
   deleted at least once, through the internal-command processor and within its retry budget
-  (`045-managed-file-storage-and-avatars.md:111-113`). Only erasure schedules inside its own transaction;
+  (`045-managed-file-storage-and-avatars.md:115-117`). Only erasure schedules inside its own transaction;
   replace and remove schedule after the save commits, so a host death in between, or a failed schedule,
-  leaves an orphaned blob that is only logged for manual removal (`:191-196`,
+  leaves an orphaned blob that is only logged for manual removal (`:195-200`,
   `SetUserAvatarHandler.cs:162-165`).
 - **`DefaultAzureCredential` needs a data-plane role, not a secret.** In production the storage account
   requires a `Storage Blob Data Contributor` grant for the app identity. That is a bicep-level infrastructure
@@ -248,36 +249,36 @@ they are real design choices rather than oversights.
   assignment exists. It is not a connection string you can paste in.
 - **An app that normalizes images owns its processor and a native image library.** The framework ships
   no decoder, so a consumer that accepts images writes (or copies) its own processor, and it takes on the
-  library behind it. ADC uses SkiaSharp 4.153.1 under MIT, three packages bumped together
-  (`MMCA.ADC/Directory.Packages.props:36-43`), whose native libraries come to roughly 490 MB across
-  platforms (`:36-40`). Containing them is a build-file discipline rather than a default: the Identity
+  library behind it. ADC uses SkiaSharp 4.157.0 under MIT, three packages bumped together
+  (`MMCA.ADC/Directory.Packages.props:80-87`), whose native libraries come to roughly 490 MB across
+  platforms (`:80-84`). Containing them is a build-file discipline rather than a default: the Identity
   Infrastructure project references SkiaSharp with `ExcludeAssets="native"`, so the natives never flow
   to the projects that reference it (`MMCA.ADC.Identity.Infrastructure.csproj:7-10`); only the Identity
-  service host (`MMCA.ADC.Identity.Service.csproj:22-29`) and the processor's own tests
+  service host (`MMCA.ADC.Identity.Service.csproj:21-28`) and the processor's own tests
   (`MMCA.ADC.Identity.Infrastructure.Tests.csproj:12-14`) reference the native packages. The host keeps
   them without `PrivateAssets`, because that would drop them from its own ReadyToRun publish and the
-  image would fail on the first upload (`MMCA.ADC.Identity.Service.csproj:24-27`), so a project that
+  image would fail on the first upload (`MMCA.ADC.Identity.Service.csproj:23-26`), so a project that
   references the host, such as the service startup tests, excludes the natives on its own side
-  (`MMCA.ADC.Services.Tests.csproj:28-32`). The payoff is on the other side of the line: every app that
+  (`MMCA.ADC.Services.Tests.csproj:49-53`). The payoff is on the other side of the line: every app that
   never decodes an image carries no image library at all, and MMCA.Common accepts no NuGet advisories
-  today (`MMCA.Common/Directory.Build.props:33`).
+  today (`MMCA.Common/Directory.Build.props:65-69`).
 
 Be precise about status: the framework legs are implemented and shipped in MMCA.Common, and two MMCA.ADC
-services wire them end to end. The Identity service calls `AddAzureBlobFileStorage(builder.Configuration)`
-at startup for avatars (`MMCA.ADC.Identity.Service/Program.cs:261`) and the Conference service calls it for
-speaker session assets (`MMCA.ADC.Conference.Service/Program.cs:367`). On the Identity side,
+services wire them end to end. The Identity service calls `AddAzureBlobFileStorage(configuration)`
+at startup for avatars (`MMCA.ADC.Identity.Service/Program.cs:225`) and the Conference service calls it for
+speaker session assets (`MMCA.ADC.Conference.Service/Program.cs:301`). On the Identity side,
 `SetUserAvatarHandler` normalizes through the module's own processor (`SetUserAvatarHandler.cs:29`,
 `:103`) and is the only request-path handler that calls `IFileStorageService`, for the upload
 itself (`SetUserAvatarHandler.cs:117`). Every avatar blob delete is a durable
 `DeleteAvatarBlobInternalCommand` scheduled through `IInternalCommandScheduler`: the replaced blob once
 the new URL is saved (`SetUserAvatarHandler.cs:158-160`), the freshly uploaded blob when the save fails
 and leaves no row pointing at it (`:78-88`, `:187`), a removed avatar
-(`RemoveUserAvatarHandler.cs:20,75`) and an erased user (`DeleteUserHandler.cs:35,84`). The deletion
+(`RemoveUserAvatarHandler.cs:20,75`) and an erased user (`DeleteUserHandler.cs:38,90`). The deletion
 runs in `DeleteAvatarBlobInternalCommandHandler` (`DeleteAvatarBlobInternalCommandHandler.cs:17-23`),
 which only names the blob kind for its log lines and inherits the work from Common's
 `DeleteBlobInternalCommandHandlerBase` (`DeleteBlobInternalCommandHandlerBase.cs:28`): the port call
 (`:45`), with a `NotFound` answer completing the row as success (`:53-57`) so at-least-once execution
-stays idempotent. The `Profile` page uploads through `IMediaPickerService` (`Profile.razor.cs:22`). Each
+stays idempotent. The `Profile` page uploads through `IMediaPickerService` (`Profile.razor.cs:24`). Each
 consumer still provisions its own storage account and wires its own upload endpoints against these ports,
 so this is a capability the framework provides rather than one that is live in every downstream app by
 default: MMCA.Store has not adopted the storage port.
@@ -332,24 +333,42 @@ grant, and an app-owned processor whose native image library stays out of every 
 
 *Tags: .NET, C Sharp, Software Architecture, Security, Cloud*
 
-*Notes (refreshed 2026-10-29 against MMCA.Common v1.265.1, `MMCA.Common/FACTS.md:14`): anchors only, no*
-*behavior change in the storage port, the Null default or the avatar flow. Re-anchored this run:*
-*`AzureBlobFileStorageService` class `:15` -> `:20` (class doc grew to `:10-19` with the transport-failure*
-*paragraph: the adapters answer a transport failure as a `FileStorage.UploadFailed` Result, `:14-17`,*
-*`:60`, `:68`); Infrastructure `DependencyInjection.cs` storage comment `:355-360` -> `:356-360` and the*
-*Null `TryAddTransient` `:360` -> `:361`; Identity `Program.cs:260` -> `:261` (comment `:259-260`;*
-*Conference `:367` holds); `DeleteUserHandler.cs:34,83` -> `:35,84` (class `:33`, `IUnitOfWork` `:34`,*
-*scheduler `:35`, `ScheduleAvatarBlobDeletionAsync` `:81`, `ScheduleAsync(new DeleteAvatarBlobInternalCommand`*
-*`:84`). ADR-045 anchors against its 2026-10-28 revision (Status `:21-22`): ADR-123 supersede `:11` and*
-*`:133-134` -> `:142-144`, BR-116a contract `:87-94` -> `:97-104`, eventual deletion `:100-102` ->*
-*`:111-113`, post-commit orphan `:184-186` -> `:191-196`; `SetUserAvatarHandler.cs:162-165` holds. Body*
-*addition: one pointer to `cloud-neutral-vendor-adapters.md` (ADR-134) beside the adapter call, and the*
-*fact that file storage has no startup tripwire (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Configuration/CloudAdapterTripwire.cs:22-26`,*
-*restated at `DependencyInjection.cs:220`), so a missing adapter call shows as `FileStorage.NotConfigured`*
-*(`NullFileStorageService.cs:34`). Every other body anchor was re-checked by the 2026-10-29 audit and holds.*
+*Notes (re-verified 2026-11-25 against MMCA.Common v1.319.0, `MMCA.Common/FACTS.md:14`, and MMCA.ADC main): one*
+*contract addition plus anchors; no behavior change in the storage port, the Null default, the adapter guards or*
+*the processor. Body change: the avatar contract sentence names the fourth delete path, a failed save that*
+*leaves a freshly uploaded blob with no row pointing at it, per ADR-045 (`045-managed-file-storage-and-avatars.md:100-108`,*
+*fourth path `:104-106`, Status `:23`). SkiaSharp is 4.157.0 on all three pins*
+*(`MMCA.ADC/Directory.Packages.props:85-87`; comment with ~490 MB and "Bump all three together" at `:80-84`).*
+*Re-anchored this run, each re-read: `AddAzureBlobFileStorage` `:41` -> `:44`, ContainerName guard `:49-52` -> `:52-55`,*
+*empty-string `ServiceUri` comment and absolute check `:54-55` -> `:57-58`, neither-credential guard `:56-59` -> `:59-62`,*
+*`DefaultAzureCredential` `:64` -> `:67`, `ConnectionString` `:65` -> `:68`*
+*(`MMCA.Common/Source/Hosting/MMCA.Common.Azure/AzureServiceCollectionExtensions.cs`); the file-storage no-tripwire*
+*paragraph `CloudAdapterTripwire.cs:22-26` -> `:24-28` (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Configuration/`);*
+*Infrastructure `DependencyInjection.cs` storage comment `:356-360` -> `:380-384` (Null `TryAddTransient` `:385`);*
+*`AddModuleIdentityInfrastructure` `:22-24` -> `:23-25` (`TryAddSingleton<IImageProcessor, SkiaSharpImageProcessor>` `:25`);*
+*ADR-045 supersede-by-ADR-123 `:11` holds, its Revision (2026-09-12) statement `:142-144` -> `:146-148`, BR-116a*
+*contract `:97-104` -> `:100-108`, eventual deletion `:111-113` -> `:115-117`, post-commit orphan `:191-196` -> `:195-200`;*
+*`MMCA.ADC/Directory.Packages.props:36-43` -> `:80-87`; `MMCA.ADC.Identity.Service.csproj` natives `:22-29` -> `:21-28`*
+*(no-`PrivateAssets` rationale `:24-27` -> `:23-26`); `MMCA.ADC.Services.Tests.csproj:28-32` -> `:49-53` (its comment*
+*at `:49` still says ~470 MB; the body uses the props figure); `MMCA.Common/Directory.Build.props:33` -> `:65-69`*
+*("There are no entries today"; no `NuGetAuditSuppress Include` item exists in any Common `.props` or `.targets`, and*
+*ADR-045 Status `:24-25` records 1.318.0 dropping the last two); Identity `Program.cs:261` -> `:225` (the call is*
+*`services.AddAzureBlobFileStorage(configuration)`, comment `:222-224`), Conference `Program.cs:367` -> `:301`*
+*(comment `:297-300`); `DeleteUserHandler.cs:35,84` -> `:38,90` (class `:36`, `ScheduleAvatarBlobDeletionAsync` `:87`,*
+*called `:81`); `Profile.razor.cs:22` -> `:24`. Spot re-read and holding: `SetUserAvatarHandler.cs` `:29`, `:37`, `:63`,*
+*`:103`, `:117`, `:159`, `:187`; `RemoveUserAvatarHandler.cs:20,75`. Correction to the history below: MMCA.Store does*
+*inject `IMediaPickerService`*
+*(`MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.UI/Pages/Products/ProductDetail.Images.razor.cs:43`,*
+*`ProductDetail.razor:157`), so the 2026-10-25 and 2026-10-22 statements that Store has no such reference do not*
+*hold; the body claim "MMCA.Store has not adopted the storage port" does (no `IFileStorageService`,*
+*`AddAzureBlobFileStorage` or SkiaSharp reference in any `.cs`, `.razor` or `.csproj` under `MMCA.Store/Source`,*
+*re-searched). The remaining body anchors (the `SkiaSharpImageProcessor` constants and methods, the port, the Null*
+*default, the settings, the sniffer, the media picker, the `.csproj` containment in Identity.Infrastructure and its*
+*tests, and the blob-delete handler and base) were confirmed by this run's independent audit and not re-read by the*
+*apply pass.*
 
 *Notes (refreshed 2026-10-25 against MMCA.Common main v1.260.0 and MMCA.ADC main after #293; HISTORY: the*
-*anchors this block shares with the 2026-10-29 entry above are superseded there): image*
+*anchors this block shares with the 2026-11-25 entry above are superseded there): image*
 *normalization is no longer a framework capability. Common v1.258.0 (#603) moved the processor from*
 *SixLabors.ImageSharp to SkiaSharp, and v1.259.0 (#608) removed `IImageProcessor` and the SkiaSharp*
 *processor from MMCA.Common (CHANGELOG and facts file, not re-read here); re-confirmed this run: no*

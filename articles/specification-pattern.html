@@ -95,7 +95,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 54 articles</summary>
+        <summary>All 57 articles</summary>
         <nav class="doc-nav" aria-label="The MMCA.Common series">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -152,7 +152,10 @@
         <li><a href="durable-internal-commands.html">51 · Four ways to do work later</a></li>
         <li><a href="identity-completions.html">52 · Finishing identity</a></li>
         <li><a href="cloud-neutral-vendor-adapters.html">53 · One framework, three clouds</a></li>
-        <li><a href="series-index.html">54 · The series index</a></li>
+        <li><a href="borrowed-and-machine-identities.html">54 · Borrowed and machine identities</a></li>
+        <li><a href="app-as-mcp-server.html">55 · Your app as an MCP server</a></li>
+        <li><a href="outbound-webhooks.html">56 · Sending webhooks without opening a door</a></li>
+        <li><a href="series-index.html">57 · The series index</a></li>
           </ol>
         </nav>
       </details>
@@ -232,25 +235,28 @@
           spec-taking <code>ListAsync</code> honors in full. Hand a shaped one to <code>And</code>, <code>Or</code>, or <code>Not</code> and the combinator&#39;s
           constructor throws <code>ArgumentException</code> instead of silently dropping the shape; an unshaped one composes
           like any other, and predicates that belong with a shaped read are composed inside its own <code>Criteria</code>.
-          Composition is live in production
-          today, in seven consumer read paths across two applications. Four are in ADC: the paged sessions read
+          Composition is live
+          today, in nine consumer read paths across two applications. Six are in ADC: the paged sessions read
           ANDs the public-session filter with the speaker-scoped one rather than substituting, because dropping
           the public filter for a speaker-scoped request would leak non-accepted sessions to non-privileged
           callers; the paged speakers read ANDs the public-speaker filter with an event-scoped one for the same
           reason; a shared visibility helper ANDs the public-session status rule with an inline event-scope
-          predicate before projecting session ids; and the organizer user roster turns the grid&#39;s signed-in
+          predicate before projecting session ids; the organizer user roster turns the grid&#39;s signed-in
           filter into a specification (an id <code>Contains</code> over the accounts holding a live session), negates it
           with <code>.Not()</code> for the not-signed-in case, and ANDs it with any specification the caller already
-          supplied. Three are in MMCA.Store. The public product-reviews endpoint and the domain-event
+          supplied; and the conference reader behind ADC&#39;s MCP tools composes on two paths, ANDing the same
+          public-session filter with an event scope when it lists an event&#39;s sessions, and chaining the
+          public-session, speaker-session and event filters with two <code>.And()</code> calls when it returns a speaker&#39;s
+          sessions. Three are in MMCA.Store. The public product-reviews endpoint and the domain-event
           handler that recomputes a product&#39;s rating both AND a by-product review specification with a
           published-reviews one, and the storefront product read is itself a <code>QuerySpecification</code> that folds
           its optional search, category and on-sale filters into its own <code>Criteria</code> with <code>.And()</code>, so only the
           filters a request asks for reach the predicate and the shaped specification is never an operand.
           Each composed <code>Criteria</code> reaches the database as a single server-side <code>WHERE</code>.
-          That is ten composing call sites, nine fluent <code>.And()</code> calls and one fluent <code>.Not()</code>, and the
-          hand-built <code>new AndSpecification&lt;...&gt;(a, b)</code> form appears nowhere in the three consumer repositories.
-          Ten call sites in two applications is a narrow sample, though (MMCA.Helpdesk composes
-          nothing), and <code>Or</code> ships without a caller.</p>
+          That is thirteen composing operations on twelve lines, twelve fluent <code>.And()</code> calls and one fluent
+          <code>.Not()</code>, and the hand-built <code>new AndSpecification&lt;...&gt;(a, b)</code> form appears nowhere in the three
+          consumer repositories. Thirteen operations in two applications is a narrow sample, though
+          (MMCA.Helpdesk composes nothing), and <code>Or</code> ships without a caller.</p>
           <pre class="doc-pre" tabindex="0" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-comment">// A named, reusable, server-authored visibility rule (ADC, BR-49): a session is publicly</span>
 <span class="hljs-comment">// visible when it is Accepted, or carries no status (organizer-created sessions never get one).</span>
 <span class="hljs-keyword">public</span> <span class="hljs-keyword">sealed</span> <span class="hljs-keyword">class</span> <span class="hljs-title">PublicSessionStatusSpecification</span> : <span class="hljs-title">Specification</span>&lt;<span class="hljs-title">Session</span>, <span class="hljs-title">SessionIdentifierType</span>&gt;
@@ -365,12 +371,14 @@
           <code>ApplicationLayer_DoesNotUseRawQueryableSurfaces</code> is a fitness function that reads the <code>.cs</code> files of
           each mapped module&#39;s Application project, flags <code>.Table</code> / <code>.TableNoTracking*</code> member access, and fails
           the build on a hit. It is deliberately a textual line scan rather than IL analysis (the testing package
-          carries no Roslyn or IL dependency on purpose), and its limits are documented on the rule itself.
-          Existing violations go into an <code>AllowedFiles</code> list used as an adoption ratchet, so new code is clean
-          immediately while the list shrinks. The rule is opt-in per repository by subclassing the base:
-          MMCA.Common, MMCA.ADC, and MMCA.Store subclass it today (Store adopted with an empty <code>AllowedFiles</code>,
-          because its Application layer had zero raw-queryable uses at adoption), so only MMCA.Helpdesk&#39;s
-          Application code is not scanned yet.</p>
+          carries no Roslyn dependency, and this rule does not use the IL reader the package&#39;s call-graph rules
+          use), and its limits are documented on the rule itself. Existing violations go into an <code>AllowedFiles</code>
+          list used as an adoption ratchet, so new code is clean immediately while the list shrinks, and an entry
+          that no longer matches a raw-queryable use fails the rule as stale, so the ratchet can only tighten. The
+          rule is opt-in per repository by subclassing the base, and all four repositories subclass it:
+          MMCA.Common and MMCA.ADC with an allowlist, MMCA.Store with an empty <code>AllowedFiles</code> (its Application
+          layer had zero raw-queryable uses at adoption), and MMCA.Helpdesk with an empty one on purpose, because
+          an entry there would name the seed&#39;s own files and cover nothing in a module an adopter scaffolds.</p>
           <h2 id="trade-offs-honestly">Trade-offs, honestly</h2>
           <p>The pattern earns its keep, but a few real, specific gaps are worth stating plainly rather than
           glossing:</p>
@@ -385,9 +393,9 @@
           override versus when to bypass is judgment.</li>
           <li><strong>The queryable ban is a textual scan, and it is opt-in.</strong> It skips only whole-line <code>//</code> comments, so
           a match inside a string literal or a trailing comment is a false positive, and it cannot see through
-          variable indirection or an alias that re-exposes a queryable. Three of the four repositories subclass
-          the rule today; only MMCA.Helpdesk relies on review. The allowlisted files are real coupling, not
-          paperwork: each one would need rework if its module moved behind a transport boundary.</li>
+          variable indirection or an alias that re-exposes a queryable. All four repositories subclass the rule,
+          but a new repository is scanned only once it subclasses the base too. The allowlisted files are real
+          coupling, not paperwork: each one would need rework if its module moved behind a transport boundary.</li>
           </ul>
           <p>None of these argue against the pattern. They argue for testing your composed specifications and for
           keeping the trusted/untrusted boundary crisp.</p>

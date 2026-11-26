@@ -113,7 +113,7 @@ second lookup turns a race that deleted the account between the two steps into a
 own doc comment names it the "untracked-then-tracked dual-fetch"; the ADC and
 Store Identity modules are thin sealed subclasses that supply the app-specific hooks (the untracked
 lookup, the claim set) and re-label it "dual-fetch pattern" in their class doc comments
-(`AuthenticationService.cs:20` in both ADC and Store). It is shared framework login code, not a
+(`AuthenticationService.cs:23` in ADC, `:20` in Store). It is shared framework login code, not a
 per-app copy, but it is not part of ADR-004's cross-service validation design.
 
 ## JWT algorithm pinning: the attack you would otherwise ship
@@ -177,10 +177,18 @@ lock (_gate)
 
 The receiving service opts in separately with `AddServiceTokenAuthentication`: a second JwtBearer
 scheme that pins `ValidAlgorithms` to HS256, refuses a token without the `svc` claim, and is never the
-default scheme. Only an endpoint under the `InternalCaller` policy accepts it, and that policy takes an
-authenticated caller from either scheme, so a user token on the same call is validated by the user
-scheme against the issuer's JWKS exactly as described above. Store is the one adopter: its Sales service sends the token on its Customers client, and
-its Identity service validates it (`MMCA.Store.Identity.Service/Program.cs:179`); ADC uses neither half.
+default scheme. It registers two policies, and only an endpoint under one of them accepts the token.
+`InternalCaller` takes an authenticated caller from either scheme, so a user token on the same call is
+validated by the user scheme against the issuer's JWKS exactly as described above, and an edge that
+admits both kinds of caller tells them apart with `IsServiceCaller()`. `ServiceCaller` evaluates the
+service scheme alone, so an end-user token is refused there.
+
+Both apps adopt it. In Store, the Sales service sends the token on its Customers client, and Identity
+validates it on the Customers edge under `InternalCaller`. ADC runs three such edges: Engagement sends
+its token to Identity's VerifiedUserLookup edge (`InternalCaller`, reached by the roster import, which
+has no user) and to Notification's LiveChannelPush edge (`ServiceCaller`, reached only by the
+live-channel publish drain), and Identity sends its own to Engagement's TicketInvitation edge
+(`ServiceCaller`, for the anonymous sign-in link request).
 
 ## Trade-offs, honestly
 
@@ -241,12 +249,14 @@ The JWKS layer is the right model, but it is not free, and the rough edges are w
   on an empty scan, on an endpoint that declares neither `[Authorize]` nor `[AllowAnonymous]` (a
   stricter gate that is on by default, which a repo not yet ready opts out of explicitly; Common, ADC,
   Store and Helpdesk all keep it on), and on a stale entry in that second, undecorated allow-list. The
-  framework's own allow-list holds 21 entries: twelve credential-exchange actions that cannot require
-  a token because issuing one is what they do, or because the caller has no session yet (login,
-  register, refresh, the OAuth exchange, the three provider challenges and the provider callback,
-  forgot-password and reset-password, and sending and confirming an email-confirmation link), six
-  credential pages (the email-confirmation landing among them), and three landing and outcome pages
-  that render nothing depending on the caller. The scan matches `ControllerBase`, `RouteAttribute`
+  framework's own allow-list holds 29 entries: nineteen credential-exchange actions that cannot
+  require a token because issuing one is what they do, or because the caller has no session yet
+  (login, register, refresh, the OAuth exchange, the four provider challenges for Google, GitHub,
+  Apple and OIDC and the provider callback, OIDC home-realm discovery, forgot-password and
+  reset-password, sending and confirming an email-confirmation link, sending and redeeming a sign-in
+  link, beginning and completing a passkey sign-in, and the machine-client token endpoint), seven
+  credential pages (the email-confirmation and sign-in-link landings among them), and three landing
+  and outcome pages that render nothing depending on the caller. The scan matches `ControllerBase`, `RouteAttribute`
   and `AllowAnonymousAttribute` by full-name reflection, which keeps the shared test package free of
   ASP.NET references, and the bearer and CORS invariants run the real registration code and read the
   options back. Two residuals stay
@@ -255,11 +265,12 @@ The JWKS layer is the right model, but it is not free, and the rough edges are w
   the scan's reach. And the anonymous-endpoint scan is only as complete as the suites that subclass it:
   each consuming repo owns its own allow-list. The framework's thesis is that a rule that matters
   should fail the build, and these rules do.
-- **The service token is one shared secret, scoped to one edge.** It is HS256 over a single key that
-  the caller and the receiver both hold, so any holder can mint a token naming any service, and the
-  receiving scheme checks that the `svc` claim is present, not which service it names. What bounds it
-  is the opt-in on both sides: the scheme is never the default, a plain `[Authorize]` endpoint still
-  authenticates the user scheme alone, and only `InternalCaller` endpoints accept it. Per-service keys
+- **The service token is one shared secret, scoped to the edges that opt in.** It is HS256 over a
+  single key that the callers and the receivers both hold, so any holder can mint a token naming any
+  service, and the receiving scheme checks that the `svc` claim is present, not which service it
+  names. What bounds it is the opt-in on both sides: the scheme is never the default, a plain
+  `[Authorize]` endpoint still authenticates the user scheme alone, and only endpoints under
+  `InternalCaller` or `ServiceCaller` accept it. Per-service keys
   or transport-level service identity are a deliberate non-goal for traffic that stays inside the
   Container Apps environment; the governance backlog names a service reachable from outside it, or a
   second team owning a service, as the condition to revisit that.
@@ -310,95 +321,57 @@ pattern, or `dotnet add package MMCA.Common.API` and try it.*
 
 *Tags: .NET, C Sharp, Software Architecture, Microservices, Authentication*
 
-*Notes (evidence audit, 2026-11-17, MMCA.Common v1.300.0, read from the `chore/api-drift` branch ahead of its
-tag): the trade-offs bullet on environment checks names one non-Production mapping, the OpenAPI document
-(`MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/Endpoints/OpenApiEndpointExtensions.cs:61`),
-because the opt-in Scalar reference UI mapping and its package left the framework (no host called it);
-nothing else was re-read this run. Earlier entry (evidence audit, 2026-10-29, MMCA.Common v1.265.1,
-`MMCA.Common/FACTS.md:14`): Re-verified this
-run against the same-day audit; one body anchor moved and no claim changed. The Store service-token
-adoption anchors moved and are corrected in place in the body and in the entry below:
-`AddServiceTokenAuthentication` at `MMCA.Store/Source/Services/MMCA.Store.Identity.Service/Program.cs:179`
-(was `:173`), Customers mapped under `InternalCaller` at `:354` (was `:343`), and `AddServiceTokenClient`
-at `MMCA.Store/Source/Services/MMCA.Store.Sales.Service/Program.cs:300` (was `:289`); `.WithServiceToken()`
-stays at `MMCA.Store/Source/Services/MMCA.Store.Identity.Contracts/DependencyInjection.cs:46`, and
-`MMCA.ADC/Source` still has zero matches for any of the three calls. The 21-entry allow-list was
-recounted this run: twelve actions, six credential pages and three landing pages
-(`MMCA.Common/Tests/Architecture/MMCA.Common.Architecture.Tests/Api/AnonymousEndpointTests.cs:22-66`,
-gate `:71`, floor `MinimumScannedTypes => 21` `:75`). Current FACTS: 160 test methods across 64 abstract
-`*TestsBase` classes (`MMCA.Common/FACTS.md:89`), Common executes 479 (`:92`), 26 packages (`:19`); the
-body states none of these numbers. Earlier entry (evidence audit, 2026-10-22, MMCA.Common v1.250.0):
-three body claims changed and one section added. (1) New section "When there is no user: the opt-in service
-token" (user-approved), grounded in
-`MMCA.Common/Source/Presentation/MMCA.Common.Grpc/Authentication/ServiceTokenProvider.cs:23` (class;
-singleton and 60-second refresh remark `:17-21`, `RefreshWindow` `:26`, HS256 credentials `:46-48`,
-`GetToken` `:52-73`, `Mint` `:79-102` with `sub`/`svc`/`jti` at `:87-89`); the code block is ABRIDGED
-from `GetToken` `:54-72` (one-line braces, comments rewritten). `ServiceTokenSettings.cs` section
-`Grpc:ServiceToken` `:21`, issuer default `mmca-service` `:42`, audience `internal-grpc` `:48`,
-`LifetimeMinutes = 5` `:51`, 1 to 60 check `:27`, `:87`. `ServiceTokenServiceCollectionExtensions.cs`
-opt-in remark `:17-21`, `AddServiceTokenClient` `:35-42`, never-default and plain-`[Authorize]` doc
-`:52-58`, `AddServiceTokenAuthentication` `:63`, default-scheme guard `:78-80`, `InternalCaller`
-policy over both schemes `:84-87`, `ValidAlgorithms = [HmacSha256]` `:144`, `svc` refusal `:151-157`.
-`ServiceTokenHttpClientBuilderExtensions.cs:28` (`WithServiceToken`, per-client interceptor `:34`);
-user-token-first precedence and no-overwrite `ServiceTokenClientInterceptor.cs:20-23`, per-client only
-`:13-17`; `JwtForwardingClientInterceptor.cs:28-31` forwards only the user's token;
-`ServiceTokenDefaults.cs` scheme `:15`, policy `:21`, `svc` `:27`. Store adoption:
-`MMCA.Store/Source/Services/MMCA.Store.Sales.Service/Program.cs:300` (`AddServiceTokenClient`),
-`MMCA.Store/Source/Services/MMCA.Store.Identity.Contracts/DependencyInjection.cs:46` (Customers client
-`.WithServiceToken()`), `MMCA.Store/Source/Services/MMCA.Store.Identity.Service/Program.cs:179`
-(`AddServiceTokenAuthentication`) and `:354` (Customers under `InternalCaller`); zero matches for either
-call in `MMCA.ADC/Source`. ADR-007 (`Website/docs-src/adr/007-grpc-extraction.md`) typed-client bullet
-`:37-47`, federated-auth bullet with the one service-token edge `:59-78` (claim name not checked `:77`),
-revision 2026-10-21 `:11-12`. The new trade-offs bullet: any service can mint any service name
-(`Website/docs-src/governance/common-ArchitectureScorecard.md:75`); backlog #11 is closed 2026-10-19,
-per-service or transport-level gRPC identity not adopted
-(`Website/docs-src/governance/common-RemediationBacklog.md:14`, heading `:44`, sweep row `:111`), with
-the in-environment rationale and re-open condition at `:165`. This replaces the 2026-10-08 entry's
-"open, 4 / 8, named Implementation lever" reading of #11. (2) The login trade-off drops the
-unmeasured buffer-pool remark and states that an unknown email pays a real verification cost
-(`MMCA.Common/Source/Core/MMCA.Common.Application/Auth/AuthenticationServiceBase.cs:152-155`,
-`BurnPasswordVerificationCost` `:623`, rationale `:617-621`). (3) The reflection rationale is the
-source's own: full-name reflection keeps the package free of ASP.NET references
-(`MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Bases/Api/AnonymousEndpointTestsBase.cs:26-27`);
-the former NetArchTest-limitation claim had no source. Header adds ADR-007. Re-anchored this run:
-ADR-004 (240 lines, revised 2026-10-21) empty set `:36-39` and `:152-154`, central mapping `:40-45`,
-unpinned `ValidIssuer` `:71-76`, discovery routing `:88-104`; `Extensions.cs` `WithJwksDiscovery`
-`:321-323`, gateway-vs-fallback comment `:333-343`, endpoint choice `:344-346`, env var `:347`; ADC
-bicep Authority `:2161`, `:2297`, `:2451`, opt-out `:2165`, `:2301`, `:2455` (comments `:2162-2164`,
-`:2298-2300`, `:2452-2454`); Store bicep Authority `:1777`, `:1913`, opt-out `:1782`, `:1918`
-(comments `:1778-1781`, `:1914-1917`); `MMCA.Common/AGENTS.md:132` under `:126`; `PublicAPI.Shipped.txt`
-extension form `:444`, const `:501`, static form `:598` (Unshipped: zero `*REMOVED*` lines). FACTS:
-159 test methods across 63 abstract `*TestsBase` classes (`:81`), Common executes 458 (`:84`), 22
-packages (`:19`), v1.250.0 as of 2026-10-21 (`:4`, `:14`). Confirmed unchanged this run: allow-list
-`:42-43`, `:66`, gate `:71`, floor `:75`; base default `:69`; consumer gates ADC `:139` (floor 80
-`:144`), Store `:86` (37 `:94`), Helpdesk `:45` (1 `:35`); login class `:64`, `LoginAsync` `:123`,
-untracked `:148`, tracked `:199`, `Error.NotFound` `:203`, doc comment `:22`; ADC and Store
-`AuthenticationService.cs:20` (classes `:50`, `:26`); `Authentication.cs` const `:25`, `AddForwardedJwtBearer`
-`:52`, warning filter `:71`, core `:77`, `ValidIssuer` comment `:96`, pins `:109`, `:238`, `:254`,
-`BuildValidationParameters` `:215`; CORS `:142`, `:144`, `:146`, `:149`; gates
-`SensitiveDataLoggingGate.cs:36`, `SmtpTransportSecurity.cs:48`, `:72`, AI `DependencyInjection.cs:177`,
-`:257`, `:262`, `CultureSwitcher.razor:25`; scorecard §11 row `:75` still cites `:109`.
-Earlier entry (2026-10-08, MMCA.Common v1.233.0): five body claims changed. Common's anonymous
-allow-list is 21 entries (twelve actions, the two added being `SendEmailConfirmationAsync` and
-`ConfirmEmailAsync` on `EmailConfirmationControllerBase`; six credential pages; three landing pages);
-the undecorated-endpoint gate is on by default and opt-out, and all four suites keep it on; the login
-tracked re-fetch does not persist the refresh token; the unpinned-`ValidIssuer` reason is "the
-authority need not be the `iss` origin"; and ADR-122's plain-check inventory (`:47-78`, pseudo-locale
-`:50-51`, `:68-74`, CSP `:65-66`, design-time skip `:75-78`, `!IsProduction()` mappings `:80-87`) is
-stated in full. Earlier entry (2026-10-02, v1.221.0): ADR-004 is titled "Cross-Service Token
-Validation via JWKS / OIDC Discovery" (`:1`) and never uses "dual-fetch" in its body, so the former
-framing was replaced by what the ADR says; gateway-routed discovery is the local AppHost path only and
-both deployments point the authority at Identity's internal ingress; `MMCA.Common/CLAUDE.md` is only an
-`@AGENTS.md` import, so the citation moved (the AGENTS.md bullet still says "discovery routes through
-the gateway", which is true of the AppHost path only). ADR-122 fold-in (user-approved): decision
-`:21-23`, three gates `:27-40`, `RequireHttpsMetadata` as the hybrid `:42-45`, rationale from `:102`.
-Carried from the 2026-10-02 audit's CONFIRMED verdicts and not re-opened:
-`JwtSettings.cs:30` (RS256 default), `RsaJwksProvider.cs:21` (PublicationOnly lazy,
-public-only export, empty set), `JwksEndpointExtensions.cs:20`, `TokenService.cs:197`
-(`GetPrincipalFromExpiredToken` pin), `InsecureJwtMetadataWarningStartupFilter.cs:26`,
-`GatewayCorsExtensions.cs:38`, `AnonymousEndpointTestsBase.cs:30` (five facts at `:79`, `:91`, `:104`,
-`:118`, `:136`), the invariant tests starting at `ForwardedJwtBearerSecurityTests.cs:25`,
-`PasswordHasher.cs:24`, and `LICENSE:2`. Not changed by design: the CTA's "2-minute ADR-004" (CTA block
-out of scope for this pass; ADR-004 runs 240 lines).*
+*Notes (evidence audit, re-verified 2026-11-25 against MMCA.Common v1.319.0, `MMCA.Common/FACTS.md:14`):
+four body claims changed, header unchanged. (1) Service-token adoption: both apps adopt it, and the
+receiving registration adds a second, service-only policy. `ServiceTokenDefaults.cs` `InternalCaller`
+`:22`, `ServiceCaller` `:29` (user scheme not evaluated `:24-28`), `svc` `:35`;
+`ServiceTokenServiceCollectionExtensions.cs` `AddServiceTokenClient` `:35-43`, two-policy and
+never-default doc `:45-62`, `AddServiceTokenAuthentication` `:66`, default-scheme guard `:81-85`,
+policies `:87-94` (`ServiceCaller` requires the `svc` claim `:94`), `ValidAlgorithms = [HmacSha256]`
+`:151`, `svc` presence check `:162-171`; `ServiceCallerClaimsPrincipalExtensions.cs` `IsServiceCaller`
+`:21-29`. ADC: `MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs` `AddServiceTokenAuthentication`
+`:140`, `AddServiceTokenClient` `:146` (TicketInvitation, anonymous sign-in link `:142-145`),
+VerifiedUserLookup under `InternalCaller` `:344`; `MMCA.ADC.Engagement.Service/Program.cs`
+`AddServiceTokenClient` `:232` (roster import and live-channel drain `:227-231`),
+`AddServiceTokenAuthentication` `:238`, TicketInvitation under `ServiceCaller` `:278`;
+`MMCA.ADC.Notification.Service/Program.cs` `AddServiceTokenAuthentication` `:137`, LiveChannel under
+`ServiceCaller` `:160`; `.WithServiceToken()` at `MMCA.ADC.Engagement.Contracts/DependencyInjection.cs:110`,
+`MMCA.ADC.Identity.Contracts/DependencyInjection.cs:74`, `MMCA.ADC.Notification.Contracts/DependencyInjection.cs:51`.
+Store: `MMCA.Store/Source/Services/MMCA.Store.Identity.Service/Program.cs` `AddServiceTokenAuthentication`
+`:85`, Customers under `InternalCaller` `:149`; `MMCA.Store.Sales.Service/Program.cs:147`
+(`AddServiceTokenClient`); `MMCA.Store.Identity.Contracts/DependencyInjection.cs:46` (`.WithServiceToken()`).
+(2) The service-token trade-off now names both policies and the opt-in edges (same anchors). (3) The
+allow-list is 29 entries
+(`MMCA.Common/Tests/Architecture/MMCA.Common.Architecture.Tests/Api/AnonymousEndpointTests.cs:22-82`):
+nineteen actions `:26-64` (sign-in links `:46-47`, passkeys `:49`, `:51`, machine token `:53`, OIDC
+challenge `:60`, home-realm discovery `:64`), seven credential pages `:70-77`, three landing pages
+`:79-81`; strict gate on `:87`; the scan floor `MinimumScannedTypes => 21` `:91` counts scanned types,
+not list entries. (4) Subclass doc comments: ADC
+`MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Application/Users/AuthenticationService.cs:23`,
+Store `MMCA.Store/Source/Modules/Identity/MMCA.Store.Identity.Application/Users/AuthenticationService.cs:20`;
+base wording `MMCA.Common/Source/Core/MMCA.Common.Application/Auth/AuthenticationServiceBase.cs:31`, class
+`:74`. Re-read and confirmed unchanged: `ServiceTokenProvider.cs` singleton and 60-second remark
+`:17-21`, class `:23`, `RefreshWindow` `:26`, HS256 credentials `:46-48`, `GetToken` `:52-74` (the code
+block is abridged from `:54-73`), `IsFresh` `:76-77`, `Mint` `:79-102` with `sub`/`svc`/`jti` `:87-89`;
+`ServiceTokenSettings.cs` section `:21`, maximum 60 `:27`, `LifetimeMinutes = 5` `:51`, 1-to-60 check
+`:87`; `MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/WebApplicationBuilderExtensions.Authentication.cs`
+config key `:25`, `AddForwardedJwtBearer` `:52`, `[RsaSha256]` pins `:110`, `:249`, `[HmacSha256]` `:265`;
+`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Auth/TokenService.cs` `IDisposable` `:27`,
+`GetPrincipalFromExpiredToken` `:204`, pin `:218`; `JwtSettings.cs:30` (RS256 default);
+`RsaJwksProvider.cs:14`, `PublicationOnly` `:22`; `OpenApiEndpointExtensions.cs:61`.
+Flag (2026-11-25): `ServiceTokenClientInterceptor` (user-token-first precedence, no overwrite) was not
+re-read this run; the file is not at `MMCA.Common.Grpc/Authentication/`, so its location and anchors
+are unconfirmed.
+Flag (2026-11-25): not re-read this run, text kept as is: the ADR-004, ADR-007 and ADR-122 line
+anchors, `JwksEndpointExtensions.cs`, `WithJwksDiscovery` in the AppHost extensions, the ADC and Store
+bicep Authority and `RequireHttpsMetadata` anchors, the three ADR-122 gates
+(`SensitiveDataLoggingGate`, `SmtpTransportSecurity`, the AI `DependencyInjection`), the
+`AnonymousEndpointTestsBase` five facts and reflection rationale, the invariant tests, the
+Minimal-API discovery endpoints' `.AllowAnonymous()` residual, and the governance backlog's
+service-token re-open condition (`Website/docs-src/governance/common-RemediationBacklog.md`).
+History: the 2026-10-22 entry added the service-token section (user-approved); the 2026-10-08 entry
+settled the undecorated-endpoint gate, the login re-fetch and the unpinned-`ValidIssuer` reason; the
+2026-10-02 entry replaced the "dual-fetch" framing with what ADR-004 says and folded in ADR-122
+(user-approved). Not changed by design: the CTA's "2-minute ADR-004" (CTA block out of scope).*
 
 - Full series index: https://ivanball.github.io/writing.html

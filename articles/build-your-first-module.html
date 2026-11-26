@@ -95,7 +95,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 54 articles</summary>
+        <summary>All 57 articles</summary>
         <nav class="doc-nav" aria-label="The MMCA.Common series">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -152,7 +152,10 @@
         <li><a href="durable-internal-commands.html">51 · Four ways to do work later</a></li>
         <li><a href="identity-completions.html">52 · Finishing identity</a></li>
         <li><a href="cloud-neutral-vendor-adapters.html">53 · One framework, three clouds</a></li>
-        <li><a href="series-index.html">54 · The series index</a></li>
+        <li><a href="borrowed-and-machine-identities.html">54 · Borrowed and machine identities</a></li>
+        <li><a href="app-as-mcp-server.html">55 · Your app as an MCP server</a></li>
+        <li><a href="outbound-webhooks.html">56 · Sending webhooks without opening a door</a></li>
+        <li><a href="series-index.html">57 · The series index</a></li>
           </ol>
         </nav>
       </details>
@@ -174,18 +177,18 @@
           that declares its own dependencies so the host can assemble everything in the right order.</p>
           <p>The framework ships a <code>dotnet new</code> pack, so you type none of that plumbing (ADR-065). Hand-rolling it
           costs a day before you write a line of business logic, and ADR-065 measures that starting cost against
-          the framework&#39;s reference app: 12 projects, 148 files, and 12,597 lines of plumbing, an 827-line
-          <code>.editorconfig</code> and the 99-line <code>Directory.Packages.props</code> that carries every package pin (57 of them
-          in the seed today) among them, several of those lines load-bearing in ways nothing tells you about
-          until much later.</p>
-          <p>That changes what a tutorial like this is for. Step 0 gets you a green solution in about a minute.
+          the framework&#39;s reference app: 12 projects, 178 files, and 15,128 lines of plumbing, an 803-line
+          <code>.editorconfig</code> and the 101-line <code>Directory.Packages.props</code> that carries every package pin among
+          them, several of those lines load-bearing in ways nothing tells you about until much later.</p>
+          <p>That changes what a tutorial like this is for. Step 0 gets you a green solution in a few minutes.
           Steps 1 through 7 are the reasoning behind code you already have, which is what you need before you
           change it. The example is a <code>Coupon</code> aggregate in a <code>Promotions</code> module, but every step maps directly
           onto the real Conference, Sales, and Catalog modules in the consumer apps.</p>
           <h2 id="prerequisites">Prerequisites</h2>
           <ul>
-          <li><strong>.NET 10 SDK.</strong> The framework targets <code>net10.0</code> with <code>LangVersion: preview</code> for C# extension types.</li>
-          <li>Familiarity with the layer flow: API/Grpc -&gt; Infrastructure -&gt; Application -&gt; Domain -&gt; Shared. Your
+          <li><strong>.NET 10 SDK.</strong> The framework multi-targets <code>net10.0</code> and <code>net11.0</code>; the generated app targets
+          <code>net10.0</code> with <code>LangVersion: preview</code> for C# extension types.</li>
+          <li>Familiarity with the layer flow: API -&gt; Infrastructure -&gt; Application -&gt; Domain -&gt; Shared. Your
           module&#39;s code lives in those layers, and the framework forbids inward layers from referencing
           outward ones (a topic for the fitness-test tutorial).</li>
           <li>The conventions in your head: factory methods return <code>Result&lt;T&gt;</code> instead of throwing; commands and
@@ -217,16 +220,17 @@ dotnet test  <span class="hljs-literal">--solution</span> Contoso.Support.slnx  
           one SQLite solution without an AppHost) and builds and tests each in package mode.</p>
           <p>One thing the scaffold deliberately does not hand over, because a rename or a shape flag invalidates
           it and no fixed value is right for every name you could pick: <strong>declaration order, plus one
-          constructor shape</strong>. Three analyzer rules, and only three, ship dropped to <code>suggestion</code> in a marked
+          constructor shape</strong>. Two analyzer rules, and only two, ship dropped to <code>suggestion</code> in a marked
           block appended to the <em>staged</em> <code>.editorconfig</code>; every other analyzer stays at error. <code>SA1210</code> cannot
           sort your namespace against <code>MMCA.Common.*</code> without knowing your name: an app namespace sorts above it
-          for <code>Contoso.Support</code> and below it for <code>Zeta.App</code>, so no checked-in order survives both. <code>SA1211</code> is
-          the same story one level down, on the identifier-alias file whose two aliases re-sort when <code>--child</code>
-          renames them. <code>IDE0021</code> is the shape flags rather than the renames: the aggregate&#39;s private constructor
-          assigns one property per optional axis, so <code>--no-status --no-description --no-owner</code> together leave it
-          with a single statement, which the baseline then wants as an expression body. The generated README
-          carries the exact commands (one <code>dotnet format analyzers</code> run restores the two ordering rules;
-          <code>IDE0021</code> is not fixable that way, so you fold the constructor by hand and delete the line). Every
+          for <code>Contoso.Support</code> and below it for <code>Zeta.App</code>, so no checked-in order survives both. (<code>SA1211</code>,
+          alias order, stays at error: each module&#39;s identifier-alias file declares exactly one alias, so there
+          is no order for a rename to break.) <code>IDE0021</code> is the shape flags rather than the renames: the
+          aggregate&#39;s private constructor assigns one property per optional axis, so
+          <code>--no-status --no-description --no-owner</code> together leave it with a single statement, which the
+          baseline then wants as an expression body. The generated README carries the exact commands (one
+          <code>dotnet format analyzers</code> run restores the ordering rule, <code>SA1210</code>; <code>IDE0021</code> is not fixable that
+          way, so you fold the constructor by hand and delete the line). Every
           <code>mmca-command</code> and <code>mmca-query</code> slice you scaffold later arrives with the same ordering skew, so either
           re-run that format command after each scaffold or keep the delta until you stop scaffolding, then
           delete it.</p>
@@ -391,17 +395,17 @@ dotnet test  <span class="hljs-literal">--solution</span> Contoso.Support.slnx  
         IConfigurationBuilder configuration,
         ApplicationSettings applicationSettings</span>)</span>
     {
-        <span class="hljs-comment">// One call per layer. Handlers, validators, and mappers are picked up by the</span>
-        <span class="hljs-comment">// Application layer&#x27;s convention scan (next step); CouponRepository is</span>
-        <span class="hljs-comment">// registered by the Infrastructure layer&#x27;s own extension.</span>
-        services.AddModulePromotionsApplication(applicationSettings);
+        <span class="hljs-comment">// Handlers, validators, and mappers are picked up by the Application layer&#x27;s</span>
+        <span class="hljs-comment">// convention scan (next step). The Infrastructure call registers no service: it</span>
+        <span class="hljs-comment">// is what makes the host load the assembly whose EF configurations are discovered.</span>
+        services.AddModulePromotionsApplication();
         services.AddModulePromotionsInfrastructure();
-        services.AddModulePromotionsAPI();
     }
 }</code></pre>
           <p>The class lives in the module&#39;s API project, the one layer that references both Application and
-          Infrastructure, so it is the natural place to compose them. The generated module keeps <code>Register</code> to a
-          single line that delegates to an <code>Add{Module}Module</code> extension making those three calls.</p>
+          Infrastructure, so it is the natural place to compose them. The API layer registers nothing of its
+          own (MVC discovers its controllers), so there is no third call. The generated module keeps <code>Register</code>
+          to a single line that delegates to an <code>Add{Module}Module</code> extension making those two calls.</p>
           <p><code>Dependencies</code> is what lets the framework do something genuinely useful: <code>ModuleLoader</code> discovers every
           <code>IModule</code> in the assemblies the host names and registers them in <strong>topological order</strong> (Kahn&#39;s
           algorithm) based on declared dependencies, so a module is always wired after the modules it depends on.
@@ -421,6 +425,8 @@ dotnet test  <span class="hljs-literal">--solution</span> Contoso.Support.slnx  
           <pre class="doc-pre" tabindex="0" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-comment">// Host composition root: the generated Web/Program.cs, abridged (representative module names)</span>
 services.AddCommonExceptionHandlers();                  <span class="hljs-comment">// ProblemDetails exception handlers</span>
 services.AddInfrastructure(builder.Configuration);      <span class="hljs-comment">// repos, UoW, DbContexts, caching, outbox</span>
+services.AddStronglyTypedIds(identifierAssemblies);     <span class="hljs-comment">// one Shared assembly per module (ADR-115)</span>
+<span class="hljs-comment">// ...the opt-ins (AddAuditTrail, AddScheduledJobs, AddMultiTenancy, AddWebhooks) sit here</span>
 services.AddAPI(modulesSettings);                       <span class="hljs-comment">// controllers, idempotency, feature flags, error localization</span>
 services.AddErrorResources&lt;OrdersErrorResources&gt;();     <span class="hljs-comment">// one per module: error-code translations</span>
 services.AddErrorResources&lt;PromotionsErrorResources&gt;();
@@ -430,7 +436,8 @@ services.AddMmcaApplicationPipeline(pipeline =&gt; pipeline <span class="hljs-co
         s, builder.Configuration, applicationSettings, modulesSettings,
         builder.Environment.EnvironmentName,
         [<span class="hljs-meta">typeof(OrdersModule).Assembly, typeof(PromotionsModule).Assembly</span>])) <span class="hljs-comment">// each module scans itself</span>
-    .Register(s =&gt; s.AddBrokerMessaging(builder.Configuration)));
+    .Register(s =&gt; s.AddBrokerMessaging(builder.Configuration))
+    .AddWebhookDelivery());                             <span class="hljs-comment">// the decorated webhook delivery handler</span>
 
 services.AddModuleHealthChecks(moduleLoader);           <span class="hljs-comment">// not a handler registration: stays outside</span></code></pre>
           <p>The rules embedded in that order:</p>
@@ -449,25 +456,30 @@ services.AddModuleHealthChecks(moduleLoader);           <span class="hljs-commen
           to tell you.</li>
           <li><strong><code>AddMmcaApplicationPipeline(pipeline =&gt; ...)</code></strong> is the framework&#39;s preferred form of the same
           sequence and the one the generated host uses: it runs <code>AddApplication()</code>, then your callback&#39;s
-          <code>Register</code> steps in order (module discovery, then broker wiring, so the broker&#39;s <code>Replace</code> calls win
-          over the loader&#39;s), then <code>AddApplicationDecorators()</code>, so the handler registrations cannot land on the
+          steps in order (module discovery, then broker wiring, so the broker&#39;s <code>Replace</code> calls win over the
+          loader&#39;s, then the outbound webhook delivery handler, so the decorators wrap it like every other
+          command handler), then <code>AddApplicationDecorators()</code>, so the handler registrations cannot land on the
           wrong side of the decorators.</li>
           </ul>
           <h2 id="step-7-watch-the-decorator-pipeline-kick-in-for-free">Step 7: watch the decorator pipeline kick in, for free</h2>
           <p>With the sequence correct, every command and query handler is now wrapped, in this execution order:</p>
-          <pre class="doc-pre" tabindex="0"><code class="">Commands: FeatureGate -&gt; Authorization -&gt; Logging -&gt; Caching -&gt; Validating -&gt; Timeout -&gt; Transactional -&gt; Handler
+          <pre class="doc-pre" tabindex="0"><code class="">Commands: ViewAs -&gt; FeatureGate -&gt; Authorization -&gt; Logging -&gt; Caching -&gt; Validating -&gt; Timeout -&gt; Transactional -&gt; Handler
 Queries:  FeatureGate -&gt; Authorization -&gt; Logging -&gt; Caching -&gt; Validating -&gt; Timeout -&gt; Handler</code></pre>
           <p>You wrote a thin handler. The pipeline added the rest, driven by the marker interfaces:</p>
           <ul>
-          <li><strong>FeatureGate</strong> is outermost and short-circuits the call when the feature flag for that command or
-          query is turned off.</li>
+          <li><strong>ViewAs</strong> is outermost for commands, and commands only: it refuses every command while the caller
+          holds a view-as token, so a staff user viewing the app as another user can read but never write in
+          that user&#39;s name (ADR-137). For an ordinary caller it passes straight through.</li>
+          <li><strong>FeatureGate</strong> comes next for commands and is outermost for queries. It short-circuits the call
+          when the feature flag for that command or query is turned off.</li>
           <li><strong>Authorization</strong> comes next, and sits outside caching on purpose. Commands and queries that
           implement <code>IRequiresPermission</code> are checked against the permission registry for the current user&#39;s
           roles (and those that implement <code>IRequiresMfa</code> against the <code>mfa</code> claim), and a denial short-circuits
           with a <code>Forbidden</code> error, so a denied query never reads from or populates the cache.</li>
-          <li><strong>Logging</strong> logs every command and query with its duration and the correlation id it reads from
-          <code>ICorrelationContext</code>, with no per-handler code. It times only what runs inside it (Caching down to
-          the handler), so FeatureGate and Authorization fall outside the recorded duration.</li>
+          <li><strong>Logging</strong> logs every command and query that passed the gates outside it, with its duration and
+          the correlation id it reads from <code>ICorrelationContext</code>, with no per-handler code. It times only what
+          runs inside it (Caching down to the handler), so ViewAs, FeatureGate and Authorization fall outside
+          the recorded duration.</li>
           <li><strong>Caching</strong> runs for queries that implement <code>IQueryCacheable</code> (supplying <code>CacheKey</code> + <code>CacheDuration</code>),
           and invalidates for commands that implement <code>ICacheInvalidating</code> (on success, outside the transaction
           boundary).</li>
@@ -533,10 +545,13 @@ dotnet new mmca<span class="hljs-literal">-query</span> <span class="hljs-litera
           <li><strong>Architecture map.</strong> Five lines in your <code>*ArchitectureMap.cs</code>, one per layer. <strong>A module missing
           from the map is silently not covered by the layering and isolation rules.</strong> No error, no warning:
           the rules simply stop watching the code you just added.</li>
-          <li><strong>Host.</strong> Two edits in the Web host&#39;s <code>Program.cs</code>. Add <code>typeof(BillingModule).Assembly</code> to the
+          <li><strong>Host.</strong> Three edits in the Web host&#39;s <code>Program.cs</code>. Add <code>typeof(BillingModule).Assembly</code> to the
           list handed to <code>ModuleLoader.DiscoverAndRegister</code>: discovery scans only the assemblies the host
           names, so a module left out of that list registers nothing. Then add one
-          <code>services.AddErrorResources&lt;BillingErrorResources&gt;();</code> next to the existing ones.</li>
+          <code>services.AddErrorResources&lt;BillingErrorResources&gt;();</code> next to the existing ones. Last, add the
+          module&#39;s Shared assembly to the list handed to <code>AddStronglyTypedIds</code>: the generated child
+          identifier is a strongly typed wrapper, so without it EF has no converter for its key and a route
+          cannot bind it.</li>
           <li><strong>Database.</strong> The module gets its own: an <code>AddDatabase</code> / <code>WithSQLServerDataSource</code> pair in the
           AppHost, <code>Modules</code> / <code>DataSources</code> / <code>Outbox</code> entries in the Web host&#39;s <code>appsettings.json</code>, and the
           deletion of the now-conflicting top-level <code>SQLServerMigrationsAssembly</code>. Every module database

@@ -95,7 +95,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 54 articles</summary>
+        <summary>All 57 articles</summary>
         <nav class="doc-nav" aria-label="The MMCA.Common series">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -152,7 +152,10 @@
         <li><a href="durable-internal-commands.html">51 · Four ways to do work later</a></li>
         <li><a href="identity-completions.html">52 · Finishing identity</a></li>
         <li><a href="cloud-neutral-vendor-adapters.html">53 · One framework, three clouds</a></li>
-        <li><a href="series-index.html">54 · The series index</a></li>
+        <li><a href="borrowed-and-machine-identities.html">54 · Borrowed and machine identities</a></li>
+        <li><a href="app-as-mcp-server.html">55 · Your app as an MCP server</a></li>
+        <li><a href="outbound-webhooks.html">56 · Sending webhooks without opening a door</a></li>
+        <li><a href="series-index.html">57 · The series index</a></li>
           </ol>
         </nav>
       </details>
@@ -235,11 +238,15 @@
           failure <code>notification.MarkAsFailed()</code>. This SignalR leg alone owns the audit status.</li>
           <li><strong>Deliver OS-level native push, best-effort (ADR-044).</strong> The handler then calls
           <code>INativePushSender.SendToUsersAsync</code> inside its own non-fatal try/catch, reaching devices the hub
-          cannot (app backgrounded or killed). This leg is fire-and-forget: a failure is logged via
-          <code>LogNativePushFailed</code> and does not touch the audit status the SignalR leg already decided. The
-          default <code>NullNativePushSender</code> keeps it a no-op until a delivery adapter is registered and configured.</li>
-          <li><strong>Save and return the DTO.</strong> The handler saves the observed status a third time, then maps the
-          saved aggregate and returns <code>201 Created</code>.</li>
+          cannot (app backgrounded or killed). The sender answers with a <code>NativePushOutcome</code>, and the handler
+          records it on the audit row through <code>notification.RecordNativePushOutcome(...)</code>: sent and failed
+          counts per platform (Android and Apple) plus the unit the provider counts in, where a null pair
+          means that platform was not attempted. A failure, whether reported in the outcome or thrown, is
+          logged as a Warning via <code>LogNativePushFailed</code>. None of this touches the audit status the SignalR leg
+          already decided. The default <code>NullNativePushSender</code> keeps the leg a no-op until a delivery adapter is
+          registered and configured.</li>
+          <li><strong>Save and return the DTO.</strong> The handler saves a third time, recording the observed status and the
+          native outcome, then maps the saved aggregate and returns <code>201 Created</code>.</li>
           </ol>
           <p>Those three saves are one unit of work, not three. <code>SendPushNotificationCommand</code> declares
           <code>ITransactional</code>, and <code>TransactionalCommandDecorator</code> wraps any command carrying that marker in a
@@ -276,10 +283,16 @@
 <span class="hljs-keyword">try</span> { <span class="hljs-keyword">await</span> _push.SendToUsersAsync(recipients, title, body, LiveMetadata(scopeKey), ct); notification.MarkAsSent(); }
 <span class="hljs-keyword">catch</span> { notification.MarkAsFailed(); }                            <span class="hljs-comment">// CA1031: SignalR leg owns the status</span>
 
-<span class="hljs-keyword">try</span> { <span class="hljs-keyword">await</span> _nativePush.SendToUsersAsync(recipients, title, body, ct); } <span class="hljs-comment">// ADR-044: OS-level leg</span>
+<span class="hljs-keyword">try</span>                                                               <span class="hljs-comment">// ADR-044: OS-level leg</span>
+{
+    <span class="hljs-keyword">var</span> outcome = <span class="hljs-keyword">await</span> _nativePush.SendToUsersAsync(recipients, title, body, ct);
+    notification.RecordNativePushOutcome(                         <span class="hljs-comment">// per-platform counts, not the status</span>
+        unit, androidSent, androidFailed, appleSent, appleFailed);
+    <span class="hljs-keyword">if</span> (outcome.FirstFailure <span class="hljs-keyword">is</span> { } failure) { <span class="hljs-comment">/* LogNativePushFailed */</span> }
+}
 <span class="hljs-keyword">catch</span> { <span class="hljs-comment">/* LogNativePushFailed; native delivery is best-effort, audit status untouched */</span> } <span class="hljs-comment">// CA1031</span>
 
-<span class="hljs-keyword">await</span> _unitOfWork.SaveChangesAsync(ct);                           <span class="hljs-comment">// record observed status; commit on return</span></code></pre>
+<span class="hljs-keyword">await</span> _unitOfWork.SaveChangesAsync(ct);         <span class="hljs-comment">// record status + native outcome; commit on return</span></code></pre>
           <p>Notice what this ordering buys you. <code>PushNotificationStatus</code> is an observed-delivery audit field, not a
           gate, and it is decided by the SignalR leg alone. The answer to &quot;what if the user is offline?&quot; is built
           in: they read it later from the inbox, the native leg tries their pocket, and the organizer sees a Sent
@@ -480,11 +493,12 @@
           <li><strong>Scale-out needs the backplane.</strong> SignalR across multiple replicas only works correctly with the
           Redis backplane wired. Forget the <code>redis</code> connection string in a multi-replica deployment and pushes
           reach only the users connected to the replica that handled the send.</li>
-          <li><strong>Native push is inert until provisioned, and fire-and-forget once live.</strong> The native leg stays a
-          no-op until the host calls a delivery adapter, the provider behind it holds the platform credentials
-          (on Azure, a notification hub carrying a Firebase service account and an APNs key), and the
-          <code>NativePush</code> section is enabled. Once live it does no per-device delivery tracking: the provider&#39;s
-          telemetry is the observability surface, and the inbox remains the recovery path.</li>
+          <li><strong>Native push is inert until provisioned, and counted rather than tracked once live.</strong> The native leg
+          stays a no-op until the host calls a delivery adapter, the provider behind it holds the platform
+          credentials (on Azure, a notification hub carrying a Firebase service account and an APNs key), and
+          the <code>NativePush</code> section is enabled. Once live the audit row carries per-platform sent and failed
+          counts, in whatever unit the provider reports, but nothing per device: which phone missed a push is
+          the provider&#39;s telemetry, and the inbox remains the recovery path.</li>
           <li><strong>It is one example, not a notification platform.</strong> This is a reference vertical slice, not a
           full-featured notification product. There is no retry queue for failed real-time delivery, no template
           engine, no per-channel user preferences. The slice is shaped to teach the pattern and to be extended,

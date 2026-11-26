@@ -30,7 +30,8 @@ dashboard, and then look at exactly what the framework wired for you.
 
 You need a few things in place before the first run:
 
-- **.NET 10 SDK** (the framework targets .NET 10.0 with C# `preview` language features).
+- **.NET 11 SDK** (`global.json` pins 11.0.100). The framework libraries multi-target `net10.0` and
+  `net11.0` with C# 15.0; ADC runs on `net11.0`, and Store stays on `net10.0`.
 - **Docker** (or a compatible container runtime) running locally. Aspire provisions SQL Server, Redis,
   RabbitMQ, and a mail interceptor as containers.
 - An app that consumes MMCA.Common. You can scaffold one in a command
@@ -96,8 +97,9 @@ three things you would otherwise hand-roll:
 1. **OpenTelemetry** for logging, metrics, and tracing. Logs include the formatted message and scopes;
    metrics cover ASP.NET Core, `HttpClient`, and the .NET runtime unless a host turns those cost knobs
    off (Step 6); tracing instruments ASP.NET Core and `HttpClient` and subscribes
-   four activity sources: the application's own, `MMCA.Common.Outbox`,
-   `MMCA.Common.InternalCommands`, and `MMCA.Common.AI`. It also registers ten MMCA-specific meters
+   five activity sources: the application's own, `MMCA.Common.Outbox`, `MMCA.Common.Messaging` (the
+   broker transport), `MMCA.Common.InternalCommands`, and `MMCA.Common.AI`. It also registers eleven
+   MMCA-specific meters
    by literal name: `MMCA.Common.Outbox` (a dead-letter counter, a processed counter, a dispatch-lag
    histogram, a pending-depth gauge, and an oldest-pending-age gauge), `MMCA.Common.Cqrs` (RED
    histograms for command and query handlers, query cache hit and miss counters, and the
@@ -109,15 +111,18 @@ three things you would otherwise hand-roll:
    eviction consumer's failed tag evictions), `MMCA.Common.BestEffort` (the swallowed failures of
    best-effort side effects), `MMCA.Common.InternalCommands` (the durable internal-command runner),
    `MMCA.Common.Persistence` (the optimistic-concurrency conflict counter, tagged by entity type),
-   and `MMCA.Common.AI` (the optional AI package's token spend and call duration, inert until a host
+   `MMCA.Common.Auth` (password sign-in outcomes), and `MMCA.Common.AI` (the optional AI package's token spend and call duration, inert until a host
    adds that package and enables `Ai:Enabled`). Polly's own `Polly` meter is subscribed alongside
    them, so retries, timeouts, and circuit transitions leave the process instead of looking like
    plain latency from the outside.
 2. **Service discovery**, so a service resolves a peer by name (`http://identity`,
    `http://conference`) rather than a hardcoded address.
 3. **Polly resilience handlers on every `HttpClient`**: a **30 second per-attempt timeout**, a
-   **60 second circuit-breaker sampling window**, and a **90 second total-request timeout**. Every
-   outbound call rides this pipeline by default (this is the runtime side of ADR-009).
+   **60 second circuit-breaker sampling window**, a **90 second total-request timeout**, and one retry
+   per hop that never replays a POST or PATCH. Every typed and named `HttpClient` rides this pipeline
+   by default (this is the runtime side of ADR-009). Two paths differ: the YARP forwarder builds its
+   clients through its own factory and stays outside it, and the gRPC typed clients keep the one-retry
+   budget but use their own, tighter timeouts (8 seconds per attempt, 20 seconds total).
 
 It also installs a `SocketsHttpHandler` tuned for Azure Container Apps and a startup warm-up gate (the
 gate is covered in Step 3, the handler in Step 7). The point of Step 2 is simply this: the moment a
@@ -154,25 +159,35 @@ first authenticated request does not pay a cold connection on a CPU-throttled id
 
 The AppHost `Program.cs` does not start anything immediately. It builds a *resource model*: a graph of
 containers, databases, services, the gateway, and the UI, with their dependency edges. The cross-cutting
-wiring vocabulary lives in `MMCA.Common.Aspire.Hosting` as sixteen fluent helpers (seventeen methods,
-because `WithBroker` has one overload per broker resource). Here is the shape of a service declaration
-(representative, condensed from ADC's AppHost):
+wiring vocabulary lives in `MMCA.Common.Aspire.Hosting` as twenty-six fluent helpers (twenty-seven
+methods, because `WithBroker` has one overload per broker resource). Here is the shape of a service
+declaration (representative, condensed from ADC's AppHost):
 
 ```csharp
 // Representative: the broker is chosen once, then every service host attaches it
 var withBroker = builder.AddSelectedBroker("ADC_BROKER", sqlServer);   // RabbitMQ unless ADC_BROKER=servicebus
 
-builder.AddProject<Projects.MMCA_ADC_Conference_Service>("conference", launchProfileName: "https")
-    .WithSQLServerDataSource(conferenceDb, "Conference")   // per-service database (ADR-006)
-    .WithReference(redis)                          // distributed cache
-    .WithSelectedBroker(withBroker)                // WithBroker on the selected broker resource
-    .WaitFor(redis)
-    .WaitFor(mailDev)
-    .WithH2cHealthCheck()                          // liveness over the HTTP/2 cleartext endpoint
-    .WithExternalHttpEndpoints();
+var conferenceService = builder.AddDotnetProject(
+        "conference",
+        "../../Services/MMCA.ADC.Conference.Service/MMCA.ADC.Conference.Service.csproj",
+        options => options.LaunchProfileName = "https")
+    .WithMmcaServiceInfrastructure(
+        conferenceDb, "Conference",                // per-service database (ADR-006)
+        redis, mailDev,                            // distributed cache and mail interceptor
+        withBroker,                                // WithBroker on the selected broker resource
+        ServiceEndpointProfile.Http2Only);         // liveness over the HTTP/2 cleartext endpoint
 ```
 
 What each framework helper does:
+
+- **`WithMmcaServiceInfrastructure(...)`** is the chain every service shares, in one call and one
+  order: `WithSQLServerDataSource` for its own database, `WithReference` on the cache,
+  `WithSelectedBroker` for the broker, `WaitFor` on the cache and the mail server, then the liveness probe
+  the endpoint profile selects (`WithH2cHealthCheck` for an HTTP/2-only service, the stock HTTP probe for
+  a mixed one). It marks no endpoint external, because a backend service is reached through the gateway:
+  only the gateway and UI helpers (`WithMmcaGateway`, `WithMmcaUi`) expose endpoints. It references the
+  cache, the database and the broker and never another project, so the AppHost's project-to-project
+  edges are exactly the ones it declares itself (Step 5).
 
 - **`AddMessageBroker()`** wraps `builder.AddRabbitMQ(name).WithManagementPlugin()`. One call provisions
   the broker container with its admin UI. `AddServiceBusEmulatorBroker()` is its peer for the official
@@ -281,12 +296,14 @@ That filtering only matters because of where the telemetry actually flows, and t
 that by environment, not by code. `AddServiceDefaults()` enables the OTLP exporter when
 `OTEL_EXPORTER_OTLP_ENDPOINT` is set, which is exactly the variable the Aspire dashboard injects into
 every process, so the dashboard on your laptop lights up with no configuration. OTLP is the one built-in,
-vendor-neutral exporter (`Extensions.Telemetry.cs:152-172`). A vendor exporter is an adapter package's
-single call made after `AddServiceDefaults()`: `AddAzureMonitorExporter()` from `MMCA.Common.Azure`
-enables Azure Monitor (through `UseAzureMonitor`) when `APPLICATIONINSIGHTS_CONNECTION_STRING` is set,
-which the cloud deployment supplies, so production ships to workspace-based Application Insights
-(`AzureMonitorExporterExtensions.cs:42`, `:63`), and it refuses to run ahead of the service defaults,
-whose filter processors must sit before its batch processor (`:51`). Both exporters can run at once, each
+vendor-neutral exporter (`Extensions.Telemetry.cs:153-173`). A vendor exporter is an adapter package's
+single call made after `AddServiceDefaults()`: `AddAzureMonitorExporter()` from the
+`MMCA.Common.Azure.Startup` adapter (namespace `MMCA.Common.Azure`, also reachable through
+`MMCA.Common.Azure`, which references it) enables Azure Monitor (through `UseAzureMonitor`) when
+`APPLICATIONINSIGHTS_CONNECTION_STRING` is set, which the cloud deployment supplies, so production ships
+to workspace-based Application Insights (`AzureMonitorExporterExtensions.cs:42`, `:65`), and it refuses
+to run ahead of the service defaults, whose filter processors must sit before its batch processor
+(`:50-51`). Both exporters can run at once, each
 shipping its own copy, so the same pipeline feeds the local dashboard and the cloud with no code change
 between them ([how the adapters work](cloud-neutral-vendor-adapters.md)).
 
@@ -351,19 +368,25 @@ services.AddOptions<ConnectionStringSettings>()
 
 `ValidateOnStart()` is the load-bearing link. `ValidateDataAnnotations()` on its own defers evaluation to
 the first resolution, which for a section only a background service reads can be minutes after the replica
-started taking traffic; pairing the two converts "configured wrong" into "did not start". Thirty-two
-framework sections bind with both links: the nineteen Infrastructure sections (connection strings, SMTP,
-persistence, outbox, login protection, password reset, refresh sessions, message bus, JWKS, tenancy, cache,
-query-cache pipeline, scheduler, audit trail, internal commands, two-factor, email confirmation, permission
-grants, push notifications), plus idempotency, JWT, API rate limiting, the UI's API settings, UI rate
-limiting, the Blazor circuit limit, the health-report cache, the host-edge security headers, the gateway
-settings, gateway rate limiting, the gRPC service-token settings, and the optional AI package's settings
-and content policy, including the
+started taking traffic; pairing the two converts "configured wrong" into "did not start". Thirty-five
+framework sections bind with both links: the twenty-three Infrastructure sections (connection strings,
+SMTP, persistence, outbox, login protection, password reset, refresh sessions, view-as, message bus, JWKS,
+tenancy, cache, query-cache pipeline, feature-flag overrides, scheduler, audit trail, internal commands,
+two-factor, email confirmation, sign-in links, permission grants, push notifications, outbound webhooks),
+plus idempotency, JWT, API rate limiting, UI rate limiting, the Blazor circuit limit, the health-report
+cache, the host-edge security headers, the gateway settings, gateway rate limiting, the gRPC service-token
+settings, and the optional AI package's settings and content policy, including the
 ones behind opt-in features. Two of them, UI rate limiting and the Blazor circuit limit, bind through
 `BindConfiguration(...)` instead of `Bind(GetSection(...))`, and the security headers attach the
-validation chain first and bind their section only when the host passes its configuration. Two Blazor-host sections, the CSP settings and the same-origin API proxy settings,
-call `ValidateOnStart()` without `ValidateDataAnnotations()` (the proxy section also runs a `PostConfigure`
-that fills its gateway address from the API settings).
+validation chain first and bind their section only when the host passes its configuration. Six more
+sections call `ValidateOnStart()` without `ValidateDataAnnotations()` and validate another way: the UI's
+API settings, whose annotations a source-generated `ApiSettingsValidator` checks so a WebAssembly client
+needs no reflection; the machine-client and passkey settings, each with its own `IValidateOptions<T>`
+validator; the MCP endpoint's settings, with an inline `Validate` rule; and two Blazor-host sections, the
+CSP settings and the same-origin API proxy settings (the proxy section also runs a `PostConfigure` that
+fills its gateway address from the API settings). The webhook delivery registration adds one more
+startup check on the already validated webhook settings, which fails, naming `AddWebhooks(configuration)`,
+when the host registered no subscription store.
 The two sections every host needs, `ApplicationSettings` and `ModulesSettings`, bind on the identical chain
 inside the framework's module-host wiring, so a consuming app inherits them instead of repeating them and
 adds only its module-level sections, such as Store's Stripe configuration.
@@ -383,9 +406,9 @@ at startup would fail every host that never applies the filter; validating on fi
 in front of the host that actually uses it, and the call site says so. `LegalAcceptanceOptions` binds with
 no validation at all, because its one setting has no invalid value (any version string turns the feature on,
 null or whitespace turns it off), which its call site also states. A set of optional sections binds without
-the validation chain: native push, file storage, the cache-key prefix, and the UI's layout, legal-link,
-registration, read-cache and notification-bell options (where the call sites note that an absent section
-leaves the defaults). The hybrid cache options have no section of their own: they are configured from the
+the validation chain: the cache-key prefix, the UI's layout, legal-link, registration, sign-in and
+notification-bell options (where the call sites note that an absent section leaves the defaults), and the
+vendor adapters' own settings, such as Azure Blob file storage and Azure Notification Hubs push. The hybrid cache options have no section of their own: they are configured from the
 validated cache settings.
 
 ## Trade-offs and gotchas, honestly
@@ -396,8 +419,9 @@ A single-command stack is a force multiplier, but it has edges worth naming:
   And the AppHost launched headless can stall at control-plane init; run it in a real terminal.
 - **Local broker is RabbitMQ by default; production is Azure Service Bus.** The transport switch is
   entirely environment-driven (`MessageBus__Provider`), so no code path changes, but they are not the
-  same product. Basic-tier Service Bus also lacks the topics MassTransit needs, so the production tier
-  is Standard. ADC narrows the gap on demand: with `ADC_BROKER=servicebus`, the framework's
+  same product. Basic-tier Service Bus supports only queues, while the framework's transport publishes
+  each event on its own topic and binds each consuming host to it through a subscription that forwards
+  into the host's queue, so the production tier is Standard. ADC narrows the gap on demand: with `ADC_BROKER=servicebus`, the framework's
   `AddSelectedBroker` swaps the official Azure Service Bus emulator in locally through
   `AddServiceBusEmulatorBroker`. That costs a second container and a
   warm-up, which is why the everyday inner loop still runs on RabbitMQ.
@@ -408,10 +432,10 @@ A single-command stack is a force multiplier, but it has edges worth naming:
   so you are not re-seeding on every restart. That is a feature, but it also means stale local data can
   outlive a schema change; reset the container when a migration changes shape.
 - **Telemetry meters are registered by literal name.** Because the Aspire package has no project
-  reference to the assemblies that define `MMCA.Common.Outbox`, `MMCA.Common.Cqrs`,
-  `MMCA.Common.Idempotency`, `MMCA.Common.Scheduler`, `MMCA.Common.Broker`, `MMCA.Common.OutputCache`,
-  `MMCA.Common.BestEffort`, `MMCA.Common.InternalCommands`, `MMCA.Common.Persistence`, and
-  `MMCA.Common.AI` (nor to Polly's own
+  reference to the assemblies that define `MMCA.Common.Outbox`, `MMCA.Common.Messaging`,
+  `MMCA.Common.Cqrs`, `MMCA.Common.Idempotency`, `MMCA.Common.Scheduler`, `MMCA.Common.Broker`,
+  `MMCA.Common.OutputCache`, `MMCA.Common.BestEffort`, `MMCA.Common.InternalCommands`,
+  `MMCA.Common.Persistence`, `MMCA.Common.Auth`, and `MMCA.Common.AI` (nor to Polly's own
   assemblies for the `Polly` meter), those source and meter names are duplicated string literals.
   Rename a source in one place and you must rename it in the other; the code comments flag this.
 - **Nothing gates the fail-fast chain.** No fitness test asserts that a new `AddOptions<T>` call carries
@@ -465,115 +489,119 @@ the AppHost wiring you just met.
 
 *Tags: .NET, C Sharp, Microservices, DevOps, Observability*
 
-*Notes: re-verified against source on 2026-10-29 (MMCA.Common v1.265.1, `MMCA.Common/FACTS.md:14`); every
-anchor below is re-stamped to that tree unless marked as carried from an earlier pass or confirmed by the
-2026-10-29 audit. Paths are under `MMCA.Common/Source/` unless stated. Baseline: `AddServiceDefaults`
-(`Hosting/MMCA.Common.Aspire/Extensions.cs:33`); `ConfigureOpenTelemetry` (`Extensions.Telemetry.cs:70`)
-with formatted message + scopes (`:74-75`), metrics via `ConfigureMetrics` (called `:79`, defined `:239`),
-which first calls `ConfigureAspNetCoreMetrics` (`:241`, defined `:351`): `Telemetry:DisableAspNetCoreMetrics`
-(`:353`) drops every `Microsoft.AspNetCore.` meter through a View (from `:358`), else
-`AddAspNetCoreInstrumentation` (`:365`). `Telemetry:DisableHttpClientMetrics` (`:250`, View from `:263`) and
-`Telemetry:DisableRuntimeMetrics` (`:278`, View from `:283`) gate the other two families. Ten MMCA meters by
-literal name at `:305-314` (`MMCA.Common.Persistence` at `:313`, defined by
-`Presentation/MMCA.Common.API/Concurrency/ConcurrencyConflictMetrics.cs:27` with its `ConflictCounter` at
-`:37`); Polly's meter at `:321` (`PollyMeterName = "Polly"`, `:30`), duration histograms dropped by the View
-from `:333` unless `Telemetry:EnablePollyDurationMetrics` (`:24`). Four trace sources at `:82-85`
-(`AiTelemetryName = "MMCA.Common.AI"`, `:43`). `OutboxPollFilterProcessor` added at `:123`,
-`ProbeTelemetryFilterProcessor` at `:130`, `FilterProbeTelemetryConfigKey` at `:18`; sampler
-`ParentBasedSampler(TraceIdRatioBasedSampler)` at `:139-140`, ratio parsed by `TryGetTraceSampleRatio`
-(`:181`); the one built-in exporter is OTLP, read from `OTEL_EXPORTER_OTLP_ENDPOINT` (`:166`, method and doc
-`:152-172`); Azure Monitor is `AddAzureMonitorExporter()`
-(`Hosting/MMCA.Common.Azure/AzureMonitorExporterExtensions.cs:42`, `ConnectionStringKey =
-"APPLICATIONINSIGHTS_CONNECTION_STRING"` `:18`, order guard `:51`, `UseAzureMonitor()` `:63`). The poll filter (`Hosting/MMCA.Common.Aspire/Telemetry/OutboxPollFilterProcessor.cs`) matches
-`OutboxPoll` on `MMCA.Common.Outbox` and `InternalCommandPoll` on `MMCA.Common.InternalCommands` (constants
-`:26-29`, predicate `:60-64`) and clears `Recorded` at `:49`; the doc comment (`:9-15`) names the per-message
-`OutboxProcess` and per-command `InternalCommandExecute` survivors. Outbox meter, five instruments:
-`DeadLetterCounter`, `ProcessedCounter`, `DispatchLagHistogram`, `PendingDepthGauge`, `OldestPendingAgeGauge`
-(`Core/MMCA.Common.Infrastructure/Persistence/Outbox/Processing/OutboxMetrics.cs:41,47,57,75,98`). CQRS meter:
-`CommandDuration`, `QueryDuration`, `QueryCacheHits`, `QueryCacheMisses`, `AuthorizationDenied`, `TimeoutExpired`
-(`Core/MMCA.Common.Application/UseCases/Decorators/CqrsMetrics.cs:29,35,41,47,53,59`). Resilience:
-`AddStandardResilienceHandler` at `Extensions.cs:60`; values in
-`Core/MMCA.Common.Shared/Resilience/HttpResilienceDefaults.cs:16,19,22` (30s / 60s / 90s) and
-`MaxRetryAttempts = 1` at `:33`; `SocketsHttpHandler` at `Extensions.cs:99-107` (tuning comment from `:88`);
-warm-up gate added by `AddWarmupReadiness()` (called `:37`, defined `:122`) with
-`OpenIdConnectMetadataWarmupTask` registered at `:127`.
-Health: `MapDefaultEndpoints` (`Extensions.Health.cs:123`), `/health` cached (`:134`), `/alive` on the `Live`
-tag uncached (`:138-140`, "self" check tagged `Live` at `:28`), `/health/ready` cached with the `Live`/`Optional`
-exclusion (`:154-156`). Step 4 vocabulary, sixteen helper names across seventeen methods:
-`Hosting/MMCA.Common.Aspire.Hosting/Extensions.cs` `AddMailDev` (`:153`; `MailDevHttpPort = 1080` at `:130`),
-`AddMessageBroker` (`:172`, `AddRabbitMQ(name).WithManagementPlugin()` at `:176`), `AddServiceBusEmulatorBroker`
-(`:213`), `WithBroker` (`:264`, `:292`), `WithJwksDiscovery` (`:321`), `WithE2eRsaKeys` (`:365`),
-`WithE2eRegistrationThrottleLift` (`:404`), `WithE2eForceServer` (`:441`, called by ADC's AppHost at
-`Program.cs:433`), `WithE2eGatewayRateLimitLift` (`:487`), `WithSQLServerDataSource` (`:530`),
-`WithPostgreSQLDataSource` (`:560`), `WithCosmosDataSource` (`:589`), `WithSqliteDataSource` (`:614`),
-`WithH2cHealthCheck` (`H2cHealthCheckExtensions.cs:110`, behavior per its doc comment `:80-109`), plus
-`AddSelectedBroker` (`BrokerSelection.cs:57`: emulator branch `:64-67`, persistent RabbitMQ `:70-71`) and
-`WithSelectedBroker` (`:81`). The static `IsServiceBusSelected` (`:35`, case-insensitive match on
-`ServiceBusSelection = "servicebus"` at `:27`) is not a fluent helper and is not counted. The "second container
-plus a warm-up" cost is the class doc comment `:10`; the "two overloads take different resource types" rationale
-is `:13-17`. `WithSQLServerDataSource` chains `WithReference(database)` (`:538`), `WaitFor` (`:539`) and the
-`DataSources__{logicalName}__SQLServerConnectionString` variable (`:540`); the "one entry, becomes Default"
-reasoning is its doc comment `:521-524`. `WithReference` on a database resource may inject Aspire's own
-`ConnectionStrings__*` entry too, which is not determinable from repo source. No RabbitMQ management port
-appears in Step 1: `WithManagementPlugin()` is called with no port (`Extensions.cs:176`) and `AddSelectedBroker`
-adds none (`BrokerSelection.cs:70-71`); only an ADC comment states 15672. ADC AppHost
-(`MMCA.ADC/Source/Hosting/MMCA.ADC.AppHost/Program.cs`): 15672 comment `:48-50`, broker wiring comment `:59-67`,
-RabbitMQ-vs-Service-Bus divergence comment `:69-91`, selection `builder.AddSelectedBroker("ADC_BROKER", sqlServer)`
-`:98` (comment `:94-97`), MailDev `:106`; every service chain calls `WithSelectedBroker(withBroker)` (`:129`,
-`:158`, `:201`, `:229`); the Step 4 source chain is `:196-211` (the snippet omits its
-`Seeding__IncludeSampleConferenceData` variable, `:207`); the Step 5 gRPC snippet shows the edges at `:265`,
-`:267`, `:270` (the AppHost declares further edges at `:288`, `:294`, `:302`); gateway 6001 pin `:365`; JWKS
-`:374-376`; UI 6002 pin `:407` (comment `:388`). Store's AppHost project is
-`MMCA.Store/Source/Hosting/MMCA.Store.AppHost/MMCA.Store.AppHost.csproj`.
-Correlation: `Presentation/MMCA.Common.API/Middleware/CorrelationIdMiddleware.cs` header `:23`, `MaxLength = 64`
-`:26`, read-or-fall-back `:40-43` (a blank header counts as absent), `Sanitize` keeps a value only when every
-character is printable ASCII (`:61-65`; Kestrel-echo rationale in the class doc comment `:13-17`), set `:45`,
-echo `:46-50`. Security headers (`Hosting/MMCA.Common.Aspire/Security/SecurityHeaders.cs`):
-`AddCommonSecurityHeaders` `:268`, options builder `:276` with `ValidateDataAnnotations().ValidateOnStart()` at
-`:277` (ADR-070 comment `:274-275`), section bound only when a configuration is passed (`:278-281`),
-`StaticCspPolicyProvider` registered `:288`, `UseCommonSecurityHeaders` `:296` inserting the middleware `:299`;
-`CspPolicy` record `:78`. Step 8 (ADR-070): canonical chain `Core/MMCA.Common.Infrastructure/DependencyInjection.cs:72-75`.
-Thirty-two sections carry `ValidateDataAnnotations().ValidateOnStart()` (count from a Grep of all 39
-`ValidateOnStart()` hits under `Source/`, minus the two startup tripwires, the two sections without data annotations, the service-token
-default-scheme guard, and the two module-host chains). Infrastructure (19):
-`DependencyInjection.cs:75,101,147,152,157,163,171,195,200,302`, `.Caching.cs:47,52`, `.Jobs.cs:42,113,152`,
-`.Auth.cs:45,73,144`, `.Notifications.cs:43`. Others (13): `Presentation/MMCA.Common.API/DependencyInjection.cs:80`
-(idempotency), `API/Startup/WebApplicationBuilderExtensions.Authentication.cs:135-138` (JWT),
-`WebApplicationBuilderExtensions.RateLimiting.cs:378`, `Presentation/MMCA.Common.UI/DependencyInjection.cs:43-46`
-(ApiSettings), `UI.Web/Hardening/UiRateLimitingExtensions.cs:180-183` and `BlazorCircuitLimitExtensions.cs:55-58`
-(both `BindConfiguration`), `Hosting/MMCA.Common.Aspire/Extensions.Health.cs:36` (HealthReportCacheOptions),
-`Hosting/MMCA.Common.Aspire/Security/SecurityHeaders.cs:276-277` (SecurityHeadersSettings),
-`Hosting/MMCA.Common.Gateway/GatewayReverseProxyExtensions.cs:55-58` (GatewaySettings),
-`Hosting/MMCA.Common.Aspire/Gateway/GatewayRateLimitingExtensions.cs:273-276`,
-`Presentation/MMCA.Common.Grpc/Authentication/ServiceTokenServiceCollectionExtensions.cs:103-106`
-(ServiceTokenSettings, section `Grpc:ServiceToken` at `ServiceTokenSettings.cs:21`),
-`Core/MMCA.Common.AI/DependencyInjection.cs:126` (AiSettings),
-`Core/MMCA.Common.AI/Guardrails/GuardrailServiceCollectionExtensions.cs:70` (ContentPolicySettings). The same
-service-token file's other hit (`:78-82`) is not a settings section: it validates a `DefaultSchemeGuard` marker
-type at startup, with no data annotations, so the service-token scheme cannot become the default authentication
-scheme; Step 8 does not count it. `ValidateOnStart` without data annotations: `BlazorCspSettings`
-(`UI.Web/DependencyInjection.cs:69-71`, `BindConfiguration`) and `SameOriginApiProxySettings`
-(`UI.Web/SameOriginProxy/SameOriginApiProxyServiceExtensions.cs:65`, with `PostConfigure`). `ApplicationSettings` /
-`ModulesSettings` at `Presentation/MMCA.Common.API/Startup/ModuleHostExtensions.cs:61-64` and `:69-72`; Store Stripe
-at `MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.API/SalesModule.cs:51-54`. Exclusions:
-`OwnerOrAdminFilterOptions` (`API/DependencyInjection.cs:87-92`, comment from `:87`), `LegalAcceptanceOptions`
-(`Infrastructure/DependencyInjection.Auth.cs:109-110`, no-`ValidateOnStart` comment `:106-108`; it carries no
-data-annotation link either), `HybridCacheOptions` (no section of its own: `Configure`d from the validated
-`CacheSettings` at `.Caching.cs:149-150`), `CacheKeyPrefixOptions` (`Configure` at `.Caching.cs:41`),
-`NativePushSettings` and `FileStorageSettings` (`.Notifications.cs:87-88`, `:119-120`), and the UI's
-`LayoutSettings` / `LegalSettings` / `RegistrationSettings` / `UiReadCacheOptions` / `NotificationBellOptions`
-(`UI/DependencyInjection.cs:49-50`, `:54-55`, `:59-60`, `:64-65`, `:67-68`, optional-section comments `:48`,
-`:52-53`, `:57-58`, `:62-63`). `JwtSettings` rules (`Core/MMCA.Common.Infrastructure/Auth/JwtSettings.cs`):
-`[Required]` at `:53` and `:57`, `Validate` at `:79` (HS256 32-character secret `:81`, RS256 private key `:88`).
-"Nothing gates the chain" was re-run this pass: no `ValidateOnStart` or `AddOptions` hit in
-`Hosting/MMCA.Common.Testing.Architecture`, and the `ValidateOnStart` hits under `MMCA.Common/Tests/` are eight
-behavior-test files, none of them a governance test. ADR cells unchanged (ADR-023 / 025 / 041 / 070), range
-001-136 per `Website/docs-src/adr/README.md:6`. The headless-launch caveat is a known operational note, not a
-code limitation, and is not determinable from source.
-The two hits added since 2026-10-22 are the startup tripwires, `ValidateOnStart` with no data annotations
-and no settings section: `CloudAdapterTripwireOptions` (`Core/MMCA.Common.Infrastructure/DependencyInjection.cs:221`)
-and `HostIntegrationTripwireOptions` (`Hosting/MMCA.Common.Aspire/Extensions.cs:44`); the two new test files
-are `CloudAdapterTripwireTests` and `HostIntegrationTripwireTests`.
+*Notes: re-verified 2026-11-25 against MMCA.Common v1.319.0 (`MMCA.Common/FACTS.md:14`). Paths are under
+`MMCA.Common/Source/` unless stated. Every anchor below was re-read this pass unless marked "carried", which
+means it keeps its 2026-10-29 value and was not re-opened.
+Prerequisites: SDK 11.0.100 pinned at `MMCA.ADC/global.json:3` and `MMCA.Common/global.json:3`; libraries
+multi-target `net10.0;net11.0`, default `net11.0` (`MMCA.Common/build/Frameworks.props:23-24`); `LangVersion`
+15.0 at `MMCA.Common/Directory.Build.props:18`, `MMCA.ADC/Directory.Build.props:50` and
+`MMCA.Store/Directory.Build.props:47`; ADC and Store take `TargetFramework` from `$(MmcaNet)`
+(`MMCA.ADC/Directory.Build.props:42`, `MMCA.Store/Directory.Build.props:39`), ADC on net11.0 and Store on
+net10.0 per ADR-141.
+Baseline (`Hosting/MMCA.Common.Aspire/Extensions.cs`): `AddServiceDefaults` `:35`, `AddWarmupReadiness` called
+`:39` and defined `:130` with `OpenIdConnectMetadataWarmupTask` at `:135`, host-integration tripwire `:50`,
+`ConfigureHttpClientDefaults` with the YARP-forwarder exclusion comment `:54-57`, `AddStandardResilienceHandler`
+`:68` (timeouts and retry budget `:70-73`, POST/PATCH never retried `:82`), `SocketsHttpHandler` `:107` (tuning
+comment `:96`). Values in `Core/MMCA.Common.Shared/Resilience/HttpResilienceDefaults.cs:15,18,21` (30s / 60s /
+90s), `MaxRetryAttempts = 1` `:32`, `GrpcAttemptTimeout` 8s `:72`, `GrpcTotalRequestTimeout` 20s `:75`, applied
+to typed gRPC clients at `Presentation/MMCA.Common.Grpc/DependencyInjection.cs:142-146`.
+Telemetry (`Hosting/MMCA.Common.Aspire/Extensions.Telemetry.cs`): five trace sources `:82-86`
+(`MMCA.Common.Messaging` is `BrokerWire.ActivitySourceName`,
+`Core/MMCA.Common.Infrastructure/Messaging/BrokerWire.cs:19`; `AiTelemetryName = "MMCA.Common.AI"` `:43`);
+`ConfigureMetrics` defined `:240`, calling `ConfigureAspNetCoreMetrics` `:242`; eleven MMCA meters by literal
+name `:310-320`, `MMCA.Common.Auth` at `:319` (defined `Core/MMCA.Common.Application/Auth/AuthenticationServiceBase.cs:1102`);
+Polly meter `:327` (literal because Aspire holds no Polly reference, comment `:27-28`), duration View `:339`
+unless `Telemetry:EnablePollyDurationMetrics`; `OutboxPollFilterProcessor` `:124`, `ProbeTelemetryFilterProcessor`
+`:131`, `ParentBasedSampler(TraceIdRatioBasedSampler)` `:140-141`; OTLP `AddOpenTelemetryExporters` doc and body
+`:153-173`, `OTEL_EXPORTER_OTLP_ENDPOINT` read `:166`. The Aspire project references only `MMCA.Common.Shared`
+(`Hosting/MMCA.Common.Aspire/MMCA.Common.Aspire.csproj:59`), which is why the source and meter names are literals.
+The three metric-knob anchors (`DisableAspNetCoreMetrics`, `DisableHttpClientMetrics`, `DisableRuntimeMetrics`)
+and `FilterProbeTelemetryConfigKey` are carried. Azure Monitor:
+`Hosting/MMCA.Common.Azure.Startup/AzureMonitorExporterExtensions.cs` (namespace `MMCA.Common.Azure` `:6`,
+`ConnectionStringKey` `:18`, `AddAzureMonitorExporter` `:42`, order guard `:50-51`, `UseAzureMonitor()` `:65`);
+`MMCA.Common.Azure` references and type-forwards it per `MMCA.Common/AGENTS.md` (cloud vendor adapters bullet).
+Health (`Hosting/MMCA.Common.Aspire/Extensions.Health.cs`): `MapDefaultEndpoints` `:143`, `/health` cached
+`:154`, `/health/ready` cached with the `Live`/`Optional` exclusion `:174-176`; the `/alive` mapping and the
+"self" check tag are carried. Carried unchanged: the poll filter (`OutboxPollFilterProcessor.cs:26-29`, `:49`,
+`:60-64`), the outbox and CQRS meter instruments (`OutboxMetrics.cs:41,47,57,75,98`;
+`CqrsMetrics.cs:29,35,41,47,53,59`), `CorrelationIdMiddleware.cs:23,26,40-50,61-65`, the security headers
+(`SecurityHeaders.cs:268`, `:288`, `:296`, `:299`, `CspPolicy` `:78`; its `:276-277` chain was re-read) and
+`JwtSettings.cs:53,57,79,81,88`.
+Step 4 vocabulary, twenty-six helper names across twenty-seven methods (`Hosting/MMCA.Common.Aspire.Hosting/`):
+`Extensions.cs` `AddMailDev` `:201`, `AddMessageBroker` `:220` (`AddRabbitMQ(name).WithManagementPlugin()` `:224`),
+`AddServiceBusEmulatorBroker` `:261`, `WithBroker` `:312` (`MessageBus__Provider=RabbitMq` `:321`) and `:341`
+(`AzureServiceBus` plus the emulator connection string and admin endpoint `:350-352`), `WithJwksDiscovery` `:370`,
+`WithE2eRsaKeys` `:414`, `WithE2eRegistrationThrottleLift` `:456`, `WithE2eForceServer` `:490`,
+`WithE2eForceWebAssembly` `:514`, `WithE2eGatewayRateLimitLift` `:548`, `WithSQLServerDataSource` `:587` (chain
+`:595-597`, "becomes Default" doc comment `:578-581`), `WithPostgreSQLDataSource` `:617`, `WithCosmosDataSource`
+`:646`, `WithSqliteDataSource` `:671`; `BrokerSelection.cs` `AddSelectedBroker` `:58` (emulator branch `:65-67`,
+persistent RabbitMQ `:71-72`) and `WithSelectedBroker` `:82` (the static `IsServiceBusSelected` `:36`, matching
+`ServiceBusSelection = "servicebus"` `:28`, is not a fluent helper and is not counted); `GatewayUiExtensions.cs`
+`WithMmcaGateway` `:41`, `WithMmcaUi` `:82`, `WithGatewayApiEndpoints` `:122`; `H2cHealthCheckExtensions.cs`
+`WithH2cHealthCheck` `:111`; `IdentityLinkExtensions.cs` `WithUiLinks` `:74`, `WithIssuer` `:100`;
+`MmcaReplicas.cs` `WithMmcaReplicas` `:63`; `ServiceInfrastructureExtensions.cs` `WithMmcaServiceInfrastructure`
+`:57` (chain `:73-78`, probe choice `:80-84`, endpoints-stay-internal doc `:28-31`, no-project-reference doc
+`:39-42`); `ServiceTokenExtensions.cs` `AddServiceTokenSigningKey` `:46`, `WithServiceTokenSigningKey` `:67`.
+ADC AppHost (`MMCA.ADC/Source/Hosting/MMCA.ADC.AppHost/Program.cs`): 15672 comment `:50`,
+`AddSelectedBroker("ADC_BROKER", sqlServer)` `:98`, `AddMailDev()` `:106`, shared-chain comment `:118-122`, every
+service calls `WithMmcaServiceInfrastructure` (`:137-138`, `:159`, `:197`, `:222`); the Step 4 source is the
+Conference chain `:191-201` (`AddDotnetProject` `:191-194`, infrastructure `:197`; the snippet omits its
+`Seeding__IncludeSampleConferenceData` variable, `:201`); the Step 5 gRPC snippet shows the edges at `:267`,
+`:269`, `:276` (further edges at `:273`, `:284`, `:294-295`, `:300`, `:308`); `WithMmcaGateway(6001, ...)` `:364`;
+JWKS `:373-375`; `WithMmcaUi(gateway, 6002, ...)` `:394`. Store's AppHost project path is carried.
+Step 8 (ADR-070): canonical chain `Core/MMCA.Common.Infrastructure/DependencyInjection.cs:74-76`. A Grep of
+`ValidateOnStart()` under `Source/` returns 47 hits: 35 sections with `ValidateDataAnnotations().ValidateOnStart()`,
+the two module-host chains, six sections validated another way, the webhook-delivery registration check, the two
+startup tripwires and the service-token default-scheme guard. Infrastructure (23):
+`DependencyInjection.cs:76,102,148,153,158,164,172,196,218,223,325`, `.Auth.cs:52,85,112,180`, `.Caching.cs:51,56`,
+`.FeatureFlags.cs:67`, `.Jobs.cs:41,112,147`, `.Notifications.cs:46`, `Webhooks/WebhookServiceCollectionExtensions.cs:74`.
+Others (12): `Presentation/MMCA.Common.API/DependencyInjection.cs:81` (idempotency),
+`API/Startup/WebApplicationBuilderExtensions.Authentication.cs:139` (JWT), `WebApplicationBuilderExtensions.RateLimiting.cs:410`,
+`UI.Web/Hardening/UiRateLimitingExtensions.cs:223-225` and `BlazorCircuitLimitExtensions.cs:56-58` (both
+`BindConfiguration`), `Hosting/MMCA.Common.Aspire/Extensions.Health.cs:36` (HealthReportCacheOptions),
+`Hosting/MMCA.Common.Aspire/Security/SecurityHeaders.cs:276-277`, `Hosting/MMCA.Common.Gateway/GatewayReverseProxyExtensions.cs:66`,
+`Hosting/MMCA.Common.Aspire/Gateway/GatewayRateLimitingExtensions.cs:383`,
+`Presentation/MMCA.Common.Grpc/Authentication/ServiceTokenServiceCollectionExtensions.cs:113`,
+`Core/MMCA.Common.AI/DependencyInjection.cs:129`, `Core/MMCA.Common.AI/Guardrails/GuardrailServiceCollectionExtensions.cs:72`.
+Validated another way (6): `Presentation/MMCA.Common.UI/DependencyInjection.cs:48-51` (`ApiSettingsValidator`,
+comment `:45-47`), `Core/MMCA.Common.Infrastructure/DependencyInjection.MachineClients.cs:41-45`,
+`Core/MMCA.Common.Passkeys/PasskeysServiceCollectionExtensions.cs:41-44`, `Presentation/MMCA.Common.Mcp/McpHostingExtensions.cs:58-63`,
+`UI.Web/DependencyInjection.cs:69-71` (BlazorCspSettings) and `UI.Web/SameOriginProxy/SameOriginApiProxyServiceExtensions.cs:65`
+(its `PostConfigure` is carried). Webhook-delivery check: `Core/MMCA.Common.Application/DependencyInjection.Webhooks.cs:98-99`
+(doc comment `:89-91`). Tripwires: `Core/MMCA.Common.Infrastructure/DependencyInjection.cs:244`,
+`Hosting/MMCA.Common.Aspire/Extensions.cs:50`; default-scheme guard ending `ServiceTokenServiceCollectionExtensions.cs:85`;
+module host `Presentation/MMCA.Common.API/Startup/ModuleHostExtensions.cs:62-64`, `:70-72`. Store Stripe
+(`SalesModule.cs:51-54`) is carried. Exclusions: `OwnerOrAdminFilterOptions` (`API/DependencyInjection.cs:90-95`),
+`LegalAcceptanceOptions` (`Infrastructure/DependencyInjection.Auth.cs:145-146`), `CacheKeyPrefixOptions` (`Configure`
+at `.Caching.cs:46`), `HybridCacheOptions` (`.Caching.cs:170`; configured from `CacheSettings`, carried), the UI's
+`LayoutSettings` / `LegalSettings` / `RegistrationSettings` / `SignInSettings` / `NotificationBellOptions`
+(`UI/DependencyInjection.cs:54-55`, `:59-60`, `:64-65`, `:69-70`, `:73-74`, optional-section comments `:53`,
+`:57-58`, `:62-63`, `:67-68`, `:72`), and vendor adapter settings such as `AzureBlobFileStorageSettings` and
+`AzureNotificationHubSettings` (`Hosting/MMCA.Common.Azure/AzureServiceCollectionExtensions.cs:48`, `:99`; no
+`ValidateOnStart()` hit in that package). `.Notifications.cs` (91 lines) binds no native-push or file-storage section.
+"Nothing gates the chain" re-run: no `ValidateOnStart` or `AddOptions` hit in `Hosting/MMCA.Common.Testing.Architecture`;
+the `ValidateOnStart` hits under `MMCA.Common/Tests/` are nine behavior-test files, none a governance test.
+Broker trade-off: Basic rejected because each event publishes on its own topic with a forwarding subscription and
+Basic supports only queues (`MMCA.ADC/infra/main.bicep:1484-1486`); Standard sku `:1494-1496`; MassTransit is banned
+(ADR-118, `MMCA.Common/AGENTS.md`). ADR cells unchanged (ADR-023 / 025 / 041 / 070), range 001-147 per
+`Website/docs-src/adr/README.md:6`. The headless-launch caveat is a known operational note, not a code limitation,
+and is not determinable from source.
+Flag (2026-11-25): the scaffold sentence (`dotnet new install MMCA.Templates`, then `dotnet new mmca-app`, generating
+an AppHost wired to SQL Server plus an API and a Blazor UI) is not verified this pass: the template source is not
+in this workspace, so the generated output could not be read. Text left as is.
+Changed 2026-11-25: prerequisite .NET 10 SDK with C# preview to .NET 11 SDK 11.0.100, net10.0/net11.0 multi-target,
+C# 15.0; trace sources four to five (`MMCA.Common.Messaging`); meters ten to eleven (`MMCA.Common.Auth`), both
+also added to the literal-name trade-off; the resilience bullet names the one retry, the POST/PATCH exclusion,
+the YARP forwarder exclusion and the gRPC 8s/20s timeouts instead of "every outbound call"; Step 4 helpers 16/17
+to 26/27, the snippet follows the ADC `AddDotnetProject(...).WithMmcaServiceInfrastructure(...)` chain (dropping
+`.WithExternalHttpEndpoints()`, which no backend service sets) and a bullet for that helper was added; OTLP cite
+`:152-172` to `:153-173`; Azure Monitor exporter attributed to `MMCA.Common.Azure.Startup` with `:65` and `:50-51`;
+Step 8 validated sections 32 to 35 (Infrastructure 19 to 23: view-as, feature-flag overrides, sign-in links,
+outbound webhooks; the UI's API settings moved to the validated-another-way group), the no-data-annotations group
+2 to 6 plus the webhook-delivery check; the unvalidated optional list drops native push, file storage and the UI
+read cache, and adds the sign-in options and the vendor adapter settings; the broker trade-off states the
+topic-per-event reason for Standard instead of MassTransit; `ValidateOnStart()` hits 39 to 47; behavior-test files
+8 to 9; ADR range 001-136 to 001-147; every anchor re-stamped.
 Changed 2026-10-29: meters nine to ten (`MMCA.Common.Persistence`, the concurrency-conflict counter, added to
 Step 2 and the literal-name trade-off); the exporter paragraph and the closing summary say OTLP is the one
 built-in exporter and Azure Monitor comes from the `MMCA.Common.Azure` adapter's `AddAzureMonitorExporter()`

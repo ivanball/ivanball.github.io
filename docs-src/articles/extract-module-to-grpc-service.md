@@ -1,7 +1,7 @@
 # Extracting a module to a gRPC service, live
 
 > Series: MMCA.Common · Article #32 (tutorial) · Pillar P3/P5 · Groups G13,G14 · Rubric §7,§9 ·
-> ADR-007, ADR-008, ADR-012, ADR-088, ADR-089 · Status: grounded in `Website/docs-src/adr/007-grpc-extraction.md`,
+> ADR-007, ADR-008, ADR-012, ADR-021, ADR-088, ADR-089, ADR-118 · Status: grounded in `Website/docs-src/adr/007-grpc-extraction.md`,
 > `Website/docs-src/adr/008-service-extraction-topology.md`, `Website/docs-src/adr/012-grpc-host-transport.md`,
 > `Website/docs-src/adr/088-gateway-edge-responsibilities.md`,
 > `Website/docs-src/adr/089-gateway-topology-owned-by-configuration.md`, `MMCA.Common/AGENTS.md`
@@ -31,15 +31,17 @@ abstractions, and transport choices live at the edges.**
 
 Concretely, that means two things were true while the code still ran as a monolith:
 
-- Asynchronous, fire-and-forget flows go through `IMessageBus`, defined in
-  `MMCA.Common.Application`. The application never references the broker library.
+- Asynchronous, fire-and-forget flows go through `IEventBus`, defined in `MMCA.Common.Application`.
+  Beneath it, `IMessageBus` (also an Application abstraction) is the transport the outbox drains
+  through. The application never references the broker library.
 - Synchronous cross-module calls go through a plain C# interface (for example
   `IBookmarkCountService`), resolved from DI. The caller does not know whether the implementation is an
   in-process object or something else.
 
 This invariant is not a hope. It is enforced. `MicroserviceExtractionTests` in the architecture suite
-fail the build if `MassTransit`, gRPC, or Protobuf types appear in any Domain, Application, or Shared
-assembly. So you cannot accidentally couple the core to a transport during normal development, which
+fail the build if a broker client (RabbitMQ, Azure Service Bus, Amazon SQS or SNS), `MassTransit`
+(banned outright), or gRPC or Protobuf types appear in any Domain, Application, or Shared assembly.
+So you cannot accidentally couple the core to a transport during normal development, which
 means when extraction day arrives the core is genuinely host-agnostic. If your codebase does not have
 this property, stop here and fix that first. Everything below assumes it.
 
@@ -157,8 +159,10 @@ events) need the same treatment, and the framework makes it a configuration swit
 change.
 
 `IMessageBus` has two implementations in Infrastructure: `InProcessMessageBus` (in-monolith, delivery is
-a method call) and `BrokerMessageBus` (a MassTransit broker, RabbitMQ locally and Azure Service Bus in
-production, with an `IntegrationEventConsumer`).
+a method call) and `BrokerMessageBus`, which publishes through the selected transport's
+`IBrokerPublisher`. RabbitMQ and PostgreSQL transports are built in, and an adapter package
+(MMCA.Common.Azure for Azure Service Bus, MMCA.Common.Aws for Amazon SQS) registers its own; on the
+receiving side an `IntegrationEventConsumer` delivers each event to its handlers.
 `MessageBusSettings` selects the mode. In the monolith you ran in-process; in the extracted service you
 flip the setting to the broker.
 
@@ -186,14 +190,17 @@ through the gateway; in Azure Container Apps each service points straight at the
 in-cluster address (ADR-004, ADR-012). Validating a user's token never requires services to share a
 symmetric secret, which is what makes the fleet safe to grow. The framework's one shared key is opt-in
 and separate: an HS256 service token (configuration section `Grpc:ServiceToken`) for calls that carry
-no user, which Store enables on its Sales-to-Identity edge and ADC does not use (ADR-007).
+no user, which Store enables on its Sales-to-Identity edge and ADC on three edges (the verified-user
+lookup, the live-channel push and the ticket-invitation call) (ADR-007).
 
 ## Step 6: wire it in the AppHost with MMCA.Common.Aspire.Hosting
 
 Local orchestration is where the topology becomes runnable. `MMCA.Common.Aspire.Hosting` provides
-AppHost extension methods for the cross-cutting infrastructure of an extracted deployment: the RabbitMQ
-broker, JWKS service discovery, and the per-service data sources. The gRPC edge is not one of them, as
-the snippet below shows: peers are wired with stock Aspire `WithReference`.
+AppHost extension methods for the cross-cutting infrastructure of an extracted deployment: the broker
+(RabbitMQ, or the Azure Service Bus emulator, with an `AddSelectedBroker`/`WithSelectedBroker` pair),
+JWKS service discovery, the per-service data sources, `WithMmcaServiceInfrastructure` for the chain
+every service shares, and the signing key for the opt-in service token. The peer gRPC edge is not one
+of them, as the snippet below shows: peers are wired with stock Aspire `WithReference`.
 
 ```csharp
 // AppHost Program.cs
@@ -251,8 +258,8 @@ them ship in the `Gateway` namespace of `MMCA.Common.Aspire`. A fourth, the forw
 that makes the client IP the caller's rather than the ingress's, ships in `MMCA.Common.Gateway`
 alongside `AddMmcaGateway`, the shared YARP forwarder profile both gateways chain onto
 `AddReverseProxy`. The package placement is a constraint, not a preference: a YARP host has no
-controllers, so it references those two framework packages plus `MMCA.Common.Azure` (for Key Vault
-configuration and Azure Monitor export, see
+controllers, so it references those two framework packages plus `MMCA.Common.Azure.Startup` (Key Vault
+configuration and Azure Monitor export only, with no persistence or messaging code, see
 [the cloud adapters article](cloud-neutral-vendor-adapters.md)) and nothing else from the framework, and
 it cannot reach the service-tier `CorrelationIdMiddleware` or `AddCommonRateLimiting` that live in
 `MMCA.Common.API`.
@@ -291,15 +298,19 @@ app.MapReverseProxy();
   from the output cache, and that cache lives *behind* the proxy, so a flood is paid for in full at the
   edge before anything can be served cheaply. The two limiters answer different failures: the window
   answers one noisy source, the concurrency cap answers total in-flight work no matter how many sources
-  produced it. Four kinds of request take the no-limiter partition on both limiters. `/health`,
+  produced it. Three kinds of request take the no-limiter partition on both limiters. `/health`,
   `/alive` and `/.well-known` are always bypassed, because throttling them takes out the probes and
   JWKS discovery as collateral. A host adds its own prefixes through `BypassPathPrefixes`, which is
-  how Store exempts its Stripe webhook route and ADC its SignalR hub route. The other two are
-  secret-proving headers, each off until its secret is configured: `SyntheticTrafficSecret`, so a
-  load run measures the system rather than the limiter, and `TrustedCallerSecret`, for a
-  server-rendered UI host whose every back-end call leaves from one address that the per-IP window
-  would otherwise collapse into a single partition. ADC's gateway names the trusted-caller header in
-  configuration and takes the secret itself from Key Vault. A request with no attributable client IP
+  how Store exempts its Stripe webhook route and ADC its SignalR hub route. The third is a
+  secret-proving header, off until its secret is configured: `SyntheticTrafficSecret`, so a load run
+  measures the system rather than the limiter. A second secret-proving header, `TrustedCallerSecret`,
+  serves a server-rendered UI host whose every back-end call leaves from one address that the per-IP
+  window would otherwise collapse into a single partition. A proven trusted caller skips the
+  concurrency cap, and under the default `TrustedCallerMode.PerVisitor` it is counted in the per-IP
+  window of the visitor it forwards in `X-Forwarded-For` rather than of its own address;
+  `TrustedCallerMode.Exempt` exempts it from both limiters. ADC's gateway names the trusted-caller
+  header in configuration, takes the secret itself from Key Vault, and sets no mode, so it runs
+  per-visitor. A request with no attributable client IP
   skips the per-IP window (fail-open, chosen over collapsing every unattributable caller into one shared
   bucket) but still counts against the concurrency cap. The settings
   validate on both construction paths, the options pipeline (`ValidateOnStart`) and a
@@ -321,7 +332,7 @@ to revisit is measured, not felt: when invalid-token traffic is a material share
 it becomes a cost argument, and the services keep validating either way (ADR-088).
 
 The route table itself is configuration, not code. What step 7 calls "the gateway's table" is YARP
-`ReverseProxy` configuration as the single source, 33 routes in ADC and 15 in Store, pinned in both
+`ReverseProxy` configuration as the single source, 45 routes in ADC and 18 in Store, pinned in both
 repositories by a `RouteMapTests` drift gate that drives each route through the real proxy pipeline
 and compares the loaded `IProxyConfig` back against the pinned list in both directions. The
 alternative shape, hand-written `MapForwarder` calls, states the same table three times inside one
@@ -395,7 +406,9 @@ that the split was correct on the first try.
   locally; production needs the matching Bicep and ingress configuration.
 - **Distributed-systems semantics are now yours.** Cross-service consistency is eventual (outbox plus
   integration events). There are no cross-service transactions and no cross-database foreign keys.
-  Consumers must be idempotent because broker delivery is at-least-once.
+  Broker delivery is at-least-once, so redeliveries must be deduplicated. The framework inbox does that
+  for every consumer and is on by default under any broker (ADR-021), at the price of an
+  `InboxMessages` table in each service database.
 - **The transport profile leaks into hosting.** ADR-012 is not optional reading. The Kestrel protocol
   choice, the gateway-forward mode, the ingress transport, and the JWKS form are a coupled set, and a
   half-configured set fails in ways that only show up in the cloud, not locally.
@@ -460,236 +473,85 @@ behind this walkthrough, or `dotnet add package MMCA.Common.Grpc` and try it.*
 
 *Tags: .NET, C Sharp, Microservices, gRPC, Software Architecture*
 
-*Notes: 2026-10-02 pass (MMCA.Common v1.221.0). Anchors marked "re-read" were opened in this pass;
-the rest were confirmed by this run's audit (`Reports/update-medium/2026-10-02/32.json`). Corrections,
-all re-read: (1) gateway forward mode is per-cluster `ReverseProxy` configuration, not a flag: a
-Profile A cluster declares `Version` 2 with `VersionPolicy = RequestVersionExact`, a Profile B
-cluster declares no version pair (`Website/docs-src/adr/012-grpc-host-transport.md:307-312`,
-`:341-344`); `MmcaGateway:ForwardHttp2` was removed (`MMCA.Common/CHANGELOG.md:2292`). (2) The
-outbox resolves from the transport (ADR-100): `IsOutboxEnabled => EnableOutbox ?? Provider !=
-MessageBusProvider.InProcess`
-(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Messaging/MessageBusSettings.cs:175`,
-`EnableOutbox` at `:167`, `Provider` defaulting to `InProcess` at `:17`, the enum value at `:241`),
-and `OutboxProcessor` is registered only when it resolves on
-(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:213-225`); ADR-003's
-amendment note is at `Website/docs-src/adr/003-outbox-dual-dispatch.md:10-16`. (3) The gRPC
-resilience pipeline takes every value from `GrpcResilienceDefaults`
-(`MMCA.Common/Source/Presentation/MMCA.Common.Grpc/DependencyInjection.cs:127-142`): attempt and
-total timeouts and the retry count delegate to `HttpResilienceDefaults`
-(`MMCA.Common/Source/Core/MMCA.Common.Shared/Resilience/GrpcResilienceDefaults.cs:15`, `:18`,
-`:24`), the retry predicate is `HttpRequestException` only (`DependencyInjection.cs:137`), and the
-breaker's failure ratio 0.5, minimum throughput 10 and break duration 10 seconds are explicit
-(`GrpcResilienceDefaults.cs:27`, `:30`, `:33`); the `SocketsHttpHandler` override is at
-`DependencyInjection.cs:110-118` and the h2c address at `:96-98`. (4) An unattributable client IP
-skips only the per-IP window (`RateLimitPartition.GetNoLimiter` at
-`MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Gateway/GatewayRateLimitingExtensions.cs:220`);
-`ConcurrencyPartition` (`:241-255`) exempts only `IsExemptFromLimiters` (`:182-185`), so that
-request still counts against the concurrency cap. (5) Gateway-routed JWKS is the local Aspire wiring
-(`MMCA.ADC/Source/Hosting/MMCA.ADC.AppHost/Program.cs:373-375`); production ACA injects the direct
-in-cluster authority `http://${identityApp.name}` (`MMCA.ADC/infra/main.bicep:1937`, `:2071`,
-`:2223`), as `012-grpc-host-transport.md:313-320` states. (6) Reversibility names the real setting,
-`MessageBus:Provider` (`MessageBusSettings.cs:14` section name, `:17` property). (7) Step 2's client
-half: `RpcException.ToResult()` rebuilds `Result.Failure(errors)` from the trailers or degrades to
-one `Grpc.{StatusCode}` error
-(`MMCA.Common/Source/Presentation/MMCA.Common.Grpc/ResultGrpcExtensions.cs:218-227`), and
-`ToRpcException()` takes the most severe error's status, `StatusCode.Internal` for an empty list
-(`:119-125`). ADC's real `BookmarkCountServiceGrpcAdapter` returns `Task<int>` and decodes no
-trailers (`MMCA.ADC/Source/Services/MMCA.ADC.Engagement.Contracts/BookmarkCountServiceGrpcAdapter.cs:23-36`),
-so the decode is credited to `ToResult()`, not to that adapter. (8) Step 3 names the third container
-state: ADC service hosts name only their own module to `ModuleLoader`, so no stub exists
-(`MMCA.ADC/AGENTS.md`, "Service hosts"); stubs are registered at
-`MMCA.Common/Source/Core/MMCA.Common.Application/Modules/ModuleLoader.cs:112-119` through
-`IModule.RegisterDisabledStubs` (`IModule.cs:34`), and ADC's `services.Replace` is at
-`MMCA.ADC/Source/Services/MMCA.ADC.Engagement.Contracts/DependencyInjection.cs:49`. (9) The header
-grounds in `MMCA.Common/AGENTS.md` ("Microservices Extraction Boundaries"), because
-`MMCA.Common/CLAUDE.md` only imports it. AppHost surface of `MMCA.Common.Aspire.Hosting`, re-read
-(`MMCA.Common/Source/Hosting/MMCA.Common.Aspire.Hosting/Extensions.cs`), 13 public methods:
-`AddMailDev` `:141`, `AddMessageBroker` `:160`, `AddServiceBusEmulatorBroker` `:201`, `WithBroker`
-`:252` and `:280`, `WithJwksDiscovery` `:309`, `WithE2eRsaKeys` `:353`,
-`WithE2eRegistrationThrottleLift` `:392`, `WithE2eGatewayRateLimitLift` `:440`, and
-`With{SQLServer,PostgreSQL,Cosmos,Sqlite}DataSource` `:483`/`:513`/`:542`/`:567`; no gRPC API, the
-single `gRPC` occurrence is the comment at `:322`. gRPC peers use stock Aspire `WithReference`, as
-ADC's AppHost does (audit: `engagementService.WithReference(conferenceService).WaitFor(conferenceService)`
-at `:271`, the no-`WaitFor` deadlock rationale at `:261` and `:273`, the reverse edge at `:274`).
-Mixed-endpoint hosts: ADC Notification (audit:
-`MMCA.ADC/Source/Services/MMCA.ADC.Notification.Service/appsettings.json:9-19`, 8080
-`Http1AndHttp2` plus a named `grpc` endpoint 8081 `Http2`; re-read in `Program.cs`:
-`ConfigureEndpointsWithHealthProbe(HttpProtocols.Http1AndHttp2, redeclareCleartextEndpoint: false)`
-at `:73` with the rationale at `:58-72`, `AddGrpcServiceDefaults()` at `:241`,
-`MapGrpcService<LiveChannelGrpcService>().AllowAnonymous()` at `:285`, and
-`UserNotificationExportGrpcService` at `:293`) and Store Sales (audit:
-`MMCA.Store/Source/Services/MMCA.Store.Sales.Service/appsettings.json:10-19`). Edge kit, under
-`MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Gateway/`: `GatewayCorrelationMiddleware`
-`HeaderName` `:34`, mint `:53`, `Response.OnStarting` `:58`, `RequestDelegate`-only ctor `:27`,
-`UseGatewayCorrelation()` `:82` (audit); `AddGatewayRateLimiting` re-read: `ValidateOnStart()` at
-`GatewayRateLimitingExtensions.cs:276`, `Validator.ValidateObject(..., validateAllProperties: true)`
-at `:297`, `Connection.RemoteIpAddress` at `:215`, unknown-IP `GetNoLimiter` at `:220`, fixed window
-at `:223`, `GetConcurrencyLimiter` at `:250`, `PartitionedRateLimiter.CreateChained` at `:306`,
-`Status429TooManyRequests` at `:301`, always-bypassed `["/health", "/alive", "/.well-known"]` at
-`:69`, whole-segment match at `:89` (documented at `:74`), the four no-limiter kinds documented at
-`:28-37` (audit). Settings (audit): `PermitLimit` 120 (`GatewayRateLimitingSettings.cs:59`),
-`WindowSeconds` 60 (`:63`), `GlobalConcurrencyLimit` 200 (`:73`), `BypassPathPrefixes` empty
-(`:82`), section `"GatewayRateLimiting"` (`:50`), `SyntheticTrafficSecret` `:115` (header `:91`),
-`TrustedCallerSecret` `:151` (header `:123`). Health checks (audit):
-`AddGatewayDownstreamHealthChecks` `GatewayHealthCheckExtensions.cs:130` (overload `:148`),
-`BaseAddress` `:194`, `ProbeTimeout` 2 seconds `:84` (applied `:195`, `:212`), `Unhealthy` `:210`,
-`Ready` tag `:211`, `/alive` probe `DownstreamServiceHealthCheck.cs:17`. Consumer wiring (audit):
-gateway csprojs reference `MMCA.Common.Aspire` and `MMCA.Common.Gateway` only
-(`MMCA.ADC.Gateway.csproj:3-4`, `MMCA.Store.Gateway.csproj:25-26`); ADC gateway ordering
-`MMCA.ADC/Source/Hosts/MMCA.ADC.Gateway/Program.cs:146-149`, `:158`, `:163`, `:168`, `:170`, `:171`,
-`:178`; Store `MMCA.Store/Source/Hosts/MMCA.Store.Gateway/Program.cs:150`, `:155` (comment
-`:146-149`); `UseCommonForwardedHeaders()` at
-`MMCA.Common/Source/Hosting/MMCA.Common.Gateway/ForwardedHeadersExtensions.cs:36` delegating at
-`:40`; bypass lists `"/hubs"` (`MMCA.ADC.Gateway/appsettings.json:25`, trusted-caller header and Key
-Vault secret `:26-32`) and `"/Payments"` (`MMCA.Store.Gateway/appsettings.json:20`). Route table,
-re-read: ADC `Routes` opens at `MMCA.ADC/Source/Hosts/MMCA.ADC.Gateway/appsettings.json:78` (33
-routes, audit count), Store at `MMCA.Store/Source/Hosts/MMCA.Store.Gateway/appsettings.json:51` (15
-routes, audit count); ADR-089's cluster split and its 26/10 `MapForwarder` Context at
-`Website/docs-src/adr/089-gateway-topology-owned-by-configuration.md:92-96` (audit). Drift gates
-(audit): ADC `RouteMapTests.cs` `:131`, `:179`, `:221`, `:239`; Store `RouteMapTests.cs` `:46`,
-`:102`, `:126`, `:229`, `:246`, rationale `:31-35`. Step 2's HTTP table is `ErrorHttpMapping`
-(`MMCA.Common/Source/Presentation/MMCA.Common.API/Middleware/ErrorHttpMapping.cs:14`, table `:20`;
-`ApiControllerBase.cs:48` and `:58`; audit). The Program.cs, .proto and adapter code blocks are
-illustrative composites in a generic "MMCA.App" namespace, not verbatim ADC or Store source; the
-`AddEngagementBookmarkCountClient` helper name is illustrative. Earlier passes: 2026-07-27 (Step 6
-had credited `MMCA.Common.Aspire.Hosting` with gRPC project references) and 2026-09-19 (route pair
-33/15, Store's both-directions `IProxyConfig` gate, the `MMCA.Common.Gateway` reference and
-forwarded-headers step, four bypass kinds, Store Sales as a second mixed-endpoint host). Not settled
-this run: the ADR-004 attribution (validation authority in the services) was not re-read against
-the ADR text.
-2026-10-08 pass (MMCA.Common v1.233.0, `MMCA.Common/FACTS.md:14`; was v1.221.0). Body corrections, all
-re-read: (1) only three breaker values are explicit, `FailureRatio` 0.5, `MinimumThroughput` 10 and
-`BreakDuration` 10 seconds
-(`MMCA.Common/Source/Core/MMCA.Common.Shared/Resilience/GrpcResilienceDefaults.cs:27`, `:30`, `:33`),
-while `SamplingDuration` delegates to `HttpResilienceDefaults.CircuitBreakerSamplingDuration`
-(`:21`). (2) `JwtForwardingClientInterceptor` falls back to the ticket's saved `access_token` when no
-`Authorization` header is present (documented
-`MMCA.Common/Source/Presentation/MMCA.Common.Grpc/Interceptors/JwtForwardingClientInterceptor.cs:20-24`,
-implemented in `ResolveAuthorization` `:117-133`, fallback `:130-132`; no-op without an
-`HttpContext` `:14-17`, `:119-122`). (3) `GatewayCorrelationMiddleware` sanitizes a caller-supplied
-id: `MaxLength` 64 (`MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Gateway/GatewayCorrelationMiddleware.cs:43`),
-`Sanitize` cuts and rejects non-printable-ASCII (`:87-91`, rule documented `:19-23`). (4) Profile B
-is reframed to ADR-012's 2026-10-07 revision (`Website/docs-src/adr/012-grpc-host-transport.md:9`):
-no deployed host is pure Profile B (`:271`), the HTTPS/ALPN gRPC bullet is historical (`:359-360`)
-and so is single-argument discovery (`:369-373`). Corrected anchors (values unchanged): ADR-012
-Profile A gateway `:325-330` (was `:307-312`), local/ACA JWKS `:331-338` (was `:313-320`), Profile B
-gateway `:361-364` (was `:341-344`); `MmcaGateway:ForwardHttp2` removal `MMCA.Common/CHANGELOG.md:2545`
-(was `:2292`); ADC AppHost (`MMCA.ADC/Source/Hosting/MMCA.ADC.AppHost/Program.cs`) `WithJwksDiscovery`
-`:368-370` (was `:373-375`), `engagementService.WithReference(conferenceService).WaitFor(conferenceService)`
-`:266` (was `:271`), deadlock rationale `:256` and `:268` (were `:261`/`:273`), reverse edge `:269`
-(was `:274`); ADC Bicep in-cluster authority `MMCA.ADC/infra/main.bicep:2005`, `:2141`, `:2295` (were
-`:1937`/`:2071`/`:2223`); ADC gateway ordering (`MMCA.ADC/Source/Hosts/MMCA.ADC.Gateway/Program.cs`)
-`AddGatewayRateLimiting` `:76`, `AddGatewayDownstreamHealthChecks` `:90`, `AddReverseProxy` `:148-151`,
-`UseCommonForwardedHeaders` `:160`, `UseGatewayCorrelation` `:165`, `UseCors` `:173`,
-`UseGatewayRateLimiting` `:180`, `MapReverseProxy` `:234` (were `:146-149`/`:158`/`:163`/`:168-171`/`:178`);
-ADC Notification (`MMCA.ADC/Source/Services/MMCA.ADC.Notification.Service/Program.cs`)
-`ConfigureEndpointsWithHealthProbe(HttpProtocols.Http1AndHttp2, redeclareCleartextEndpoint: false)`
-`:72` (was `:73`), `AddGrpcServiceDefaults()` `:249` (was `:241`),
-`MapGrpcService<LiveChannelGrpcService>().AllowAnonymous()` `:293` (was `:285`),
-`UserNotificationExportGrpcService` `:301` (was `:293`); `GatewayCorrelationMiddleware` `HeaderName`
-`:36`, mint `:62-64`, request-header write `:68`, `Response.OnStarting` `:72`, `RequestDelegate`-only
-ctor `:29`, `UseGatewayCorrelation()` `:108` (were `:34`/`:53`/`:58`/`:27`/`:82`);
-`GatewayRateLimitingSettings.cs` section `:51`, `PermitLimit` 120 `:60`, `WindowSeconds` 60 `:64`,
-`GlobalConcurrencyLimit` 200 `:74`, `BypassPathPrefixes` empty `:85`, `SyntheticTrafficSecret` `:118`
-(header `:94`), `TrustedCallerSecret` `:154` (header `:126`); `GatewayHealthCheckExtensions.cs`
-`AddGatewayDownstreamHealthChecks` `:131` (overload `:149`), `BaseAddress` `:195`, `ProbeTimeout` 2
-seconds `:85` (applied `:196`, `:242`), `Unhealthy` `:240`, `Ready` tag `:241`; ADC `Routes` opens at
-`MMCA.ADC/Source/Hosts/MMCA.ADC.Gateway/appsettings.json:80` (was `:78`; 33 routes, unchanged);
-drift gates ADC `MMCA.ADC/Tests/Hosts/MMCA.ADC.Gateway.Tests/RouteMapTests.cs` theory `:178-180`,
-route pin `:212-223`, cluster pin `:234-235` (were `:131`/`:179`/`:221`/`:239`), Store
-`MMCA.Store/Tests/Hosts/MMCA.Store.Gateway.Tests/RouteMapTests.cs` theory `:201-203`, route pin
-`:220-231`, cluster pin `:298-299` (were `:46`/`:102`/`:126`/`:229`/`:246`; Store rationale `:31-35` not
-re-read). Unchanged and still exact per this run's audit: `GatewayRateLimitingExtensions.cs`,
-`MMCA.Common.Grpc/DependencyInjection.cs`, `ResultGrpcExtensions.cs`, `ModuleLoader.cs`,
-`MessageBusSettings.cs` and `MMCA.Common.Aspire.Hosting/Extensions.cs` anchors above; route counts
-33/15, limiter defaults 120/60/200, probe budget 2 seconds, breaker 0.5/10/10 seconds and ports
-8080/8081. The earlier side finding about ADR-012's Notification anchors is superseded: ADR-012 now
-cites `Program.cs:72` (correct) and `:292`/`:300` (`012-grpc-host-transport.md:344`), while the real
-lines are `:293`/`:301`, so it is off by one in the other direction (reported, not edited here).
-2026-10-22 pass, re-verified against MMCA.Common v1.250.0 (`MMCA.Common/FACTS.md:14`; was v1.233.0).
-Body corrections, all re-read: (1) Step 3's retry predicate is narrower than any
-`HttpRequestException`: `Retry.ShouldHandle` matches only `HttpRequestError.NameResolutionError`,
-`ConnectionError` or `SecureConnectionError`
-(`MMCA.Common/Source/Presentation/MMCA.Common.Grpc/DependencyInjection.cs:142-147`, rationale
-`:135-141`). (2) Step 3's interceptor bullet records that `JwtForwardingClientInterceptor` forwards
-only the user's token and a no-user call carries a credential only when its client chains
-`WithServiceToken()`
-(`MMCA.Common/Source/Presentation/MMCA.Common.Grpc/Interceptors/JwtForwardingClientInterceptor.cs:27-32`;
-`MMCA.Common/Source/Presentation/MMCA.Common.Grpc/Authentication/ServiceTokenHttpClientBuilderExtensions.cs:28`,
-interceptor added `:34`). (3) Step 5 and Apply-this point 3 scope the no-shared-secret claim to user
-tokens: the opt-in service token is HS256 over a shared key
-(`MMCA.Common/Source/Presentation/MMCA.Common.Grpc/Authentication/ServiceTokenSettings.cs:13`, section
-`Grpc:ServiceToken` `:21`, `SigningKey` `:33`); Store wires it on the Sales-to-Identity edge
-(`MMCA.Store/Source/Services/MMCA.Store.Sales.Service/Program.cs:289`,
-`MMCA.Store/Source/Services/MMCA.Store.Identity.Contracts/DependencyInjection.cs:46`,
-`MMCA.Store/Source/Services/MMCA.Store.Identity.Service/Program.cs:173`); ADR-007's 2026-10-21
-revision records it as Store's one shared-secret exception
-(`Website/docs-src/adr/007-grpc-extraction.md:11-12`); ADC does not use it (Grep for
-`WithServiceToken|AddServiceToken` under `MMCA.ADC/Source`: 0 matches); the full treatment stays in
-Article 16. Corrected anchors (values unchanged): `MMCA.Common.Grpc/DependencyInjection.cs`
-resilience `:129-152` (was `:127-142`), predicate as above (was `:137`), `SocketsHttpHandler`
-`:112-120` (was `:110-118`), h2c address `:98-99` (was `:96-98`); `JwtForwardingClientInterceptor.cs`
-access-token doc `:20-26` (was `:20-24`), `ResolveUserAuthorization` (was `ResolveAuthorization`)
-`:144-160` (was `:117-133`), ticket fallback `:157-159` (was `:130-132`), no-op without an
-`HttpContext` `:16-18` and `:146-148` (were `:14-17`/`:119-122`);
-`MMCA.Common/Source/Hosting/MMCA.Common.Aspire.Hosting/Extensions.cs` now has 14 public methods
-(adds `WithE2eForceServer` `:441`): `AddMailDev` `:153`, `AddMessageBroker` `:172`,
-`AddServiceBusEmulatorBroker` `:213`, `WithBroker` `:264` and `:292`, `WithJwksDiscovery` `:321`,
-`WithE2eRsaKeys` `:365`, `WithE2eRegistrationThrottleLift` `:404`, `WithE2eGatewayRateLimitLift`
-`:487`, data sources `:530`/`:560`/`:589`/`:614`, still no gRPC API and the single gRPC comment at
-`:334`; ADC AppHost `WithJwksDiscovery` `MMCA.ADC/Source/Hosting/MMCA.ADC.AppHost/Program.cs:373-375`
-(was `:368-370`); ADC Bicep in-cluster authority `MMCA.ADC/infra/main.bicep:2161`, `:2297`, `:2451`
-(were `:2005`/`:2141`/`:2295`); ADR-012 (`Website/docs-src/adr/012-grpc-host-transport.md`) no deployed
-pure Profile B host `:272` (was `:271`), Profile A gateway `:332-337` (was `:325-330`), local/ACA JWKS
-`:338-345` (was `:331-338`), historical HTTPS/ALPN note `:366-367` (was `:359-360`), Profile B gateway
-`:368-371` (was `:361-364`), historical single-argument note `:376-380` (was `:369-373`);
-`MmcaGateway:ForwardHttp2` removal `MMCA.Common/CHANGELOG.md:2858` (was `:2545`); outbox registration
-`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:222-224` (was `:213-225`);
-ADR-089's 26/10 `MapForwarder` Context `:28-29` and its 33-route five-cluster split `:96-97` (the
-earlier `:92-96` covered only the latter); Store Sales `appsettings.json:9-19` (was `:10-19`).
-`AddEngagementBookmarkCountClient` is the real ADC helper, not an illustrative name
-(`MMCA.ADC/Source/Services/MMCA.ADC.Engagement.Contracts/DependencyInjection.cs:43`, typed client
-`:45`, `services.Replace` `:49`, called at `MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:420`);
-the Step 3 code block abridges its body. Re-read this run and unchanged: `GrpcResilienceDefaults.cs`
-`:15`/`:18`/`:21`/`:24`/`:27`/`:30`/`:33`; `ResultGrpcExtensions.cs` `ToRpcException` `:119-125`,
-`ToResult` `:218-227`; `MessageBusSettings.cs` `:14`, `:17`, `:167`, `:175`, `:241`; `ModuleLoader.cs:119`,
-`IModule.cs:34`; `ErrorHttpMapping.cs:14`, `:20`; `ApiControllerBase.cs:48`, `:58`; ADC AppHost `:256`,
-`:266`, `:268`, `:269`; ADC Notification `Program.cs:72`, `:249`, `:293`, `:301` and `appsettings.json:9-19`
-(8080 `Http1AndHttp2`, named `grpc` 8081 `Http2`); Store Sales `Program.cs:79`; every
-`MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Gateway/` anchor of the 2026-10-08 pass
-(`GatewayRateLimitingExtensions.cs`, `GatewayRateLimitingSettings.cs`, `GatewayHealthCheckExtensions.cs`,
-`GatewayCorrelationMiddleware.cs`) and `ForwardedHeadersExtensions.cs:36`/`:40`; ADC gateway `Program.cs`
-`:76`/`:90`/`:148`/`:160`/`:165`/`:173`/`:180`/`:234`; Store gateway `Program.cs:150`, `:155`; gateway
-csprojs `MMCA.ADC.Gateway.csproj:3-4`, `MMCA.Store.Gateway.csproj:25-26`; bypass lists ADC
-`appsettings.json:25` and Store `:20`; `Routes` at ADC `:80` and Store `:51`, 33 and 15 routes counted by
-parsing each file; the `RouteMapTests.cs` anchors of the 2026-10-08 pass (Store rationale `:31-35`
-re-read only at `:32`). `MMCA.Common/AGENTS.md:126` is the "Microservices Extraction Boundaries" heading. Not
-settled this run: the ADR-004 attribution was re-read only as ADR-088 states it
-(`Website/docs-src/adr/088-gateway-edge-responsibilities.md:309`), not against ADR-004's own text.
-Side findings (reported, not edited): `MMCA.Common.Grpc/DependencyInjection.cs:63-65` still says the
-JWT interceptor attaches the service token when `AddServiceTokenClient` registered a provider,
-contradicting `JwtForwardingClientInterceptor.cs:27-32`; `GrpcResilienceDefaults.cs:9-10` says retries
-are left to the standard handler's transient classification, while `DependencyInjection.cs:142`
-overrides `Retry.ShouldHandle`; ADR-012 cites ADC Bicep `main.bicep:2159`/`:2295`/`:2449`
-(`012-grpc-host-transport.md:125-126`), each two lines short of the real `:2161`/`:2297`/`:2451`.
-2026-10-29 pass, re-verified against MMCA.Common v1.265.1 (`MMCA.Common/FACTS.md:14`; was v1.250.0).
-Body corrections, all re-read: (1) Step 3's resilience values come from the `Grpc`-prefixed members of
-`HttpResilienceDefaults`: `GrpcResilienceDefaults` was removed in 1.252.0
-(`MMCA.Common/CHANGELOG.md:242`, heading `:214`; Grep for the type under `MMCA.Common/Source`: 0
-matches). The gRPC timeouts are the east-west path's own, `GrpcAttemptTimeout` 8 seconds and
-`GrpcTotalRequestTimeout` 20 seconds
-(`MMCA.Common/Source/Core/MMCA.Common.Shared/Resilience/HttpResilienceDefaults.cs:73`, `:76`), not the
-HTTP 30/90 (`:16`, `:22`); only `MaxRetryAttempts` 1 (`:33`) and `CircuitBreakerSamplingDuration` 60
-seconds (`:19`) are shared; breaker 0.5/10/10 seconds at `:82`/`:88`/`:94`. Wiring
-`MMCA.Common/Source/Presentation/MMCA.Common.Grpc/DependencyInjection.cs:142-168` (values `:144-146`,
-`:161-164`), retry predicate `:155-160`, optional `configureResilience` parameter `:101` invoked last
-at `:167`, `SocketsHttpHandler` override `:124-132`, h2c address `:110-111`. (2) Step 8: both gateways
-reference three framework packages, `MMCA.Common.Aspire`, `MMCA.Common.Azure` and
-`MMCA.Common.Gateway` (`MMCA.ADC/Source/Hosts/MMCA.ADC.Gateway/MMCA.ADC.Gateway.csproj:3-5`, was
-`:3-4`; `MMCA.Store/Source/Hosts/MMCA.Store.Gateway/MMCA.Store.Gateway.csproj:27-29`, was `:25-26`),
-the Azure package for `AddAzureKeyVaultConfiguration` and `AddAzureMonitorExporter` (ADC gateway
-`Program.cs:68`, `:75`; Store gateway `Program.cs:67`, `:74`); the API package stays out of reach
-because `MMCA.Common/Source/Hosting/MMCA.Common.Azure/MMCA.Common.Azure.csproj:43-44` references
-Infrastructure and Aspire only. (3) Step 7's gateway list adds security headers and "among others"
-(ADC gateway `Program.cs:126`, `:176`). The earlier `GrpcResilienceDefaults.cs` anchors and its
-side finding above are historical.*
+*Notes: 2026-11-25 pass, re-verified 2026-11-25 against MMCA.Common v1.319.0
+(`MMCA.Common/FACTS.md:14`). Audit input: this run's findings file for Article 32 (9 drifted or
+unverifiable claims, 28 confirmed). Body corrections, each re-read this pass: (1) Step 0: application
+code publishes through `IEventBus`
+(`MMCA.Common/Source/Core/MMCA.Common.Application/Interfaces/Events/IEventBus.cs:13`); `IMessageBus`
+is the transport `OutboxProcessor` drains through
+(`MMCA.Common/Source/Core/MMCA.Common.Application/Messaging/IMessageBus.cs:5-10`, interface `:29`).
+(2) The forbidden core-layer transport list is `MassTransit`, `RabbitMQ.Client`,
+`Azure.Messaging.ServiceBus`, `Amazon.SQS`, `Amazon.SimpleNotificationService`, `Grpc` and
+`Google.Protobuf`
+(`MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Rules/Layering/ArchitectureRules.Transport.cs:14-23`;
+MassTransit "banned outright, ADR-118" at `:6-8`; the failure message names `IEventBus` at `:37-39`;
+the `MicroserviceExtractionTests` name per `MMCA.Common/AGENTS.md`, "Microservices Extraction
+Boundaries"). (3) `BrokerMessageBus` publishes through the selected transport's `IBrokerPublisher`,
+RabbitMQ and PostgreSQL built in and an adapter such as MMCA.Common.Azure or MMCA.Common.Aws
+registering its own
+(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Messaging/BrokerMessageBus.cs:13-18`, ctor
+`:46-51`); `IntegrationEventConsumer<TEvent>` at
+`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Messaging/Consumers/IntegrationEventConsumer.cs:40`;
+`WithBroker` injects `MessageBus__Provider=RabbitMq` at
+`MMCA.Common/Source/Hosting/MMCA.Common.Aspire.Hosting/Extensions.cs:321` (the Service Bus emulator
+overload sets `AzureServiceBus` at `:350`). (4) Service token: ADC opts in on three edges,
+`MMCA.ADC/Source/Services/MMCA.ADC.Identity.Contracts/DependencyInjection.cs:74` (verified-user
+lookup), `MMCA.ADC/Source/Services/MMCA.ADC.Notification.Contracts/DependencyInjection.cs:51`
+(live-channel push) and `MMCA.ADC/Source/Services/MMCA.ADC.Engagement.Contracts/DependencyInjection.cs:110`
+(ticket invitation), with the signing key shared at
+`MMCA.ADC/Source/Hosting/MMCA.ADC.AppHost/Program.cs:244-247`; ADR-007's 2026-11-23 revision at
+`Website/docs-src/adr/007-grpc-extraction.md:15-17`; Store's Sales-to-Identity edge
+(`MMCA.Store/Source/Services/MMCA.Store.Identity.Contracts/DependencyInjection.cs:46`) and HS256 with
+section `Grpc:ServiceToken` (`ServiceTokenSettings.cs:13`, `:21`) per this run's audit. (5)
+`MMCA.Common.Aspire.Hosting` surface, re-read: `AddMessageBroker` `Extensions.cs:220`,
+`AddServiceBusEmulatorBroker` `:261`, `WithBroker` `:312` and `:341`, `WithJwksDiscovery` `:370`,
+data sources `:587`/`:617`/`:646`/`:671`; `AddSelectedBroker` and `WithSelectedBroker`
+(`BrokerSelection.cs:58`, `:82`); `WithMmcaServiceInfrastructure`
+(`ServiceInfrastructureExtensions.cs:57`, used by ADC's AppHost at `Program.cs:137`, `:159`, `:197`,
+`:222`); `AddServiceTokenSigningKey` and `WithServiceTokenSigningKey` (`ServiceTokenExtensions.cs:46`,
+`:67`); no method wires a peer gRPC edge, and ADC wires its peers with stock `WithReference`
+(`MMCA.ADC/Source/Hosting/MMCA.ADC.AppHost/Program.cs:269`, `:276`). (6) Both gateways reference
+`MMCA.Common.Aspire`, `MMCA.Common.Azure.Startup` and `MMCA.Common.Gateway`
+(`MMCA.ADC/Source/Hosts/MMCA.ADC.Gateway/MMCA.ADC.Gateway.csproj:3-7`, the "does not reference
+MMCA.Common.Azure" comment at `:4-5`; `MMCA.Store/Source/Hosts/MMCA.Store.Gateway/MMCA.Store.Gateway.csproj:27-29`,
+comment `:16-17`); ADC calls `AddAzureKeyVaultConfiguration` and `AddAzureMonitorExporter` at
+`MMCA.ADC/Source/Hosts/MMCA.ADC.Gateway/Program.cs:75`, `:82`; that `MMCA.Common.Azure.Startup`
+references only `MMCA.Common.Aspire` (`MMCA.Common.Azure.Startup.csproj:33`) is per this run's audit.
+(7) Three kinds of request skip both limiters, and a trusted caller skips only the concurrency cap and
+is counted per visitor by default
+(`MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Gateway/GatewayRateLimitingExtensions.cs:33-43`);
+`TrustedCallerMode.PerVisitor` `TrustedCallerMode.cs:17`, `Exempt` `:23`, default at
+`GatewayRateLimitingSettings.cs:166` (documented `:160-163`); ADC's gateway configuration names the
+header and the Key Vault secret and sets no mode
+(`MMCA.ADC/Source/Hosts/MMCA.ADC.Gateway/appsettings.json:25-32`). (8) Route counts 45 and 18,
+counted as `"ClusterId"` lines in `MMCA.ADC/Source/Hosts/MMCA.ADC.Gateway/appsettings.json` (`Routes`
+opens `:80`) and `MMCA.Store/Source/Hosts/MMCA.Store.Gateway/appsettings.json` (`Routes` opens `:52`);
+ADR-089's 2026-11-23 recount at `Website/docs-src/adr/089-gateway-topology-owned-by-configuration.md:28-29`.
+(9) Trade-offs: the inbox resolves on for any broker transport
+(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Messaging/MessageBusSettings.cs:142`, override
+`EnableInbox` `:134`, the `InboxMessages` opt-out note `:128-131`). Header: ADR-021 and ADR-118 added
+for (2), (3) and (9). Re-read and unchanged: `MessageBusSettings.cs` section `:16`, string `Provider`
+defaulting to `MessageBusProviders.InProcess` `:25`, `EnableOutbox` `:172`, `IsOutboxEnabled` `:180`;
+`AddEngagementBookmarkCountClient`
+`MMCA.ADC/Source/Services/MMCA.ADC.Engagement.Contracts/DependencyInjection.cs:46`, typed client
+`:48`, `services.Replace` `:52`, called at
+`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:359`; ADC gateway ordering
+(`MMCA.ADC/Source/Hosts/MMCA.ADC.Gateway/Program.cs`) `AddGatewayRateLimiting` `:89`,
+`AddGatewayDownstreamHealthChecks` `:105`, `AddCommonSecurityHeaders` `:135`, `AddReverseProxy` `:171`,
+`UseCommonForwardedHeaders` `:183`, `UseGatewayCorrelation` `:188`, `UseCommonSecurityHeaders` `:193`,
+`UseCors` `:196`, `UseGatewayRateLimiting` `:203`, `MapReverseProxy` `:236`; bypass lists `"/hubs"`
+(ADC `appsettings.json:25`) and `"/Payments"` (Store `appsettings.json:20`); ADC Notification maps
+`LiveChannelGrpcService` with `RequireAuthorization(ServiceTokenDefaults.ServiceCallerPolicy)` and the
+export service with `RequireAuthorization()`
+(`MMCA.ADC/Source/Services/MMCA.ADC.Notification.Service/Program.cs:160`, `:168`). Per this run's
+audit, not reopened: `HttpResilienceDefaults.cs` gRPC and HTTP values at `:15`/`:18`/`:21`/`:32`/`:72`/`:75`/`:81`/`:87`/`:93`;
+ADC Bicep in-cluster identity authority `MMCA.ADC/infra/main.bicep:2672`, `:2816`, `:2986`; the
+gateway-kit, health-check, correlation, `ResultGrpcExtensions`, `ModuleLoader`, `ErrorHttpMapping`
+and ADR-012 Profile anchors of earlier passes (values confirmed, lines not re-pinned). The
+Notification `Program.cs` no longer carries the `ConfigureEndpointsWithHealthProbe` and
+`AddGrpcServiceDefaults` calls an earlier pass anchored there; the mixed-endpoint prose rests on ADR-012
+and this run's audit. The Program.cs, .proto and adapter code blocks are illustrative composites in a
+generic "MMCA.App" namespace; `AddEngagementBookmarkCountClient` is the real ADC helper with its body
+abridged. Not settled: the ADR-004 attribution (validation authority in the services) is read only as
+ADR-088 states it. Earlier passes: 2026-07-27, 2026-09-19, 2026-10-02 (v1.221.0), 2026-10-08
+(v1.233.0), 2026-10-22 (v1.250.0) and 2026-10-29; their line anchors are superseded by this pass.*

@@ -95,7 +95,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 54 articles</summary>
+        <summary>All 57 articles</summary>
         <nav class="doc-nav" aria-label="The MMCA.Common series">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -152,7 +152,10 @@
         <li><a href="durable-internal-commands.html">51 · Four ways to do work later</a></li>
         <li><a href="identity-completions.html">52 · Finishing identity</a></li>
         <li><a href="cloud-neutral-vendor-adapters.html">53 · One framework, three clouds</a></li>
-        <li><a href="series-index.html">54 · The series index</a></li>
+        <li><a href="borrowed-and-machine-identities.html">54 · Borrowed and machine identities</a></li>
+        <li><a href="app-as-mcp-server.html">55 · Your app as an MCP server</a></li>
+        <li><a href="outbound-webhooks.html">56 · Sending webhooks without opening a door</a></li>
+        <li><a href="series-index.html">57 · The series index</a></li>
           </ol>
         </nav>
       </details>
@@ -183,7 +186,7 @@
           <ul>
           <li><strong>Identity</strong> (the <code>User</code> aggregate, JWT auth, plus social login via Google, GitHub and Sign in with Apple),</li>
           <li><strong>Conference</strong> (events, sessions, speakers, rooms, categories, questions and answers, social
-          activities, partners and session assets, across twenty-two domain REST controllers),</li>
+          activities, partners and session assets, across twenty-three domain REST controllers),</li>
           <li><strong>Engagement</strong> (session bookmarks, the event and session feedback screens, check-ins, attendee
           badges and leaderboard points, and the conference-day live layer: the <code>LivePolls</code> and
           <code>SessionQuestions</code> aggregates behind Happening Now, the session Live view, and the presenter UI),</li>
@@ -214,20 +217,23 @@
           extracted into separate service hosts (one process per module) behind a YARP reverse-proxy Gateway
           pinned to <a href="https://localhost:6001" target="_blank" rel="noopener">https://localhost:6001</a>. Services talk to each other synchronously over gRPC (typed clients
           defined in <code>*.Contracts</code> projects) and asynchronously over a broker using the outbox pattern. User
-          tokens are signed with RS256 and validated through JWKS discovery, with no shared secret. Store adds
-          one deliberate exception for service-to-service gRPC: Identity&#39;s Customers edge requires an internal
-          caller, so Sales attaches an HS256 service token on the calls that have no user token to forward.</p>
+          tokens are signed with RS256 and validated through JWKS discovery, with no shared secret. Each app
+          makes one deliberate exception for service-to-service gRPC: a few internal edges (Identity&#39;s Customers
+          edge in Store; Identity&#39;s VerifiedUserLookup and Notification&#39;s LiveChannelPush edges in ADC) require
+          an internal or service-only caller, so the calling service attaches an HS256 service token on the
+          calls that have no user token to forward.</p>
           <p>None of that topology is hand-rolled per app. It comes from the framework:</p>
           <ul>
-          <li><strong>The same packages, at the same number.</strong> MMCA.Common publishes twenty-six packages, and each app pins
-          the subset it uses at one identical version literal: ADC pins twenty-one <code>MMCA.Common.*</code> entries
+          <li><strong>The same packages, at the same number.</strong> MMCA.Common publishes thirty packages, and each app pins
+          the subset it uses at one identical version literal: ADC pins twenty-six <code>MMCA.Common.*</code> entries
           (<code>.Shared</code>, <code>.Domain</code>, <code>.Application</code>, <code>.Infrastructure</code>, <code>.AI</code>, <code>.AI.Anthropic</code>, <code>.AI.Testing</code>,
-          <code>.API</code>, <code>.Grpc</code>, <code>.Gateway</code>, <code>.UI</code>, <code>.UI.Maui</code>, <code>.UI.Web</code>, <code>.Aspire</code>, <code>.Aspire.Hosting</code>, <code>.Azure</code>,
-          <code>.Testing</code>, <code>.Testing.Architecture</code>, <code>.Testing.Azure</code>, <code>.Testing.E2E</code>, <code>.Testing.UI</code>), Store pins
-          eighteen of those, taking none of the <code>.AI</code> packages.</li>
+          <code>.API</code>, <code>.Grpc</code>, <code>.Gateway</code>, <code>.Passkeys</code>, <code>.ServiceHost</code>, <code>.Mcp</code>, <code>.UI</code>, <code>.UI.Maui</code>, <code>.UI.Web</code>,
+          <code>.Aspire</code>, <code>.Aspire.Hosting</code>, <code>.Azure</code>, <code>.Azure.Startup</code>, <code>.Testing</code>, <code>.Testing.Architecture</code>,
+          <code>.Testing.Aspire</code>, <code>.Testing.Azure</code>, <code>.Testing.E2E</code>, <code>.Testing.UI</code>), Store pins twenty of those,
+          taking none of the <code>.AI</code> packages and none of <code>.Passkeys</code>, <code>.Mcp</code> or <code>.Testing.Aspire</code>.</li>
           <li><strong>The same patterns.</strong> <code>Result&lt;T&gt;</code> for error flow, the CQRS command/query split with the same
-          decorator order (commands run FeatureGate then Authorization then Logging then Caching then
-          Validating then Timeout then Transactional then the handler; queries run FeatureGate then
+          decorator order (commands run ViewAs then FeatureGate then Authorization then Logging then Caching
+          then Validating then Timeout then Transactional then the handler; queries run FeatureGate then
           Authorization then Logging then Caching then Validating then Timeout then the handler), the
           <code>AuditableAggregateRootEntity</code> base with <code>AddDomainEvent()</code>, the transactional outbox captured in
           <code>SaveChangesAsync()</code>, and database-per-service routing by logical data source name. Both apps run one
@@ -240,8 +246,8 @@
           an <code>IArchitectureMap</code>. Each app supplies <strong>its own map</strong> (one entry per layer assembly, tagged with
           its module and layer) and subclasses
           the same bases, so the layer, purity, and extraction rules are literally identical across MMCA.Common,
-          MMCA.ADC, and MMCA.Store. The transport-leakage rule that forbids Domain and Application from touching
-          MassTransit applies to all three the same way.</li>
+          MMCA.ADC, and MMCA.Store. The transport-leakage rule that forbids Domain, Application and Shared from
+          referencing a broker client applies to all three the same way.</li>
           </ul>
           <p>The shared abstractions are exactly the swap points the framework promises. The same <code>IMessageBus</code>-backed
           event that fires in-process in a monolith fires over a broker once the module is its own service, and
@@ -252,9 +258,9 @@
           <p>The release is a lockstep sweep:</p>
           <ol>
           <li>Tag a new MMCA.Common version (the release version is the git tag itself; every other build
-          carries a <code>0.0.0-dev</code> placeholder). All twenty-six packages publish at that same version.</li>
+          carries a <code>0.0.0-dev</code> placeholder). All thirty packages publish at that same version.</li>
           <li>In each consumer, bump every <code>MMCA.Common.*</code> entry in <code>Directory.Packages.props</code> to the new version
-          in one pass. ADC keeps its twenty-one entries and Store its eighteen on the same number.</li>
+          in one pass. ADC keeps its twenty-six entries and Store its twenty on the same number.</li>
           <li>Build, run the fitness tests and the rest of the suite, deploy.</li>
           </ol>
           <p>The framework&#39;s versioning policy doc (<code>common-VERSIONING.md</code>, canonical in the published docs
@@ -266,8 +272,33 @@
           coherent version of the contract, so there is never a matrix of &quot;ADC is on 1.74 but Store is on 1.71 of
           three of the packages.&quot; The cost is that a breaking change has to be absorbed everywhere at once, which
           is why breaking changes go through a new event type plus an upcaster rather than a silent reshape (the
-          event-schema-versioning ADR), and why the MassTransit v8 pin is guarded by a test in the framework
-          rather than a comment.</p>
+          event-schema-versioning ADR), and why the messaging-library policy (no MassTransit: the broker
+          transports are framework code over the vendor SDKs) is guarded by a fitness test in the framework
+          rather than a comment, failing the build on any <code>MassTransit*</code> package pin in any repo that runs it.</p>
+          <h2 id="two-framework-lines-one-release">Two framework lines, one release</h2>
+          <p>The lockstep sweep has a second dimension: the two apps do not run on the same .NET version. ADC
+          builds and deploys <code>net11.0</code> by default, while Store stays on <code>net10.0</code>. The framework does not answer
+          that with a release branch per framework. It builds two framework lines from one source tree
+          (ADR-141):</p>
+          <ul>
+          <li><strong>Libraries multi-target; applications switch.</strong> Every packaged MMCA.Common library builds for both
+          <code>net10.0</code> and <code>net11.0</code>, named once as <code>MmcaNetVersions</code> in <code>MMCA.Common/build/Frameworks.props</code>, so
+          one package version carries an asset for each framework. An application does not multi-target: one
+          <code>MmcaNet</code> property in its <code>Directory.Build.props</code> picks exactly one line. ADC defaults to <code>net11.0</code>
+          and keeps <code>net10.0</code> as a permanent second line (<code>-p:MmcaNet=net10.0</code>), gated by a required
+          <code>build-and-test-net10</code> check that runs the same suites on the older framework. Store defaults to
+          <code>net10.0</code> and builds no second line in CI, and MMCA.Helpdesk, a third consumer, targets <code>net10.0</code> too.</li>
+          <li><strong>Version-specific code is forward-only.</strong> It is written only as <code>#if NET11_0_OR_GREATER</code>, with the
+          existing code as the <code>#else</code> branch, never as <code>#if NET10_0</code>. Retiring a framework is removing it from
+          the list and deleting the <code>#else</code> branches.</li>
+          <li><strong>The public API is identical on both lines.</strong> Every packable project except the MAUI package
+          carries one <code>PublicAPI.Shipped.txt</code>, and the analyzer checks it once per target framework, so a member
+          present on one framework only fails the build on the other.</li>
+          </ul>
+          <p>That is what lets two apps on two .NET versions stay on one package version: ADC and Store bump the
+          same <code>MMCA.Common.*</code> literal in the same sweep, and each restores the asset for its own framework. The
+          cost lands in the framework and in ADC: Common&#39;s test run roughly doubles, and ADC carries a second set
+          of lock files for its second line.</p>
           <h2 id="what-each-app-proves-that-the-framework-cannot">What each app proves that the framework cannot</h2>
           <p>A framework can demonstrate a pattern. It cannot, by itself, demonstrate that the pattern survives a
           real domain and a real deployment. That is the division of labor between MMCA.Common and its consumers.</p>
@@ -299,9 +330,9 @@
           strategic DDD &quot;is realized downstream, since the Domain layer holds one aggregate family
           (Notifications) plus auth support types&quot;. The §5 Vertical Slice Architecture row holds at 8 because
           Common &quot;is an SDK with no business use-case slices of its own&quot;, so &quot;slice cohesion is proven in the
-          consumer repos&quot;: the framework ships a second sliced family (the <code>Users</code> use cases, thirteen abstract
-          handler bases across nine folders) and the slice gate does reach abstract bases, but twelve of the
-          thirteen declare their handler contract over a generic parameter and are exempt by design, so the
+          consumer repos&quot;: the framework ships a second sliced family (the <code>Users</code> use cases, fifteen abstract
+          handler bases across ten folders) and the slice gate does reach abstract bases, but fourteen of the
+          fifteen declare their handler contract over a generic parameter and are exempt by design, so the
           family deepens the pattern without widening the enforced surface.
           <strong>For both, the real surface lives in MMCA.Store and MMCA.ADC.</strong> For performance and
           cost, the framework ships an in-repo BenchmarkDotNet hot-path harness plus a weekly load tier on SQLite
@@ -310,7 +341,7 @@
           <p>That is not a weakness to hide; it is the reason the two apps exist. The framework supplies the base
           classes, the enforced layering, and the extraction points. The apps supply the proof that those things
           hold up against two different real domains and two different production deployments. The
-          framework&#39;s two-axis evaluation scores it at roughly 97% maturity and 85% implementation (97.3% and 85.4%
+          framework&#39;s two-axis evaluation scores it at roughly 97% maturity and 85% implementation (97.3% and 85.1%
           exactly), with implementation
           the weaker axis precisely because some of the most important &quot;does this actually model a domain well&quot;
           evidence lives downstream, in the consumers, where it should.</p>
@@ -320,6 +351,7 @@
           what they share (the packages, the same fitness rules via their own architecture maps, the same
           Result/CQRS/outbox/
           database-per-service patterns); how a framework change ships as a lockstep sweep with no phased rollout;
+          how two framework lines from one tree let the apps sit on different .NET versions at one package version;
           what each app proves that the framework cannot (real bounded contexts, real eventing, real production
           deployments); and the framework&#39;s own honest note, written into the §4 and §5 scorecard rows, that a
           few categories are best evidenced in these consumers.</p>
@@ -351,6 +383,7 @@
             <li><a href="#the-two-apps">The two apps</a></li>
             <li><a href="#what-they-actually-share">What they actually share</a></li>
             <li><a href="#how-a-framework-change-ships">How a framework change ships</a></li>
+            <li><a href="#two-framework-lines-one-release">Two framework lines, one release</a></li>
             <li><a href="#what-each-app-proves-that-the-framework-cannot">What each app proves that the framework cannot</a></li>
             <li><a href="#the-honest-note">The honest note</a></li>
             <li><a href="#what-we-covered--next">What we covered / Next</a></li>
